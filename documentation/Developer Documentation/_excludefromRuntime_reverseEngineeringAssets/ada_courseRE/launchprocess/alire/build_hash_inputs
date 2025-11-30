@@ -1,0 +1,6 @@
+dependency:ashell=1.3.0=72274323ec16896d5196293df3ee0875fa4c07c02c6291c21e2a6c505ef25b11
+dependency:spawn=25.0.0=19fd2ebc7969fb5dac64d8ec8b7330415a60403b8766f0ea5a8d39fd9661b447
+external:LAUNCHPROCESS_LIBRARY_TYPE=default
+external:LIBRARY_TYPE=default
+profile:launchprocess=DEVELOPMENT
+switches:launchprocess=-Og,-fdata-sections,-ffunction-sections,-g,-gnatVa,-gnatW8,-gnatw.X,-gnatwa,-gnaty-d,-gnaty3,-gnatyA,-gnatyB,-gnatyI,-gnatyO,-gnatyS,-gnatya,-gnatyb,-gnatyc,-gnatye,-gnatyf,-gnatyh,-gnatyi,-gnatyk,-gnatyl,-gnatym,-gnatyn,-gnatyp,-gnatyr,-gnatyt,-gnatyu,-gnatyx

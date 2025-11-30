@@ -1,0 +1,9 @@
+dependency:aws=24.0.0=75c68b2892651ce6f0e5e1a9c5661459ef6ea6f67921637d57f5099a428256b1
+dependency:gnatcoll_sqlite=24.0.0=4583fdcc120033905459402a34ea678667a846e10a5cf5ab5fcca244d594f807
+dependency:openai=1.0.0=d38b638eda7b802ec28ff08f54441f674b9f6cf8e8615bf95094866037ebf03b
+dependency:simple_components=4.68.0=57c144d7b6d09761edd169a9c44a6fa1a4c0577f30d0cbc0131bdb02d48f7bb4
+dependency:uuids=1.0.0=6e2f0c1f3b8e2b57f80f0ed0cd61fb40fed00482689343eb1e867d3bea5fed9a
+external:LIBRARY_TYPE=default
+external:ZEPHYRINE_SERVER_LIBRARY_TYPE=default
+profile:zephyrine_server=DEVELOPMENT
+switches:zephyrine_server=-Og,-fdata-sections,-ffunction-sections,-g,-gnatVa,-gnatW8,-gnatw.X,-gnatwa,-gnaty-d,-gnaty3,-gnatyA,-gnatyB,-gnatyI,-gnatyO,-gnatyS,-gnatya,-gnatyb,-gnatyc,-gnatye,-gnatyf,-gnatyh,-gnatyi,-gnatyk,-gnatyl,-gnatym,-gnatyn,-gnatyp,-gnatyr,-gnatyt,-gnatyu,-gnatyx

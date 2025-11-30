@@ -1,0 +1,81 @@
+V "GNAT Lib v15"
+M P W=8
+A -O3
+A -gnatA
+A -gnatn
+A -ffunction-sections
+A -fdata-sections
+A -gnatW8
+A -mmacosx-version-min=16.0.0
+A -mcpu=apple-m1
+A -mlittle-endian
+A -mabi=lp64
+A -fPIC
+P ZX
+
+RN
+RV NO_IO
+RV NO_IMPLEMENTATION_PRAGMAS
+
+U c_binding_test%b	main.adb		7bf74344 NE OO SU
+W ada%s			ada.ads			ada.ali
+Z ada.strings.text_buffers%s  a-sttebu.adb	a-sttebu.ali
+W ada.text_io%s		a-textio.adb		a-textio.ali
+W interfaces%s		interfac.ads		interfac.ali
+W interfaces.c%s	i-c.adb			i-c.ali
+W interfaces.c.strings%s  i-cstrin.adb		i-cstrin.ali
+
+D ada.ads		20250419085653 76789da1 ada%s
+D a-except.ads		20250419085653 e7970cd9 ada.exceptions%s
+D a-ioexce.ads		20250419085653 40018c65 ada.io_exceptions%s
+D a-stream.ads		20250419085653 17477cbd ada.streams%s
+D a-string.ads		20250419085653 90ac6797 ada.strings%s
+D a-sttebu.ads		20250419085653 f1ad67a2 ada.strings.text_buffers%s
+D a-stuten.ads		20250419085653 c6ced0ae ada.strings.utf_encoding%s
+D a-tags.ads		20250419085653 fbca0ad5 ada.tags%s
+D a-textio.ads		20250419085653 34ef47de ada.text_io%s
+D a-unccon.ads		20250419085653 0e9b276f ada.unchecked_conversion%s
+D main.adb		20250619225059 f25d5354 c_binding_test%b
+D interfac.ads		20250419085653 9111f9c1 interfaces%s
+D i-c.ads		20250419085653 e94c966a interfaces.c%s
+D i-cstrin.ads		20250419085653 5409c1a4 interfaces.c.strings%s
+D i-cstrea.ads		20250419085653 ffd01b9d interfaces.c_streams%s
+D system.ads		20250419085653 70765b54 system%s
+D s-crtl.ads		20250419085653 beb39b9e system.crtl%s
+D s-exctab.ads		20250419085653 91bef6ef system.exception_table%s
+D s-ficobl.ads		20250419085653 dc5161d4 system.file_control_block%s
+D s-parame.ads		20250419085653 3597fc11 system.parameters%s
+D s-putima.ads		20250419085653 17291fe4 system.put_images%s
+D s-secsta.ads		20250419085653 578279f5 system.secondary_stack%s
+D s-soflin.ads		20250419085653 5d88fdea system.soft_links%s
+D s-stache.ads		20250419085653 0b81c1fe system.stack_checking%s
+D s-stalib.ads		20250419085653 1c9580f6 system.standard_library%s
+D s-stoele.ads		20250419085653 ccded4e8 system.storage_elements%s
+D s-traent.ads		20250419085653 c81cbf8c system.traceback_entries%s
+D s-unstyp.ads		20250419085653 fa2a7f59 system.unsigned_types%s
+D s-wchcon.ads		20250419085653 d9032363 system.wch_con%s
+G a e
+G c Z b b [c_binding_test standard 5 11 none]
+X 1 ada.ads
+18K9*Ada 22e8 11|3r6 6r8
+X 9 a-textio.ads
+58K13*Text_IO 785e16 11|3w10 6r12
+565U14*Put_Line 11|27s4 42s10 44s10 51s4
+X 11 main.adb
+5U11*C_Binding_Test 5b11 53l5 53t19
+16V13*C_System{13|62I9} 16>23 20b<c,system>24 38s22
+16p23 Command{14|65P9}
+30a7 My_Command{string} 34r42
+33p7 C_Command{14|65P9} 38r32 48m34 48r34
+36i7 Return_Code{13|62I9} 38m7 41r10
+X 12 interfac.ads
+47K9*Interfaces 11|1r6 2r6 9r13 16r33 16r72 33r21 34r9 36r21 48r7 12|247e15
+X 13 i-c.ads
+33K20*C 11|1w17 2r17 9r24 16r44 16r83 33r32 34r20 36r32 48r18 13|601e17
+62I9*int<integer> 11|9r26 16r85 36r34
+X 14 i-cstrin.ads
+48K22*Strings 11|2w19 16r46 33r34 34r22 48r20 14|171e25
+65P9*chars_ptr 11|16r54 33r42
+86V13*New_String{65P9} 11|34s30
+92U14*Free 11|48s28
+

@@ -1,0 +1,126 @@
+V "GNAT Lib v15"
+A -O2
+A -gnatA
+A -g
+A -gnatX
+A -gnatwa
+A -mmacosx-version-min=16.0.0
+A -mcpu=apple-m1
+A -mlittle-endian
+A -mabi=lp64
+A -fPIC
+P ZX
+
+RN
+RV NO_STANDARD_STORAGE_POOLS
+RV NO_IMPLEMENTATION_PRAGMAS
+
+U zephyrine.c_sockets%s	zephyrine-c_sockets.ads	5a74c4ef NE OO PK
+W interfaces%s		interfac.ads		interfac.ali
+W interfaces.c%s	i-c.adb			i-c.ali
+W interfaces.c.strings%s  i-cstrin.adb		i-cstrin.ali
+W system%s		system.ads		system.ali
+W zephyrine%s		zephyrine.ads		zephyrine.ali
+
+D ada.ads		20250419085653 76789da1 ada%s
+D a-unccon.ads		20250419085653 0e9b276f ada.unchecked_conversion%s
+D interfac.ads		20250419085653 9111f9c1 interfaces%s
+D i-c.ads		20250419085653 e94c966a interfaces.c%s
+D i-cstrin.ads		20250419085653 5409c1a4 interfaces.c.strings%s
+D system.ads		20250419085653 70765b54 system%s
+D s-exctab.ads		20250419085653 91bef6ef system.exception_table%s
+D s-parame.ads		20250419085653 3597fc11 system.parameters%s
+D s-stalib.ads		20250419085653 1c9580f6 system.standard_library%s
+D zephyrine.ads		20250621052221 fa60cf7b zephyrine%s
+D zephyrine-c_sockets.ads  20250621092433 6d27070e zephyrine.c_sockets%s
+G a e
+G c Z s s [getaddrinfo zephyrine__c_sockets 33 13 none]
+G c Z s s [freeaddrinfo zephyrine__c_sockets 39 14 none]
+G c Z s s [socket zephyrine__c_sockets 42 13 none]
+G c Z s s [connect zephyrine__c_sockets 45 13 none]
+G c Z s s [send zephyrine__c_sockets 51 13 none]
+G c Z s s [recv zephyrine__c_sockets 58 13 none]
+G c Z s s [close zephyrine__c_sockets 65 13 none]
+G c Z s s [strerror zephyrine__c_sockets 69 13 none]
+G c Z s s [errno_location zephyrine__c_sockets 74 13 none]
+G c Z s s [get_errno zephyrine__c_sockets 78 13 none]
+G c Z s s [sockaddr_inIP zephyrine__c_sockets 12 9 none]
+G c Z s s [addr_infoIP zephyrine__c_sockets 21 9 none]
+X 3 interfac.ads
+47K9*Interfaces 247e15 11|3r6 4r6 10r26 13r28 14r28 15r28 16r28 17r28 22r22
+. 23r22 24r22 25r22 26r22 28r22 34r28 36r53 42r45 48r17 48r47 54r17 55r17
+. 55r42 61r17 62r17 62r42 65r48 69r32 69r57 74r42 78r30
+X 4 i-c.ads
+33K20*C 601e17 11|3w17 4r17 10r37 13r39 14r39 15r39 16r39 17r39 22r33 23r33
+. 24r33 25r33 26r33 28r33 34r39 36r64 42r56 48r28 48r58 54r28 55r28 55r53
+. 61r28 62r28 62r53 65r59 69r43 69r68 74r53 78r41
+62I9*int<integer> 11|10r39 22r35 23r35 24r35 25r35 36r66 42r58 48r60 55r30
+. 62r30 65r61 69r45 74r55 78r43
+64I9*long<long_integer> 11|55r55 62r55
+71M9*unsigned 11|26r35 48r30
+72M9*unsigned_short 11|15r41
+73M9*unsigned_long 11|16r41
+76M9*unsigned_char 11|13r41 14r41
+92M9*size_t 11|54r30 61r30
+109E9*char<character>
+124A9*char_array(109E9)<92M9> 11|17r41
+X 5 i-cstrin.ads
+48K22*Strings 171e25 11|4w19 28r35 34r41 69r70
+65P9*chars_ptr 11|28r43 34r49 69r78
+X 6 system.ads
+37K9*System 173e11 11|5w6 27r22 29r22 35r26 36r30 39r34 47r17 53r17 60r17
+67M9*Address 11|27r29 29r29 35r33 36r37 39r41 47r24 53r24 60r24
+X 10 zephyrine.ads
+5K9*Zephyrine 7e14 11|7r9 80r5
+X 11 zephyrine-c_sockets.ads
+7K19*C_Sockets 10|5k9 11|80l15 80e24
+8N4*AF_INET
+9N4*SOCK_STREAM
+10I9*Socket_FD<4|62I9> 42r70 46r17 52r17 59r17 65r30
+12R9*Sockaddr_In 18e14 19r26
+13m7*Sin_Len{4|76M9}
+14m7*Sin_Family{4|76M9}
+15m7*Sin_Port{4|72M9}
+16m7*Sin_Addr{4|73M9}
+17a7*Sin_Zero{4|124A9}
+21R9*Addr_Info 30e14 31r26
+22i7*Ai_Flags{4|62I9}
+23i7*Ai_Family{4|62I9}
+24i7*Ai_Socktype{4|62I9}
+25i7*Ai_Protocol{4|62I9}
+26m7*Ai_Addrlen{4|71M9}
+27m7*Ai_Addr{6|67M9}
+28p7*Ai_Canonname{5|65P9}
+29m7*Ai_Next{6|67M9}
+33V13*getaddrinfo{4|62I9} 34>7 34>17 35>7 36<7 37b<c,getaddrinfo>22
+34p7 Nodename{5|65P9}
+34p17 Servname{5|65P9}
+35m7 Hints{6|67M9}
+36m7 Res{6|67M9}
+39U14*freeaddrinfo 39>28 40b<c,freeaddrinfo>22
+39m28 Res{6|67M9}
+42V13*socket{10I9} 42>21 42>29 42>34 43b<c,socket>22
+42i21 Domain{4|62I9}
+42i29 Typ{4|62I9}
+42i34 Protocol{4|62I9}
+45V13*connect{4|62I9} 46>7 47>7 48>7 49b<c,connect>22
+46i7 Sock_FD{10I9}
+47m7 Addr{6|67M9}
+48m7 Addrlen{4|71M9}
+51V13*send{4|64I9} 52>7 53>7 54>7 55>7 56b<c,send>22
+52i7 Sock_FD{10I9}
+53m7 Msg{6|67M9}
+54m7 Len{4|92M9}
+55i7 Flags{4|62I9}
+58V13*recv{4|64I9} 59>7 60>7 61>7 62>7 63b<c,recv>22
+59i7 Sock_FD{10I9}
+60m7 Buf{6|67M9}
+61m7 Len{4|92M9}
+62i7 Flags{4|62I9}
+65V13*close{4|62I9} 65>20 66b<c,close>22
+65i20 Sock_FD{10I9}
+69V13*strerror{5|65P9} 69>23 70b<c,strerror>22
+69i23 Errnum{4|62I9}
+74V13*Errno_Location(4|62I9) 75b<c,__errno_location>22 78s51
+78V13*Get_Errno{4|62I9} 78b13
+

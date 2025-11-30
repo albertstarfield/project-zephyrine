@@ -1,0 +1,24 @@
+V "GNAT Lib v15"
+A -O2
+A -gnatA
+A -g
+A -gnat12
+A -gnatwa
+A -mmacosx-version-min=16.0.0
+A -mcpu=apple-m1
+A -mlittle-endian
+A -mabi=lp64
+A -fPIC
+P ZX
+
+RN
+RV NO_IMPLEMENTATION_PRAGMAS
+
+U zephyrine%s		zephyrine.ads		fa60cf7b NE OO PU PK
+
+D system.ads		20250419085653 70765b54 system%s
+D zephyrine.ads		20250621052221 fa60cf7b zephyrine%s
+G a e
+X 2 zephyrine.ads
+5K9*Zephyrine 7l5 7e14
+
