@@ -2,6 +2,7 @@
 import os
 from dotenv import load_dotenv
 from loguru import logger
+import numpy as np
 
 # Load environment variables from .env file if it exists
 load_dotenv()
@@ -178,7 +179,7 @@ USER_AGENTS = [
 # --- Agent Settings ---
 AGENT_MAX_SCRIPT_RETRIES = 3 # Max attempts to generate/fix AppleScript per action
 
-ENABLE_FILE_INDEXER_STR = os.getenv("ENABLE_FILE_INDEXER", "true")
+ENABLE_FILE_INDEXER_STR = os.getenv("ENABLE_FILE_INDEXER", "false")
 ENABLE_FILE_INDEXER = ENABLE_FILE_INDEXER_STR.lower() in ('true', '1', 't', 'yes', 'y')
 logger.info(f"File Indexer Enabled: {ENABLE_FILE_INDEXER}")
 DB_TEXT_TRUNCATE_LEN = int(os.getenv("DB_TEXT_TRUNCATE_LEN", 10000000)) # Max length for indexed_content before truncation
@@ -313,6 +314,25 @@ logger.info(f"  Hook Directory: {STELLA_ICARUS_HOOK_DIR}")
 logger.info(f"  Cache Directory: {STELLA_ICARUS_CACHE_DIR}") # Primarily for Numba's cache if configured
 ADA_DAEMON_RETRY_DELAY_SECONDS = 30 # NEW: Fallback value
 # --- NEW: DCTD Branch Predictor Settings ---
+# --- NEW: LSH Configuration for Branch Prediction ---
+LSH_VECTOR_SIZE = 1024 # Common embedding size, adjust if your vectors are different (1024-Dimension)
+LSH_NUM_HYPERPLANES = 10 # For a 10-bit hash
+# Generate random hyperplanes once at startup
+_lsh_seed = 42
+_rng = np.random.default_rng(_lsh_seed)
+
+# LSH_BIT_COUNT is likely already defined in your config, but ensure it is.
+# It should be 10 for a 10-bit hash.
+if 'LSH_BIT_COUNT' not in globals():
+    LSH_BIT_COUNT = 10
+
+print(f"🌀 Generating {LSH_BIT_COUNT} random hyperplanes for LSH with vector size {LSH_VECTOR_SIZE}...")
+
+# Generate random vectors (hyperplanes) with a normal distribution.
+LSH_HYPERPLANES = _rng.normal(size=(LSH_BIT_COUNT, LSH_VECTOR_SIZE))
+
+print("🌀 LSH Hyperplanes generated successfully.")
+# --- END NEW: LSH Configuration ---
 DCTD_SOCKET_PATH = "./celestial_timestream_vector_helper.socket" # Relative to systemCore/engineMain
 DCTD_NT_PORT = 11891 # Port for Windows TCP fallback
 DCTD_ENABLE_QUANTUM_PREDICTION = os.getenv("DCTD_ENABLE_QUANTUM_PREDICTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
@@ -506,9 +526,9 @@ ENABLE_PER_STEP_SOCRATIC_INQUIRY = os.getenv("ENABLE_PER_STEP_SOCRATIC_INQUIRY",
 logger.info(f"🤔 Per-Step Socratic Inquiry Enabled: {ENABLE_PER_STEP_SOCRATIC_INQUIRY}")
 # --- Add/Ensure these constants for the reflection loop timing ---
 # How long the reflector thread waits if NO work was found in a full active cycle
-IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 1)) # 5 minutes
+IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 300)) # 5 minutes
 # How long the reflector thread waits briefly between processing batches IF work IS being processed in an active cycle
-ACTIVE_CYCLE_PAUSE_SECONDS = float(os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 0.1)) # e.g., 0.1 seconds, very short
+ACTIVE_CYCLE_PAUSE_SECONDS = float(os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 0.1)) # e.g., 0.1 seconds, very short or 5 minutes
 
 # Input types eligible for new reflection
 REFLECTION_ELIGIBLE_INPUT_TYPES = [

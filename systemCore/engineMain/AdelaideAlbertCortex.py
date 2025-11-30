@@ -147,7 +147,8 @@ except ValueError:
     MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = _default_max_bg_tasks
 
 logger.info(f"🚦 Max concurrent background generate tasks: {MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS}")
-background_generate_task_semaphore = threading.Semaphore(MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS)
+background_generate_task_semaphore = asyncio.Semaphore(MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS)
+
 # === End Global Semaphores ===
 
 # --- Local Imports with Error Handling ---
@@ -171,7 +172,8 @@ try:
         get_global_file_index_vectorstore  # You already had this for CortexThoughts
     )
     from agent import AmaryllisAgent, AgentTools, _start_agent_task # Keep Agent imports
-    from .dctd_branchpredictor import BranchPredictorProvider # NEW: For DCTD Branch Prediction
+    from dctd_branchpredictor import BranchPredictorProvider # NEW: For DCTD Branch Prediction
+    from database import calculate_lsh_hash #calculate_lsh_hash
     from numpy.linalg import norm # NEW: For vector similarity calculation
 except ImportError as e:
     print(f"Error importing local modules (database, config, agent, cortex_backbone_provider): {e}")
@@ -209,10 +211,6 @@ except ImportError as e:
     # You might want to sys.exit(1) here if priority locking is critical
     sys.exit(1)
 interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
-
-#background_generate semaphore
-background_generate_task_semaphore = threading.Semaphore(MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS)
-
 
 # --- End Local Imports ---
 
@@ -1995,7 +1993,12 @@ class CortexThoughts:
                     continue
 
                 # 3. Calculate Time Bins (Temporal Quantization)
-                time_delta_seconds = int(time_delta.total_seconds())
+                if previous_timestamp:
+                    time_delta = interaction.timestamp - previous_timestamp
+                    time_delta_seconds = int(time_delta.total_seconds())
+                else:
+                    # For the very first interaction, the delta is effectively zero.
+                    time_delta_seconds = 0
 
                 # Define temporal bins (adjust as needed)
                 temporal_bin_id = 0  # Default to 0-120s
@@ -5907,7 +5910,8 @@ class CortexThoughts:
                                   update_interaction_id: Optional[int] = None,  # For reflection tasks
                                   stop_event_for_bg: Optional[threading.Event] = None,
                                   parent_ingestion_job_id: Optional[int] = None,
-                                  result_callback_queue: Optional[asyncio.Queue] = None):  # Link to parent ingestion job
+                                  result_callback_queue: Optional[
+                                      asyncio.Queue] = None):  # Link to parent ingestion job
 
         """
         Executes the main low-priority (ELP0) asynchronous pipeline, which operates
@@ -6004,7 +6008,7 @@ class CortexThoughts:
 
         final_response_text_for_this_turn = "Error: Background processing did not complete as expected."
         existing_interaction_to_update: Optional[Interaction] = None
-        source_interaction_for_reflection: Optional[Interaction] = None # New variable
+        source_interaction_for_reflection: Optional[Interaction] = None  # New variable
         task_completed_successfully = False
 
         max_retries_for_bg_task = LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES
@@ -6013,19 +6017,15 @@ class CortexThoughts:
         # ======================================================================
         # 2. LOAD/CREATE INTERACTION RECORD
         # ======================================================================
-
-        # Abort if the task is empty and not a reflection
         if not user_input and not image_b64 and not is_reflection_task:
-            logger.warning(f"{log_prefix} Empty input (no text, no image, not a reflection). Aborting.")
+            logger.warning(f"{log_prefix} Empty input (no text, no image). Aborting.")
             self.current_session_id = original_chat_session_id
-            if created_local_db_session and db:
-                db.close()
+            if created_local_db_session and db: db.close()
             return
 
-        try:
-            if is_reflection_task:
-                # --- Path for Reflection Tasks ---
-                # 1. Load the source interaction that triggered this reflection.
+        if is_reflection_task:
+            try:
+                # 1. Load the source interaction.
                 source_interaction_for_reflection = await asyncio.to_thread(
                     db.query(Interaction).filter(Interaction.id == update_interaction_id).first
                 )
@@ -6033,610 +6033,904 @@ class CortexThoughts:
                 if source_interaction_for_reflection is None:
                     logger.error(
                         f"{log_prefix} CRITICAL - Source Interaction ID {update_interaction_id} not found for reflection. Aborting.")
-                    raise RuntimeError(f"Source interaction {update_interaction_id} not found.")
+                    # Clean up and exit if the source is gone.
+                    self.current_session_id = original_chat_session_id
+                    if created_local_db_session and db: db.close()
+                    return
 
                 # 2. Mark the source interaction as "processed for reflection" immediately.
-                # This prevents it from being picked up again by the SelfReflectorThread.
+                # This prevents it from being picked up again in an infinite loop.
+                # We are UPDATING a flag here, but not the core content. This is a necessary state change.
                 source_interaction_for_reflection.reflection_completed = True
                 await asyncio.to_thread(db.commit)
                 logger.info(
                     f"{log_prefix} Marked source Interaction ID {update_interaction_id} as reflection_completed=True.")
 
-                # 3. Create a NEW "stub" record for this reflection task itself.
-                #    This is CRITICAL to have a unique ID before any agentic actions are taken.
+                # 3. Create a new "stub" record for this reflection task itself.
+                #    This is CRITICAL to ensure we have an ID before any agentic actions are taken.
                 logger.info(f"{log_prefix} Creating initial stub record for this reflection task.")
                 stub_interaction = Interaction(
                     session_id=session_id,
-                    mode="chat",
+                    mode="chat",  # Reflections are part of the chat mode
                     input_type="reflection_task_in_progress",
                     user_input=user_input,  # This now holds the Socratic prompt
                     llm_response="[Reflection task initiated... awaiting synthesis.]",
                     classification="internal_cognitive_step"
+                    # All other fields will use their default values
                 )
                 db.add(stub_interaction)
                 db.commit()
                 db.refresh(stub_interaction)
 
-                # 4. Assign the newly created stub to our main tracking variable.
+                # 4. CRITICAL: Populate the variable that was previously None.
                 existing_interaction_to_update = stub_interaction
                 logger.success(
-                    f"{log_prefix} Reflection stub record created with ID: {existing_interaction_to_update.id}.")
+                    f"{log_prefix} Reflection stub record created with ID: {existing_interaction_to_update.id}. "
+                    f"Variable is now populated."
+                )
 
-            else:
-                # --- Path for New User Queries ---
-                # Create the initial interaction record for this new query.
-                initial_interaction = Interaction(**interaction_data)
-                db.add(initial_interaction)
-                db.commit()
-                db.refresh(initial_interaction)
+            except Exception as e_load_and_mark:
+                logger.error(
+                    f"{log_prefix} Error loading or marking source Interaction ID {update_interaction_id}: {e_load_and_mark}. Aborting.")
+                if db: await asyncio.to_thread(db.rollback)
+                self.current_session_id = original_chat_session_id
+                if created_local_db_session and db: db.close()
+                return
+        else:
+            # Create the initial interaction record for this new query.
+            initial_interaction = Interaction(**interaction_data)
+            db.add(initial_interaction)
+            db.commit()
+            db.refresh(initial_interaction)
 
-                # Assign the newly created record to our main tracking variable.
-                existing_interaction_to_update = initial_interaction
-                logger.info(
-                    f"{log_prefix} Initial interaction record created with ID: {existing_interaction_to_update.id}.")
+            # Populate the variable for this path as well.
+            existing_interaction_to_update = initial_interaction
 
-        except Exception as e_load_create:
-            logger.error(f"{log_prefix} Error during interaction record load/create: {e_load_create}", exc_info=True)
-            # Cleanup and exit if we can't even create the initial record.
-            self.current_session_id = original_chat_session_id
-            if created_local_db_session and db:
-                db.rollback()
-                db.close()
-            return
+        # --- Optional Branch Prediction (Pre-processing) ---
+        future_information_prediction = ""
+        logger.info(f"🧬 {log_prefix} PRE-CHECK: About to check for Branch Predictor.")
+        logger.info(f"   - Is DCTD_ENABLE_QUANTUM_PREDICTION True? -> {DCTD_ENABLE_QUANTUM_PREDICTION}")
+        logger.info(f"   - Is self.branch_predictor None? -> {self.branch_predictor is None}")
+        logger.info(
+            f"🧬 {log_prefix} PRE-CHECK: Config={DCTD_ENABLE_QUANTUM_PREDICTION}, Provider={self.branch_predictor is not None}")
 
-            # ======================================================================
-            # 3. MAIN PROCESSING BLOCK (OUTER STRUCTURE)
-            # ======================================================================
-            semaphore_acquired_for_task = False
+        if DCTD_ENABLE_QUANTUM_PREDICTION and self.branch_predictor:
             try:
-                # --- Acquire Semaphore ---
-                # This will block until a slot is free, respecting MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS.
-                background_generate_task_semaphore.acquire()
-                semaphore_acquired_for_task = True
-                logger.info(f"{log_prefix} Acquired background_generate_task_semaphore.")
+                # 1. Get Temporal/LSH Data
+                temporal_sieve_data = await asyncio.to_thread(self._get_temporal_sieve_data, db)
+
+                # 2. Get Current Input Vector (ELP1 Priority for speed)
+                # We embed the raw user input to know "where we are now"
+                current_embedding_list = await asyncio.to_thread(
+                    self.provider.embeddings.embed_documents, [user_input], priority=ELP1
+                )
+                current_embedding = np.array(current_embedding_list[0],
+                                             dtype=np.float32) if current_embedding_list else None
+
+                # 3. Get Previous Interaction Vector
+                # We look at the last DB entry to know "where we came from"
+                prev_interactions = await asyncio.to_thread(get_recent_interactions, db, limit=1)
+                previous_embedding = None
+                if prev_interactions and prev_interactions[0].embedding_json:
+                    try:
+                        prev_emb_list = json.loads(prev_interactions[0].embedding_json)
+                        previous_embedding = np.array(prev_emb_list, dtype=np.float32)
+                    except:
+                        pass
+
+                # If we don't have a previous, use a zero vector (start of conversation)
+                if previous_embedding is None:
+                    previous_embedding = np.zeros(1024, dtype=np.float32)
+
+                # 4. Execute Prediction
+                if temporal_sieve_data and current_embedding is not None:
+                    logger.info(f"🧬 {log_prefix} DCTD: Running Vector Trajectory Prediction...")
+
+                    prediction_result = self.branch_predictor.predict_future_vector(
+                        temporal_sieve_data,
+                        current_embedding,
+                        previous_embedding
+                    )
+
+                    if prediction_result:
+                        predicted_vector = prediction_result.get("predicted_vector")
+                        # Search DB for text matching this predicted future state
+                        most_similar = await asyncio.to_thread(
+                            self._find_most_similar_interaction_by_vector,
+                            predicted_vector,
+                            await asyncio.to_thread(get_recent_interactions, db, limit=100)
+                        )
+
+                        if most_similar:
+                            future_rag_info = f"User: {most_similar.user_input or ''}\nAI: {most_similar.llm_response or ''}"
+                            future_information_prediction = f"\nFutureInformationPrediction: {future_rag_info}\n"
+                            logger.success(
+                                f"🧬 {log_prefix} DCTD: SUCCESS. Injected future prediction (ID: {most_similar.id}).")
+
+            except Exception as e_dctd:
+                logger.warning(f"{log_prefix} DCTD Branch Prediction failed: {e_dctd}")
+
+        # ======================================================================
+        # 3. MAIN PROCESSING BLOCK (WITH SEMAPHORE & RETRIES)
+        # ======================================================================
+        semaphore_acquired_for_task = False
+        try:
+            background_generate_task_semaphore.acquire()
+            semaphore_acquired_for_task = True
+            logger.info(f"{log_prefix} Acquired background_generate_task_semaphore.")
+
+            was_busy_waiting = False
+            while server_is_busy_event.is_set():
+                if stop_event_for_bg and stop_event_for_bg.is_set():
+                    raise TaskInterruptedException("Background task stopped during politeness wait.")
+                if not was_busy_waiting:
+                    logger.info(f"🚦 {log_prefix} Server busy, pausing background task start...")
+                    was_busy_waiting = True
+                await asyncio.sleep(1.0)
+            if was_busy_waiting: logger.info(f"🟢 {log_prefix} Server free, resuming background task.")
+
+            current_attempt = 0
+            while current_attempt <= max_retries_for_bg_task:
+                current_attempt += 1
+                if current_attempt > 1:
+                    logger.warning(
+                        f"{log_prefix} Retrying entire background generate process (Attempt {current_attempt})...")
+                    await asyncio.sleep(retry_delay_seconds)
 
-                # --- Politeness Wait ---
-                # If the main web server is busy with high-priority user requests, wait politely.
-                was_busy_waiting = False
-                while server_is_busy_event.is_set():
-                    if stop_event_for_bg and stop_event_for_bg.is_set():
-                        raise TaskInterruptedException("Background task stopped during politeness wait.")
-
-                    if not was_busy_waiting:
-                        logger.info(f"🚦 {log_prefix} Server is busy, pausing background task start...")
-                        was_busy_waiting = True
-
-                    await asyncio.sleep(1.0)  # Check every second
-
-                if was_busy_waiting:
-                    logger.info(f"🟢 {log_prefix} Server is now free, resuming background task.")
-
-                    # ==========================================================
-                    # 4. BRANCH PREDICTION & THE MAIN RETRY LOOP
-                    # ==========================================================
-
-                    # --- Optional Branch Prediction (Pre-processing) ---
-                    future_information_prediction = ""
-                    if DCTD_ENABLE_QUANTUM_PREDICTION and self.branch_predictor:
-                        try:
-                            logger.info(f"{log_prefix} DCTD: Attempting branch prediction augmentation.")
-                            temporal_sieve_data = await asyncio.to_thread(self._get_temporal_sieve_data, db)
-
-                            if temporal_sieve_data:
-                                prediction_result = self.branch_predictor.predict_future_vector(temporal_sieve_data)
-                                if prediction_result and isinstance(prediction_result, dict):
-                                    predicted_vector = prediction_result.get("predicted_vector")
-                                    if predicted_vector is not None:
-                                        recent_interactions = await asyncio.to_thread(get_recent_interactions, db,
-                                                                                      limit=100)
-                                        most_similar_interaction = await asyncio.to_thread(
-                                            self._find_most_similar_interaction_by_vector,
-                                            predicted_vector, recent_interactions
-                                        )
-                                        if most_similar_interaction:
-                                            future_rag_info = f"User: {most_similar_interaction.user_input or ''}\nAI: {most_similar_interaction.llm_response or ''}"
-                                            future_information_prediction = f"\nFutureInformationPrediction: {future_rag_info}\n"
-                                            logger.debug(
-                                                f"{log_prefix} DCTD: Injected future information prediction into context.")
-                        except Exception as e_dctd:
-                            logger.warning(f"{log_prefix} DCTD Branch Prediction failed (non-critical): {e_dctd}")
-
-                    # --- Main Execution & Retry Loop ---
-                    current_attempt = 0
-                    while current_attempt <= max_retries_for_bg_task:
-                        current_attempt += 1
-
-                        # Politeness wait before retrying an interrupted task
-                        if current_attempt > 1:
-                            logger.warning(
-                                f"{log_prefix} Retrying entire background generate process (Attempt {current_attempt})...")
-                            await asyncio.sleep(retry_delay_seconds)
-
-                        # This is the inner try block for the core logic.
-                        # All subsequent parts (5, 6, 7) will go inside this 'try'.
-                        try:
-                            # Check for an external stop signal at the beginning of each attempt.
-                            if stop_event_for_bg and stop_event_for_bg.is_set():
-                                raise TaskInterruptedException(
-                                    "Background task stopped by external signal before attempt.")
-
-                                # ==========================================================
-                                # 5.1 CORE LOGIC: "SHOULD I IMAGINE?" & IMAGE GENERATION
-                                # ==========================================================
-                                current_input_for_analysis = user_input
-
-                                # If the user uploaded an image, describe it first to create a text context.
-                                if image_b64:
-                                    vlm_desc, _ = await self._describe_image_async(
-                                        db, session_id, image_b64, "initial_description", ELP0
-                                    )
-                                    if vlm_desc:
-                                        current_input_for_analysis = f"[Image Context from User: {vlm_desc}]\n\nUser Query: {user_input or '(No text query)'}"
-                                        interaction_data['image_description'] = vlm_desc
-
-                                logger.info(f"{log_prefix} Deciding whether to generate an image...")
-                                temp_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=3)
-                                imagine_context_summary = self._format_direct_history(temp_history)
-
-                                should_imagine = await self._should_i_imagine_async(
-                                    db, session_id, current_input_for_analysis, imagine_context_summary
-                                )
-
-                                if should_imagine:
-                                    logger.info(
-                                        f"{log_prefix} Decision is YES. Initiating image generation pipeline...")
-                                    idea_to_viz = f"A visualization based on the user's request: {current_input_for_analysis}"
-
-                                    # Generate a refined image prompt
-                                    img_prompt = await self._generate_image_generation_prompt_async(
-                                        db, session_id, user_input, idea_to_viz, "", "", "", "", ""
-                                    )
-                                    interaction_data['imagined_image_prompt'] = img_prompt
-
-                                    if img_prompt:
-                                        # Generate the image
-                                        img_data_list, img_err = await self.provider.generate_image_async(
-                                            prompt=self._sanitize_text_for_prompt(img_prompt), priority=ELP0
-                                        )
-                                        if img_err:
-                                            logger.error(f"{log_prefix} Image generation worker failed: {img_err}")
-                                        elif img_data_list and img_data_list[0].get("b64_avif"):
-                                            img_avif_b64_gen = img_data_list[0]["b64_avif"]
-                                            interaction_data['imagined_image_avif_b64'] = img_avif_b64_gen
-
-                                            # Describe the generated image for context
-                                            gen_vlm_desc, _ = await self._describe_image_async(
-                                                db, session_id, img_avif_b64_gen, "describe_generated_image", ELP0,
-                                                is_avif=True
-                                            )
-                                            interaction_data['imagined_image_vlm_description'] = gen_vlm_desc
-
-                                            # Log the generated image and its description to the database
-                                            await asyncio.to_thread(
-                                                add_interaction, db, session_id=session_id, mode="chat",
-                                                input_type="image_generated_by_ai",
-                                                user_input=f"[AI Generated Image from prompt: {img_prompt}]",
-                                                imagined_image_avif_b64=img_avif_b64_gen,
-                                                image_description=gen_vlm_desc,
-                                                classification="vlm_analysis_of_internal_image"
-                                            )
-                                            await asyncio.to_thread(db.commit)
-                                            logger.info(
-                                                f"{log_prefix} Logged generated AVIF image and its VLM description.")
-
-                                # ==========================================================
-                                # 5.2 CORE LOGIC: GATHER COMPREHENSIVE CONTEXT
-                                # ==========================================================
-                                logger.info(f"{log_prefix} Gathering final comprehensive context for response...")
-                                wrapped_rag_res = await asyncio.to_thread(
-                                    self._get_rag_retriever_thread_wrapper, db, current_input_for_analysis, ELP0
-                                )
-                                if wrapped_rag_res.get("status") != "success":
-                                    raise RuntimeError(
-                                        f"Final RAG retrieval failed: {wrapped_rag_res.get('error_message')}")
-
-                                url_ret_obj, sess_hist_ret_obj, refl_chunk_ret_obj, sess_chat_rag_ids = wrapped_rag_res.get(
-                                    "data")
-                                interaction_data['rag_history_ids'] = sess_chat_rag_ids
-
-                                url_docs, session_docs, reflection_docs = [], [], []
-                                if url_ret_obj: url_docs = await asyncio.to_thread(url_ret_obj.invoke,
-                                                                                   current_input_for_analysis)
-                                if sess_hist_ret_obj: session_docs = await asyncio.to_thread(sess_hist_ret_obj.invoke,
-                                                                                             current_input_for_analysis)
-                                if refl_chunk_ret_obj: reflection_docs = await asyncio.to_thread(
-                                    refl_chunk_ret_obj.invoke, current_input_for_analysis)
-
-                                global_hist_final = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-                                direct_hist_prompt_final = self._format_direct_history(global_hist_final)
-
-                                log_entries_final = await asyncio.to_thread(get_recent_interactions, db,
-                                                                            RAG_HISTORY_COUNT * 2, session_id, "chat",
-                                                                            True)
-                                log_ctx_prompt_final = self._format_log_history(log_entries_final)
-
-                                emotion_analysis_str_final = await asyncio.to_thread(self._run_emotion_analysis, db,
-                                                                                     user_input, interaction_data)
-
-                                vec_file_ctx_result_str = await self._get_vector_search_file_index_context(
-                                    current_input_for_analysis, session_id, ELP0, stop_event_for_bg
-                                )
-
-                                url_context_str = self._format_docs(url_docs, "URL Context")
-                                history_rag_str = self._format_docs(session_docs + reflection_docs,
-                                                                    "History/Reflection RAG")
-
-                                if future_information_prediction:
-                                    history_rag_str += f"\n{future_information_prediction}"
-
-                                # ==========================================================
-                                # 5.3 CORE LOGIC: AGENTIC ACTION OR TEXT SYNTHESIS
-                                # ==========================================================
-                                initial_synthesis_or_action_result: str = ""
-
-                                logger.info(f"{log_prefix} Analyzing for agentic actions (search, scripts, etc.)...")
-                                action_payload_ctx = {
-                                    "history_summary": emotion_analysis_str_final,
-                                    "log_context": log_ctx_prompt_final,
-                                    "recent_direct_history": direct_hist_prompt_final,
-                                    "file_index_context": vec_file_ctx_result_str
-                                }
-                                action_details = await self._analyze_assistant_action(db, current_input_for_analysis,
-                                                                                      session_id, action_payload_ctx)
-
-                                detected_action_type = "no_action"
-                                if action_details and isinstance(action_details, dict):
-                                    detected_action_type = action_details.get("action_type", "no_action")
-                                    interaction_data.update({
-                                        'assistant_action_analysis_json': json.dumps(action_details),
-                                        'assistant_action_type': detected_action_type,
-                                        'assistant_action_params': json.dumps(action_details.get("parameters", {}))
-                                    })
-
-                                if detected_action_type != "no_action" and action_details:
-                                    logger.info(
-                                        f"{log_prefix} Action '{detected_action_type}' detected. Executing tool...")
-                                    if not existing_interaction_to_update:
-                                        raise RuntimeError("Missing interaction context for action execution.")
-                                    initial_synthesis_or_action_result = await self._execute_assistant_action(
-                                        db, session_id, action_details, existing_interaction_to_update
-                                    )
-                                    interaction_data['assistant_action_executed'] = True
-                                else:
-                                    logger.info(
-                                        f"{log_prefix} No agentic action detected. Proceeding with standard text generation.")
-
-                                    # --- Routing ---
-                                    router_payload = {
-                                        "input": current_input_for_analysis,
-                                        "recent_direct_history": direct_hist_prompt_final,
-                                        "context": self._sanitize_text_for_prompt(url_context_str),
-                                        "history_rag": self._sanitize_text_for_prompt(history_rag_str),
-                                        "file_index_context": vec_file_ctx_result_str,
-                                        "log_context": log_ctx_prompt_final,
-                                        "emotion_analysis": emotion_analysis_str_final,
-                                        "pending_tot_result": "None.",
-                                        "imagined_image_vlm_description": interaction_data.get(
-                                            'imagined_image_vlm_description', 'None.')
-                                    }
-                                    role, query, reason = await self._route_to_specialist(db, session_id,
-                                                                                          current_input_for_analysis,
-                                                                                          router_payload)
-                                    interaction_data['classification_reason'] = f"Routed to {role}: {reason}"
-
-                                    # --- Specialist Draft ---
-                                    specialist_model = self.provider.get_model(role)
-                                    if not specialist_model:
-                                        raise ValueError(f"Specialist model '{role}' not found.")
-
-                                    specialist_payload = router_payload.copy()
-                                    specialist_payload["input"] = query  # Use refined query from router
-                                    specialist_chain = self.text_prompt_template | specialist_model | StrOutputParser()
-                                    timing_data_specialist = {"session_id": session_id,
-                                                              "mode": f"chat_specialist_{role}"}
-                                    draft_response = await asyncio.to_thread(
-                                        self._call_llm_with_timing, specialist_chain, specialist_payload,
-                                        timing_data_specialist, priority=ELP0
-                                    )
-
-                                    # --- Corrector Pass ---
-                                    initial_synthesis_or_action_result = await self._correct_response(
-                                        db, session_id, current_input_for_analysis, specialist_payload, draft_response
-                                    )
-                                # ==========================================================
-                                # 6. CORE LOGIC: ITERATIVE ELABORATION & FINAL ASSEMBLY
-                                # ==========================================================
-                                logger.info(
-                                    f"{log_prefix} Starting iterative elaboration based on initial synthesis (len: {len(initial_synthesis_or_action_result)}).")
-
-                                elaborated_chunks_array = [initial_synthesis_or_action_result]
-                                is_elaboration_finished = False
-
-                                if not initial_synthesis_or_action_result.strip():
-                                    logger.warning(
-                                        f"{log_prefix} Initial synthesis was empty. Skipping elaboration phase.")
-                                    is_elaboration_finished = True
-
-                                elaboration_model = self.provider.get_model(
-                                    "router")  # Use a capable model for elaboration
-
-                                for chunk_num in range(BACKGROUND_MAX_CHUNKS):
-                                    if is_elaboration_finished:
-                                        break
-
-                                    logger.info(
-                                        f"{log_prefix} Elaborating chunk {chunk_num + 1}/{BACKGROUND_MAX_CHUNKS}...")
-                                    current_response_so_far = "".join(elaborated_chunks_array)
-
-                                    elaboration_prompt_input = {
-                                        "initial_synthesis": initial_synthesis_or_action_result,
-                                        "dynamic_rag_context": "",  # Dynamic RAG can be added here if needed
-                                        "current_response_so_far": current_response_so_far,
-                                        "self_termination_token": SELF_TERMINATION_TOKEN,
-                                    }
-
-                                    bound_elaboration_model = elaboration_model.bind(
-                                        max_tokens=BACKGROUND_MAX_TOKENS_PER_CHUNK,
-                                        stop=[CHATML_END_TOKEN, SELF_TERMINATION_TOKEN]
-                                    )
-                                    elaboration_chain = ChatPromptTemplate.from_template(
-                                        PROMPT_BACKGROUND_ELABORATE_CONCLUSION) | bound_elaboration_model | StrOutputParser()
-                                    timing_data_chunk = {"session_id": session_id,
-                                                         "mode": f"chat_bg_elaborate_chunk_{chunk_num}"}
-
-                                    generated_chunk_raw = await asyncio.to_thread(
-                                        self._call_llm_with_timing, elaboration_chain, elaboration_prompt_input,
-                                        timing_data_chunk, priority=ELP0
-                                    )
-
-                                    if SELF_TERMINATION_TOKEN in generated_chunk_raw:
-                                        is_elaboration_finished = True
-                                        generated_chunk_raw = generated_chunk_raw.split(SELF_TERMINATION_TOKEN)[0]
-
-                                    clean_chunk_to_add = generated_chunk_raw.strip()
-                                    if clean_chunk_to_add:
-                                        elaborated_chunks_array.append(" " + clean_chunk_to_add)
-                                    else:
-                                        # Stop if the model generates an empty chunk
-                                        is_elaboration_finished = True
-
-                                # --- Final Assembly & Cleanup ---
-                                final_response_text_for_this_turn = self._cleanup_llm_output(
-                                    "".join(elaborated_chunks_array).strip())
-
-                                # ==========================================================
-                                # 6.1 SAVE FINAL RESULT AS A NEW, DEFINITIVE RECORD
-                                # ==========================================================
-                                final_save_data = interaction_data.copy()
-                                final_save_data.update({
-                                    "llm_response": final_response_text_for_this_turn,
-                                    "execution_time_ms": (time.monotonic() - request_start_time) * 1000.0
-                                })
-
-                                if is_reflection_task:
-                                    # --- Logic for Saving a Reflection's Result ---
-                                    logger.info(
-                                        f"{log_prefix} Saving the result of reflection task as a new 'text' interaction record.")
-                                    source_interaction_type = source_interaction_for_reflection.input_type if source_interaction_for_reflection else 'unknown'
-                                    final_save_data.update({
-                                        "input_type": "text",
-                                        "user_input": user_input,
-                                        "classification": f"reflection_answer_on_id_{update_interaction_id}_type_{source_interaction_type}",
-                                        "reflection_completed": True
-                                    })
-                                else:
-                                    # --- Logic for Saving a New Task's Final Answer ---
-                                    logger.info(
-                                        f"{log_prefix} Saving the final, definitive ELP0 answer to the database.")
-                                    final_save_data.update({
-                                        "input_type": "text",
-                                        "user_input": user_input,
-                                        "classification": "final_elp0_answer"
-                                    })
-
-                                # --- Common Save Logic ---
-                                valid_keys_final = {c.name for c in Interaction.__table__.columns}
-                                db_kwargs_final = {k: v for k, v in final_save_data.items() if
-                                                   k in valid_keys_final and k != 'id'}
-
-                                newly_created_record = await asyncio.to_thread(add_interaction, db, **db_kwargs_final)
-                                await asyncio.to_thread(db.commit)
-                                logger.success(
-                                    f"✅ {log_prefix} Successfully saved final result as new Interaction ID: {newly_created_record.id if newly_created_record else 'N/A'}.")
-
-                                # If it was a reflection result, index it in the reflection vector store
-                                if is_reflection_task and newly_created_record:
-                                    await asyncio.to_thread(index_single_reflection, newly_created_record,
-                                                            self.provider, db, ELP0)
-                                # ==========================================================
-                                # 7. CORE LOGIC: POST-GENERATION HOOKS
-                                # ==========================================================
-
-                                task_completed_successfully = True  # Mark success before post-generation hooks
-
-                                # --- Hook Creation Logic ---
-                                if task_completed_successfully and not is_reflection_task:
-                                    try:
-                                        logger.info(
-                                            f"{log_prefix} Post-generation check: Should this be automated with a hook?")
-                                        final_rag_context_for_hook = f"URL Context:\n{url_context_str}\n\nHistory Context:\n{history_rag_str}\n\nFile Context:\n{vec_file_ctx_result_str}"
-
-                                        should_create, reason = await self._should_i_create_a_hook_async(
-                                            db, session_id, user_input,
-                                            final_rag_context_for_hook,
-                                            final_response_text_for_this_turn
-                                        )
-
-                                        if should_create:
-                                            await asyncio.to_thread(
-                                                add_interaction, db, session_id=session_id, mode="chat",
-                                                input_type="log_info_spawn_hook",
-                                                user_input="Spawning background task to generate a StellaIcarus hook.",
-                                                llm_response=f"Reason: {reason}"
-                                            )
-                                            await asyncio.to_thread(db.commit)
-                                            logger.info(
-                                                f"{log_prefix} Spawning background task to generate automation hook. Reason: {reason}")
-                                            asyncio.create_task(
-                                                self._generate_stella_icarus_hook_async(
-                                                    db, session_id, user_input,
-                                                    final_rag_context_for_hook,
-                                                    final_response_text_for_this_turn
-                                                )
-                                            )
-                                    except Exception as hook_logic_err:
-                                        # Log error but do not fail the main task
-                                        logger.error(
-                                            f"{log_prefix} Error in the hook creation logic block: {hook_logic_err}",
-                                            exc_info=True)
-
-                                # --- Socratic Question Generation ---
-                                if ENABLE_SOCRATIC_QUESTION_GENERATION and task_completed_successfully:
-                                    try:
-                                        logger.info(
-                                            f"{log_prefix} Final Step: Generating a Socratic question for future reflection...")
-
-                                        # Use the final, clean response to generate the question
-                                        generated_socratic_question = await self._generate_socratic_question_async(
-                                            db=db,
-                                            source_text=final_response_text_for_this_turn,
-                                            session_id=session_id
-                                        )
-
-                                        if generated_socratic_question:
-                                            logger.info(
-                                                f"{log_prefix} Saving generated Socratic question as a new 'text' interaction.")
-
-                                            # The "user_input" for this new task is the question itself.
-                                            await asyncio.to_thread(
-                                                add_interaction,
-                                                db,
-                                                session_id=session_id,
-                                                input_type="text",
-                                                user_input=generated_socratic_question,
-                                                llm_response="[This is a self-generated Socratic question queued for future reflection.]",
-                                                reflection_completed=False,
-                                                classification="socratic_thought"
-                                            )
-                                            await asyncio.to_thread(db.commit)
-                                            logger.success(
-                                                f"✅ {log_prefix} Socratic question saved and queued for future reflection.")
-                                        else:
-                                            logger.info(
-                                                f"{log_prefix} No Socratic question was generated for this interaction.")
-                                    except Exception as e_socratic:
-                                        # Non-critical error, do not fail the task
-                                        logger.error(f"❌ {log_prefix} Error during Socratic generation: {e_socratic}")
-
-                                # If we reached this point, the attempt was successful.
-                                # Exit the retry loop.
-                                break
-                            # ==========================================================
-                            # 8. HANDLING INNER EXCEPTIONS (INSIDE RETRY LOOP)
-                            # ==========================================================
-                        except TaskInterruptedException as tie:
-                            logger.warning(f"🚦 {log_prefix} Attempt {current_attempt} INTERRUPTED: {tie}")
-                            final_response_text_for_this_turn = f"[Task interrupted: {tie}]"
-                            interaction_data.update({
-                                'llm_response': final_response_text_for_this_turn,
-                                'classification': "task_failed_interrupted",
-                                'input_type': 'log_warning'
-                            })
-                            if current_attempt > max_retries_for_bg_task:
-                                logger.error(f"{log_prefix} Max retries reached after interruption. Failing task.")
-                                task_completed_successfully = False
-                                break  # Break loop, max retries reached
-
-                        except Exception as e_inner:
-                            logger.error(
-                                f"❌❌ {log_prefix} Attempt {current_attempt} FAILED with unhandled exception: {e_inner}")
-                            logger.exception(f"{log_prefix} Attempt {current_attempt} Traceback:")
-                            final_response_text_for_this_turn = f"Error in processing: {type(e_inner).__name__} - {str(e_inner)}"
-                            interaction_data.update({
-                                'llm_response': final_response_text_for_this_turn,
-                                'input_type': 'error'
-                            })
-                            task_completed_successfully = False
-                            break  # Break loop, this is a fatal error for the attempt
-
-                    # --- End of the 'while' retry loop ---
-
-                    # This is the outer exception handler, matching the 'try' from Part 3.
-                    # It catches critical setup errors before the inner loop starts.
-            except Exception as e_outer:
-                logger.critical(
-                    f"🔥🔥 {log_prefix} CRITICAL UNHANDLED exception in outer block (before or after retry loop): {e_outer}")
-                logger.exception(f"{log_prefix} Outer Traceback:")
-                final_response_text_for_this_turn = f"Critical Error: {type(e_outer).__name__}"
-                interaction_data.update({'llm_response': final_response_text_for_this_turn, 'input_type': 'error'})
-                task_completed_successfully = False
-
-            # ======================================================================
-            # 9. FINALIZATION & CLEANUP
-            # ======================================================================
-            finally:
-                # --- Release Semaphore ---
-                if semaphore_acquired_for_task:
-                    background_generate_task_semaphore.release()
-                    logger.info(f"{log_prefix} Released background_generate_task_semaphore.")
-
-                # --- Final Failure Logging ---
-                # This block only runs if the task failed before a definitive answer
-                # could be saved in the main 'try' block.
                 try:
-                    if not task_completed_successfully:
-                        logger.error(f"{log_prefix} Task did not complete successfully. Saving a final failure record.")
+                    if stop_event_for_bg and stop_event_for_bg.is_set():
+                        raise TaskInterruptedException("Background task stopped by external signal before attempt.")
 
-                        source_info = f"Source Reflection ID: {update_interaction_id}" if is_reflection_task else f"Original User Input: {user_input}"
+                    # ==========================================================
+                    # 3.1 CORE ANALYSIS: "SHOULD I IMAGINE?" DECISION & EXECUTION
+                    # ==========================================================
+                    current_input_for_analysis = user_input
+                    if image_b64:
+                        vlm_desc, _ = await self._describe_image_async(db, session_id, image_b64, "initial_description",
+                                                                       ELP0)
+                        if vlm_desc:
+                            current_input_for_analysis = f"[Image Context from User: {vlm_desc}]\n\nUser Query: {user_input or '(No text query)'}"
+                            interaction_data['image_description'] = vlm_desc
 
-                        # Update the existing record to reflect the failure.
-                        if existing_interaction_to_update:
-                            existing_interaction_to_update.llm_response = final_response_text_for_this_turn
-                            existing_interaction_to_update.input_type = "task_failed"
-                            existing_interaction_to_update.classification = "fatal_task_error"
-                            await asyncio.to_thread(db.commit)
-                        else:
-                            # Fallback to creating a new error record if the main one was lost
+                    logger.info(f"{log_prefix} Deciding whether to generate an image...")
+                    temp_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=3)
+                    imagine_context_summary = self._format_direct_history(temp_history)
+
+                    should_imagine = await self._should_i_imagine_async(db, session_id, current_input_for_analysis,
+                                                                        imagine_context_summary)
+
+                    if should_imagine:
+                        logger.info(f"{log_prefix} Decision is YES. Initiating image generation pipeline...")
+                        idea_to_viz = f"A visualization based on the user's request: {current_input_for_analysis}"
+                        temp_history_rag_docs = await asyncio.to_thread(get_recent_interactions, db, 10, session_id,
+                                                                        "chat")
+                        temp_history_rag_str = self._format_docs(temp_history_rag_docs, "History RAG")
+                        temp_direct_history_str = self._format_direct_history(temp_history)
+
+                        img_prompt = await self._generate_image_generation_prompt_async(
+                            db, session_id, user_input, idea_to_viz, temp_history_rag_str, "", temp_direct_history_str,
+                            "", ""
+                        )
+                        interaction_data['imagined_image_prompt'] = img_prompt
+                        await asyncio.to_thread(add_interaction, db, session_id=session_id,
+                                                input_type='log_info_imagine_prompt',
+                                                llm_response=self._sanitize_text_for_prompt(img_prompt),
+                                                classification='internal_cognitive_step')
+                        await asyncio.to_thread(db.commit)
+
+                        if img_prompt:
+                            img_data_list, img_err = await self.provider.generate_image_async(
+                                prompt=self._sanitize_text_for_prompt(img_prompt),
+                                priority=ELP0)
+                            if img_err:
+                                logger.error(f"{log_prefix} Image generation worker failed: {img_err}")
+                            elif img_data_list and img_data_list[0].get("b64_avif"):
+                                img_avif_b64_gen = img_data_list[0]["b64_avif"]
+                                interaction_data['imagined_image_avif_b64'] = img_avif_b64_gen
+                                gen_vlm_desc, _ = await self._describe_image_async(db, session_id, img_avif_b64_gen,
+                                                                                   "describe_generated_image", ELP0,
+                                                                                   is_avif=True)
+                                interaction_data['imagined_image_vlm_description'] = gen_vlm_desc
+
+                                if gen_vlm_desc:
+                                    logger.info(f"{log_prefix} Logging VLM interpretation of imagined image.")
+                                    try:
+                                        await asyncio.to_thread(
+                                            add_interaction,
+                                            db,
+                                            session_id=session_id,
+                                            mode="chat",
+                                            input_type="vlm_interpretation_of_imagination",
+                                            user_input=f"[VLM analysis of self-generated image from prompt: '{str(img_prompt)}...']",
+                                            llm_response=gen_vlm_desc,
+                                            classification="internal_vlm_feedback_loop"
+                                        )
+                                        await asyncio.to_thread(db.commit)
+                                    except Exception as e_log_vlm_interp:
+                                        logger.error(
+                                            f"❌ {log_prefix} Failed to log VLM interpretation of imagined image: {e_log_vlm_interp}")
+                                        if db: await asyncio.to_thread(db.rollback)
+
+                                await asyncio.to_thread(
+                                    add_interaction, db, session_id=session_id, mode="chat",
+                                    input_type="log_info_imagination_complete",
+                                    user_input=f"Imagination pipeline completed for prompt: {img_prompt}",
+                                    llm_response=f"Generated image and described it: {gen_vlm_desc}"
+                                )
+                                await asyncio.to_thread(db.commit)
+                                await asyncio.to_thread(
+                                    add_interaction, db, session_id=session_id, mode="chat",
+                                    input_type="image_generated_by_ai",
+                                    user_input=f"[AI Generated Image from prompt: {img_prompt}]",
+                                    imagined_image_avif_b64=img_avif_b64_gen,
+                                    image_description=gen_vlm_desc,
+                                    classification="vlm_analysis_of_internal_image"
+                                )
+                                await asyncio.to_thread(db.commit)
+                                logger.info(
+                                    f"{log_prefix} Logged generated AVIF image and its VLM description to the database.")
+                            else:
+                                logger.warning(
+                                    f"{log_prefix} Image worker returned no data, no error, or missing 'b64_avif' key.")
+
+                    # ==========================================================
+                    # 3.2 CORE ANALYSIS: GATHER COMPREHENSIVE CONTEXT
+                    # ==========================================================
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=session_id, mode="chat",
+                        input_type="log_info_rag_start",
+                        user_input=f"Starting comprehensive RAG context gathering for: {current_input_for_analysis} \n This is possible future context being predicted: {future_information_prediction} ",
+                        llm_response="Combining vector search, fuzzy search, direct history, and file context."
+                    )
+                    await asyncio.to_thread(db.commit)
+
+                    logger.info(f"{log_prefix} Gathering final comprehensive context for response...")
+                    wrapped_rag_res = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db,
+                                                              current_input_for_analysis, ELP0)
+                    if wrapped_rag_res.get("status") != "success": raise RuntimeError(
+                        f"Final RAG retrieval failed: {wrapped_rag_res.get('error_message')}")
+
+                    url_ret_obj, sess_hist_ret_obj, refl_chunk_ret_obj, sess_chat_rag_ids = wrapped_rag_res.get("data")
+                    interaction_data['rag_history_ids'] = sess_chat_rag_ids
+                    url_docs, session_docs, reflection_docs = [], [], []
+                    if url_ret_obj: url_docs = await asyncio.to_thread(url_ret_obj.invoke, current_input_for_analysis)
+                    if sess_hist_ret_obj: session_docs = await asyncio.to_thread(sess_hist_ret_obj.invoke,
+                                                                                 current_input_for_analysis)
+                    if refl_chunk_ret_obj: reflection_docs = await asyncio.to_thread(refl_chunk_ret_obj.invoke,
+                                                                                     current_input_for_analysis)
+
+                    global_hist_final = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
+                    direct_hist_prompt_final = self._format_direct_history(global_hist_final)
+                    log_entries_final = await asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT * 2,
+                                                                session_id, "chat", True)
+                    log_ctx_prompt_final = self._format_log_history(log_entries_final)
+                    emotion_analysis_str_final = await asyncio.to_thread(self._run_emotion_analysis, db, user_input,
+                                                                         interaction_data)
+
+                    vec_file_ctx_result_str = await self._get_vector_search_file_index_context(
+                        current_input_for_analysis, session_id, ELP0, stop_event_for_bg)
+                    url_context_str = self._format_docs(url_docs, "URL Context")
+                    history_rag_str = self._format_docs(session_docs + reflection_docs, "History/Reflection RAG")
+
+                    rag_summary = (
+                        f"URL Context: {len(url_docs)} docs. "
+                        f"History/Reflection Context: {len(session_docs) + len(reflection_docs)} docs. "
+                        f"File Context: {'Yes' if vec_file_ctx_result_str != 'No relevant file content found via vector or fuzzy search for the query.' else 'No'}. "
+                        f"Log Context: {'Yes' if log_ctx_prompt_final != 'No recent relevant logs found.' else 'No'}."
+                    )
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=session_id, mode="chat",
+                        input_type="log_info_rag_complete",
+                        user_input="RAG context gathering complete.",
+                        llm_response=rag_summary
+                    )
+                    await asyncio.to_thread(db.commit)
+
+                    # ==========================================================
+                    # 3.3 CORE ANALYSIS: AGENTIC ACTION OR TEXT SYNTHESIS
+                    # ==========================================================
+                    initial_synthesis_or_action_result: str = ""
+
+                    logger.info(f"{log_prefix} Analyzing for agentic actions (search, scripts, etc.)...")
+                    action_payload_ctx = {"history_summary": emotion_analysis_str_final,
+                                          "log_context": log_ctx_prompt_final,
+                                          "recent_direct_history": direct_hist_prompt_final,
+                                          "file_index_context": vec_file_ctx_result_str}
+                    action_details = await self._analyze_assistant_action(db, current_input_for_analysis, session_id,
+                                                                          action_payload_ctx)
+                    detected_action_type = action_details.get("action_type",
+                                                              "no_action") if action_details and isinstance(
+                        action_details, dict) else "no_action"  # type: ignore
+                    if action_details:
+                        interaction_data.update({'assistant_action_analysis_json': json.dumps(action_details),
+                                                 'assistant_action_type': detected_action_type,
+                                                 'assistant_action_params': json.dumps(
+                                                     action_details.get("parameters", {}))})
+                        await asyncio.to_thread(
+                            add_interaction, db, session_id=session_id, mode="chat",
+                            input_type="log_info_action_analysis",
+                            user_input="Agentic action analysis complete.",
+                            llm_response=json.dumps(
+                                action_details) if action_details else '{"action_type": "no_action"}'
+                        )
+                        await asyncio.to_thread(db.commit)
+
+                    if detected_action_type != "no_action" and action_details:
+                        logger.info(f"{log_prefix} Action '{detected_action_type}' detected. Executing tool...")
+                        if not existing_interaction_to_update:
+                            raise RuntimeError("Missing interaction context for action execution.")
+                        initial_synthesis_or_action_result = await self._execute_assistant_action(db, session_id,
+                                                                                                  action_details,
+                                                                                                  existing_interaction_to_update)
+                        interaction_data['assistant_action_executed'] = True
+                    else:
+                        logger.info(
+                            f"{log_prefix} No agentic action detected. Proceeding with standard text generation.")
+                        router_payload = {
+                            "input": current_input_for_analysis, "recent_direct_history": direct_hist_prompt_final,
+                            "context": self._sanitize_text_for_prompt(url_context_str),
+                            "history_rag": self._sanitize_text_for_prompt(history_rag_str),
+                            "file_index_context": vec_file_ctx_result_str, "log_context": log_ctx_prompt_final,
+                            "emotion_analysis": emotion_analysis_str_final, "pending_tot_result": "None.",
+                            "imagined_image_vlm_description": interaction_data.get('imagined_image_vlm_description',
+                                                                                   'None.')
+                        }
+                        role, query, reason = await self._route_to_specialist(db, session_id,
+                                                                              current_input_for_analysis,
+                                                                              router_payload)
+                        interaction_data['classification_reason'] = f"Routed to {role}: {reason}"
+                        await asyncio.to_thread(
+                            add_interaction, db, session_id=session_id, mode="chat",
+                            input_type="log_info_routing_decision",
+                            user_input="Routing decision complete.",
+                            llm_response=f"Chose model '{role}' for query '{query}...'. Reason: {reason}"
+                        )
+                        await asyncio.to_thread(db.commit)
+                        specialist_model = self.provider.get_model(role)
+                        if not specialist_model: raise ValueError(f"Specialist model '{role}' not found.")
+
+                        specialist_payload = router_payload.copy()
+                        # 1. Prepare and format the prompt for the specialist model.
+                        specialist_payload["input"] = query  # Use the refined query from the router
+                        specialist_prompt_template = self.text_prompt_template
+                        formatted_prompt_for_specialist = specialist_prompt_template.format(**specialist_payload)
+
+                        # 2. Build the chain and execute the LLM call.
+                        specialist_chain = specialist_prompt_template | specialist_model | StrOutputParser()
+                        timing_data_specialist = {"session_id": session_id, "mode": f"chat_specialist_{role}"}
+                        draft_response = await asyncio.to_thread(self._call_llm_with_timing, specialist_chain,
+                                                                 specialist_payload, timing_data_specialist,
+                                                                 priority=ELP0)
+
+                        # 3. Log the EXACT prompt and RAW response.
+                        if draft_response and "ERROR" not in str(draft_response).upper():
+                            logger.info(f"{log_prefix} Logging initial draft from '{role}' specialist.")
+                            try:
+                                await asyncio.to_thread(
+                                    add_interaction,
+                                    db,
+                                    session_id=session_id,
+                                    input_type="text",
+                                    user_input=formatted_prompt_for_specialist,  # <-- SAVE THE PROMPT
+                                    llm_response=draft_response,  # <-- SAVE THE RAW RESPONSE
+                                    classification=f"specialist_draft_thought_{role}"
+                                )
+                                await asyncio.to_thread(db.commit)
+                            except Exception as e_log_draft:
+                                logger.error(f"❌ {log_prefix} Failed to log specialist draft: {e_log_draft}")
+                                if db: await asyncio.to_thread(db.rollback)
+
+                        if ENABLE_PER_STEP_SOCRATIC_INQUIRY and draft_response:
+                            asyncio.create_task(self._spawn_socratic_inquiry_for_text(
+                                source_text=draft_response,
+                                session_id=session_id,
+                                request_id=request_id,
+                                step_name="specialist_draft"
+                            ))
+
+                        # 1. Prepare the input dictionary for the corrector prompt.
+                        corrector_prompt_input = {
+                            "input": current_input_for_analysis,
+                            "context": specialist_payload.get("context", ""),
+                            "history_rag": specialist_payload.get("history_rag", ""),
+                            "file_index_context": specialist_payload.get("file_index_context", ""),
+                            "log_context": specialist_payload.get("log_context", ""),
+                            "recent_direct_history": specialist_payload.get("recent_direct_history", ""),
+                            "emotion_analysis": specialist_payload.get("emotion_analysis", ""),
+                            "draft_response": draft_response
+                        }
+
+                        # 2. Manually format the prompt for logging.
+                        corrector_prompt_template = ChatPromptTemplate.from_template(PROMPT_CORRECTOR)
+                        formatted_prompt_for_corrector = corrector_prompt_template.format(**corrector_prompt_input)
+
+                        # 3. Execute the corrector call (the _correct_response helper does this internally).
+                        initial_synthesis_or_action_result = await self._correct_response(db, session_id,
+                                                                                          current_input_for_analysis,
+                                                                                          specialist_payload,
+                                                                                          draft_response)
+
+                        # 4. Log the EXACT prompt and RAW response.
+                        if initial_synthesis_or_action_result and "ERROR" not in str(
+                                initial_synthesis_or_action_result).upper():
+                            logger.info(f"{log_prefix} Logging corrected synthesis.")
+                            try:
+                                await asyncio.to_thread(
+                                    add_interaction,
+                                    db,
+                                    session_id=session_id,
+                                    input_type="text",
+                                    user_input=formatted_prompt_for_corrector,  # <-- SAVE THE PROMPT
+                                    llm_response=initial_synthesis_or_action_result,  # <-- SAVE THE RAW RESPONSE
+                                    classification="corrector_thought"
+                                )
+                                await asyncio.to_thread(db.commit)
+                            except Exception as e_log_corrected:
+                                logger.error(f"❌ {log_prefix} Failed to log corrected synthesis: {e_log_corrected}")
+                                if db: await asyncio.to_thread(db.rollback)
+
+                        if ENABLE_PER_STEP_SOCRATIC_INQUIRY and initial_synthesis_or_action_result:
+                            asyncio.create_task(self._spawn_socratic_inquiry_for_text(
+                                source_text=initial_synthesis_or_action_result,
+                                session_id=session_id,
+                                request_id=request_id,
+                                step_name="corrected_synthesis"
+                            ))
+
+                    # ==========================================================
+                    # 3.4 ITERATIVE ELABORATION PHASE
+                    # ==========================================================
+                    logger.info(
+                        f"{log_prefix} Starting iterative elaboration based on initial synthesis (len: {len(initial_synthesis_or_action_result)}).")
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=session_id, mode="chat",
+                        input_type="log_info_elaboration_start",
+                        user_input="Starting iterative elaboration.",
+                        llm_response=f"Initial synthesis/action result (len {len(initial_synthesis_or_action_result)}): {initial_synthesis_or_action_result}..."
+                    )
+                    await asyncio.to_thread(db.commit)
+
+                    elaborated_chunks_array = [initial_synthesis_or_action_result]
+                    is_elaboration_finished = False
+                    elaboration_model = self.provider.get_model("router")
+
+                    if not initial_synthesis_or_action_result.strip():
+                        logger.warning(f"{log_prefix} Initial synthesis was empty. Skipping elaboration phase.")
+                        is_elaboration_finished = True
+
+                    for chunk_num in range(BACKGROUND_MAX_CHUNKS):
+                        if is_elaboration_finished: break
+
+                        logger.info(f"{log_prefix} Elaborating chunk {chunk_num + 1}/{BACKGROUND_MAX_CHUNKS}...")
+                        current_response_so_far = "".join(elaborated_chunks_array)
+                        dynamic_rag_query = f"Original Query: '{user_input}'\nElaboration in progress: '{current_response_so_far[-1000:]}'"
+                        dynamic_rag_docs = []
+                        if sess_hist_ret_obj:
+                            dynamic_rag_docs = await asyncio.to_thread(sess_hist_ret_obj.invoke, dynamic_rag_query)
+                        dynamic_rag_context_str = self._format_docs(dynamic_rag_docs, "Dynamic RAG")
+
+                        # 1. Prepare the dictionary of variables for the prompt.
+                        elaboration_prompt_input = {
+                            "initial_synthesis": initial_synthesis_or_action_result,
+                            "dynamic_rag_context": dynamic_rag_context_str,
+                            "current_response_so_far": current_response_so_far,
+                            "self_termination_token": SELF_TERMINATION_TOKEN,
+                        }
+
+                        # 2. Manually format the prompt to capture it for logging.
+                        elaboration_prompt_template = ChatPromptTemplate.from_template(
+                            PROMPT_BACKGROUND_ELABORATE_CONCLUSION)
+                        formatted_prompt_for_log = elaboration_prompt_template.format(**elaboration_prompt_input)
+
+                        # 3. Build the chain for execution.
+                        bound_elaboration_model = elaboration_model.bind(max_tokens=BACKGROUND_MAX_TOKENS_PER_CHUNK,
+                                                                         stop=[CHATML_END_TOKEN,
+                                                                               SELF_TERMINATION_TOKEN])
+                        elaboration_chain = elaboration_prompt_template | bound_elaboration_model | StrOutputParser()
+                        timing_data_chunk = {"session_id": session_id, "mode": f"chat_bg_elaborate_chunk_{chunk_num}"}
+
+                        # 4. Execute the LLM call.
+                        generated_chunk_raw = await asyncio.to_thread(self._call_llm_with_timing, elaboration_chain,
+                                                                      elaboration_prompt_input, timing_data_chunk,
+                                                                      priority=ELP0)
+
+                        # 5. Log the EXACT prompt and RAW response.
+                        logger.info(
+                            f"{log_prefix} Logging elaboration chunk #{chunk_num + 1} with full prompt and raw response.")
+                        try:
                             await asyncio.to_thread(
                                 add_interaction,
-                                db, session_id=session_id, mode="error",
-                                input_type="task_failed",
-                                user_input=f"[background_generate task failed for request: {request_id}] {source_info}",
-                                llm_response=final_response_text_for_this_turn,
-                                classification="fatal_task_error"
+                                db,
+                                session_id=session_id,
+                                input_type="text",
+                                # Save the formatted prompt here
+                                user_input=formatted_prompt_for_log,
+                                # Save the raw, unfiltered LLM output here
+                                llm_response=generated_chunk_raw,
+                                classification="elaboration_thought"
                             )
                             await asyncio.to_thread(db.commit)
+                        except Exception as e_log_chunk:
+                            logger.error(
+                                f"❌ {log_prefix} Failed to log elaboration chunk #{chunk_num + 1}: {e_log_chunk}")
+                            if db: await asyncio.to_thread(db.rollback)
 
-                    # --- Handle Callback Queue for Proactive SSE ---
-                    elif task_completed_successfully and result_callback_queue:
-                        logger.info(f"{log_prefix} Task successful. Putting result into callback queue...")
-                        if existing_interaction_to_update:
-                            # This payload structure is what the Go BFF/SSE will need later
-                            callback_payload = {
-                                "userId": "user_placeholder",  # To be filled in by consumer
-                                "chatId": existing_interaction_to_update.session_id,
-                                "message": final_response_text_for_this_turn
-                            }
-                            await result_callback_queue.put(callback_payload)
-                            logger.info(f"{log_prefix} Successfully queued result for delivery.")
+                        # 6. Process the raw chunk for the next iteration.
+                        if SELF_TERMINATION_TOKEN in generated_chunk_raw:
+                            is_elaboration_finished = True
+                            generated_chunk_raw = generated_chunk_raw.split(SELF_TERMINATION_TOKEN)[0]
+
+                        clean_chunk_to_add = generated_chunk_raw.strip()
+                        if clean_chunk_to_add:
+                            elaborated_chunks_array.append(" " + clean_chunk_to_add)
+                            if ENABLE_PER_STEP_SOCRATIC_INQUIRY:
+                                asyncio.create_task(self._spawn_socratic_inquiry_for_text(
+                                    source_text=clean_chunk_to_add,  # Use the clean chunk here
+                                    session_id=session_id,
+                                    request_id=request_id,
+                                    step_name=f"elaboration_chunk_{chunk_num + 1}"
+                                ))
                         else:
-                            logger.warning(
-                                f"{log_prefix} Could not send to callback queue: source interaction context was lost.")
+                            is_elaboration_finished = True
 
-                except Exception as final_db_error_log_err:
-                    logger.critical(
-                        f"❌❌ {log_prefix} CRITICAL: Failed even to save the task failure record to DB: {final_db_error_log_err}")
-                    if db:
-                        await asyncio.to_thread(db.rollback)
+                    final_response_text_for_this_turn = "".join(elaborated_chunks_array).strip()
 
-            # --- Restore Session ID and Log Final Timings ---
+                    logger.info(f"{log_prefix} Cleaning the final assembled response before summarization...")
+                    final_response_text_for_this_turn = self._cleanup_llm_output(final_response_text_for_this_turn)
+
+                    # =================== SAVE FINAL RESULT AS A NEW RECORD ===================
+                    # This block runs at the end of a successful task. It creates a new
+                    # record for either the final answer to a user query OR the result of a reflection.
+
+                    final_save_data = interaction_data.copy()
+                    final_save_data.update({
+                        "llm_response": self._cleanup_llm_output(final_response_text_for_this_turn),
+                        "execution_time_ms": (time.monotonic() - request_start_time) * 1000.0
+                    })
+
+                    if is_reflection_task:
+                        # --- Logic for Saving a Reflection's Result ---
+                        logger.info(
+                            f"{log_prefix} Saving the result of reflection task as a new 'text' interaction record.")
+
+                        # The original interaction that was the *source* for this reflection.
+                        # This variable comes from the logic we added at the start of background_generate.
+                        source_interaction_type = source_interaction_for_reflection.input_type if source_interaction_for_reflection else 'unknown'
+
+                        final_save_data.update({
+                            "input_type": "text",  # <-- CHANGED to 'text'
+                            # The "user_input" for a reflection result is the full prompt/content it reflected on.
+                            "user_input": user_input,
+                            # The classification now clearly states the purpose.
+                            "classification": f"reflection_answer_on_id_{update_interaction_id}_type_{source_interaction_type}",
+                            # <-- CHANGED
+                            # A reflection result is considered "complete" by default.
+                            "reflection_completed": True
+                        })
+
+                    else:
+                        # --- Logic for Saving a New Task's Final Answer ---
+                        logger.info(f"{log_prefix} Saving the final, definitive ELP0 answer to the database.")
+
+                        if ENABLE_PER_STEP_SOCRATIC_INQUIRY:
+                            asyncio.create_task(self._spawn_socratic_inquiry_for_text(
+                                source_text=final_response_text_for_this_turn,
+                                session_id=session_id,
+                                request_id=request_id,
+                                step_name="final_answer"
+                            ))
+
+                        final_save_data.update({
+                            "input_type": "text",
+                            "user_input": user_input,  # The original user query
+                            "classification": "final_elp0_answer"
+                        })
+
+                    # --- Common Save Logic ---
+                    try:
+                        valid_keys_final = {c.name for c in Interaction.__table__.columns}
+                        db_kwargs_final = {k: v for k, v in final_save_data.items() if
+                                           k in valid_keys_final and k != 'id'}
+
+                        # Add the new record to the database
+                        newly_created_record = await asyncio.to_thread(
+                            add_interaction,
+                            db,
+                            **db_kwargs_final
+                        )
+                        await asyncio.to_thread(db.commit)
+                        logger.success(
+                            f"✅ {log_prefix} Successfully saved final result as new Interaction ID: {newly_created_record.id if newly_created_record else 'N/A'}.")
+
+                        # If it was a reflection result, index it in the reflection vector store
+                        if is_reflection_task and newly_created_record:
+                            await asyncio.to_thread(index_single_reflection, newly_created_record, self.provider, db,
+                                                    ELP0)
+
+                    except Exception as e_final_save:
+                        logger.error(f"❌ {log_prefix} CRITICAL: Failed to save the final result record: {e_final_save}")
+                        if db: await asyncio.to_thread(db.rollback)
+
+                    # ====================================================================
+
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=session_id, mode="chat",
+                        input_type="log_info_elaboration_complete",
+                        user_input="Iterative elaboration complete.",
+                        llm_response=f"Final response length: {len(final_response_text_for_this_turn)}. Chunks: {len(elaborated_chunks_array)}."
+                    )
+                    await asyncio.to_thread(db.commit)
+
+                    # --- NEW: Multi-language Summarization and Translation ---
+                    logger.info(f"{log_prefix} Starting multi-language summarization and translation.")
+
+                    if final_response_text_for_this_turn and final_response_text_for_this_turn.strip():
+                        logger.info(f"{log_prefix} Starting multi-language summarization and translation.")
+                        # 1. Determine original language of the user input
+                        # In a real scenario, you'd use a library like `langdetect` or `fasttext` here.
+                        # For the purpose of this task, we'll assume English for the original query language.
+                        # If a language detection library were available, it would be used like:
+                        # try:
+                        #     from langdetect import detect
+                        #     original_query_lang_code = detect(user_input)
+                        # except ImportError:
+                        #     logger.warning("langdetect not installed. Defaulting original query language to 'en'.")
+                        # except Exception as e:
+                        #     logger.warning(f"Language detection failed: {e}. Defaulting to 'en'.")
+                        original_query_lang_code = "en"  # Default to English for now.
+
+                        # 2. Prepare prompt for summarization and translation
+                        summary_prompt_input = {
+                            "text_to_summarize": final_response_text_for_this_turn
+                        }
+
+                        # 3. Call the translator model
+                        translator_model = self.provider.get_model("translator")
+                        if not translator_model:
+                            logger.error(
+                                f"{log_prefix} Translator model not available for summarization. Skipping multi-language summary.")
+                        else:
+                            # 1. Manually format the prompt for logging.
+                            summary_prompt_template = ChatPromptTemplate.from_template(PROMPT_MULTI_LANGUAGE_SUMMARY)
+                            formatted_prompt_for_summary = summary_prompt_template.format(**summary_prompt_input)
+
+                            # 2. Build chain and execute.
+                            summary_chain = summary_prompt_template | translator_model | StrOutputParser()
+                            summary_timing_data = {"session_id": session_id, "mode": "multi_lang_summary"}
+
+                            try:
+                                raw_summary_output = await asyncio.to_thread(
+                                    self._call_llm_with_timing, summary_chain, summary_prompt_input,
+                                    summary_timing_data, priority=ELP0
+                                )
+
+                                # 3. Log the EXACT prompt and RAW response.
+                                if raw_summary_output:
+                                    logger.info(f"{log_prefix} Logging multi-language summary thought.")
+                                    await asyncio.to_thread(
+                                        add_interaction,
+                                        db,
+                                        session_id=session_id,
+                                        input_type="text",  # <-- CHANGED
+                                        user_input=formatted_prompt_for_summary,  # <-- SAVE THE PROMPT
+                                        llm_response=raw_summary_output,  # <-- SAVE THE RAW RESPONSE
+                                        classification="summary_thought"  # <-- CHANGED
+                                    )
+                                    await asyncio.to_thread(db.commit)
+
+                                # 4. Parse the output to update the main interaction data (no change here).
+                                json_candidate = self._extract_json_candidate_string(raw_summary_output,
+                                                                                     log_prefix + "-SummaryExtract")
+                                if json_candidate:
+                                    parsed_summaries = self._programmatic_json_parse_and_fix(json_candidate,
+                                                                                             log_prefix=log_prefix + "-SummaryFix")
+                                    if parsed_summaries and isinstance(parsed_summaries, dict):
+                                        interaction_data["summary_original_lang"] = parsed_summaries.get(
+                                            "summary_original_lang", "")
+                                        interaction_data["summary_en"] = parsed_summaries.get("summary_en", "")
+                                        interaction_data["summary_zh"] = parsed_summaries.get("summary_zh", "")
+                                        logger.info(f"{log_prefix} Multi-language summaries generated and stored.")
+                                    else:
+                                        logger.warning(f"{log_prefix} Failed to parse multi-language summary JSON.")
+                                else:
+                                    logger.warning(f"{log_prefix} No JSON candidate found for multi-language summary.")
+
+                            except Exception as e:
+                                logger.error(f"❌ {log_prefix} Error during multi-language summarization: {e}",
+                                             exc_info=True)
+                    # --- END NEW: Multi-language Summarization and Translation ---
+
+                    # ==========================================================
+                    # 3.5 SPAWN TREE OF THOUGHTS (IF NEEDED)
+                    # ==========================================================
+                    if not is_reflection_task and interaction_data.get("requires_deep_thought"):
+                        trigger_id_for_tot = existing_interaction_to_update.id if existing_interaction_to_update else None
+                        if trigger_id_for_tot:
+                            await asyncio.to_thread(
+                                add_interaction, db, session_id=session_id, mode="chat",
+                                input_type="log_info_spawn_tot",
+                                user_input=f"Spawning background Tree of Thoughts task for Interaction ID {trigger_id_for_tot}.",
+                                llm_response=f"ToT Input: {current_input_for_analysis}..."
+                            )
+                            await asyncio.to_thread(db.commit)
+                            logger.info(f"{log_prefix} Spawning ToT for Interaction ID: {trigger_id_for_tot}.")
+                            tot_payload = {
+                                "db_session_factory": SessionLocal,
+                                "original_input_for_tot": current_input_for_analysis,
+                                "rag_context_docs": url_docs,
+                                "history_rag_interactions": session_docs + reflection_docs,
+                                "log_context_str": log_ctx_prompt_final,
+                                "recent_direct_history_str": direct_hist_prompt_final,
+                                "file_index_context_str": vec_file_ctx_result_str,
+                                "triggering_interaction_id": trigger_id_for_tot,
+                                "imagined_image_context_str": interaction_data.get('imagined_image_vlm_description',
+                                                                                   'None.')
+                            }
+                            asyncio.create_task(self._run_tot_in_background_wrapper_v2(**tot_payload))
+                            interaction_data['tot_analysis_spawned'] = True
+                        else:
+                            logger.warning(f"{log_prefix} Could not spawn ToT, no trigger ID.")
+
+                    # ==========================================================
+                    # 3.6 POST-GENERATION: CREATE AUTOMATION HOOK?
+                    # ==========================================================
+                    task_completed_successfully = True  # Mark success before hook check
+                    if task_completed_successfully and not is_reflection_task:
+                        try:
+                            logger.info(f"{log_prefix} Post-generation check: Should this be automated with a hook?")
+                            final_rag_context_for_hook = f"URL Context:\n{url_context_str}\n\nHistory Context:\n{history_rag_str}\n\nFile Context:\n{vec_file_ctx_result_str}"
+                            should_create, reason = await self._should_i_create_a_hook_async(db, session_id, user_input,
+                                                                                             final_rag_context_for_hook,
+                                                                                             final_response_text_for_this_turn)
+                            if should_create:
+                                await asyncio.to_thread(
+                                    add_interaction, db, session_id=session_id, mode="chat",
+                                    input_type="log_info_spawn_hook",
+                                    user_input="Spawning background task to generate a StellaIcarus hook.",
+                                    llm_response=f"Reason: {reason}"
+                                )
+                                await asyncio.to_thread(db.commit)
+                                logger.info(
+                                    f"{log_prefix} Spawning background task to generate automation hook. Reason: {reason}")
+                                asyncio.create_task(self._generate_stella_icarus_hook_async(db, session_id, user_input,
+                                                                                            final_rag_context_for_hook,
+                                                                                            final_response_text_for_this_turn))
+                        except Exception as hook_logic_err:
+                            logger.error(f"{log_prefix} Error in the hook creation logic block: {hook_logic_err}",
+                                         exc_info=True)
+
+                    break  # Exit the retry loop on success
+
+                except TaskInterruptedException as tie:
+                    logger.warning(f"🚦 {log_prefix} Attempt {current_attempt} INTERRUPTED: {tie}")
+                    final_response_text_for_this_turn = f"[Task interrupted: {tie}]"
+                    interaction_data.update(
+                        {'llm_response': final_response_text_for_this_turn, 'classification': "task_failed_interrupted",
+                         'input_type': 'log_warning'})
+                    if current_attempt >= max_retries_for_bg_task:
+                        task_completed_successfully = False
+                        break
+                except Exception as e_inner:
+                    logger.error(
+                        f"❌❌ {log_prefix} Attempt {current_attempt} FAILED with unhandled exception: {e_inner}")
+                    logger.exception(f"{log_prefix} Attempt {current_attempt} Traceback:")
+                    final_response_text_for_this_turn = f"Error in processing: {type(e_inner).__name__} - {str(e_inner)}"
+                    interaction_data.update(
+                        {'llm_response': final_response_text_for_this_turn, 'input_type': 'error'})
+                    task_completed_successfully = False
+                    break
+
+                if ENABLE_SOCRATIC_QUESTION_GENERATION and task_completed_successfully:
+                    logger.info(f"{log_prefix} Final Step: Generating a Socratic question for future reflection...")
+
+                    # 1. Prepare the prompt inputs.
+                    socratic_prompt_input = {
+                        "original_user_input": user_input,
+                        "final_ai_response": final_response_text_for_this_turn
+                    }
+                    # 2. Manually format the prompt for logging.
+                    socratic_prompt_template = ChatPromptTemplate.from_template(PROMPT_GENERATE_SOCRATIC_QUESTION)
+                    formatted_prompt_for_socratic = socratic_prompt_template.format(**socratic_prompt_input)
+
+                    # 3. Call the helper (which calls the LLM).
+                    generated_socratic_question = await self._generate_socratic_question_async(
+                        db=db,
+                        source_text=socratic_prompt_input,
+                        session_id=session_id
+                    )
+
+                    # 4. Log the EXACT prompt and RAW response.
+                    if generated_socratic_question:
+                        logger.info(f"{log_prefix} Saving generated Socratic question as a new 'text' interaction.")
+                        try:
+                            await asyncio.to_thread(
+                                add_interaction,
+                                db,
+                                session_id=session_id,
+                                input_type="text",  # <-- CHANGED
+                                user_input=formatted_prompt_for_socratic,  # <-- SAVE THE PROMPT
+                                llm_response=generated_socratic_question,  # <-- SAVE THE RAW RESPONSE
+                                reflection_completed=False,  # <-- Keep this flag
+                                classification="socratic_thought"  # <-- CHANGED
+                            )
+                            await asyncio.to_thread(db.commit)
+                            logger.success(f"✅ {log_prefix} Socratic question saved and queued for future reflection.")
+                        except Exception as e_save_socratic:
+                            logger.error(f"❌ {log_prefix} Failed to save Socratic question to DB: {e_save_socratic}")
+                            if db: await asyncio.to_thread(db.rollback)
+                    else:
+                        logger.info(f"{log_prefix} No Socratic question was generated for this interaction.")
+
+
+        except Exception as e_outer:
+            logger.critical(f"🔥🔥 {log_prefix} CRITICAL UNHANDLED exception in outer block: {e_outer}")
+            logger.exception(f"{log_prefix} Outer Traceback:")
+            final_response_text_for_this_turn = f"Critical Error: {type(e_outer).__name__}"
+            interaction_data.update({'llm_response': final_response_text_for_this_turn, 'input_type': 'error'})
+            task_completed_successfully = False
+
+        # ======================================================================
+        # 4. FINALIZATION & DB JOURNAL ADD ENTRY TRACE
+        # ======================================================================
+        finally:
+            if semaphore_acquired_for_task:
+                background_generate_task_semaphore.release()
+                logger.info(f"{log_prefix} Released background_generate_task_semaphore.")
+
+            # --- NEW SIMPLIFIED LOGIC ---
+            # This block's only remaining data-related duty is to log a single,
+            # consolidated error record if the entire task failed before a result
+            # could be properly saved in the main 'try' block.
+            try:
+                if not task_completed_successfully:
+                    logger.error(f"{log_prefix} Task did not complete successfully. Saving a final failure record.")
+                    # Determine the source for the error log
+                    source_info = f"Source Reflection ID: {update_interaction_id}" if is_reflection_task else f"Original User Input: {user_input}"
+
+                    await asyncio.to_thread(
+                        add_interaction,
+                        db,
+                        session_id=session_id,
+                        mode="error",  # Use a distinct mode for clarity
+                        input_type="task_failed",
+                        user_input=f"[background_generate task failed for request: {request_id}] {source_info}",
+                        llm_response=final_response_text_for_this_turn,
+                        classification="fatal_task_error"
+                    )
+                    await asyncio.to_thread(db.commit)
+
+                elif task_completed_successfully and result_callback_queue:
+                    logger.info(f"{log_prefix} Task successful. Putting result into callback queue...")
+                    # We need to send both the message and the routing info
+                    # Get the user and chat ID from the interaction record we created/updated
+                    source_interaction = existing_interaction_to_update
+                    if source_interaction:
+                        # This payload structure is what the Go BFF/SSE will need later
+                        callback_payload = {
+                            "userId": "user_placeholder",
+                            # You will need to fetch the actual user ID associated with the session
+                            "chatId": source_interaction.session_id,
+                            "message": final_response_text_for_this_turn
+                        }
+                        await result_callback_queue.put(callback_payload)
+                        logger.info(f"{log_prefix} Successfully queued result for delivery.")
+                    else:
+                        logger.warning(
+                            f"{log_prefix} Could not send to callback queue: source interaction context was lost.")
+
+            except Exception as final_db_error_log_err:
+                logger.critical(
+                    f"❌❌ {log_prefix} CRITICAL: Failed even to save the task failure record to DB: {final_db_error_log_err}")
+                if db: await asyncio.to_thread(db.rollback)
+            # --- END NEW LOGIC ---
+
+            # Cleanup remains the same
             self.current_session_id = original_chat_session_id
             final_duration_ms = (time.monotonic() - request_start_time) * 1000.0
             logger.info(
                 f"{log_prefix} END. Duration: {final_duration_ms:.2f}ms. Success: {task_completed_successfully}"
             )
 
-            # --- Close DB Session if created locally ---
             if created_local_db_session and db:
                 db.close()
                 logger.debug(f"{log_prefix} Closed local DB session.")
