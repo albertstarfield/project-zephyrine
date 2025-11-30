@@ -183,7 +183,7 @@ This document serves as the master list for all tracked requirements, features, 
 
 -   **ID:** `CORE-FEAT-015`
     -   **Title:** Enhance file ingestion to support structured datasets (JSONL, CSV, Parquet).
-    -   **Status:** `In-Progress`
+    -   **Status:** `Resolved`
     -   **Description:** The file ingestion service has been significantly enhanced to parse and process structured data files, including `.jsonl`, `.csv`, and `.parquet`. This allows the system to learn from various conversational AI dataset formats (Alpaca, DPO, etc.) by extracting user/assistant interactions and queuing them for background reflection.
 
 ### Defects (Bugs)
