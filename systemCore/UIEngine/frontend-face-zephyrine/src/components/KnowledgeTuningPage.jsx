@@ -5,7 +5,10 @@ import '../styles/components/_knowledgeTuning.css';
 import { v4 as uuidv4 } from 'uuid'; // Import uuidv4 for temporary file IDs
 
 // This is the LLM API endpoint for file uploads
-const LLM_UPLOAD_API_URL = import.meta.env.VITE_LLM_FILE_UPLOAD_API_URL || 'http://localhost:11434/v1/files';
+//const LLM_UPLOAD_API_URL = import.meta.env.VITE_LLM_FILE_UPLOAD_API_URL || 'http://localhost:11434/v1/files';
+//const LLM_UPLOAD_API_URL = '/v1/files';
+const LLM_UPLOAD_API_URL = '/api/v1/files';
+//const LLM_UPLOAD_API_URL = 'http://localhost:3001/api/v1/files';
 // This is your backend endpoint for saving/fetching metadata about files
 const METADATA_API_URL = '/api/v1/files';
 
@@ -136,6 +139,7 @@ const KnowledgeTuningPage = () => {
         const formData = new FormData();
         formData.append('purpose', 'fine-tune'); // As per curl example
         formData.append('file', fileToUpload.actualFile); // Append the actual File object
+        formData.append('userId', user.id); // Add the user ID to the form data
 
         const API_KEY_OR_TOKEN = import.meta.env.VITE_OPENAI_API_KEY || 'your-ollama-token-if-needed'; // FIXED: process.env -> import.meta.env
 
