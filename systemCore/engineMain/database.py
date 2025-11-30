@@ -47,7 +47,6 @@ from collections import deque
 from loguru import logger
 from thefuzz import process as fuzz_process, fuzz
 from langchain_chroma import Chroma
-from interaction_indexer import get_global_interaction_vectorstore
 
 
 # --- Configuration & Paths ---
@@ -72,12 +71,7 @@ from CortexConfiguration import *
 
 ZSTD_COMPRESSION_LEVEL = int(os.getenv("ZSTD_COMPRESSION_LEVEL", 9))
 
-# --- NEW: LSH Configuration for Branch Prediction ---
-LSH_VECTOR_SIZE = 384 # Common embedding size, adjust if your vectors are different
-LSH_NUM_HYPERPLANES = 10 # For a 10-bit hash
-# Generate random hyperplanes once at startup
-LSH_HYPERPLANES = np.random.randn(LSH_NUM_HYPERPLANES, LSH_VECTOR_SIZE)
-# --- END NEW: LSH Configuration ---
+
 
 logger.info(f"⚙️ Runtime DB Path: {RUNTIME_DB_PATH}")
 logger.info(f"📦 Compressed DB Path (Shutdown Archive): {DB_PATH_COMPRESSED}")
@@ -288,51 +282,6 @@ class FileIndex(Base):
     def __repr__(self):
         return f"<FileIndex(path='{self.file_path[:50]}...', status='{self.index_status}', hash='{self.md5_hash}')>"
 
-# --- NEW: LSH Helper Functions for Branch Prediction ---
-def calculate_lsh_hash(vector: np.ndarray) -> Optional[int]:
-    """
-    Calculates a 10-bit Locality Sensitive Hash for a given vector.
-    Returns None if the vector size does not match LSH_VECTOR_SIZE.
-    """
-    if vector.shape[0] != LSH_VECTOR_SIZE:
-        logger.warning(f"Vector size mismatch for LSH calculation. Expected {LSH_VECTOR_SIZE}, got {vector.shape[0]}.")
-        return None
-    
-    # Project the vector onto each hyperplane and determine the bit
-    # If dot product is positive, bit is 1; otherwise, 0.
-    bits = (np.dot(LSH_HYPERPLANES, vector) > 0).astype(int)
-    
-    # Combine bits into a single integer (10-bit hash)
-    lsh_hash = int("".join(str(b) for b in bits), 2)
-    return lsh_hash
-
-def store_lsh_hash_for_interaction(db_session: Session, interaction_id: int, vector: np.ndarray) -> bool:
-    """
-    Calculates the LSH hash for a given vector and stores it in the specified interaction.
-    """
-    lsh_hash = calculate_lsh_hash(vector)
-    if lsh_hash is None:
-        return False
-
-    try:
-        stmt = update(Interaction).where(Interaction.id == interaction_id).values(lsh_hash_10bit=lsh_hash)
-        db_session.execute(stmt)
-        # No commit here; assume calling function will commit/rollback transaction
-        return True
-    except Exception as e:
-        logger.error(f"Error storing LSH hash for interaction ID {interaction_id}: {e}")
-        return False
-
-def create_lsh_index(db_session: Session):
-    """
-    Ensures that an index exists on the lsh_hash_10bit column.
-    This function is largely a no-op as SQLAlchemy's __table_args__ handles
-    index creation via Alembic migrations. It's kept for conceptual completeness
-    as described in the TODO.
-    """
-    logger.debug("create_lsh_index called. Index is handled by SQLAlchemy/Alembic migration on Interaction table.")
-    pass
-# --- END NEW: LSH Helper Functions ---
 
 
 # --- END Database Models ---
@@ -472,6 +421,59 @@ def _is_db_readonly(db_path: str) -> bool:
 
 
 # --- END Read-Only Check ---
+
+
+# --- NEW: LSH Helper Functions for Branch Prediction ---
+def calculate_lsh_hash(vector: np.ndarray) -> Optional[int]:
+    """
+    Calculates a 10-bit Locality Sensitive Hash for a given vector.
+    Returns None if the vector size does not match LSH_VECTOR_SIZE.
+    """
+    if vector.shape[0] != LSH_VECTOR_SIZE:
+        logger.warning(f"Vector size mismatch for LSH calculation. Expected {LSH_VECTOR_SIZE}, got {vector.shape[0]}.")
+        return None
+
+    # Project the vector onto each hyperplane and determine the bit
+    # If dot product is positive, bit is 1; otherwise, 0.
+    bits = (np.dot(LSH_HYPERPLANES, vector) > 0).astype(int)
+
+    # Combine bits into a single integer (10-bit hash)
+    lsh_hash = int("".join(str(b) for b in bits), 2)
+    return lsh_hash
+
+
+def store_lsh_hash_for_interaction(db_session: Session, interaction_id: int, vector: np.ndarray) -> bool:
+    """
+    Calculates the LSH hash for a given vector and stores it in the specified interaction.
+    """
+    lsh_hash = calculate_lsh_hash(vector)
+    if lsh_hash is None:
+        return False
+
+    try:
+        stmt = update(Interaction).where(Interaction.id == interaction_id).values(lsh_hash_10bit=lsh_hash)
+        db_session.execute(stmt)
+        # No commit here; assume calling function will commit/rollback transaction
+        return True
+    except Exception as e:
+        logger.error(f"Error storing LSH hash for interaction ID {interaction_id}: {e}")
+        return False
+
+
+def create_lsh_index(db_session: Session):
+    """
+    Ensures that an index exists on the lsh_hash_10bit column.
+    This function is largely a no-op as SQLAlchemy's __table_args__ handles
+    index creation via Alembic migrations. It's kept for conceptual completeness
+    as described in the TODO.
+    """
+    logger.debug("create_lsh_index called. Index is handled by SQLAlchemy/Alembic migration on Interaction table.")
+    pass
+
+
+# --- END NEW: LSH Helper Functions ---
+
+
 
 def _check_db_integrity_quick(db_path: str, context_msg: str = "DB") -> bool:
     """Quickly checks SQLite DB integrity using 'PRAGMA integrity_check'."""
@@ -1551,7 +1553,141 @@ datefmt = %H:%M:%S
         logger.critical(f"🔥🔥 {log_prefix}: A critical, unhandled error occurred in the health check thread: {e}")
         logger.exception(f"{log_prefix} Traceback:")
         # The _DB_HEALTH_OK_EVENT will NOT be set, leaving the app in a degraded state.
-        
+
+
+def _run_background_db_health_check():
+    """
+    This function runs in a dedicated background thread on startup.
+    It robustly ensures the database schema is up-to-date with the models
+    using Alembic, creating or altering tables as needed without data loss.
+    This version uses the "Stamp and Upgrade" strategy for maximum compatibility
+    with existing, unversioned databases.
+    """
+    log_prefix = "DB_HEALTH_CHECK"
+    logger.info(f"🧬 {log_prefix}: Background health check and migration thread started (v3 - Stamp and Upgrade).")
+
+    try:
+        # --- Step 1: Ensure Alembic environment is ready ---
+        # (This part is unchanged)
+        _create_default_env_py()
+        _create_default_script_mako()
+        if not os.path.exists(ALEMBIC_INI_PATH):
+            # ... (Your alembic.ini creation logic remains here) ...
+            logger.warning(f"🔧 Alembic config file alembic.ini not found. Creating default.")
+            alembic_dir_relative_path = os.path.relpath(ALEMBIC_DIR, APP_DIR).replace("\\", "/")
+            alembic_cfg_content = f"""
+[alembic]
+script_location = {alembic_dir_relative_path}
+sqlalchemy.url = {RUNTIME_DATABASE_URL}
+[loggers]
+keys = root,sqlalchemy,alembic
+[handlers]
+keys = console
+[formatters]
+keys = generic
+[logger_root]
+level = WARN
+handlers = console
+qualname =
+[logger_sqlalchemy]
+level = WARN
+handlers =
+qualname = sqlalchemy.engine
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+"""
+            with open(ALEMBIC_INI_PATH, 'w') as f: f.write(alembic_cfg_content.strip())
+            logger.success(f"📝 Default alembic.ini created.")
+
+        alembic_cfg = _get_alembic_config()
+        if not alembic_cfg:
+            raise RuntimeError("Failed to load/create Alembic configuration.")
+
+        engine_instance = get_engine()
+
+        # --- Step 2: Check if the database is completely empty ---
+        inspector = sql_inspect(engine_instance)
+        table_names_in_db = inspector.get_table_names()
+        is_new_db = not table_names_in_db
+
+        if is_new_db:
+            logger.info(
+                f"🧬 {log_prefix}: Database appears to be new or empty. Proceeding with initial schema creation.")
+            # If the DB is new, we clear any old migration files to start fresh.
+            if os.path.isdir(ALEMBIC_VERSIONS_PATH):
+                shutil.rmtree(ALEMBIC_VERSIONS_PATH)
+            os.makedirs(ALEMBIC_VERSIONS_PATH, exist_ok=True)
+
+            # Autogenerate the first migration script from the models.
+            command.revision(alembic_cfg, message="Create initial baseline schema", autogenerate=True)
+            # Apply it to create all tables.
+            command.upgrade(alembic_cfg, "head")
+            logger.success(f"✅ {log_prefix}: New database successfully created and stamped at 'head'.")
+
+        else:
+            logger.info(
+                f"🧬 {log_prefix}: Existing database detected. Stamping it to the latest revision before checking for changes.")
+            # --- THE CRITICAL FIX FOR EXISTING DATABASES ---
+            # "Stamping" tells Alembic to assume the database schema matches the latest
+            # migration file, even if the alembic_version table is missing or out of sync.
+            # This prevents it from trying to re-create existing tables.
+            try:
+                command.stamp(alembic_cfg, "head")
+                logger.info(f"✅ {log_prefix}: Database successfully 'stamped' to head revision.")
+            except Exception as e_stamp:
+                logger.critical(f"🔥🔥 {log_prefix}: FAILED during Alembic stamp: {e_stamp}")
+                raise
+
+            # Now that the DB is stamped, we can safely check for new changes.
+            logger.info(f"🧬 {log_prefix}: Autogenerating migration to detect new schema changes (e.g., new columns)...")
+            try:
+                command.revision(alembic_cfg, message="Autodetect new schema changes", autogenerate=True)
+            except CommandError as ce:
+                if "No changes detected" not in str(ce): raise
+
+            # And finally, apply any newly generated migration.
+            logger.info(f"🧬 {log_prefix}: Applying any newly generated migrations...")
+            command.upgrade(alembic_cfg, "head")
+            logger.success(f"✅ {log_prefix}: Schema is now fully up-to-date.")
+
+        # --- Step 3: Final Schema Verification ---
+        # (This part is unchanged)
+        logger.info(f"📊 {log_prefix}: Verifying final database schema...")
+        inspector = sql_inspect(engine_instance)
+        table_names_in_db = set(inspector.get_table_names())
+        expected_tables_from_models = set(Base.metadata.tables.keys())
+
+        if not expected_tables_from_models.issubset(table_names_in_db):
+            missing_tables = expected_tables_from_models - table_names_in_db
+            raise RuntimeError(f"Schema verification failed: Missing tables {missing_tables}")
+
+        logger.success(f"📊 {log_prefix}: All expected tables from models are present in the database.")
+
+        # --- Step 4: Start Services & Signal "All Clear" ---
+        # (Unchanged)
+        logger.info(f"🧬 {log_prefix}: Database is healthy and migrated. Starting dependent services.")
+        start_db_snapshotter()
+        atexit.register(stop_db_snapshotter)
+
+        _DB_HEALTH_OK_EVENT.set()
+        logger.success(
+            f"✅✅ {log_prefix}: Database is fully initialized and healthy. System is now operating at full capacity.")
+
+    except Exception as e:
+        logger.critical(f"🔥🔥 {log_prefix}: A critical, unhandled error occurred in the health check thread: {e}")
+        logger.exception(f"{log_prefix} Traceback:")
+        # The _DB_HEALTH_OK_EVENT will NOT be set.
+
 def is_db_healthy() -> bool:
     """
     Checks if the background database health check and migration process has completed successfully.
@@ -1993,6 +2129,8 @@ def get_text_from_vector(db: Session, vector: np.ndarray) -> Optional[str]:
     :param vector: The vector to search for.
     :return: The text of the most similar interaction, or None if not found.
     """
+
+    from interaction_indexer import get_global_interaction_vectorstore
 
     log_prefix = "VectorToText"
     logger.debug(f"{log_prefix}: Searching for text from vector.")

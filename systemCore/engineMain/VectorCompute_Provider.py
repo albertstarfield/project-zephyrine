@@ -112,115 +112,87 @@ class VectorComputeProvider:
                 gate[i, j] = 1
                 gate[j, i] = 1
         return gate
-        
-    def run_qrnn(self, feature_sequence: list[int], priority_lock: 'PriorityQuotaLock') -> np.ndarray:
-        """
-        Runs the QRNN simulation on a sequence of 16-bit features.
 
-        :param feature_sequence: A list of 16-bit integers representing historical interaction features.
-        :param priority_lock: The priority lock to use for preemption.
+    def run_qrnn(self, state_sequence: list[np.ndarray], priority_lock: 'PriorityQuotaLock') -> np.ndarray:
+        """
+        Runs the QRNN simulation using Angle Encoding on a sequence of state vectors.
+
+        :param state_sequence: A list of numpy arrays. Each array represents a timestep
+                               and should have a length equal to num_qubits (16).
+                               Values should be normalized floats between 0.0 and 1.0.
+        :param priority_lock: The priority lock.
         :return: A predicted 1024-dimensional vector.
         """
         if not self.backend:
             logger.error("QRNN simulation skipped: backend not initialized.")
             return np.zeros(1024)
 
-        if not feature_sequence:
-            logger.warning("QRNN simulation skipped: empty feature sequence.")
+        if not state_sequence:
+            logger.warning("QRNN simulation skipped: empty state sequence.")
             return np.zeros(1024)
 
-        logger.debug(f"Running QRNN simulation with {self.backend} backend on a sequence of {len(feature_sequence)} features.")
+        # Determine qubit count from the input dimension (should be 16)
+        num_qubits = len(state_sequence[0])
+        logger.debug(f"Running QRNN with {self.backend} backend. Seq Len: {len(state_sequence)}, Qubits: {num_qubits}")
 
-        # Acquire lock
         if priority_lock:
             priority_lock.acquire(0)
 
         try:
-            if self.backend in ["qiskit_qrack", "qiskit_aer"]:
-                # --- Qiskit QRNN Logic ---
-                num_qubits = 16
-                qc = QuantumCircuit(num_qubits, num_qubits)
+            # --- Numpy QRNN Logic (Classical Simulation of Quantum Circuit) ---
+            # Initialize state |00...0>
+            state_vector = np.zeros(2 ** num_qubits, dtype=np.complex64)
+            state_vector[0] = 1.0
 
-                for i, feature in enumerate(feature_sequence):
-                    if priority_lock and priority_lock.is_preempted(0):
-                        raise Exception("Task preempted by higher priority task.")
-                    
-                    for j in range(num_qubits):
-                        if (feature >> j) & 1:
-                            angle = float(feature) / float(2**16) * np.pi
-                            qc.ry(angle, j)
-                    
-                    for j in range(num_qubits - 1):
-                        qc.cnot(j, j + 1)
-
-                # Get the state vector from the simulation
-                qc.save_statevector()
-                compiled_circuit = transpile(qc, self.qiskit_simulator)
-                job = self.qiskit_simulator.run(compiled_circuit)
-                result = job.result()
-                state_vector = result.get_statevector(compiled_circuit)
-
-                # Convert state vector to a 1024-dimensional vector
-                real_vector = np.abs(state_vector)
-                reshaped_vector = real_vector.reshape((256, 256))
-                downsampled_vector = np.mean(reshaped_vector, axis=0)
-                
-                # Pad to 1024 dimensions
-                predicted_vector = np.zeros(1024)
-                predicted_vector[:256] = downsampled_vector
-                
-                logger.debug(f"  Qiskit simulation complete. Returning predicted vector.")
-                return predicted_vector
-
-            # --- Numpy QRNN Logic ---
-            num_qubits = 16
-            state_vector = np.zeros(2**num_qubits, dtype=np.complex64)
-            state_vector[0] = 1
-
-            for i, feature in enumerate(feature_sequence):
+            for t, input_features in enumerate(state_sequence):
                 if priority_lock and priority_lock.is_preempted(0):
                     raise Exception("Task preempted by higher priority task.")
 
+                # 1. Encoding Layer (Angle Encoding)
+                # We rotate each qubit based on the input feature value
                 for j in range(num_qubits):
-                    if (feature >> j) & 1:
-                        # Apply RY gate with an angle based on the feature
-                        angle = float(feature) / float(2**16) * np.pi
-                        ry = self._ry_gate(angle)
-                        gate = np.identity(2**(j), dtype=np.complex64)
-                        gate = np.kron(ry, gate)
-                        gate = np.kron(np.identity(2**(num_qubits - j - 1), dtype=np.complex64), gate)
-                        state_vector = np.dot(gate, state_vector)
+                    # Map input 0.0-1.0 to rotation 0 to Pi
+                    theta = input_features[j] * np.pi
+                    ry = self._ry_gate(theta)
 
-                # Entangle qubits
+                    # Apply gate to specific qubit (Tensor Product expansion)
+                    # Optimization: In a real sim, we'd use sparse matrices, but this is explicit
+                    gate = np.identity(2 ** (j), dtype=np.complex64)
+                    gate = np.kron(ry, gate)
+                    gate = np.kron(np.identity(2 ** (num_qubits - j - 1), dtype=np.complex64), gate)
+
+                    state_vector = np.dot(gate, state_vector)
+
+                # 2. Entanglement Layer (CNOT chain)
+                # This diffuses the information across the qubits
                 for j in range(num_qubits - 1):
                     cnot = self._cnot_gate(num_qubits, j, j + 1)
                     state_vector = np.dot(cnot, state_vector)
 
-            # Simulate depolarizing noise
-            noise_level = 0.01
-            for i in range(num_qubits):
-                if np.random.rand() < noise_level:
-                    x = self._x_gate()
-                    gate = np.identity(2**(i), dtype=np.complex64)
-                    gate = np.kron(x, gate)
-                    gate = np.kron(np.identity(2**(num_qubits - i - 1), dtype=np.complex64), gate)
-                    state_vector = np.dot(gate, state_vector)
+                # Circular entanglement (last to first) to close the loop
+                cnot_last = self._cnot_gate(num_qubits, num_qubits - 1, 0)
+                state_vector = np.dot(cnot_last, state_vector)
 
-            # Convert the final state_vector to a 1024-dimensional real-valued vector
-            real_vector = np.abs(state_vector)
-            reshaped_vector = real_vector.reshape((256, 256))
-            downsampled_vector = np.mean(reshaped_vector, axis=0)
-            
-            # Pad to 1024 dimensions
-            predicted_vector = np.zeros(1024)
-            predicted_vector[:256] = downsampled_vector
+            # --- Measurement / Readout ---
+            # Convert complex quantum probability amplitudes to real-valued dense vector
+            probabilities = np.abs(state_vector) ** 2  # Get probabilities
 
-            logger.debug(f"  QRNN simulation complete. Returning predicted vector.")
+            # We need to map 2^16 (65536) probabilities down to 1024 dimensions.
+            # We reshape and pool (average).
+            reshaped = probabilities.reshape((1024, 64))
+            predicted_vector = np.mean(reshaped, axis=1)
 
+            # Normalize the result to be a valid unit vector (like an embedding)
+            norm = np.linalg.norm(predicted_vector)
+            if norm > 0:
+                predicted_vector = predicted_vector / norm
+
+            logger.debug(f"  QRNN simulation complete. Predicted vector norm: {norm:.4f}")
             return predicted_vector
+
         finally:
             if priority_lock:
-                priority_lock.release(0)
+                priority_lock.release()
 
 if __name__ == '__main__':
     # Example Usage

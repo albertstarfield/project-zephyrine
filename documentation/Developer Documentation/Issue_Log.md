@@ -243,6 +243,17 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** Updated project dependencies and code to align with recent changes in the langchain library. This includes adding `langchain-experimental` to `requirements.txt`, changing the import for `RecursiveCharacterTextSplitter` from `langchain.text_splitter` to `langchain_text_splitters` across multiple files, and updating the `aria2` conda package source in `launcher.py`.
 
+-   **ID:** `CORE-REFACTOR-008`
+    -   **Title:** Overhaul background processing, DB migrations, and branch prediction.
+    -   **Status:** `In-Progress`
+    -   **Description:** This commit introduces a major architectural overhaul of the core engine. Key changes include:
+        - Refactoring the `background_generate` task in `AdelaideAlbertCortex.py` with improved error handling, more robust logging, and a clearer separation of concerns.
+        - Introducing a new "Tree of Thoughts" (ToT) background task for deeper analysis.
+        - Adding a mechanism to generate "StellaIcarus hooks" for creating automations based on interactions.
+        - Overhauling the database health check (`_run_background_db_health_check`) in `database.py` to use a robust "Stamp and Upgrade" Alembic migration strategy, resolving issues with existing databases.
+        - Refactoring the QRNN implementation in `VectorCompute_Provider.py` and the prediction logic in `dctd_branchpredictor.py` to use a trajectory-based approach.
+        - Adding support for AVIF/HEIC image formats to the file indexer's OCR capabilities.
+
 ---
 
 

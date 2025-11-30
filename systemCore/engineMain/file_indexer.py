@@ -33,6 +33,15 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.output_parsers import StrOutputParser
 
 # Optional imports - handle gracefully if libraries are missing
+
+try:
+    import pillow_avif # This plugin automatically registers AVIF support with Pillow
+    AVIF_SUPPORT_AVAILABLE = True
+    logger.info("✅ pillow-avif-plugin found. On-the-fly AVIF/HEIC conversion for OCR is enabled.")
+except ImportError:
+    AVIF_SUPPORT_AVAILABLE = False
+    logger.warning("⚠️ pillow-avif-plugin not installed. On-the-fly AVIF/HEIC conversion for OCR is disabled. Run: pip install pillow-avif-plugin")
+
 try:
     import pypdf
     PYPDF_AVAILABLE = True
@@ -281,57 +290,85 @@ class FileIndexer:
     def _extract_text_with_ocr_fallback(self, file_path: str, file_ext: str) -> str:
         """
         Extracts text from a file. For PDFs, it checks for a text layer and
-        falls back to OCR. For standard image types, it performs OCR directly.
+        falls back to OCR. For standard image types, it performs OCR directly,
+        with a fallback to convert unsupported formats like AVIF/HEIC on the fly.
         """
         log_prefix = f"TextExtract|{os.path.basename(file_path)[:15]}"
 
         try:
+            # --- PDF Processing (Unchanged) ---
             if file_ext == '.pdf':
-                # Add type hint for the 'doc' object for clarity
                 doc: fitz.Document = fitz.open(file_path)
                 full_text = ""
                 is_image_based = True
-
-                # First pass: check for a text layer
-                # --- FIX: Add type hint here to resolve warning on line 240 ---
                 page: fitz.Page
                 for page in doc:
-                    text_from_page = page.get_text("text") #type: ignore
+                    text_from_page = page.get_text("text")
                     if text_from_page and len(text_from_page.strip()) > 20:
                         is_image_based = False
                         break
-
                 if not is_image_based:
-                    log_worker("INFO", f"{log_prefix}: PDF has text layer, extracting directly.")
-                    # --- FIX: The type hint above also resolves the warning on line 247 ---
-                    full_text = "\n".join([page.get_text() for page in doc]) #type: ignore
+                    logger.trace(f"{log_prefix}: PDF has text layer, extracting directly.")
+                    full_text = "\n".join([page.get_text() for page in doc])
                 else:
-                    log_worker("INFO", f"{log_prefix}: PDF has no text layer, performing OCR...")
+                    logger.info(f"{log_prefix}: PDF has no text layer, performing OCR...")
                     ocr_texts = []
-                    # --- FIX: Add type hint again here to resolve warning on line 253 ---
-                    page: fitz.Page
                     for page_num, page in enumerate(doc):
-                        pix = page.get_pixmap(dpi=300)  #type: ignore
+                        pix = page.get_pixmap(dpi=300)
                         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                         try:
                             ocr_texts.append(pytesseract.image_to_string(img))
                         except pytesseract.TesseractNotFoundError:
-                            log_worker("ERROR", f"{log_prefix}: Tesseract OCR engine not found.")
+                            logger.error(f"{log_prefix}: Tesseract OCR engine not found.")
                             return "[OCR Error: Tesseract engine not found]"
                     full_text = "\n\n--- Page Break ---\n\n".join(ocr_texts)
                 doc.close()
                 return full_text
 
+            # --- Image Processing (NEW LOGIC) ---
             elif file_ext in OCR_TARGET_EXTENSIONS:
-                log_worker("INFO", f"{log_prefix}: Performing OCR on image file: {file_path}")
+                logger.info(f"{log_prefix}: Performing OCR on image file: {file_path}")
                 try:
+                    # Attempt direct OCR first. This works for JPG, PNG, etc.
                     return pytesseract.image_to_string(Image.open(file_path))
                 except pytesseract.TesseractNotFoundError:
-                    log_worker("ERROR", f"{log_prefix}: Tesseract OCR engine not found.")
+                    logger.error(f"{log_prefix}: Tesseract OCR engine not found.")
                     return "[OCR Error: Tesseract engine not found]"
+                except Exception as e:
+                    # Check if this is a format error that we can handle with conversion.
+                    if "Unsupported image format" in str(e) or "cannot identify image file" in str(e):
+                        logger.warning(
+                            f"{log_prefix}: Unsupported format '{file_ext}'. Attempting on-the-fly conversion...")
+
+                        if not AVIF_SUPPORT_AVAILABLE:
+                            err_msg = f"Cannot convert '{file_path}'. The required AVIF/HEIC plugin ('pillow-avif-plugin') is not installed."
+                            logger.error(f"{log_prefix}: {err_msg}")
+                            return f"[OCR Error: {err_msg}]"
+
+                        # If the plugin is available, try the conversion logic.
+                        try:
+                            # Load the unsupported image (this should work now thanks to the plugin)
+                            unsupported_image = Image.open(file_path)
+
+                            # Convert to PNG in memory for maximum compatibility.
+                            # The .convert("RGB") is crucial for formats that might have alpha channels (like PNG/AVIF).
+                            png_buffer = BytesIO()
+                            unsupported_image.convert("RGB").save(png_buffer, format="PNG")
+                            png_buffer.seek(0)  # Rewind the buffer to the beginning
+
+                            # Now, run OCR on the in-memory PNG data
+                            logger.info(f"{log_prefix}: Conversion successful. Performing OCR on in-memory PNG.")
+                            return pytesseract.image_to_string(Image.open(png_buffer))
+                        except Exception as conversion_error:
+                            err_msg = f"On-the-fly conversion failed for '{file_path}': {conversion_error}"
+                            logger.error(f"{log_prefix}: {err_msg}")
+                            return f"[OCR Error: {err_msg}]"
+                    else:
+                        # Re-raise any other unexpected errors.
+                        raise e
 
         except Exception as e:
-            log_worker("ERROR", f"{log_prefix}: Failed to extract text/OCR from '{file_path}': {e}")
+            logger.error(f"{log_prefix}: Failed to extract text/OCR from '{file_path}': {e}")
             return f"[Error extracting text/OCR: {e}]"
 
         return ""  # Fallback for unhandled file types
