@@ -20,6 +20,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"mime/multipart"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -28,7 +29,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
-	"github.com/sashabaranov/go-openai"
+	"github.com/sashabaranov/go-openai"	
 )
 
 // --- Configuration ---
@@ -664,9 +665,11 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		//AllowedOrigins:   []string{"*"},
+		AllowedOrigins: []string{"http://localhost:5173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		//AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"*"}, // Allow all headers
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -1054,45 +1057,127 @@ type FileUploadRequest struct {
 }
 
 func (app *App) handleFileUpload(w http.ResponseWriter, r *http.Request) {
-	var reqBody FileUploadRequest
-	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+	log.Printf("DEBUG: Received upload request. Content-Type: %s, Content-Length: %d", 
+        r.Header.Get("Content-Type"), r.ContentLength)
+	// 1. Parse the incoming Multipart Form (File Upload)
+	// Limit memory usage to 10MB
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		log.Printf("Error parsing multipart form: %v", err)
+		respondWithError(w, http.StatusBadRequest, "Invalid form data. Did you send a file?")
 		return
 	}
-	if reqBody.Filename == "" || reqBody.Filetype == "" || reqBody.UserID == "" {
-		respondWithError(w, http.StatusBadRequest, "Filename, filetype, and user ID are required.")
-		return
-	}
-	if !app.Config.AllowedFileTypes[reqBody.Filetype] {
-		msg := fmt.Sprintf("Unsupported file type: %s", reqBody.Filetype)
-		respondWithError(w, http.StatusUnsupportedMediaType, msg)
-		return
-	}
-	fileId := uuid.New().String()
-	status := "uploaded"
-	var llmFileID sql.NullString
-	if reqBody.LLMFileID != "" {
-		llmFileID.String = reqBody.LLMFileID
-		llmFileID.Valid = true
-	}
-	_, err := app.DB.ExecContext(r.Context(), `
-		INSERT INTO fine_tuning_files (id, user_id, filename, filetype, status, llm_file_id) VALUES (?, ?, ?, ?, ?, ?)
-	`, fileId, reqBody.UserID, reqBody.Filename, reqBody.Filetype, status, llmFileID)
+
+	// Retrieve the file from the form data
+	file, handler, err := r.FormFile("file")
 	if err != nil {
-		log.Printf("[POST /api/v1/files] DB INSERT error: %v", err)
-		respondWithError(w, http.StatusInternalServerError, "Failed to save file metadata to database.")
+		log.Printf("Error retrieving file from form: %v", err)
+		respondWithError(w, http.StatusBadRequest, "Missing 'file' field in request")
 		return
 	}
-	log.Printf("[POST /api/v1/files] File metadata %s saved to DB with ID: %s.", reqBody.Filename, fileId)
+	defer file.Close()
+
+	purpose := r.FormValue("purpose")
+	if purpose == "" {
+		purpose = "fine-tune"
+	}
+
+	// 2. Prepare Proxy Request to Python LLM Backend
+	targetURL := app.Config.LLMAPIRoot + "/v1/files" // e.g., http://localhost:11434/v1/files
+	log.Printf("Proxying file upload to: %s", targetURL)
+
+	// Create a buffer to hold the multipart data for the upstream request
+	var b bytes.Buffer
+	w_multipart := multipart.NewWriter(&b)
+
+	// Add the file to the upstream request
+	fw, err := w_multipart.CreateFormFile("file", handler.Filename)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating upstream form file")
+		return
+	}
+	if _, err = io.Copy(fw, file); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error copying file content")
+		return
+	}
+
+	// Add the 'purpose' field
+	if err = w_multipart.WriteField("purpose", purpose); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error writing purpose field")
+		return
+	}
+	
+	// Close the writer to finalize the boundary
+	w_multipart.Close()
+
+	// 3. Send Request to Python Backend
+	proxyReq, err := http.NewRequest("POST", targetURL, &b)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating proxy request")
+		return
+	}
+	// Set the correct Content-Type with the boundary
+	proxyReq.Header.Set("Content-Type", w_multipart.FormDataContentType())
+
+	client := &http.Client{}
+	llmResp, err := client.Do(proxyReq)
+	if err != nil {
+		log.Printf("Error communicating with AI engine: %v", err)
+		respondWithError(w, http.StatusServiceUnavailable, "Failed to contact AI engine")
+		return
+	}
+	defer llmResp.Body.Close()
+
+	// Check if Python backend rejected it
+	if llmResp.StatusCode != 200 {
+		bodyBytes, _ := io.ReadAll(llmResp.Body)
+		log.Printf("AI engine returned error: %d - %s", llmResp.StatusCode, string(bodyBytes))
+		respondWithError(w, llmResp.StatusCode, "AI engine error: "+string(bodyBytes))
+		return
+	}
+
+	// 4. Parse AI Engine Response (to get the ingestion ID)
+	var llmResult struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(llmResp.Body).Decode(&llmResult); err != nil {
+		log.Printf("Warning: Could not decode AI engine response JSON: %v", err)
+	}
+
+	// 5. Save Metadata to Go Database
+	fileId := uuid.New().String()
+	
+	// Get User ID from header or form (frontend sends it in form usually)
+	userID := r.FormValue("userId")
+	
+	// Add a strict check. If no userId is provided, reject the request.
+	if userID == "" {
+        log.Println("Rejecting file upload: missing 'userId' in form data.")
+		respondWithError(w, http.StatusBadRequest, "Missing required 'userId' field in the upload request.")
+		return
+	}
+
+	filename := handler.Filename
+	filetype := handler.Header.Get("Content-Type")
+
+	_, err = app.DB.ExecContext(r.Context(), `
+		INSERT INTO fine_tuning_files (id, user_id, filename, filetype, status, llm_file_id) 
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, fileId, userID, filename, filetype, "uploaded", llmResult.ID)
+
+	if err != nil {
+		log.Printf("DB Error saving file metadata: %v", err)
+		// We don't return an error to the client here because the upload actually succeeded
+	}
+
+	// 6. Respond to Frontend
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"message": "File metadata uploaded successfully.",
+		"message": "File uploaded and processing started.",
 		"file": map[string]interface{}{
 			"id":          fileId,
-			"filename":    reqBody.Filename,
-			"filetype":    reqBody.Filetype,
-			"status":      status,
-			"llm_file_id": llmFileID,
+			"filename":    filename,
+			"status":      "processing",
+			"llm_file_id": llmResult.ID,
 		},
 	})
 }

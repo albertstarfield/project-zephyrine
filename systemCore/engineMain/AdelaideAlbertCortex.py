@@ -892,8 +892,10 @@ def add_cors_headers(response):
     # Only add headers for the specified origin
     # You can add more complex logic here if needed (e.g., checking request.origin)
     response.headers['Access-Control-Allow-Origin'] = '*' #everywhere
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization' # Add any other headers your frontend might send
-    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS' # Add all methods your frontend uses
+    #response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization' # Add any other headers your frontend might send (It's too restrictive! it can't upload the fintuning jsonl)
+    response.headers['Access-Control-Allow-Headers'] = '*'  # Allow all headers for file uploads
+    #response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS' # Add all methods your frontend uses
+    response.headers['Access-Control-Allow-Methods'] = '*'
     response.headers['Access-Control-Allow-Credentials'] = 'true' # If you send cookies/credentials
     return response
 
@@ -5783,27 +5785,25 @@ class CortexThoughts:
 
     async def _initiate_file_ingestion_and_reflection(self,
                                                       db_session_factory: Any,
-                                                      # Changed type hint to generic Any to accept sessionmaker or Session
                                                       uploaded_file_record_id: int):
         """
-        Revised Ingestion Logic: Parses JSONL, Parquet, CSV, and Text files.
-        Extracts specific interaction pairs for reflection.
+        Universal Ingestion Logic: Parses JSONL, Parquet, CSV, TSV, Excel (XLSX/XLS),
+        LibreOffice (ODS), and Raw Text.
+        Extracts User Input, Assistant Response, and Chain-of-Thought (Reasoning).
         """
         current_job_id = f"ingest_proc_{uploaded_file_record_id}"
-        logger.info(f"🚀 {current_job_id}: Starting REVISED background file ingestion and reflection.")
+        logger.info(f"🚀 {current_job_id}: Starting UNIVERSAL background file ingestion.")
 
         bg_db_session: Optional[Session] = None
         uploaded_record_path: Optional[str] = None
 
-        # Handle the session factory vs session instance discrepancy
+        # 1. Session Setup
         try:
             if callable(db_session_factory):
                 bg_db_session = db_session_factory()
             else:
-                # If a session was passed directly (less likely for BG task, but possible)
                 bg_db_session = db_session_factory
         except Exception:
-            # Fallback if passed argument is weird, create fresh from global
             bg_db_session = SessionLocal()
 
         if not bg_db_session:
@@ -5811,7 +5811,7 @@ class CortexThoughts:
             return
 
         try:
-            # Fetch and update the main upload record
+            # 2. Fetch Record
             uploaded_record = bg_db_session.query(UploadedFileRecord).filter(
                 UploadedFileRecord.id == uploaded_file_record_id).first()
 
@@ -5820,6 +5820,7 @@ class CortexThoughts:
 
             uploaded_record_path = uploaded_record.stored_path
             original_filename = uploaded_record.original_filename
+            # Normalize extension
             file_ext = os.path.splitext(original_filename)[1].lower()
 
             logger.info(f"{current_job_id}: Processing '{original_filename}' ({file_ext})...")
@@ -5829,155 +5830,87 @@ class CortexThoughts:
             newly_created_interaction_ids = []
             processed_rows_or_lines = 0
 
-            # --- PARSING LOGIC START ---
+            # --- DATA LOADING STRATEGY ---
+            # We attempt to load everything into a list of dictionaries (records)
+            loaded_records = []
+            is_raw_text_fallback = False
 
-            # 1. Handle JSONL (OpenAI Fine-Tuning Format)
-            if file_ext == '.jsonl':
-                with open(uploaded_record_path, 'r', encoding='utf-8', errors='replace') as f:
-                    for line in f:
-                        if not line.strip(): continue
-                        try:
-                            data_entry = json.loads(line)
-                            user_content, asst_content, valid = self._parse_ingested_text_content(data_entry)
+            try:
+                # A. JSONL (Streaming Line-by-Line)
+                if file_ext == '.jsonl':
+                    with open(uploaded_record_path, 'r', encoding='utf-8', errors='replace') as f:
+                        for line in f:
+                            if not line.strip(): continue
+                            try:
+                                loaded_records.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                pass
 
-                            if valid:
-                                processed_rows_or_lines += 1
-                                # Create structured interaction
-                                new_interaction = add_interaction_no_commit(
-                                    bg_db_session,
-                                    session_id=f"ingest_{uploaded_record.ingestion_id}_row_{processed_rows_or_lines}",
-                                    mode="ingested_dataset",
-                                    input_type="text",
-                                    user_input=user_content,
-                                    llm_response=asst_content,
-                                    classification="ingested_reflection_task_queued",
-                                    reflection_completed=False,
-                                    parent_ingestion_job_id=uploaded_record.ingestion_id
-                                )
-                                if new_interaction:
-                                    bg_db_session.flush()  # Get ID
-                                    newly_created_interaction_ids.append(new_interaction.id)
-                        except json.JSONDecodeError:
-                            logger.warning(f"{current_job_id}: Skipping invalid JSON line.")
-                            continue
+                # B. Structured Data (Excel, ODS, Parquet, CSV, TSV)
+                # We use Pandas as the universal adapter here.
+                elif file_ext in ['.parquet', '.csv', '.tsv', '.xlsx', '.xls', '.ods']:
+                    df = None
+                    # Try using Polars for speed if available (optional optimization)
+                    try:
+                        import polars as pl
+                        if file_ext == '.parquet':
+                            df = pl.read_parquet(uploaded_record_path).to_pandas()
+                        elif file_ext == '.csv':
+                            df = pl.read_csv(uploaded_record_path).to_pandas()
+                        elif file_ext == '.tsv':
+                            df = pl.read_csv(uploaded_record_path, separator='\t').to_pandas()
+                    except ImportError:
+                        pass  # Fallback to Pandas standard
 
-            # 2. Handle Parquet / CSV (Structured Data)
-            elif file_ext in ['.parquet', '.csv']:
-                try:
-                    if file_ext == '.parquet':
-                        df = pd.read_parquet(uploaded_record_path)
-                    else:
-                        df = pd.read_csv(uploaded_record_path)
+                    # Pandas Loading (if Polars didn't run or it's an Excel file)
+                    if df is None:
+                        if file_ext == '.parquet':
+                            df = pd.read_parquet(uploaded_record_path)
+                        elif file_ext == '.csv':
+                            df = pd.read_csv(uploaded_record_path)
+                        elif file_ext == '.tsv':
+                            df = pd.read_csv(uploaded_record_path, sep='\t')
+                        elif file_ext in ['.xlsx', '.xls', '.ods']:
+                            # Reads the first sheet by default
+                            # Requires: openpyxl (xlsx), xlrd (xls), odfpy (ods)
+                            df = pd.read_excel(uploaded_record_path)
 
-                    # Iterate rows
-                    for _, row in df.iterrows():
-                        data_entry = row.to_dict()
-                        keys_lower = {k.lower(): k for k in data_entry.keys()}
+                    if df is not None:
+                        # Convert DataFrame to list of dicts
+                        loaded_records = df.to_dict(orient='records')
 
-                        user_content = None
-                        asst_content = None
-
-                        # --- PRIORITY 1: Chat/Messages Format (GPT, Qwen, Llama 3) ---
-                        if 'messages' in keys_lower:
-                            # Complex parsing: Extract the last user and last assistant message
-                            msgs = data_entry[keys_lower['messages']]
-                            # (Add logic here to parse list of dicts if format is JSON string)
-                            # For now, assuming it's already parsed or handled by helper
-
-                        # --- PRIORITY 2: Instruction/Alpaca Format (Llama 2, Deepseek, Mistral) ---
-                        elif 'instruction' in keys_lower and 'output' in keys_lower:
-                            # Handle "Input" column if it exists (Context)
-                            if 'input' in keys_lower and pd.notna(data_entry[keys_lower['input']]):
-                                user_content = f"{data_entry[keys_lower['instruction']]}\n\nContext:\n{data_entry[keys_lower['input']]}"
+                # C. Standard JSON (List of objects)
+                elif file_ext == '.json':
+                    with open(uploaded_record_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            loaded_records = data
+                        elif isinstance(data, dict):
+                            # Check for Croissant/Metadata wrapper
+                            if 'distribution' in data or '@context' in data:
+                                logger.warning(
+                                    f"{current_job_id}: Croissant/Metadata JSON detected. Attempting to find data keys...")
+                                # Naive extraction: look for any key holding a list
+                                for key, val in data.items():
+                                    if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                                        loaded_records = val
+                                        break
                             else:
-                                user_content = str(data_entry[keys_lower['instruction']])
-                            asst_content = str(data_entry[keys_lower['output']])
+                                loaded_records = [data]  # Treat single object as one record
 
-                        # --- PRIORITY 3: Legacy Prompt/Completion (Old GPT, Mistral) ---
-                        elif 'prompt' in keys_lower and 'completion' in keys_lower:
-                            user_content = str(data_entry[keys_lower['prompt']])
-                            asst_content = str(data_entry[keys_lower['completion']])
+                # D. Raw Text Fallback
+                else:
+                    is_raw_text_fallback = True
 
-                        # --- PRIORITY 4: Google/Turn-based Style (Gemma, Gemini) ---
-                        elif 'human' in keys_lower and 'assistant' in keys_lower:
-                            user_content = str(data_entry[keys_lower['human']])
-                            asst_content = str(data_entry[keys_lower['assistant']])
+            except Exception as load_err:
+                logger.warning(
+                    f"{current_job_id}: Structured load failed ({load_err}). Falling back to raw text processing.")
+                is_raw_text_fallback = True
 
-                        # --- PRIORITY 5: Raw Text (Phi, Granite Pre-training) ---
-                        elif 'text' in keys_lower:
-                            # Treat the whole text as input, and the "response" is a self-reflection task
-                            user_content = str(data_entry[keys_lower['text']])
-                            asst_content = "[Raw Text Data: Requesting Self-Reflection/Analysis]"
+            # --- PARSING & INGESTION LOOP ---
 
-                        # --- PRIORITY 6: DPO/Preference Data (Alignment) ---
-                        elif 'chosen' in keys_lower and 'rejected' in keys_lower:
-                            # We ingest the 'chosen' (good) response for learning
-                            if 'prompt' in keys_lower:
-                                user_content = str(data_entry[keys_lower['prompt']])
-                            elif 'instruction' in keys_lower:
-                                user_content = str(data_entry[keys_lower['instruction']])
-
-                            # Ingest the 'chosen' response
-                            # (Optional: You could ingest 'rejected' as a negative example later)
-                            chosen_data = data_entry[keys_lower['chosen']]
-                            # Handle if 'chosen' is a list of messages or a string
-                            if isinstance(chosen_data, list):
-                                asst_content = chosen_data[-1].get('content', '')  # Last message
-                            else:
-                                asst_content = str(chosen_data)
-
-                        reasoning_content = None
-                        if 'reasoning' in keys_lower:
-                            reasoning_content = str(data_entry[keys_lower['reasoning']])
-                        elif 'thought' in keys_lower:
-                            reasoning_content = str(data_entry[keys_lower['thought']])
-                        elif 'rationale' in keys_lower:
-                            reasoning_content = str(data_entry[keys_lower['rationale']])
-                        elif 'cot_content' in keys_lower:
-                            reasoning_content = str(data_entry[keys_lower['cot_content']])
-
-                        # 4. Merge Reasoning into Assistant Output
-                        # We wrap it in <think> tags so your system recognizes it as internal monologue.
-                        if reasoning_content and pd.notna(reasoning_content):
-                            # Clean up existing tags if they exist in the raw data
-                            clean_reasoning = reasoning_content.replace("<think>", "").replace("</think>", "").strip()
-
-                            formatted_thought = f"<think>\n{clean_reasoning}\n</think>"
-
-                            if asst_content:
-                                # Prepend thought to the final answer
-                                asst_content = f"{formatted_thought}\n\n{asst_content}"
-                            else:
-                                # If there's only thought (rare), that becomes the response
-                                asst_content = formatted_thought
-
-                        # Fallback if still None
-                        if not user_content:
-                            user_content, asst_content, _ = self._parse_ingested_text_content(data_entry)
-
-                        if user_content:
-                            processed_rows_or_lines += 1
-                            new_interaction = add_interaction_no_commit(
-                                bg_db_session,
-                                session_id=f"ingest_{uploaded_record.ingestion_id}_row_{processed_rows_or_lines}",
-                                mode="ingested_dataset",
-                                input_type="text",
-                                user_input=user_content,
-                                llm_response=asst_content if asst_content else "[Ingested without response]",
-                                classification="ingested_reflection_task_queued",
-                                reflection_completed=False,
-                                parent_ingestion_job_id=uploaded_record.ingestion_id
-                            )
-                            if new_interaction:
-                                bg_db_session.flush()
-                                newly_created_interaction_ids.append(new_interaction.id)
-                except Exception as e_pandas:
-                    logger.error(f"{current_job_id}: Pandas parsing error: {e_pandas}")
-                    raise e_pandas
-
-            # 3. Fallback: Raw Text Files
-            else:
-                # Treat as raw text, line by line
+            if is_raw_text_fallback:
+                # Raw Text Handling
                 with open(uploaded_record_path, 'r', encoding='utf-8', errors='replace') as f:
                     for i, line in enumerate(f):
                         if not line.strip(): continue
@@ -5996,25 +5929,118 @@ class CortexThoughts:
                         if new_interaction:
                             bg_db_session.flush()
                             newly_created_interaction_ids.append(new_interaction.id)
+            else:
+                # Structured Data Handling (The Universal Mapper)
+                for data_entry in loaded_records:
+                    if not isinstance(data_entry, dict): continue
 
-            # --- PARSING LOGIC END ---
+                    user_content = None
+                    asst_content = None
+
+                    # normalize keys
+                    keys_lower = {str(k).lower(): k for k in data_entry.keys()}
+
+                    # 1. Extract User Content (The Prompt)
+                    if 'messages' in keys_lower:
+                        # Handle Standard OpenAI "messages" list
+                        msgs = data_entry[keys_lower['messages']]
+                        if isinstance(msgs, list):
+                            # Parse using helper to get last user/assistant turn
+                            # (We create a temporary wrapper dict to reuse the helper logic)
+                            user_content, asst_content, _ = await self._parse_ingested_text_content({"messages": msgs})
+
+                    # If messages parsing didn't yield results, try columns
+                    if not user_content:
+                        if 'user' in keys_lower:
+                            user_content = str(data_entry[keys_lower['user']])
+                        elif 'instruction' in keys_lower:
+                            # Alpaca Style
+                            inst = str(data_entry[keys_lower['instruction']])
+                            inp = str(data_entry[keys_lower['input']]) if 'input' in keys_lower and pd.notna(
+                                data_entry[keys_lower['input']]) else ""
+                            user_content = f"{inst}\n\nContext:\n{inp}" if inp else inst
+                        elif 'question' in keys_lower:
+                            user_content = str(data_entry[keys_lower['question']])
+                        elif 'prompt' in keys_lower:
+                            user_content = str(data_entry[keys_lower['prompt']])
+                        elif 'input' in keys_lower:
+                            user_content = str(data_entry[keys_lower['input']])
+                        elif 'content' in keys_lower:
+                            user_content = str(data_entry[keys_lower['content']])  # Text only
+
+                    # 2. Extract Assistant Content (The Final Answer)
+                    if not asst_content:
+                        if 'assistant' in keys_lower:
+                            asst_content = str(data_entry[keys_lower['assistant']])
+                        elif 'response' in keys_lower:
+                            asst_content = str(data_entry[keys_lower['response']])
+                        elif 'answer' in keys_lower:
+                            asst_content = str(data_entry[keys_lower['answer']])
+                        elif 'output' in keys_lower:
+                            asst_content = str(data_entry[keys_lower['output']])
+                        elif 'completion' in keys_lower:
+                            asst_content = str(data_entry[keys_lower['completion']])
+                        elif 'chosen' in keys_lower:
+                            # DPO/RLHF: Take the 'chosen' response
+                            ch = data_entry[keys_lower['chosen']]
+                            if isinstance(ch, list):
+                                asst_content = ch[-1].get('content', '')
+                            else:
+                                asst_content = str(ch)
+
+                    # 3. Extract Reasoning/Thinking Content (Deepseek/CoT Style)
+                    reasoning_content = None
+                    if 'reasoning' in keys_lower:
+                        reasoning_content = str(data_entry[keys_lower['reasoning']])
+                    elif 'thought' in keys_lower:
+                        reasoning_content = str(data_entry[keys_lower['thought']])
+                    elif 'rationale' in keys_lower:
+                        reasoning_content = str(data_entry[keys_lower['rationale']])
+                    elif 'cot_content' in keys_lower:
+                        reasoning_content = str(data_entry[keys_lower['cot_content']])
+
+                    # 4. Merge Reasoning into Assistant Output (Internal Monologue Format)
+                    if reasoning_content and pd.notna(reasoning_content) and str(reasoning_content).strip():
+                        clean_reasoning = str(reasoning_content).replace("<think>", "").replace("</think>", "").strip()
+                        formatted_thought = f"<think>\n{clean_reasoning}\n</think>"
+                        if asst_content:
+                            asst_content = f"{formatted_thought}\n\n{asst_content}"
+                        else:
+                            asst_content = formatted_thought
+
+                    # 5. Create the Interaction
+                    if user_content:
+                        processed_rows_or_lines += 1
+                        new_interaction = add_interaction_no_commit(
+                            bg_db_session,
+                            session_id=f"ingest_{uploaded_record.ingestion_id}_row_{processed_rows_or_lines}",
+                            mode="ingested_dataset",
+                            input_type="text",
+                            user_input=user_content,
+                            llm_response=asst_content if asst_content else "[Ingested without response]",
+                            classification="ingested_reflection_task_queued",
+                            reflection_completed=False,
+                            parent_ingestion_job_id=uploaded_record.ingestion_id
+                        )
+                        if new_interaction:
+                            bg_db_session.flush()
+                            newly_created_interaction_ids.append(new_interaction.id)
 
             bg_db_session.commit()
             logger.info(
                 f"{current_job_id}: Committed {len(newly_created_interaction_ids)} records. Spawning background tasks...")
 
-            # Phase 2: Spawn background tasks for the committed records
+            # Phase 3: Spawn background tasks for the committed records
             spawned_tasks_count = 0
             for interaction_id in newly_created_interaction_ids:
-                # Note: We don't pass 'db' here; background_generate creates its own session
                 asyncio.create_task(
                     self.background_generate(
                         db=None,
                         user_input=None,  # It will load from DB based on ID
-                        session_id=None,  # It will generate one
+                        session_id=None,
                         classification="ingested_reflection_task",
                         image_b64=None,
-                        update_interaction_id=interaction_id,  # THIS IS KEY
+                        update_interaction_id=interaction_id,
                         parent_ingestion_job_id=uploaded_record.id
                     )
                 )
@@ -6041,7 +6067,6 @@ class CortexThoughts:
                     pass
         finally:
             if bg_db_session: bg_db_session.close()
-            # Cleanup temp file
             if uploaded_record_path and os.path.exists(uploaded_record_path):
                 try:
                     os.remove(uploaded_record_path)
@@ -12194,7 +12219,7 @@ async def handle_create_pseudo_fine_tuning_job():
         # and not block the API response.
         asyncio.create_task(
             cortex_text_interaction._initiate_file_ingestion_and_reflection(
-                db_session_from_caller=db,  # Pass the session from the route, the helper will create its own
+                db_session_factory=db,  # Pass the session from the route, the helper will create its own
                 uploaded_file_record_id=uploaded_record.id
             )
         )
@@ -12414,8 +12439,12 @@ def handle_list_fine_tuning_job_events(fine_tuning_job_id: str):
 
 
 ##v1/files openAI expected to be?
-@system.route("/v1/files", methods=["POST"])
+@system.route("/v1/files", methods=["POST", "OPTIONS"])
 async def handle_upload_and_ingest_file():
+    # --- Handle CORS Preflight ---
+    if request.method == "OPTIONS":
+        return Response(status=200)
+
     start_req_time = time.monotonic()
     request_id = f"req-file-upload-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received POST /v1/files (File Upload Only)")
@@ -12472,7 +12501,7 @@ async def handle_upload_and_ingest_file():
             # It's crucial to use asyncio.create_task to not block the current request handler
             asyncio.create_task(
                 cortex_text_interaction._initiate_file_ingestion_and_reflection(
-                    db_session_from_caller=db,  # FIX: Correct parameter name here
+                    db_session_factory=SessionLocal,  # FIX: Correct parameter name here
                     uploaded_file_record_id=uploaded_record.id
                 )
             )
