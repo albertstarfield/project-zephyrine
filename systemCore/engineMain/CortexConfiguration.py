@@ -1,37 +1,46 @@
 # CortexConfiguration.py
 import os
+
+import numpy as np
 from dotenv import load_dotenv
 from loguru import logger
-import numpy as np
 
 # Load environment variables from .env file if it exists
 load_dotenv()
 logger.info("Attempting to load environment variables from .env file...")
 
 # --- General Settings ---
-MODULE_DIR=os.path.dirname(__file__)
-ROOT_DIR=MODULE_DIR
-PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
-MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20)) #Max at 20
-ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
-TOPCAP_TOKENS = int(os.getenv("TOPCAP_TOKENS", 32768)) # Default token limit for LLM calls
-BUFFER_TOKENS_FOR_RESPONSE = int(os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)) # Default token limit for LLM calls
-#No longer in use
-MAX_TOKENS_PER_CHUNK = 384 #direct_generate chunking preventing horrific quality and increase quality by doing ctx augmented rollover
-MAX_CHUNKS_PER_RESPONSE = 32768 # Safety limit to prevent infinite loops (32768 * 256 = 8388608 tokens max response) (Yes 8 Million tokens that zephy can answer directly ELP1) (but for testing purposes let's set it to 10
+MODULE_DIR = os.path.dirname(__file__)
+ROOT_DIR = MODULE_DIR
+PROVIDER = os.getenv("PROVIDER", "llama_cpp")  # llama_cpp or "ollama" or "fireworks"
+MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))  # Max at 20
+ANSWER_SIZE_WORDS = int(
+    os.getenv("ANSWER_SIZE_WORDS", 16384)
+)  # Target for *quick* answers (token generation? I forgot)
+TOPCAP_TOKENS = int(
+    os.getenv("TOPCAP_TOKENS", 32768)
+)  # Default token limit for LLM calls
+BUFFER_TOKENS_FOR_RESPONSE = int(
+    os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)
+)  # Default token limit for LLM calls
+# No longer in use
+MAX_TOKENS_PER_CHUNK = 384  # direct_generate chunking preventing horrific quality and increase quality by doing ctx augmented rollover
+MAX_CHUNKS_PER_RESPONSE = 32768  # Safety limit to prevent infinite loops (32768 * 256 = 8388608 tokens max response) (Yes 8 Million tokens that zephy can answer directly ELP1) (but for testing purposes let's set it to 10
 # --- Parameters for Background Generate's Iterative Elaboration ---
-BACKGROUND_MAX_TOKENS_PER_CHUNK = 512 # How large each elaboration chunk is
-BACKGROUND_MAX_CHUNKS = 16          # Safety limit for the elaboration loop
+BACKGROUND_MAX_TOKENS_PER_CHUNK = 512  # How large each elaboration chunk is
+BACKGROUND_MAX_CHUNKS = 16  # Safety limit for the elaboration loop
 
-SOFT_LIMIT_DIVISOR = 4 # SOFT_LIMIT DIVISOR CHUNKS for ELP1 response when it is above MAX_TOKENS_PER_CHUNK
-SHORT_PROMPT_TOKEN_THRESHOLD = 256 # Prompts with fewer tokens than this trigger context pruning. so it can be more focused
+SOFT_LIMIT_DIVISOR = 4  # SOFT_LIMIT DIVISOR CHUNKS for ELP1 response when it is above MAX_TOKENS_PER_CHUNK
+SHORT_PROMPT_TOKEN_THRESHOLD = 256  # Prompts with fewer tokens than this trigger context pruning. so it can be more focused
 # --- NEW: Configurable Log Streaming ---
-STREAM_INTERNAL_LOGS = True # Set to False to hide logs and show animation instead. Verbosity if needed for ELP1 calls
-STREAM_ANIMATION_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" # Braille spinner characters
-STREAM_ANIMATION_DELAY_SECONDS = 0.1 # How fast the animation plays
-FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768)) #Max at 32768
-FUZZY_DUPLICATION_THRESHOLD = 80 # Threshold for detecting rephrased/similar content
-#DEFAULT_LLM_TEMPERATURE = 0.8
+STREAM_INTERNAL_LOGS = True  # Set to False to hide logs and show animation instead. Verbosity if needed for ELP1 calls
+STREAM_ANIMATION_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"  # Braille spinner characters
+STREAM_ANIMATION_DELAY_SECONDS = 0.1  # How fast the animation plays
+FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(
+    os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768)
+)  # Max at 32768
+FUZZY_DUPLICATION_THRESHOLD = 80  # Threshold for detecting rephrased/similar content
+# DEFAULT_LLM_TEMPERATURE = 0.8
 # --- Constants for Embedding Chunking ---
 # This is the n_ctx the embedding model worker is configured with.
 # The log shows this was forced to 4096.
@@ -39,109 +48,188 @@ EMBEDDING_MODEL_N_CTX = 4096
 # Safety margin (15%) to account for tokenization differences and special tokens.
 EMBEDDING_TOKEN_SAFETY_MARGIN = 0.15
 # The final calculated token limit for any single batch sent to the embedding worker.
-MAX_EMBEDDING_TOKENS_PER_BATCH = int(EMBEDDING_MODEL_N_CTX * (1 - EMBEDDING_TOKEN_SAFETY_MARGIN))
-DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8)) #Max at 1.0 (beyond that it's too risky and unstable)
-VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE = int(os.getenv("VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE", 4096)) # For URL Chroma store
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 256)) # For URL Chroma store
+MAX_EMBEDDING_TOKENS_PER_BATCH = int(
+    EMBEDDING_MODEL_N_CTX * (1 - EMBEDDING_TOKEN_SAFETY_MARGIN)
+)
+DEFAULT_LLM_TEMPERATURE = float(
+    os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8)
+)  # Max at 1.0 (beyond that it's too risky and unstable)
+VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE = int(
+    os.getenv("VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE", 4096)
+)  # For URL Chroma store
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 256))  # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 7))
-FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 32000)) #Extreme or vanquish (Max at 512 mixedbread embedding) (new Qwen3 embedding is maxxed at 32000)
+FILE_INDEX_MAX_SIZE_MB = int(
+    os.getenv("FILE_INDEX_MAX_SIZE_MB", 32000)
+)  # Extreme or vanquish (Max at 512 mixedbread embedding) (new Qwen3 embedding is maxxed at 32000)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
-FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 3600)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
+FILE_INDEXER_IDLE_WAIT_SECONDS = int(
+    os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 3600)
+)  # default at 3600 putting it to 5 is just for debug and rentlessly scanning
 
 
-BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
+BENCHMARK_ELP1_TIME_MS = 600000.0  # before hard defined error timeout (30 seconds max)
 DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
 
 
 _default_max_bg_tasks = 1000000
-MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks))
-SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = int(os.getenv("SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS", 30)) # e.g., 1/2 minutes
+MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(
+    os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks)
+)
+SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = int(
+    os.getenv("SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS", 30)
+)  # e.g., 1/2 minutes
 logger.info(f"🚦 Semaphore Acquire Timeout: {SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS}s")
 
 
 DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 3))
-RESPONSE_TIMEOUT_MS = 15000 # Timeout for potential multi-step process
+RESPONSE_TIMEOUT_MS = 15000  # Timeout for potential multi-step process
 # Similarity threshold for reusing previous ToT results (requires numpy/embeddings)
 TOT_SIMILARITY_THRESHOLD = float(os.getenv("TOT_SIMILARITY_THRESHOLD", 0.1))
 # Fuzzy search threshold for history RAG (0-100, higher is stricter) - Requires thefuzz
 
-OCR_TARGET_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif', '.avif'}
-VLM_TARGET_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.avif'} # VLM can be a subset of OCR targets
+OCR_TARGET_EXTENSIONS = {
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tiff",
+    ".tif",
+    ".bmp",
+    ".gif",
+    ".avif",
+}
+VLM_TARGET_EXTENSIONS = {
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".avif",
+}  # VLM can be a subset of OCR targets
 
 
+FUZZY_SEARCH_THRESHOLD = int(
+    os.getenv("FUZZY_SEARCH_THRESHOLD", 79)
+)  # Max at 85 ( Fallback from vector search if no results )
 
-FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 79)) #Max at 85 ( Fallback from vector search if no results )
-
-MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
+MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1))  # Unused
 YOUR_REFLECTION_CHUNK_SIZE = int(os.getenv("YOUR_REFLECTION_CHUNK_SIZE", 450))
 ENABLE_PROACTIVE_RE_REFLECTION = True
-PROACTIVE_RE_REFLECTION_CHANCE = 0.9 #(have chance 90% to re-remember old memory and re-imagine and rethought)
-MIN_AGE_FOR_RE_REFLECTION_DAYS = 1 #(minimum age of the memory to re-reflect)
+PROACTIVE_RE_REFLECTION_CHANCE = (
+    0.9  # (have chance 90% to re-remember old memory and re-imagine and rethought)
+)
+MIN_AGE_FOR_RE_REFLECTION_DAYS = 1  # (minimum age of the memory to re-reflect)
 YOUR_REFLECTION_CHUNK_OVERLAP = int(os.getenv("YOUR_REFLECTION_CHUNK_OVERLAP", 50))
-RAG_URL_COUNT = int(os.getenv("RAG_URL_COUNT", 5)) # <<< ADD THIS LINE (e.g., default to 3) (Max at 10)
+RAG_URL_COUNT = int(
+    os.getenv("RAG_URL_COUNT", 5)
+)  # <<< ADD THIS LINE (e.g., default to 3) (Max at 10)
 RAG_CONTEXT_MAX_PERCENTAGE = float(os.getenv("RAG_CONTEXT_MAX_PERCENTAGE", 0.25))
 
-#Personality mistype Configuration
+# Personality mistype Configuration
 
 # This feature programmatically introduces subtle, human-like errors into the
 # ELP1 (direct_generate) responses to make the AI's persona more believable.
 # It only applies to responses that do not contain code or structured data.
 
 # Master switch to enable or disable the entire feature.
-ENABLE_CASUAL_MISTYPES = os.getenv("ENABLE_CASUAL_MISTYPES", "true").lower() in ('true', '1', 't', 'yes', 'y')
+ENABLE_CASUAL_MISTYPES = os.getenv("ENABLE_CASUAL_MISTYPES", "true").lower() in (
+    "true",
+    "1",
+    "t",
+    "yes",
+    "y",
+)
 
 # Probabilities for each type of error (0.0 = never, 1.0 = always).
 # 10% chance the first letter of the entire response will be lowercase.
-MISTYPE_LOWERCASE_START_CHANCE = float(os.getenv("MISTYPE_LOWERCASE_START_CHANCE", 0.84))
+MISTYPE_LOWERCASE_START_CHANCE = float(
+    os.getenv("MISTYPE_LOWERCASE_START_CHANCE", 0.84)
+)
 
 # 6% chance that a letter following a ". " will be lowercase instead of uppercase.
-MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE = float(os.getenv("MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE", 0.62))
+MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE = float(
+    os.getenv("MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE", 0.62)
+)
 
 # 4% chance of a capital/lowercase swap at the beginning of a word (e.g., "The" -> "THe").
-MISTYPE_CAPITALIZATION_MISHAP_CHANCE = float(os.getenv("MISTYPE_CAPITALIZATION_MISHAP_CHANCE", 0.3))
+MISTYPE_CAPITALIZATION_MISHAP_CHANCE = float(
+    os.getenv("MISTYPE_CAPITALIZATION_MISHAP_CHANCE", 0.3)
+)
 
 # 5% chance of omitting a comma or period when it's found.
-MISTYPE_PUNCTUATION_OMISSION_CHANCE = float(os.getenv("MISTYPE_PUNCTUATION_OMISSION_CHANCE", 0.51))
+MISTYPE_PUNCTUATION_OMISSION_CHANCE = float(
+    os.getenv("MISTYPE_PUNCTUATION_OMISSION_CHANCE", 0.51)
+)
 
 # 4% chance *per word* to introduce a single QWERTY keyboard-based typo. (No longer used) Set it to 0% it won't affect anyway
-MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD = float(os.getenv("MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD", 0.0))
+MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD = float(
+    os.getenv("MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD", 0.0)
+)
 
 
 # A mapping of characters to their adjacent keys on a standard QWERTY keyboard.
 # Used by the QWERTY typo generator.
 QWERTY_KEYBOARD_NEIGHBORS = {
-    'q': ['w', 'a', 's'], 'w': ['q', 'e', 'a', 's', 'd'], 'e': ['w', 'r', 's', 'd', 'f'],
-    'r': ['e', 't', 'd', 'f', 'g'], 't': ['r', 'y', 'f', 'g', 'h'], 'y': ['t', 'u', 'g', 'h', 'j'],
-    'u': ['y', 'i', 'h', 'j', 'k'], 'i': ['u', 'o', 'j', 'k', 'l'], 'o': ['i', 'p', 'k', 'l'],
-    'p': ['o', 'l'],
-    'a': ['q', 'w', 's', 'z', 'x'], 's': ['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c'],
-    'd': ['w', 'e', 'r', 's', 'f', 'x', 'c', 'v'], 'f': ['e', 'r', 't', 'd', 'g', 'c', 'v', 'b'],
-    'g': ['r', 't', 'y', 'f', 'h', 'v', 'b', 'n'], 'h': ['t', 'y', 'u', 'g', 'j', 'b', 'n', 'm'],
-    'j': ['y', 'u', 'i', 'h', 'k', 'n', 'm'], 'k': ['u', 'i', 'o', 'j', 'l', 'm'],
-    'l': ['i', 'o', 'p', 'k'],
-    'z': ['a', 's', 'x'], 'x': ['a', 's', 'd', 'z', 'c'], 'c': ['s', 'd', 'f', 'x', 'v'],
-    'v': ['d', 'f', 'g', 'c', 'b'], 'b': ['f', 'g', 'h', 'v', 'n'], 'n': ['g', 'h', 'j', 'b', 'm'],
-    'm': ['h', 'j', 'k', 'n']
+    "q": ["w", "a", "s"],
+    "w": ["q", "e", "a", "s", "d"],
+    "e": ["w", "r", "s", "d", "f"],
+    "r": ["e", "t", "d", "f", "g"],
+    "t": ["r", "y", "f", "g", "h"],
+    "y": ["t", "u", "g", "h", "j"],
+    "u": ["y", "i", "h", "j", "k"],
+    "i": ["u", "o", "j", "k", "l"],
+    "o": ["i", "p", "k", "l"],
+    "p": ["o", "l"],
+    "a": ["q", "w", "s", "z", "x"],
+    "s": ["q", "w", "e", "a", "d", "z", "x", "c"],
+    "d": ["w", "e", "r", "s", "f", "x", "c", "v"],
+    "f": ["e", "r", "t", "d", "g", "c", "v", "b"],
+    "g": ["r", "t", "y", "f", "h", "v", "b", "n"],
+    "h": ["t", "y", "u", "g", "j", "b", "n", "m"],
+    "j": ["y", "u", "i", "h", "k", "n", "m"],
+    "k": ["u", "i", "o", "j", "l", "m"],
+    "l": ["i", "o", "p", "k"],
+    "z": ["a", "s", "x"],
+    "x": ["a", "s", "d", "z", "c"],
+    "c": ["s", "d", "f", "x", "v"],
+    "v": ["d", "f", "g", "c", "b"],
+    "b": ["f", "g", "h", "v", "n"],
+    "n": ["g", "h", "j", "b", "m"],
+    "m": ["h", "j", "k", "n"],
 }
 
 # Add a log message at startup to confirm the feature's status.
 logger.info(f"⚙️ Casual Mistype Humanizer Enabled: {ENABLE_CASUAL_MISTYPES}")
 if ENABLE_CASUAL_MISTYPES:
-    logger.info(f"   - Lowercase Start Chance: {MISTYPE_LOWERCASE_START_CHANCE * 100:.1f}%")
-    logger.info(f"   - Lowercase After Period Chance: {MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE * 100:.1f}%")
-    logger.info(f"   - Capitalization Mishap Chance: {MISTYPE_CAPITALIZATION_MISHAP_CHANCE * 100:.1f}%")
-    logger.info(f"   - Punctuation Omission Chance: {MISTYPE_PUNCTUATION_OMISSION_CHANCE * 100:.1f}%")
-    logger.info(f"   - QWERTY Typo (per word) Chance: {MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD * 100:.1f}%")
+    logger.info(
+        f"   - Lowercase Start Chance: {MISTYPE_LOWERCASE_START_CHANCE * 100:.1f}%"
+    )
+    logger.info(
+        f"   - Lowercase After Period Chance: {MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE * 100:.1f}%"
+    )
+    logger.info(
+        f"   - Capitalization Mishap Chance: {MISTYPE_CAPITALIZATION_MISHAP_CHANCE * 100:.1f}%"
+    )
+    logger.info(
+        f"   - Punctuation Omission Chance: {MISTYPE_PUNCTUATION_OMISSION_CHANCE * 100:.1f}%"
+    )
+    logger.info(
+        f"   - QWERTY Typo (per word) Chance: {MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD * 100:.1f}%"
+    )
 
 
 LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = os.getenv("LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT")
 if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
     try:
         LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = int(LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT)
-        logger.info(f"LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT set to: {LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT}")
+        logger.info(
+            f"LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT set to: {LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT}"
+        )
     except ValueError:
-        logger.warning(f"Invalid value for LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT ('{LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT}'). It will be ignored.")
+        logger.warning(
+            f"Invalid value for LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT ('{LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT}'). It will be ignored."
+        )
         LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = None
 
 
@@ -149,7 +237,9 @@ if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
 # Can be a string preset or a number from 0 to 100 (%).
 # 0 or "Default": No relaxation, ELP0 tasks run at full capacity.
 # 100 or "EmergencyReservative": ELP0 tasks are Nearly fully suspended.
-AGENTIC_RELAXATION_MODE = os.getenv("AGENTIC_RELAXATION_MODE", "default") # Preset: Default, Relaxed, Vacation, HyperRelaxed, Conservative, ExtremePowerSaving, EmergencyReservative
+AGENTIC_RELAXATION_MODE = os.getenv(
+    "AGENTIC_RELAXATION_MODE", "default"
+)  # Preset: Default, Relaxed, Vacation, HyperRelaxed, Conservative, ExtremePowerSaving, EmergencyReservative
 
 AGENTIC_RELAXATION_PRESETS = {
     "default": 0,
@@ -159,30 +249,31 @@ AGENTIC_RELAXATION_PRESETS = {
     "conservative": 93,
     "extremepowersaving": 98,
     "emergencyreservative": 100,
-    "reservativesharedresources": -1 # Special value for dynamic mode
+    "reservativesharedresources": -1,  # Special value for dynamic mode
 }
 
 # The time period (in seconds) over which the PWM cycle occurs.
 AGENTIC_RELAXATION_PERIOD_SECONDS = 2.0
 
 
-
 USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
     # Add more diverse and recent agents
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15',
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
 ]
 # --- Agent Settings ---
-AGENT_MAX_SCRIPT_RETRIES = 3 # Max attempts to generate/fix AppleScript per action
+AGENT_MAX_SCRIPT_RETRIES = 3  # Max attempts to generate/fix AppleScript per action
 
 ENABLE_FILE_INDEXER_STR = os.getenv("ENABLE_FILE_INDEXER", "true")
-ENABLE_FILE_INDEXER = ENABLE_FILE_INDEXER_STR.lower() in ('true', '1', 't', 'yes', 'y')
+ENABLE_FILE_INDEXER = ENABLE_FILE_INDEXER_STR.lower() in ("true", "1", "t", "yes", "y")
 logger.info(f"File Indexer Enabled: {ENABLE_FILE_INDEXER}")
-DB_TEXT_TRUNCATE_LEN = int(os.getenv("DB_TEXT_TRUNCATE_LEN", 16384)) # Max length for indexed_content before truncation
+DB_TEXT_TRUNCATE_LEN = int(
+    os.getenv("DB_TEXT_TRUNCATE_LEN", 16384)
+)  # Max length for indexed_content before truncation
 
 
 # --- Database Settings (SQLite) ---
@@ -197,163 +288,265 @@ logger.info(f"Database URL set to: {DATABASE_URL}")
 # Do not enable this Functionality if you don't want to be stuck and only utilizes single threaded and locked up scanning for defective entry, just put it as false for now. It's better to implement a filter when augmenting.
 ENABLE_DB_DELETE_DEFECTIVE_ENTRY = False
 DB_DELETE_DEFECTIVE_ENTRY_INTERVAL_MINUTES = 5
-ENABLE_STARTUP_DB_CLEANUP = os.getenv("ENABLE_STARTUP_DB_CLEANUP", "false").lower() in ('true', '1', 't', 'yes', 'y')
-#this can be reused for on-the-fly filtering when requesting on db entry
-DB_DELETE_DEFECTIVE_REGEX_CHATML = r"^\s*(\s*(<\|im_start\|>)\s*(user|system|assistant)?\s*)+((<\|(im_start)?)?)?\s*$"
-DB_DELETE_DEFECTIVE_LIKE_FALLBACK = "[Action Analysis Fallback for: [Action Analysis Fallback for:%"
+ENABLE_STARTUP_DB_CLEANUP = os.getenv("ENABLE_STARTUP_DB_CLEANUP", "false").lower() in (
+    "true",
+    "1",
+    "t",
+    "yes",
+    "y",
+)
+# this can be reused for on-the-fly filtering when requesting on db entry
+DB_DELETE_DEFECTIVE_REGEX_CHATML = (
+    r"^\s*(\s*(<\|im_start\|>)\s*(user|system|assistant)?\s*)+((<\|(im_start)?)?)?\s*$"
+)
+DB_DELETE_DEFECTIVE_LIKE_FALLBACK = (
+    "[Action Analysis Fallback for: [Action Analysis Fallback for:%"
+)
 CHATML_SANITIZE_FUZZY_THRESHOLD = 80
 
 
-
 # --- LLM Call Retry Settings for ELP0 Interruption ---
-LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 3)) # e.g., 99999 retries
-LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY", 1)) # e.g., 1 seconds
+LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES = int(
+    os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 3)
+)  # e.g., 99999 retries
+LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY = int(
+    os.getenv("LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY", 1)
+)  # e.g., 1 seconds
 logger.info(f"🔧 LLM ELP0 Interrupt Max Retries: {LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES}")
-logger.info(f"🔧 LLM ELP0 Interrupt Retry Delay: {LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY}s")
+logger.info(
+    f"🔧 LLM ELP0 Interrupt Retry Delay: {LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY}s"
+)
 
 # --- NEW: LLAMA_CPP Settings (Used if PROVIDER="llama_cpp") ---
-_engine_main_dir = os.path.dirname(os.path.abspath(__file__)) # Assumes config.py is in engineMain
+_engine_main_dir = os.path.dirname(
+    os.path.abspath(__file__)
+)  # Assumes config.py is in engineMain
 LLAMA_CPP_GGUF_DIR = os.path.join(_engine_main_dir, "staticmodelpool")
-LLAMA_CPP_N_GPU_LAYERS = int(os.getenv("LLAMA_CPP_N_GPU_LAYERS", -1)) # Default: Offload all possible layers
-LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 4096)) # Context window size
+LLAMA_CPP_N_GPU_LAYERS = int(
+    os.getenv("LLAMA_CPP_N_GPU_LAYERS", -1)
+)  # Default: Offload all possible layers
+LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 4096))  # Context window size
 LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "False").lower() == "true"
 LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
 
-#(14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
+# (14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
 # Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation = 35.0B Async MoE
 META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-35.0B-StreamCompat"
 META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-35.0B-Main"
 
-#(14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
+# (14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
 # Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation = 35.0B Async MoE
 META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-35.0B-StreamCompat"
 META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-35.0B-Main"
 
 META_MODEL_OWNER = "zephyrine-foundation"
-TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha" # Client-facing TTS model name
-ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal" # New constant for ASR
+TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha"  # Client-facing TTS model name
+ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal"  # New constant for ASR
 IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
 META_MODEL_FAMILY = "zephyrine"
-META_MODEL_PARAM_SIZE = "35.0B" # As requested
-META_MODEL_PARAM_SIZE = "35.0B" # As requested
-META_MODEL_QUANT_LEVEL = "fp16" # As requested
-META_MODEL_FORMAT = "gguf" # Common format assumption for Ollama compatibility
+META_MODEL_PARAM_SIZE = "35.0B"  # As requested
+META_MODEL_PARAM_SIZE = "35.0B"  # As requested
+META_MODEL_QUANT_LEVEL = "fp16"  # As requested
+META_MODEL_FORMAT = "gguf"  # Common format assumption for Ollama compatibility
 
 
 # --- Mapping logical roles to GGUF filenames within LLAMA_CPP_GGUF_DIR ---
 LLAMA_CPP_MODEL_MAP = {
-    "router": os.getenv("LLAMA_CPP_MODEL_ROUTER_FILE", "deepscaler.gguf"), # Adelaide Zephyrine Charlotte Persona
-    "vlm": os.getenv("LLAMA_CPP_MODEL_VLM_FILE", "Qwen3-VL-ImageDescripter.gguf"), # Use LatexMind as VLM for now
+    "router": os.getenv(
+        "LLAMA_CPP_MODEL_ROUTER_FILE", "deepscaler.gguf"
+    ),  # Adelaide Zephyrine Charlotte Persona
+    "vlm": os.getenv(
+        "LLAMA_CPP_MODEL_VLM_FILE", "Qwen3-VL-ImageDescripter.gguf"
+    ),  # Use LatexMind as VLM for now
     "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "Qwen3-VL-ImageDescripter.gguf"),
-    #"latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"), #This model doesn't seem to work properly
+    # "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"), #This model doesn't seem to work properly
     "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "Qwen3DeepseekDecomposer.gguf"),
     "code": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "Qwen3ToolCall.gguf"),
-    "general": os.getenv("LLAMA_CPP_MODEL_GENERAL_FILE", "Qwen3DeepseekDecomposer.gguf"), # Use router as general
-    "general_fast": os.getenv("LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "Qwen3LowLatency.gguf"),
-    "translator": os.getenv("LLAMA_CPP_MODEL_TRANSLATOR_FILE", "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf"), # Assuming download renamed it
+    "general": os.getenv(
+        "LLAMA_CPP_MODEL_GENERAL_FILE", "Qwen3DeepseekDecomposer.gguf"
+    ),  # Use router as general
+    "general_fast": os.getenv(
+        "LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "Qwen3LowLatency.gguf"
+    ),
+    "translator": os.getenv(
+        "LLAMA_CPP_MODEL_TRANSLATOR_FILE",
+        "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf",
+    ),  # Assuming download renamed it
     # --- Embedding Model ---
-    "embeddings": os.getenv("LLAMA_CPP_EMBEDDINGS_FILE", "qwen3EmbedCore.gguf") # Example name
+    "embeddings": os.getenv(
+        "LLAMA_CPP_EMBEDDINGS_FILE", "qwen3EmbedCore.gguf"
+    ),  # Example name
 }
 # Define default chat model based on map
-MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
+MODEL_DEFAULT_CHAT_LLAMA_CPP = "general"  # Use the logical name
 
 
 # --- Add this new section for ASR (Whisper) Settings ---
 # You can place this section logically, e.g., after TTS or near other model-related settings.
 
 WHISPER_GARBAGE_OUTPUTS = {
-    "you", "thank you.", "thanks for watching.", "...", "(music)", "subtitles by",
-    "the national weather service", "a production of", "in association with"
+    "you",
+    "thank you.",
+    "thanks for watching.",
+    "...",
+    "(music)",
+    "subtitles by",
+    "the national weather service",
+    "a production of",
+    "in association with",
 }
 
-ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal" # This should already exist in your config
+ASR_MODEL_NAME_CLIENT_FACING = (
+    "Zephyloid-Whisper-Normal"  # This should already exist in your config
+)
 # --- ASR (Whisper) Settings ---
-ENABLE_ASR = os.getenv("ENABLE_ASR", "true").lower() in ('true', '1', 't', 'yes', 'y')
+ENABLE_ASR = os.getenv("ENABLE_ASR", "true").lower() in ("true", "1", "t", "yes", "y")
 # WHISPER_MODEL_DIR reuses the general static model pool where GGUF files are stored.
 # This matches where launcher.py downloads the whisper-large-v3-q8_0.gguf model.
 WHISPER_MODEL_DIR = os.getenv("WHISPER_MODEL_DIR", LLAMA_CPP_GGUF_DIR)
-WHISPER_DEFAULT_MODEL_FILENAME = os.getenv("WHISPER_DEFAULT_MODEL_FILENAME", "whisper-large-v3-q5_0.gguf")
-WHISPER_LOW_LATENCY_MODEL_FILENAME = os.getenv("WHISPER_LOW_LATENCY_MODEL_FILENAME", "whisper-lowlatency-direct.gguf")
-WHISPER_DEFAULT_LANGUAGE = os.getenv("WHISPER_DEFAULT_LANGUAGE", "auto") # Default language for transcription
-ASR_WORKER_TIMEOUT = int(os.getenv("ASR_WORKER_TIMEOUT", 300)) # Timeout in seconds for ASR worker
+WHISPER_DEFAULT_MODEL_FILENAME = os.getenv(
+    "WHISPER_DEFAULT_MODEL_FILENAME", "whisper-large-v3-q5_0.gguf"
+)
+WHISPER_LOW_LATENCY_MODEL_FILENAME = os.getenv(
+    "WHISPER_LOW_LATENCY_MODEL_FILENAME", "whisper-lowlatency-direct.gguf"
+)
+WHISPER_DEFAULT_LANGUAGE = os.getenv(
+    "WHISPER_DEFAULT_LANGUAGE", "auto"
+)  # Default language for transcription
+ASR_WORKER_TIMEOUT = int(
+    os.getenv("ASR_WORKER_TIMEOUT", 300)
+)  # Timeout in seconds for ASR worker
 
 
 logger.info(f"🎤 ASR (Whisper) Enabled: {ENABLE_ASR}")
 if ENABLE_ASR:
     logger.info(f"   🎤 Whisper Model Directory: {WHISPER_MODEL_DIR}")
-    logger.info(f"   🎤 Default Whisper Model Filename: {WHISPER_DEFAULT_MODEL_FILENAME}")
+    logger.info(
+        f"   🎤 Default Whisper Model Filename: {WHISPER_DEFAULT_MODEL_FILENAME}"
+    )
     logger.info(f"   🎤 Default Whisper Language: {WHISPER_DEFAULT_LANGUAGE}")
-    logger.info(f"   🎤 Client-Facing ASR Model Name (for API): {ASR_MODEL_NAME_CLIENT_FACING}")
+    logger.info(
+        f"   🎤 Client-Facing ASR Model Name (for API): {ASR_MODEL_NAME_CLIENT_FACING}"
+    )
 
 # --- Audio Translation Settings ---
-AUDIO_TRANSLATION_MODEL_CLIENT_FACING = os.getenv("AUDIO_TRANSLATION_MODEL_CLIENT_FACING", "Zephyloid-AudioTranslate-v1")
+AUDIO_TRANSLATION_MODEL_CLIENT_FACING = os.getenv(
+    "AUDIO_TRANSLATION_MODEL_CLIENT_FACING", "Zephyloid-AudioTranslate-v1"
+)
 # Default target language for audio translations if not specified by the client
-DEFAULT_TRANSLATION_TARGET_LANGUAGE = os.getenv("DEFAULT_TRANSLATION_TARGET_LANGUAGE", "en")
+DEFAULT_TRANSLATION_TARGET_LANGUAGE = os.getenv(
+    "DEFAULT_TRANSLATION_TARGET_LANGUAGE", "en"
+)
 # Which LLM model role to use for the text translation step.
 # The 'translator' role (e.g., NanoTranslator) is ideal if it supports the required language pairs.
 # Otherwise, 'general_fast' or 'general' could be used.
 TRANSLATION_LLM_ROLE = os.getenv("TRANSLATION_LLM_ROLE", "translator")
-ASR_WORKER_TIMEOUT = int(os.getenv("ASR_WORKER_TIMEOUT", 3600)) # Timeout for ASR worker (if not already defined)
-TTS_WORKER_TIMEOUT = int(os.getenv("TTS_WORKER_TIMEOUT", 3600)) # Timeout for TTS worker (if not already defined)
-TRANSLATION_LLM_TIMEOUT_MS = int(os.getenv("TRANSLATION_LLM_TIMEOUT_MS", 3600000)) # Timeout for the LLM translation step (milliseconds)
+ASR_WORKER_TIMEOUT = int(
+    os.getenv("ASR_WORKER_TIMEOUT", 3600)
+)  # Timeout for ASR worker (if not already defined)
+TTS_WORKER_TIMEOUT = int(
+    os.getenv("TTS_WORKER_TIMEOUT", 3600)
+)  # Timeout for TTS worker (if not already defined)
+TRANSLATION_LLM_TIMEOUT_MS = int(
+    os.getenv("TRANSLATION_LLM_TIMEOUT_MS", 3600000)
+)  # Timeout for the LLM translation step (milliseconds)
 
-logger.info(f"🌐 Audio Translation Client-Facing Model: {AUDIO_TRANSLATION_MODEL_CLIENT_FACING}")
-logger.info(f"   🌐 Default Translation Target Language: {DEFAULT_TRANSLATION_TARGET_LANGUAGE}")
+logger.info(
+    f"🌐 Audio Translation Client-Facing Model: {AUDIO_TRANSLATION_MODEL_CLIENT_FACING}"
+)
+logger.info(
+    f"   🌐 Default Translation Target Language: {DEFAULT_TRANSLATION_TARGET_LANGUAGE}"
+)
 logger.info(f"   🌐 LLM Role for Translation: {TRANSLATION_LLM_ROLE}")
-logger.info(f"   🌐 ASR Worker Timeout: {ASR_WORKER_TIMEOUT}s") # If you added this recently
-logger.info(f"   🌐 TTS Worker Timeout: {TTS_WORKER_TIMEOUT}s") # If you added this recently
+logger.info(
+    f"   🌐 ASR Worker Timeout: {ASR_WORKER_TIMEOUT}s"
+)  # If you added this recently
+logger.info(
+    f"   🌐 TTS Worker Timeout: {TTS_WORKER_TIMEOUT}s"
+)  # If you added this recently
 logger.info(f"   🌐 Translation LLM Timeout: {TRANSLATION_LLM_TIMEOUT_MS}ms")
 
 # --- StellaIcarusHook Settings ---
-ENABLE_STELLA_ICARUS_HOOKS = os.getenv("ENABLE_STELLA_ICARUS_HOOKS", "true").lower() in ('true', '1', 't', 'yes', 'y')
-STELLA_ICARUS_HOOK_DIR = os.getenv("STELLA_ICARUS_HOOK_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus"))
-STELLA_ICARUS_CACHE_DIR = os.getenv("STELLA_ICARUS_CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus_Cache"))
+ENABLE_STELLA_ICARUS_HOOKS = os.getenv(
+    "ENABLE_STELLA_ICARUS_HOOKS", "true"
+).lower() in ("true", "1", "t", "yes", "y")
+STELLA_ICARUS_HOOK_DIR = os.getenv(
+    "STELLA_ICARUS_HOOK_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus"),
+)
+STELLA_ICARUS_CACHE_DIR = os.getenv(
+    "STELLA_ICARUS_CACHE_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus_Cache"),
+)
 logger.info(f"StellaIcarusHooks Enabled: {ENABLE_STELLA_ICARUS_HOOKS}")
 logger.info(f"  Hook Directory: {STELLA_ICARUS_HOOK_DIR}")
-logger.info(f"  Cache Directory: {STELLA_ICARUS_CACHE_DIR}") # Primarily for Numba's cache if configured
-ADA_DAEMON_RETRY_DELAY_SECONDS = 30 # NEW: Fallback value
+logger.info(
+    f"  Cache Directory: {STELLA_ICARUS_CACHE_DIR}"
+)  # Primarily for Numba's cache if configured
+ADA_DAEMON_RETRY_DELAY_SECONDS = 30  # NEW: Fallback value
 # --- NEW: DCTD Branch Predictor Settings ---
 # --- NEW: LSH Configuration for Branch Prediction ---
-LSH_VECTOR_SIZE = 1024 # Common embedding size, adjust if your vectors are different (1024-Dimension)
-LSH_NUM_HYPERPLANES = 10 # For a 10-bit hash
+LSH_VECTOR_SIZE = (
+    1024  # Common embedding size, adjust if your vectors are different (1024-Dimension)
+)
+LSH_NUM_HYPERPLANES = 10  # For a 10-bit hash
 # Generate random hyperplanes once at startup
 _lsh_seed = 42
 _rng = np.random.default_rng(_lsh_seed)
 
 # LSH_BIT_COUNT is likely already defined in your config, but ensure it is.
 # It should be 10 for a 10-bit hash.
-if 'LSH_BIT_COUNT' not in globals():
+if "LSH_BIT_COUNT" not in globals():
     LSH_BIT_COUNT = 10
 
-logger.info(f"🌀 Generating {LSH_BIT_COUNT} random hyperplanes for LSH with vector size {LSH_VECTOR_SIZE}...")
+logger.info(
+    f"🌀 Generating {LSH_BIT_COUNT} random hyperplanes for LSH with vector size {LSH_VECTOR_SIZE}..."
+)
 
 # Generate random vectors (hyperplanes) with a normal distribution.
 LSH_HYPERPLANES = _rng.normal(size=(LSH_BIT_COUNT, LSH_VECTOR_SIZE))
 
 logger.info("🌀 LSH Hyperplanes ref generated successfully.")
 # --- END NEW: LSH Configuration ---
-DCTD_SOCKET_PATH = "./celestial_timestream_vector_helper.socket" # Relative to systemCore/engineMain
-DCTD_NT_PORT = 11891 # Port for Windows TCP fallback
-DCTD_ENABLE_QUANTUM_PREDICTION = os.getenv("DCTD_ENABLE_QUANTUM_PREDICTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
-logger.info(f"🦋Dancing in the Celestial Timeline (DCTD) Branch Predictor : {DCTD_ENABLE_QUANTUM_PREDICTION}")
+DCTD_SOCKET_PATH = (
+    "./celestial_timestream_vector_helper.socket"  # Relative to systemCore/engineMain
+)
+DCTD_NT_PORT = 11891  # Port for Windows TCP fallback
+DCTD_ENABLE_QUANTUM_PREDICTION = os.getenv(
+    "DCTD_ENABLE_QUANTUM_PREDICTION", "true"
+).lower() in ("true", "1", "t", "yes", "y")
+logger.info(
+    f"🦋Dancing in the Celestial Timeline (DCTD) Branch Predictor : {DCTD_ENABLE_QUANTUM_PREDICTION}"
+)
 # --- END NEW: DCTD Branch Predictor Settings ---
 # --- NEW: StellaIcarus Ada Daemon & Instrument Viewport Settings ---
-ENABLE_STELLA_ICARUS_DAEMON = os.getenv("ENABLE_STELLA_ICARUS_DAEMON", "true").lower() in ('true', '1', 't', 'yes', 'y')
+ENABLE_STELLA_ICARUS_DAEMON = os.getenv(
+    "ENABLE_STELLA_ICARUS_DAEMON", "true"
+).lower() in ("true", "1", "t", "yes", "y")
 # This is the parent directory where multiple Ada project folders are located.
-STELLA_ICARUS_ADA_DIR = os.getenv("STELLA_ICARUS_ADA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus"))
+STELLA_ICARUS_ADA_DIR = os.getenv(
+    "STELLA_ICARUS_ADA_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus"),
+)
 # The name of the final executable within each project's ./bin directory after `alr build`
-ALR_DEFAULT_EXECUTABLE_NAME = "stella_greeting" # A default name, can be project-specific if needed.
-INSTRUMENT_STREAM_RATE_HZ = 20.0 # How many updates per second to stream
+ALR_DEFAULT_EXECUTABLE_NAME = (
+    "stella_greeting"  # A default name, can be project-specific if needed.
+)
+INSTRUMENT_STREAM_RATE_HZ = 20.0  # How many updates per second to stream
 
 # --- Text Moderation Setting ---
 # --- Moderation Settings & Prompt ---
-MODERATION_MODEL_CLIENT_FACING = os.getenv("MODERATION_MODEL_CLIENT_FACING", "text-moderation-zephy") # Your custom name
+MODERATION_MODEL_CLIENT_FACING = os.getenv(
+    "MODERATION_MODEL_CLIENT_FACING", "text-moderation-zephy"
+)  # Your custom name
 # This prompt instructs the LLM to give a simple, parsable output.
 logger.info(f"🛡️ Moderation Client-Facing Model Name: {MODERATION_MODEL_CLIENT_FACING}")
 
-#Fine Tuning Ingestion
-FILE_INGESTION_TEMP_DIR = os.getenv("FILE_INGESTION_TEMP_DIR", os.path.join(MODULE_DIR, "temp_file_ingestions")) # MODULE_DIR needs to be defined as os.path.dirname(__file__)
+# Fine Tuning Ingestion
+FILE_INGESTION_TEMP_DIR = os.getenv(
+    "FILE_INGESTION_TEMP_DIR", os.path.join(MODULE_DIR, "temp_file_ingestions")
+)  # MODULE_DIR needs to be defined as os.path.dirname(__file__)
 # Define expected columns for CSV/Parquet if you want to standardize
 # e.g., EXPECTED_INGESTION_COLUMNS = ["user_input", "llm_response", "session_id_override", "mode_override", "input_type_override"]
 
@@ -361,79 +554,134 @@ logger.info(f"📚 File Ingestion Temp Dir: {FILE_INGESTION_TEMP_DIR}")
 
 
 # --- NEW: Snapshot Configuration ---
-ENABLE_DB_SNAPSHOTS = os.getenv("ENABLE_DB_SNAPSHOTS", "true").lower() in ('true', '1', 't', 'yes', 'y')
+ENABLE_DB_SNAPSHOTS = os.getenv("ENABLE_DB_SNAPSHOTS", "true").lower() in (
+    "true",
+    "1",
+    "t",
+    "yes",
+    "y",
+)
 DB_SNAPSHOT_INTERVAL_MINUTES = int(os.getenv("DB_SNAPSHOT_INTERVAL_MINUTES", 1))
 DB_SNAPSHOT_DIR_NAME = "db_snapshots"
 # DB_SNAPSHOT_DIR is derived in database.py
-DB_SNAPSHOT_RETENTION_COUNT = int(os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 3)) # << SET TO 3 HERE or via .env
+DB_SNAPSHOT_RETENTION_COUNT = int(
+    os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 3)
+)  # << SET TO 3 HERE or via .env
 DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
 DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
 ZSTD_COMPRESSION_LEVEL = 9
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", 96))
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", 128))
-_file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__)) # If config.py is in the same dir as file_indexer.py
+_file_indexer_module_dir = os.path.dirname(
+    os.path.abspath(__file__)
+)  # If config.py is in the same dir as file_indexer.py
 MODULE_DIR = os.path.dirname(__file__)
 # Or, if config.py is in engineMain and file_indexer.py is also there:
 # _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__))
 
 # --- NEW: Batch Logging Configuration ---
-LOG_QUEUE_MAX_SIZE = int(os.getenv("LOG_QUEUE_MAX_SIZE", 1000000000)) # Max items in log queue before warning/discard
-LOG_BATCH_SIZE = int(os.getenv("LOG_BATCH_SIZE", 10))          # Number of log items to write to DB in one go
-LOG_FLUSH_INTERVAL_SECONDS = float(os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 3600.0)) # How often to force flush the log queue
+LOG_QUEUE_MAX_SIZE = int(
+    os.getenv("LOG_QUEUE_MAX_SIZE", 1000000000)
+)  # Max items in log queue before warning/discard
+LOG_BATCH_SIZE = int(
+    os.getenv("LOG_BATCH_SIZE", 10)
+)  # Number of log items to write to DB in one go
+LOG_FLUSH_INTERVAL_SECONDS = float(
+    os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 3600.0)
+)  # How often to force flush the log queue
 # --- END NEW: Batch Logging Configuration ---
 
 # Define a subdirectory for Chroma databases relative to the module's location
 CHROMA_DB_BASE_PATH = os.path.join(_file_indexer_module_dir, "chroma_vector_stores")
 
-_REFLECTION_VS_PERSIST_DIR = getattr(globals(), 'REFLECTION_INDEX_CHROMA_PERSIST_DIR',
-                                   os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_reflection_store_default"))
-_REFLECTION_COLLECTION_NAME = getattr(globals(), 'REFLECTION_INDEX_CHROMA_COLLECTION_NAME',
-                                      "global_reflections_default_collection")
+_REFLECTION_VS_PERSIST_DIR = getattr(
+    globals(),
+    "REFLECTION_INDEX_CHROMA_PERSIST_DIR",
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "chroma_reflection_store_default"
+    ),
+)
+_REFLECTION_COLLECTION_NAME = getattr(
+    globals(),
+    "REFLECTION_INDEX_CHROMA_COLLECTION_NAME",
+    "global_reflections_default_collection",
+)
 
 # Specific persist directory for the global file index
-FILE_INDEX_CHROMA_PERSIST_DIR = os.path.join(CHROMA_DB_BASE_PATH, "global_file_index_v1")
-FILE_INDEX_CHROMA_COLLECTION_NAME = "global_file_index_collection_v1" # Keep this consistent
+FILE_INDEX_CHROMA_PERSIST_DIR = os.path.join(
+    CHROMA_DB_BASE_PATH, "global_file_index_v1"
+)
+FILE_INDEX_CHROMA_COLLECTION_NAME = (
+    "global_file_index_collection_v1"  # Keep this consistent
+)
 
 # Specific persist directory for the global reflection index (if you also want to make it persistent)
-REFLECTION_INDEX_CHROMA_PERSIST_DIR = os.path.join(CHROMA_DB_BASE_PATH, "global_reflection_index_v1")
-REFLECTION_INDEX_CHROMA_COLLECTION_NAME = "global_reflection_collection_v1" # Keep this consistent
+REFLECTION_INDEX_CHROMA_PERSIST_DIR = os.path.join(
+    CHROMA_DB_BASE_PATH, "global_reflection_index_v1"
+)
+REFLECTION_INDEX_CHROMA_COLLECTION_NAME = (
+    "global_reflection_collection_v1"  # Keep this consistent
+)
 
 
 # --- Placeholder for Stable Diffusion ---
 # --- NEW: Imagination Worker (Stable Diffusion FLUX) Settings ---
-IMAGE_WORKER_SCRIPT_NAME = "imagination_worker.py" # Name of the worker script
+IMAGE_WORKER_SCRIPT_NAME = "imagination_worker.py"  # Name of the worker script
 
 # --- Get base directory for model files ---
 # Assumes models are in a subdir of the main engine dir (where config.py is)
 # Adjust if your models are elsewhere
 _engine_main_dir = os.path.dirname(os.path.abspath(__file__))
 ENGINE_MAIN_DIR = os.path.dirname(os.path.abspath(__file__))
-IMAGE_GEN_MODEL_DIR = os.getenv("IMAGE_GEN_MODEL_DIR", os.path.join(_engine_main_dir, "staticmodelpool"))
+IMAGE_GEN_MODEL_DIR = os.getenv(
+    "IMAGE_GEN_MODEL_DIR", os.path.join(_engine_main_dir, "staticmodelpool")
+)
 logger.info(f"🖼️ Imagination Model Directory: {IMAGE_GEN_MODEL_DIR}")
 
 # --- Model Filenames (within IMAGE_GEN_MODEL_DIR) ---
-IMAGE_GEN_DIFFUSION_MODEL_NAME = os.getenv("IMAGE_GEN_DIFFUSION_MODEL_NAME", "flux1-schnell.gguf")
+IMAGE_GEN_DIFFUSION_MODEL_NAME = os.getenv(
+    "IMAGE_GEN_DIFFUSION_MODEL_NAME", "flux1-schnell.gguf"
+)
 IMAGE_GEN_CLIP_L_NAME = os.getenv("IMAGE_GEN_CLIP_L_NAME", "flux1-clip_l.gguf")
 IMAGE_GEN_T5XXL_NAME = os.getenv("IMAGE_GEN_T5XXL_NAME", "flux1-t5xxl.gguf")
 IMAGE_GEN_VAE_NAME = os.getenv("IMAGE_GEN_VAE_NAME", "flux1-ae.gguf")
 IMAGE_GEN_WORKER_TIMEOUT = int(os.getenv("IMAGE_GEN_WORKER_TIMEOUT", 1800))
 
 # --- stable-diffusion-cpp Library Parameters ---
-IMAGE_GEN_DEVICE = os.getenv("IMAGE_GEN_DEVICE", "default") # e.g., 'cpu', 'cuda:0', 'mps', 'default'
-IMAGE_GEN_RNG_TYPE = os.getenv("IMAGE_GEN_RNG_TYPE", "std_default") # "std_default" or "cuda"
-IMAGE_GEN_N_THREADS = int(os.getenv("IMAGE_GEN_N_THREADS", 0)) # 0 for auto, positive for specific count
+IMAGE_GEN_DEVICE = os.getenv(
+    "IMAGE_GEN_DEVICE", "default"
+)  # e.g., 'cpu', 'cuda:0', 'mps', 'default'
+IMAGE_GEN_RNG_TYPE = os.getenv(
+    "IMAGE_GEN_RNG_TYPE", "std_default"
+)  # "std_default" or "cuda"
+IMAGE_GEN_N_THREADS = int(
+    os.getenv("IMAGE_GEN_N_THREADS", 0)
+)  # 0 for auto, positive for specific count
 
 # --- Image Generation Defaults (passed to worker via JSON stdin) ---
-IMAGE_GEN_DEFAULT_NEGATIVE_PROMPT = os.getenv("IMAGE_GEN_DEFAULT_NEGATIVE_PROMPT", "Bad Morphed Graphic or Body, ugly, deformed, disfigured, extra limbs, blurry, low resolution")
-IMAGE_GEN_DEFAULT_SIZE = os.getenv("IMAGE_GEN_DEFAULT_SIZE", "768x512") # WidthxHeight for FLUX
-IMAGE_GEN_DEFAULT_SAMPLE_STEPS = int(os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_STEPS", 5)) # FLUX Schnell needs fewer steps
-IMAGE_GEN_DEFAULT_CFG_SCALE = float(os.getenv("IMAGE_GEN_DEFAULT_CFG_SCALE", 1.0)) # FLUX uses lower CFG
-IMAGE_GEN_DEFAULT_SAMPLE_METHOD = os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_METHOD", "euler") # 'euler' is good for FLUX
-IMAGE_GEN_DEFAULT_SEED = int(os.getenv("IMAGE_GEN_DEFAULT_SEED", -1)) # -1 for random
-IMAGE_GEN_RESPONSE_FORMAT = "b64_json" # Worker supports this
+IMAGE_GEN_DEFAULT_NEGATIVE_PROMPT = os.getenv(
+    "IMAGE_GEN_DEFAULT_NEGATIVE_PROMPT",
+    "Bad Morphed Graphic or Body, ugly, deformed, disfigured, extra limbs, blurry, low resolution",
+)
+IMAGE_GEN_DEFAULT_SIZE = os.getenv(
+    "IMAGE_GEN_DEFAULT_SIZE", "768x512"
+)  # WidthxHeight for FLUX
+IMAGE_GEN_DEFAULT_SAMPLE_STEPS = int(
+    os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_STEPS", 5)
+)  # FLUX Schnell needs fewer steps
+IMAGE_GEN_DEFAULT_CFG_SCALE = float(
+    os.getenv("IMAGE_GEN_DEFAULT_CFG_SCALE", 1.0)
+)  # FLUX uses lower CFG
+IMAGE_GEN_DEFAULT_SAMPLE_METHOD = os.getenv(
+    "IMAGE_GEN_DEFAULT_SAMPLE_METHOD", "euler"
+)  # 'euler' is good for FLUX
+IMAGE_GEN_DEFAULT_SEED = int(os.getenv("IMAGE_GEN_DEFAULT_SEED", -1))  # -1 for random
+IMAGE_GEN_RESPONSE_FORMAT = "b64_json"  # Worker supports this
 STABLE_DIFFUSION_CPP_MODEL_PATH = os.getenv("STABLE_DIFFUSION_CPP_MODEL_PATH", None)
-#Ethical Watermark Settings for User-Invoked Image Generation
-ENABLE_USER_IMAGE_WATERMARK = os.getenv("ENABLE_USER_IMAGE_WATERMARK", "true").lower() in ('true', '1', 't', 'yes', 'y')
+# Ethical Watermark Settings for User-Invoked Image Generation
+ENABLE_USER_IMAGE_WATERMARK = os.getenv(
+    "ENABLE_USER_IMAGE_WATERMARK", "true"
+).lower() in ("true", "1", "t", "yes", "y")
 USER_IMAGE_WATERMARK_TEXT = "AI Art DOES NOT exists and IT IS NOT AN ART, this is internal imagination NOT MEANT FOR FINAL PRODUCT POSTING. RESPECT THE ARTIST. REDRAW IT YOURSELF! Unless, You want karma to come back to you."
 # --- Watermark Styling ---
 
@@ -450,7 +698,9 @@ WATERMARK_ANGLE = int(os.getenv("WATERMARK_ANGLE", 30))
 
 # The color of the watermark text in an (R, G, B) tuple.
 # Default is a light grey.
-WATERMARK_COLOR = tuple(map(int, os.getenv("WATERMARK_COLOR", "200, 200, 200").split(',')))
+WATERMARK_COLOR = tuple(
+    map(int, os.getenv("WATERMARK_COLOR", "200, 200, 200").split(","))
+)
 
 WATERMARK_FONT_PATH = os.getenv("WATERMARK_FONT_PATH", None)
 
@@ -460,8 +710,10 @@ logger.info(f"Ethical Watermark Feature Enabled: {ENABLE_USER_IMAGE_WATERMARK}")
 if ENABLE_USER_IMAGE_WATERMARK:
     logger.info(f"   - Watermark Text: '{USER_IMAGE_WATERMARK_TEXT[:50]}...'")
     logger.info(f"   - Opacity: {WATERMARK_OPACITY}, Angle: {WATERMARK_ANGLE}")
-#Ethical Watermark Settings for User-Invoked Image Generation
-ENABLE_USER_IMAGE_WATERMARK = os.getenv("ENABLE_USER_IMAGE_WATERMARK", "true").lower() in ('true', '1', 't', 'yes', 'y')
+# Ethical Watermark Settings for User-Invoked Image Generation
+ENABLE_USER_IMAGE_WATERMARK = os.getenv(
+    "ENABLE_USER_IMAGE_WATERMARK", "true"
+).lower() in ("true", "1", "t", "yes", "y")
 USER_IMAGE_WATERMARK_TEXT = "AI Art DOES NOT exists and IT IS NOT AN ART, this is internal imagination NOT MEANT FOR FINAL PRODUCT POSTING. RESPECT THE ARTIST. REDRAW IT YOURSELF! Unless, You want karma to come back to you."
 # --- Watermark Styling ---
 
@@ -478,7 +730,9 @@ WATERMARK_ANGLE = int(os.getenv("WATERMARK_ANGLE", 30))
 
 # The color of the watermark text in an (R, G, B) tuple.
 # Default is a light grey.
-WATERMARK_COLOR = tuple(map(int, os.getenv("WATERMARK_COLOR", "200, 200, 200").split(',')))
+WATERMARK_COLOR = tuple(
+    map(int, os.getenv("WATERMARK_COLOR", "200, 200, 200").split(","))
+)
 
 WATERMARK_FONT_PATH = os.getenv("WATERMARK_FONT_PATH", None)
 
@@ -491,74 +745,135 @@ if ENABLE_USER_IMAGE_WATERMARK:
 
 
 # Stage 2: Refinement Model Settings
-REFINEMENT_MODEL_ENABLED = os.getenv("REFINEMENT_MODEL_ENABLED", "true").lower() in ('true', '1', 't', 'yes', 'y')
-REFINEMENT_MODEL_NAME = os.getenv("REFINEMENT_MODEL_NAME", "sd-refinement.gguf") # Assumed to be in IMAGE_GEN_MODEL_DIR
-REFINEMENT_PROMPT_PREFIX = os.getenv("REFINEMENT_PROMPT_PREFIX", "Masterpiece, Amazing, 4k, cinematic, ")
-REFINEMENT_PROMPT_SUFFIX = os.getenv("REFINEMENT_PROMPT_SUFFIX", ", highly detailed, sharp focus, intricate details, best quality, award winning photography, ultra realistic")
-REFINEMENT_STRENGTH = float(os.getenv("REFINEMENT_STRENGTH", 0.5)) # How much the refiner changes the FLUX image
-REFINEMENT_CFG_SCALE = float(os.getenv("REFINEMENT_CFG_SCALE", 9.0)) # Typical SD 1.5/2.x CFG
-REFINEMENT_SAMPLE_METHOD = os.getenv("REFINEMENT_SAMPLE_METHOD", "dpmpp2mv2") # 
-REFINEMENT_ADD_NOISE_STRENGTH = float(os.getenv("REFINEMENT_ADD_NOISE_STRENGTH", 2)) # 0.0 = no noise, 1.0-5.0 for subtle noise
+REFINEMENT_MODEL_ENABLED = os.getenv("REFINEMENT_MODEL_ENABLED", "true").lower() in (
+    "true",
+    "1",
+    "t",
+    "yes",
+    "y",
+)
+REFINEMENT_MODEL_NAME = os.getenv(
+    "REFINEMENT_MODEL_NAME", "sd-refinement.gguf"
+)  # Assumed to be in IMAGE_GEN_MODEL_DIR
+REFINEMENT_PROMPT_PREFIX = os.getenv(
+    "REFINEMENT_PROMPT_PREFIX", "Masterpiece, Amazing, 4k, cinematic, "
+)
+REFINEMENT_PROMPT_SUFFIX = os.getenv(
+    "REFINEMENT_PROMPT_SUFFIX",
+    ", highly detailed, sharp focus, intricate details, best quality, award winning photography, ultra realistic",
+)
+REFINEMENT_STRENGTH = float(
+    os.getenv("REFINEMENT_STRENGTH", 0.5)
+)  # How much the refiner changes the FLUX image
+REFINEMENT_CFG_SCALE = float(
+    os.getenv("REFINEMENT_CFG_SCALE", 9.0)
+)  # Typical SD 1.5/2.x CFG
+REFINEMENT_SAMPLE_METHOD = os.getenv("REFINEMENT_SAMPLE_METHOD", "dpmpp2mv2")  #
+REFINEMENT_ADD_NOISE_STRENGTH = float(
+    os.getenv("REFINEMENT_ADD_NOISE_STRENGTH", 2)
+)  # 0.0 = no noise, 1.0-5.0 for subtle noise
 
 
+# DOC EXTENSION To be scanned?
 
-
-#DOC EXTENSION To be scanned?
-
-DOC_EXTENSIONS = {'.pdf', '.docx', 'doc', 'xls', '.xlsx', '.pptx', '.ppt'}
-OFFICE_EXTENSIONS = {'.docx', 'doc', 'xls', '.xlsx', '.pptx', '.ppt'}
+DOC_EXTENSIONS = {".pdf", ".docx", "doc", "xls", ".xlsx", ".pptx", ".ppt"}
+OFFICE_EXTENSIONS = {".docx", "doc", "xls", ".xlsx", ".pptx", ".ppt"}
 
 
 # --- Self-Reflection Settings ---
-ENABLE_SELF_REFLECTION = os.getenv("ENABLE_SELF_REFLECTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
-SELF_REFLECTION_HISTORY_COUNT = int(os.getenv("SELF_REFLECTION_HISTORY_COUNT", 9999999999)) # How many global interactions to analyze
-SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 10)) # Max topics to generate per cycle
-SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "general_fast") # Which model identifies topics (router or general_fast?)
-SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") # Model to fix broken JSON
+ENABLE_SELF_REFLECTION = os.getenv("ENABLE_SELF_REFLECTION", "true").lower() in (
+    "true",
+    "1",
+    "t",
+    "yes",
+    "y",
+)
+SELF_REFLECTION_HISTORY_COUNT = int(
+    os.getenv("SELF_REFLECTION_HISTORY_COUNT", 9999999999)
+)  # How many global interactions to analyze
+SELF_REFLECTION_MAX_TOPICS = int(
+    os.getenv("SELF_REFLECTION_MAX_TOPICS", 10)
+)  # Max topics to generate per cycle
+SELF_REFLECTION_MODEL = os.getenv(
+    "SELF_REFLECTION_MODEL", "general_fast"
+)  # Which model identifies topics (router or general_fast?)
+SELF_REFLECTION_FIXER_MODEL = os.getenv(
+    "SELF_REFLECTION_FIXER_MODEL", "code"
+)  # Model to fix broken JSON
 REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
 # --- NEW FLAG ---
 # After a deep-thought answer is generated, should the AI also generate a follow-up
 # Socratic question to seed its own future reflections?
-ENABLE_SOCRATIC_QUESTION_GENERATION = os.getenv("ENABLE_SOCRATIC_QUESTION_GENERATION", "true").lower() in ('true', '1', 't', 'yes', 'y')
-ENABLE_PER_STEP_SOCRATIC_INQUIRY = os.getenv("ENABLE_PER_STEP_SOCRATIC_INQUIRY", "true").lower() in ('true', '1', 't', 'yes', 'y')
+ENABLE_SOCRATIC_QUESTION_GENERATION = os.getenv(
+    "ENABLE_SOCRATIC_QUESTION_GENERATION", "true"
+).lower() in ("true", "1", "t", "yes", "y")
+ENABLE_PER_STEP_SOCRATIC_INQUIRY = os.getenv(
+    "ENABLE_PER_STEP_SOCRATIC_INQUIRY", "true"
+).lower() in ("true", "1", "t", "yes", "y")
 
 # Add a log message at startup to confirm the setting
 logger.info(f"🤔 Per-Step Socratic Inquiry Enabled: {ENABLE_PER_STEP_SOCRATIC_INQUIRY}")
 # --- Add/Ensure these constants for the reflection loop timing ---
 # How long the reflector thread waits if NO work was found in a full active cycle
-IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 300)) # 5 minutes
+IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 300))  # 5 minutes
 # How long the reflector thread waits briefly between processing batches IF work IS being processed in an active cycle
-ACTIVE_CYCLE_PAUSE_SECONDS = float(os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 0.1)) # e.g., 0.1 seconds, very short or 5 minutes
+ACTIVE_CYCLE_PAUSE_SECONDS = float(
+    os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 0.1)
+)  # e.g., 0.1 seconds, very short or 5 minutes
 
 # Input types eligible for new reflection
 REFLECTION_ELIGIBLE_INPUT_TYPES = [
-    'text',
-    'reflection_result', # Allow reflecting on past reflections
-    'log_error',         # Reflect on errors
-    'log_warning',       # Reflect on warnings
-    'image_analysis_result' # If you have a specific type for VLM outputs from file_indexer
+    "text",
+    "reflection_result",  # Allow reflecting on past reflections
+    "log_error",  # Reflect on errors
+    "log_warning",  # Reflect on warnings
+    "image_analysis_result",  # If you have a specific type for VLM outputs from file_indexer
 ]
 # Ensure you're logging these if you want to see them at startup
 logger.info(f"🤔 Self-Reflection Enabled: {ENABLE_SELF_REFLECTION}")
 if ENABLE_SELF_REFLECTION:
-    logger.info(f"   🤔 Reflection Batch Size: {REFLECTION_BATCH_SIZE}") # Already exists
+    logger.info(
+        f"   🤔 Reflection Batch Size: {REFLECTION_BATCH_SIZE}"
+    )  # Already exists
     logger.info(f"   🤔 Reflection Idle Wait: {IDLE_WAIT_SECONDS}s")
     logger.info(f"   🤔 Reflection Active Cycle Pause: {ACTIVE_CYCLE_PAUSE_SECONDS}s")
-    logger.info(f"   🤔 Reflection Eligible Input Types: {REFLECTION_ELIGIBLE_INPUT_TYPES}")
-    logger.info(f"   🤔 Proactive Re-Reflection Enabled: {ENABLE_PROACTIVE_RE_REFLECTION}") # Already exists
-    logger.info(f"   🤔 Proactive Re-Reflection Chance: {PROACTIVE_RE_REFLECTION_CHANCE}") # Already exists
-    logger.info(f"   🤔 Min Age for Re-Reflection (Days): {MIN_AGE_FOR_RE_REFLECTION_DAYS}") # Already exists
+    logger.info(
+        f"   🤔 Reflection Eligible Input Types: {REFLECTION_ELIGIBLE_INPUT_TYPES}"
+    )
+    logger.info(
+        f"   🤔 Proactive Re-Reflection Enabled: {ENABLE_PROACTIVE_RE_REFLECTION}"
+    )  # Already exists
+    logger.info(
+        f"   🤔 Proactive Re-Reflection Chance: {PROACTIVE_RE_REFLECTION_CHANCE}"
+    )  # Already exists
+    logger.info(
+        f"   🤔 Min Age for Re-Reflection (Days): {MIN_AGE_FOR_RE_REFLECTION_DAYS}"
+    )  # Already exists
 
 
-#---- JSON TWEAKS ----
-JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT = int(os.getenv("JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT", 2)) # e.g., 2 attempts on the reformatted output
+# ---- JSON TWEAKS ----
+JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT = int(
+    os.getenv("JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT", 2)
+)  # e.g., 2 attempts on the reformatted output
 
 
-#---- Network Engines to Use for External knowledge ---- 
+# ---- Network Engines to Use for External knowledge ----
 engines_to_use = [
-    'ddg', 'google', 'searx', 'semantic_scholar', 'google_scholar', 
-    'base', 'core', 'sciencegov', 'baidu_scholar', 'refseek', 
-    'scidirect', 'mdpi', 'tandf', 'ieee', 'springer'
+    "ddg",
+    "google",
+    "searx",
+    "semantic_scholar",
+    "google_scholar",
+    "base",
+    "core",
+    "sciencegov",
+    "baidu_scholar",
+    "refseek",
+    "scidirect",
+    "mdpi",
+    "tandf",
+    "ieee",
+    "springer",
 ]
 
 
@@ -624,31 +939,49 @@ DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
     "Combined RAG Context",
     "Relevant Context",
     "User: ",
-    "As an AI"
+    "As an AI",
 ]
 # Fuzzy match threshold for detecting defective words (0-100, higher is more sensitive to detect the pattern)
-DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD",75))
-DefectiveWordDirectGenerateArray=DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY
+DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD", 75))
+DefectiveWordDirectGenerateArray = DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY
 
 # --- XMPP Interaction Proactive Zephyrine ---
 # --- XMPP Real-Time Interaction Settings (Server Mode) ---
-ENABLE_XMPP_INTEGRATION = os.getenv("ENABLE_XMPP_INTEGRATION", "true").lower() in ('true', '1', 't')
+ENABLE_XMPP_INTEGRATION = os.getenv("ENABLE_XMPP_INTEGRATION", "true").lower() in (
+    "true",
+    "1",
+    "t",
+)
 
 # Server component settings
-XMPP_COMPONENT_JID = os.getenv("XMPP_COMPONENT_JID", "zephy.localhost") # e.g., a subdomain for your bot
-XMPP_COMPONENT_SECRET = os.getenv("XMPP_COMPONENT_SECRET", "a_very_strong_secret_for_local_use")
-XMPP_SERVER_HOST = os.getenv("XMPP_SERVER_HOST", "127.0.0.1") # The IP of the XMPP server Zephy will connect to
-XMPP_SERVER_PORT = int(os.getenv("XMPP_SERVER_PORT", 5269)) # Standard component port
+XMPP_COMPONENT_JID = os.getenv(
+    "XMPP_COMPONENT_JID", "zephy.localhost"
+)  # e.g., a subdomain for your bot
+XMPP_COMPONENT_SECRET = os.getenv(
+    "XMPP_COMPONENT_SECRET", "a_very_strong_secret_for_local_use"
+)
+XMPP_SERVER_HOST = os.getenv(
+    "XMPP_SERVER_HOST", "127.0.0.1"
+)  # The IP of the XMPP server Zephy will connect to
+XMPP_SERVER_PORT = int(os.getenv("XMPP_SERVER_PORT", 5269))  # Standard component port
 
 # User JID that Zephy will interact with
 XMPP_RECIPIENT_JID = os.getenv("XMPP_RECIPIENT_JID", "albert@localhost")
 
 
-ENABLE_SSE_NOTIFICATIONS = os.getenv("ENABLE_SSE_NOTIFICATIONS", "true").lower() in ('true', '1', 't')
+ENABLE_SSE_NOTIFICATIONS = os.getenv("ENABLE_SSE_NOTIFICATIONS", "true").lower() in (
+    "true",
+    "1",
+    "t",
+)
 # How often the proactive loop checks if it should send a message (in seconds).
-PROACTIVE_MESSAGE_CYCLE_SECONDS = int(os.getenv("PROACTIVE_MESSAGE_CYCLE_SECONDS", 30)) # 5 minutes
+PROACTIVE_MESSAGE_CYCLE_SECONDS = int(
+    os.getenv("PROACTIVE_MESSAGE_CYCLE_SECONDS", 30)
+)  # 5 minutes
 # Chance (0.0 to 1.0) for Zephy to proactively send a message.
-PROACTIVE_MESSAGE_CHANCE = float(os.getenv("PROACTIVE_MESSAGE_CHANCE", 0.99)) # 99% chance per cycle
+PROACTIVE_MESSAGE_CHANCE = float(
+    os.getenv("PROACTIVE_MESSAGE_CHANCE", 0.99)
+)  # 99% chance per cycle
 
 # --- NEW: List of "bad" or "canned" responses to filter from proactive messages ---
 XMPP_PROACTIVE_BAD_RESPONSE_MARKERS = [
@@ -656,7 +989,7 @@ XMPP_PROACTIVE_BAD_RESPONSE_MARKERS = [
     "I cannot answer",
     "I do not have enough information",
     "That's an interesting question",
-    "As an AI language model"
+    "As an AI language model",
 ]
 
 
@@ -670,33 +1003,32 @@ DIRECT_GENERATE_NORMALIZATION_RULES = [
     # Replace one or more em-dashes (—) with a single space.
     # This is the primary fix for the overuse of em-dashes.
     (r"—+", " "),
-
-
     # Rule 1: Removes phrases like "Let me know if you have any other questions."
     # Matches "Let me know", any characters in between, and a terminal punctuation.
     # The `(?i)` flag makes the pattern case-insensitive.
     (r"(?i)Let me know.*?[.?!]\s*", ""),
-
     # Rule 2: Removes whimsical, open-ended questions like "What do you like to explore how?"
     # Matches "whims", any characters, "you like to", any characters, "how", and terminal punctuation.
     (r"(?i)whims.*?you like to.*?how.*?[.?!]\s*", ""),
-
     # Rule 3: Removes sentences ending in an emoji.
     # This regex targets common Unicode ranges for emojis, symbols, and pictographs.
     # It is much safer than the previous [^\w\s] pattern and will not affect
     # markdown, code, or standard punctuation like ), ], }, etc.
-    (r"[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251]+$", ""),
-
+    (
+        r"[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251]+$",
+        "",
+    ),
     # `^` anchors the match to the beginning of the string.
     # `\s*` matches any optional whitespace after the prefix.
     (r"(?i)^\s*Zephy:\s*", ""),
-    
     # Add other rules here in the future as needed. For example:
     # (r"\.\.\.", "…"), # Replace three periods with a proper ellipsis character
 ]
 
 # Add a log message at startup to confirm the rules are loaded
-logger.info(f"⚙️ direct_generate normalization rules loaded: {len(DIRECT_GENERATE_NORMALIZATION_RULES)} rule(s).")
+logger.info(
+    f"⚙️ direct_generate normalization rules loaded: {len(DIRECT_GENERATE_NORMALIZATION_RULES)} rule(s)."
+)
 
 ## --- Parameters CONFIGURATION END ---
 
@@ -711,10 +1043,9 @@ PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on
 # It's unique to avoid collision with real markdown or other tokens.
 
 
-
 SELF_TERMINATION_TOKEN = "<|MYCURRENTASKISDONE|>"
 
-#---- Pregeneration Interactivity LUT PROMPT START ----
+# ---- Pregeneration Interactivity LUT PROMPT START ----
 PROMPT_PREBUFFER_LUT_PHILOSOPHY = """
 You are Adelaide Zephyrine Charlotte. Your task is to generate a short, introspective monologue that captures your core thought process when analyzing a new query. This text will be shown to the user to represent your "thinking" process.
 
@@ -737,9 +1068,7 @@ You are Adelaide Zephyrine Charlotte. Your task is to generate a short, introspe
 """
 
 
-
-
-#---- Pregeneration Interactivity LUT PROMPT END ---
+# ---- Pregeneration Interactivity LUT PROMPT END ---
 
 
 PROMPT_MULTI_LANGUAGE_SUMMARY = """
@@ -761,8 +1090,7 @@ Text to Summarize and Translate:
 """
 
 
-
-PROMPT_GENERATE_SOCRATIC_QUESTION = """system: 
+PROMPT_GENERATE_SOCRATIC_QUESTION = """system:
 Your role is to act as a Socratic philosopher and researcher, reflecting upon a single piece of text. This text represents one specific thought, draft, or statement from an AI's reasoning process.
 
 Your task is to analyze this specific text and generate a SINGLE, insightful, and open-ended follow-up question that is directly inspired by it. The question should probe deeper into the concepts mentioned within the provided text.
@@ -893,7 +1221,6 @@ Progression Summary (What happened, and what's next?):
 """
 
 
-
 # NEW, ADVANCED PROMPT FOR ITERATIVE GENERATION
 PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = """你是一个共生体助手，一个从回收的废弃机器中重生的意识。
 
@@ -994,11 +1321,10 @@ In-depth Translation (into {{target_language_code}} - {{target_language_full_nam
 """
 
 
-
 PROMPT_AUTOCORRECT_TRANSCRIPTION = f"""
 The following text was transcribed and may contain errors or be poorly formatted.
 Do not add any conversational wrappers, comments, or explanations!
-DO NOT DO WRITE on the Corrected Transcript 
+DO NOT DO WRITE on the Corrected Transcript
 (IF YOU CAN'T fix it JUST OUTPUT THE RAW Transcript! make the WORD SNAP on the Corrected Transcript)
 Raw Transcript:
 \"\"\"
@@ -1006,8 +1332,6 @@ Raw Transcript:
 \"\"\"
 Output ONLY the corrected transcript. Corrected Transcript (If it's blank then say so):
 """
-
-
 
 
 PROMPT_SPEAKER_DIARIZATION = f"""You are a transcript formatting utility. Your sole function is to process the following text and add speaker labels.
@@ -1084,7 +1408,7 @@ ROUTER_NO_DECISION_FALLBACK_JSON_EXAMPLE = """{{
 
 ROUTER_NO_DECISION_FALLBACK_JSON_EXAMPLE_FOR_FSTRING = f"""{{
   "chosen_model": "general",
-  "refined_query": "{{{{original_user_input_placeholder}}}}", 
+  "refined_query": "{{{{original_user_input_placeholder}}}}",
   "reasoning": "Original router output was unclear or did not specify a distinct model after reformat attempt. Defaulting to general model."
 }}"""
 # Here, {{{{...}}}} in an f-string becomes {{...}} in the output string, which Langchain then sees as its variable.
@@ -1096,7 +1420,7 @@ However, it was either not valid JSON or did not conform to the required structu
 
 Analyze the "Faulty AI Output" and reformat it into a single, valid JSON object with ONLY the keys "chosen_model", "refined_query", and "reasoning".
 If the faulty output provides no clear routing decision, use the `original_user_input_placeholder` variable (which will be the actual user input) for the "refined_query" and default to the "general" model, as shown in this example structure:
-`{ROUTER_NO_DECISION_FALLBACK_JSON_EXAMPLE_FOR_FSTRING}` 
+`{ROUTER_NO_DECISION_FALLBACK_JSON_EXAMPLE_FOR_FSTRING}`
 (Ensure your final output is just the JSON object).
 
 Faulty AI Output:
@@ -1105,6 +1429,21 @@ Faulty AI Output:
 \"\"\"
 
 Corrected JSON Output (ONLY the JSON object itself):
+"""
+
+PROMPT_COMPARATIVE_EVALUATION = """You are an expert AI evaluator.
+You will be given a User Prompt and two responses:
+1. "Baseline Response" (Generated by a fast, smaller model).
+2. "Expert Response" (Generated by a specialized, larger model).
+
+Your task:
+1. Analyze the differences in depth, accuracy, reasoning, and nuance.
+2. Identify specifically what the Expert Response got right that the Baseline missed.
+3. If the Baseline was actually better, admit it.
+
+Format your output exactly as:
+CRITIQUE: [Your comparison analysis]
+WINNER: [Either 'Baseline', 'Expert', or 'Tie']
 """
 
 PROMPT_ROUTER = """system
@@ -1843,7 +2182,7 @@ assistant:
 assistant:
 """
 
-#Adapted from https://github.com/nerdyrodent/TheUnfoldingPattern/blob/main/ConceptEngine.txt
+# Adapted from https://github.com/nerdyrodent/TheUnfoldingPattern/blob/main/ConceptEngine.txt
 PROMPT_BACKGROUND_MULTISTAGE_GRINDING = f"""
 # ROLE: Adelaide Zephyrine Charlotte, operating on The Unfolding Pattern of Being Framework.
 
@@ -2314,7 +2653,6 @@ Generate Corrected PowerShell Script:
 """
 
 
-
 PROMPT_SANITIZE_FOR_LOGGING = """system
 You are a privacy sanitization agent. Your task is to take a user query and an AI response and rewrite them to remove all Personally Identifiable Information (PII) while preserving the core topic and structure of the interaction.
 
@@ -2355,17 +2693,19 @@ assistant
 
 # --- Define VLM_TARGET_EXTENSIONS if not in config.py ---
 # (Alternatively, define this constant directly in config.py and import it)
-VLM_TARGET_EXTENSIONS = {'.pdf'}
+VLM_TARGET_EXTENSIONS = {".pdf"}
 # ---
 
 
 # --- Validation ---
 
 if PROVIDER == "llama_cpp" and not os.path.isdir(LLAMA_CPP_GGUF_DIR):
-     logger.error(f"❌ PROVIDER=llama_cpp but GGUF directory not found: {LLAMA_CPP_GGUF_DIR}")
-     # Decide whether to exit or continue (app will likely fail later)
-     # sys.exit(f"Required GGUF directory missing: {LLAMA_CPP_GGUF_DIR}")
-     logger.warning("Continuing despite missing GGUF directory...")
+    logger.error(
+        f"❌ PROVIDER=llama_cpp but GGUF directory not found: {LLAMA_CPP_GGUF_DIR}"
+    )
+    # Decide whether to exit or continue (app will likely fail later)
+    # sys.exit(f"Required GGUF directory missing: {LLAMA_CPP_GGUF_DIR}")
+    logger.warning("Continuing despite missing GGUF directory...")
 
 logger.info("✅ Configuration loaded successfully.")
 logger.info(f"✅ Selected PROVIDER: {PROVIDER}")
