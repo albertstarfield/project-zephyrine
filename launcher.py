@@ -259,8 +259,8 @@ ARIA2P_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".aria2p_installed_v1")
 FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     SETUP_COMPLETE_FLAG_FILE,
     LICENSE_FLAG_FILE,
-    MELO_TTS_LIB_INSTALLED_FLAG_FILE,  
-    MELO_TTS_DATA_INSTALLED_FLAG_FILE,  
+    MELO_TTS_LIB_INSTALLED_FLAG_FILE,
+    MELO_TTS_DATA_INSTALLED_FLAG_FILE,
     CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE,
     CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE,
     CONDA_PATH_CACHE_FILE,
@@ -340,7 +340,7 @@ def _compile_watchtowers() -> bool:
 
     # --- Compile Ada Watchdog (Thread 2) ---
     ada_watchdog_dir = os.path.join(ROOT_DIR, "ZephyWatchtower", "watchdog_thread2")
-    
+
     print_system("Compiling Ada Watchdog (Thread 2)...")
     if not os.path.isdir(ada_watchdog_dir):
         print_error(f"Ada Watchdog project directory not found: {ada_watchdog_dir}")
@@ -349,10 +349,10 @@ def _compile_watchtowers() -> bool:
     if not shutil.which("alr"):
         print_error("'alr' command not found. Cannot build Ada watchdog. Please ensure Alire is in your PATH.")
         return False
-        
+
     try:
         ### MODIFICATION START ###
-        
+
         # Base command is now 'alr exec -- gprbuild', which we proved is more reliable.
         build_command_ada = ["alr", "exec", "--", "gprbuild"]
 
@@ -368,7 +368,7 @@ def _compile_watchtowers() -> bool:
             except Exception as e:
                 print_error(f"Could not get macOS SDK path for Ada build: {e}")
                 return False
-        
+
         ### MODIFICATION END ###
 
         process_ada = subprocess.run(build_command_ada, cwd=ada_watchdog_dir, capture_output=True, text=True, check=False, timeout=300)
@@ -742,19 +742,19 @@ def start_service_process(command, cwd, name, use_shell_windows=False):
     """
     log_dir = os.path.join(ROOT_DIR, "logs")
     os.makedirs(log_dir, exist_ok=True)
-    
+
     # Create a clean log file name, e.g., "ENGINE.log"
     log_file_path = os.path.join(log_dir, f"{name.replace(' ', '_')}.log")
-    
+
     print_system(f"Launching {name}: {' '.join(command)} in {os.path.basename(cwd)}")
     print_system(f"  --> Log output will be streamed to: {log_file_path}")
-    
+
     try:
         # Open the log file in write mode, which will truncate it on each start
         log_file_handle = open(log_file_path, 'w', encoding='utf-8')
-        
+
         shell_val = use_shell_windows if IS_WINDOWS else False
-        
+
         # Redirect both stdout and stderr to the same log file handle
         process = subprocess.Popen(
             command,
@@ -766,13 +766,13 @@ def start_service_process(command, cwd, name, use_shell_windows=False):
             errors='replace',
             shell=shell_val
         )
-        
+
         # Keep track of the process and its log file for the TUI to use
         with process_lock:
             running_processes.append((process, name, log_file_path, log_file_handle))
 
         return process
-        
+
     except FileNotFoundError:
         print_error(f"Command failed for {name}: '{command[0]}' not found.")
         sys.exit(1)
@@ -855,7 +855,7 @@ def cleanup_processes():
         except subprocess.TimeoutExpired:
             print_warning("ZephyMesh Node did not terminate gracefully, killing...")
             zephymesh_process.kill()
-    
+
     # --- Handle the main relaunched 'conda run' process ---
     if relaunched_conda_process_obj and relaunched_conda_process_obj.poll() is None:
         print_system("Terminating the 'conda run' process and its children...")
@@ -865,7 +865,7 @@ def cleanup_processes():
     # --- Handle locally managed services (Engine, Backend, etc.) ---
     with process_lock:
         # Make a copy to avoid issues while iterating and modifying
-        procs_to_terminate = list(running_processes) 
+        procs_to_terminate = list(running_processes)
         running_processes.clear()
 
     # Iterate over the copied list
@@ -1148,7 +1148,7 @@ def launch_all_services_in_parallel_and_monitor():
     else:
         print_warning("Textual or psutil not found. Falling back to simple terminal output for monitoring.")
         monitor_services_fallback()
-        
+
 
 
 
@@ -1162,9 +1162,9 @@ def get_conda_python_versions_to_try(current_dt=None):
     """
     if current_dt is None:
         current_dt = datetime.now()
-    
+
     # Use the global EPOCH_DATE which should now be set to date(2025, 6, 1)
-    epoch_date = EPOCH_DATE 
+    epoch_date = EPOCH_DATE
     current_date_obj = current_dt.date()
 
     # --- New Semester-Based Calculation ---
@@ -1182,7 +1182,7 @@ def get_conda_python_versions_to_try(current_dt=None):
 
     # --- New "Stability First" Version Ordering ---
     versions_to_try = []
-    
+
     # 1. PRIORITY 1: The stable, developer-tested initial version.
     versions_to_try.append(f"{INITIAL_PYTHON_MAJOR}.{INITIAL_PYTHON_MINOR}")
 
@@ -1369,7 +1369,7 @@ apt-get install -y --install-recommends \\
     build-essential ca-certificates cmake git gettext \\
     python3-pip python3-dev libc6-dev libc6 \\
     libvulkan-dev vulkan-tools libudev-dev llvm-dev \\
-    libgmp-dev libssl-dev libffi-dev 
+    libgmp-dev libssl-dev libffi-dev
 
 echo "--> Removing any system-level Node.js and npm to avoid conflicts..."
 # Use || true to prevent the script from failing if the packages aren't installed.
@@ -1383,7 +1383,7 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
     # --- Step 1: Update system and install a comprehensive set of build packages ---
     echo "--> Updating package lists and installing dependencies..."
     export DEBIAN_FRONTEND=noninteractive
-    
+
 
     # --- Step 2: Update Linker Cache ---
     echo "--> Updating dynamic linker cache..."
@@ -1447,13 +1447,13 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
     # <<< NEW SECTION START >>>
     # --- Step 7: Configure Runtime Environment for Custom Drivers ---
     echo "--> Configuring runtime environment to use custom Adreno/Mali drivers..."
-    
+
     # This is the path where Mesa's ICD files are installed
     ICD_PATH="/usr/share/vulkan/icd.d"
     ADRENO_ICD="/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json"
     PANFROST_ICD="/usr/share/vulkan/icd.d/panfrost_icd.aarch64.json"
     PROFILE_SCRIPT="/etc/profile.d/mesa-drivers.sh"
-    
+
     # For Adreno GPUs (Turnip driver)
     if [ -f "$ICD_PATH/freedreno_icd.aarch64.json" ]; then
         echo "--> Found Adreno (Turnip) Vulkan driver. Setting environment variables."
@@ -1464,8 +1464,8 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
         echo "--> Adreno environment configured."
         export VK_ICD_FILENAMES="$ADRENO_ICD"
         export GALLIUM_DRIVER=freedreno
-        
-    
+
+
     # For Mali GPUs (Panfrost driver)
     elif [ -f "$ICD_PATH/panfrost_icd.aarch64.json" ]; then
         echo "--> Found Mali (Panfrost) Vulkan driver. Setting environment variables."
@@ -1476,14 +1476,14 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
         echo "--> Mali environment configured."
         export VK_ICD_FILENAMES="$PANFROST_ICD"
         export GALLIUM_DRIVER=panfrost
-    
+
     else
         echo "--> WARNING: Could not find hardware-specific Vulkan ICD files. GPU acceleration may not work."
     fi
-    
+
     # Make the script executable so it's loaded on login
     chmod +x /etc/profile.d/mesa-drivers.sh
-    
+
     echo "--> Runtime environment configuration complete. Changes will apply on next login."
 
     if vulkaninfo --summary | grep -q "llvmpipe"; then
@@ -1495,13 +1495,13 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
         echo "Please report this issue."
         echo "------------------------------------------------------------"
         touch /root/.gpu_acceleration_failed
-    
+
     else
         # This block executes if "llvmpipe" was NOT found, meaning SUCCESS.
         echo "--> SUCCESS: A non-CPU Vulkan driver is active."
         # We can also clean up any old failure flag just in case
         rm -f /root/.gpu_acceleration_failed
-    
+
     fi
     echo "--- Zephyrine Proot Setup: Environment build complete! ---"
     touch "$MESA_BUILD_FLAG"
@@ -1678,7 +1678,7 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
                 conda_bin_path = os.path.join(install_path, "bin")
                 bashrc_path = os.path.expanduser("~/.bashrc")
                 export_line = f'\n# Added by Zephyrine Launcher\nexport PATH="{conda_bin_path}:$PATH"\n'
-                
+
                 try:
                     with open(bashrc_path, "a", encoding="utf-8") as f:
                         f.write(export_line)
@@ -2539,7 +2539,7 @@ def _ensure_conda_package_version(package_name: str, executable_name: str, requi
             print_error(f"FATAL: Failed to patch {executable_name} after installation: {e}")
             print_error("The application will likely fail to run. Check if 'patchelf' is installed correctly.")
             return False
-        
+
     # --- Final verification ---
     try:
         post_install_process = subprocess.run([executable_name, version_arg_prefix], capture_output=True, text=True,
@@ -2918,7 +2918,7 @@ def download_file_with_progress(
                                 print_warning(f"Removed incomplete aria2c download: {file_entry.path}")
                             except Exception as e_rm_aria:
                                 print_error(f"Failed to remove incomplete aria2c file {file_entry.path}: {e_rm_aria}")
-            
+
             if not download_successful:
                  print_warning("Aria2c download path did not complete successfully. Falling back to requests.")
 
@@ -3000,7 +3000,7 @@ def download_file_with_progress(
                     try: os.remove(temp_destination_path_requests)
                     except Exception: pass
                 time.sleep(5)
-            
+
             except requests.exceptions.HTTPError as e_http_error:
                 other_errors_retries += 1
                 print_error(f"HTTP error (requests): {e_http_error.response.status_code} for URL {url_to_use}")
@@ -3015,7 +3015,7 @@ def download_file_with_progress(
                     break # Exit while loop
                 print_warning(f"Retrying (requests) due to HTTP error (retry {other_errors_retries}/{max_retries_non_connection_error})...")
                 time.sleep(5)
-            
+
             except Exception as e_general_requests:
                 other_errors_retries += 1
                 print_error(f"Unexpected error during requests download: {type(e_general_requests).__name__}")
@@ -3054,7 +3054,7 @@ def _ensure_gnat_compiler_from_source():
         with open(GNAT_INSTALLED_FLAG_FILE, 'w') as f:
             f.write(f"Found at {shutil.which('gnat')} on {datetime.now().isoformat()}")
         return True
-        
+
 
     print_warning("GNAT Ada compiler not found. Preparing to build from GCC source...")
     print_warning("This is a simple but I doesn't understand yet, one-time setup and will take a VERY long time.")
@@ -3359,7 +3359,7 @@ def _check_and_repair_conda_env(env_path: str) -> bool:
         )
 
         output = process.stdout + "\n" + process.stderr
-        
+
         # Check for specific failure signatures from the conda doctor output.
         # "Missing Files" is a critical error that requires a rebuild.
         # "Altered Files" is often benign (e.g., new .pyc files), so we ignore it.
@@ -3367,11 +3367,11 @@ def _check_and_repair_conda_env(env_path: str) -> bool:
             print_error(f"Conda environment at '{env_path}' is CORRUPT (Missing Files detected).")
             print_warning("Triggering autofix: The environment will be completely removed and recreated.")
             print_error(f"--- Conda Doctor Report ---\n{output.strip()}\n--------------------------")
-            
+
             # --- The "Autofix" ---
             # 1. Remove associated flag files to ensure fresh installations.
             _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
-            
+
             # 2. Delete the entire corrupt Conda environment directory.
             try:
                 shutil.rmtree(env_path)
@@ -3380,7 +3380,7 @@ def _check_and_repair_conda_env(env_path: str) -> bool:
                 print_error(f"CRITICAL: Failed to remove corrupt Conda environment at '{env_path}': {e}")
                 print_error("Please remove this directory manually and restart the launcher.")
                 sys.exit(1)
-            
+
             return False # Signal that the environment was corrupt and has been removed.
 
         elif "❌" in output: # Catch other potential doctor errors
@@ -3833,8 +3833,8 @@ if TUI_AVAILABLE:
             return (f"💻 CPU: {self.cpu_usage:>5.1f}% | "
                     f"🧠 RAM: {self.ram_usage:>5.1f}% | "
                     f"💾 Disk Free: {self.disk_free:.1f} GB")
-        
-    
+
+
 
     class ZephyrineTUI(App):
         """A Textual UI for monitoring the Zephyrine Engine and its daemons."""
@@ -3843,7 +3843,7 @@ if TUI_AVAILABLE:
         CSS = """
                 Grid {
                     /* Keep 2 columns, but now define row heights explicitly */
-                    grid-size: 2; 
+                    grid-size: 2;
                     grid-rows: 2fr 1fr 1; /* Top: 2 parts, Middle: 1 part, Bottom: 1 fixed line */
                     grid-gutter: 1;
                 }
@@ -3895,17 +3895,17 @@ if TUI_AVAILABLE:
 
             # Start all services in background threads
             self.start_all_services_in_background()
-        
+
 
         def update_stats(self) -> None:
             """Update the system stats widget with percentages for the bars."""
             # Target the new widget class
             stats_widget = self.query_one(SystemStatsGraph)
-            
+
             # Update CPU and RAM percentages directly
             stats_widget.cpu_percent = psutil.cpu_percent()
             stats_widget.ram_percent = psutil.virtual_memory().percent
-            
+
             # Get disk usage info
             disk_usage = psutil.disk_usage('/')
             stats_widget.disk_percent = disk_usage.percent
@@ -3920,7 +3920,7 @@ if TUI_AVAILABLE:
 
             # The watchdogs and mesh node are already running.
             # We only need to start the remaining services here.
-            
+
             if not os.path.exists(SETUP_COMPLETE_FLAG_FILE):
                 start_engine_main()
                 start_backend_service()
@@ -3996,7 +3996,7 @@ if TUI_AVAILABLE:
 
     class SystemStatsGraph(Static):
         """A widget to display real-time system stats with graphical bars."""
-        
+
         # Define reactive variables to hold the data
         cpu_percent = reactive(0.0)
         ram_percent = reactive(0.0)
@@ -4159,7 +4159,7 @@ if __name__ == "__main__":
                     print_warning("All models Will all run on CPU")
                     print_warning("Performance will be significantly reduced.")
                     print_colored("WARNING", "------------------------------------------------------------", "WARNING")
-                    
+
                     # This is the override logic. We force all GPU flags to false.
                     AUTO_PRIMARY_GPU_BACKEND = "cpu"
                     AUTO_CUDA_AVAILABLE = False

@@ -1,4 +1,0 @@
-external:LIBRARY_TYPE=default
-external:WATCHDOG_FINAL_LIBRARY_TYPE=default
-profile:watchdog_final=DEVELOPMENT
-switches:watchdog_final=-Og,-fdata-sections,-ffunction-sections,-g,-gnatVa,-gnatW8,-gnatw.X,-gnatwa,-gnaty-d,-gnaty3,-gnatyA,-gnatyB,-gnatyI,-gnatyO,-gnatyS,-gnatya,-gnatyb,-gnatyc,-gnatye,-gnatyf,-gnatyh,-gnatyi,-gnatyk,-gnatyl,-gnatym,-gnatyn,-gnatyp,-gnatyr,-gnatyt,-gnatyu,-gnatyx

@@ -1,2 +1,0 @@
-last_build_profile = "aws=RELEASE,gnat_native=RELEASE,gnatcoll=RELEASE,gnatcoll_sql=RELEASE,gnatcoll_sqlite=RELEASE,libgnutls=RELEASE,libgpr=RELEASE,make=RELEASE,openai=RELEASE,openapi=RELEASE,openssl=RELEASE,security=RELEASE,simple_components=RELEASE,system_random=RELEASE,unixodbc=RELEASE,utilada=RELEASE,utilada_xml=RELEASE,uuids=RELEASE,xmlada=RELEASE,zephyrine_server=DEVELOPMENT"
-
