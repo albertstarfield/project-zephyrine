@@ -22,6 +22,7 @@ reportlab
 dotenv
 rich
 textual
+cst_lsp
 
 
 # fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install

@@ -1,8 +1,0 @@
-my_final_test.adb:12:01: (style) trailing spaces not permitted [-gnatyb]
-my_final_test.adb:18:07: error: no candidate interpretations match the actuals:
-my_final_test.adb:18:07: error: missing argument for parameter "Output_File" in call to "spawn" declared at s-os_lib.ads:929
-my_final_test.adb:18:07: error: missing argument for parameter "Output_File_Descriptor" in call to "spawn" declared at s-os_lib.ads:915
-my_final_test.adb:18:07: error: missing argument for parameter "Success" in call to "spawn" declared at s-os_lib.ads:869
-my_final_test.adb:20:14: error: unmatched actual "Process_Id" in call
-my_final_test.adb:22:61: error: "To_String" is undefined
-my_final_test.adb:22:80: (style) this line is too long [-gnatyM]

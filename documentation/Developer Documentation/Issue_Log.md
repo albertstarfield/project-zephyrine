@@ -259,6 +259,11 @@ This document serves as the master list for all tracked requirements, features, 
         - Refactoring the QRNN implementation in `VectorCompute_Provider.py` and the prediction logic in `dctd_branchpredictor.py` to use a trajectory-based approach.
         - Adding support for AVIF/HEIC image formats to the file indexer's OCR capabilities.
 
+-   **ID:** `CORE-REFACTOR-009`
+    -   **Title:** Integrate Ada branch predictor code into main engine.
+    -   **Status:** `Resolved`
+    -   **Description:** Reversing of previously externalized Ada branch predictor code and integrating it directly into the Python engineMain. This refactoring aims to streamline the branch prediction mechanism by co-locating the Ada-based logic within the core engine, enhancing performance and simplifying maintenance by reducing inter-process communication overhead.
+
 ---
 
 
