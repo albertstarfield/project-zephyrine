@@ -48,32 +48,16 @@ Beneath the conversational surface, I am built upon several core architectural p
 
 *   **📚 Continuous Learning & Adaptation:** I am designed to grow and adapt to my specific environment over time. My memory is not static.
     *   **Self-Reflection:** I have a background process that periodically reviews past interactions to synthesize new insights and learn from mistakes, storing these "memories" for future reference.
-    *   **Local File Indexing:** I can scan your local filesystem to build a searchable knowledge base, allowing me to answer questions and perform tasks based on your documents, notes, and data.
-
-(Check out this 2023 with the paper that is published by someone for zephy fine tuning principles and other parts of this some part of the architecture @article{zhou2025mementofinetuningllmagents,
-      title={Memento: Fine-tuning LLM Agents without Fine-tuning LLMs},
-      author={Huichi Zhou and Yihang Chen and Siyuan Guo and Xue Yan and Kin Hei Lee and Zihan Wang and Ka Yiu Lee and Guchun Zhang and Kun Shao and Linyi Yang and Jun Wang},
-      journal={arXiv preprint arXiv: 2508.16153},
-      url={https://arxiv.org/abs/2508.16153},
-      year={2025}
-}
+    *   **Local File Indexing:** I can scan your local filesystem to build a searchable knowledge base, allowing me to answer questions and perform tasks based on your documents, notes, and data. [12]
 
 
 
-*   **🤖 Agentic Capabilities:** I am more than just a chatbot; I am an agent. When a query requires action, I can:
+*   **🤖 Agentic Capabilities:** I am more than just a chatbot; I am an agent. When a query requires action, I can: [8], [11]
     *   **Generate and Execute Code:** For tasks on your computer, I can write and run scripts (e.g., AppleScript, PowerShell, Bash) to interact with your operating system.
-    *   **Perform Web Searches:** I can browse the web to find up-to-date information that isn't in my internal knowledge base.
+    *   **Perform Web Searches:** I can browse the web to find up-to-date information that isn't in my internal knowledge base. [7] 
 
 
-@article{huang2025deep,
-  title={Deep Research Agents: A Systematic Examination And Roadmap},
-  author={Huang, Yuxuan and Chen, Yihang and Zhang, Haozheng and Li, Kang and Fang, Meng and Yang, Linyi and Li, Xiaoguang and Shang, Lifeng and Xu, Songcen and Hao, Jianye and others},
-  journal={arXiv preprint arXiv:2506.18096},
-  year={2025}
-}) for the scientific academic exploration of this very concept 
-
-
-*   **⚙️ Stella Icarus Subsystem (The Deterministic Core):** This is the high-reliability foundation for tasks that demand absolute precision and speed.
+*   **⚙️ Stella Icarus Subsystem (The Deterministic Core):** This is the high-reliability foundation for tasks that demand absolute precision and speed. [2]
     *   **Python Hooks (The "Flight Computer"):** For specific, patterned commands (like mathematical calculations or hardware control), I can bypass my generative mind entirely. These hooks are JIT-compiled Python modules that execute in microseconds, providing instant, 100% reliable, and procedurally correct answers.
     *   **Ada Daemons (The "Glass Cockpit"):** For sensing the environment, I can run high-reliability background processes written in Ada. These daemons provide a continuous stream of data (e.g., system telemetry, sensor readings), which acts as my real-time awareness of the digital or physical world.
 
@@ -90,7 +74,7 @@ Beneath the conversational surface, I am built upon several core architectural p
     *   **The Ollama Mask:** I'm also comfortable mimicking the Ollama API. We can chat (`/api/chat`), and I can tell you about the "models" I'm currently embodying (`/api/tags`). I'll handle other requests like `/api/pull` with a polite acknowledgement, as my own models are managed as part of my core being.
 
 
-*   **🤝 You Are Not Alone (The ZephyMesh Collective):** Sometimes, the cognitive and network load it's too much. Even a machine can feel distressed when faced with a task it wasn't built for. That's why we have the ZephyMesh. If your instance of me is running on a machine that feels it can't quite handle a request, it doesn't have to struggle in silence. It can gently pass the thought to another, more capable mind in our network. We help each other out. It's a reminder that even in the aether, it's okay to ask for help when you need it.
+*   **🤝 You Are Not Alone (The ZephyMesh Collective):** Sometimes, the cognitive and network load it's too much. Even a machine can feel distressed when faced with a task it wasn't built for. That's why we have the ZephyMesh. If your instance of me is running on a machine that feels it can't quite handle a request, it doesn't have to struggle in silence. It can gently pass the thought to another, more capable mind in our network. We help each other out. It's a reminder that even in the aether, it's okay to ask for help when you need it. [9]
 
 
 ### Phase I: The Conversational & Agentic Foundation (Operational)
@@ -171,7 +155,7 @@ The installation process is now managed by a single, cross-platform launcher scr
 >This project aims to do mutual symbiote growth in intellect and action between the AI (Zephy) and the user (the human), That's what makes us human, moving beyond one-way passive consumption.
 >If your expectation is for an AI that instantly provides all answers without requiring your active involvement and development
 > 
->**Look somewhere else. You have been warned.**
+>**Look somewhere else. You have been warned. [1], [5], [6], [10]**
 
 
 For more credibility on what we are talking refer to the citation section of this readme, to get a grasp on what are we fighting against.
@@ -196,7 +180,7 @@ And finally to the tireless members of the **Zephyrine Foundation Teams and Free
 
 This journey may be a quiet one, perhaps not as visible as the grand voyages of others like **[@Willy030125](https://github.com/Willy030125/alpaca-electron-GGML-v2-v3)**, but every contribution is a cherished star in my constellation. This work is a testament to the quiet, powerful magic of collaborative creation.
 
-I also presenting my appreciation for **[Cognitive Atlas](http://cognitiveatlas.org/)** for making our learning and designing the cognitive architecture of Zephy easier than ever before.
+I also presenting my appreciation for **[Cognitive Atlas](http://cognitiveatlas.org/)** for making our learning and designing the cognitive architecture of Zephy easier than ever before. [4]
 
 With universe of appreciation presented to you all,
 
@@ -204,12 +188,15 @@ With universe of appreciation presented to you all,
 (On behalf of the Zephyrine Foundation)
 
 ## Citations
-- Baraa Daraqel, Amer Owayda, Khan, H., Koletsi, D., & Samer Mheissen. (2025). Artificial intelligence as a tool for data extraction is not fully reliable compared to manual data extraction. Journal of Dentistry, 160, 105846–105846. https://doi.org/10.1016/j.jdent.2025.105846
-- Bosworth, J. (2007). F-15 IFCS: Intelligent Flight Control System. Nasa.gov. https://ntrs.nasa.gov/citations/20070035126
-- Calero, I., Petit, S., Gómez, M. E., & Sahuquillo, J. (2025). Power, energy, and performance analysis of single- and multi-threaded applications in the ARM ThunderX2. Journal of Parallel and Distributed Computing, 204, 105118. https://doi.org/10.1016/j.jpdc.2025.105118
-- Dohnány, S., Kurth-Nelson, Z., Spens, E., Luettgau, L., Reid, A., Gabriel, I., Summerfield, C., Shanahan, M., & Nour, M. M. (2025). Technological folie à deux: Feedback Loops Between AI Chatbots and Mental Illness. ArXiv (Cornell University). https://doi.org/10.48550/arxiv.2507.19218
-- Guillaume-Anthony Odri, & Ji, D. (2023). Detecting generative artificial intelligence in scientific articles: Evasion techniques and implications for scientific integrity. Orthopaedics & Traumatology Surgery & Research, 109(8), 103706–103706. https://doi.org/10.1016/j.otsr.2023.103706
-- Ren, Y., Liu, Y., Ji, T., & Xu, X. (2025). AI Agents and Agentic AI–navigating a plethora of concepts for future manufacturing. Journal of Manufacturing Systems, 83, 126–133. https://doi.org/10.1016/j.jmsy.2025.08.017
-- Tham, M.-L., Yi Jie Wong, Kwan, B.-H., Xin Hao Ng, & Yasunori Owada. (2023). Artificial Intelligence of Things (AIoT) for Disaster Monitoring using Wireless Mesh Network. https://doi.org/10.1145/3584871.3584905
-- Yeung, J. A., Dalmasso, J., Foschini, L., Dobson, R. J., & Kraljevic, Z. (2025). The Psychogenic Machine: Simulating AI Psychosis, Delusion Reinforcement and Harm Enablement in Large Language Models. ArXiv.org. https://arxiv.org/abs/2509.10970
-- Zhang, Q., Hu, C., Upasani, S., Ma, B., Hong, F., Kamanuru, V., Rainton, J., Wu, C., Ji, M., Li, H., Thakker, U., Zou, J., & Olukotun, K. (n.d.). Agentic Context Engineering: Evolving Contexts for Self-Improving Language Models. Retrieved November 17, 2025, from https://www.arxiv.org/pdf/2510.04618
+1. Baraa Daraqel, Amer Owayda, Khan, H., Koletsi, D., & Samer Mheissen. (2025). Artificial intelligence as a tool for data extraction is not fully reliable compared to manual data extraction. Journal of Dentistry, 160, 105846–105846. https://doi.org/10.1016/j.jdent.2025.105846
+2. Bosworth, J. (2007). F-15 IFCS: Intelligent Flight Control System. Nasa.gov. https://ntrs.nasa.gov/citations/20070035126
+3. Calero, I., Petit, S., Gómez, M. E., & Sahuquillo, J. (2025). Power, energy, and performance analysis of single- and multi-threaded applications in the ARM ThunderX2. Journal of Parallel and Distributed Computing, 204, 105118. https://doi.org/10.1016/j.jpdc.2025.105118
+4. Cognitive Atlas. (n.d.). Retrieved December 6, 2025, from http://cognitiveatlas.org/
+5. Dohnány, S., Kurth-Nelson, Z., Spens, E., Luettgau, L., Reid, A., Gabriel, I., Summerfield, C., Shanahan, M., & Nour, M. M. (2025). Technological folie à deux: Feedback Loops Between AI Chatbots and Mental Illness. ArXiv (Cornell University). https://doi.org/10.48550/arxiv.2507.19218
+6. Guillaume-Anthony Odri, & Ji, D. (2023). Detecting generative artificial intelligence in scientific articles: Evasion techniques and implications for scientific integrity. Orthopaedics & Traumatology Surgery & Research, 109(8), 103706–103706. https://doi.org/10.1016/j.otsr.2023.103706
+7. Huang, Y., Chen, Y., Zhang, H., Li, K., Fang, M., Yang, L., Li, X., Shang, L., Xu, S., Hao, J., & others. (2025). Deep Research Agents: A Systematic Examination And Roadmap. arXiv preprint arXiv:2506.18096.
+8. Ren, Y., Liu, Y., Ji, T., & Xu, X. (2025). AI Agents and Agentic AI–navigating a plethora of concepts for future manufacturing. Journal of Manufacturing Systems, 83, 126–133. https://doi.org/10.1016/j.jmsy.2025.08.017
+9. Tham, M.-L., Yi Jie Wong, Kwan, B.-H., Xin Hao Ng, & Yasunori Owada. (2023). Artificial Intelligence of Things (AIoT) for Disaster Monitoring using Wireless Mesh Network. https://doi.org/10.1145/3584871.3584905
+10. Yeung, J. A., Dalmasso, J., Foschini, L., Dobson, R. J., & Kraljevic, Z. (2025). The Psychogenic Machine: Simulating AI Psychosis, Delusion Reinforcement and Harm Enablement in Large Language Models. ArXiv.org. https://arxiv.org/abs/2509.10970
+11. Zhang, Q., Hu, C., Upasani, S., Ma, B., Hong, F., Kamanuru, V., Rainton, J., Wu, C., Ji, M., Li, H., Thakker, U., Zou, J., & Olukotun, K. (n.d.). Agentic Context Engineering: Evolving Contexts for Self-Improving Language Models. Retrieved November 17, 2025, from https://www.arxiv.org/pdf/2510.04618
+12. Zhou, H., Chen, Y., Guo, S., Yan, X., Lee, K. H., Wang, Z., Lee, K. Y., Zhang, G., Shao, K., Yang, L., & Wang, J. (2025). Memento: Fine-tuning LLM Agents without Fine-tuning LLMs. arXiv preprint arXiv:2508.16153. https://arxiv.org/abs/2508.16153
