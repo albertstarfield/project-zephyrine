@@ -4227,6 +4227,27 @@ if __name__ == "__main__":
             print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
             print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
 
+            # --- CRITICAL FIX: Repair Corrupted SQLAlchemy Extensions ---
+            # This block runs before the main requirements.txt install.
+
+            print_system("--- Checking and Repairing SQLAlchemy Extensions for Python 3.13 ---")
+
+            # 1. Force remove the potentially broken SQLAlchemy (using the version from requirements.txt)
+            if not run_command([PIP_EXECUTABLE, "uninstall", "-y", "SQLAlchemy"], ROOT_DIR, "PIP-UNINSTALL-SQLA", check=False):
+                print_warning("SQLAlchemy not found for uninstall, proceeding.")
+
+            # 2. Force reinstall the package, ignoring cached versions.
+            # We explicitly set a slightly OLDER, known-stable version (e.g., 2.0.40) 
+            # or ensure the current version is clean. Since 2.0.45 is pinned, let's trust it 
+            # and focus on cleaning the compilation.
+            if not run_command([PIP_EXECUTABLE, "install", "--no-cache-dir", "SQLAlchemy==2.0.45"], ROOT_DIR, "PIP-REINSTALL-SQLA", check=True):
+                print_error("FATAL: Failed to cleanly reinstall SQLAlchemy. Cannot proceed.")
+                setup_failures.append("Failed to install/ensure SQLAlchemy is compiled correctly.")
+            else:
+                print_system("SQLAlchemy successfully repaired and recompiled.")
+                
+            # --- End of Repair Block ---
+
             # --- Engine Python Dependencies (requirements.txt) ---
             engine_req_path = os.path.join(ROOT_DIR, "requirements.txt")
             if not os.path.exists(engine_req_path): print_error(
