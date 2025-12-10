@@ -385,7 +385,8 @@ func (app *App) handleProactiveNotification(w http.ResponseWriter, r *http.Reque
 func (app *App) handleProactiveThoughtEvent(jsonData string) {
 	var payload struct {
 		UserID  string `json:"userId"`
-		//ChatID  string `json:"chatId"` // we no longer need UUID bounded chat
+		// ChatID is commented out in your struct, so we remove references to it
+		// ChatID  string `json:"chatId"` 
 		Message string `json:"message"`
 	}
 
@@ -394,33 +395,32 @@ func (app *App) handleProactiveThoughtEvent(jsonData string) {
 		return
 	}
 
-	if payload.UserID == "" || payload.ChatID == "" {
-		log.Printf("WARNING: Received proactive_thought event with missing userId or chatId. Data: %s", jsonData)
+	// FIX 1: Removed check for payload.ChatID
+	if payload.UserID == "" {
+		log.Printf("WARNING: Received proactive_thought event with missing userId. Data: %s", jsonData)
 		return
 	}
 
 	log.Printf("Received proactive thought from LLM for user %s. Finding latest chat...", payload.UserID)
 
-	//log.Printf("Received proactive thought from LLM for user %s", payload.UserID)
-
 	var latestChatID string
 
 	app.DBMutex.Lock()
-
+	// Note: 'err' is declared here
 	err := app.DB.QueryRow(
-        "SELECT id FROM chats WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
-        payload.UserID,
-    ).Scan(&latestChatID)
-    app.DBMutex.Unlock()
+		"SELECT id FROM chats WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
+		payload.UserID,
+	).Scan(&latestChatID)
+	app.DBMutex.Unlock()
 
 	if err != nil {
-        if err == sql.ErrNoRows {
-            log.Printf("Could not find any chats for user %s to deliver proactive message.", payload.UserID)
-        } else {
-            log.Printf("ERROR querying for latest chat for user %s: %v", payload.UserID, err)
-        }
-        return // Stop processing if we can't find a chat
-    }
+		if err == sql.ErrNoRows {
+			log.Printf("Could not find any chats for user %s to deliver proactive message.", payload.UserID)
+		} else {
+			log.Printf("ERROR querying for latest chat for user %s: %v", payload.UserID, err)
+		}
+		return // Stop processing if we can't find a chat
+	}
 
 	log.Printf("Found latest chat ID '%s' for user %s.", latestChatID, payload.UserID)
 
@@ -430,22 +430,21 @@ func (app *App) handleProactiveThoughtEvent(jsonData string) {
 		log.Printf("Could not find active WebSocket for user %s. Proactive message from LLM was not delivered.", payload.UserID)
 		return
 	}
-	
+
 	// Create the payload to send to the client
 	wsPayload := map[string]string{
-		//"chatId":  payload.ChatID,
 		"chatId":  latestChatID,
 		"message": payload.Message,
 	}
 
-	// This function is in websocket_handler.go. We need to make sure it's accessible.
-	// For now, let's assume `sendWsMessage` is a public function or we reimplement the write logic here.
-	// Let's use the safer direct write method to avoid import cycle issues.
 	msgToSend := WSMessage{Type: "proactive_thought", Payload: wsPayload}
-	
+
 	// We need to lock the connection when writing from a different goroutine
 	app.connectionsMux.Lock()
-	err := conn.WriteJSON(msgToSend)
+	
+	// FIX 2: Changed ':=' to '=' because 'err' was already declared above
+	err = conn.WriteJSON(msgToSend)
+	
 	app.connectionsMux.Unlock()
 
 	if err != nil {

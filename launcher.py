@@ -3490,14 +3490,52 @@ def _ensure_and_launch_zephymesh():
         # No need to terminate here, the main atexit handler will get it.
         return False  # Indicate failure
 
+def _heal_base_conda_environment(conda_exec):
+    """
+    detects if the base conda environment lacks critical modern capabilities 
+    (like zstandard for .conda files) and attempts to auto-repair it.
+    """
+    print_system("--- Checking Base Conda Health & Capabilities ---")
+    
+    # We target the 'base' environment specifically
+    # logic: The base env is usually 2 levels up from the 'bin/conda' executable
+    # but using '-n base' is safer if 'conda' is in the path correctly.
+    
+    # Check 1: Does the base env support zstandard? (The .conda format reader)
+    # We test this by trying to import it using the base python.
+    # Note: We use 'conda run -n base' to execute in the base context.
+    
+    # A generic "heal" command that installs the missing drivers and updates conda
+    print_warning("Ensuring base Conda has 'zstandard' and 'conda-package-handling' for modern package support...")
+    
+    heal_cmd = [
+        conda_exec, "install", "-n", "base", "--yes",
+        "-c", "conda-forge",
+        "conda-package-handling", 
+        "zstandard"  # The critical missing driver
+    ]
+    
+    # We execute this blindly because checking via python import inside 'conda run' 
+    # can be flaky on some broken setups. Installing it if it's already there is fast.
+    if not run_command(heal_cmd, ROOT_DIR, "CONDA-BASE-HEAL", check=False):
+        print_warning("Could not auto-install zstandard to base environment.")
+        print_warning("If you see 'PackagesNotFoundError' later, this is likely why.")
+    else:
+        print_system("Base Conda environment patched with modern package support.")
+
+    # Optional: Update Conda itself (can be risky/slow, maybe skip or make optional)
+    # print_system("Updating Conda core to latest version...")
+    # update_cmd = [conda_exec, "update", "-n", "base", "-c", "conda-forge", "conda", "--yes"]
+    # run_command(update_cmd, ROOT_DIR, "CONDA-BASE-UPDATE", check=False)
+
 def _miniforge_alike_checking_config(CONDA_EXEC):
-    print_system("--- Configuring newly installed Conda")
+    print_system("--- Configuring newly installed virtual environment")
 
     # This is the path to the conda executable we just installed
 
-
+    command_enable_conda_fmt = [CONDA_EXEC, "config", "--set", "use_only_tar_bz2", "false"]
     command_zst = [CONDA_EXEC, "config", "--set", "experimental", "repodata_from_zst"]
-
+    
     command_priority = [CONDA_EXEC, "config", "--set", "channel_priority", "flexible"]
     command_bypass_ssl_test = [CONDA_EXEC, "config", "--set", "ssl_verify", "no"]
     #conda config --set ssl_verify no
@@ -3514,7 +3552,10 @@ def _miniforge_alike_checking_config(CONDA_EXEC):
             #print_system("  -> Successfully enabled 'repodata_from_zst'.")
 
             subprocess.run(command_bypass_ssl_test, check=True, capture_output=True, text=True, timeout=60)
-            print_system("  -> DANGER TEST: Successfully enabled command_bypass_ssl_test.") #HTTP 000 Error bypass on third-party conda miniforge  https://stackoverflow.com/questions/50305725/condahttperror-http-000-connection-failed-for-url-https-repo-continuum-io-pk
+            print_system("  -> DANGER TEST for microconda that doesn't ship with certificate : Successfully enabled command_bypass_ssl_test.") #HTTP 000 Error bypass on third-party conda miniforge  https://stackoverflow.com/questions/50305725/condahttperror-http-000-connection-failed-for-url-https-repo-continuum-io-pk
+
+            subprocess.run(command_enable_conda_fmt, check=True, capture_output=True, text=True, timeout=60)
+            print_system("  -> Successfully enabled modern .conda package format (disabled tar-only mode).")
 
             #subprocess.run(command_priority, check=True, capture_output=True, text=True, timeout=60)
             #print_system("  -> Successfully set 'channel_priority' to 'flexible'.")
@@ -3925,10 +3966,13 @@ if TUI_AVAILABLE:
                 start_engine_main()
                 start_backend_service()
                 start_frontend()
+                print_system(f"Creating fast-launch post-compilation flag at: {SETUP_COMPLETE_FLAG_FILE}")
+                with open(SETUP_COMPLETE_FLAG_FILE, 'w') as f:
+                    f.write(f"Setup completed on {datetime.now().isoformat()}")
             # This is where the slow mode starts the services because in one go (look at the main slow logic how it rely on this function to launch the services). but on fast mode it done using async service launch itself (check on the main threads of the async io services)
 
             # --- Wait a moment for the new log files to be created ---
-            time.sleep(1.0)
+            time.sleep(0.01)
 
             # This logic remains the same, but it will now also pick up
             # the log files from the pre-started watchdogs.
@@ -4356,7 +4400,7 @@ if __name__ == "__main__":
                 setup_failures.append("Failed to install openmpi-mpifort, which is critical for terminal operations.")
             if not _ensure_conda_package("openmpi", is_critical=True):
                 setup_failures.append("Failed to install openmpi, which is critical for terminal operations.")
-            if not _ensure_conda_package("cmake>=3.21", is_critical=True):
+            if not _ensure_conda_package("cmake", is_critical=True):
                 setup_failures.append("Failed to install cmake>=3.21, which is critical for installation operations.")
             if AUTO_VULKAN_AVAILABLE:
                 print_system("--- Ensuring Vulkan build tools (shaderc for glslc) ---")
@@ -4368,7 +4412,7 @@ if __name__ == "__main__":
             if not _ensure_conda_package("git", executable_to_check="git", is_critical=True): setup_failures.append("Failed to install git, which is critical for terminal operations. requesting post install retry")
             if not _ensure_conda_package("cmake", executable_to_check="cmake", is_critical=True): setup_failures.append("Failed to install cmake, which is critical for terminal operations. requesting post install retry")
             # Ensure Go is installed for ZephyMesh and Backend
-            if not _ensure_conda_package("go", executable_to_check="go", conda_channel="conda-forge", is_critical=True): setup_failures.append("Failed to install go, which is critical for terminal operations. requesting post install retry")
+            if not _ensure_conda_package("go=1.23", executable_to_check="go", conda_channel="conda-forge", is_critical=True): setup_failures.append("Failed to install go, which is critical for terminal operations. requesting post install retry")
             # Ensure Alire/GNAT for Ada compilation
             if not _ensure_alire_and_gnat_toolchain(): setup_failures.append(f"Failed to install/ensure critical tool: Ada toolchain failed to install")
 
@@ -4664,6 +4708,32 @@ if __name__ == "__main__":
                             print_error("llama-cpp-python clone or submodule update failed.")
                         else:
                             build_env_llama = {'FORCE_CMAKE': '1'}
+                            #Temporary Fix due to Conda outdated compiler issue freaking out what is VisionOS is.
+                            if platform.system() == "Darwin":
+                                try:
+                                    # 1. Force the use of Apple's Native Clang
+                                    # This bypasses the old Conda Clang (v14) that crashes on macOS 26 headers
+                                    print_system("macOS Fix: Forcing Native Apple Clang for compilation...")
+                                    build_env_llama['CC'] = '/usr/bin/clang'
+                                    build_env_llama['CXX'] = '/usr/bin/clang++'
+
+                                    # 2. Get the actual physical path of the macOS 26 SDK
+                                    real_sdk_path = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
+                                    build_env_llama['SDKROOT'] = real_sdk_path
+                                    
+                                    # 3. Force flags to use this SDK
+                                    build_env_llama['CFLAGS'] = f"-isysroot {real_sdk_path}"
+                                    build_env_llama['CXXFLAGS'] = f"-isysroot {real_sdk_path}"
+                                    
+                                    # 4. Anchor Deployment Target to 15.0
+                                    # This prevents the compiler from panicking when it sees "26.0"
+                                    build_env_llama['MACOSX_DEPLOYMENT_TARGET'] = "15.0"
+                                    #Conda dyld eject on the outdated slow library
+                                    build_env_llama['DYLD_LIBRARY_PATH'] = ""
+                                    
+                                except Exception as e_mac_fix:
+                                    print_warning(f"macOS Fix Warning: {e_mac_fix}")
+                            # ------------------------------------
                             cmake_args_list_llama = ["-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_BUILD_TESTS=OFF"]
                             chosen_llama_backend = os.getenv("LLAMA_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
                             backend_log_llama = "cpu"
@@ -4706,9 +4776,37 @@ if __name__ == "__main__":
                                                     "stable-diffusion.cpp")
                         sd_cpp_build_path = os.path.join(sd_cpp_sub_path, "build")
                         os.makedirs(sd_cpp_build_path, exist_ok=True)
+                        sd_build_env = os.environ.copy() # Start with current env
+                        #--- Temporary fix due to conda really slow at catching up for the package the darwin compatibility for macOS 26.2
+                        if platform.system() == "Darwin":
+                            try:
+                                print_system("macOS Fix (SD): Forcing Native Apple Clang and Deployment Target 15.0...")
+                                print_warning("Temporary fix due to conda really slow at catching up for the package the darwin compatibility for macOS 26.2")
+                                
+                                # 1. Force Apple Native Clang
+                                sd_build_env['CC'] = '/usr/bin/clang'
+                                sd_build_env['CXX'] = '/usr/bin/clang++'
+                                
+                                # 2. Force Physical SDK Path
+                                real_sdk_path = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
+                                sd_build_env['SDKROOT'] = real_sdk_path
+                                sd_build_env['CFLAGS'] = f"-isysroot {real_sdk_path}"
+                                sd_build_env['CXXFLAGS'] = f"-isysroot {real_sdk_path}"
+                                
+                                # 3. Anchor Deployment Target
+                                sd_build_env['MACOSX_DEPLOYMENT_TARGET'] = "15.0"
+
+                                # 4. CRITICAL FIX: SANITIZE LIBRARY PATH
+                                # This stops Apple's 'ld' from loading Conda's broken libtapi.dylib
+                                sd_build_env['DYLD_LIBRARY_PATH'] = ""
+                                
+                            except Exception as e_mac_fix:
+                                print_warning(f"macOS Fix Warning (SD): {e_mac_fix}")
+                        # -------------------------------------------------------
                         cmake_args_sd_lib = []
                         chosen_sd_backend = os.getenv("SD_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
                         backend_log_sd = "cpu"
+                        
                         if chosen_sd_backend == "cuda" and AUTO_CUDA_AVAILABLE:
                             cmake_args_sd_lib.append("-DSD_CUDA=ON"); backend_log_sd = "CUDA"
                         elif chosen_sd_backend == "metal" and AUTO_METAL_AVAILABLE:
@@ -4717,22 +4815,33 @@ if __name__ == "__main__":
                             cmake_args_sd_lib.append("-DSD_VULKAN=ON"); backend_log_sd = "Vulkan"
                         else:
                             backend_log_sd = "CPU (Default)"
+
                         print_system(f"Configuring stable-diffusion.cpp library build with: {backend_log_sd}")
-                        if not run_command([CMAKE_CMD, ".."] + cmake_args_sd_lib, sd_cpp_build_path, "CMAKE-SD-LIB-CFG"):
+
+                        # IMPORTANT: Pass env_override=sd_build_env to ALL run_command calls below!
+                        
+                        # 1. CMake Configure
+                        if not run_command([CMAKE_CMD, ".."] + cmake_args_sd_lib, sd_cpp_build_path, "CMAKE-SD-LIB-CFG", env_override=sd_build_env):
                             print_error("CMake SD lib config failed.")
-                        elif not run_command([CMAKE_CMD, "--build", "."] + (["--config", "Release"] if IS_WINDOWS else []),
-                                            sd_cpp_build_path, "CMAKE-BUILD-SD-LIB"):
+                        
+                        # 2. CMake Build
+                        elif not run_command([CMAKE_CMD, "--build", "."] + (["--config", "Release"] if IS_WINDOWS else []), 
+                                             sd_cpp_build_path, "CMAKE-BUILD-SD-LIB", env_override=sd_build_env):
                             print_error("Build SD lib failed.")
+                        
                         else:
-                            pip_build_env_sd = {'FORCE_CMAKE': '1'}
-                            if cmake_args_sd_lib: pip_build_env_sd['CMAKE_ARGS'] = " ".join(cmake_args_sd_lib)
-                            if not run_command([PIP_EXECUTABLE, "install", "."], STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH,
-                                            "PIP-SD-BINDINGS", env_override=pip_build_env_sd):
+                            # 3. Pip Install (Bindings)
+                            pip_build_env_sd = sd_build_env.copy() # Inherit our macOS fixes
+                            pip_build_env_sd['FORCE_CMAKE'] = '1'
+                            if cmake_args_sd_lib: 
+                                pip_build_env_sd['CMAKE_ARGS'] = " ".join(cmake_args_sd_lib)
+                            
+                            if not run_command([PIP_EXECUTABLE, "install", "."], STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, 
+                                               "PIP-SD-BINDINGS", env_override=pip_build_env_sd):
                                 print_error("Install SD bindings failed.")
                             else:
                                 print_system("stable-diffusion-cpp-python installed.")
-                                with open(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE, 'w',
-                                        encoding='utf-8') as f_sd_flag:
+                                with open(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_sd_flag:
                                     f_sd_flag.write(backend_log_sd)
             else:
                 print_system("Custom stable-diffusion-cpp-python previously installed.")
@@ -4906,9 +5015,7 @@ if __name__ == "__main__":
                     # We remove it from setup_failures so the master flag can still be created.
                     # setup_failures.append("Bytecode compilation failed.")
 
-                print_system(f"Creating fast-launch flag at: {SETUP_COMPLETE_FLAG_FILE}")
-                with open(SETUP_COMPLETE_FLAG_FILE, 'w') as f:
-                    f.write(f"Setup completed on {datetime.now().isoformat()}")
+                
 
                 print_system("Setup complete. Proceeding to launch.")
                 # We will call our new parallel launch function here later.
@@ -4968,6 +5075,9 @@ if __name__ == "__main__":
                 setup_failures.append("issue on _check_playwright_linux_deps. Requesting Retry!")
 
             print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
+
+            # Auto-heal the base environment before doing anything else
+            _heal_base_conda_environment(CONDA_EXECUTABLE)
 
             # Run the health check on the existing environment before proceeding.
             # If it returns False, it means the environment was corrupt and has been deleted.
