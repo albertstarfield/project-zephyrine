@@ -9185,12 +9185,14 @@ class CortexThoughts:
                             "session_id": session_id,
                             "mode": f"chat_specialist_{role}",
                         }
-                        draft_response = await asyncio.to_thread(
-                            self._call_llm_with_timing,
-                            specialist_chain,
-                            specialist_payload,
-                            timing_data_specialist,
-                            priority=ELP0,
+
+                        draft_response = await self._generate_with_comparative_evaluation(
+                            db=db,
+                            session_id=session_id,
+                            user_prompt_str=formatted_prompt_for_specialist,  # The exact text prompt
+                            prompt_inputs=specialist_payload,  # The inputs for the expert chain
+                            expert_chain=specialist_chain,  # The expert runnable
+                            step_name=f"specialist_draft_{role}"
                         )
 
                         # 3. Log the EXACT prompt and RAW response.
@@ -9256,14 +9258,18 @@ class CortexThoughts:
                         )
 
                         # 3. Execute the corrector call (the _correct_response helper does this internally).
-                        initial_synthesis_or_action_result = (
-                            await self._correct_response(
-                                db,
-                                session_id,
-                                current_input_for_analysis,
-                                specialist_payload,
-                                draft_response,
-                            )
+
+                        # Define the expert chain here
+                        corrector_model = self.provider.get_model("router")
+                        corrector_chain = corrector_prompt_template | corrector_model | StrOutputParser()
+
+                        initial_synthesis_or_action_result = await self._generate_with_comparative_evaluation(
+                            db=db,
+                            session_id=session_id,
+                            user_prompt_str=formatted_prompt_for_corrector,
+                            prompt_inputs=corrector_prompt_input,
+                            expert_chain=corrector_chain,
+                            step_name="correction_step"
                         )
 
                         # 4. Log the EXACT prompt and RAW response.
