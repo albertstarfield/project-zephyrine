@@ -19,6 +19,7 @@ systemCore/engineMain/reverseEngineeringAssets/models
 **tmp-reposync*
 **repoworkspace*
 **installed.flag*
+**.currentLauncherHash.flag**
 **ffs_lock**
 **code_query**
 **code_queue**
@@ -168,3 +169,4 @@ systemCore/UIEngine/backend-service/zephyrine-backend
 **.pyc**
 
 .conda_executable_path_cache_main_env.txt
+systemCore/engineMain/StellaIcarus/stella_math_core.so

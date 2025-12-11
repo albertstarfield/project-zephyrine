@@ -449,3 +449,48 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Checkpoint: AdelaideAlbertCortex refactor and documentation asset relocation.
     -   **Status:** `Resolved`
     -   **Description:** This serves as a checkpoint before a major refactoring of the Branch Prediction system. It includes a significant logical overhaul of the `AdelaideAlbertCortex.py` main loop, restructuring the flow of context gathering, action analysis, and response synthesis. Additionally, the `_excludefromRuntime_reverseEngineeringAssets` directory has been relocated into the `documentation/Developer Documentation` folder to better organize non-runtime assets.
+---
+
+## **LAUNCHER**
+
+### Features
+
+-   **ID:** `LAUNCHER-FEAT-003`
+    -   **Title:** Add launcher integrity check to force rebuilds on change.
+    -   **Status:** `Resolved`
+    -   **Description:** Implemented a file hash check for `launcher.py`. If the launcher's content changes, the `.setup_complete_v2` flag is deleted, forcing a full environment rebuild. This guarantees that changes to dependencies or build steps in the launcher are always applied, preventing environment desynchronization.
+
+---
+
+## **CORE ENGINE (CORE)**
+
+### Features
+
+-   **ID:** `CORE-FEAT-016`
+    -   **Title:** Implement DCTD Temporal Scheduler for future task execution.
+    -   **Status:** `Resolved`
+    -   **Description:** Introduced the DCTD (Dancing in the Celestial Timeline) Temporal Scheduler. This system allows the AI to schedule "thoughts" (background tasks) for execution at a specific time in the future. It includes a database table `scheduled_thought_tasks` to persist the schedule, logic for collision avoidance, and a daemon thread to execute due tasks. This enables more complex, long-term reasoning and self-reflection.
+
+-   **ID:** `CORE-FEAT-017`
+    -   **Title:** Add new models for OCR, UI interaction, and language-to-action.
+    -   **Status:** `Resolved`
+    -   **Description:** Expanded the model ecosystem by adding three new models: `Qwen2.5-OCR-Document-VL-ImageDescripter` for document OCR, `fara7b-compagent-Interact` for computer UI interaction, and `Octopus-v2-word-to-action` for translating language commands into actions. This increases the system's capabilities in document understanding and agentic control.
+
+-   **ID:** `CORE-FEAT-018`
+    -   **Title:** Add semaphore for ELP1 direct generation queue concurrency control.
+    -   **Status:** `Resolved`
+    -   **Description:** Implemented an asyncio.Semaphore (`direct_generate_task_semaphore`) to limit the number of concurrent ELP1 (high-priority) generation tasks. This prevents resource exhaustion and ensures system stability under high load by queueing requests gracefully instead of overwhelming the backend.
+
+### Defects (Bugs)
+
+-   **ID:** `CORE-BUG-007`
+    -   **Title:** Fix corrupted SQLAlchemy extensions on Python 3.13.
+    -   **Status:** `Resolved`
+    -   **Description:** Added a critical fix to `launcher.py` that forces the reinstallation of SQLAlchemy. This resolves compilation issues with SQLAlchemy's C extensions on newer Python versions like 3.13, preventing runtime crashes related to the database connection.
+
+### Refactors
+
+-   **ID:** `CORE-REFACTOR-010`
+    -   **Title:** "Trickshot" refactor of math hook with C++ and Numba tiers.
+    -   **Status:** `Resolved`
+    -   **Description:** The `basic_math_hook` in StellaIcarus was refactored for maximum performance using a tiered "trickshot" approach. It now attempts to compile and use a native C++ library for calculations first. If that fails, it falls back to a Numba JIT-compiled function. The final fallback is a pure Python implementation. This significantly speeds up the execution of simple math queries.

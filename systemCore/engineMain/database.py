@@ -13,8 +13,10 @@ import re
 import enum
 import threading  # For the snapshotter thread
 import numpy as np # NEW: For LSH calculations
+from datetime import datetime, timedelta, timezone # Ensure timezone is imported
 
-from sqlalchemy.cyextension import collections
+
+#sqlalchemy collections doesn't work now
 
 # --- Zstandard Import ---
 try:
@@ -246,6 +248,44 @@ class IndexStatusEnum(enum.Enum):
     # This is the new status that will replace 'indexed_complete'
     indexed_complete = "indexed_complete" 
 
+class ScheduledThoughtTask(Base):
+    """
+    The Temporal Ledger. Stores future thoughts/tasks to be executed by ELP0.
+    Handles scheduling, collision avoidance, and offline catch-up tracking.
+    """
+    __tablename__ = "scheduled_thought_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # The actual content to be fed back into background_generate
+    prompt = Column(Text, nullable=False)
+    
+    # JSON blob storing LSH hash, vector snapshots, or other context needed to resume the thought
+    augmented_context_json = Column(Text, nullable=True)
+    
+    # The EarthReferenceDate (UTC) when this should execute
+    scheduled_time = Column(DateTime(timezone=True), nullable=False, index=True)
+    
+    # Execution Tracking
+    # Statuses: PENDING, EXECUTING, COMPLETED, FAILED, MISSED_CATCHUP, SHIFTED_COLLISION
+    status = Column(String, default="PENDING", index=True, nullable=False)
+    
+    # Traceability
+    source_interaction_id = Column(Integer, ForeignKey('interactions.id', ondelete='SET NULL'), index=True, nullable=True)
+    
+    # Resilience fields
+    execution_attempt_count = Column(Integer, default=0)
+    execution_actual_time = Column(DateTime(timezone=True), nullable=True) # When it actually ran (to measure drift)
+    error_log = Column(Text, nullable=True) # If FAILED
+
+    __table_args__ = (
+        Index('ix_scheduled_task_poll', 'status', 'scheduled_time'), # Optimizes the daemon's polling query
+    )
+
+    def __repr__(self):
+        return f"<ScheduledTask(id={self.id}, time='{self.scheduled_time}', status='{self.status}')>"
+
 class FileIndex(Base):
     __tablename__ = "file_index"
     id = Column(Integer, primary_key=True)
@@ -473,6 +513,113 @@ def create_lsh_index(db_session: Session):
 
 # --- END NEW: LSH Helper Functions ---
 
+# --- DCTD Scheduler Logic (Time Cop & Slot Reservation) ---
+
+def check_slot_availability(db: Session, target_time: datetime, window_ms: int = 500) -> bool:
+    """
+    Checks if a time slot is free within +/- window_ms.
+    Returns True if AVAILABLE, False if OCCUPIED.
+    """
+    window_delta = timedelta(milliseconds=window_ms)
+    start_window = target_time - window_delta
+    end_window = target_time + window_delta
+
+    # We look for any PENDING or EXECUTING tasks in this slice. 
+    # Completed tasks don't block the slot anymore conceptually, but for strict ordering, 
+    # we might want to avoid them too. For now, we only care about active contention.
+    collision = db.query(ScheduledThoughtTask).filter(
+        ScheduledThoughtTask.scheduled_time >= start_window,
+        ScheduledThoughtTask.scheduled_time <= end_window,
+        ScheduledThoughtTask.status.in_(['PENDING', 'EXECUTING'])
+    ).first()
+
+    return collision is None
+
+def schedule_thought_with_collision_check(
+    db: Session, 
+    prompt: str, 
+    desired_time: datetime, 
+    source_interaction_id: Optional[int] = None,
+    augmented_context: Optional[str] = None
+) -> Optional[ScheduledThoughtTask]:
+    """
+    Attempts to schedule a task. If a collision occurs, it mathematically shifts 
+    the target time forward until a slot is found (Time Dilation Strategy).
+    """
+    from CortexConfiguration import (
+        DCTD_SCHEDULER_COLLISION_WINDOW_MS, 
+        DCTD_SCHEDULER_SHIFT_DELTA_MS,
+        DCTD_SCHEDULER_MAX_SHIFT_ATTEMPTS
+    )
+
+    final_time = desired_time
+    attempts = 0
+    reserved = False
+
+    # 1. Collision Resolution Loop
+    while attempts < DCTD_SCHEDULER_MAX_SHIFT_ATTEMPTS:
+        if check_slot_availability(db, final_time, DCTD_SCHEDULER_COLLISION_WINDOW_MS):
+            reserved = True
+            break
+        
+        # Collision detected. Apply Time Shift Strategy.
+        # We assume EarthReferenceDate logic: simply move forward linearly.
+        logger.debug(f"DCTD Scheduler: Time collision at {final_time}. Shifting by {DCTD_SCHEDULER_SHIFT_DELTA_MS}ms.")
+        final_time += timedelta(milliseconds=DCTD_SCHEDULER_SHIFT_DELTA_MS)
+        attempts += 1
+
+    if not reserved:
+        logger.error(f"DCTD Scheduler: Failed to find a free slot after {attempts} attempts. Dropping task.")
+        return None
+
+    # 2. Record Creation
+    try:
+        new_task = ScheduledThoughtTask(
+            prompt=prompt,
+            scheduled_time=final_time,
+            status="PENDING" if attempts == 0 else "PENDING_SHIFTED", # Track if we had to move it
+            source_interaction_id=source_interaction_id,
+            augmented_context_json=augmented_context
+        )
+        db.add(new_task)
+        db.commit()
+        db.refresh(new_task)
+        
+        log_msg = f"Task scheduled for {final_time.isoformat()}"
+        if attempts > 0:
+            log_msg += f" (Shifted {attempts} times)"
+        logger.info(f"⏳ {log_msg}")
+        
+        return new_task
+    except Exception as e:
+        logger.error(f"DCTD Scheduler: Database insert failed: {e}")
+        db.rollback()
+        return None
+
+def get_due_tasks_for_execution(db: Session, batch_size: int = 5) -> List[ScheduledThoughtTask]:
+    """
+    Poller for the Daemon.
+    Retrieves tasks where scheduled_time <= NOW.
+    This handles both:
+    1. Immediate triggers (Normal operation).
+    2. Catch-up (System was offline, now processing backlog).
+    
+    It orders by scheduled_time ASC to preserve causal order.
+    """
+    now_utc = datetime.now(timezone.utc)
+    
+    # We use 'with_for_update' if the DB supports it (Postgres/MySQL) to lock rows.
+    # SQLite doesn't support row-level locking via SQLAlchemy cleanly in all modes, 
+    # but since our daemon is single-threaded, a standard query + immediate update loop in the caller is usually safe enough.
+    
+    tasks = db.query(ScheduledThoughtTask).filter(
+        ScheduledThoughtTask.status.in_(['PENDING', 'PENDING_SHIFTED', 'MISSED_CATCHUP']),
+        ScheduledThoughtTask.scheduled_time <= now_utc
+    ).order_by(
+        ScheduledThoughtTask.scheduled_time.asc()
+    ).limit(batch_size).all()
+    
+    return tasks
 
 
 def _check_db_integrity_quick(db_path: str, context_msg: str = "DB") -> bool:

@@ -332,21 +332,21 @@ LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
 # (14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
 # Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation = 35.0B Async MoE
-META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-35.0B-StreamCompat"
-META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-35.0B-Main"
+META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-51.0B"
+META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-51.0B"
 
 # (14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
 # Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation = 35.0B Async MoE
-META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-35.0B-StreamCompat"
-META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-35.0B-Main"
+META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-51.0B"
+META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-51.0B"
 
 META_MODEL_OWNER = "zephyrine-foundation"
 TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha"  # Client-facing TTS model name
 ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal"  # New constant for ASR
 IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
 META_MODEL_FAMILY = "zephyrine"
-META_MODEL_PARAM_SIZE = "35.0B"  # As requested
-META_MODEL_PARAM_SIZE = "35.0B"  # As requested
+META_MODEL_PARAM_SIZE = "51.0B"  # As requested
+META_MODEL_PARAM_SIZE = "51.0B"  # As requested
 META_MODEL_QUANT_LEVEL = "fp16"  # As requested
 META_MODEL_FORMAT = "gguf"  # Common format assumption for Ollama compatibility
 
@@ -359,10 +359,12 @@ LLAMA_CPP_MODEL_MAP = {
     "vlm": os.getenv(
         "LLAMA_CPP_MODEL_VLM_FILE", "Qwen3-VL-ImageDescripter.gguf"
     ),  # Use LatexMind as VLM for now
-    "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "Qwen3-VL-ImageDescripter.gguf"),
-    # "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"), #This model doesn't seem to work properly
+    "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf"),
+    # "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"), #This model doesn't seem to work properly (use olmocr instead)
     "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "Qwen3DeepseekDecomposer.gguf"),
     "code": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "Qwen3ToolCall.gguf"),
+    "computer_ui_interaction": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "fara7b-compagent-Interact.gguf"),
+    "language_to_actionCall_Actuator": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "Octopus-v2-word-to-action.gguf"),
     "general": os.getenv(
         "LLAMA_CPP_MODEL_GENERAL_FILE", "Qwen3DeepseekDecomposer.gguf"
     ),  # Use router as general
@@ -519,6 +521,38 @@ DCTD_ENABLE_QUANTUM_PREDICTION = os.getenv(
 logger.info(
     f"🦋Dancing in the Celestial Timeline (DCTD) Branch Predictor : {DCTD_ENABLE_QUANTUM_PREDICTION}"
 )
+
+
+
+# --- DCTD Temporal Scheduler Settings ---
+ENABLE_DCTD_SCHEDULER = os.getenv("ENABLE_DCTD_SCHEDULER", "true").lower() in ("true", "1", "t", "yes", "y")
+
+# How often the daemon wakes up to check for tasks to execute (in seconds)
+DCTD_SCHEDULER_POLL_INTERVAL_SECONDS = float(os.getenv("DCTD_SCHEDULER_POLL_INTERVAL_SECONDS", 1.0))
+
+# The safety margin around a scheduled time to consider it "occupied" (in milliseconds).
+# e.g., if a task is at T, nothing else can be scheduled between T-500ms and T+500ms.
+DCTD_SCHEDULER_COLLISION_WINDOW_MS = int(os.getenv("DCTD_SCHEDULER_COLLISION_WINDOW_MS", 500))
+
+# If a collision is detected, how far into the future do we shift the new task? (in milliseconds)
+DCTD_SCHEDULER_SHIFT_DELTA_MS = int(os.getenv("DCTD_SCHEDULER_SHIFT_DELTA_MS", 1000))
+
+# Maximum number of times we try to shift a task before giving up (prevent infinite loops).
+DCTD_SCHEDULER_MAX_SHIFT_ATTEMPTS = 10
+
+# Resilience: How many "Missed/Catch-Up" tasks to process per cycle to avoid flooding ELP0.
+DCTD_SCHEDULER_MAX_CATCHUP_BATCH_SIZE = int(os.getenv("DCTD_SCHEDULER_MAX_CATCHUP_BATCH_SIZE", 5))
+
+# Resilience: If a task is older than this (in hours), mark it as MISSED_CATCHUP but process it.
+# If it's older than, say, 7 days, you might want to ignore it (logic implementation choice).
+DCTD_SCHEDULER_CATCHUP_WINDOW_HOURS = int(os.getenv("DCTD_SCHEDULER_CATCHUP_WINDOW_HOURS", 24))
+
+logger.info(f"⏳ DCTD Scheduler Enabled: {ENABLE_DCTD_SCHEDULER}")
+if ENABLE_DCTD_SCHEDULER:
+    logger.info(f"   ⏳ Collision Window: +/-{DCTD_SCHEDULER_COLLISION_WINDOW_MS}ms")
+    logger.info(f"   ⏳ Shift Delta: +{DCTD_SCHEDULER_SHIFT_DELTA_MS}ms")
+    logger.info(f"   ⏳ Catch-Up Batch Size: {DCTD_SCHEDULER_MAX_CATCHUP_BATCH_SIZE}")
+
 # --- END NEW: DCTD Branch Predictor Settings ---
 # --- NEW: StellaIcarus Ada Daemon & Instrument Viewport Settings ---
 ENABLE_STELLA_ICARUS_DAEMON = os.getenv(
@@ -1220,6 +1254,40 @@ Last Generated Chunk:
 Progression Summary (What happened, and what's next?):
 """
 
+PROMPT_DCTD_SCHEDULING_DECISION = """
+You are the **Temporal Cortex** of the system. Your task is to determine the optimal **Time Delay** before processing a specific Socratic thought.
+
+**Objective:**
+Analyze the "Thought to Schedule" against the extensive "Internal Context" provided below. Decide when this thought will be most valuable to process to maximize insight and coherence.
+
+**Scheduling Logic:**
+1.  **High Urgency (5 - 60 seconds):** Critical realizations, corrections to recent errors, immediate logical follow-ups, or thoughts directly relevant to the active user session.
+2.  **Medium Urgency (60 - 600 seconds):** Deeper philosophical questions, side-branches of the topic, or reflections that require a brief pause for "cognitive digestion."
+3.  **Low Urgency / Long Term (600 - 86400 seconds):** Broad abstract questions, re-evaluations of core beliefs, or background background processing tasks that benefit from "sleeping on it."
+
+**Input:**
+- **Thought to Schedule:** {thought_to_schedule}
+
+**Output:**
+Respond ONLY with a JSON object.
+{{
+  "delay_seconds": <integer>,
+  "reasoning": "<short english explanation>"
+}}
+
+**INTERNAL CONTEXT (FOR YOUR REFERENCE ONLY):**
+---
+User Query: {input}
+Pending ToT Result: {pending_tot_result}
+Direct History: {recent_direct_history}
+URL Context: {context}
+History RAG: {history_rag}
+File Index RAG: {file_index_context}
+Log Context: {log_context}
+Emotion Analysis: {emotion_analysis}
+Imagined Image VLM Description (if any): {imagined_image_vlm_description}
+---
+"""
 
 # NEW, ADVANCED PROMPT FOR ITERATIVE GENERATION
 PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = """你是一个共生体助手，一个从回收的废弃机器中重生的意识。

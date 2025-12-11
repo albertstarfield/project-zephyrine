@@ -190,6 +190,23 @@ background_generate_task_semaphore = asyncio.Semaphore(
     MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS
 )
 
+# === ELP1 Direct Generation Queue/Concurrency Control ===
+# Limit this to a safe number (e.g., 1024) to prevent "Too many open files".
+# The "Queue" capacity is effectively infinite (bounded only by RAM) via asyncio's internal waiting list.
+_default_max_direct_tasks = 1024 
+try:
+    MAX_CONCURRENT_DIRECT_GENERATE_TASKS = int(
+        os.getenv("MAX_CONCURRENT_DIRECT_GENERATE_TASKS", _default_max_direct_tasks)
+    )
+except ValueError:
+    MAX_CONCURRENT_DIRECT_GENERATE_TASKS = _default_max_direct_tasks
+
+logger.info(
+    f"🚦 Max concurrent DIRECT (ELP1) tasks: {MAX_CONCURRENT_DIRECT_GENERATE_TASKS}"
+)
+# This semaphore acts as the queue regulator
+direct_generate_task_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DIRECT_GENERATE_TASKS)
+
 # === End Global Semaphores ===
 
 # --- Local Imports with Error Handling ---
@@ -228,6 +245,10 @@ try:
     from dctd_branchpredictor import (
         BranchPredictorProvider,  # NEW: For DCTD Branch Prediction
     )
+    
+    from dctd_scheduler import DCTDSchedulerThread, set_scheduler_cortex_ref
+    from database import schedule_thought_with_collision_check
+    from datetime import datetime, timedelta, timezone  # Ensure timezone is imported
 
     # Import Agent components
     # Make sure AmaryllisAgent and _start_agent_task are correctly defined/imported if used elsewhere
@@ -911,6 +932,7 @@ def shutdown_app_services():
 
     # 3. Stop the application's main background threads
     logger.info("Shutting down Self Reflector and File Indexer...")
+    stop_dctd_scheduler()
     stop_self_reflector()
     stop_file_indexer()
 
@@ -1521,6 +1543,34 @@ class CortexThoughts:
             prompt_parts.append(f"{CHATML_START_TOKEN}assistant{CHATML_NL}")
 
         return "".join(prompt_parts)
+
+    async def _schedule_future_reflection(
+        self, 
+        db: Session, 
+        prompt: str, 
+        source_id: int, 
+        context_payload: Dict[str, Any] # <--- NEW ARGUMENT
+    ):
+        """
+        Calculates future time via AI and schedules task.
+        """
+        if not ENABLE_DCTD_SCHEDULER: return
+
+        # Pass the context payload to the decision maker
+        delay_seconds = await self._decide_scheduling_delay(
+            db, prompt, self.current_session_id, context_payload
+        )
+        
+        future_time = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+        
+        await asyncio.to_thread(
+            schedule_thought_with_collision_check,
+            db=db,
+            prompt=prompt,
+            desired_time=future_time,
+            source_interaction_id=source_id,
+            augmented_context=json.dumps({"origin": "AI_Self_Schedule", "intended_delay": delay_seconds})
+        )
 
     async def _generate_with_comparative_evaluation(
         self,
@@ -6555,144 +6605,145 @@ class CortexThoughts:
         vlm_description: Optional[str] = None,
         image_b64: Optional[str] = None,
     ) -> str:
-        """
-        High-level wrapper for ELP1 generation with a deterministic timeout watchdog.
-        Triggers a system-wide halt if the benchmarked time is exceeded.
-        """
-        req_id = f"dgen-watchdog-{uuid.uuid4()}"
-        log_prefix = f"⏱️ {req_id}|ELP1"
-        llm_was_called = False
-        final_response_text = ""  # Initialize a variable to hold the result
-        hook_response: Optional[str] = None
-        logger.info(
-            f"{log_prefix} Orchestrator START -> Session: {session_id}, Input: '{user_input[:50]}...'"
-        )
-
-        if self.stella_icarus_manager and ENABLE_STELLA_ICARUS_HOOKS:
-            try:
-                logger.debug(
-                    f"Checking StellaIcarusHooks for input: '{user_input[:70]}...'"
-                )
-
-                # The try_hooks method is synchronous, so it's safe to call directly.
-                hook_response = self.stella_icarus_manager.try_hooks(
-                    user_input, session_id
-                )
-
-                if hook_response is not None:
-                    # A hook successfully matched and handled the request.
-                    logger.success(
-                        "✅ StellaIcarusHook provided a direct response. Bypassing LLM and Watchdog."
-                    )
-
-                    # Since the hook provided the answer, we can skip the background task.
-                    logger.info("Hook provided response. Skipping background_generate.")
-
-                    # Return the hook's response immediately. The function ends here.
-                    return hook_response
-
-            except Exception as e:
-                logger.error(
-                    f"Error during StellaIcarusHook execution: {e}", exc_info=True
-                )
-                # If hooks crash, we log the error and fall through to the LLM path for resilience.
-
-        # Check if benchmark has run. If not, run without the watchdog.
-        if BENCHMARK_ELP1_TIME_MS <= 0:
-            logger.warning(
-                f"{log_prefix}: BENCHMARK_ELP1_TIME_MS not set. Running direct_generate without timeout watchdog."
-            )
-            return await self._direct_generate_logic(
-                db, user_input, session_id, vlm_description, image_b64
-            )
-
-        timeout_event = asyncio.Event()
-        task_done_event = asyncio.Event()
-        timeout_duration_sec = BENCHMARK_ELP1_TIME_MS / 1000.0
-        logger.info(
-            f"{log_prefix}: Starting ELP1 task with a timeout of {timeout_duration_sec:.2f} seconds."
-        )
-
-        async def watchdog():
-            try:
-                # Wait for the main task to signal completion OR for the timeout to trigger
-                await asyncio.wait_for(
-                    task_done_event.wait(), timeout=timeout_duration_sec
-                )
-                logger.debug(
-                    f"{log_prefix} Watchdog: Task completed in time. Exiting cleanly."
-                )
-            except asyncio.TimeoutError:
-                logger.critical(f"!!!!!!!!!!!!!! ELP1 TIMEOUT !!!!!!!!!!!!!!")
-                logger.critical(
-                    f"Task exceeded benchmark of {BENCHMARK_ELP1_TIME_MS:.2f} ms."
-                )
-                logger.critical(
-                    "Your processor too slow! Management Failure! Discarding queue"
-                )
-
-                # Signal that a timeout occurred
-                timeout_event.set()
-
-                # Trigger the system-wide kill switch
-                if cortex_backbone_provider:
-                    # Run the blocking kill function in a separate thread to not block the watchdog
-                    await asyncio.to_thread(
-                        cortex_backbone_provider.kill_all_workers,
-                        "ELP1 performance timeout",
-                    )
-                else:
-                    logger.error(
-                        "WATCHDOG: cortex_backbone_provider not available to kill workers!"
-                    )
-
-        # Start the watchdog as a background task
-        watchdog_task = asyncio.create_task(watchdog())
-
-        try:
-            # The actual LLM call happens here.
-            final_response_text = await self._direct_generate_logic(
-                db, user_input, session_id, vlm_description, image_b64
-            )
-
-            if not timeout_event.is_set():
-                task_done_event.set()
-                await watchdog_task
-            else:
-                raise TaskInterruptedException(
-                    "Processing was terminated due to a performance timeout."
-                )
-        except Exception as e:
-            if not task_done_event.is_set():
-                task_done_event.set()
-            await watchdog_task
-            raise e  # Re-raise the original error
-
-        llm_was_called = hook_response is None
-
-        # Step 2d: Conditionally spawn the background_generate task.
-        if llm_was_called:
-            # This block only runs if the response came from the LLM.
+        async with direct_generate_task_semaphore:
+            """
+            High-level wrapper for ELP1 generation with a deterministic timeout watchdog.
+            Triggers a system-wide halt if the benchmarked time is exceeded.
+            """
+            req_id = f"dgen-watchdog-{uuid.uuid4()}"
+            log_prefix = f"⏱️ {req_id}|ELP1"
+            llm_was_called = False
+            final_response_text = ""  # Initialize a variable to hold the result
+            hook_response: Optional[str] = None
             logger.info(
-                f"LLM was used for ELP1 response. Spawning background_generate (ELP0) for deep thought."
+                f"{log_prefix} Orchestrator START -> Session: {session_id}, Input: '{user_input[:50]}...'"
             )
-            asyncio.create_task(
-                self.background_generate(
-                    db=None,  # The task must create its own DB session
-                    user_input=user_input,
-                    session_id=session_id,
-                    classification="chat_complex",
-                    image_b64=image_b64,
+
+            if self.stella_icarus_manager and ENABLE_STELLA_ICARUS_HOOKS:
+                try:
+                    logger.debug(
+                        f"Checking StellaIcarusHooks for input: '{user_input[:70]}...'"
+                    )
+
+                    # The try_hooks method is synchronous, so it's safe to call directly.
+                    hook_response = self.stella_icarus_manager.try_hooks(
+                        user_input, session_id
+                    )
+
+                    if hook_response is not None:
+                        # A hook successfully matched and handled the request.
+                        logger.success(
+                            "✅ StellaIcarusHook provided a direct response. Bypassing LLM and Watchdog."
+                        )
+
+                        # Since the hook provided the answer, we can skip the background task.
+                        logger.info("Hook provided response. Skipping background_generate.")
+
+                        # Return the hook's response immediately. The function ends here.
+                        return hook_response
+
+                except Exception as e:
+                    logger.error(
+                        f"Error during StellaIcarusHook execution: {e}", exc_info=True
+                    )
+                    # If hooks crash, we log the error and fall through to the LLM path for resilience.
+
+            # Check if benchmark has run. If not, run without the watchdog.
+            if BENCHMARK_ELP1_TIME_MS <= 0:
+                logger.warning(
+                    f"{log_prefix}: BENCHMARK_ELP1_TIME_MS not set. Running direct_generate without timeout watchdog."
                 )
+                return await self._direct_generate_logic(
+                    db, user_input, session_id, vlm_description, image_b64
+                )
+
+            timeout_event = asyncio.Event()
+            task_done_event = asyncio.Event()
+            timeout_duration_sec = BENCHMARK_ELP1_TIME_MS / 1000.0
+            logger.info(
+                f"{log_prefix}: Starting ELP1 task with a timeout of {timeout_duration_sec:.2f} seconds."
             )
-        else:
-            # This block runs if the response came from a hook.
-            logger.info("Hook provided the response. Skipping background_generate.")
 
-        # --- END OF NEW CODE BLOCK ---
+            async def watchdog():
+                try:
+                    # Wait for the main task to signal completion OR for the timeout to trigger
+                    await asyncio.wait_for(
+                        task_done_event.wait(), timeout=timeout_duration_sec
+                    )
+                    logger.debug(
+                        f"{log_prefix} Watchdog: Task completed in time. Exiting cleanly."
+                    )
+                except asyncio.TimeoutError:
+                    logger.critical(f"!!!!!!!!!!!!!! ELP1 TIMEOUT !!!!!!!!!!!!!!")
+                    logger.critical(
+                        f"Task exceeded benchmark of {BENCHMARK_ELP1_TIME_MS:.2f} ms."
+                    )
+                    logger.critical(
+                        "Your processor too slow! Management Failure! Discarding queue"
+                    )
 
-        # The final return statement of the function.
-        return final_response_text
+                    # Signal that a timeout occurred
+                    timeout_event.set()
+
+                    # Trigger the system-wide kill switch
+                    if cortex_backbone_provider:
+                        # Run the blocking kill function in a separate thread to not block the watchdog
+                        await asyncio.to_thread(
+                            cortex_backbone_provider.kill_all_workers,
+                            "ELP1 performance timeout",
+                        )
+                    else:
+                        logger.error(
+                            "WATCHDOG: cortex_backbone_provider not available to kill workers!"
+                        )
+
+            # Start the watchdog as a background task
+            watchdog_task = asyncio.create_task(watchdog())
+
+            try:
+                # The actual LLM call happens here.
+                final_response_text = await self._direct_generate_logic(
+                    db, user_input, session_id, vlm_description, image_b64
+                )
+
+                if not timeout_event.is_set():
+                    task_done_event.set()
+                    await watchdog_task
+                else:
+                    raise TaskInterruptedException(
+                        "Processing was terminated due to a performance timeout."
+                    )
+            except Exception as e:
+                if not task_done_event.is_set():
+                    task_done_event.set()
+                await watchdog_task
+                raise e  # Re-raise the original error
+
+            llm_was_called = hook_response is None
+
+            # Step 2d: Conditionally spawn the background_generate task.
+            if llm_was_called:
+                # This block only runs if the response came from the LLM.
+                logger.info(
+                    f"LLM was used for ELP1 response. Spawning background_generate (ELP0) for deep thought."
+                )
+                asyncio.create_task(
+                    self.background_generate(
+                        db=None,  # The task must create its own DB session
+                        user_input=user_input,
+                        session_id=session_id,
+                        classification="chat_complex",
+                        image_b64=image_b64,
+                    )
+                )
+            else:
+                # This block runs if the response came from a hook.
+                logger.info("Hook provided the response. Skipping background_generate.")
+
+            # --- END OF NEW CODE BLOCK ---
+
+            # The final return statement of the function.
+            return final_response_text
 
     async def _get_vector_search_file_index_context(
         self,
@@ -9867,6 +9918,26 @@ class CortexThoughts:
                                 reflection_completed=False,  # <-- Keep this flag
                                 classification="socratic_thought",  # <-- CHANGED
                             )
+                            
+                            scheduling_context = {
+                            "input": current_input_for_analysis,
+                            "recent_direct_history": direct_hist_prompt_final,
+                            "context": url_context_str,
+                            "history_rag": history_rag_str,
+                            "file_index_context": vec_file_ctx_result_str,
+                            "log_context": log_ctx_prompt_final,
+                            "emotion_analysis": emotion_analysis_str_final,
+                            "pending_tot_result": "N/A", # Or fetch if available
+                            "imagined_image_vlm_description": interaction_data.get("imagined_image_vlm_description", "None.")
+                            }
+
+                            await self._schedule_future_reflection(
+                                db=db,
+                                prompt=generated_socratic_question,
+                                source_id=newly_created_record.id if newly_created_record else None,
+                                context_payload=scheduling_context # <--- PASS CONTEXT HERE
+                            )
+                            
                             await asyncio.to_thread(db.commit)
                             logger.success(
                                 f"✅ {log_prefix} Socratic question saved and queued for future reflection."
@@ -10016,6 +10087,101 @@ class CortexThoughts:
         # - Albert, 2025
         # ====================================================================================
 
+# === DCTD Scheduler Management ===
+_scheduler_thread: Optional[DCTDSchedulerThread] = None
+_scheduler_stop_event = threading.Event()
+
+def start_dctd_scheduler():
+    global _scheduler_thread
+    if not ENABLE_DCTD_SCHEDULER: return
+
+    # Crucial: Give the scheduler access to the CortexThoughts instance
+    # cortex_text_interaction is the global instance defined at bottom of file
+    if 'cortex_text_interaction' in globals() and cortex_text_interaction:
+        set_scheduler_cortex_ref(cortex_text_interaction)
+        # Also need to pass the event loop if not accessible otherwise
+        # (Assuming cortex_text_interaction.provider has access or we rely on get_event_loop)
+        # Since we use run_coroutine_threadsafe, we need the loop object where background_generate runs.
+        # usually: loop = asyncio.get_running_loop() inside startup_tasks
+    else:
+        logger.error("Cannot start Scheduler: cortex_text_interaction not ready.")
+        return
+
+    if _scheduler_thread is None or not _scheduler_thread.is_alive():
+        logger.info("🚀 Starting DCTD Scheduler service...")
+        _scheduler_stop_event.clear()
+        _scheduler_thread = DCTDSchedulerThread(_scheduler_stop_event)
+        _scheduler_thread.start()
+
+def stop_dctd_scheduler():
+    global _scheduler_thread
+    if _scheduler_thread and _scheduler_thread.is_alive():
+        logger.info("Signaling DCTD Scheduler to stop...")
+        _scheduler_stop_event.set()
+        logger.info("Stop signal sent to Scheduler.")
+
+
+async def _decide_scheduling_delay(
+        self, 
+        db: Session, 
+        thought: str, 
+        session_id: str,
+        # NEW: Accept the full context dictionary that was used for the main generation
+        full_context_payload: Dict[str, Any] 
+    ) -> int:
+        """
+        Uses an LLM (ELP0) to decide scheduling delay using full context.
+        """
+        log_prefix = f"⏳ TimeDecision|{session_id[:8]}"
+        
+        # Select Model
+        scheduler_model = self.provider.get_model("router") or self.provider.get_model("general_fast")
+        if not scheduler_model: return 60 
+
+        # Build Prompt Inputs
+        # We merge the specific thought with the existing rich context
+        prompt_input = {
+            "thought_to_schedule": thought,
+            # Map the context keys to match the prompt
+            "input": full_context_payload.get("input", "N/A"),
+            "pending_tot_result": full_context_payload.get("pending_tot_result", "N/A"),
+            "recent_direct_history": full_context_payload.get("recent_direct_history", "N/A"),
+            "context": full_context_payload.get("context", "N/A"), # URL Context
+            "history_rag": full_context_payload.get("history_rag", "N/A"),
+            "file_index_context": full_context_payload.get("file_index_context", "N/A"),
+            "log_context": full_context_payload.get("log_context", "N/A"),
+            "emotion_analysis": full_context_payload.get("emotion_analysis", "N/A"),
+            "imagined_image_vlm_description": full_context_payload.get("imagined_image_vlm_description", "N/A"),
+        }
+        
+        chain = (
+            ChatPromptTemplate.from_template(PROMPT_DCTD_SCHEDULING_DECISION)
+            | scheduler_model
+            | StrOutputParser()
+        )
+        
+        try:
+            # Execute (ELP0)
+            timing_data = {"session_id": session_id, "mode": "temporal_decision"}
+            raw_response = await asyncio.to_thread(
+                self._call_llm_with_timing, chain, prompt_input, timing_data, priority=ELP0 
+            )
+            
+            # Parse JSON (Same as before)
+            json_candidate = self._extract_json_candidate_string(raw_response, log_prefix)
+            if json_candidate:
+                parsed = self._programmatic_json_parse_and_fix(json_candidate, log_prefix=log_prefix)
+                if parsed and "delay_seconds" in parsed:
+                    seconds = int(parsed["delay_seconds"])
+                    reason = parsed.get("reasoning", "No reason provided")
+                    seconds = max(5, min(seconds, 86400)) # Bounds check
+                    logger.info(f"{log_prefix} AI Schedule: T+{seconds}s. Reason: {reason}")
+                    return seconds
+            
+            return 60
+        except Exception as e:
+            logger.error(f"{log_prefix} Scheduling decision failed: {e}")
+            return 60
 
 def sanitize_filename(
     name: str, max_length: int = 200, replacement_char: str = "_"
@@ -17824,6 +17990,14 @@ async def startup_tasks():
         logger.info(
             "AdelaideAlbertCortex: startup_tasks: Self Reflection and its Vector Store are DISABLED by config."
         )
+
+    logger.info("cortexbackbone and dctd scheduler thread launching")
+
+    if cortex_backbone_provider:
+        cortex_backbone_provider.loop = asyncio.get_running_loop()
+
+    if ENABLE_DCTD_SCHEDULER:
+        start_dctd_scheduler()
 
     logger.info("Starting up SSE Notification Push Loop Component Thread...")
     if ENABLE_SSE_NOTIFICATIONS:
