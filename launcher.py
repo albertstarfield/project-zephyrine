@@ -12,6 +12,7 @@ from datetime import datetime, date
 import json  # For parsing conda info
 import traceback
 import compileall
+import hashlib
 #import requests #(Don't request at the top) But on the main after conda relaunch to make sure it's installed
 from typing import Optional, Dict
 try:
@@ -47,6 +48,8 @@ except ImportError:
     TUI_AVAILABLE = False
 # --- End TUI Imports ---
 
+_sys_exec_dir = os.path.dirname(sys.executable)
+
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENGINE_MAIN_DIR = os.path.join(ROOT_DIR, "systemCore", "engineMain")
@@ -55,6 +58,10 @@ FRONTEND_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "frontend-face-z
 LICENSE_DIR = os.path.join(ROOT_DIR, "licenses")
 LICENSE_FLAG_FILE = os.path.join(ROOT_DIR, ".license_accepted_v1")
 CUDA_TOOLKIT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".CUDA_Toolkit_Installed")
+#Launcher Flag File
+
+LAUNCHER_HASH_FILE = os.path.join(ROOT_DIR, ".currentLauncherHash.flag")
+
 # Near the top with other path configurations
 RELAUNCH_LOG_DIR = os.path.join(ROOT_DIR, "logs") # Or any preferred log directory
 RELAUNCH_STDOUT_LOG = os.path.join(RELAUNCH_LOG_DIR, "relaunched_launcher_stdout.log")
@@ -191,10 +198,29 @@ MODELS_TO_DOWNLOAD = [
         "url": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf?download=true",
         "description": "Qwen 3 Tool Calling, Not good thinker but good for controlling and tool calling and coding"
     },
+    #Image Encoder to Decoder
     {
         "filename": "Qwen3-VL-ImageDescripter.gguf",
         "url": "https://huggingface.co/NexaAI/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct.Q4_K.gguf?download=true",
         "description": "Qwen3 Image Descriptor VL Model"
+    },
+    {
+    #https://huggingface.co/Mungert/olmOCR-7B-0225-preview-GGUF/resolve/main/olmOCR-7B-0225-preview-q4_k_m.gguf?download=true    
+        "filename": "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf",
+        "url": "https://huggingface.co/Mungert/olmOCR-7B-0225-preview-GGUF/resolve/main/olmOCR-7B-0225-preview-q4_k_m.gguf?download=true",
+        "description": "Qwen 2.5 Document Image Descripter"
+    },
+    #Computer agent
+    {
+        "filename": "fara7b-compagent-Interact.gguf",
+        "url": "https://huggingface.co/bartowski/microsoft_Fara-7B-GGUF/resolve/main/microsoft_Fara-7B-IQ4_XS.gguf?download=true",
+        "description": "Experimental Actuator for software interaction from language"
+    },
+    #Octopus LLM language to Action
+    { 
+        "filename": "Octopus-v2-word-to-action.gguf", #2b
+        "url": "https://huggingface.co/QuantFactory/Octopus-v2-GGUF/resolve/main/Octopus-v2.Q5_K_M.gguf?download=true",
+        "description": "Experimental Actuator Non Realtime LM Model Language to Action"
     },
     {
         "filename": "whisper-large-v3-q5_0.gguf",
@@ -293,6 +319,19 @@ def print_colored(prefix, message, color=None):
     else:
         print(f"[{now} | {prefix.ljust(10)}] {message.strip()}")
 
+def calculate_launcher_hash() -> str:
+    """Calculates the SHA256 hash of the currently executing launcher.py file."""
+    launcher_path = os.path.abspath(__file__)
+    # Read the file content, ignoring the .flag file itself if it exists, but since
+    # this function is only called before comparison/removal, we just hash the content.
+    try:
+        with open(launcher_path, 'rb') as f:
+            # We hash the entire content of the script
+            return hashlib.sha256(f.read()).hexdigest()
+    except Exception as e:
+        print_error(f"Failed to calculate launcher hash: {e}")
+        # Return a deterministic failure hash to force re-setup if the file can't be read.
+        return "HASH_READ_FAILURE"
 
 def _compile_watchtowers() -> bool:
     """
@@ -4076,6 +4115,44 @@ if TUI_AVAILABLE:
 # and global configurations (ROOT_DIR, REQUIRED_NODE_MAJOR, etc.) are defined correctly above this block.
 
 if __name__ == "__main__":
+    # ----------------------------------------------------
+    # --- LAUNCHER INTEGRITY AND HASH CHECK (New Block)---
+    # ----------------------------------------------------
+    current_hash = calculate_launcher_hash()
+    
+    # 1. Read stored hash
+    stored_hash = None
+    if os.path.exists(LAUNCHER_HASH_FILE):
+        try:
+            with open(LAUNCHER_HASH_FILE, 'r', encoding='utf-8') as f:
+                stored_hash = f.read().strip()
+        except Exception:
+            # If we can't read the old file, treat it as a difference.
+            print_warning("Could not read stored launcher hash. Assuming launcher file integrity change.")
+    
+    integrity_mismatch = (stored_hash is None or stored_hash != current_hash)
+
+    if integrity_mismatch:
+        print_colored("WARNING", "--- LAUNCHER INTEGRITY CHECK FAILED ---", "WARNING")
+        print_warning("Launcher.py content has changed since the last successful setup.")
+        print_warning("Forcing full environment rebuild to guarantee compatibility.")
+        
+        # 2. Delete the setup complete flag
+        if os.path.exists(SETUP_COMPLETE_FLAG_FILE):
+            os.remove(SETUP_COMPLETE_FLAG_FILE)
+            print_system(f"Removed old setup flag: {SETUP_COMPLETE_FLAG_FILE}")
+        
+        # 3. Write the new hash (We'll save the hash only AFTER successful completion later)
+        # We delete the old hash file here if it exists, to ensure the new one gets written clean later.
+        if os.path.exists(LAUNCHER_HASH_FILE):
+            os.remove(LAUNCHER_HASH_FILE)
+            
+    else:
+        print_system("Launcher integrity check passed. Using existing environment.")
+    
+    # ----------------------------------------------------
+    # --- END LAUNCHER INTEGRITY CHECK -------------------
+    # ----------------------------------------------------
     for attempt in range(1, MAX_SETUP_ATTEMPTS + 1):
         print_colored("SYSTEM", f"--- Starting Setup Attempt {attempt}/{MAX_SETUP_ATTEMPTS} ---", "SUCCESS")
         setup_failures = [] # Reset failures for this attempt
@@ -4144,6 +4221,27 @@ if __name__ == "__main__":
                 print_warning("--- First-Time Verification Run: Performing all checks... ---")
                 print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
             print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
+            
+            #define PIP executable
+            PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
+            if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip" # Fallback if direct path missing
+            
+            # --- CRITICAL FIX: Repair Corrupted SQLAlchemy Extensions ---
+            print_system("--- Checking and Repairing SQLAlchemy Extensions for Python 3.13 ---")
+
+            # 1. Force remove the potentially broken SQLAlchemy 
+            if not run_command([PIP_EXECUTABLE, "uninstall", "-y", "SQLAlchemy"], ROOT_DIR, "PIP-UNINSTALL-SQLA", check=False):
+                print_warning("SQLAlchemy not found for uninstall, proceeding.")
+
+            # 2. Force reinstall the package, ignoring cached versions, and using the new C compiler setup
+            if not run_command([PIP_EXECUTABLE, "install", "--no-cache-dir", "SQLAlchemy==2.0.45"], ROOT_DIR, "PIP-REINSTALL-SQLA", check=True):
+                print_error("FATAL: Failed to cleanly reinstall SQLAlchemy. Cannot proceed.")
+                setup_failures.append("Failed to install/ensure SQLAlchemy is compiled correctly.")
+            else:
+                print_system("SQLAlchemy successfully repaired and recompiled.")
+                
+            # --- End of Repair Block ---
+
 
             # --- START: Set Hugging Face Cache Directory (NEW) ---
             print_system("--- Configuring Hugging Face Cache Directory ---")
@@ -4217,29 +4315,27 @@ if __name__ == "__main__":
 
             print_system(f"Checking python version again, it could betrayed us! changed in the mid exec {sys.version.split()[0]} ")
 
-            PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
-            if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip" # Fallback if direct path missing
+            
             HYPERCORN_EXECUTABLE = os.path.join(_sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
             if not os.path.exists(HYPERCORN_EXECUTABLE): HYPERCORN_EXECUTABLE = shutil.which("hypercorn") or "hypercorn" # Fallback
 
 
 
-            print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
+            
             print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
 
+            #define PIP executable
+            PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
+            if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip" # Fallback if direct path missing
+            print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
             # --- CRITICAL FIX: Repair Corrupted SQLAlchemy Extensions ---
-            # This block runs before the main requirements.txt install.
-
             print_system("--- Checking and Repairing SQLAlchemy Extensions for Python 3.13 ---")
 
-            # 1. Force remove the potentially broken SQLAlchemy (using the version from requirements.txt)
+            # 1. Force remove the potentially broken SQLAlchemy 
             if not run_command([PIP_EXECUTABLE, "uninstall", "-y", "SQLAlchemy"], ROOT_DIR, "PIP-UNINSTALL-SQLA", check=False):
                 print_warning("SQLAlchemy not found for uninstall, proceeding.")
 
-            # 2. Force reinstall the package, ignoring cached versions.
-            # We explicitly set a slightly OLDER, known-stable version (e.g., 2.0.40) 
-            # or ensure the current version is clean. Since 2.0.45 is pinned, let's trust it 
-            # and focus on cleaning the compilation.
+            # 2. Force reinstall the package, ignoring cached versions, and using the new C compiler setup
             if not run_command([PIP_EXECUTABLE, "install", "--no-cache-dir", "SQLAlchemy==2.0.45"], ROOT_DIR, "PIP-REINSTALL-SQLA", check=True):
                 print_error("FATAL: Failed to cleanly reinstall SQLAlchemy. Cannot proceed.")
                 setup_failures.append("Failed to install/ensure SQLAlchemy is compiled correctly.")
@@ -5036,7 +5132,9 @@ if __name__ == "__main__":
                     # We remove it from setup_failures so the master flag can still be created.
                     # setup_failures.append("Bytecode compilation failed.")
 
-                
+                print_system(f"Writing current launcher hash to: {LAUNCHER_HASH_FILE}")
+                with open(LAUNCHER_HASH_FILE, 'w', encoding='utf-8') as f_hash:
+                    f_hash.write(current_hash)
 
                 print_system("Setup complete. Proceeding to launch.")
                 # We will call our new parallel launch function here later.
@@ -5098,7 +5196,8 @@ if __name__ == "__main__":
             print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
 
             # Auto-heal the base environment before doing anything else
-            _heal_base_conda_environment(CONDA_EXECUTABLE)
+            if attempt >= 2:
+                _heal_base_conda_environment(CONDA_EXECUTABLE)
 
             # Run the health check on the existing environment before proceeding.
             # If it returns False, it means the environment was corrupt and has been deleted.
