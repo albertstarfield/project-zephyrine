@@ -46,22 +46,23 @@ class DCTDSchedulerThread(threading.Thread):
             logger.info("⏳ DCTD Scheduler disabled by config. Exiting thread.")
             return
 
-        logger.info("⏳ DCTD Scheduler 'Chronos' thread started.")
-        
-        # Wait for DB to be healthy before starting the loop
-        logger.info("⏳ Scheduler waiting for DB Health...")
-        _DB_HEALTH_OK_EVENT.wait()
-        logger.info("⏳ DB Ready. Scheduler active.")
+        logger.info("⏳ DCTD Scheduler 'Chronos' thread started (Aggressive Access Mode).")
 
+        # NO WAITING. WE GO STRAIGHT TO THE LOOP.
         while not self.stop_event.is_set():
             try:
+                # Attempt to access the DB immediately.
+                # If tables aren't ready or DB is locked, this will raise an Exception.
                 self._process_due_tasks()
+                
+                # If successful, wait standard interval
+                self.stop_event.wait(timeout=DCTD_SCHEDULER_POLL_INTERVAL_SECONDS)
+
             except Exception as e:
-                logger.error(f"⏳ Scheduler Loop Error: {e}")
-                logger.exception("Scheduler Traceback:")
-            
-            # Sleep interval
-            self.stop_event.wait(timeout=DCTD_SCHEDULER_POLL_INTERVAL_SECONDS)
+                # DB failed (Locked, missing tables, etc.). 
+                # Log it, wait 5 seconds, and hammer it again.
+                logger.warning(f"⏳ Scheduler DB Access Failed (Retrying in 5s): {e}")
+                self.stop_event.wait(5.0)
 
     def _process_due_tasks(self):
         """

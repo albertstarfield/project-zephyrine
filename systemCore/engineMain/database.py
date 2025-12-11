@@ -13,7 +13,6 @@ import re
 import enum
 import threading  # For the snapshotter thread
 import numpy as np # NEW: For LSH calculations
-from datetime import datetime, timedelta, timezone # Ensure timezone is imported
 
 
 #sqlalchemy collections doesn't work now
@@ -520,7 +519,7 @@ def check_slot_availability(db: Session, target_time: datetime, window_ms: int =
     Checks if a time slot is free within +/- window_ms.
     Returns True if AVAILABLE, False if OCCUPIED.
     """
-    window_delta = timedelta(milliseconds=window_ms)
+    window_delta = datetime.timedelta(milliseconds=window_ms)
     start_window = target_time - window_delta
     end_window = target_time + window_delta
 
@@ -565,7 +564,7 @@ def schedule_thought_with_collision_check(
         # Collision detected. Apply Time Shift Strategy.
         # We assume EarthReferenceDate logic: simply move forward linearly.
         logger.debug(f"DCTD Scheduler: Time collision at {final_time}. Shifting by {DCTD_SCHEDULER_SHIFT_DELTA_MS}ms.")
-        final_time += timedelta(milliseconds=DCTD_SCHEDULER_SHIFT_DELTA_MS)
+        final_time += datetime.timedelta(milliseconds=DCTD_SCHEDULER_SHIFT_DELTA_MS)
         attempts += 1
 
     if not reserved:
@@ -606,7 +605,7 @@ def get_due_tasks_for_execution(db: Session, batch_size: int = 5) -> List[Schedu
     
     It orders by scheduled_time ASC to preserve causal order.
     """
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
     
     # We use 'with_for_update' if the DB supports it (Postgres/MySQL) to lock rows.
     # SQLite doesn't support row-level locking via SQLAlchemy cleanly in all modes, 
@@ -1359,8 +1358,8 @@ EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = None
 
 print(f"[alembic/env.py] === STARTING IMPORTS ===", file=sys.stderr)
 try:
-    print(f"[alembic/env.py] Attempting: from database import Base, Interaction, SystemInteractionScriptAttempt, FileIndex", file=sys.stderr)
-    from database import Base, Interaction, SystemInteractionScriptAttempt, FileIndex
+    print(f"[alembic/env.py] Attempting: from database import Base, Interaction, SystemInteractionScriptAttempt, FileIndex, ScheduledThoughtTask", file=sys.stderr)
+    from database import Base, Interaction, SystemInteractionScriptAttempt, FileIndex, ScheduledThoughtTask
     print(f"[alembic/env.py]   Successfully imported from 'database'. Type of Base: {{type(Base)}}", file=sys.stderr)
 
     if Base is not None and hasattr(Base, 'metadata'):
@@ -1619,6 +1618,11 @@ datefmt = %H:%M:%S
 
         engine_instance = get_engine() # Get the engine created by init_db()
 
+        logger.info(f"🧬 {log_prefix}: Force-checking for missing tables (Silver Bullet)...")
+        # This creates 'scheduled_thought_tasks' immediately if it's missing
+        Base.metadata.create_all(engine_instance)
+        logger.success(f"🧬 {log_prefix}: Missing tables created successfully.")
+
         # --- Step 2: Check if the database is already healthy and migrated ---
         try:
             with engine_instance.connect() as connection:
@@ -1702,138 +1706,6 @@ datefmt = %H:%M:%S
         # The _DB_HEALTH_OK_EVENT will NOT be set, leaving the app in a degraded state.
 
 
-def _run_background_db_health_check():
-    """
-    This function runs in a dedicated background thread on startup.
-    It robustly ensures the database schema is up-to-date with the models
-    using Alembic, creating or altering tables as needed without data loss.
-    This version uses the "Stamp and Upgrade" strategy for maximum compatibility
-    with existing, unversioned databases.
-    """
-    log_prefix = "DB_HEALTH_CHECK"
-    logger.info(f"🧬 {log_prefix}: Background health check and migration thread started (v3 - Stamp and Upgrade).")
-
-    try:
-        # --- Step 1: Ensure Alembic environment is ready ---
-        # (This part is unchanged)
-        _create_default_env_py()
-        _create_default_script_mako()
-        if not os.path.exists(ALEMBIC_INI_PATH):
-            # ... (Your alembic.ini creation logic remains here) ...
-            logger.warning(f"🔧 Alembic config file alembic.ini not found. Creating default.")
-            alembic_dir_relative_path = os.path.relpath(ALEMBIC_DIR, APP_DIR).replace("\\", "/")
-            alembic_cfg_content = f"""
-[alembic]
-script_location = {alembic_dir_relative_path}
-sqlalchemy.url = {RUNTIME_DATABASE_URL}
-[loggers]
-keys = root,sqlalchemy,alembic
-[handlers]
-keys = console
-[formatters]
-keys = generic
-[logger_root]
-level = WARN
-handlers = console
-qualname =
-[logger_sqlalchemy]
-level = WARN
-handlers =
-qualname = sqlalchemy.engine
-[logger_alembic]
-level = INFO
-handlers =
-qualname = alembic
-[handler_console]
-class = StreamHandler
-args = (sys.stderr,)
-level = NOTSET
-formatter = generic
-[formatter_generic]
-format = %(levelname)-5.5s [%(name)s] %(message)s
-datefmt = %H:%M:%S
-"""
-            with open(ALEMBIC_INI_PATH, 'w') as f: f.write(alembic_cfg_content.strip())
-            logger.success(f"📝 Default alembic.ini created.")
-
-        alembic_cfg = _get_alembic_config()
-        if not alembic_cfg:
-            raise RuntimeError("Failed to load/create Alembic configuration.")
-
-        engine_instance = get_engine()
-
-        # --- Step 2: Check if the database is completely empty ---
-        inspector = sql_inspect(engine_instance)
-        table_names_in_db = inspector.get_table_names()
-        is_new_db = not table_names_in_db
-
-        if is_new_db:
-            logger.info(
-                f"🧬 {log_prefix}: Database appears to be new or empty. Proceeding with initial schema creation.")
-            # If the DB is new, we clear any old migration files to start fresh.
-            if os.path.isdir(ALEMBIC_VERSIONS_PATH):
-                shutil.rmtree(ALEMBIC_VERSIONS_PATH)
-            os.makedirs(ALEMBIC_VERSIONS_PATH, exist_ok=True)
-
-            # Autogenerate the first migration script from the models.
-            command.revision(alembic_cfg, message="Create initial baseline schema", autogenerate=True)
-            # Apply it to create all tables.
-            command.upgrade(alembic_cfg, "head")
-            logger.success(f"✅ {log_prefix}: New database successfully created and stamped at 'head'.")
-
-        else:
-            logger.info(
-                f"🧬 {log_prefix}: Existing database detected. Stamping it to the latest revision before checking for changes.")
-            # --- THE CRITICAL FIX FOR EXISTING DATABASES ---
-            # "Stamping" tells Alembic to assume the database schema matches the latest
-            # migration file, even if the alembic_version table is missing or out of sync.
-            # This prevents it from trying to re-create existing tables.
-            try:
-                command.stamp(alembic_cfg, "head")
-                logger.info(f"✅ {log_prefix}: Database successfully 'stamped' to head revision.")
-            except Exception as e_stamp:
-                logger.critical(f"🔥🔥 {log_prefix}: FAILED during Alembic stamp: {e_stamp}")
-                raise
-
-            # Now that the DB is stamped, we can safely check for new changes.
-            logger.info(f"🧬 {log_prefix}: Autogenerating migration to detect new schema changes (e.g., new columns)...")
-            try:
-                command.revision(alembic_cfg, message="Autodetect new schema changes", autogenerate=True)
-            except CommandError as ce:
-                if "No changes detected" not in str(ce): raise
-
-            # And finally, apply any newly generated migration.
-            logger.info(f"🧬 {log_prefix}: Applying any newly generated migrations...")
-            command.upgrade(alembic_cfg, "head")
-            logger.success(f"✅ {log_prefix}: Schema is now fully up-to-date.")
-
-        # --- Step 3: Final Schema Verification ---
-        # (This part is unchanged)
-        logger.info(f"📊 {log_prefix}: Verifying final database schema...")
-        inspector = sql_inspect(engine_instance)
-        table_names_in_db = set(inspector.get_table_names())
-        expected_tables_from_models = set(Base.metadata.tables.keys())
-
-        if not expected_tables_from_models.issubset(table_names_in_db):
-            missing_tables = expected_tables_from_models - table_names_in_db
-            raise RuntimeError(f"Schema verification failed: Missing tables {missing_tables}")
-
-        logger.success(f"📊 {log_prefix}: All expected tables from models are present in the database.")
-
-        # --- Step 4: Start Services & Signal "All Clear" ---
-        # (Unchanged)
-        logger.info(f"🧬 {log_prefix}: Database is healthy and migrated. Starting dependent services.")
-        start_db_snapshotter()
-        atexit.register(stop_db_snapshotter)
-
-        _DB_HEALTH_OK_EVENT.set()
-        logger.success(
-            f"✅✅ {log_prefix}: Database is fully initialized and healthy. System is now operating at full capacity.")
-
-    except Exception as e:
-        logger.critical(f"🔥🔥 {log_prefix}: A critical, unhandled error occurred in the health check thread: {e}")
-        logger.exception(f"{log_prefix} Traceback:")
-        # The _DB_HEALTH_OK_EVENT will NOT be set.
 
 def is_db_healthy() -> bool:
     """

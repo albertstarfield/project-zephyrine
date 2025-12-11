@@ -3,7 +3,7 @@ import asyncio
 import atexit  # To signal shutdown
 import base64  # Used for image handling
 import contextlib  # For ensuring driver quit
-import datetime
+import datetime as dt
 import hashlib
 import io
 import json
@@ -248,7 +248,6 @@ try:
     
     from dctd_scheduler import DCTDSchedulerThread, set_scheduler_cortex_ref
     from database import schedule_thought_with_collision_check
-    from datetime import timedelta, timezone  # Ensure timezone is imported
 
     # Import Agent components
     # Make sure AmaryllisAgent and _start_agent_task are correctly defined/imported if used elsewhere
@@ -732,9 +731,9 @@ def run_self_reflection_loop():
                 )
                 re_reflected_interaction_id: Optional[int] = None
                 try:
-                    time_threshold = datetime.datetime.now(
-                        datetime.timezone.utc
-                    ) - datetime.timedelta(days=MIN_AGE_FOR_RE_REFLECTION_DAYS)
+                    time_threshold = dt.datetime.now(
+                        dt.timezone.utc
+                    ) - dt.timedelta(days=MIN_AGE_FOR_RE_REFLECTION_DAYS)
 
                     # For SQLite ORDER BY RANDOM()
                     order_by_clause = (
@@ -767,13 +766,13 @@ def run_self_reflection_loop():
                         )
 
                         candidate_for_re_reflection.reflection_completed = False
-                        note = f"\n\n[System Re-queued for Reflection ({datetime.datetime.now(datetime.timezone.utc).isoformat()}) due to Gabut State]"
+                        note = f"\n\n[System Re-queued for Reflection ({dt.datetime.now(dt.timezone.utc).isoformat()}) due to Gabut State]"
                         current_resp = candidate_for_re_reflection.llm_response or ""
                         candidate_for_re_reflection.llm_response = (
                             current_resp + note
                         )[: getattr(Interaction.llm_response.type, "length", 4000)]
                         # last_modified_db will be updated by SQLAlchemy's onupdate if configured, or manually:
-                        # candidate_for_re_reflection.last_modified_db = datetime.datetime.now(datetime.timezone.utc)
+                        # candidate_for_re_reflection.last_modified_db = dt.datetime.now(dt.timezone.utc)
 
                         db.commit()
                         re_reflected_interaction_id = candidate_for_re_reflection.id
@@ -1544,15 +1543,78 @@ class CortexThoughts:
 
         return "".join(prompt_parts)
 
+    async def _decide_scheduling_delay(
+            self,
+            db: Session,
+            thought: str,
+            session_id: str,
+            # NEW: Accept the full context dictionary that was used for the main generation
+            full_context_payload: Dict[str, Any]
+    ) -> int:
+        """
+        Uses an LLM (ELP0) to decide scheduling delay using full context.
+        """
+        log_prefix = f"⏳ TimeDecision|{session_id[:8]}"
+
+        # Select Model
+        scheduler_model = self.provider.get_model("router") or self.provider.get_model("general_fast")
+        if not scheduler_model: return 60
+
+        # Build Prompt Inputs
+        # We merge the specific thought with the existing rich context
+        prompt_input = {
+            "thought_to_schedule": thought,
+            # Map the context keys to match the prompt
+            "input": full_context_payload.get("input", "N/A"),
+            "pending_tot_result": full_context_payload.get("pending_tot_result", "N/A"),
+            "recent_direct_history": full_context_payload.get("recent_direct_history", "N/A"),
+            "context": full_context_payload.get("context", "N/A"),  # URL Context
+            "history_rag": full_context_payload.get("history_rag", "N/A"),
+            "file_index_context": full_context_payload.get("file_index_context", "N/A"),
+            "log_context": full_context_payload.get("log_context", "N/A"),
+            "emotion_analysis": full_context_payload.get("emotion_analysis", "N/A"),
+            "imagined_image_vlm_description": full_context_payload.get("imagined_image_vlm_description", "N/A"),
+        }
+
+        chain = (
+                ChatPromptTemplate.from_template(PROMPT_DCTD_SCHEDULING_DECISION)
+                | scheduler_model
+                | StrOutputParser()
+        )
+
+        try:
+            # Execute (ELP0)
+            timing_data = {"session_id": session_id, "mode": "temporal_decision"}
+            raw_response = await asyncio.to_thread(
+                self._call_llm_with_timing, chain, prompt_input, timing_data, priority=ELP0
+            )
+
+            # Parse JSON (Same as before)
+            json_candidate = self._extract_json_candidate_string(raw_response, log_prefix)
+            if json_candidate:
+                parsed = self._programmatic_json_parse_and_fix(json_candidate, log_prefix=log_prefix)
+                if parsed and "delay_seconds" in parsed:
+                    seconds = int(parsed["delay_seconds"])
+                    reason = parsed.get("reasoning", "No reason provided")
+                    seconds = max(5, min(seconds, 86400))  # Bounds check
+                    logger.info(f"{log_prefix} AI Schedule: T+{seconds}s. Reason: {reason}")
+                    return seconds
+
+            return 60
+        except Exception as e:
+            logger.error(f"{log_prefix} Scheduling decision failed: {e}")
+            return 60
+
     async def _schedule_future_reflection(
         self, 
         db: Session, 
         prompt: str, 
         source_id: int, 
-        context_payload: Dict[str, Any] # <--- NEW ARGUMENT
+        context_payload: Dict[str, Any]
     ):
         """
         Calculates future time via AI and schedules task.
+        Uses fully qualified datetime objects to avoid import conflicts.
         """
         if not ENABLE_DCTD_SCHEDULER: return
 
@@ -1561,7 +1623,8 @@ class CortexThoughts:
             db, prompt, self.current_session_id, context_payload
         )
         
-        future_time = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+        # CORRECTED: Use dt.datetime and dt.timedelta
+        future_time = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=delay_seconds)
         
         await asyncio.to_thread(
             schedule_thought_with_collision_check,
@@ -2472,7 +2535,7 @@ class CortexThoughts:
 
             # 3. Save the new hook file
             sanitized_query = re.sub(r"\W+", "_", query.lower())[:50]
-            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            timestamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
             new_hook_filename = (
                 f"{timestamp}_{sanitized_query}_generatedStellaIcarus.py"
             )
@@ -2481,7 +2544,7 @@ class CortexThoughts:
             with open(new_hook_filepath, "w", encoding="utf-8") as f:
                 f.write("# Auto-generated by Adelaide AI\n")
                 f.write(f"# Original Query: {query}\n")
-                f.write(f"# Timestamp: {datetime.datetime.now().isoformat()}\n\n")
+                f.write(f"# Timestamp: {dt.datetime.now().isoformat()}\n\n")
                 f.write(generated_code)
 
             logger.success(
@@ -6925,7 +6988,7 @@ class CortexThoughts:
                         fuzzy_matches.sort(
                             key=lambda x: (
                                 x[1],
-                                x[0].last_modified_os or datetime.datetime.min,
+                                x[0].last_modified_os or dt.datetime.min,
                             ),
                             reverse=True,
                         )
@@ -10121,67 +10184,7 @@ def stop_dctd_scheduler():
         logger.info("Stop signal sent to Scheduler.")
 
 
-async def _decide_scheduling_delay(
-        self, 
-        db: Session, 
-        thought: str, 
-        session_id: str,
-        # NEW: Accept the full context dictionary that was used for the main generation
-        full_context_payload: Dict[str, Any] 
-    ) -> int:
-        """
-        Uses an LLM (ELP0) to decide scheduling delay using full context.
-        """
-        log_prefix = f"⏳ TimeDecision|{session_id[:8]}"
-        
-        # Select Model
-        scheduler_model = self.provider.get_model("router") or self.provider.get_model("general_fast")
-        if not scheduler_model: return 60 
 
-        # Build Prompt Inputs
-        # We merge the specific thought with the existing rich context
-        prompt_input = {
-            "thought_to_schedule": thought,
-            # Map the context keys to match the prompt
-            "input": full_context_payload.get("input", "N/A"),
-            "pending_tot_result": full_context_payload.get("pending_tot_result", "N/A"),
-            "recent_direct_history": full_context_payload.get("recent_direct_history", "N/A"),
-            "context": full_context_payload.get("context", "N/A"), # URL Context
-            "history_rag": full_context_payload.get("history_rag", "N/A"),
-            "file_index_context": full_context_payload.get("file_index_context", "N/A"),
-            "log_context": full_context_payload.get("log_context", "N/A"),
-            "emotion_analysis": full_context_payload.get("emotion_analysis", "N/A"),
-            "imagined_image_vlm_description": full_context_payload.get("imagined_image_vlm_description", "N/A"),
-        }
-        
-        chain = (
-            ChatPromptTemplate.from_template(PROMPT_DCTD_SCHEDULING_DECISION)
-            | scheduler_model
-            | StrOutputParser()
-        )
-        
-        try:
-            # Execute (ELP0)
-            timing_data = {"session_id": session_id, "mode": "temporal_decision"}
-            raw_response = await asyncio.to_thread(
-                self._call_llm_with_timing, chain, prompt_input, timing_data, priority=ELP0 
-            )
-            
-            # Parse JSON (Same as before)
-            json_candidate = self._extract_json_candidate_string(raw_response, log_prefix)
-            if json_candidate:
-                parsed = self._programmatic_json_parse_and_fix(json_candidate, log_prefix=log_prefix)
-                if parsed and "delay_seconds" in parsed:
-                    seconds = int(parsed["delay_seconds"])
-                    reason = parsed.get("reasoning", "No reason provided")
-                    seconds = max(5, min(seconds, 86400)) # Bounds check
-                    logger.info(f"{log_prefix} AI Schedule: T+{seconds}s. Reason: {reason}")
-                    return seconds
-            
-            return 60
-        except Exception as e:
-            logger.error(f"{log_prefix} Scheduling decision failed: {e}")
-            return 60
 
 def sanitize_filename(
     name: str, max_length: int = 200, replacement_char: str = "_"
@@ -10401,7 +10404,7 @@ def _format_ollama_chat_response_nonstream(
     """
     return {
         "model": model_name,
-        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "message": {"role": "assistant", "content": response_text},
         "done": True,
         "total_duration": total_duration_ns,
@@ -10439,7 +10442,7 @@ def _ollama_pseudo_stream_sync_generator(
         """
         chunk = {
             "model": model_name,
-            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "done": done,
         }
 
@@ -10603,7 +10606,7 @@ def _ollama_pseudo_stream_sync_generator(
         try:
             error_chunk = {
                 "model": model_name,
-                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                 "done": True,
                 "error": f"Server-side streaming error: {type(e).__name__}",
             }
@@ -12908,7 +12911,7 @@ def _generate_simulated_avionics_data() -> Dict[str, Any]:
 
         # --- Construct the Final JSON Payload ---
         payload = {
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
             "flight_dynamics": {
                 "attitude": {
                     "pitch": round(_sim_state["pitch"], 2),
@@ -13383,8 +13386,8 @@ async def handle_instrument_viewport_stream():
                     sim_data = _generate_simulated_avionics_data()
                     data_packet = {
                         "source_daemon": "System_Simulation_Fallback",
-                        "timestamp_py": datetime.datetime.now(
-                            datetime.timezone.utc
+                        "timestamp_py": dt.datetime.now(
+                            dt.timezone.utc
                         ).isoformat(),
                         "data": sim_data,
                     }
@@ -15014,7 +15017,7 @@ async def handle_ollama_tags():
         {
             "name": f"{META_MODEL_NAME_STREAM}:latest",
             "model": f"{META_MODEL_NAME_STREAM}:latest",
-            "modified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "modified_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "size": placeholder_size_bytes,
             "digest": hashlib.sha256(META_MODEL_NAME_STREAM.encode()).hexdigest(),
             "details": {
@@ -15029,7 +15032,7 @@ async def handle_ollama_tags():
         {
             "name": f"{META_MODEL_NAME_NONSTREAM}:latest",
             "model": f"{META_MODEL_NAME_NONSTREAM}:latest",
-            "modified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "modified_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "size": placeholder_size_bytes,
             "digest": hashlib.sha256(META_MODEL_NAME_NONSTREAM.encode()).hexdigest(),
             "details": {

@@ -2,3 +2,7 @@
 -   **Title:** Remove unused datetime import in AdelaideAlbertCortex.py
 -   **Status:** Resolved
 -   **Description:** Removed an unnecessary `datetime` import from `systemCore/engineMain/AdelaideAlbertCortex.py` to clean up the code.
+-   **ID:** CORE-REFACTOR-002
+-   **Title:** Streamline DB Init, Improve Scheduler Resilience, and Add Preemption Check
+-   **Status:** In-Progress
+-   **Description:** This change involves several refactors and a new feature. The database initialization logic was simplified by removing the complex Alembic "stamp and upgrade" process in favor of a more direct `create_all` approach, and the background health check thread was removed. The DCTD scheduler is now more aggressive, attempting to connect to the database immediately upon startup without waiting for a health signal. A new `is_preempted` method was added to the `PriorityQuotaLock` to allow tasks to check if they have been preempted by a higher-priority task. Finally, `datetime` imports were standardized to `import datetime as dt` to prevent import shadowing.
