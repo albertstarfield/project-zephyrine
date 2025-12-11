@@ -248,7 +248,7 @@ try:
     
     from dctd_scheduler import DCTDSchedulerThread, set_scheduler_cortex_ref
     from database import schedule_thought_with_collision_check
-    from datetime import datetime, timedelta, timezone  # Ensure timezone is imported
+    from datetime import timedelta, timezone  # Ensure timezone is imported
 
     # Import Agent components
     # Make sure AmaryllisAgent and _start_agent_task are correctly defined/imported if used elsewhere
