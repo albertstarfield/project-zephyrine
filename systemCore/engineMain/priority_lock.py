@@ -167,6 +167,27 @@ class PriorityQuotaLock:
             if self._relaxation_thread.is_alive():
                 logger.warning("AgenticRelaxationThread did not stop in time.")
 
+    def is_preempted(self, priority: int) -> bool:
+        """
+        Checks if the current thread has lost the lock to a higher priority task.
+        Returns True if the lock is no longer held by this thread/priority.
+        """
+        current_thread = threading.get_ident()
+        with self._condition:
+            # If lock is free, we definitely don't hold it -> Preempted/Lost
+            if not self._is_locked:
+                return True
+            
+            # If priority doesn't match current holder -> Preempted
+            if self._lock_holder_priority != priority:
+                return True
+            
+            # If thread ID doesn't match current holder -> Preempted
+            if self._lock_holder_thread_ident != current_thread:
+                return True
+                
+            return False
+
     def acquire(self, priority: int, timeout: Optional[float] = None) -> bool:
         acquire_start_time = time.monotonic()
         requesting_thread_ident = threading.get_ident()
