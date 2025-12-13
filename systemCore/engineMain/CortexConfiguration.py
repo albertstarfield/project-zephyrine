@@ -331,22 +331,22 @@ LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
 
 # (14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
-# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation = 35.0B Async MoE
-META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-51.0B"
-META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-51.0B"
+# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+ 4.7B (Flux T5XXL Encoder)+ CLiP FLUX 1 (0.12B) + VAE FLux 1 0.08B +~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation + Fara 7B (Computer Agent) + token to Action tool call 2B + STEM Generalist RNJ-1 8B + Physics Specialist 8B + Chemistry Specialist 5B + Biology Specialist 1.5B + (Outside GGUF, like TTS (Chatterbox 0.5B (LLaMa but not serialized to gguf) + MeloTTS 0.15 (Text Encoder (BERT) + Core TTS Generator (VITS-based):))) = 77.05B Async MoE
+# (Additionally there's new one... MoE on Stem and etc..) so it's 71.5B
+META_MODEL_NAME_STREAM = "Zephy-async-77.05B"
+META_MODEL_NAME_NONSTREAM = "Zephy-async-77.05B"
 
-# (14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
-# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation = 35.0B Async MoE
-META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-51.0B"
-META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-51.0B"
+
+META_MODEL_NAME_STREAM = "Zephy-async-77.05B"
+META_MODEL_NAME_NONSTREAM = "Zephy-async-77.05B"
 
 META_MODEL_OWNER = "zephyrine-foundation"
 TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha"  # Client-facing TTS model name
 ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal"  # New constant for ASR
 IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
 META_MODEL_FAMILY = "zephyrine"
-META_MODEL_PARAM_SIZE = "51.0B"  # As requested
-META_MODEL_PARAM_SIZE = "51.0B"  # As requested
+META_MODEL_PARAM_SIZE = "77.05B"  # As requested
+META_MODEL_PARAM_SIZE = "77.05B"  # As requested
 META_MODEL_QUANT_LEVEL = "fp16"  # As requested
 META_MODEL_FORMAT = "gguf"  # Common format assumption for Ollama compatibility
 
@@ -361,7 +361,11 @@ LLAMA_CPP_MODEL_MAP = {
     ),  # Use LatexMind as VLM for now
     "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf"),
     # "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"), #This model doesn't seem to work properly (use olmocr instead)
+    "rnj_1_general_STEM": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "STEM-RNJ1-Compass.gguf"),
     "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "Qwen3DeepseekDecomposer.gguf"),
+    "physics": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen3-Physics.gguf"),
+    "chemistry": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen3-Chemistry.gguf"),
+    "biology": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen2-Biology.gguf"),
     "code": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "Qwen3ToolCall.gguf"),
     "computer_ui_interaction": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "fara7b-compagent-Interact.gguf"),
     "language_to_actionCall_Actuator": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "Octopus-v2-word-to-action.gguf"),

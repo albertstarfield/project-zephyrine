@@ -134,6 +134,7 @@ temp_melo_audio_test_files
 .CUDA_Toolkit_Installed
 **logs**
 **StellaIcarus_Cache**
+**StellaIcarus/*.so**
 .conda_executable_path_cache.txt
 **temp_melo_audio_test_files**
 **zephyrineCondaVenv**
@@ -167,6 +168,10 @@ ZephyWatchtower/Watchdog_Thread1
 AutomatedAuditNotes.txt
 systemCore/UIEngine/backend-service/zephyrine-backend
 **.pyc**
+**__personalstella__Hook_**
+**personalstella__Hook**
+
+
 
 .conda_executable_path_cache_main_env.txt
 systemCore/engineMain/StellaIcarus/stella_math_core.so
