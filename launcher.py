@@ -164,7 +164,7 @@ ZEPHYMESH_PORT_INFO_FILE = os.path.join(ROOT_DIR, "zephymesh_ports.json")
 # --- License Acceptance & Optional Imports (Initial state) ---
 TIKTOKEN_AVAILABLE = False
 
-# --- Static Model Pool Configuration ---
+# --- Static Model Pool Configuration (for GGUF) ---
 STATIC_MODEL_POOL_DIR_NAME = "staticmodelpool"
 STATIC_MODEL_POOL_PATH = os.path.join(ENGINE_MAIN_DIR, STATIC_MODEL_POOL_DIR_NAME)
 MODELS_TO_DOWNLOAD = [
@@ -222,6 +222,29 @@ MODELS_TO_DOWNLOAD = [
         "url": "https://huggingface.co/QuantFactory/Octopus-v2-GGUF/resolve/main/Octopus-v2.Q5_K_M.gguf?download=true",
         "description": "Experimental Actuator Non Realtime LM Model Language to Action"
     },
+    #STEM Compass MoE
+    {
+        #Generalist STEM Compass RNJ-1
+        "filename": "STEM-RNJ1-Compass.gguf", #8b
+        "url": "https://huggingface.co/noctrex/rnj-1-instruct-GGUF/resolve/main/rnj-1-instruct-IQ4_XS.gguf?download=true",
+        "description": "Generalist Overview on Physics Chemistry Math. Or perhaps Biology."
+    },
+    {
+        "filename": "qwen3-Physics.gguf", #8b
+        "url": "https://huggingface.co/mradermacher/qwen3-8b-physics-i1-GGUF/resolve/main/qwen3-8b-physics.i1-Q4_K_S.gguf?download=true",
+        "description": "Specialist on Phhysics Science Domain or Model for Physics Science Skill"
+    },
+    {
+        "filename": "qwen3-Chemistry.gguf", #5b
+        "url": "https://huggingface.co/mradermacher/ChemQwen2-vL-i1-GGUF/resolve/main/ChemQwen2-vL.i1-Q5_K_M.gguf?download=true",
+        "description": "Specialist on Chemistry Science Domain or Model for Chemistry Skill"
+    },
+    {
+        "filename": "qwen2-Biology.gguf", #1.5b
+        "url": "https://huggingface.co/Agnuxo/Qwen2-1.5B-Instruct_MOE_BIOLOGY_assistant-GGUF_8bit/resolve/main/unsloth.Q8_0.gguf?download=true",
+        "description": "Specialist on Biology Science Domain or Model for Biology Skill"
+    },
+    #-=-=-=-=-=-=-=-=-=-
     {
         "filename": "whisper-large-v3-q5_0.gguf",
         "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin?download=true",
@@ -4133,9 +4156,9 @@ if __name__ == "__main__":
     integrity_mismatch = (stored_hash is None or stored_hash != current_hash)
 
     if integrity_mismatch:
-        print_colored("WARNING", "--- LAUNCHER INTEGRITY CHECK FAILED ---", "WARNING")
+        print_colored("WARNING", "--- LAUNCHER HAVE BEEN CHANGED! ---", "WARNING")
         print_warning("Launcher.py content has changed since the last successful setup.")
-        print_warning("Forcing full environment rebuild to guarantee compatibility.")
+        print_warning("Forcing full step to apply changes to the current setup!")
         
         # 2. Delete the setup complete flag
         if os.path.exists(SETUP_COMPLETE_FLAG_FILE):
