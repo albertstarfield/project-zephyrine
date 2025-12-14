@@ -193,7 +193,7 @@ background_generate_task_semaphore = asyncio.Semaphore(
 # === ELP1 Direct Generation Queue/Concurrency Control ===
 # Limit this to a safe number (e.g., 1024) to prevent "Too many open files".
 # The "Queue" capacity is effectively infinite (bounded only by RAM) via asyncio's internal waiting list.
-_default_max_direct_tasks = 1024 
+_default_max_direct_tasks = 512 
 try:
     MAX_CONCURRENT_DIRECT_GENERATE_TASKS = int(
         os.getenv("MAX_CONCURRENT_DIRECT_GENERATE_TASKS", _default_max_direct_tasks)

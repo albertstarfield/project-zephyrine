@@ -617,6 +617,11 @@ class CortexEngine:
         self.setup_provider()
         # self.image_generator: Any = None # This will be implicitly handled by calling the worker
 
+        self._loaded_llama_instance: Optional[llama_cpp.Llama] = None
+        self._loaded_gguf_path: Optional[str] = None
+        self._last_task_type: Optional[str] = None
+        self.loop = None # For scheduler
+
         # --- llama.cpp specific state ---
         self._llama_model_access_lock = threading.Lock() if LLAMA_CPP_AVAILABLE and self.provider_name == "llama_cpp" else None
         if LLAMA_CPP_AVAILABLE and self.provider_name == "llama_cpp":
