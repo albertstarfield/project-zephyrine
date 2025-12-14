@@ -29,7 +29,7 @@ function ChatPage({
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [showPlaceholder, setShowPlaceholder] = useState(false);
   const [error, setError] = useState(null);
-  const [streamingAssistantMessage, setStreamingAssistantMessage] = useState(null);
+  //const [streamingAssistantMessage, setStreamingAssistantMessage] = useState(null);
   const [fileData, setFileData] = useState(null);
   const [localCopySuccessId, setLocalCopySuccessId] = useState('');
   const bottomRef = useRef(null);
@@ -37,7 +37,7 @@ function ChatPage({
   const currentAssistantMessageId = useRef(null);
   const accumulatedContentRef = useRef("");
   const isConnected = useRef(false);
-  const streamingStartTimeRef = useRef(0);
+  //const streamingStartTimeRef = useRef(0);
   const latestRequestRef = useRef(null); // <-- Add this line
 
   useEffect(() => {
@@ -159,7 +159,7 @@ function ChatPage({
     if (bottomRef.current && (visibleMessages[visibleMessages.length - 1]?.sender === 'user' || streamingAssistantMessage)) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [visibleMessages, streamingAssistantMessage]);
+  }, [visibleMessages]);
 
   const updateVisibleMessages = (newAllMessages) => {
     const messageCount = newAllMessages.length;
@@ -214,8 +214,8 @@ function ChatPage({
           }
 
           // Clear any streaming state, as this is a full response
-          setStreamingAssistantMessage(null);
-          accumulatedContentRef.current = "";
+          
+          //accumulatedContentRef.current = "";
           currentAssistantMessageId.current = null;
           streamingStartTimeRef.current = 0;
 
@@ -267,7 +267,7 @@ function ChatPage({
             console.error("ChatPage: Received error from backend:", message.payload?.message);
             setError(message.payload?.message || "An unknown error occurred on the backend.");
             setIsGenerating(false);
-            setStreamingAssistantMessage(null);
+            
             break;
         // --- END: Added Case ---
 
@@ -342,7 +342,7 @@ function ChatPage({
                  triggerSidebarRefresh();
             }
           }
-          setStreamingAssistantMessage(null);
+          
           accumulatedContentRef.current = "";
           currentAssistantMessageId.current = null;
           streamingStartTimeRef.current = 0;
@@ -393,12 +393,12 @@ function ChatPage({
       console.error("ChatPage: Failed to parse WebSocket message or handle:", error, "Raw data:", data);
       setError("Received invalid data from server.");
       setIsGenerating(false);
-      setStreamingAssistantMessage(null);
+      
       accumulatedContentRef.current = "";
       currentAssistantMessageId.current = null;
       setIsLoadingHistory(false);
     }
-  }, [chatId, refreshHistory, allMessages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]);
+  }, [chatId, refreshHistory, allMessages, updateSidebarHistory, triggerSidebarRefresh, user]);
 
   const handleEditSave = async (messageId, newContent) => {
     if (isGenerating) return;
@@ -460,7 +460,7 @@ function ChatPage({
         console.error("ChatPage: WebSocket send error during edit:", sendError);
         setError("Failed to send edit request to server.");
         setIsGenerating(false);
-        setStreamingAssistantMessage(null);
+        
         setAllMessages(originalMessages);
     }
   };
@@ -474,27 +474,10 @@ function ChatPage({
       ws.current.send(JSON.stringify({ type: "stop", payload: { chatId } }));
     }
     setIsGenerating(false);
-
-    if (!isSilent && streamingAssistantMessage && accumulatedContentRef.current && currentAssistantMessageId.current) {
-      const finalPartialMessage = {
-        ...streamingAssistantMessage,
-        content: accumulatedContentRef.current,
-        isLoading: false,
-      };
-      setAllMessages((prev) => {
-          const existing = prev.find(msg => msg.id === finalPartialMessage.id);
-          if (existing) {
-              return prev.map(msg => msg.id === finalPartialMessage.id ? finalPartialMessage : msg);
-          } else {
-              return [...prev, finalPartialMessage];
-          }
-      });
-    }
     
-    setStreamingAssistantMessage(null);
     accumulatedContentRef.current = "";
     currentAssistantMessageId.current = null;
-  }, [isGenerating, streamingAssistantMessage, chatId]);
+  }, [isGenerating, chatId]);
 
   const sendMessageOrRegenerate = useCallback(async (contentToSend, isRegeneration = false) => {
     if ((!contentToSend?.trim() && !fileData) || !ws.current || ws.current.readyState !== WebSocket.OPEN) {
@@ -540,7 +523,6 @@ function ChatPage({
     setIsGenerating(true);
     accumulatedContentRef.current = "";
     currentAssistantMessageId.current = `temp-assistant-${uuidv4()}`;
-    setStreamingAssistantMessage({ id: currentAssistantMessageId.current, sender: "assistant", content: "", isLoading: true });
 
     ws.current.send(JSON.stringify({ type: "chat", payload: messagePayload }));
 
@@ -598,7 +580,6 @@ function ChatPage({
         {!isLoadingHistory && (
             <ChatFeed
               messages={visibleMessages}
-              streamingMessage={streamingAssistantMessage}
               showPlaceholder={showPlaceholder}
               isGenerating={isGenerating}
               onExampleClick={handleExampleClick}

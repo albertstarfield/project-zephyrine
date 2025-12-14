@@ -620,13 +620,13 @@ MODULE_DIR = os.path.dirname(__file__)
 # --- NEW: Batch Logging Configuration ---
 #Too long database loging may cause evergrowing memory growing, constantly doing this flushing may flush from memory to disk often
 LOG_QUEUE_MAX_SIZE = int(
-    os.getenv("LOG_QUEUE_MAX_SIZE", 1024)
+    os.getenv("LOG_QUEUE_MAX_SIZE", 10000000)
 )  # Max items in log queue before warning/discard
 LOG_BATCH_SIZE = int(
-    os.getenv("LOG_BATCH_SIZE", 2)
+    os.getenv("LOG_BATCH_SIZE", 4096)
 )  # Number of log items to write to DB in one go
 LOG_FLUSH_INTERVAL_SECONDS = float(
-    os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 3.0)
+    os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 600.0)
 )  # How often to force flush the log queue
 # --- END NEW: Batch Logging Configuration ---
 

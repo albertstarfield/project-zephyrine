@@ -42,8 +42,11 @@ try:
     from textual.containers import Grid
     from textual.widgets import Header, Footer, Log, Static
     from textual.reactive import reactive
+    from rich.text import Text
+    from textual.widgets import Sparkline
     import psutil
     TUI_AVAILABLE = True
+    logger.success("You have TUI available!")
 except ImportError:
     TUI_AVAILABLE = False
 # --- End TUI Imports ---
@@ -1046,6 +1049,62 @@ def start_frontend():
     start_service_process(command, FRONTEND_DIR, name, use_shell_windows=True)
 
 
+def check_and_restart_services():
+    """
+    The single, authoritative function to check all managed services.
+    If a service is found to be dead, it is aggressively restarted.
+    This function is thread-safe.
+    """
+    # This mapping is the "brain" of the restart system.
+    # It links a service's name to the function that starts it.
+    # We use the "_fast" versions for restarts to avoid re-compiling.
+    restart_function_map = {
+        "ENGINE": start_engine_main,
+        "BACKEND": start_backend_service_fast,
+        "FRONTEND": start_frontend,
+        "ZEPHYMESH-NODE": start_zephymesh_service_fast,
+        "GO-WATCHDOG": start_watchdogs_service_fast, # Restarting one watchdog will restart both
+        "ADA-WATCHDOG": start_watchdogs_service_fast,
+    }
+
+    with process_lock:
+        # It is CRITICAL to iterate over a copy of the list,
+        # because we will be modifying the original list inside the loop.
+        services_snapshot = list(running_processes)
+
+        for i, entry in enumerate(services_snapshot):
+            proc, name, log_path, log_handle = entry
+
+            if proc.poll() is not None:  # The process is DEAD
+                print_colored("ERROR", f"Service '{name}' is DEAD! Return Code: {proc.poll()}. Aggressively restarting...", "ERROR")
+
+                # 1. Clean up the old, dead process entry
+                # First, close its log file handle to prevent resource leaks
+                try:
+                    if log_handle and not log_handle.closed:
+                        log_handle.close()
+                except Exception as e:
+                    print_warning(f"Could not close log handle for dead process '{name}': {e}")
+
+                # Remove the stale entry from the master list of running processes
+                if entry in running_processes:
+                    running_processes.remove(entry)
+
+                # 2. Relaunch the service
+                if name in restart_function_map:
+                    try:
+                        # Get the correct restart function from our map
+                        restart_func = restart_function_map[name]
+                        print_system(f"Executing restart function for '{name}'...")
+                        # We run the restart in a new thread to avoid blocking the monitor loop,
+                        # especially if a service has a slow startup.
+                        restart_thread = threading.Thread(target=restart_func, daemon=True)
+                        restart_thread.start()
+                    except Exception as e:
+                        print_error(f"Failed to execute restart function for '{name}': {e}")
+                else:
+                    print_warning(f"No restart rule found for dead service '{name}'. It will not be restarted.")
+
 def start_backend_service_fast():
     """Fast-path version: Assumes the backend is already compiled."""
     name = "BACKEND"
@@ -1115,44 +1174,20 @@ def start_watchdogs_service_fast():
         print_error(f"FATAL (Fast Path): Ada watchdog executable not found at {ada_exe_path}.")
 
 def monitor_services_fallback():
-    print_colored("SUCCESS", "All services launching. Monitoring with Auto-Restart...", "SUCCESS")
+    """The non-TUI monitoring loop. Now uses the centralized restart logic."""
+    print_colored("SUCCESS", "All services launching. Monitoring with aggressive auto-restart.", "SUCCESS")
+    print_system("Press Ctrl+C to shut down.")
     try:
         while True:
-            with process_lock:
-                # Iterate over a copy so we can modify the real list if needed
-                snapshot = list(running_processes)
+            # Call our single, powerful monitoring function.
+            check_and_restart_services()
             
-            start_count = len(running_processes)
-            
-            for i, entry in enumerate(snapshot):
-                proc, name, _, _ = entry
-                if proc.poll() is not None:
-                    print_warning(f"Service '{name}' died. Attempting restart...")
-                    
-                    # Remove the dead entry from the global list
-                    with process_lock:
-                        if entry in running_processes:
-                            running_processes.remove(entry)
-                    
-                    # Relaunch the specific service
-                    if name == "ENGINE":
-                        start_engine_main()
-                    elif name == "BACKEND":
-                        start_backend_service_fast()
-                    elif name == "FRONTEND":
-                        # Frontend usually spawns a shell, simpler to just restart
-                        threading.Thread(target=start_frontend, daemon=True).start()
-                    elif name == "ZEPHYMESH-NODE":
-                        start_zephymesh_service_fast()
-                        
-            # If the list size changed (because we restarted something), logs might need strict handling
-            # but usually start_service_process handles appending the new proc.
-            
-            time.sleep(3) # Check every 3 seconds
+            # The check interval.
+            time.sleep(3)
     except KeyboardInterrupt:
         print_system("\nKeyboardInterrupt received by main thread. Shutting down...")
     finally:
-        print_system("Launcher main loop finished. Ensuring cleanup via atexit...")
+        print_system("Launcher monitoring loop finished. Ensuring cleanup via atexit...")
 
 
 def launch_all_services_in_parallel_and_monitor():
@@ -3964,232 +3999,234 @@ def _start_port_shield_daemon(port: int, target_process_name: str):
     shield_thread.start()
 
 # --- End Helper Logic ---
-# --- Textual TUI Application (Self-Contained) ---
-
 if TUI_AVAILABLE:
-    class SystemStats(Static):
-        """A widget to display real-time system stats."""
-        cpu_usage = reactive(0.0)
-        ram_usage = reactive(0.0)
-        disk_free = reactive(0.0)
+    # --- CORRECTED IMPORTS ---
+    # Imports are moved here to run AFTER pip installers.
+    from textual.app import App, ComposeResult
+    from textual.containers import Vertical, Horizontal
+    from textual.widgets import Header, Footer, Static, DataTable, Log, Sparkline # CORRECT: Sparkline is a widget
+    from textual.reactive import reactive
+    from textual.message import Message
+    from textual.binding import Binding
+    import psutil
+    from collections import deque
 
-        def render(self) -> str:
-            return (f"💻 CPU: {self.cpu_usage:>5.1f}% | "
-                    f"🧠 RAM: {self.ram_usage:>5.1f}% | "
-                    f"💾 Disk Free: {self.disk_free:.1f} GB")
+    # --- TUI HELPER WIDGETS (REFACTORED) ---
+
+    class SystemMonitor(Static):
+        """A widget for displaying a single system resource with a native Textual Sparkline."""
+
+        # Store data points for the graph
+        data = reactive(deque(maxlen=50))
+
+        def __init__(self, title, color, **kwargs):
+            super().__init__(**kwargs)
+            self.title_text = title
+            self.color = color
+            self.current_value = 0.0
+
+        def compose(self) -> ComposeResult:
+            """Layout the widget with a title, a sparkline, and a value."""
+            yield Static(self.title_text, classes="label")
+            # The Sparkline is now purely graphical. NO summary function.
+            yield Sparkline(self.data, id="sparkline_graph")
+            # A new, dedicated Static widget to display the formatted value.
+            yield Static(classes="value")
+
+        def update_value(self, new_value: float) -> None:
+            """Update the data for the graph AND update the text for the value label."""
+            self.data.append(new_value)
+            
+            # 1. Update the graph data
+            self.query_one("#sparkline_graph", Sparkline).data = list(self.data)
+            
+            # 2. Update the separate text label
+            value_label = self.query_one(".value", Static)
+            value_label.update(f"{new_value: >5.1f}%")
 
 
+    class ServicesStatus(Static):
+        """A widget to display the status of all managed services in a table."""
+
+        class ServiceSelected(Message):
+            def __init__(self, service_name: str, log_file: str) -> None:
+                self.service_name = service_name
+                self.log_file = log_file
+                super().__init__()
+
+        def compose(self) -> ComposeResult:
+            table = DataTable(cursor_type="row", id="services_table")
+            table.add_columns("Status", "Service Name", "PID", "CPU%", "Memory (MiB)")
+            yield table
+
+        def on_mount(self) -> None:
+            self.update_services_table()
+            self.set_interval(2, self.update_services_table)
+
+        def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+            table = self.query_one(DataTable)
+            service_name = table.get_row_at(event.cursor_row)[1]
+            log_dir = os.path.join(ROOT_DIR, "logs")
+            log_file = os.path.join(log_dir, f"{service_name.replace(' ', '_')}.log")
+            self.post_message(self.ServiceSelected(service_name, log_file))
+
+        def update_services_table(self) -> None:
+            """Fetch latest process info and update the table."""
+            table = self.query_one(DataTable)
+            
+            # Preserve scroll position and cursor while updating
+            cursor_row = table.cursor_row
+            scroll_y = self.scroll_y
+            
+            table.clear()
+            with process_lock:
+                for proc, name, _, _ in running_processes:
+                    status_icon, cpu, mem = "✅", 0.0, 0.0
+                    try:
+                        p = psutil.Process(proc.pid)
+                        if p.is_running() and p.status() != psutil.STATUS_ZOMBIE:
+                            cpu = p.cpu_percent()
+                            mem = p.memory_info().rss / (1024 * 1024)
+                        else: status_icon = "❌"
+                    except psutil.NoSuchProcess: status_icon = "❌"
+                    table.add_row(status_icon, name, str(proc.pid), f"{cpu:.1f}", f"{mem:.1f}")
+            
+            # Restore cursor and scroll
+            if cursor_row < table.row_count:
+                # --- THIS IS THE FIX ---
+                # Use the move_cursor() method instead of direct assignment.
+                table.move_cursor(row=cursor_row)
+            
+            self.scroll_y = scroll_y
+
+    # --- MAIN TUI APPLICATION CLASS ---
 
     class ZephyrineTUI(App):
         """A Textual UI for monitoring the Zephyrine Engine and its daemons."""
-        log_tail_threads = [] #initializing tail array Before we use it for parent child Processing tracking
 
+        # --- CORRECTED CSS ---
+        # The invalid `border-title` properties have been removed.
         CSS = """
-                Grid {
-                    /* Keep 2 columns, but now define row heights explicitly */
-                    grid-size: 2;
-                    grid-rows: 2fr 1fr 1; /* Top: 2 parts, Middle: 1 part, Bottom: 1 fixed line */
-                    grid-gutter: 1;
-                }
-                #engine {
-                    column-span: 2;
-                    /* This widget now sits in the first row, which has a height of 2fr */
-                }
-                #watchdog1 {
-                    /* This widget sits in the second row, which has a height of 1fr */
-                }
-                #watchdog2 {
-                    /* This widget also sits in the second row, height 1fr */
-                }
-                #stats {
-                    column-span: 2;
-                    /* This widget sits in the third row, which has a fixed height of 1 line */
-                    height: 1;
-                }
-                Log {
-                    border-title-align: center;
-                }
-                """
+        #main_container {
+            layout: vertical;
+            overflow: hidden;
+        }
+        #system_stats_container {
+            layout: horizontal;
+            height: 3;
+            border: round white;
+        }
+        #app_monitoring_container {
+            layout: horizontal;
+            height: 1fr;
+        }
+        #services_status {
+            width: 50%;
+            border: round white;
+        }
+        #service_log {
+            width: 50%;
+            border: round white;
+        }
+        SystemMonitor {
+            width: 1fr;
+            height: 100%;
+            padding: 0 1;
+            /* Use horizontal layout for the label, graph, and value */
+            layout: horizontal;
+            align: center middle;
+        }
+        SystemMonitor .label {
+            width: 8;
+        }
+        SystemMonitor .value {
+            /* Give it a fixed width to prevent jittering */
+            width: 7;
+            text-align: right;
+        }
+        #cpu_monitor Sparkline {
+            color: green;
+        }
+        #mem_monitor Sparkline {
+            color: cyan;
+        }
+        #net_monitor Sparkline {
+            color: magenta;
+        }
+        """
+
+        BINDINGS = [
+            Binding(key="ctrl+c,ctrl+q", action="quit", description="Quit App", show=True),
+        ]
+
+        current_log_tail_thread: Optional[threading.Thread] = None
 
         def compose(self) -> ComposeResult:
-            """Create child widgets for the TUI."""
             yield Header(show_clock=True)
-
-            # The Grid will now contain ALL the main panels
-            with Grid():
-                yield Log(id="engine", max_lines=386) # Increased max_lines for the bigger pane
-                yield Log(id="watchdog1", max_lines=256)
-                yield Log(id="watchdog2", max_lines=256)
-                yield SystemStatsGraph(id="stats") # SystemStatsGraph is now the new name for the stats widget
-
+            with Vertical(id="main_container"):
+                with Horizontal(id="system_stats_container"):
+                    yield SystemMonitor("CPU", "green", id="cpu_monitor")
+                    yield SystemMonitor("Memory", "cyan", id="mem_monitor")
+                    yield SystemMonitor("Network", "magenta", id="net_monitor")
+                with Horizontal(id="app_monitoring_container"):
+                    yield ServicesStatus(id="services_status")
+                    yield Log(id="service_log", max_lines=5000)
             yield Footer()
-
-        def check_services_health(self):
-            """Periodically check if services are alive and restart them."""
-            with process_lock:
-                snapshot = list(running_processes)
-            
-            for entry in snapshot:
-                proc, name, _, _ = entry
-                if proc.poll() is not None:
-                    self.query_one("#engine", Log).write(f"[WARNING] {name} died. Restarting...")
-                    
-                    with process_lock:
-                        if entry in running_processes:
-                            running_processes.remove(entry)
-
-                    if name == "ENGINE":
-                        start_engine_main()
 
         def on_mount(self) -> None:
             """Called when the app is mounted."""
-
-            # Set the border titles correctly after the widgets are created
-            self.query_one("#engine", Log).border_title = "🚀 Main Engine & Services"
-            self.query_one("#watchdog1", Log).border_title = "🛡️ Watchdog (Go)"
-            self.query_one("#watchdog2", Log).border_title = "🛡️ Watchdog (Ada)"
-
-
-            # Start system stats updates
-            self.update_stats()
-            self.set_interval(2, self.update_stats)
-
-            # Start all services in background threads
-            self.start_all_services_in_background()
+            # --- CORRECT: Set border titles programmatically ---
+            self.query_one("#system_stats_container").border_title = "System Overview"
+            self.query_one("#services_status").border_title = "Managed Services (Select to View Log)"
+            self.query_one("#service_log").border_title = "Logs"
             
+            self.set_interval(2, self.update_system_monitors)
             self.set_interval(3, self.check_services_health)
+            self.last_net_io = psutil.net_io_counters()
 
+        def update_system_monitors(self) -> None:
+            """Update the CPU, Memory, and Network sparkline graphs."""
+            # Update CPU
+            self.query_one("#cpu_monitor", SystemMonitor).update_value(psutil.cpu_percent())
+            # Update Memory
+            self.query_one("#mem_monitor", SystemMonitor).update_value(psutil.virtual_memory().percent)
+            # Update Network
+            current_net_io = psutil.net_io_counters()
+            bytes_sent = current_net_io.bytes_sent - self.last_net_io.bytes_sent
+            bytes_recv = current_net_io.bytes_recv - self.last_net_io.bytes_recv
+            total_mbps = ((bytes_sent + bytes_recv) / 2) * 8 / (1024 * 1024)
+            self.query_one("#net_monitor", SystemMonitor).update_value(min(100, total_mbps))
+            self.last_net_io = current_net_io
 
-        def update_stats(self) -> None:
-            """Update the system stats widget with percentages for the bars."""
-            # Target the new widget class
-            stats_widget = self.query_one(SystemStatsGraph)
+        def check_services_health(self) -> None:
+            check_and_restart_services()
 
-            # Update CPU and RAM percentages directly
-            stats_widget.cpu_percent = psutil.cpu_percent()
-            stats_widget.ram_percent = psutil.virtual_memory().percent
+        def on_services_status_service_selected(self, message: ServicesStatus.ServiceSelected) -> None:
+            log_widget = self.query_one("#service_log", Log)
+            global tui_shutdown_event
+            tui_shutdown_event.set()
+            if self.current_log_tail_thread and self.current_log_tail_thread.is_alive():
+                self.current_log_tail_thread.join(timeout=0.5)
 
-            # Get disk usage info
-            disk_usage = psutil.disk_usage('/')
-            stats_widget.disk_percent = disk_usage.percent
-            stats_widget.disk_free_gb = disk_usage.free / (1024 ** 3)
-
-        def start_all_services_in_background(self):
-            """
-            Starts the main application services and tails the log files for ALL
-            running processes (including those started before the TUI).
-            """
-            logger.info("TUI: Starting main application services and initiating log tailing...")
-
-            # The watchdogs and mesh node are already running.
-            # We only need to start the remaining services here.
-
-            if not os.path.exists(SETUP_COMPLETE_FLAG_FILE):
-                start_engine_main()
-                start_backend_service()
-                start_frontend()
-                print_system(f"Creating fast-launch post-compilation flag at: {SETUP_COMPLETE_FLAG_FILE}")
-                with open(SETUP_COMPLETE_FLAG_FILE, 'w') as f:
-                    f.write(f"Setup completed on {datetime.now().isoformat()}")
-            # This is where the slow mode starts the services because in one go (look at the main slow logic how it rely on this function to launch the services). but on fast mode it done using async service launch itself (check on the main threads of the async io services)
-
-            # --- Wait a moment for the new log files to be created ---
-            time.sleep(0.01)
-
-            # This logic remains the same, but it will now also pick up
-            # the log files from the pre-started watchdogs.
-            log_dir = os.path.join(ROOT_DIR, "logs")
-            widget_service_map = {
-                "engine": ["ENGINE", "BACKEND", "FRONTEND"],
-                "watchdog1": ["GO-WATCHDOG"],
-                "watchdog2": ["ADA-WATCHDOG"],
-            }
-
-            tailed_files = set()
-
-            for widget_id, service_names in widget_service_map.items():
-                widget = self.query_one(f"#{widget_id}", Log)
-                for service_name in service_names:
-                    # NOTE: This part needs a small fix. The mesh node also creates a log.
-                    # We should decide if we want to display it. Let's add it to the 'engine' log.
-                    log_file = os.path.join(log_dir, f"{service_name.replace(' ', '_')}.log")
-
-                    if log_file not in tailed_files:
-                        logger.info(f"TUI: Starting tail for '{log_file}' -> '#{widget_id}'")
-
-                        tail_thread = threading.Thread(
-                            target=tail_log_to_widget,
-                            args=(log_file, widget),
-                            name=f"TuiTail-{service_name}",
-                            daemon=True
-                        )
-                        tail_thread.start()
-
-                        self.log_tail_threads.append(tail_thread)
-                        tailed_files.add(log_file)
-
-        from textual.binding import Binding
-
-        BINDINGS = [
-            Binding(key="ctrl+c", action="quit", description="Quit App", show=True),
-            Binding(key="ctrl+q", action="quit", description="Quit App", show=True),
-        ]
+            tui_shutdown_event = threading.Event()
+            log_widget.clear()
+            log_widget.border_title = f"Log: {message.service_name}"
+            
+            self.current_log_tail_thread = threading.Thread(
+                target=tail_log_to_widget,
+                args=(message.log_file, log_widget),
+                daemon=True
+            )
+            self.current_log_tail_thread.start()
 
         def action_quit(self) -> None:
-            """An action to quit the application gracefully."""
-            # You can log this to the TUI itself for user feedback
-            self.query_one("#engine", Log).write("\n[SYSTEM] Shutdown requested. Terminating services...")
-            # self.exit() will trigger the on_unmount event and then quit
-
-            tui_shutdown_event.set() #making sure that the quit TUI event is stated
+            self.query_one("#service_log", Log).write("\n[SYSTEM] Shutdown requested. Terminating all services...")
+            tui_shutdown_event.set()
             self.exit()
 
         def on_unmount(self) -> None:
-            """Perform cleanup when the TUI is unmounted (quitting)."""
-            # This is the new, primary cleanup location for TUI mode.
-            # We call the same logic as the atexit handler.
             logger.info("TUI is unmounting. Initiating process cleanup...")
             cleanup_processes()
-            logger.info("Waiting for log tailing threads to exit...")
-            for thread in self.log_tail_threads:
-                # We give each thread a moment to finish its loop and exit.
-                thread.join(timeout=2.0)
-
-    from textual.widgets import Static
-    from textual.reactive import reactive
-    from rich.table import Table
-    from rich.progress_bar import ProgressBar
-
-    class SystemStatsGraph(Static):
-        """A widget to display real-time system stats with graphical bars."""
-
-        # Define reactive variables to hold the data
-        cpu_percent = reactive(0.0)
-        ram_percent = reactive(0.0)
-        disk_percent = reactive(0.0)
-        disk_free_gb = reactive(0.0)
-
-        def render(self) -> Table:
-            """Render the stats into a Rich Table with progress bars."""
-            # A Table is a perfect layout tool for this
-            stats_table = Table.grid(expand=True, padding=(0, 1))
-            stats_table.add_column("label", width=5)
-            stats_table.add_column("bar") # The bar column will expand
-            stats_table.add_column("value", width=8, justify="right")
-
-            # Create ProgressBar instances for each stat
-            # `width=None` allows the bar to fill the available space in its column
-            cpu_bar = ProgressBar(total=100, completed=self.cpu_percent, width=None, style="bright_green", complete_style="green")
-            ram_bar = ProgressBar(total=100, completed=self.ram_percent, width=None, style="bright_cyan", complete_style="cyan")
-            disk_bar = ProgressBar(total=100, completed=self.disk_percent, width=None, style="bright_magenta", complete_style="magenta")
-
-            # Add a row for each statistic
-            stats_table.add_row("CPU", cpu_bar, f"{self.cpu_percent:>5.1f}%")
-            stats_table.add_row("RAM", ram_bar, f"{self.ram_percent:>5.1f}%")
-            stats_table.add_row("Disk", disk_bar, f"{self.disk_free_gb:>5.1f}G")
-
-            return stats_table
-    # --- End of new widget ---
 
 # --- End of TUI Application Block ---
 
@@ -4437,10 +4474,23 @@ if __name__ == "__main__":
                 os.getenv("PIP_INSTALL_RETRIES", 3))  # Reduced from 99999 to 3 for more realistic retry
             PIP_RETRY_DELAY_SECONDS = 5
 
+            core_packages_to_install = [
+                "requests",
+                "tqdm",
+                "dotenv",
+                "rich",
+                "textual",       # A modern version of textual for best performance and features
+                "playwright",
+                "multiprocess",
+                "setuptools"
+            ]
 
-            # Install fundamental Python libraries (requests for downloads, tqdm for progress)
-            if not run_command([PIP_EXECUTABLE, "install", "-U", "tqdm", "requests", 'dotenv', 'rich', 'textual', 'playwright', 'multiprocess', 'requests', 'setuptools'], ROOT_DIR, "PIP-UTILS"):
-                print_error("tqdm/requests install failed. Exiting as these are crucial for further setup."); setup_failures.append("failed to install tqdm and requests for file downloads")
+            # Construct the pip command with the --upgrade flag
+            pip_install_command = [PIP_EXECUTABLE, "install", "--upgrade"] + core_packages_to_install
+
+            if not run_command(pip_install_command, ROOT_DIR, "PIP-UTILS"):
+                print_error("Core utility installation/upgrade failed. TUI may not function correctly."); 
+                setup_failures.append("Failed to install/upgrade critical Python utilities like rich and textual.")
 
             # Initialize requests session for file downloads
             try:
@@ -4602,6 +4652,10 @@ if __name__ == "__main__":
                 setup_failures.append("Failed to install openmpi, which is critical for terminal operations.")
             if not _ensure_conda_package("cmake", is_critical=True):
                 setup_failures.append("Failed to install cmake>=3.21, which is critical for installation operations.")
+            print_system("--- Ensuring jemalloc memory allocator ---")
+            # We install 'jemalloc' from conda-forge. It contains the shared libraries.
+            if not _ensure_conda_package("jemalloc", conda_channel="conda-forge", is_critical=True):
+                 setup_failures.append("Failed to install jemalloc. Memory stability may be compromised.")
             if AUTO_VULKAN_AVAILABLE:
                 print_system("--- Ensuring Vulkan build tools (shaderc for glslc) ---")
                 if not _ensure_conda_package("shaderc", executable_to_check="glslc", is_critical=True):
@@ -5373,6 +5427,49 @@ if __name__ == "__main__":
             popen_env = os.environ.copy()
             popen_env.update(autodetected_build_env_vars)
             popen_env["ZEPHYRINE_RELAUNCHED_IN_CONDA"] = "1" # Set flag for relaunched script
+
+            # --- JEMALLOC INJECTION START ---
+            # We find the path to the jemalloc library inside the TARGET Conda environment
+            jemalloc_lib_path = None
+            if platform.system() == "Linux":
+                # On Linux, it's usually libjemalloc.so.2
+                possible_path = os.path.join(TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.so.2")
+                if os.path.exists(possible_path):
+                    jemalloc_lib_path = possible_path
+                    popen_env["LD_PRELOAD"] = jemalloc_lib_path
+                    print_system(f"Injecting jemalloc for Linux relaunch: {jemalloc_lib_path}")
+                else:
+                    # Fallback to .so if .so.2 isn't there (unlikely with conda-forge)
+                    possible_path = os.path.join(TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.so")
+                    if os.path.exists(possible_path):
+                        jemalloc_lib_path = possible_path
+                        popen_env["LD_PRELOAD"] = jemalloc_lib_path
+                        print_system(f"Injecting jemalloc for Linux relaunch: {jemalloc_lib_path}")
+
+            elif platform.system() == "Darwin":
+                # On macOS, it's libjemalloc.dylib (usually versioned, but symlink should exist)
+                # Conda usually puts it in lib/libjemalloc.2.dylib or libjemalloc.dylib
+                possible_paths = [
+                    os.path.join(TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.2.dylib"),
+                    os.path.join(TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.dylib")
+                ]
+                for p in possible_paths:
+                    if os.path.exists(p):
+                        jemalloc_lib_path = p
+                        break
+                
+                if jemalloc_lib_path:
+                    popen_env["DYLD_INSERT_LIBRARIES"] = jemalloc_lib_path
+                    # macOS sometimes scrubs DYLD_ vars for security, but it usually works 
+                    # for non-system binaries like our Conda python.
+                    print_system(f"Injecting jemalloc for macOS relaunch: {jemalloc_lib_path}")
+                    
+                    # Optional: Configure jemalloc for aggressive purging (helps with the 34GB bloat)
+                    # popen_env["MALLOC_CONF"] = "background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000"
+
+            if not jemalloc_lib_path:
+                print_warning("Could not find jemalloc library in Conda env. Launching with default allocator.")
+            # --- JEMALLOC INJECTION END ---
 
             log_stream_threads = []
             common_popen_kwargs_relaunch = {"text": True, "errors": 'replace', "bufsize": 1, "env": popen_env}
