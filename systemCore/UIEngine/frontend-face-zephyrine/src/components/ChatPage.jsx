@@ -217,7 +217,7 @@ function ChatPage({
           
           //accumulatedContentRef.current = "";
           currentAssistantMessageId.current = null;
-          streamingStartTimeRef.current = 0;
+
 
           // Find the optimistic user message and append the assistant response
           setAllMessages((prev) => {
@@ -277,12 +277,9 @@ function ChatPage({
           accumulatedContentRef.current += contentChunk;
 
           const currentTime = Date.now();
-          const elapsedTime = currentTime - streamingStartTimeRef.current;
           const currentChars = accumulatedContentRef.current.length;
           let tokensPerSecond = 0;
-          if (elapsedTime > 0) {
-            tokensPerSecond = (currentChars / elapsedTime) * 1000;
-          }
+
 
           
 
@@ -345,7 +342,7 @@ function ChatPage({
           
           accumulatedContentRef.current = "";
           currentAssistantMessageId.current = null;
-          streamingStartTimeRef.current = 0;
+          //streamingStartTimeRef.current = 0;
           break;
         case "user_message_saved":
             const savedMessage = {
