@@ -348,52 +348,6 @@ const ChatFeed = ({
                 {Row}
             </List>
 
-            {/* The streaming message is rendered outside the virtualized list for simplicity */}
-            {streamingMessage && (
-                <ul className="message-list">
-                    <li key={streamingMessage.id || "streaming-message"} className="message assistant streaming group-single">
-                        <div className="message-avatar-wrapper">
-                            <div className="message-avatar">
-                                <img src="/img/AdelaideEntity.png" alt="Assistant Avatar" className="avatar-image" />
-                            </div>
-                        </div>
-                        <div className="message-content-container">
-                            <div className="message-sender-name">{assistantName}</div>
-                            ) : streamingMessage.content ? (
-                                <div className="message-content">
-                                    <ReactMarkdown
-                                        remarkPlugins={[remarkMath, remarkMermaid]}
-                                        rehypePlugins={[rehypeRaw, rehypeKatex]}
-                                        children={processMessageContent(streamingMessage.content) + (isGenerating ? "<span class='streaming-cursor'>▋</span>" : "")}
-                                        components={{
-                                            'thinking-block': LazyThinkBlock, // Also handle for streaming messages
-                                            code({ node, inline, className, children, ...props }) {
-                                                const match = /language-(\w+)/.exec(className || "");
-                                                if (className === 'language-mermaid') {
-                                                    return <div className="mermaid">{String(children).replace(/\n$/, "")}</div>;
-                                                }
-                                                return !inline && match ? (
-                                                    <SyntaxHighlighter style={atomDark} language={match[1]} PreTag="div" {...props}>
-                                                        {String(children).replace(/\n$/, "")}
-                                                    </SyntaxHighlighter>
-                                                ) : (
-                                                    <code className={className} {...props}>
-                                                        {children}
-                                                    </code>
-                                                );
-                                            },
-                                        }}
-                                    />
-                                    {streamingMessage.tokensPerSecond && (
-                                        <span className="tokens-per-second">{streamingMessage.tokensPerSecond} chars/s</span>
-                                    )}
-                                </div>
-                            )
-                        </div>
-                    </li>
-                </ul>
-            )}
-
             <div id="bottom"></div>
         </div>
     );
