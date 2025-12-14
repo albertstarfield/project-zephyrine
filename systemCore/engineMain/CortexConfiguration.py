@@ -73,7 +73,7 @@ BENCHMARK_ELP1_TIME_MS = 600000.0  # before hard defined error timeout (30 secon
 DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
 
 
-_default_max_bg_tasks = 1000000
+_default_max_bg_tasks = 100000
 MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(
     os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks)
 )
@@ -272,7 +272,7 @@ ENABLE_FILE_INDEXER_STR = os.getenv("ENABLE_FILE_INDEXER", "true")
 ENABLE_FILE_INDEXER = ENABLE_FILE_INDEXER_STR.lower() in ("true", "1", "t", "yes", "y")
 logger.info(f"File Indexer Enabled: {ENABLE_FILE_INDEXER}")
 DB_TEXT_TRUNCATE_LEN = int(
-    os.getenv("DB_TEXT_TRUNCATE_LEN", 16384)
+    os.getenv("DB_TEXT_TRUNCATE_LEN", 2048)
 )  # Max length for indexed_content before truncation
 
 
@@ -286,7 +286,7 @@ EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = DATABASE_URL
 logger.info(f"Database URL set to: {DATABASE_URL}")
 
 # Do not enable this Functionality if you don't want to be stuck and only utilizes single threaded and locked up scanning for defective entry, just put it as false for now. It's better to implement a filter when augmenting.
-ENABLE_DB_DELETE_DEFECTIVE_ENTRY = False
+ENABLE_DB_DELETE_DEFECTIVE_ENTRY = True
 DB_DELETE_DEFECTIVE_ENTRY_INTERVAL_MINUTES = 5
 ENABLE_STARTUP_DB_CLEANUP = os.getenv("ENABLE_STARTUP_DB_CLEANUP", "false").lower() in (
     "true",
@@ -618,14 +618,15 @@ MODULE_DIR = os.path.dirname(__file__)
 # _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__))
 
 # --- NEW: Batch Logging Configuration ---
+#Too long database loging may cause evergrowing memory growing, constantly doing this flushing may flush from memory to disk often
 LOG_QUEUE_MAX_SIZE = int(
-    os.getenv("LOG_QUEUE_MAX_SIZE", 1000000000)
+    os.getenv("LOG_QUEUE_MAX_SIZE", 1024)
 )  # Max items in log queue before warning/discard
 LOG_BATCH_SIZE = int(
-    os.getenv("LOG_BATCH_SIZE", 10)
+    os.getenv("LOG_BATCH_SIZE", 2)
 )  # Number of log items to write to DB in one go
 LOG_FLUSH_INTERVAL_SECONDS = float(
-    os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 3600.0)
+    os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 3.0)
 )  # How often to force flush the log queue
 # --- END NEW: Batch Logging Configuration ---
 

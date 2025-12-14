@@ -344,8 +344,14 @@ class FileIndexer:
                 image_to_process = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 doc.close()
 
+
             elif file_ext in OCR_TARGET_EXTENSIONS:
-                image_to_process = Image.open(file_path)
+                # Open the image directly. 
+                # Note: Do not reference 'values_to_update' here; that logic belongs in _process_file_phase1.
+                try:
+                    image_to_process = Image.open(file_path)
+                except Exception as e:
+                    return f"[Error opening image: {e}]"
 
             if image_to_process is None:
                 return "" # No image to process
