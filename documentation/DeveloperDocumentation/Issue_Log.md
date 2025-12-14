@@ -14,3 +14,7 @@
 -   **Title:** Tune resource limits, improve logging, and relax dependency pinning
 -   **Status:** Resolved
 -   **Description:** This change introduces several modifications to improve system performance and stability. It adjusts resource limits in `CortexConfiguration.py` for background tasks, database truncation length, and logging to reduce memory footprint and increase responsiveness. Logging is now more frequent with smaller batch sizes. Dependency versions in `requirements.txt` have been relaxed from `==` to `>=` to allow for more flexible package updates. Error handling in the `file_indexer.py` has been improved with a try-except block for image processing. `ENABLE_DB_DELETE_DEFECTIVE_ENTRY` has been enabled to allow for automated cleanup of defective database entries.
+-   **ID:** UI-REFACTOR-005
+-   **Title:** Remove unused streaming timer logic in ChatPage
+-   **Status:** In-Progress
+-   **Description:** Refactored the `ChatPage.jsx` component to remove the `streamingStartTimeRef` and the related tokens-per-second calculation. This logic was unused and added unnecessary complexity to the component's state management during message streaming.
