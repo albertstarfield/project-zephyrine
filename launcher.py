@@ -496,7 +496,7 @@ def _compile_and_run_watchdogs():
         backend_process_name = backend_exe_name.replace(".exe", "")
         go_watchdog_command = [
             go_exe_path,
-            f"--targets={backend_process_name},node",
+            f"--targets={backend_process_name},node,{mesh_process_name}",
             f"--pid-file={ENGINE_PID_FILE}"
         ]
 
@@ -1115,36 +1115,40 @@ def start_watchdogs_service_fast():
         print_error(f"FATAL (Fast Path): Ada watchdog executable not found at {ada_exe_path}.")
 
 def monitor_services_fallback():
-    """A simple loop to watch processes in non-TUI mode."""
-    print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.", "SUCCESS")
+    print_colored("SUCCESS", "All services launching. Monitoring with Auto-Restart...", "SUCCESS")
     try:
         while True:
-            all_ok = True
-            active_procs_found = False
             with process_lock:
-                current_procs_snapshot = list(running_processes)
-
-            if not current_procs_snapshot:
-                # This could happen right at the start before any process is registered.
-                time.sleep(1)
-                continue
-
-            for proc, name_s, _, _ in current_procs_snapshot:
-                if proc.poll() is None:
-                    active_procs_found = True
-                else:
-                    print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()}).")
-                    all_ok = False
-
-            if not all_ok:
-                print_error("One or more services terminated. Shutting down launcher.")
-                break
-            # If no processes are active anymore (e.g., they all finished), exit.
-            if not active_procs_found:
-                print_system("All services seem to have finished. Exiting launcher.")
-                break
-
-            time.sleep(5)
+                # Iterate over a copy so we can modify the real list if needed
+                snapshot = list(running_processes)
+            
+            start_count = len(running_processes)
+            
+            for i, entry in enumerate(snapshot):
+                proc, name, _, _ = entry
+                if proc.poll() is not None:
+                    print_warning(f"Service '{name}' died. Attempting restart...")
+                    
+                    # Remove the dead entry from the global list
+                    with process_lock:
+                        if entry in running_processes:
+                            running_processes.remove(entry)
+                    
+                    # Relaunch the specific service
+                    if name == "ENGINE":
+                        start_engine_main()
+                    elif name == "BACKEND":
+                        start_backend_service_fast()
+                    elif name == "FRONTEND":
+                        # Frontend usually spawns a shell, simpler to just restart
+                        threading.Thread(target=start_frontend, daemon=True).start()
+                    elif name == "ZEPHYMESH-NODE":
+                        start_zephymesh_service_fast()
+                        
+            # If the list size changed (because we restarted something), logs might need strict handling
+            # but usually start_service_process handles appending the new proc.
+            
+            time.sleep(3) # Check every 3 seconds
     except KeyboardInterrupt:
         print_system("\nKeyboardInterrupt received by main thread. Shutting down...")
     finally:
@@ -1997,6 +2001,43 @@ LICENSES_TO_ACCEPT = [
     ("MIT_Zephyrine.txt", "Project Zephyrine Core & UI (MIT)"),
     ("LICENSE_THIRD_PARTY_MODELS.txt", "Various licenses for bundled AI Models (see file for details)")
 ]
+
+def restart_service_if_dead(process_entry):
+    """Checks if a process is dead and restarts it if necessary."""
+    proc, name, log_path, log_handle = process_entry
+    
+    if proc.poll() is None:
+        return process_entry # Still alive, no change
+
+    print_warning(f"Service '{name}' died (RC: {proc.returncode}). Restarting...")
+
+    # Close old log handle
+    try:
+        log_handle.close()
+    except:
+        pass
+
+    # RE-LAUNCH BASED ON NAME
+    # We have to map names back to their start functions
+    new_proc = None
+    if name == "ENGINE":
+        # We need to manually call the start logic again
+        # Note: We rely on start_engine_main internal logic to handle the global running_processes list
+        # But here we are manually managing the list entry, so we should be careful.
+        # Ideally, refactor start_engine_main to return the proc, and call it here.
+        
+        # Simpler approach: Just re-run the command that launched it
+        # We can reconstruct it or simply call the specific function
+        start_engine_main() 
+        # start_engine_main appends to running_processes, so we will have a duplicate if we aren't careful.
+        # The calling loop needs to handle the list update.
+        return None # Signal that the list needs refreshing from the global
+        
+    elif name == "BACKEND":
+        start_backend_service_fast()
+        return None
+        
+    return process_entry
 
 
 def load_licenses() -> tuple[dict[str, str], str]:
@@ -3983,6 +4024,23 @@ if TUI_AVAILABLE:
 
             yield Footer()
 
+        def check_services_health(self):
+            """Periodically check if services are alive and restart them."""
+            with process_lock:
+                snapshot = list(running_processes)
+            
+            for entry in snapshot:
+                proc, name, _, _ = entry
+                if proc.poll() is not None:
+                    self.query_one("#engine", Log).write(f"[WARNING] {name} died. Restarting...")
+                    
+                    with process_lock:
+                        if entry in running_processes:
+                            running_processes.remove(entry)
+
+                    if name == "ENGINE":
+                        start_engine_main()
+
         def on_mount(self) -> None:
             """Called when the app is mounted."""
 
@@ -3998,6 +4056,8 @@ if TUI_AVAILABLE:
 
             # Start all services in background threads
             self.start_all_services_in_background()
+            
+            self.set_interval(3, self.check_services_health)
 
 
         def update_stats(self) -> None:
