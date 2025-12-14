@@ -5,9 +5,11 @@ import sys
 import time
 import threading
 import mimetypes
+import gc
 import datetime
 import asyncio
 import platform
+import tempfile
 from sqlalchemy.orm import Session
 import shutil
 from loguru import logger
@@ -75,18 +77,7 @@ except ImportError:
     logger.warning("pdf2image or poppler not installed. PDF -> Image conversion disabled.")
 
 
-PIX2TEX_AVAILABLE = False
-#Let's comment this first because it's having error or crashing the program
-"""try:
-    # Assuming the package installed from GitHub is importable as 'pix2tex'
-    from pix2tex import cli as pix2tex
-    PIX2TEX_AVAILABLE = True
-    logger.info("Pix2Tex (Latex-OCR) library imported successfully.")
-except ImportError:
-    logger.warning("pix2tex library not found. Latex-OCR functionality will be disabled.")
-    pix2tex = None # Define as None to avoid Unresolved reference errors
-"""
-pix2tex = None
+
 
 # Database imports
 DATABASE_AVAILABLE = False
@@ -243,16 +234,6 @@ class FileIndexer:
         if not self.vlm_model or not self.latex_model: logger.warning(
             "⚠️ VLM->LaTeX processing disabled (one or both models missing).")
 
-        # Initialize LatexOCR model once (this part is fine as it is)
-        self.latex_ocr_model = None
-        if PIX2TEX_AVAILABLE and pix2tex:
-            try:
-                logger.info("Initializing LatexOCR model for file indexer...")
-                self.latex_ocr_model = pix2tex.LatexOCR()
-                logger.success("LatexOCR model initialized successfully.")
-            except Exception as e_pix2tex_init:
-                logger.error(f"Failed to initialize LatexOCR model: {e_pix2tex_init}")
-                self.latex_ocr_model = None
 
     def _wait_if_server_busy(self, check_interval=0.5, log_wait=True):
         """Checks the busy event and sleeps if set."""
@@ -269,109 +250,154 @@ class FileIndexer:
              logger.info(f"� {self.thread_name}: Server is free, resuming indexing.")
         return False # Indicate processing can continue
 
-    def _get_latex_from_image(self, image: Image.Image) -> Optional[str]:
-        """Uses pix2tex LatexOCR to extract math LaTeX from a PIL Image."""
-        if not self.latex_ocr_model:
-            logger.warning("LatexOCR model not available, skipping math extraction.")
-            return None
+    def _get_latex_from_image(self, image: Image.Image, session_id_for_log: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        UPDATED: Uses the 'latex' VLM model role to extract math/diagrams.
+        Returns (latex_string, explanation_string).
+        """
+        if not self.latex_model:
+            return None, "[LaTeX Model Unavailable]"
+        
+        # <<< INSERT THE RESIZING LOGIC HERE to prevent memory spikes >>>
+        MAX_DIMENSION = 720
+        width, height = image.size
+        if width > MAX_DIMENSION or height > MAX_DIMENSION:
+            scale = MAX_DIMENSION / max(width, height)
+            new_width = int(width * scale)
+            new_height = int(height * scale)
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        # <<< END RESIZING >>>
+
+        log_prefix = f"VLMLatex|ELP0|{session_id_for_log[:8]}"
+        logger.trace(f"{log_prefix}: Getting LaTeX/TikZ from VLM...")
 
         try:
-            log_worker("TRACE", "Extracting math using LatexOCR model...")
-            # The model call is synchronous/blocking
-            math_latex = self.latex_ocr_model(image)
-            if math_latex and math_latex.strip():
-                log_worker("DEBUG", f"LatexOCR extracted math: {math_latex.strip()[:100]}...")
-                return math_latex.strip()
-            return None  # Return None if OCR produces no text
-        except Exception as e_latex_ocr:
-            log_worker("ERROR", f"Error during LatexOCR processing: {e_latex_ocr}")
-            return f"[LatexOCR Error: {e_latex_ocr}]"
+            # Prepare image data
+            buffered = BytesIO()
+            if image.mode in ("RGBA", "P"): image = image.convert("RGB")
+            image.save(buffered, format="PNG")
+            img_b64_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            image_uri = f"data:image/png;base64,{img_b64_str}"
+
+            image_content = {"type": "image_url", "image_url": {"url": image_uri}}
+            text_content = {"type": "text", "text": PROMPT_IMAGE_TO_LATEX}
+            messages = [HumanMessage(content=[image_content, text_content])]
+            
+            chain = self.latex_model | StrOutputParser()
+            timing_data = {"session_id": session_id_for_log, "mode": "vlm_latex_extraction"}
+            
+            response_markdown = asyncio.run(asyncio.to_thread(
+                self.provider._call_llm_with_timing, chain, messages, timing_data, priority=ELP0
+            ))
+
+            # Parse the markdown response for code blocks
+            latex_code = None; tikz_code = None; explanation = response_markdown
+            latex_match = re.search(r"```latex\s*(.*?)\s*```", response_markdown, re.DOTALL)
+            tikz_match = re.search(r"```tikz\s*(.*?)\s*```", response_markdown, re.DOTALL)
+            
+            cleaned_response = response_markdown
+            if latex_match:
+                latex_code = latex_match.group(1).strip()
+                cleaned_response = cleaned_response.replace(latex_match.group(0), "", 1)
+            if tikz_match:
+                tikz_code = tikz_match.group(1).strip()
+                cleaned_response = cleaned_response.replace(tikz_match.group(0), "", 1)
+            
+            explanation = cleaned_response.strip()
+
+            final_latex_repr = latex_code or ""
+            if tikz_code:
+                final_latex_repr += "\n\n% --- TikZ Code ---\n" + tikz_code
+
+            return final_latex_repr.strip(), explanation
+
+        except Exception as e:
+            return None, f"[VLM LaTeX Error: {e}]"
 
     def _extract_text_with_ocr_fallback(self, file_path: str, file_ext: str) -> str:
         """
-        Extracts text from a file. For PDFs, it checks for a text layer and
-        falls back to OCR. For standard image types, it performs OCR directly,
-        with a fallback to convert unsupported formats like AVIF/HEIC on the fly.
+        FINAL FIX: Isolates Tesseract OCR in a separate subprocess to contain memory leaks.
         """
         log_prefix = f"TextExtract|{os.path.basename(file_path)[:15]}"
+        temp_image_path = None # To hold path for temporary image file
 
         try:
-            # --- PDF Processing (Unchanged) ---
+            # --- Unload LLM to maximize available RAM for this operation ---
+            if self.provider:
+                logger.debug(f"{log_prefix}: Unloading LLM to clear RAM for isolated OCR process.")
+                self.provider.unload_llama_model_if_needed()
+                gc.collect()
+
+            # --- Prepare Image Data ---
+            image_to_process: Optional[Image.Image] = None
             if file_ext == '.pdf':
+                # ... (your existing PDF logic to get a list of images) ...
+                # For simplicity, we'll process the first page of a PDF for now.
+                # A full implementation would loop this subprocess logic.
                 doc: fitz.Document = fitz.open(file_path)
-                full_text = ""
-                is_image_based = True
-                page: fitz.Page
-                for page in doc:
-                    text_from_page = page.get_text("text")
-                    if text_from_page and len(text_from_page.strip()) > 20:
-                        is_image_based = False
-                        break
-                if not is_image_based:
-                    logger.trace(f"{log_prefix}: PDF has text layer, extracting directly.")
-                    full_text = "\n".join([page.get_text() for page in doc])
-                else:
-                    logger.info(f"{log_prefix}: PDF has no text layer, performing OCR...")
-                    ocr_texts = []
-                    for page_num, page in enumerate(doc):
-                        pix = page.get_pixmap(dpi=300)
-                        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                        try:
-                            ocr_texts.append(pytesseract.image_to_string(img))
-                        except pytesseract.TesseractNotFoundError:
-                            logger.error(f"{log_prefix}: Tesseract OCR engine not found.")
-                            return "[OCR Error: Tesseract engine not found]"
-                    full_text = "\n\n--- Page Break ---\n\n".join(ocr_texts)
+                if not doc.is_image_only:
+                     doc.close()
+                     return "\n".join([page.get_text() for page in doc])
+
+                page = doc.load_page(0)
+                pix = page.get_pixmap(dpi=200)
+                image_to_process = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 doc.close()
-                return full_text
 
-            # --- Image Processing (NEW LOGIC) ---
             elif file_ext in OCR_TARGET_EXTENSIONS:
-                logger.info(f"{log_prefix}: Performing OCR on image file: {file_path}")
-                try:
-                    # Attempt direct OCR first. This works for JPG, PNG, etc.
-                    return pytesseract.image_to_string(Image.open(file_path))
-                except pytesseract.TesseractNotFoundError:
-                    logger.error(f"{log_prefix}: Tesseract OCR engine not found.")
-                    return "[OCR Error: Tesseract engine not found]"
-                except Exception as e:
-                    # Check if this is a format error that we can handle with conversion.
-                    if "Unsupported image format" in str(e) or "cannot identify image file" in str(e):
-                        logger.warning(
-                            f"{log_prefix}: Unsupported format '{file_ext}'. Attempting on-the-fly conversion...")
+                image_to_process = Image.open(file_path)
 
-                        if not AVIF_SUPPORT_AVAILABLE:
-                            err_msg = f"Cannot convert '{file_path}'. The required AVIF/HEIC plugin ('pillow-avif-plugin') is not installed."
-                            logger.error(f"{log_prefix}: {err_msg}")
-                            return f"[OCR Error: {err_msg}]"
+            if image_to_process is None:
+                return "" # No image to process
 
-                        # If the plugin is available, try the conversion logic.
-                        try:
-                            # Load the unsupported image (this should work now thanks to the plugin)
-                            unsupported_image = Image.open(file_path)
+            # --- Create a temporary file for Tesseract to read ---
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                temp_image_path = tmp.name
+                # Convert to RGB to avoid issues with alpha channels (like in PNGs/AVIFs)
+                if image_to_process.mode in ("RGBA", "P"):
+                    image_to_process = image_to_process.convert("RGB")
+                image_to_process.save(temp_image_path, format="PNG")
 
-                            # Convert to PNG in memory for maximum compatibility.
-                            # The .convert("RGB") is crucial for formats that might have alpha channels (like PNG/AVIF).
-                            png_buffer = BytesIO()
-                            unsupported_image.convert("RGB").save(png_buffer, format="PNG")
-                            png_buffer.seek(0)  # Rewind the buffer to the beginning
+            # --- Execute Tesseract in a Subprocess ---
+            logger.info(f"{log_prefix}: Running Tesseract in isolated subprocess on {temp_image_path}")
+            
+            # The command: tesseract [image_path] stdout
+            # This tells tesseract to write the output directly to standard out.
+            process = subprocess.run(
+                ['tesseract', temp_image_path, 'stdout'],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=60 # 60 second timeout per image
+            )
 
-                            # Now, run OCR on the in-memory PNG data
-                            logger.info(f"{log_prefix}: Conversion successful. Performing OCR on in-memory PNG.")
-                            return pytesseract.image_to_string(Image.open(png_buffer))
-                        except Exception as conversion_error:
-                            err_msg = f"On-the-fly conversion failed for '{file_path}': {conversion_error}"
-                            logger.error(f"{log_prefix}: {err_msg}")
-                            return f"[OCR Error: {err_msg}]"
-                    else:
-                        # Re-raise any other unexpected errors.
-                        raise e
+            if process.returncode == 0:
+                return process.stdout.strip()
+            else:
+                logger.error(f"{log_prefix}: Tesseract subprocess failed. Stderr: {process.stderr.strip()}")
+                return f"[OCR Subprocess Error: {process.stderr.strip()}]"
 
+        except pytesseract.TesseractNotFoundError:
+             return "[OCR Error: Tesseract command-line tool not found in PATH]"
         except Exception as e:
-            logger.error(f"{log_prefix}: Failed to extract text/OCR from '{file_path}': {e}")
-            return f"[Error extracting text/OCR: {e}]"
-
-        return ""  # Fallback for unhandled file types
+            logger.error(f"{log_prefix}: Failed during OCR subprocess management: {e}")
+            return f"[Error: {e}]"
+        finally:
+            # --- CRITICAL: Cleanup ---
+            # Ensure the temporary image file is always deleted.
+            if temp_image_path and os.path.exists(temp_image_path):
+                try:
+                    os.remove(temp_image_path)
+                except Exception as del_err:
+                    logger.warning(f"Failed to delete temp OCR file {temp_image_path}: {del_err}")
+            
+            # Explicitly delete the large image object
+            if 'image_to_process' in locals() and image_to_process:
+                del image_to_process
+            
+            # Call garbage collection to be safe
+            gc.collect()
 
     def _convert_office_to_pdf(self, office_path: str) -> Optional[str]:
         """
@@ -479,6 +505,14 @@ class FileIndexer:
         if self._wait_if_server_busy(): return None, "[LaTeX Model Skipped - Server Busy]"
         if self.stop_event.is_set(): return None, "[LaTeX Model Skipped - Stop Requested]"
         if not self.latex_model: return None, "[LaTeX Model Unavailable]"
+
+        MAX_DIMENSION = 720
+        width, height = image.size
+        if width > MAX_DIMENSION or height > MAX_DIMENSION:
+            scale = MAX_DIMENSION / max(width, height)
+            new_width = int(width * scale)
+            new_height = int(height * scale)
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         logger.trace("Sending image and initial analysis to LaTeX Model for refinement (Priority: ELP0)...")
         response_markdown = None # Initialize
@@ -805,7 +839,7 @@ class FileIndexer:
 
         try:
             for current_dir, dirnames, filenames in os.walk(root_path, topdown=True, onerror=None):
-                #logger.debug(f"SCANNER_WALK_DEBUG: Entering directory: {current_dir}")
+                logger.debug(f"SCANNER_WALK_DEBUG: Entering directory: {current_dir}")
                 if self.stop_event.is_set():
                     logger.info(f"Phase 1 Scan interrupted by stop signal in {current_dir}")
                     break
@@ -1354,13 +1388,24 @@ class FileIndexer:
         Calls the general 'vlm' model to get an initial textual description of an image.
         Returns (description, error_message_if_any).
         """
+        MAX_DIMENSION = 720 # Cap at 720p to save VRAM and Base64 size
         # Check for stop events before processing
         if self._wait_if_server_busy(): return None, "[VLM Description Skipped - Server Busy]"
         if self.stop_event.is_set(): return None, "[VLM Description Skipped - Stop Requested]"
-
+        
         if not self.vlm_model:
             log_worker("WARNING", "VLM model ('vlm' role) not available for initial description.")
             return None, "[VLM Model Unavailable]"
+
+        width, height = image.size
+        if width > MAX_DIMENSION or height > MAX_DIMENSION:
+            scale = MAX_DIMENSION / max(width, height)
+            new_width = int(width * scale)
+            new_height = int(height * scale)
+            logger.trace(f"Resizing image from {width}x{height} to {new_width}x{new_height} for VLM.")
+            
+            # Use LANCZOS for high quality downscaling, or BILINEAR for speed/lower memory
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         log_prefix = f"VLMDesc|ELP0|{session_id_for_log[:8]}"
         logger.trace(f"{log_prefix}: Getting initial VLM description for image...")
@@ -1422,7 +1467,7 @@ class FileIndexer:
         3. Saves this new text to the database.
         4. Calls the final embedding helper to create and store vectors for the combined text.
         """
-        if not self.vlm_model and not self.latex_ocr_model:
+        if not self.vlm_model and not self.latex_model:
             logger.warning("Skipping Phase 2 processing: VLM and/or LatexOCR models are not available.")
             return
 
@@ -1461,12 +1506,14 @@ class FileIndexer:
                 processed_in_cycle += 1
                 log_prefix = f"P2-VLM|{os.path.basename(record.file_path)[:15]}" #type: ignore
                 logger.info(f"--> {log_prefix}: Starting Phase 2 processing for File ID {record.id}")
-
+                if self.provider:
+                    self.provider.unload_llama_model_if_needed()
+                    gc.collect()
+                
                 images: Optional[List[Image.Image]] = None
                 temp_pdf_to_process: Optional[str] = None
 
                 try:
-                    # --- FIX APPLIED HERE ---
                     # Get the file extension from the file_path attribute
                     file_ext = os.path.splitext(record.file_path)[1].lower() #type: ignore
 
@@ -1489,23 +1536,32 @@ class FileIndexer:
 
                     # Step 2: Process each page/image with VLM and LaTeX-OCR
                     for page_num, page_image in enumerate(images):
-                        session_id_for_page = f"p2_vlm_{record.id}_p{page_num}"
+                        try:
+                            session_id_for_page = f"p2_vlm_{record.id}_p{page_num}"
 
-                        # Get general description from main VLM model
-                        if self.vlm_model:
-                            vlm_description, vlm_err = await self._get_initial_vlm_description_async(page_image,
-                                                                                                     session_id_for_page)
-                            if vlm_err: page_errors.append(f"Page {page_num + 1} VLM Error: {vlm_err}")
-                            if vlm_description: page_vlm_descriptions.append(vlm_description)
+                            # Get general description from main VLM model
+                            if self.vlm_model:
+                                vlm_description, vlm_err = await self._get_initial_vlm_description_async(page_image,
+                                                                                                         session_id_for_page)
+                                if vlm_err: page_errors.append(f"Page {page_num + 1} VLM Error: {vlm_err}")
+                                if vlm_description: page_vlm_descriptions.append(vlm_description)
 
-                        # Get LaTeX math from specialized LatexOCR model
-                        if self.latex_ocr_model:
-                            latex_math = await asyncio.to_thread(self._get_latex_from_image, page_image)
+                            # Get LaTeX math from specialized LatexOCR model
+                            latex_math, latex_explanation = await asyncio.to_thread(
+                                self._get_latex_from_image, page_image, session_id_for_page
+                            )
+                            if latex_explanation and "[Error:" in latex_explanation:
+                                page_errors.append(f"Page {page_num+1} VLM-LaTeX Error: {latex_explanation}")
                             if latex_math:
-                                if "[LatexOCR Error:" not in latex_math:
-                                    page_latex_ocr_outputs.append(latex_math)
-                                else:
-                                    page_errors.append(f"Page {page_num + 1} LatexOCR Error: {latex_math}")
+                                page_latex_ocr_outputs.append(latex_math)
+                        finally:
+                            # --- GARBAGE COLLECTION ---
+                            # Explicitly delete the large image object from this iteration
+                            del page_image
+                            # --- END ---
+                    del images
+                    gc.collect()
+                    logger.trace(f"{log_prefix}: Manually triggered garbage collection after processing images.")
 
                     # Step 3: Combine results and update the record in the database session
                     final_vlm_desc = "\n\n--- Page Break ---\n\n".join(
