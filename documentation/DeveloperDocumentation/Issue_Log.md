@@ -18,3 +18,7 @@
 -   **Title:** Remove unused streaming timer logic in ChatPage
 -   **Status:** In-Progress
 -   **Description:** Refactored the `ChatPage.jsx` component to remove the `streamingStartTimeRef` and the related tokens-per-second calculation. This logic was unused and added unnecessary complexity to the component's state management during message streaming.
+-   **ID:** VECTCOMP-REFACTOR-006
+-   **Title:** Isolate QRNN Numpy Simulation in Subprocess for Memory Safety
+-   **Status:** Resolved
+-   **Description:** Refactored the `VectorCompute_Provider.py` to execute the memory-intensive QRNN numpy simulation in an isolated subprocess. This prevents the main application from crashing due to excessive memory allocation during large matrix operations (`2^16 x 2^16` matrices). The core logic is now in a standalone `_execute_numpy_qrnn_isolated` function, and the provider orchestrates the subprocess lifecycle, passing data via temporary files. This guarantees that memory used by the simulation is released back to the OS immediately upon completion.

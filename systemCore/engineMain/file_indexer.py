@@ -327,10 +327,7 @@ class FileIndexer:
                 logger.debug(f"{log_prefix}: Unloading LLM to clear RAM for isolated OCR process.")
                 self.provider.unload_llama_model_if_needed()
                 gc.collect()
-            if self.vlm_model:  
-                self.provider.unload_model("vlm")  
-            if self.latex_model:  
-                self.provider.unload_model("latex")
+
 
             # --- Prepare Image Data ---
             image_to_process: Optional[Image.Image] = None
