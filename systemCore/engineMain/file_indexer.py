@@ -762,7 +762,7 @@ class FileIndexer:
                     # Force garbage collection
             import gc
             gc.collect()
-            logger.info("All models unloaded and garbage collected")
+            #logger.debug("All models unloaded and garbage collected")
 
         except Exception as e:
             logger.error(f"Error during model unloading: {e}")

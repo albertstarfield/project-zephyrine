@@ -1,3 +1,7 @@
+-   **ID:** VECTCOMP-PERF-007
+-   **Title:** Refactor QRNN simulation to use GPU-accelerated tensor engine
+-   **Status:** Resolved
+-   **Description:** Majorly refactored `VectorCompute_Provider.py` to replace the memory-intensive, numpy-based dense matrix simulation with a high-performance, memory-optimized tensor contraction engine. The new engine automatically utilizes PyTorch for GPU acceleration (CUDA, ROCm, MPS) if available, falling back to accelerated CPU routines. This change significantly improves simulation speed and reduces the memory footprint by avoiding the construction of large, dense unitary matrices. The implementation now relies on efficient `tensordot` operations and index permutation for entanglement, which is well-suited for modern hardware. The provider now dynamically selects the best backend (PyTorch, Qiskit, etc.) at initialization. Minor logging noise was reduced in `cortex_backbone_provider.py` and `file_indexer.py`.
 -   **ID:** CORTEX-REFACTOR-001
 -   **Title:** Remove unused datetime import in AdelaideAlbertCortex.py
 -   **Status:** Resolved

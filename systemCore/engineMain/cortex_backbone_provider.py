@@ -1723,7 +1723,8 @@ class CortexEngine:
              logger.debug("Unload called, but provider is not llama_cpp or lock not initialized.")
              return
 
-        logger.info("Attempting to acquire lock for explicit model unload...")
+        #logger.info("Attempting to acquire lock for explicit model unload...")
+        pass
         with self._llama_model_access_lock: # Acquire lock to safely modify shared state
             if self._loaded_llama_instance:
                 logger.warning(f"Explicitly unloading llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
@@ -1737,7 +1738,8 @@ class CortexEngine:
                 gc.collect()
                 logger.info("llama.cpp model unloaded via explicit call.")
             else:
-                logger.info("Explicit unload called, but no llama.cpp model was loaded.")
+                #logger.info("Explicit unload called, but no llama.cpp model was loaded.")
+                pass
             pass
         # Lock released here
 
