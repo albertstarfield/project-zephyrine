@@ -327,6 +327,10 @@ class FileIndexer:
                 logger.debug(f"{log_prefix}: Unloading LLM to clear RAM for isolated OCR process.")
                 self.provider.unload_llama_model_if_needed()
                 gc.collect()
+            if self.vlm_model:  
+                self.provider.unload_model("vlm")  
+            if self.latex_model:  
+                self.provider.unload_model("latex")
 
             # --- Prepare Image Data ---
             image_to_process: Optional[Image.Image] = None
@@ -746,6 +750,46 @@ class FileIndexer:
             logger.error(f"PPTX extraction failed for {file_path}: {e}")
             return None
 
+    def _unload_all_models(self):
+        """Unload all AI models to free memory."""
+        try:
+            if self.provider:
+                # Unload LLM if loaded
+                self.provider.unload_llama_model_if_needed()
+
+                # Unload VLM and LaTeX models
+                if hasattr(self.provider, 'unload_model'):
+                    self.provider.unload_model("vlm")
+                    self.provider.unload_model("latex")
+
+                    # Force garbage collection
+            import gc
+            gc.collect()
+            logger.info("All models unloaded and garbage collected")
+
+        except Exception as e:
+            logger.error(f"Error during model unloading: {e}")
+
+    def _process_single_file(self, file_path: str, db_session: Session, loop: asyncio.AbstractEventLoop):
+        """
+        Process a single file and immediately unload all models afterward.
+        This wrapper ensures memory is freed after each file to prevent the 80GB spike.
+        """
+        try:
+            # Process the file using the existing Phase 1 logic
+            loop.run_until_complete(
+                self._process_file_phase1(file_path, db_session)
+            )
+
+            # Immediately unload all models after processing
+            self._unload_all_models()
+
+        except Exception as e:
+            logger.error(f"Error processing {file_path}: {e}")
+        finally:
+            # Ensure cleanup even on error
+            self._unload_all_models()
+
     def _scan_directory(self, root_path: str, db_session: Session, loop: asyncio.AbstractEventLoop):
         """
         Phase 1: Walks through a directory and processes files using _process_file_phase1,
@@ -890,9 +934,10 @@ class FileIndexer:
                         if os.path.islink(file_path): continue
                         if not os.path.isfile(file_path): continue
 
-                        loop.run_until_complete(
-                            self._process_file_phase1(file_path, db_session)
-                        )
+                        #loop.run_until_complete(
+                        #    self._process_file_phase1(file_path, db_session)
+                        #)
+                        self._process_single_file(file_path, db_session, loop)
                         file_processed_this_iter = True
                     except PermissionError:
                         logger.warning(f"Phase 1 Permission denied processing file: {file_path}")
@@ -1512,9 +1557,7 @@ class FileIndexer:
                 processed_in_cycle += 1
                 log_prefix = f"P2-VLM|{os.path.basename(record.file_path)[:15]}" #type: ignore
                 logger.info(f"--> {log_prefix}: Starting Phase 2 processing for File ID {record.id}")
-                if self.provider:
-                    self.provider.unload_llama_model_if_needed()
-                    gc.collect()
+                self._unload_all_models()
                 
                 images: Optional[List[Image.Image]] = None
                 temp_pdf_to_process: Optional[str] = None
@@ -1590,6 +1633,7 @@ class FileIndexer:
                     # Step 4: Call the unified embedding function now that all text is available
                     # This function will handle chunking, embedding, updating Chroma, and setting final status.
                     await self._embed_and_update_vector_store(record, db_session)
+                    self._unload_all_models()
                     # The commit is handled inside _embed_and_update_vector_store
 
                 except Exception as e_vlm_process:
@@ -1659,6 +1703,7 @@ class FileIndexer:
                     # Call the unified embedding helper function. This function handles
                     # combining text, chunking, embedding, and updating ChromaDB.
                     await self._embed_and_update_vector_store(record, db_session)
+                    self._unload_all_models()
                 except Exception as e_final_embed:
                     logger.error(
                         f"{log_prefix}: Unhandled error during final embedding process for File ID {record.id}: {e_final_embed}",
@@ -1742,6 +1787,9 @@ class FileIndexer:
             logger.warning(f"Error closing asyncio loop in {self.thread_name}: {e_loop_close}")
 
         logger.info(f"🛑 {self.thread_name} has been shut down.")
+
+
+
 
 
 def _locked_initialization_task(provider_ref: CortexEngine) -> Dict[str, Any]:
