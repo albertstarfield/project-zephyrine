@@ -1249,6 +1249,17 @@ def launch_all_services_in_parallel_and_monitor():
     else:
         print_warning("Textual or psutil not found. Falling back to simple terminal output for monitoring.")
         monitor_services_fallback()
+    
+    #-=-=-=--=-=-=-=- First Launch flag successfull fast shortcut
+    print_system(f"Creating first boot success flag: {SETUP_COMPLETE_FLAG_FILE}")
+    try:
+        with open(SETUP_COMPLETE_FLAG_FILE, 'w', encoding='utf-8') as f_flag:
+            f_flag.write(f"First Launch Completed: {datetime.now().isoformat()}\n")
+            f_flag.write(f"Launcher Hash: {current_hash}\n")
+            f_flag.write(f"System: {platform.system()} {platform.machine()}\n")
+    except IOError as e_flag:
+        print_error(f"Failed to write setup completion flag: {e_flag}")
+        # Optional: setup_failures.append("Failed to create setup completion flag")
 
 
 
@@ -4981,7 +4992,7 @@ if __name__ == "__main__":
                                     
                                     # 4. Anchor Deployment Target to 15.0
                                     # This prevents the compiler from panicking when it sees "26.0"
-                                    build_env_llama['MACOSX_DEPLOYMENT_TARGET'] = "15.0"
+                                    build_env_llama['MACOSX_DEPLOYMENT_TARGET'] = "26.0"
                                     #Conda dyld eject on the outdated slow library
                                     build_env_llama['DYLD_LIBRARY_PATH'] = ""
                                     
@@ -5048,7 +5059,7 @@ if __name__ == "__main__":
                                 sd_build_env['CXXFLAGS'] = f"-isysroot {real_sdk_path}"
                                 
                                 # 3. Anchor Deployment Target
-                                sd_build_env['MACOSX_DEPLOYMENT_TARGET'] = "15.0"
+                                sd_build_env['MACOSX_DEPLOYMENT_TARGET'] = "26.0"
 
                                 # 4. CRITICAL FIX: SANITIZE LIBRARY PATH
                                 # This stops Apple's 'ld' from loading Conda's broken libtapi.dylib
