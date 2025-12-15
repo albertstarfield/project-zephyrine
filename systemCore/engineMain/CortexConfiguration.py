@@ -519,6 +519,7 @@ DCTD_SOCKET_PATH = (
     "./celestial_timestream_vector_helper.socket"  # Relative to systemCore/engineMain
 )
 DCTD_NT_PORT = 11891  # Port for Windows TCP fallback
+#DCTD need
 DCTD_ENABLE_QUANTUM_PREDICTION = os.getenv(
     "DCTD_ENABLE_QUANTUM_PREDICTION", "true"
 ).lower() in ("true", "1", "t", "yes", "y")

@@ -1725,7 +1725,6 @@ class CortexEngine:
 
         logger.info("Attempting to acquire lock for explicit model unload...")
         with self._llama_model_access_lock: # Acquire lock to safely modify shared state
-            logger.info("Acquired lock for explicit model unload.")
             if self._loaded_llama_instance:
                 logger.warning(f"Explicitly unloading llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
                 try:
@@ -1739,7 +1738,7 @@ class CortexEngine:
                 logger.info("llama.cpp model unloaded via explicit call.")
             else:
                 logger.info("Explicit unload called, but no llama.cpp model was loaded.")
-            logger.info("Releasing lock after explicit unload attempt.")
+            pass
         # Lock released here
 
 # --- Optional: Add a shutdown hook specific to CortexEngine for llama.cpp ---
