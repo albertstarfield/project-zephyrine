@@ -1,3 +1,7 @@
+-   **ID:** SYS-PERF-008
+-   **Title:** Tune Cortex performance, improve response normalization, and prevent file indexer stalls.
+-   **Status:** Resolved
+-   **Description:** This change introduces several performance and reliability improvements. In `CortexConfiguration.py`, background task limits, log queue size, and flush intervals were significantly increased to handle larger workloads, while the fuzzy search threshold and reflector idle wait time were lowered to improve responsiveness. New regex-based normalization rules were added to `DIRECT_GENERATE_NORMALIZATION_RULES` to aggressively clean up verbose, conversational filler from AI responses. In `file_indexer.py`, the automatic unloading of VLM models was disabled to prevent a suspected race condition causing the indexer to hang overnight. A blank line was added to `.gitignore` for readability.
 -   **ID:** VECTCOMP-PERF-007
 -   **Title:** Refactor QRNN simulation to use GPU-accelerated tensor engine
 -   **Status:** Resolved
