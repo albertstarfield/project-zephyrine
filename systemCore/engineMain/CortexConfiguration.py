@@ -73,7 +73,7 @@ BENCHMARK_ELP1_TIME_MS = 600000.0  # before hard defined error timeout (30 secon
 DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
 
 
-_default_max_bg_tasks = 100000
+_default_max_bg_tasks = 100000000000
 MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(
     os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks)
 )
@@ -110,7 +110,7 @@ VLM_TARGET_EXTENSIONS = {
 
 
 FUZZY_SEARCH_THRESHOLD = int(
-    os.getenv("FUZZY_SEARCH_THRESHOLD", 79)
+    os.getenv("FUZZY_SEARCH_THRESHOLD", 50)
 )  # Max at 85 ( Fallback from vector search if no results )
 
 MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1))  # Unused
@@ -621,13 +621,13 @@ MODULE_DIR = os.path.dirname(__file__)
 # --- NEW: Batch Logging Configuration ---
 #Too long database loging may cause evergrowing memory growing, constantly doing this flushing may flush from memory to disk often
 LOG_QUEUE_MAX_SIZE = int(
-    os.getenv("LOG_QUEUE_MAX_SIZE", 10000000)
+    os.getenv("LOG_QUEUE_MAX_SIZE", 4294967296)
 )  # Max items in log queue before warning/discard
 LOG_BATCH_SIZE = int(
     os.getenv("LOG_BATCH_SIZE", 4096)
 )  # Number of log items to write to DB in one go
 LOG_FLUSH_INTERVAL_SECONDS = float(
-    os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 600.0)
+    os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 864000.0)
 )  # How often to force flush the log queue
 # --- END NEW: Batch Logging Configuration ---
 
@@ -855,7 +855,7 @@ ENABLE_PER_STEP_SOCRATIC_INQUIRY = os.getenv(
 logger.info(f"🤔 Per-Step Socratic Inquiry Enabled: {ENABLE_PER_STEP_SOCRATIC_INQUIRY}")
 # --- Add/Ensure these constants for the reflection loop timing ---
 # How long the reflector thread waits if NO work was found in a full active cycle
-IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 300))  # 5 minutes
+IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 1))  # 5 minutes or 1 second to be constant
 # How long the reflector thread waits briefly between processing batches IF work IS being processed in an active cycle
 ACTIVE_CYCLE_PAUSE_SECONDS = float(
     os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 0.1)
@@ -1063,6 +1063,39 @@ DIRECT_GENERATE_NORMALIZATION_RULES = [
     (r"(?i)^\s*Zephy:\s*", ""),
     # Add other rules here in the future as needed. For example:
     # (r"\.\.\.", "…"), # Replace three periods with a proper ellipsis character
+    # Rule: Remove "Assistant: " prefix at the start of the text.
+    (r"(?i)^\s*Assistant:\s*", ""),
+
+    # Rule: Remove variations of "I'd love/I'm curious to hear your thoughts."
+    # Matches "I'd love", "I'm curious", "I want", followed eventually by "hear your thoughts".
+    # [^\w\s]* matches optional punctuation.
+    (r"(?i)(I['’]m|I['’]d|I)\s+.*?\s+hear\s+your\s+thoughts[^\w\s]*\s*", ""),
+
+    # Rule: Remove standalone or trailing "I'm curious" phrases.
+    # Handles: "or a movie? I'm curious," or "It's a trick. I'm curious."
+    # Matches optional punctuation/space before the phrase to clean up the sentence preceding it.
+    (r"(?i)[,.]*\s*I['’]m\s*curious[.,!]*\s*", ""),
+
+    # Rule: Remove "Maybe we can dig deeper together."
+    (r"(?i)Maybe we can dig deeper together[^\w\s]*\s*", ""),
+
+    # Rule: Remove "I'm always here [wildcard]!" and "I'm here [wildcard] hear [wildcard] more"
+    # This covers "I'm always here!" and "I'm here to hear more."
+    (r"(?i)I['’]m\s*(always\s*)?here.*?(?:!|hear.*?more)[^\w\s]*\s*", ""),
+    # Matches: "I'd love to explore...", "Maybe we can explore...", "Let's explore..."
+    # Logic: 
+    # 1. Starts with I, I'd, We, Let's, or Maybe.
+    # 2. Followed by optional words like "love", "want", "can", "happy to".
+    # 3. Followed explicitly by "explore" or "exploring".
+    # 4. Removes the rest of the sentence until punctuation.
+    (r"(?i)(?:I['’]d|I|We|Let['’]s|Maybe)\s+(?:love|like|want|can|could|happy\s+to)\s+(?:to\s+)?explor(?:e|ing).*?[.?!]\s*", ""),
+    # Rule: Remove positive reinforcement fillers like "I'm so glad to hear that!"
+    # Matches: 
+    # - "I'm so glad to hear that!"
+    # - "I am happy to hear that."
+    # - "Glad to hear it."
+    # - "I'm really pleased to hear this."
+    (r"(?i)(?:(?:I['’]m|I\s+am)\s+)?(?:so|really|very)?\s*(?:glad|happy|pleased|thrilled)\s+to\s+hear\s+(?:that|this|it).*?[.?!]\s*", ""),
 ]
 
 # Add a log message at startup to confirm the rules are loaded

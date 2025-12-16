@@ -779,13 +779,16 @@ class FileIndexer:
             )
 
             # Immediately unload all models after processing
-            self._unload_all_models()
+            # (Sorry this may make a ghost ELP0 session)
+            #self._unload_all_models() 
 
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")
         finally:
             # Ensure cleanup even on error
-            self._unload_all_models()
+            pass
+            # (Sorry this may make a ghost ELP0 session that cause a lockup overnight)
+            #self._unload_all_models()
 
     def _scan_directory(self, root_path: str, db_session: Session, loop: asyncio.AbstractEventLoop):
         """
@@ -1554,7 +1557,8 @@ class FileIndexer:
                 processed_in_cycle += 1
                 log_prefix = f"P2-VLM|{os.path.basename(record.file_path)[:15]}" #type: ignore
                 logger.info(f"--> {log_prefix}: Starting Phase 2 processing for File ID {record.id}")
-                self._unload_all_models()
+                # (Sorry this may make a ghost ELP0 session that cause a lockup overnight)
+                #self._unload_all_models()
                 
                 images: Optional[List[Image.Image]] = None
                 temp_pdf_to_process: Optional[str] = None
@@ -1630,7 +1634,8 @@ class FileIndexer:
                     # Step 4: Call the unified embedding function now that all text is available
                     # This function will handle chunking, embedding, updating Chroma, and setting final status.
                     await self._embed_and_update_vector_store(record, db_session)
-                    self._unload_all_models()
+                    # (Sorry this may make a ghost ELP0 session that cause a lockup overnight)
+                    #self._unload_all_models()
                     # The commit is handled inside _embed_and_update_vector_store
 
                 except Exception as e_vlm_process:
@@ -1700,7 +1705,8 @@ class FileIndexer:
                     # Call the unified embedding helper function. This function handles
                     # combining text, chunking, embedding, and updating ChromaDB.
                     await self._embed_and_update_vector_store(record, db_session)
-                    self._unload_all_models()
+                    # (Sorry this may make a ghost ELP0 session that cause a lockup overnight)
+                    #self._unload_all_models()
                 except Exception as e_final_embed:
                     logger.error(
                         f"{log_prefix}: Unhandled error during final embedding process for File ID {record.id}: {e_final_embed}",
