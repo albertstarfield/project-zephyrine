@@ -188,55 +188,91 @@ class StellaIcarusAdaDaemonManager:
         if not self.is_enabled or not os.path.isdir(STELLA_ICARUS_ADA_DIR):
             return
 
+        # Avoid rediscovering if already populated (prevents duplicates)
+        if self.ada_projects:
+            return
+
         logger.info(f"Discovering Ada projects in '{STELLA_ICARUS_ADA_DIR}'...")
         for item in os.listdir(STELLA_ICARUS_ADA_DIR):
             project_path = os.path.join(STELLA_ICARUS_ADA_DIR, item)
+            
             if os.path.isdir(project_path):
                 has_alire_toml = os.path.exists(os.path.join(project_path, "alire.toml"))
                 gpr_files = [f for f in os.listdir(project_path) if f.endswith(".gpr")]
 
                 if has_alire_toml or gpr_files:
                     project_name = item
-                    executable_name = ALR_DEFAULT_EXECUTABLE_NAME  # Or parse from GPR if needed
+                    
+                    # [FIX 2] DYNAMIC NAMING
+                    # Use the directory name as the binary name.
+                    # 'avionics_daemon' folder -> 'avionics_daemon' binary
+                    executable_name = project_name
+                    
+                    # Handle Windows extension
+                    if os.name == 'nt':
+                        executable_name += ".exe"
+
                     self.ada_projects.append({
                         "name": project_name,
                         "path": project_path,
-                        "executable_name": f"{executable_name}.exe" if os.name == 'nt' else executable_name,
+                        "executable_name": executable_name, # <--- CORRECTED
                         "process": None,
                         "thread": None,
                         "stop_event": threading.Event()
                     })
-                    logger.info(f"  Discovered Ada project: '{project_name}'")
+                    logger.info(f"  Discovered Ada project: '{project_name}' -> expecting binary '{executable_name}'")
 
     def build_all(self):
-        """Builds all discovered Ada projects using 'alr build'."""
+        """Builds all discovered Ada projects using 'alr build' with verbose error logging."""
         if not self.is_enabled: return
 
         logger.info("--- Building all discovered StellaIcarus Ada projects... ---")
         for project in self.ada_projects:
             logger.info(f"Building '{project['name']}' in '{project['path']}'...")
             try:
-                # Using shell=True can be a security risk if project['path'] is not trusted.
-                # For this controlled environment, it's simpler.
+                # Capture BOTH stdout and stderr to catch all compiler messages
                 process = subprocess.run(
                     ["alr", "build"],
                     cwd=project["path"],
                     capture_output=True, text=True, check=False, timeout=300
                 )
+                
                 if process.returncode == 0:
                     logger.success(f"  ✅ Successfully built '{project['name']}'.")
                 else:
                     logger.error(f"  ❌ Failed to build '{project['name']}'. RC: {process.returncode}")
-                    logger.error(f"     STDOUT: {process.stdout.strip()}")
-                    logger.error(f"     STDERR: {process.stderr.strip()}")
+                    
+                    # --- IMPROVED ERROR LOGGING ---
+                    # Combine streams to preserve order of error messages
+                    output_stream = (process.stdout or "") + "\n" + (process.stderr or "")
+                    
+                    if not output_stream.strip():
+                        logger.error("     [NO OUTPUT CAPTURED] - Check Alire installation.")
+                    
+                    for line in output_stream.splitlines():
+                        line = line.strip()
+                        if not line: continue
+                        
+                        # Make errors pop out in red (Critical)
+                        if "error:" in line.lower() or "exception" in line.lower():
+                            logger.critical(f"     🔥 {line}")
+                        elif "warning:" in line.lower():
+                            logger.warning(f"     ⚠️ {line}")
+                        else:
+                            # Log normal build info as debug/info so it doesn't clutter unless needed
+                            logger.info(f"     [BUILD] {line}")
+
             except FileNotFoundError:
-                logger.error("  ❌ Build failed: 'alr' command not found. Is Alire installed and in the PATH?")
-                # Stop trying to build other projects if alr is missing
+                logger.error("  ❌ Build failed: 'alr' command not found. Is Alire installed and in PATH?")
                 break
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as e:
                 logger.error(f"  ❌ Build timed out for '{project['name']}'.")
+                # Try to print what happened before it froze
+                if e.stdout: logger.error(f"Last Output:\n{e.stdout.decode()}")
+                if e.stderr: logger.error(f"Last Errors:\n{e.stderr.decode()}")
             except Exception as e:
-                logger.error(f"  ❌ An unexpected error occurred during build of '{project['name']}': {e}")
+                logger.error(f"  ❌ Unexpected error building '{project['name']}': {e}")
+        
         logger.info("--- Finished building Ada projects. ---")
 
     def _run_daemon_thread(self, project: Dict[str, Any]):
@@ -262,12 +298,26 @@ class StellaIcarusAdaDaemonManager:
                     cwd=project["path"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
                     text=True, encoding='utf-8', errors='replace'
                 )
                 with self._lock:
                     project["process"] = process
 
                 # --- (The existing stdout/stderr monitoring logic goes here) ---
+                # Communicate through STDIO (why did i forgot about it you can communicate through stdio for the Ada daemons smh smh smh smh)
+                def send_command(self, daemon_name: str, command: dict):
+                    """Sends a JSON command to the specific Ada daemon via Stdin Pipe."""
+                    for project in self.ada_projects:
+                        if project["name"] == daemon_name and project["process"]:
+                            try:
+                                msg = json.dumps(command) + "\n"
+                                project["process"].stdin.write(msg)
+                                project["process"].stdin.flush()
+                                logger.debug(f"Sent to {daemon_name}: {msg.strip()}")
+                            except Exception as e:
+                                logger.error(f"Failed to write to {daemon_name}: {e}")
+                
                 def log_stderr():
                     if process and process.stderr:
                         for line in iter(process.stderr.readline, ''):
@@ -333,9 +383,9 @@ class StellaIcarusAdaDaemonManager:
             return
 
         self._discover_ada_projects()
+        
         if not self.ada_projects:
-            logger.info("No Ada projects discovered to start.")
-            return
+            self._discover_ada_projects()
 
         for project in self.ada_projects:
             thread = threading.Thread(target=self._run_daemon_thread, args=(project,), daemon=True)

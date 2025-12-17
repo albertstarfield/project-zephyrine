@@ -17925,6 +17925,7 @@ async def startup_tasks():
     global SYSTEM_IS_PRIMING
     SYSTEM_IS_PRIMING = True  # Just changed or when the startup is executed then the system is priming thus it is set to True.
 
+    #-=-=-=-=-=-=-=-=- build ada daemons -=-=-=-=-=-=-=-=-=-=-
     await build_ada_daemons()
     if (
         "stella_icarus_daemon_manager" in globals()

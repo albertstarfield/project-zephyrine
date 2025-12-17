@@ -1,3 +1,7 @@
+-   **ID:** STELLA-REFACTOR-001
+-   **Title:** Refactor Avionics Daemon from Simulator to Deterministic Kernel
+-   **Status:** In-Progress
+-   **Description:** This refactor transforms the `avionics_daemon` from a random data simulator into a deterministic, physics-based kernel. It introduces a thread-safe state manager and a physics integration loop. Two-way communication with the Python orchestrator is now established via `stdin`/`stdout` pipes, allowing for external control. The Python host's build and discovery logic for Ada daemons has also been significantly improved with better error logging and dynamic executable naming.
 -   **ID:** DOCS-UPDATE-001
 -   **Title:** Update Hippocratic License badge in README
 -   **Status:** Resolved
