@@ -267,7 +267,7 @@ const AppContent = () => {
   }, [user, fetchChatHistory, setChatHistory, setIsLoadingHistory]);
 
 
-  const availableModels = [{ id: "+11111111111", name: "Default Model (App)" }, { id: "Zephyrine Unified fragmented Model Interface", name: "Zephyrine Unified Model" }];
+  const availableModels = [{ id: "+11111111111", name: "Default Model (App)" }, { id: "Zephyrine Unified fragmented Model Interface", name: "Snowball Enaga Model" }];
   const [selectedModel, setSelectedModel] = useState(availableModels[0]?.id || "+11111111111");
 
   const toggleSidebar = useCallback(() => {

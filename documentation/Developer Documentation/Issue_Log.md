@@ -29,6 +29,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** Amend the `CODE_OF_CONDUCT.md` to formally include adherence to core architectural principles as an expected standard of behavior. This includes a strict prohibition on committing compiled, architecture-specific binaries to the repository.
 
+-   **ID:** `GOVERNANCE-FEAT-003`
+    -   **Title:** Introduce DAL and update license to Hippocratic 3.0.
+    -   **Status:** `Resolved`
+    -   **Description:** Introduced a formal Design Assurance Level (DAL) system based on DO-178C to improve architectural safety and rigor. Changed the project license from MIT to the Hippocratic License 3.0 to align with "do no harm" principles. Also updated the model's public-facing name to "Snowball Enaga" and refined contribution guidelines.
+
 ---
 
 ## **ZEPHYMESH NETWORK (MESH)**

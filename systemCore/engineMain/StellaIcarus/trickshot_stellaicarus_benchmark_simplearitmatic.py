@@ -147,12 +147,12 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
     
     # Format the specific response required
     response = (
-        f"Hello this is Zephy, and this is Trickshot, it is an architecture of StellaIcarus Hook with O3 dynamic optimization "
-        f"and dynamic recompilation at startup (AOT), this is the example of the 1000000 simple arithmatics execution, trying to bring O(1) on simple task rather than waste it on Power and Processing resources.\n"
+        f"Hello this is Zephy, and this is Trickshot, it is an architecture of StellaIcarus Hook with O3 dynamic optimization, THIS IS NOT A MODEL RESPONSE! but semi canned determenistic response based on phrase hooks regex! "
+        f"and dynamic recompilation at startup (AOT), this is the example of the 1000000 simple arithmatics execution, \n"
         f"This is your response time required running with StellaIcarus Trickshot:\n\n"
-        f"**{avg_ns:.4f} nanoseconds per AI response operation.**"
-        f"\n\n This architecture might be pushing the CPU to it's physics limit or how fast the response by it's clock cycle rather than Operation per Clock"
-        f"\n Better be balance! Because we also need efficiency on parallel."
+        f"**{avg_ns:.4f} nanoseconds per Internal calculation operation.**\n We do not need to use the AI hype to answer this determenistic and simple question."
+        f"\n\n This architecture might be pushing the CPU to it's physics limit or how much clock cycle is available for the response than Operation per Clock"
+        f"\n Better be balance!\n Because we also need efficiency on parallel for the Model LM one."
     )
     
     return response

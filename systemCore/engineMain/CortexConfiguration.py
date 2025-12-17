@@ -332,13 +332,17 @@ LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
 # (14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
 # Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+ 4.7B (Flux T5XXL Encoder)+ CLiP FLUX 1 (0.12B) + VAE FLux 1 0.08B +~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation + Fara 7B (Computer Agent) + token to Action tool call 2B + STEM Generalist RNJ-1 8B + Physics Specialist 8B + Chemistry Specialist 5B + Biology Specialist 1.5B + (Outside GGUF, like TTS (Chatterbox 0.5B (LLaMa but not serialized to gguf) + MeloTTS 0.15 (Text Encoder (BERT) + Core TTS Generator (VITS-based):))) = 77.05B Async MoE
-# (Additionally there's new one... MoE on Stem and etc..) so it's 71.5B
-META_MODEL_NAME_STREAM = "Zephy-async-77.05B"
-META_MODEL_NAME_NONSTREAM = "Zephy-async-77.05B"
+# (Additionally there's new one... MoE on Stem and etc..) so it's 77.05B
 
 
-META_MODEL_NAME_STREAM = "Zephy-async-77.05B"
-META_MODEL_NAME_NONSTREAM = "Zephy-async-77.05B"
+#No do not put 77.05B label on it, it would drove people away. and scared before hand, make it embracing and cute and ticklish to read an flying fairy Snowball! And I'm quite exhausted need to change the param every "Experts" added into the mix.
+
+META_MODEL_NAME_STREAM = "Snowball-Enaga"
+META_MODEL_NAME_NONSTREAM = "Snowball-Enaga"
+
+
+META_MODEL_NAME_STREAM = "Snowball-Enaga"
+META_MODEL_NAME_NONSTREAM = "Snowball-Enaga"
 
 META_MODEL_OWNER = "zephyrine-foundation"
 TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha"  # Client-facing TTS model name

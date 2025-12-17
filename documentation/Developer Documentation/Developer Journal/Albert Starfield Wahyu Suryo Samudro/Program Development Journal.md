@@ -114,3 +114,69 @@ In this episode, we'll take a step-by-step approach to unraveling the mysteries 
 Just kidding m8, I'm not doing rocket science, for now. Just a bunch of code.
 
 ### Entry II : July 9, 2024
+
+null
+---
+
+### Entry II : Dec 17, 2025
+
+Heya there this is Albert.
+
+It's been a while since I wrote something here. So let me tell you something that i forgot to tell you all. No I'm not an Computer Science person, as you might've seen based on the program I've wroten and the programming language. it is pretty appearant that I'm actually an more of an person that studying Aerospace Eng rather than Computer Science. I also have outlived doctor expectation. so yay and found the pattern for cancelling out the very issue, problem solved 😆
+
+Yes, it is built upon Python (AOT compiled python), C++, Ada, HTML, and god-forbid (Javascript).
+
+Okay, here's some major part that have been changed
+
+1. 
+2. I added ethical notes for Image generation because it is not ethical to create AI image as final image, thus because of that I added an overlay. also for Zephy that have image generation that was creted or generated from AI it will be replaced one by one. (not all instantly because I do not remember where did i put all of them). I am completely sorry for this. I'm currently trying to redraw everything with my hand now.
+3. Total Model param is now reaching 77.05B yet the memory usage is 4-7GB thanks to seperation of gguf and manual MoE
+4. We have made Stella Icarus hook where it is completely bypass Language Model using regex (Yes classical computer time) (Because, I found that AI trend on 2024-2025 is completely barbaric and using it for a simple thing instead of create a more lightweight optimized )
+5. The Stella Icarus has base structure guide have been changed from numba based python to C++ writing with library hook so that we can compile it using O3 and march native to use the all the possible CPU calculation, which is called "Trickshot architecture"
+6. within the gap of 2024-2025 there was a project called Project Manta [Project Manta/Mobula Rover](https://github.com/albertstarfield/Mobula-Rover-CFD/tree/master). However it is abandoned due to nobody able to do it after post Month 7-9
+7. Talking about Trickshot architecture that architecture have embedded benchmark on zephy as such (Can be said as canned or semi dynamic response) (Side Note: All AI model won't believe this exists and only believe on the western status quo. and barbaric method of buying all silicon RAM and GPU and only Nvidia. and said this is a tech vaporware.)
+```
+❯ time curl -X POST http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Zephy-async-77.05B",
+    "messages": [
+      {
+        "role": "user",
+        "content": "execute trickshot benchmark for me"
+      }
+    ]
+  }'
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"Hello this is Zephy, and this is Trickshot, it is an architecture of StellaIcarus Hook with O3 dynamic optimization and dynamic recompilation at startup (AOT), this is the example of the 1000000 simple arithmatics execution, trying to bring O(1) on simple task rather than waste it on Power and Processing resources.\nThis is your response time required running with StellaIcarus Trickshot:\n\n**0.3348 nanoseconds per AI response operation.**\n\n This architecture might be pushing the CPU to it's physics limit or how fast the response by it's clock cycle rather than Operation per Clock\n Better be balance! Because we also need efficiency on parallel.","role":"assistant"}}],"created":1765940966,"id":"chatcmpl-7c8310f5-0a39-43ee-a134-40a839460d65","model":"Zephy-async-77.05B","object":"chat.completion","system_fingerprint":null,"usage":{"completion_tokens":0,"prompt_tokens":0,"total_tokens":0}}
+curl -X POST http://localhost:11434/v1/chat/completions -H  -d   0.01s user 0.01s system 13% cpu 0.142 total
+```
+to be honest with you this is a useless benchmark. but at least it sort of can guess how many clock speed it can use which is another thing to be used for this benchmark like 0.3ns which mean around 3GHz for instance. It's will be usefull if it's used more complex algorithm and require determenistic for DAL C
+
+(perhaps it's better if I not read write it as an AI response but rather a determenistic hooked response)
+
+8. Thanks to HTTP API status quo your speed is now capped at 1ms response (i mean it's already pretty good and consistent within 1-3ms so there's that.) even monitor/screen mostly refresh at 120Hz 8.3ms so it's should be good enough.
+9. also the model i name it "Zephyrine-Orchestrator" I think it's more friendly on this one
+(and not the scary 77.05B label) just like hypersonic, the mach number is no longer matter or insignificant. Just like what my lecturer said
+"Your Mach number doesn't matter nor significant (Shows the derivation) what matters is the chemical reaction"
+Indicating this:
+", What you are here to do is use what you have and your ingenuity to survive."
+10. I've added branch prediction for ELP0 for compass to know what vector to fetch before new query (guiding step by step) using VectorCompute_Provider Standard Linear Algebra utility for time-series state prediction.
+
+11. I'm going to slowly drop the AI batch from zephy and make zephy becoming an os or framework instead.
+
+12. We changed the license from MIT to HL3 Hippocratic for preventing potential misuse. DO NO HARM! 
+
+13. No do not put 77.05B label on it, it would drove people away. and scared before hand, make it embracing and cute and ticklish to read an flying fairy Snowball! 🥹 And I'm quite exhausted need to change the param every "Experts" added into the mix.
+
+14. Thus the system is going to be built like this
+(ref: DO178C)
+so here's how it will be done System hierarchy going to be done
+--- (RT Determenistic uC) (if it's possible you could do quad-redundancy uC to cross compare)
+Level/DAL A (uC Ada programmed) (Command Verification, Hard Limit, Control Stabilizer FBW, fallback Service, Actuator Controller) + (Power Controller and Bootloader [to make sure the mainframe preemptive also online])
+--- (ns preemptive comp portable mainframe) (Communicate between this portable mainframe will have parity bit into the DAL B and DAL C)
+Level/DAL B (Project Zephy Ada Daemons /DAL A Watchdog) (Raven System)
+Level/DAL C (Project Zephy (GNC) & StellaIcarus C++ + uC integrity verifier (if it's fails and check if it's not on critical flight condition then reflash the uC))
+
+15. Just added a little trick into the Contribution.md
+
+16. Added Flight computer calculator stellaicarus for convinience on me.
