@@ -1,3 +1,7 @@
+-   **ID:** DOCS-UPDATE-001
+-   **Title:** Update Hippocratic License badge in README
+-   **Status:** Resolved
+-   **Description:** Updated the Hippocratic License badge in `README.md` to include the `LAW` and `SOC` clauses, changing it from `HL3-BDS-BOD-MEDIA-MIL-SUP-SV` to `HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV`.
 -   **ID:** SYS-PERF-008
 -   **Title:** Tune Cortex performance, improve response normalization, and prevent file indexer stalls.
 -   **Status:** Resolved
