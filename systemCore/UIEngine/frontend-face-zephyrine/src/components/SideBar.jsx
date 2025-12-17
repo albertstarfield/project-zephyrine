@@ -155,7 +155,7 @@ const SideBar = ({
                  <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
               </svg>
               <select className="model-selector-dropdown" disabled>
-                <option>Zephyrine Unified Model</option>
+                <option>Snowball Enaga Model</option>
               </select>
             </div>
           )}

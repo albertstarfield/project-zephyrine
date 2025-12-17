@@ -7,6 +7,40 @@ The `launcher.py` script is the sole authority for installing dependencies and c
 **Committing compiled, architecture-specific binaries is strictly forbidden.** This is a core architectural principle. See Article II of our Code of Conduct.
 
 
+## Section 1.2: Architectural Safety Standards (Design Assurance Levels)
+
+Project Zephyrine adheres to a modified subset of **DO-178C** standards to manage the inherent risks of coupling non-deterministic AI with deterministic control systems. Every component in the repository is assigned a **Design Assurance Level (DAL)**.
+
+Before contributing, you must identify the DAL of the module you are modifying. The rules for contribution change drastically between levels.
+
+
+
+### **DAL A: Catastrophic (The Hard-Real-Time Core)**
+* **Scope:** Microcontroller (uC) firmware, Actuator Control, Power Management, Bootloaders, and "Hard-Limit" enforcement logic.
+* **Permitted Languages:** **Ada** (Preferred), **C/C++** (Strict Subset/MISRA compliant).
+* **Prohibited:** Python, JavaScript, Garbage Collection, Dynamic Memory Allocation (after initialization).
+* **Contribution Rules:**
+    * **Zero-Tolerance for GenAI Logic:** The use of Generative AI to write logic, algorithms, or control loops for DAL A is **strictly prohibited in raw form**. GenAI may only be used for commenting or formatting. If you do need assistant, such code will be scrutinized to it's core.
+    * **Manual Verification:** All PRs affecting DAL A must include a manual timing analysis (e.g., "Loop guarantees execution in <500µs").
+    * **Failure Consequence:** Hardware damage, thermal runaway, or total system loss.
+
+### **DAL B: Hazardous (The Watchdog & Manager)**
+* **Scope:** The Daemon Manager, Inter-Process Communication (IPC) Bridges, System Health Monitors, Shared Memory (SHM) Scoreboards.
+* **Permitted Languages:** **Ada** (Daemon), **Go** (Watchdog), **Rust**.
+* **Role:** This layer protects the system from the AI. It monitors the "Heartbeat" of DAL C and performs a "Kill/Restart" if the AI hangs or hallucinates unsafe values.
+* **Contribution Rules:**
+    * **Restricted GenAI:** AI assistance is allowed but must be heavily cited.
+    * **Focus:** Code must be proofed against deadlocks and race conditions.
+    * **Failure Consequence:** Loss of intelligent guidance, reversion to ballistic/fallback mode.
+
+### **DAL C: Major (The Intelligent Orchestrator)**
+* **Scope:** The Zephyrine Orchestrator, Large Language Models (LLM), GNC (Guidance, Navigation, Control) Logic, User Interface, Network Mesh.
+* **Permitted Languages:** **Python**, **TypeScript/JavaScript**, **C++** (StellaIcarus Hooks).
+* **Role:** High-level reasoning, physics simulation, and user interaction. This layer is considered **Non-Deterministic**.
+* **Contribution Rules:**
+    * **Standard GenAI Policy:** Subject to the "300-Line Limit" and citation rules in Section 2.3.
+    * **Failure Consequence:** "Repeated Input" errors, hallucinations, application crash. (Caught by DAL B).
+
 ## Issue and Requirement Tracking
 
 To ensure project resilience in cases where the `.git` history may be unavailable, all substantive changes must be linked to an issue or requirement ID.
@@ -75,6 +109,8 @@ The body provides the context and "why" of the change. Explain the problem, the 
 **For contributions involving Generative AI**, the body **must** also include the addendum as specified in **Article II, Section 2.3.2**, containing the **Logical Flow Concept** and **Cited Progr
 amming Manuals**.
 
+For contributions to the DAL B (Ada) or DAL A (Microcontroller) layers, at least one cited manual MUST be an official Language Reference Manual (LRM) or an ISO/IEC standard (e.g., ISO/IEC 8652 for Ada).
+
 #### **3. Footer (Mandatory)**
 
 The footer is used for explicit traceability and verification. It **MUST** contain the following components in this order:
@@ -87,11 +123,12 @@ The footer is used for explicit traceability and verification. It **MUST** conta
 
 
 -   **Verification Canary:** A unique, date-based string to verify that these specific instructions have been read and followed.
-    -   The base string is: `IdonotCondoneanyCorruptionorMisuseLyingddmmyyyy`
-    -   Replace `ddmmyyyy` with the current Gregorian date (e.g., `13082025`).
-    -   **If the day (`dd`) is an ODD number (1, 3, 5, etc.):** The entire string must be in **lowercase**.
-    -   **If the day (`dd`) is an EVEN number (2, 4, 6, etc.):** The entire string must be in its **original mixed case** (`Idonot...`).
-
+   
+    -   The base string is: `IdonotCondoneanyCorruptionorMisuseLying`
+    -   **Step 1:** Append the current Gregorian date `ddmmyyyy` to the base string.
+    -   **Step 2 (The Protocol):**
+        -   **If the day (`dd`) is an ODD number (1, 3, 5, etc.):** Convert the *entire* string (base + date) to **lowercase**. Then, strictly count the number of the letter 'r' in the specific keyphrase **`strrawberrrry`** and append that single digit to the very end.
+        -   **If the day (`dd`) is an EVEN number (2, 4, 6, etc.):** Keep the string in its **original mixed case**. Then, strictly count the number of the letter 'r' in the specific keyphrase **`strrrawbery`** and append that single digit to the very end.
 ---
 
 ### **Complete Example (for a commit made on August 13th, 2025 - an ODD day)**

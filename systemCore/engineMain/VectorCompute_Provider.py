@@ -1,3 +1,12 @@
+
+# ==============================================================================
+# MODULE: VectorCompute_provider.py (Snowball-Enaga Framework)
+# DESCRIPTION: Standard Linear Algebra utility for time-series state prediction.
+#              Provides a deterministic interface for aerospace GNC vectors.
+#              Utilizes process-isolated tensor contraction for memory safety.
+# DAL LEVEL: DAL C (Isolated Logic)
+# MAINTAINER: Zephyrine Foundation
+# ==============================================================================
 import numpy as np
 from loguru import logger
 import os
