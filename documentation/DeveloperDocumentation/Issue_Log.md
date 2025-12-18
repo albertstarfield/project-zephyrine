@@ -1,3 +1,7 @@
+-   **ID:** CORTEX-FEAT-004
+-   **Title:** Overhaul RAG by Re-adding Hybrid Search and Advanced Prompt Synthesis
+-   **Status:** Resolved
+-   **Description:** This feature restores and significantly enhances the Cortex's RAG capabilities by re-introducing fuzzy search, which was previously erroneously removed by an AI agent. The `direct_rag_retriever` now uses a robust hybrid approach, combining high-precision semantic vector search with a fuzzy search fallback to improve context retrieval. A new configuration, `FUZZY_SEARCH_THRESHOLD_CONTEXT`, was introduced for this. Furthermore, the core `PROMPT_DIRECT_GENERATE` was rewritten to give the AI explicit, step-by-step instructions on how to comprehensively synthesize information from retrieved context, leading to more detailed and useful responses. A DeepWiki badge was also added to the `README.md`.
 -   **ID:** STELLA-REFACTOR-001
 -   **Title:** Refactor Avionics Daemon from Simulator to Deterministic Kernel
 -   **Status:** In-Progress

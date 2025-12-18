@@ -22,6 +22,8 @@
 
 [![Hippocratic License HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV](https://img.shields.io/static/v1?label=Hippocratic%20License&message=HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV&labelColor=5e2751&color=bc8c3d)](https://firstdonoharm.dev/version/3/0/bds-bod-law-media-mil-soc-sup-sv.html)
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/albertstarfield/project-zephyrine)
+
 ## Project Zephyrine: An open-source cognitive architecture exploring the fusion of generative AI with adaptive deterministic control systems.
 
 ### A Glimpse Into the Aether: Abstract
