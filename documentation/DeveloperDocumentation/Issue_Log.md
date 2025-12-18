@@ -42,3 +42,12 @@
 -   **Title:** Isolate QRNN Numpy Simulation in Subprocess for Memory Safety
 -   **Status:** Resolved
 -   **Description:** Refactored the `VectorCompute_Provider.py` to execute the memory-intensive QRNN numpy simulation in an isolated subprocess. This prevents the main application from crashing due to excessive memory allocation during large matrix operations (`2^16 x 2^16` matrices). The core logic is now in a standalone `_execute_numpy_qrnn_isolated` function, and the provider orchestrates the subprocess lifecycle, passing data via temporary files. This guarantees that memory used by the simulation is released back to the OS immediately upon completion.
+-   **ID:** CORE-FEAT-015
+-   **Title:** Refactor Generation Logic to Peer Review Architecture and Improve Priority Lock
+-   **Status:** In-Progress
+-   **Description:**
+    *   Refactors the primary `chat_direct_generate` function to a "Peer Review Everphase Context" (V9) architecture. This involves a loop of generation, fact-checking against RAG, and routing to specialist models for complex or incomplete responses.
+    *   Implements a "politeness" policy in the `PriorityQuotaLock` to prevent ELP0 tasks from starving waiting ELP1 tasks, improving high-priority task responsiveness.
+    *   Deletes the legacy `trickshot_simple_flight_computer.py`.
+    *   Increases RAG context limits (`RAG_URL_COUNT`, fuzzy search interaction fetch).
+    *   Adjusts logging and disables the "mistype" feature.

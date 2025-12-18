@@ -3161,13 +3161,13 @@ class CortexThoughts:
         if FUZZY_AVAILABLE:
             try:
                 # 1. FETCH: Explicitly query DB to bypass potential session filtering issues
-                # We want the last 150 VALID interactions from ANY session.
+                # We want the last 2048 VALID interactions from ANY session.
                 def fetch_global_candidates():
                     return db.query(Interaction).filter(
                         Interaction.input_type.in_(["text", "llm_response"]),
                         # Ensure at least one field has content
                         (Interaction.user_input.isnot(None) | Interaction.llm_response.isnot(None))
-                    ).order_by(desc(Interaction.timestamp)).limit(150).all()
+                    ).order_by(desc(Interaction.timestamp)).limit(2048).all()
 
                 candidates = await asyncio.to_thread(fetch_global_candidates)
                 
@@ -6506,30 +6506,22 @@ class CortexThoughts:
         image_b64: Optional[str] = None,
     ) -> str:
         """
-        CORRECTED: The definitive ELP1 logic. It now uses a dedicated, lightweight RAG
-        function to ensure it meets its performance benchmark.
+        INTERNAL CODENAME: "Peer Review Everphase Context" Architecture (V9)
+        - Every generation phase is "peer-reviewed" by a fact-checker.
+        - The context is refreshed ("everphase") before each step.
         """
-        direct_req_id = f"dgen-logic-direct-v5-{uuid.uuid4()}"
+        direct_req_id = f"dgen-peer-review-everphase-{uuid.uuid4()}"
         log_prefix = f"⚡️ {direct_req_id}|ELP1"
         logger.info(
-            f"{log_prefix} CORRECTED DIRECT V5 Logic START -> Session: {session_id}, Input: '{user_input[:50]}...'"
+            f"{log_prefix} START -> Session: {session_id}, Input: '{user_input[:50]}...'"
         )
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
 
-        # --- 1. CONTEXT GATHERING (ELP1 Priority) ---
-        logger.info(
-            f"{log_prefix} Gathering RAG and direct history context with ELP1 priority."
-        )
-
-        # <<< MODIFICATION: Call the new, lightweight RAG helper >>>
+        # --- 1. INITIAL CONTEXT GATHERING ---
         history_rag_str = await self._get_direct_rag_context_elp1(
             db, user_input, session_id
         )
-
-        # --- End Branch Prediction Augmentation ---
-
-        # Get the most recent, direct conversation turns for immediate context.
         direct_history_interactions = await asyncio.to_thread(
             get_global_recent_interactions, db, limit=5
         )
@@ -6537,27 +6529,13 @@ class CortexThoughts:
             direct_history_interactions
         )
 
-        # --- 2. SINGLE LLM GENERATION (ELP1 Priority) ---
-        logger.info(
-            f"{log_prefix} Preparing single, large LLM call with ELP1 priority."
-        )
+        # --- 2. INITIAL GENERATION ---
         fast_model = self.provider.get_model("general_fast")
         if not fast_model:
-            raise RuntimeError(
-                "Fast model 'general_fast' for direct response is not configured."
-            )
-
-        max_response_tokens = LLAMA_CPP_N_CTX // 2
-
-        prompt_placeholders = {
-            "history_rag": history_rag_str,
-            "recent_direct_history": recent_direct_history_str,
-            "input": user_input,
-            "augmented_prediction_context": "",  # NEW
-        }
+            raise RuntimeError("Fast model 'general_fast' not configured.")
 
         bound_model = fast_model.bind(
-            max_tokens=max_response_tokens, stop=[CHATML_END_TOKEN], priority=ELP1
+            max_tokens=LLAMA_CPP_N_CTX // 2, stop=[CHATML_END_TOKEN], priority=ELP1
         )
         chain = (
             ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE)
@@ -6565,126 +6543,126 @@ class CortexThoughts:
             | StrOutputParser()
         )
 
-        timing_data = {"session_id": session_id, "mode": "chat_direct_elp1"}
-        raw_llm_output = ""
+        prompt_placeholders = {
+            "history_rag": history_rag_str,
+            "recent_direct_history": recent_direct_history_str,
+            "input": user_input,
+            "augmented_prediction_context": "", 
+        }
+        timing_data = {"session_id": session_id, "mode": "chat_direct_elp1_initial"}
+
         try:
-            # We must use asyncio.to_thread here because _call_llm_with_timing is a synchronous function
             raw_llm_output = await asyncio.to_thread(
-                self._call_llm_with_timing,
-                chain,
-                prompt_placeholders,
-                timing_data,
-                priority=ELP1,
+                self._call_llm_with_timing, chain, prompt_placeholders, timing_data, priority=ELP1
             )
-
         except TaskInterruptedException as tie:
-            logger.error(
-                f"🚦 {log_prefix} Direct generation LLM call was INTERRUPTED: {tie}"
-            )
-            return f"[System Error: The response generation was interrupted by a higher priority request.]"
+            logger.error(f"🚦 {log_prefix} Initial ELP1 INTERRUPTED: {tie}")
+            return f"[System Error: Interrupted by priority task.]"
 
-        # --- 3. POST-PROCESSING & FINALIZATION ---
-        _think_content, speak_content = self._parse_think_speak_output(raw_llm_output)
-        final_response_text = speak_content
+        if fuzz.partial_ratio("LLAMA_CPP_RAW_CHATML_WRAPPER_WORKER_ERROR", raw_llm_output) > 90:
+             logger.error(f"❌ {log_prefix} Critical Worker Error in initial response. Aborting.")
+             return "[System Error: The AI model encountered a critical failure.]"
 
-        # Regex to find "Zephy:" (case-insensitive, with optional space/colon variants) and capture what comes after.
-        # The (?i) flag makes it case-insensitive. re.DOTALL allows '.' to match newlines.
-        zephy_prefix_pattern = re.compile(r"(?i)\s*Zephy\s*:\s*(.*)", re.DOTALL)
+        _, current_speak_content = self._parse_think_speak_output(raw_llm_output)
+        
+        # --- 3. PEER REVIEW & RECURSIVE SPECIALIST LOOP ---
+        
+        final_response_text = current_speak_content
+        
+        input_token_count = self._count_tokens(user_input)
+        complex_triggers = ["prove", "derive", "solve", "calculate", "equation", "mathematically", "code", "script", "function", "analyze", "design"]
+        is_technically_complex = any(t in user_input.lower() for t in complex_triggers)
+        
+        should_enter_loop = False
+        if input_token_count >= DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD:
+            should_enter_loop = True
+        elif is_technically_complex:
+            logger.info(f"{log_prefix} Short input but Technical Keywords detected. Forcing Peer Review Loop.")
+            should_enter_loop = True
 
-        # Split the content by the pattern. This will give us a list where every odd-indexed element
-        # is a message that followed "Zephy:".
-        parts = zephy_prefix_pattern.split(speak_content)
+        if should_enter_loop:
+            logger.info(f"{log_prefix} Entering Peer Review Specialist Loop.")
+            
+            loop_count = 0
+            MAX_CONTINUATION_LOOPS = 3 
 
-        # Filter out empty strings that result from the split.
-        messages = [p.strip() for p in parts if p.strip()]
-
-        final_response_text = ""  # This will be the immediate HTTP response
-
-        if len(messages) > 1:
-            logger.info(
-                f"{log_prefix} Zephy Engine Multi-message response detected! ({len(messages)} parts). Splitting for SSE delivery."
-            )
-
-            # The first message is the primary, immediate response.
-            final_response_text = messages[0]
-
-            # Loop through all SUBSEQUENT messages and queue them for SSE push.
-            for i, subsequent_message in enumerate(messages[1:]):
-                logger.debug(f"Queuing subsequent message #{i + 1} for SSE push.")
-
-                # This payload structure must match what the Go BFF now expects (userId, message)
-                # and what the Python SSE listener needs to format correctly.
-                sse_payload = {
-                    "userId": "user_placeholder_from_zephy_split",
-                    # Placeholder, as Go BFF will handle routing by latest chat
-                    "message": subsequent_message,
-                }
-
-                # The final chatId will be determined by the Go BFF, but we could add it here for logging if needed.
-                # sse_payload["chatId"] = session_id
-
-                sse_event_string = format_sse_notification(
-                    data=sse_payload,
-                    event="proactive_thought",  # We reuse the 'proactive_thought' event type for simplicity
+            while loop_count < MAX_CONTINUATION_LOOPS:
+                force_route = (loop_count == 0 and is_technically_complex)
+                
+                if force_route:
+                    logger.warning(f"{log_prefix} Loop {loop_count}: Technical request. BYPASSING AUDIT -> Forcing Peer Review.")
+                    is_complete = False
+                else:
+                    is_complete = await self._check_if_response_is_complete(
+                        db, final_response_text, user_input, session_id
+                    )
+                
+                if is_complete:
+                    logger.info(f"{log_prefix} Loop {loop_count}: Response PASSED Peer Review.")
+                    break
+                
+                if not force_route:
+                    logger.warning(f"{log_prefix} Loop {loop_count}: FAILED Peer Review. Routing to specialist...")
+                
+                target_model_key = await self._router_select_specialist_for_continuation(
+                    final_response_text, user_input, session_id
                 )
-
-                # Put the formatted string into the global queue
-                sse_notification_queue.put(sse_event_string)
-
-        elif len(messages) == 1:
-            # Only one message was found after a "Zephy:" prefix. Use it.
-            final_response_text = messages[0]
+                
+                continuation_text = await self._generate_continuation_segment(
+                    db, target_model_key, final_response_text, user_input, session_id
+                )
+                
+                if not continuation_text:
+                    logger.warning(f"{log_prefix} Loop {loop_count}: Specialist returned no continuation. Stopping.")
+                    break
+                    
+                if not final_response_text.endswith(("\n", " ")):
+                    final_response_text += " "
+                
+                final_response_text += continuation_text
+                logger.info(f"{log_prefix} Loop {loop_count}: Appended {len(continuation_text)} chars from {target_model_key}.")
+                loop_count += 1
         else:
-            # No "Zephy:" prefixes found. Use the original speak_content as is.
-            final_response_text = speak_content
+            logger.info(f"{log_prefix} Input simple/short. Skipping Peer Review Loop.")
 
-        if not final_response_text.strip():
-            logger.error(
-                f"{log_prefix} Final response is empty after parsing. Model failed to generate speak content."
-            )
-            final_response_text = (
-                "[System Error: The AI model could not generate a valid response.]"
-            )
+        # --- 4. POST-PROCESSING ---
+        
+        zephy_prefix_pattern = re.compile(r"(?i)\s*Zephy\s*:\s*(.*)", re.DOTALL)
+        parts = zephy_prefix_pattern.split(final_response_text)
+        messages = [p.strip() for p in parts if p.strip()]
+        
+        text_to_return = messages[0] if messages else final_response_text
+        
+        if len(messages) > 1:
+            for subsequent_message in messages[1:]:
+                sse_payload = {"userId": "user_placeholder", "message": subsequent_message}
+                sse_notification_queue.put(format_sse_notification(sse_payload, "proactive_thought"))
 
         if FUZZY_AVAILABLE and fuzz and user_input.strip():
-            normalized_user = "".join(filter(str.isalnum, user_input.lower()))
-            normalized_response = "".join(
-                filter(str.isalnum, final_response_text[: len(user_input) + 20].lower())
-            )
-            if len(normalized_user) > 15 and normalized_response.startswith(
-                normalized_user
-            ):
-                logger.error(
-                    f"{log_prefix} Spit-back detected! Response starts with user input. Overriding."
-                )
-                final_response_text = "[System Error: The AI model repeated the input instead of providing a valid response.]"
+            norm_user = "".join(filter(str.isalnum, user_input.lower()))
+            norm_resp = "".join(filter(str.isalnum, text_to_return[: len(user_input) + 20].lower()))
+            if len(norm_user) > 15 and norm_resp.startswith(norm_user):
+                return "[System Error: Input spit-back detected.]"
 
-        # --- 4. LOGGING and RETURN ---
+        normalized_text = self._normalize_direct_response_text(text_to_return)
+        humanized_final_text = self._casual_mistype(normalized_text)
+
+        # --- 5. LOGGING ---
         final_duration_ms = (time.monotonic() - direct_start_time) * 1000.0
-        # =================== THIS IS THE NEW PART (STEP 3) ===================
-        # Apply normalization rules (e.g., remove em-dashes) to the final text.
-        normalized_final_text = self._normalize_direct_response_text(
-            final_response_text
-        )
-        # humanized_final_text = self._casual_mistype(normalized_final_text)
-        humanized_final_text = normalized_final_text  # bypass _casual_mistype due to it's bugginess on swapping the text
-        # =====================================================================
         interaction_data = {
             "session_id": session_id,
             "mode": "chat",
             "input_type": "text",
             "user_input": user_input,
-            # Use the latest text for the database record.
             "llm_response": humanized_final_text,
             "execution_time_ms": final_duration_ms,
-            "classification": "direct_response_single_call_elp1",
+            "classification": "direct_response_peer_review_everphase", 
         }
         queue_interaction_for_batch_logging(**interaction_data)
 
         logger.info(
-            f"{log_prefix} CORRECTED DIRECT V5 Logic END. Duration: {final_duration_ms:.2f}ms"
+            f"{log_prefix} END Peer Review. Duration: {final_duration_ms:.2f}ms"
         )
-        # Return the NORMALIZED text to the user.
         return humanized_final_text
 
     def _convert_interactions_to_chatml_turns(
@@ -8626,6 +8604,242 @@ class CortexThoughts:
                     pass
 
         # In AdelaideAlbertCortex.py, inside the CortexThoughts class
+
+    async def _check_if_response_is_complete(
+        self, db: Session, text_to_check: str, original_user_input: str, session_id: str
+    ) -> bool:
+        """
+        V3 HARDENED: Now performs a "Fact-Check" against RAG context.
+        It's no longer just about completeness, but also about correctness.
+        """
+        # Fail-safe for short text
+        if not text_to_check or len(text_to_check) < 150:
+            logger.warning(f"✅ CompCheck|{session_id}: Text too short. Forcing continuation.")
+            return False 
+
+        log_prefix = f"✅ FactCheck|{session_id}"
+        
+        # 1. Fetch FRESH Context (The Ground Truth for Fact-Checking)
+        logger.debug(f"{log_prefix}: Fetching fresh RAG context for fact-checking...")
+        fresh_rag_context = await self._get_direct_rag_context_elp1(
+            db, original_user_input, session_id
+        )
+        
+        # If RAG returns nothing, the auditor can't fact-check. We must assume incomplete.
+        if "No specific historical context" in fresh_rag_context:
+            logger.warning(f"{log_prefix}: No RAG context found to fact-check against. Forcing continuation.")
+            return False
+
+        checker_model = self.provider.get_model("general_fast")
+        if not checker_model: return True 
+
+        # 2. New "Fact-Checker" Prompt
+        prompt = f"""[SYSTEM]
+        You are a meticulous Fact-Checker. Your task is to determine if the "AI Answer" is factually consistent with the "Ground Truth Knowledge" and fully addresses the "User Request".
+
+        [GROUND TRUTH KNOWLEDGE (from RAG)]
+        {fresh_rag_context[:2000]}...
+
+        [USER REQUEST]
+        "{original_user_input}"
+
+        [AI ANSWER TO VERIFY]
+        "{text_to_check[-2500:]}"
+
+        [VERIFICATION STEPS]
+        1.  Are the key concepts and technical terms in the "AI Answer" supported by the "Ground Truth Knowledge"?
+        2.  Are there any factual contradictions or nonsensical statements (like aluminum alloys for hypersonic reentry)?
+        3.  Does the answer completely fulfill all parts of the "User Request"?
+
+        [DECISION]
+        Is this answer factually correct AND complete?
+        Respond ONLY with "YES" or "NO".
+        """
+
+        try:
+            # 3. ELP1 Priority Call
+            bound_checker = checker_model.bind(priority=ELP1)
+            chain = bound_checker | StrOutputParser()
+            
+            raw_decision = await asyncio.to_thread(chain.invoke, prompt)
+            
+            # 4. Aggressive "Fail-First" Fuzzy Logic
+            score_no = fuzz.partial_ratio("NO", raw_decision.upper())
+            
+            # If the model says NO with any confidence, we immediately fail the check.
+            if score_no > 85:
+                logger.warning(f"{log_prefix}: Response FAILED fact-check (Explicit NO detected). Routing to specialist.")
+                return False
+            
+            # If it doesn't say NO, it must say YES very confidently to pass.
+            score_yes = fuzz.partial_ratio("YES", raw_decision.upper())
+            if score_yes > 95:
+                logger.debug(f"{log_prefix}: Response PASSED fact-check.")
+                return True
+            
+            # If the decision is ambiguous, we assume it's a failure to be safe.
+            logger.warning(f"{log_prefix}: Fact-check ambiguous (Yes:{score_yes}, No:{score_no}). Failing to be safe -> Routing.")
+            return False
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: Fact-check failed ({e}). Assuming incomplete.")
+            return False
+
+    async def _router_select_specialist_for_continuation(
+        self, current_text: str, original_user_input: str, session_id: str
+    ) -> str:
+        """
+        Uses the Router model (ELP1) to pick the specialist.
+        FIX: Now sees the ORIGINAL USER INPUT to make better routing decisions.
+        """
+        log_prefix = f"🔀 ContRouter|{session_id}"
+        router_model = self.provider.get_model("router")
+        if not router_model: return "general" 
+
+        available_models = list(LLAMA_CPP_MODEL_MAP.keys())
+        models_str = ", ".join(available_models)
+
+        # Updated Prompt: Includes User Request + Incomplete Text
+        prompt = f"""[SYSTEM]
+        You are a routing expert. The AI is midway through answering a request but has stopped.
+        Determine which Expert Model is best suited to CONTINUE and FINISH the answer.
+
+        [USER ORIGINAL REQUEST]
+        "{original_user_input}"
+
+        [AI INCOMPLETE RESPONSE]
+        "...{current_text[-1000:]}"
+
+        [AVAILABLE MODELS]
+        [{models_str}]
+        
+        [INSTRUCTION]
+        Select the best model key from the list above.
+        Output ONLY the model name (e.g. 'math', 'code', 'general').
+        """
+
+        try:
+            # FIX: Explicitly bind priority
+            bound_router = router_model.bind(priority=ELP1)
+            chain = bound_router | StrOutputParser()
+            
+            raw_selection = await asyncio.to_thread(chain.invoke, prompt)
+            
+            # --- NEW "LAST MENTION WINS" LOGIC ---
+            best_match = "general" # Default fallback
+            highest_score = 0
+            best_match_index = -1 # Keep track of the position of the best match
+
+            raw_selection_lower = raw_selection.lower()
+
+            for key in available_models:
+                # Use find to get the position of the potential match
+                # We search for the key within the model's output
+                match_index = raw_selection_lower.find(key.lower())
+
+                if match_index != -1: # If the key was found in the string
+                    # Calculate score for this specific key
+                    score = fuzz.ratio(key.lower(), raw_selection_lower[match_index : match_index + len(key)])
+
+                    # We want the match that appears LATEST in the string
+                    # If this match is later than our current best, it's a new candidate
+                    if match_index > best_match_index and score > 80:
+                        highest_score = score
+                        best_match = key
+                        best_match_index = match_index
+                    # TIE-BREAKER: If two models appear at the same position (unlikely but possible),
+                    # prefer the one with a higher fuzzy score.
+                    elif match_index == best_match_index and score > highest_score:
+                         highest_score = score
+                         best_match = key
+            
+            logger.info(f"{log_prefix}: Selected '{best_match}' (Score: {highest_score}, Position: {best_match_index})")
+            return best_match
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: Router failed: {e}")
+            return "general"
+
+    async def _generate_continuation_segment(
+        self, 
+        db: Session,
+        model_key: str, 
+        current_full_text: str, 
+        original_user_input: str,
+        session_id: str
+    ) -> str:
+        """
+        Calls the selected specialist (ELP1) to continue the text.
+        V4 FINAL: Uses smart truncation and a "reset" prompt to prevent confusion and empty responses.
+        """
+        log_prefix = f"⏩ Continue|{model_key}|{session_id}"
+        
+        # --- SMART TRUNCATION ---
+        # We query for context based on the user's original goal, not the messy text.
+        fresh_rag_str = await self._get_direct_rag_context_elp1(
+            db, original_user_input, session_id 
+        )
+
+        model = self.provider.get_model(model_key)
+        if not model: model = self.provider.get_model("general")
+
+        # We only show the specialist the TAIL END of the current text. [-750 or -3840 is before in characters not in tokens]
+        context_window = current_full_text[-3840:] # Increased window slightly for more context
+        
+        # --- NEW "RESET" PROMPT ---
+        prompt = f"""[SYSTEM]
+        You are a specialist continuing an incomplete or incorrect answer. Your goal is to provide the *correct* next step towards solving the user's request.
+
+        [USER'S ORIGINAL REQUEST]
+        "{original_user_input}"
+
+        [AVAILABLE KNOWLEDGE (RAG)]
+        {fresh_rag_str}
+        
+        [INCOMPLETE/INCORRECT TEXT SO FAR (for context only)]
+        "...{context_window}"
+        
+        [INSTRUCTION]
+        1.  Analyze the user's original request.
+        2.  Provide the next logical, correct paragraph to continue the explanation.
+        3.  **Ignore and correct any errors** in the "Incomplete Text So Far". Do not repeat them.
+        4.  If the problem requires a numerical solver or a table lookup (e.g., Prandtl-Meyer), state this as the method. Do not invent formulas.
+        5.  Output ONLY the next paragraph of the correct explanation.
+        """
+
+        try:
+            bound_model = model.bind(
+                priority=ELP1,
+                max_tokens=DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT
+            )
+            chain = bound_model | StrOutputParser()
+            
+            raw_continuation = await asyncio.to_thread(chain.invoke, prompt)
+            
+            # Error Checking
+            error_sig = "LLAMA_CPP_RAW_CHATML_WRAPPER_WORKER_ERROR"
+            if fuzz.partial_ratio(error_sig, raw_continuation) > 90:
+                logger.error(f"{log_prefix}: Worker reported fatal error. Discarding.")
+                return ""
+
+            # Cleanup
+            cleaned = re.sub(r"<think>.*?</think>", "", raw_continuation, flags=re.DOTALL | re.IGNORECASE).strip()
+            cleaned = re.sub(r"^(Zephy:|Assistant:)\s*", "", cleaned, flags=re.IGNORECASE).strip()
+
+            # Anti-Repetition (still useful)
+            check_len = min(len(cleaned), 30)
+            if check_len > 5:
+                start_snippet = cleaned[:check_len]
+                if current_full_text.endswith(start_snippet):
+                    logger.warning(f"{log_prefix}: Detected direct repetition overlap. Slicing.")
+                    cleaned = cleaned[check_len:].strip()
+
+            return cleaned
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: Continuation failed: {e}")
+            return ""
+
 
     async def background_generate(
         self,
