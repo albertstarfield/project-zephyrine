@@ -145,9 +145,6 @@ except ImportError:
     )
     fuzz_process = None  # Placeholder
     fuzz = None  # Placeholder
-FUZZY_SEARCH_THRESHOLD_APP = getattr(
-    globals(), "FUZZY_SEARCH_THRESHOLD", 30
-)  # Default to 80 if not from
 
 try:
     from CortexConfiguration import (
@@ -3078,8 +3075,8 @@ class CortexThoughts:
                     # Calculate the fuzzy match score.
                     score = fuzz.partial_ratio(query.lower(), text_to_match.lower())
 
-                    # FUZZY_SEARCH_THRESHOLD_APP is defined at the top of the file
-                    if score >= FUZZY_SEARCH_THRESHOLD_APP:
+                    # FUZZY_SEARCH_THRESHOLD_CONTEXT is defined at the top of the file
+                    if score >= FUZZY_SEARCH_THRESHOLD_CONTEXT:
                         fuzzy_matches.append((interaction, score))
 
             if fuzzy_matches:
@@ -3112,78 +3109,121 @@ class CortexThoughts:
     ) -> str:
         """
         A lightweight, fast RAG retriever specifically for the ELP1 direct_generate path.
-        CORRECTED: Now explicitly embeds the query with ELP1 priority before searching
-        to ensure the entire RAG process is high-priority.
+        NOW RESTORED: Performs Vector Search AND Fuzzy Search on Global Recent History.
         """
-        log_prefix = f"⚡️ DirectRAG-Prioritized|ELP1|{session_id}"
+        log_prefix = f"⚡️ DirectRAG-Hybrid|ELP1|{session_id}"
         logger.info(
-            f"{log_prefix} Performing lightweight, ELP1-prioritized RAG for direct response."
+            f"{log_prefix} Performing hybrid (Vector+Fuzzy), ELP1-prioritized RAG."
         )
 
         interaction_vs = get_global_interaction_vectorstore()
-        if not interaction_vs:
-            logger.warning(
-                f"{log_prefix} Global interaction vector store not available for direct RAG."
-            )
-            return "No historical context is available."
+        search_results_docs = []
+        found_ids = set()
 
-        try:
-            # --- STEP 1: Explicitly embed the query with ELP1 priority ---
-            logger.debug(f"{log_prefix} Embedding query with ELP1 priority...")
-
-            # We must run the synchronous `embed_query` in a thread to be non-blocking.
-            # Your `embed_query` method in the provider should accept a `priority` kwarg.
-            query_vector = await asyncio.to_thread(
-                self.provider.embeddings.embed_query,
-                user_input,
-                priority=ELP1,  # Pass the priority directly
-            )
-
-            if not query_vector:
-                logger.error(
-                    f"{log_prefix} Query embedding with ELP1 failed. Aborting RAG."
+        # --- PART A: Vector Search (High Precision / Semantic) ---
+        if interaction_vs:
+            try:
+                logger.debug(f"{log_prefix} Embedding query with ELP1 priority...")
+                # Run the synchronous embed_query in a thread
+                query_vector = await asyncio.to_thread(
+                    self.provider.embeddings.embed_query,
+                    user_input,
+                    priority=ELP1,
                 )
-                return "[An error occurred while preparing historical context.]"
 
-            # --- STEP 2: Search the vector store using the pre-computed vector ---
-            logger.debug(
-                f"{log_prefix} Searching vector store using the ELP1-generated vector..."
-            )
-            search_kwargs = {
-                "k": 3,
-                "filter": {"input_type": {"$in": ["text", "llm_response"]}},
-            }
+                if query_vector:
+                    logger.debug(f"{log_prefix} Searching vector store...")
+                    search_kwargs = {
+                        "k": 10,
+                        "filter": {"input_type": {"$in": ["text", "llm_response"]}},
+                    }
+                    
+                    # Run vector search in thread
+                    vector_docs = await asyncio.to_thread(
+                        interaction_vs.similarity_search_by_vector,
+                        embedding=query_vector,
+                        **search_kwargs,
+                    )
+                    
+                    if vector_docs:
+                        logger.info(f"{log_prefix} Vector search found {len(vector_docs)} docs.")
+                        search_results_docs.extend(vector_docs)
+                        # Track IDs to avoid duplicates in Fuzzy step
+                        for doc in vector_docs:
+                            if doc.metadata and "interaction_id" in doc.metadata:
+                                found_ids.add(doc.metadata["interaction_id"])
+            except Exception as e:
+                logger.error(f"❌ {log_prefix} Vector search failed: {e}")
 
-            # Use `similarity_search_by_vector`, which does NOT call the embedder again.
-            # This is also a synchronous call and needs to be run in a thread.
-            search_results_docs = await asyncio.to_thread(
-                interaction_vs.similarity_search_by_vector,
-                embedding=query_vector,
-                **search_kwargs,
-            )
+        # --- PART B: Fuzzy Search Fallback (Keyword / Exact Match) ---
+        # We scan the last N global interactions for keyword matches. 
+        # This catches things like specific variable names that Vector might miss.
+        if FUZZY_AVAILABLE:
+            try:
+                # 1. FETCH: Explicitly query DB to bypass potential session filtering issues
+                # We want the last 150 VALID interactions from ANY session.
+                def fetch_global_candidates():
+                    return db.query(Interaction).filter(
+                        Interaction.input_type.in_(["text", "llm_response"]),
+                        # Ensure at least one field has content
+                        (Interaction.user_input.isnot(None) | Interaction.llm_response.isnot(None))
+                    ).order_by(desc(Interaction.timestamp)).limit(150).all()
 
-            if not search_results_docs:
-                logger.info(
-                    f"{log_prefix} No relevant conversational documents found in persistent store."
-                )
-                return "No specific historical context was found for this query."
+                candidates = await asyncio.to_thread(fetch_global_candidates)
+                
+                # 2. SCORE & FILTER: Run CPU-bound matching in a thread
+                def run_fuzzy_scoring():
+                    matches = []
+                    query_lower = user_input.lower().strip()
+                    
+                    for interaction in candidates:
+                        # --- DEDUPLICATION ---
+                        if interaction.id in found_ids:
+                            continue 
 
-            logger.info(
-                f"{log_prefix} Found {len(search_results_docs)} purified documents for direct context."
-            )
-            return self._format_docs(search_results_docs, "History RAG")
+                        # --- CONTENT PREP ---
+                        # Explicitly check both columns as per your suspicion
+                        u_text = str(interaction.user_input or "")
+                        a_text = str(interaction.llm_response or "")
+                        
+                        # Match against User Input OR AI Response
+                        # Using partial_ratio to find the query inside the history
+                        score_u = fuzz.partial_ratio(query_lower, u_text.lower()) if u_text else 0
+                        score_a = fuzz.partial_ratio(query_lower, a_text.lower()) if a_text else 0
+                        
+                        # Take the best score
+                        best_score = max(score_u, score_a)
+                        
+                        if best_score >= FUZZY_SEARCH_THRESHOLD_CONTEXT:
+                            matches.append((interaction, best_score))
+                    
+                    # Sort by score descending
+                    matches.sort(key=lambda x: x[1], reverse=True)
+                    return matches[:5] 
 
-        except TaskInterruptedException as tie:
-            logger.warning(
-                f"🚦 {log_prefix} Prioritized direct RAG was interrupted: {tie}"
-            )
-            return "[Context retrieval interrupted by a higher priority task]"
-        except Exception as e:
-            logger.error(
-                f"❌ {log_prefix} Error during prioritized direct RAG retrieval: {e}",
-                exc_info=True,
-            )
-            return "[An error occurred while retrieving historical context]"
+                # 3. EXECUTE
+                top_fuzzy = await asyncio.to_thread(run_fuzzy_scoring)
+
+                # 4. LOGGING & MERGING
+                logger.info(f"{log_prefix} Fuzzy scanned {len(candidates)} items (Explicit Global Fetch). Found {len(top_fuzzy)} matches.")
+
+                if top_fuzzy:
+                    for inter, score in top_fuzzy:
+                        doc_content = f"User: {inter.user_input or ''}\nAI: {inter.llm_response or ''}"
+                        doc = Document(
+                            page_content=doc_content,
+                            metadata={
+                                "interaction_id": inter.id, 
+                                "source": "fuzzy_match", 
+                                "score": score
+                            }
+                        )
+                        search_results_docs.append(doc)
+
+            except Exception as e:
+                logger.warning(f"⚠️ {log_prefix} Fuzzy search logic failed: {e}")
+
+        return self._format_docs(search_results_docs, "History RAG (Hybrid)")
 
     # for ELP1 rag retriever since it's uses small amount of resources for calculation vector and retrieve it's better to put it on ELP1 by default
     def _send_to_dctd_daemon(
@@ -6979,8 +7019,8 @@ class CortexThoughts:
                         )
 
                         if (
-                            score >= FUZZY_SEARCH_THRESHOLD_APP
-                        ):  # FUZZY_SEARCH_THRESHOLD_APP from AdelaideAlbertCortex/config
+                            score >= FUZZY_SEARCH_THRESHOLD_CONTEXT
+                        ):  # FUZZY_SEARCH_THRESHOLD_CONTEXT from AdelaideAlbertCortex/config
                             fuzzy_matches.append((record, score))
 
                     if fuzzy_matches:
@@ -6996,7 +7036,7 @@ class CortexThoughts:
                             :RAG_FILE_INDEX_COUNT
                         ]  # Take top N
                         logger.info(
-                            f"{log_prefix} FUZZY: Found {len(top_fuzzy_matches)} matches with score >= {FUZZY_SEARCH_THRESHOLD_APP}."
+                            f"{log_prefix} FUZZY: Found {len(top_fuzzy_matches)} matches with score >= {FUZZY_SEARCH_THRESHOLD_CONTEXT}."
                         )
 
                         for i, (record, score) in enumerate(top_fuzzy_matches):
@@ -7014,7 +7054,7 @@ class CortexThoughts:
                             fuzzy_search_results_text_list.append(entry)
                     else:
                         logger.info(
-                            f"{log_prefix} FUZZY: No matches found above threshold {FUZZY_SEARCH_THRESHOLD_APP}."
+                            f"{log_prefix} FUZZY: No matches found above threshold {FUZZY_SEARCH_THRESHOLD_CONTEXT}."
                         )
 
             except Exception as e_fuzzy:
