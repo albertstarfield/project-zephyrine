@@ -74,7 +74,11 @@ FUZZY_SEARCH_THRESHOLD_CONTEXT = getattr(
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0  # before hard defined error timeout (30 seconds max)
+
 DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
+DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 18)) #quick switch based on tkoen to peer review everphase architecture 
+DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT = int(os.getenv("DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT", 8192)) #each specialist model "peer review everphase" max token gen
+
 
 
 _default_max_bg_tasks = 100000000000
@@ -126,9 +130,11 @@ PROACTIVE_RE_REFLECTION_CHANCE = (
 MIN_AGE_FOR_RE_REFLECTION_DAYS = 1  # (minimum age of the memory to re-reflect)
 YOUR_REFLECTION_CHUNK_OVERLAP = int(os.getenv("YOUR_REFLECTION_CHUNK_OVERLAP", 50))
 RAG_URL_COUNT = int(
-    os.getenv("RAG_URL_COUNT", 5)
-)  # <<< ADD THIS LINE (e.g., default to 3) (Max at 10)
+    os.getenv("RAG_URL_COUNT", 10)
+)
 RAG_CONTEXT_MAX_PERCENTAGE = float(os.getenv("RAG_CONTEXT_MAX_PERCENTAGE", 0.25))
+
+
 
 # Personality mistype Configuration
 
@@ -158,7 +164,7 @@ MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE = float(
 
 # 4% chance of a capital/lowercase swap at the beginning of a word (e.g., "The" -> "THe").
 MISTYPE_CAPITALIZATION_MISHAP_CHANCE = float(
-    os.getenv("MISTYPE_CAPITALIZATION_MISHAP_CHANCE", 0.3)
+    os.getenv("MISTYPE_CAPITALIZATION_MISHAP_CHANCE", 0.0)
 )
 
 # 5% chance of omitting a comma or period when it's found.

@@ -324,7 +324,7 @@ class FileIndexer:
         try:
             # --- Unload LLM to maximize available RAM for this operation ---
             if self.provider:
-                logger.debug(f"{log_prefix}: Unloading LLM to clear RAM for isolated OCR process.")
+                #logger.debug(f"{log_prefix}: Unloading LLM to clear RAM for isolated OCR process.")
                 self.provider.unload_llama_model_if_needed()
                 gc.collect()
 
@@ -366,7 +366,7 @@ class FileIndexer:
                 image_to_process.save(temp_image_path, format="PNG")
 
             # --- Execute Tesseract in a Subprocess ---
-            logger.info(f"{log_prefix}: Running Tesseract in isolated subprocess on {temp_image_path}")
+            #logger.debug(f"{log_prefix}: Running Tesseract in isolated subprocess on {temp_image_path}")
             
             # The command: tesseract [image_path] stdout
             # This tells tesseract to write the output directly to standard out.
@@ -889,7 +889,7 @@ class FileIndexer:
 
         try:
             for current_dir, dirnames, filenames in os.walk(root_path, topdown=True, onerror=None):
-                logger.debug(f"SCANNER_WALK_DEBUG: Entering directory: {current_dir}")
+                #logger.debug(f"SCANNER_WALK_DEBUG: Entering directory: {current_dir}")
                 if self.stop_event.is_set():
                     logger.info(f"Phase 1 Scan interrupted by stop signal in {current_dir}")
                     break
