@@ -40,7 +40,7 @@ base_cmd = [
     "--n-gpu-layers", str(args.n_gpu_layers),
     "--simple-io",
     "-no-cnv",               # Use single dash as per your terminal test
-    "--mmap",
+    "--no-mmap",
     "--reasoning-budget", "0" # Kill thinking blocks for clean output
 ]
 
@@ -507,6 +507,7 @@ def main():
                 "--prompt-cache-all",  # Cache the prompt for future turns
                 "--simple-io",  # Use basic IO for subprocesses
                 "-no-cnv",
+                "--no-mmap",
                 "--log-disable"  # Prevent logs from polluting stdout
             ]
 

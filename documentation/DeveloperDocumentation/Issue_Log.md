@@ -1,3 +1,7 @@
+-   **ID:** LLAMA-FIX-001
+-   **Title:** Disable memory mapping in llama_worker for stability
+-   **Status:** Resolved
+-   **Description:** Disabled memory mapping (`--mmap`) for the llama.cpp subprocess by replacing it with `--no-mmap`. This is to prevent potential memory-related issues and improve stability, especially on systems where mmap might be problematic.
 -   **ID:** CORTEX-FEAT-004
 -   **Title:** Overhaul RAG by Re-adding Hybrid Search and Advanced Prompt Synthesis
 -   **Status:** Resolved
@@ -48,6 +52,6 @@
 -   **Description:**
     *   Refactors the primary `chat_direct_generate` function to a "Peer Review Everphase Context" (V9) architecture. This involves a loop of generation, fact-checking against RAG, and routing to specialist models for complex or incomplete responses.
     *   Implements a "politeness" policy in the `PriorityQuotaLock` to prevent ELP0 tasks from starving waiting ELP1 tasks, improving high-priority task responsiveness.
-    *   Deletes the legacy `trickshot_simple_flight_computer.py`.
+    *   Dele tes the legacy `trickshot_simple_flight_computer.py`.
     *   Increases RAG context limits (`RAG_URL_COUNT`, fuzzy search interaction fetch).
     *   Adjusts logging and disables the "mistype" feature.
