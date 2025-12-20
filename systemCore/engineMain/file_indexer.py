@@ -749,23 +749,8 @@ class FileIndexer:
 
     def _unload_all_models(self):
         """Unload all AI models to free memory."""
-        try:
-            if self.provider:
-                # Unload LLM if loaded
-                self.provider.unload_llama_model_if_needed()
-
-                # Unload VLM and LaTeX models
-                if hasattr(self.provider, 'unload_model'):
-                    self.provider.unload_model("vlm")
-                    self.provider.unload_model("latex")
-
-                    # Force garbage collection
-            import gc
-            gc.collect()
-            #logger.debug("All models unloaded and garbage collected")
-
-        except Exception as e:
-            logger.error(f"Error during model unloading: {e}")
+        """We do not need this anymore. since we do not use llama-cpp-python """
+        pass
 
     def _process_single_file(self, file_path: str, db_session: Session, loop: asyncio.AbstractEventLoop):
         """
