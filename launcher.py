@@ -292,6 +292,12 @@ LLAMA_CPP_PYTHON_CLONE_DIR_NAME = "llama-cpp-python_build"
 LLAMA_CPP_PYTHON_CLONE_PATH = os.path.join(ROOT_DIR, LLAMA_CPP_PYTHON_CLONE_DIR_NAME)
 CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".custom_llama_cpp_installed_v1_conda")
 
+# --- Llama.cpp Direct Build Configuration ---
+LLAMA_CPP_DIRECT_REPO_URL = "https://github.com/ggerganov/llama.cpp.git"
+LLAMA_CPP_DIRECT_CLONE_DIR_NAME = "llama_cpp_direct"
+LLAMA_CPP_DIRECT_CLONE_PATH = os.path.join(ROOT_DIR, LLAMA_CPP_DIRECT_CLONE_DIR_NAME)
+LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".llama_cpp_direct_installed_v1")
+
 # Stable Diffusion cpp python Configuration
 STABLE_DIFFUSION_CPP_PYTHON_REPO_URL = "https://github.com/william-murray1204/stable-diffusion-cpp-python.git"
 STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME = "stable-diffusion-cpp-python_build"
@@ -320,7 +326,8 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     ARIA2P_INSTALLED_FLAG_FILE, # From previous step
     CHATTERBOX_TTS_INSTALLED_FLAG_FILE,
     LATEX_OCR_INSTALLED_FLAG_FILE,
-    PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE
+    PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE,
+    CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE
 ]
 
 
@@ -4959,8 +4966,10 @@ if __name__ == "__main__":
                 print_system("Local LaTeX-OCR Sub-Engine previously installed (flag file found).")
 
             # --- Custom llama-cpp-python Installation ---
+            print_warning("llama-cpp-python is deprecated, and will be removed later on. The problem is that the developer does not update or sync the dsym hook")
             if os.getenv("PROVIDER", "llama_cpp").lower() == "llama_cpp":
                 if not os.path.exists(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE):
+                    
                     print_system("--- Custom llama-cpp-python Installation ---")
                     if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
                         print_error("'git' not found. Skipping source install.")
@@ -5023,6 +5032,94 @@ if __name__ == "__main__":
                                     f_lcpp_flag.write(backend_log_llama)
                 else:
                     print_system("Custom llama-cpp-python previously installed.")
+
+            # --- Direct llama.cpp Binary Compilation (CLI Focused) ---
+            if not os.path.exists(LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE):
+                print_system("--- Direct llama.cpp High-Performance CLI Build ---")
+                
+                if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
+                    print_error("'git' not found. Skipping direct llama.cpp install.")
+                else:
+                    # Clean previous build artifacts for a fresh start
+                    if os.path.exists(LLAMA_CPP_DIRECT_CLONE_PATH): 
+                        shutil.rmtree(LLAMA_CPP_DIRECT_CLONE_PATH)
+                    
+                    # 1. Clone the official repository
+                    if not run_command([GIT_CMD, "clone", "--depth", "1", LLAMA_CPP_DIRECT_REPO_URL, LLAMA_CPP_DIRECT_CLONE_PATH], ROOT_DIR, "GIT-CLONE-LLAMA-DIRECT"):
+                        print_error("Direct llama.cpp clone failed.")
+                    else:
+                        build_dir = os.path.join(LLAMA_CPP_DIRECT_CLONE_PATH, "build")
+                        os.makedirs(build_dir, exist_ok=True)
+                        
+                        # 2. Configure CMake focusing on llama-cli and detected hardware
+                        cmake_args = [
+                            CMAKE_CMD, "..",
+                            "-DCMAKE_BUILD_TYPE=Release",
+                            "-DLLAMA_BUILD_SERVER=ON",  # Server disabled as per requirement (but why mtmd error?) ah llama.cpp seems to be server oriented and expected be the central server. perhaps.
+                            "-DLLAMA_BUILD_EXAMPLES=ON"   # Needed to build the CLI tool
+                        ]
+                        
+                        # Use established auto-detection variables for backend selection
+                        chosen_backend = os.getenv("LLAMA_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                        backend_label = "CPU"
+
+                        if chosen_backend == "cuda" and AUTO_CUDA_AVAILABLE:
+                            cmake_args.append("-DGGML_CUDA=ON")
+                            backend_label = "CUDA"
+                        elif chosen_backend == "metal" and AUTO_METAL_AVAILABLE:
+                            cmake_args.append("-DGGML_METAL=ON")
+                            backend_label = "Metal"
+                        elif chosen_backend == "vulkan" and AUTO_VULKAN_AVAILABLE:
+                            cmake_args.append("-DGGML_VULKAN=ON")
+                            backend_label = "Vulkan"
+                        else:
+                            cmake_args.append("-DGGML_OPENMP=ON")
+                            backend_label = "CPU (OpenMP)"
+
+                        print_system(f"Configuring LMExec build with backend: {backend_label}")
+
+                        # 3. Compile the binary
+                        if run_command(cmake_args, build_dir, "CMAKE-LLAMA-DIRECT-CONFIG") and \
+                        run_command([CMAKE_CMD, "--build", ".", "--config", "Release", "-j", str(os.cpu_count() or 4)], build_dir, "CMAKE-LLAMA-DIRECT-BUILD"):
+                            
+                            # 4. Install llama-cli binary to the Zephyrine Runtime bin directory
+                            conda_bin_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "bin")
+                            os.makedirs(conda_bin_dir, exist_ok=True)
+                            conda_bin_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "bin")
+                            os.makedirs(conda_bin_dir, exist_ok=True)
+
+                            # 1. Define the Source -> Target Mapping
+                            # This maps the compiled llama.cpp name to your custom internal Zephyrine name
+                            binary_mapping = {
+                                "llama-cli": "llamacpp_TUI",
+                                "llama-completion": "LMExec",
+                                "llama-embedding": "LMText2Vector"
+                            }
+
+                            # 2. Determine OS extension
+                            ext = ".exe" if IS_WINDOWS else ""
+
+                            print_system(f"Installing and renaming binaries to {conda_bin_dir}...")
+
+                            # 3. Perform Migration and Renaming
+                            for src_base, target_base in binary_mapping.items():
+                                src_filename = f"{src_base}{ext}"
+                                target_filename = f"{target_base}{ext}"
+
+                                src_bin_path = os.path.join(build_dir, "bin", src_filename)
+                                dest_bin_path = os.path.join(conda_bin_dir, target_filename)
+
+                                if os.path.exists(src_bin_path):
+                                    # shutil.copy2 preserves permissions (important for execution)
+                                    shutil.copy2(src_bin_path, dest_bin_path)
+                                    print_system(f"  -> Successfully migrated: {src_filename} as {target_filename}")
+                                else:
+                                    print_error(
+                                        f"  -> CRITICAL: Source binary {src_filename} not found in build directory.")
+                        else:
+                            print_error("llama.cpp compilation failed.")
+            else:
+                print_system("Direct llama.cpp CLI build previously completed (flag found).")
 
             # --- Custom stable-diffusion-cpp-python Installation ---
             if not os.path.exists(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE):

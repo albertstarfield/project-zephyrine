@@ -3109,22 +3109,25 @@ class CortexThoughts:
     ) -> str:
         """
         A lightweight, fast RAG retriever specifically for the ELP1 direct_generate path.
-        NOW RESTORED: Performs Vector Search AND Fuzzy Search on Global Recent History.
+        Hybrid Strategy with Strict Budgets:
+        1. Vector Search (Semantic) -> Max 4096 chars
+        2. Fuzzy Search (Keyword) -> Max 4096 chars
         """
         log_prefix = f"⚡️ DirectRAG-Hybrid|ELP1|{session_id}"
-        logger.info(
-            f"{log_prefix} Performing hybrid (Vector+Fuzzy), ELP1-prioritized RAG."
-        )
+        logger.info(f"{log_prefix} Performing hybrid RAG (Budget: 4096 chars per source).")
 
         interaction_vs = get_global_interaction_vectorstore()
-        search_results_docs = []
         found_ids = set()
+        
+        # Buffers for the context
+        vector_context_str = ""
+        fuzzy_context_str = ""
+        
+        limit_chars = 4096
 
-        # --- PART A: Vector Search (High Precision / Semantic) ---
+        # --- PART A: Vector Search (Semantic) ---
         if interaction_vs:
             try:
-                logger.debug(f"{log_prefix} Embedding query with ELP1 priority...")
-                # Run the synchronous embed_query in a thread
                 query_vector = await asyncio.to_thread(
                     self.provider.embeddings.embed_query,
                     user_input,
@@ -3132,13 +3135,11 @@ class CortexThoughts:
                 )
 
                 if query_vector:
-                    logger.debug(f"{log_prefix} Searching vector store...")
                     search_kwargs = {
-                        "k": 10,
+                        "k": 8, # Fetch a few more to fill the character budget
                         "filter": {"input_type": {"$in": ["text", "llm_response"]}},
                     }
                     
-                    # Run vector search in thread
                     vector_docs = await asyncio.to_thread(
                         interaction_vs.similarity_search_by_vector,
                         embedding=query_vector,
@@ -3146,52 +3147,61 @@ class CortexThoughts:
                     )
                     
                     if vector_docs:
-                        logger.info(f"{log_prefix} Vector search found {len(vector_docs)} docs.")
-                        search_results_docs.extend(vector_docs)
-                        # Track IDs to avoid duplicates in Fuzzy step
+                        count_added = 0
                         for doc in vector_docs:
+                            # Track ID for deduplication
                             if doc.metadata and "interaction_id" in doc.metadata:
-                                found_ids.add(doc.metadata["interaction_id"])
+                                i_id = doc.metadata["interaction_id"]
+                                found_ids.add(i_id)
+
+                            content = doc.page_content
+                            formatted_chunk = f"Source (Semantic): {content}\n---\n"
+                            
+                            # Check Budget
+                            if len(vector_context_str) + len(formatted_chunk) > limit_chars:
+                                # Truncate to fit remaining budget then stop
+                                remaining = limit_chars - len(vector_context_str)
+                                if remaining > 50: # Only add if meaningful space left
+                                    vector_context_str += formatted_chunk[:remaining] + "...[Truncated]"
+                                break
+                            
+                            vector_context_str += formatted_chunk
+                            count_added += 1
+                        
+                        logger.debug(f"{log_prefix} Vector bucket filled: {len(vector_context_str)} chars ({count_added} docs).")
+
             except Exception as e:
                 logger.error(f"❌ {log_prefix} Vector search failed: {e}")
 
-        # --- PART B: Fuzzy Search Fallback (Keyword / Exact Match) ---
-        # We scan the last N global interactions for keyword matches. 
-        # This catches things like specific variable names that Vector might miss.
+        # --- PART B: Fuzzy Search Fallback (Keyword) ---
         if FUZZY_AVAILABLE:
             try:
-                # 1. FETCH: Explicitly query DB to bypass potential session filtering issues
-                # We want the last 2048 VALID interactions from ANY session.
+                # 1. FETCH Global Candidates (Explicit Query)
                 def fetch_global_candidates():
                     return db.query(Interaction).filter(
                         Interaction.input_type.in_(["text", "llm_response"]),
-                        # Ensure at least one field has content
                         (Interaction.user_input.isnot(None) | Interaction.llm_response.isnot(None))
-                    ).order_by(desc(Interaction.timestamp)).limit(2048).all()
+                    ).order_by(desc(Interaction.timestamp)).limit(200).all() # Increased scan limit slightly
 
                 candidates = await asyncio.to_thread(fetch_global_candidates)
                 
-                # 2. SCORE & FILTER: Run CPU-bound matching in a thread
+                # 2. SCORE
                 def run_fuzzy_scoring():
                     matches = []
                     query_lower = user_input.lower().strip()
                     
                     for interaction in candidates:
-                        # --- DEDUPLICATION ---
+                        # Deduplication
                         if interaction.id in found_ids:
                             continue 
 
-                        # --- CONTENT PREP ---
-                        # Explicitly check both columns as per your suspicion
                         u_text = str(interaction.user_input or "")
                         a_text = str(interaction.llm_response or "")
                         
-                        # Match against User Input OR AI Response
-                        # Using partial_ratio to find the query inside the history
+                        # Check matches in both fields
                         score_u = fuzz.partial_ratio(query_lower, u_text.lower()) if u_text else 0
                         score_a = fuzz.partial_ratio(query_lower, a_text.lower()) if a_text else 0
                         
-                        # Take the best score
                         best_score = max(score_u, score_a)
                         
                         if best_score >= FUZZY_SEARCH_THRESHOLD_CONTEXT:
@@ -3199,78 +3209,45 @@ class CortexThoughts:
                     
                     # Sort by score descending
                     matches.sort(key=lambda x: x[1], reverse=True)
-                    return matches[:5] 
+                    return matches[:8] # Process top 8
 
-                # 3. EXECUTE
                 top_fuzzy = await asyncio.to_thread(run_fuzzy_scoring)
 
-                # 4. LOGGING & MERGING
-                logger.info(f"{log_prefix} Fuzzy scanned {len(candidates)} items (Explicit Global Fetch). Found {len(top_fuzzy)} matches.")
-
+                # 3. ACCUMULATE WITH BUDGET
                 if top_fuzzy:
+                    count_added = 0
                     for inter, score in top_fuzzy:
+                        # Format
                         doc_content = f"User: {inter.user_input or ''}\nAI: {inter.llm_response or ''}"
-                        doc = Document(
-                            page_content=doc_content,
-                            metadata={
-                                "interaction_id": inter.id, 
-                                "source": "fuzzy_match", 
-                                "score": score
-                            }
-                        )
-                        search_results_docs.append(doc)
+                        formatted_chunk = f"Source (Keyword Match {score}%): {doc_content}\n---\n"
+                        
+                        # Check Budget
+                        if len(fuzzy_context_str) + len(formatted_chunk) > limit_chars:
+                            remaining = limit_chars - len(fuzzy_context_str)
+                            if remaining > 50:
+                                fuzzy_context_str += formatted_chunk[:remaining] + "...[Truncated]"
+                            break
+                        
+                        fuzzy_context_str += formatted_chunk
+                        count_added += 1
+                        
+                    logger.debug(f"{log_prefix} Fuzzy bucket filled: {len(fuzzy_context_str)} chars ({count_added} docs).")
 
             except Exception as e:
                 logger.warning(f"⚠️ {log_prefix} Fuzzy search logic failed: {e}")
 
-        return self._format_docs(search_results_docs, "History RAG (Hybrid)")
+        # --- Final Formatting ---
+        combined_context = ""
+        if vector_context_str:
+            combined_context += f"### SEMANTIC CONTEXT\n{vector_context_str}\n"
+        if fuzzy_context_str:
+            combined_context += f"### EXACT KEYWORD CONTEXT\n{fuzzy_context_str}\n"
 
-    # for ELP1 rag retriever since it's uses small amount of resources for calculation vector and retrieve it's better to put it on ELP1 by default
-    def _send_to_dctd_daemon(
-        self, temporal_sieve_data: List[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Sends temporal sieve data to the DCTD daemon via ZMQ and returns the prediction.
-        """
-        log_prefix = f"DCTD_Client|{self.current_session_id or 'NoSession'}"
-        if not DCTD_ENABLE_QUANTUM_PREDICTION or self.zmq_socket is None:
-            logger.debug(
-                f"{log_prefix}: DCTD daemon communication skipped (disabled or not connected)."
-            )
-            return None
+        if not combined_context:
+            return "No specific historical context was found for this query."
 
-        if not temporal_sieve_data:
-            logger.debug(f"{log_prefix}: No temporal sieve data to send.")
-            return None
+        return combined_context
 
-        try:
-            # Serialize the data to JSON
-            message = json.dumps(temporal_sieve_data)
-
-            logger.debug(
-                f"{log_prefix}: Sending {len(message)} bytes to DCTD daemon..."
-            )
-            self.zmq_socket.send_string(message)
-
-            # Wait for response
-            response_str = self.zmq_socket.recv_string()
-            logger.debug(
-                f"{log_prefix}: Received {len(response_str)} bytes from DCTD daemon."
-            )
-
-            prediction = json.loads(response_str)
-            return prediction
-
-        except zmq.Again:  # Timeout exception
-            logger.warning(
-                f"{log_prefix}: ZMQ communication timed out with DCTD daemon."
-            )
-            return None
-        except Exception as e:
-            logger.error(f"❌ {log_prefix}: Error communicating with DCTD daemon: {e}")
-            return None
-
-    # --- END NEW HELPER ---
 
     def _get_rag_retriever(
         self, db: Session, user_input_for_rag_query: str, priority: int = ELP1
@@ -4308,13 +4285,6 @@ class CortexThoughts:
         return context_str
 
     def _format_docs(self, docs: List[Any], source_type: str = "Context") -> str:
-        if not _DB_HEALTH_OK_EVENT.is_set():
-            # If the DB is not ready, inject the explicit warning message into the context.
-            return (
-                "CONTEXT: CRITICAL SYSTEM ALERT. My long-term memory (database) is currently offline "
-                "pending startup health checks. I am operating in a degraded, stateless mode. "
-                "Inform the user that my memory is temporarily unavailable and that I cannot recall past conversations."
-            )
         """Helper to format retrieved Langchain Documents into a single string."""
         if not docs:
             logger.trace(f"_format_docs received empty list for {source_type}")
@@ -6506,148 +6476,140 @@ class CortexThoughts:
         image_b64: Optional[str] = None,
     ) -> str:
         """
-        INTERNAL CODENAME: "Peer Review Everphase Context" Architecture (V9)
-        - Every generation phase is "peer-reviewed" by a fact-checker.
-        - The context is refreshed ("everphase") before each step.
+        CODENAME: Snowball-Enaga LoD Engine (V10)
+        Strategy: 
+        1. Analyze Complexity.
+        2. If Complex: Generate LoD Skeleton (Plan).
+        3. Execute Grid: Generate content for each section using specific specialists.
+        4. Fallback: If a specialist fails (e.g., missing model), auto-switch to general model.
+        5. Assembly & Humanization.
         """
-        direct_req_id = f"dgen-peer-review-everphase-{uuid.uuid4()}"
-        log_prefix = f"⚡️ {direct_req_id}|ELP1"
-        logger.info(
-            f"{log_prefix} START -> Session: {session_id}, Input: '{user_input[:50]}...'"
-        )
+        direct_req_id = f"dgen-snowball-v10-{uuid.uuid4()}"
+        log_prefix = f"❄️ {direct_req_id}|ELP1"
+        logger.info(f"{log_prefix} START -> Session: {session_id}")
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
 
-        # --- 1. INITIAL CONTEXT GATHERING ---
-        history_rag_str = await self._get_direct_rag_context_elp1(
-            db, user_input, session_id
-        )
-        direct_history_interactions = await asyncio.to_thread(
-            get_global_recent_interactions, db, limit=5
-        )
-        recent_direct_history_str = self._format_direct_history(
-            direct_history_interactions
-        )
-
-        # --- 2. INITIAL GENERATION ---
-        fast_model = self.provider.get_model("general_fast")
-        if not fast_model:
-            raise RuntimeError("Fast model 'general_fast' not configured.")
-
-        bound_model = fast_model.bind(
-            max_tokens=LLAMA_CPP_N_CTX // 2, stop=[CHATML_END_TOKEN], priority=ELP1
-        )
-        chain = (
-            ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE)
-            | bound_model
-            | StrOutputParser()
-        )
-
-        prompt_placeholders = {
-            "history_rag": history_rag_str,
-            "recent_direct_history": recent_direct_history_str,
-            "input": user_input,
-            "augmented_prediction_context": "", 
-        }
-        timing_data = {"session_id": session_id, "mode": "chat_direct_elp1_initial"}
-
-        try:
-            raw_llm_output = await asyncio.to_thread(
-                self._call_llm_with_timing, chain, prompt_placeholders, timing_data, priority=ELP1
-            )
-        except TaskInterruptedException as tie:
-            logger.error(f"🚦 {log_prefix} Initial ELP1 INTERRUPTED: {tie}")
-            return f"[System Error: Interrupted by priority task.]"
-
-        if fuzz.partial_ratio("LLAMA_CPP_RAW_CHATML_WRAPPER_WORKER_ERROR", raw_llm_output) > 90:
-             logger.error(f"❌ {log_prefix} Critical Worker Error in initial response. Aborting.")
-             return "[System Error: The AI model encountered a critical failure.]"
-
-        _, current_speak_content = self._parse_think_speak_output(raw_llm_output)
-        
-        # --- 3. PEER REVIEW & RECURSIVE SPECIALIST LOOP ---
-        
-        final_response_text = current_speak_content
-        
+        # --- 1. COMPLEXITY CHECK ---
         input_token_count = self._count_tokens(user_input)
-        complex_triggers = ["prove", "derive", "solve", "calculate", "equation", "mathematically", "code", "script", "function", "analyze", "design"]
-        is_technically_complex = any(t in user_input.lower() for t in complex_triggers)
         
-        should_enter_loop = False
-        if input_token_count >= DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD:
-            should_enter_loop = True
-        elif is_technically_complex:
-            logger.info(f"{log_prefix} Short input but Technical Keywords detected. Forcing Peer Review Loop.")
-            should_enter_loop = True
-
-        if should_enter_loop:
-            logger.info(f"{log_prefix} Entering Peer Review Specialist Loop.")
+        # Keywords that suggest a multi-step or technical structure is needed
+        complex_triggers = ["prove", "derive", "solve", "calculate", "equation", "explain", "analyze", "design", "how", "outline", "compare"]
+        is_complex = any(t in user_input.lower() for t in complex_triggers)
+        
+        # --- PATH A: FAST PATH (One-Shot) ---
+        if not is_complex and input_token_count < DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD:
+            logger.info(f"{log_prefix}: Simple query detected (<{DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD} tokens). Using Fast Path.")
             
-            loop_count = 0
-            MAX_CONTINUATION_LOOPS = 3 
+            # Simple RAG
+            history_rag_str = await self._get_direct_rag_context_elp1(db, user_input, session_id)
+            direct_hist = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
+            recent_direct_history_str = self._format_direct_history(direct_hist)
 
-            while loop_count < MAX_CONTINUATION_LOOPS:
-                force_route = (loop_count == 0 and is_technically_complex)
-                
-                if force_route:
-                    logger.warning(f"{log_prefix} Loop {loop_count}: Technical request. BYPASSING AUDIT -> Forcing Peer Review.")
-                    is_complete = False
-                else:
-                    is_complete = await self._check_if_response_is_complete(
-                        db, final_response_text, user_input, session_id
-                    )
-                
-                if is_complete:
-                    logger.info(f"{log_prefix} Loop {loop_count}: Response PASSED Peer Review.")
-                    break
-                
-                if not force_route:
-                    logger.warning(f"{log_prefix} Loop {loop_count}: FAILED Peer Review. Routing to specialist...")
-                
-                target_model_key = await self._router_select_specialist_for_continuation(
-                    final_response_text, user_input, session_id
+            # Fast Model Generation
+            fast_model = self.provider.get_model("general_fast")
+            if not fast_model:
+                # Fallback to general if fast not available
+                fast_model = self.provider.get_model("general")
+            
+            if not fast_model:
+                 return "[System Error: No suitable model found for fast generation.]"
+
+            bound_model = fast_model.bind(max_tokens=LLAMA_CPP_N_CTX // 2, stop=[CHATML_END_TOKEN], priority=ELP1)
+            chain = (ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE) | bound_model | StrOutputParser())
+            
+            prompt_placeholders = {
+                "history_rag": history_rag_str,
+                "recent_direct_history": recent_direct_history_str,
+                "input": user_input,
+                "augmented_prediction_context": "", 
+            }
+            timing_data = {"session_id": session_id, "mode": "chat_direct_elp1_fast"}
+            
+            try:
+                raw_output = await asyncio.to_thread(
+                    self._call_llm_with_timing, chain, prompt_placeholders, timing_data, priority=ELP1
                 )
+                _, final_response_text = self._parse_think_speak_output(raw_output)
+                # Set skeleton count to 1 for logging
+                skeleton_len = 1
                 
-                continuation_text = await self._generate_continuation_segment(
-                    db, target_model_key, final_response_text, user_input, session_id
-                )
-                
-                if not continuation_text:
-                    logger.warning(f"{log_prefix} Loop {loop_count}: Specialist returned no continuation. Stopping.")
-                    break
-                    
-                if not final_response_text.endswith(("\n", " ")):
-                    final_response_text += " "
-                
-                final_response_text += continuation_text
-                logger.info(f"{log_prefix} Loop {loop_count}: Appended {len(continuation_text)} chars from {target_model_key}.")
-                loop_count += 1
+            except TaskInterruptedException as tie:
+                logger.error(f"🚦 {log_prefix} Fast Path INTERRUPTED: {tie}")
+                return f"[System Error: Interrupted by priority task.]"
+
+        # --- PATH B: SNOWBALL LoD PATH (Complex/Long) ---
         else:
-            logger.info(f"{log_prefix} Input simple/short. Skipping Peer Review Loop.")
+            logger.info(f"{log_prefix}: Complex query. Generating LoD Skeleton...")
+            
+            # 1. Generate Skeleton
+            skeleton = await self._generate_lod_skeleton(db, user_input, session_id)
+            skeleton_len = len(skeleton)
+            
+            # 2. Execute Grid (Generate content for each section)
+            final_output_parts = []
+            
+            # Helper to handle VLM context if present
+            vlm_context_str = f"Image Context: {vlm_description}\n" if vlm_description else ""
 
-        # --- 4. POST-PROCESSING ---
-        
+            for i, section_title in enumerate(skeleton):
+                logger.info(f"{log_prefix}: Processing Grid Node {i+1}/{len(skeleton)}: '{section_title}'")
+                
+                # Combine user input with VLM context for the section generator
+                section_input_context = f"{vlm_context_str}{user_input}"
+
+                # Generate content (Handles Routing + RAG + Fallback)
+                content = await self._generate_section_content(
+                    db, section_title, skeleton, section_input_context, session_id
+                )
+                
+                # Format the section
+                formatted_section = f"## {section_title}\n{content}"
+                final_output_parts.append(formatted_section)
+                
+                # Stream this section as a proactive thought chunk
+                # This gives the user immediate feedback as sections finish
+                sse_payload = {"userId": "user_placeholder", "message": f"\n\n{formatted_section}"}
+                sse_notification_queue.put(format_sse_notification(sse_payload, "proactive_thought"))
+
+            # 3. Assembly
+            final_response_text = "\n\n".join(final_output_parts)
+
+        # --- 4. SAFETY & POST-PROCESSING ---
+
+        # Spit-back check (Anti-Echo)
+        if FUZZY_AVAILABLE and fuzz and user_input.strip():
+            norm_user = "".join(filter(str.isalnum, user_input.lower()))
+            norm_resp = "".join(filter(str.isalnum, final_response_text[: len(user_input) + 20].lower()))
+            if len(norm_user) > 15 and norm_resp.startswith(norm_user):
+                return "[System Error: Input spit-back detected.]"
+
+        # Standard Zephy cleanup (Prefix Removal)
         zephy_prefix_pattern = re.compile(r"(?i)\s*Zephy\s*:\s*(.*)", re.DOTALL)
         parts = zephy_prefix_pattern.split(final_response_text)
         messages = [p.strip() for p in parts if p.strip()]
         
-        text_to_return = messages[0] if messages else final_response_text
-        
+        # If the model output multiple "Zephy:" blocks, use the first as main response
+        # and queue the rest.
+        text_to_return = ""
         if len(messages) > 1:
+            text_to_return = messages[0]
             for subsequent_message in messages[1:]:
                 sse_payload = {"userId": "user_placeholder", "message": subsequent_message}
                 sse_notification_queue.put(format_sse_notification(sse_payload, "proactive_thought"))
+        elif len(messages) == 1:
+            text_to_return = messages[0]
+        else:
+            text_to_return = final_response_text
 
-        if FUZZY_AVAILABLE and fuzz and user_input.strip():
-            norm_user = "".join(filter(str.isalnum, user_input.lower()))
-            norm_resp = "".join(filter(str.isalnum, text_to_return[: len(user_input) + 20].lower()))
-            if len(norm_user) > 15 and norm_resp.startswith(norm_user):
-                return "[System Error: Input spit-back detected.]"
-
+        # --- 5. HUMANIZATION ---
+        # Normalize (remove em-dashes, artifacts)
         normalized_text = self._normalize_direct_response_text(text_to_return)
+        
+        # Apply Personality Mistypes (if enabled in config)
         humanized_final_text = self._casual_mistype(normalized_text)
 
-        # --- 5. LOGGING ---
+        # --- 6. LOGGING ---
         final_duration_ms = (time.monotonic() - direct_start_time) * 1000.0
         interaction_data = {
             "session_id": session_id,
@@ -6656,12 +6618,12 @@ class CortexThoughts:
             "user_input": user_input,
             "llm_response": humanized_final_text,
             "execution_time_ms": final_duration_ms,
-            "classification": "direct_response_peer_review_everphase", 
+            "classification": "direct_response_snowball_lod_v10", 
         }
         queue_interaction_for_batch_logging(**interaction_data)
 
         logger.info(
-            f"{log_prefix} END Peer Review. Duration: {final_duration_ms:.2f}ms"
+            f"{log_prefix} END Snowball V10. Sections: {skeleton_len}. Duration: {final_duration_ms:.2f}ms"
         )
         return humanized_final_text
 
@@ -8605,6 +8567,120 @@ class CortexThoughts:
 
         # In AdelaideAlbertCortex.py, inside the CortexThoughts class
 
+    async def _generate_lod_skeleton(
+        self, db: Session, user_input: str, session_id: str
+    ) -> List[str]:
+        """
+        LoD 0: Creates a structural plan (Skeleton) for the response.
+        Returns a list of section headers.
+        """
+        log_prefix = f"🦴 Skeleton|{session_id}"
+        model = self.provider.get_model("general_fast")
+        if not model: return ["Response"]
+
+        # Limit the scope to keep ELP1 fast
+        prompt = f"""[SYSTEM]
+        You are a Structural Architect. Plan the structure for a helpful response to the user's request.
+        Break the response into 2 to 4 logical sections.
+        
+        [USER REQUEST]
+        "{user_input}"
+
+        [INSTRUCTION]
+        Output ONLY a JSON list of section headers strings.
+        Example: ["Concept Definition", "Mathematical Derivation", "Practical Example"]
+        
+        JSON LIST:
+        """
+
+        try:
+            bound_model = model.bind(priority=ELP1, max_tokens=4096)
+            chain = bound_model | StrOutputParser()
+            raw_plan = await asyncio.to_thread(chain.invoke, prompt)
+            
+            # Extract JSON list
+            json_candidate = self._extract_json_candidate_string(raw_plan, log_prefix)
+            if json_candidate:
+                plan = json.loads(json_candidate)
+                if isinstance(plan, list):
+                    # Hard limit sections to 4 for speed
+                    logger.info(f"{log_prefix}: Generated plan: {plan[:4]}")
+                    return plan[:4]
+            
+            # Fallback if JSON fails
+            return ["Main Explanation"]
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: Failed to generate skeleton: {e}")
+            return ["Detailed Answer"]
+        
+    async def _generate_section_content(
+        self, 
+        db: Session, 
+        section_title: str, 
+        full_plan: List[str],
+        user_input: str, 
+        session_id: str
+    ) -> str:
+        """
+        LoD 1: Generates content for a SINGLE node in the grid.
+        Performs its own Routing and RAG specifically for this section title.
+        """
+        log_prefix = f"🧱 BuildNode|'{section_title}'"
+        
+        # 1. Focused RAG: Search ONLY for this section's topic
+        # This is the "Unloading" magic. We don't pollute context with unrelated stuff.
+        search_query = f"{user_input} {section_title}"
+        section_context = await self._get_direct_rag_context_elp1(
+            db, search_query, session_id
+        )
+
+        # 2. Route specifically for this section
+        # (e.g., "Math Derivation" -> Math model, "Conclusion" -> General model)
+        target_model_key = await self._router_select_specialist_for_continuation(
+            section_title, user_input, session_id # We pass title as "current text" for context
+        )
+        
+        model = self.provider.get_model(target_model_key)
+        if not model: model = self.provider.get_model("general")
+
+        # 3. Generation Prompt
+        prompt = f"""[SYSTEM]
+        You are writing ONE section of a larger response. Focus ONLY on the topic provided.
+        
+        [OVERALL PLAN]
+        {json.dumps(full_plan)}
+        
+        [CURRENT SECTION TO WRITE]
+        *** {section_title} ***
+
+        [USER GOAL]
+        {user_input}
+
+        [RELEVANT KNOWLEDGE]
+        {section_context}
+
+        [INSTRUCTION]
+        Write the content for the '{section_title}' section. 
+        Be direct and detailed. Do not write an intro or conclusion for the whole essay, just this part.
+        """
+
+        try:
+            bound_model = model.bind(priority=ELP1, max_tokens=DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT)
+            chain = bound_model | StrOutputParser()
+            
+            content = await asyncio.to_thread(chain.invoke, prompt)
+            
+            # Clean think tags
+            content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE).strip()
+            return content
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: Generation failed: {e}")
+            return "[Content generation failed]"
+
+    
+
     async def _check_if_response_is_complete(
         self, db: Session, text_to_check: str, original_user_input: str, session_id: str
     ) -> bool:
@@ -8684,77 +8760,98 @@ class CortexThoughts:
         except Exception as e:
             logger.error(f"{log_prefix}: Fact-check failed ({e}). Assuming incomplete.")
             return False
+        
+    async def _synthesize_final_response(
+        self, text_to_fix: str, session_id: str
+    ) -> str:
+        """
+        Uses general_fast (ELP1) to clean up and reorganize the stitched response.
+        """
+        log_prefix = f"✨ Synthesize|{session_id}"
+        
+        # If the text is short, synthesis might be overkill/slow.
+        if len(text_to_fix) < 500:
+            return text_to_fix
+
+        model = self.provider.get_model("general_fast")
+        if not model: return text_to_fix
+
+        prompt = PROMPT_FINAL_SYNTHESIS.format(rough_draft=text_to_fix)
+
+        try:
+            logger.info(f"{log_prefix}: Starting final synthesis/cleanup of response.")
+            bound_model = model.bind(priority=ELP1)
+            chain = bound_model | StrOutputParser()
+            
+            cleaned_response = await asyncio.to_thread(chain.invoke, prompt)
+            
+            # Basic sanity check: don't return empty if something goes wrong
+            if not cleaned_response or len(cleaned_response) < 100:
+                logger.warning(f"{log_prefix}: Synthesis returned empty/short text. Reverting to original.")
+                return text_to_fix
+                
+            return cleaned_response.strip()
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: Synthesis failed: {e}")
+            return text_to_fix
 
     async def _router_select_specialist_for_continuation(
         self, current_text: str, original_user_input: str, session_id: str
     ) -> str:
         """
         Uses the Router model (ELP1) to pick the specialist.
-        FIX: Now sees the ORIGINAL USER INPUT to make better routing decisions.
+        V2 UPDATE: Now provides the router with explicit model descriptions.
         """
         log_prefix = f"🔀 ContRouter|{session_id}"
         router_model = self.provider.get_model("router")
         if not router_model: return "general" 
 
-        available_models = list(LLAMA_CPP_MODEL_MAP.keys())
-        models_str = ", ".join(available_models)
+        # --- Build the descriptive model list for the prompt ---
+        models_with_descriptions = []
+        for key, description in LLAMA_CPP_MODEL_DESCRIPTIONS.items():
+            if key not in ["router", "embeddings", "general_fast"]: # Exclude non-content models
+                models_with_descriptions.append(f"- `{key}`: {description}")
+        
+        models_str = "\n".join(models_with_descriptions)
 
-        # Updated Prompt: Includes User Request + Incomplete Text
         prompt = f"""[SYSTEM]
-        You are a routing expert. The AI is midway through answering a request but has stopped.
-        Determine which Expert Model is best suited to CONTINUE and FINISH the answer.
+        You are only a router that hands into another model and NOT to answer the question or original Query or goal or input.
 
-        [USER ORIGINAL REQUEST]
+        [USER'S ORIGINAL GOAL]
         "{original_user_input}"
 
-        [AI INCOMPLETE RESPONSE]
+        [INCOMPLETE RESPONSE SO FAR]
         "...{current_text[-1000:]}"
 
-        [AVAILABLE MODELS]
-        [{models_str}]
+        [AVAILABLE SPECIALIST MODELS]
+        {models_str}
         
         [INSTRUCTION]
-        Select the best model key from the list above.
-        Output ONLY the model name (e.g. 'math', 'code', 'general').
+        Based on the user's goal, which specialist is best suited to provide the missing information?
+        Answer ONLY model name (e.g., 'physics').
         """
-
         try:
-            # FIX: Explicitly bind priority
             bound_router = router_model.bind(priority=ELP1)
             chain = bound_router | StrOutputParser()
-            
             raw_selection = await asyncio.to_thread(chain.invoke, prompt)
             
-            # --- NEW "LAST MENTION WINS" LOGIC ---
-            best_match = "general" # Default fallback
-            highest_score = 0
-            best_match_index = -1 # Keep track of the position of the best match
-
-            raw_selection_lower = raw_selection.lower()
-
-            for key in available_models:
-                # Use find to get the position of the potential match
-                # We search for the key within the model's output
-                match_index = raw_selection_lower.find(key.lower())
-
-                if match_index != -1: # If the key was found in the string
-                    # Calculate score for this specific key
-                    score = fuzz.ratio(key.lower(), raw_selection_lower[match_index : match_index + len(key)])
-
-                    # We want the match that appears LATEST in the string
-                    # If this match is later than our current best, it's a new candidate
-                    if match_index > best_match_index and score > 80:
-                        highest_score = score
-                        best_match = key
-                        best_match_index = match_index
-                    # TIE-BREAKER: If two models appear at the same position (unlikely but possible),
-                    # prefer the one with a higher fuzzy score.
-                    elif match_index == best_match_index and score > highest_score:
-                         highest_score = score
-                         best_match = key
+            logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW OUTPUT STRIP: '{raw_selection.strip()}'")
+            logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW INPUT STRIP: '{prompt.strip()}'")
             
-            logger.info(f"{log_prefix}: Selected '{best_match}' (Score: {highest_score}, Position: {best_match_index})")
-            return best_match
+            logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW OUTPUT: '{raw_selection}'")
+            logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW INPUT: '{prompt}'")
+            
+            # Fuzzy matching remains the same
+            available_keys = list(LLAMA_CPP_MODEL_MAP.keys())
+            best_match, score = fuzz_process.extractOne(raw_selection.lower(), available_keys)
+            
+            if score > 50:
+                logger.info(f"{log_prefix}: Selected '{best_match}' (Score: {score}) for input: '{original_user_input[:20]}...'")
+                return best_match
+            else:
+                logger.warning(f"{log_prefix}: Router confidence low (Best: '{best_match}', Score: {score}). Defaulting to 'general'.")
+                return "general"
 
         except Exception as e:
             logger.error(f"{log_prefix}: Router failed: {e}")
@@ -8784,7 +8881,7 @@ class CortexThoughts:
         if not model: model = self.provider.get_model("general")
 
         # We only show the specialist the TAIL END of the current text. [-750 or -3840 is before in characters not in tokens]
-        context_window = current_full_text[-3840:] # Increased window slightly for more context
+        context_window = current_full_text[-750:] # Increased window slightly for more context
         
         # --- NEW "RESET" PROMPT ---
         prompt = f"""[SYSTEM]
@@ -8803,7 +8900,7 @@ class CortexThoughts:
         1.  Analyze the user's original request.
         2.  Provide the next logical, correct paragraph to continue the explanation.
         3.  **Ignore and correct any errors** in the "Incomplete Text So Far". Do not repeat them.
-        4.  If the problem requires a numerical solver or a table lookup (e.g., Prandtl-Meyer), state this as the method. Do not invent formulas.
+        4.  If the problem requires a numerical solver or a table lookup (e.g., Prandtl-Meyer), state this as the method. Do not invent formulas. but you may allow to derive from the established axioms
         5.  Output ONLY the next paragraph of the correct explanation.
         """
 

@@ -85,20 +85,21 @@ except ImportError:
      FireworksEmbeddings = None
 
 # llama-cpp-python
-try:
+"""try:
     import llama_cpp
     LLAMA_CPP_AVAILABLE = True
     logger.info("✅ llama-cpp-python imported.")
 except ImportError:
     LLAMA_CPP_AVAILABLE = False
     logger.warning("⚠️ llama-cpp-python not installed. Run 'pip install llama-cpp-python'. llama_cpp provider disabled.")
-    llama_cpp = None # Placeholder
+    llama_cpp = None # Placeholder"""
+logger.warning(" llama-cpp-python is deprecated! since it is no longer updated. and now bypassed directly to binary invocation ")
 
 # Stable Diffusion (Placeholder)
 try:
     # import stable_diffusion_cpp # Or however the python bindings are imported
     STABLE_DIFFUSION_AVAILABLE = False # Set to True if import succeeds
-    logger.info("✅ stable-diffusion-cpp imported (Placeholder).")
+    logger.info("✅ stable-diffusion-cpp imported")
 except ImportError:
     STABLE_DIFFUSION_AVAILABLE = False
     logger.warning("⚠️ stable-diffusion-cpp bindings not found. Image generation disabled.")
@@ -617,14 +618,16 @@ class CortexEngine:
         self.setup_provider()
         # self.image_generator: Any = None # This will be implicitly handled by calling the worker
 
-        self._loaded_llama_instance: Optional[llama_cpp.Llama] = None
-        self._loaded_gguf_path: Optional[str] = None
-        self._last_task_type: Optional[str] = None
+        # This is connected with the deprecated llama-cpp-python binder that is outdated and can't build with the latest llama.cpp binaries
+        #self._loaded_llama_instance: Optional[llama_cpp.Llama] = None
+        #self._loaded_gguf_path: Optional[str] = None
+        #self._last_task_type: Optional[str] = None
+
         self.loop = None # For scheduler
 
         # --- llama.cpp specific state ---
-        self._llama_model_access_lock = threading.Lock() if LLAMA_CPP_AVAILABLE and self.provider_name == "llama_cpp" else None
-        if LLAMA_CPP_AVAILABLE and self.provider_name == "llama_cpp":
+        self._llama_model_access_lock = threading.Lock() if self.provider_name == "llama_cpp" else None
+        if self.provider_name == "llama_cpp":
              if PriorityQuotaLock is not threading.Lock:
                  self._priority_quota_lock = PriorityQuotaLock()
                  logger.info("   🔑 Initialized PriorityQuotaLock for worker access (Llama & Imagination).")
@@ -1314,125 +1317,6 @@ class CortexEngine:
 
     # <<< --- END NEW Worker Execution Method --- >>>
 
-    def _load_llama_model(self, required_gguf_path: str, task_type: str) -> Optional[llama_cpp.Llama]:
-        """
-        Loads or returns the cached llama_cpp.Llama instance.
-        Handles unloading previous model if path OR task_type changes. Thread-safe.
-        """
-        if not LLAMA_CPP_AVAILABLE or not self._llama_model_access_lock:
-            logger.error("_load_llama_model: Preconditions not met (Lib available? Lock init?).")
-            return None
-
-        with self._llama_model_access_lock:
-            logger.trace(f"Acquired lock for load/switch: Requesting '{os.path.basename(required_gguf_path)}' for task '{task_type}'")
-
-            # --- Determine if Reload is Needed ---
-            needs_reload = False
-            if not self._loaded_llama_instance:
-                needs_reload = True # First load
-                logger.debug("No model loaded, proceeding to load.")
-            elif self._loaded_gguf_path != required_gguf_path:
-                needs_reload = True # Different model file requested
-                logger.info(f"Switching model from '{os.path.basename(self._loaded_gguf_path)}' to '{os.path.basename(required_gguf_path)}'.")
-            elif self._last_task_type != task_type:
-                needs_reload = True # Same model file, but different task type (e.g., chat after embed)
-                logger.warning(f"Forcing reload of '{os.path.basename(required_gguf_path)}' due to task type switch: '{self._last_task_type}' -> '{task_type}'.")
-            else:
-                # Paths and task types match, use cached instance
-                logger.debug(f"Using cached llama.cpp instance: '{os.path.basename(required_gguf_path)}' for task '{task_type}'.")
-                instance_to_return = self._loaded_llama_instance
-
-            # --- Perform Reload if Needed ---
-            if needs_reload:
-                instance_to_return = None # Default return for this branch
-
-                # 1. Unload if necessary
-                if self._loaded_llama_instance:
-                    logger.info(f"Unloading previous llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
-                    try:
-                        del self._loaded_llama_instance # Attempt explicit deletion
-                        self._loaded_llama_instance = None
-                        self._loaded_gguf_path = None
-                        self._last_task_type = None
-                        gc.collect() # Hint garbage collector
-                        logger.info("Previous llama.cpp model unloaded.")
-                        # Optional: Add small delay IF experiencing driver issues after unload
-                        # time.sleep(0.2)
-                    except Exception as del_err:
-                         logger.error(f"Error during explicit deletion of Llama instance: {del_err}")
-                         # Attempt to continue with load anyway, but log the issue
-
-                # 2. Load new model
-                logger.info(f"Loading llama.cpp model: '{os.path.basename(required_gguf_path)}' for task '{task_type}'...")
-                logger.info(f"  >> Path: {required_gguf_path}")
-                # ... (log GPU layers, context size etc.) ...
-                logger.info(f"  >> GPU Layers: {LLAMA_CPP_N_GPU_LAYERS}")
-                logger.info(f"  >> Context Size: {LLAMA_CPP_N_CTX}")
-
-
-                if not os.path.isfile(required_gguf_path):
-                     logger.error(f"LLAMA_CPP_ERROR: Model file not found: {required_gguf_path}")
-                else:
-                     load_start_time = time.monotonic()
-                     try:
-                         # >>> MODIFIED: Determine embedding/chat_format from task_type <<<
-                         is_embedding_task = (task_type == "embedding")
-                         role_for_path = "unknown" # Find role for logging
-                         for r, f in self._llama_model_map.items():
-                             if os.path.join(self._llama_gguf_dir or "", f) == required_gguf_path:
-                                 role_for_path = r; break
-
-                         logger.info(f"Initializing Llama for role '{role_for_path}', task '{task_type}' (embedding={is_embedding_task})...")
-                         chat_format_to_use = "chatml" if not is_embedding_task else None
-                         if chat_format_to_use: logger.info(f"  >> Setting chat_format='{chat_format_to_use}'")
-
-                         new_instance = llama_cpp.Llama(
-                             model_path=required_gguf_path,
-                             n_gpu_layers=LLAMA_CPP_N_GPU_LAYERS,
-                             n_ctx=LLAMA_CPP_N_CTX,
-                             embedding=is_embedding_task, # <<< MODIFIED
-                             verbose=LLAMA_CPP_VERBOSE,
-                             chat_format=chat_format_to_use, # <<< MODIFIED
-                         )
-                         # >>> END MODIFIED <<<
-                         self._loaded_llama_instance = new_instance
-                         self._loaded_gguf_path = required_gguf_path
-                         # >>> MODIFIED: Store task type <<<
-                         self._last_task_type = task_type
-                         instance_to_return = new_instance
-                         load_duration = time.monotonic() - load_start_time
-                         logger.success(f"✅ Loaded '{os.path.basename(required_gguf_path)}' ({task_type}) in {load_duration:.2f}s.")
-                     except Exception as e:
-                         logger.error(f"LLAMA_CPP_ERROR: Failed to load model {required_gguf_path} for task {task_type}: {e}")
-                         logger.exception("Llama.cpp loading traceback:")
-                         self._loaded_llama_instance = None # Ensure state is clean
-                         self._loaded_gguf_path = None
-                         self._last_task_type = None
-
-            logger.trace(f"Releasing lock after load/switch check for task '{task_type}'")
-
-        return instance_to_return # Return the instance determined inside the lock
-
-    def _get_loaded_llama_instance(self, model_role: str, task_type: str) -> Optional[llama_cpp.Llama]:
-        """
-        Ensures the correct llama.cpp model is loaded via _load_llama_model
-        (passing the required task_type) and returns it.
-        """
-        if self.provider_name != "llama_cpp": logger.error("Attempted llama.cpp instance outside llama_cpp provider."); return None
-        if not self._llama_gguf_dir: logger.error("Llama.cpp GGUF directory not set."); return None
-        # --->>> NEW: Validate task_type <<<---
-        if task_type not in ["chat", "embedding"]:
-             logger.error(f"Invalid task_type '{task_type}' passed. Must be 'chat' or 'embedding'.")
-             return None
-
-        gguf_filename = self._llama_model_map.get(model_role)
-        if not gguf_filename:
-            logger.error(f"No GGUF file configured for role: '{model_role}'")
-            return None
-
-        required_path = os.path.join(self._llama_gguf_dir, gguf_filename)
-        # --->>> Pass task_type to the loading function <<<---
-        return self._load_llama_model(required_path, task_type)
 
     def setup_provider(self):
         """Sets up the AI models based on the configured PROVIDER."""
@@ -1458,86 +1342,134 @@ class CortexEngine:
                 self.embeddings = None
                 # sys.exit("Fireworks provider selected but is no longer supported.") # Alternative: exit
 
+
             elif self.provider_name == "llama_cpp":
-                if not LLAMA_CPP_AVAILABLE:  # LLAMA_CPP_AVAILABLE global flag from top of ai_provider.py
-                    raise ImportError("llama-cpp-python library is not installed or failed to import.")
+
+                # We no longer check for the llama-cpp-python library (LLAMA_CPP_AVAILABLE).
+
+                # Instead, we rely on the llama-cli binary located in the environment path.
 
                 self._llama_gguf_dir = LLAMA_CPP_GGUF_DIR  # from CortexConfiguration.py
+
                 self._llama_model_map = LLAMA_CPP_MODEL_MAP  # from CortexConfiguration.py
+
                 self._python_executable = sys.executable  # Python executable for workers
 
                 if not self._llama_gguf_dir or not os.path.isdir(self._llama_gguf_dir):
                     raise FileNotFoundError(
+
                         f"Llama.cpp GGUF directory not found or not a directory: {self._llama_gguf_dir}")
 
+                # --- Verify Direct Binaries Exist ---
+
+                # These were installed to the RuntimeVenv/bin by launcher.py
+
+                conda_bin_dir = os.path.dirname(self._python_executable)
+
+                cli_bin_name = "llama-cli" if os.name != "nt" else "llama-cli.exe"
+
+                embed_bin_name = "llama-embedding" if os.name != "nt" else "llama-embedding.exe"
+
+                if not os.path.isfile(os.path.join(conda_bin_dir, cli_bin_name)):
+                    logger.warning(
+                        f"⚠️ {cli_bin_name} not found in {conda_bin_dir}. Ensure launcher.py finished the direct build.")
+
+                if not os.path.isfile(os.path.join(conda_bin_dir, embed_bin_name)):
+                    logger.warning(
+                        f"⚠️ {embed_bin_name} not found in {conda_bin_dir}. Ensure launcher.py finished the direct build.")
+
                 # --- Setup Embeddings ---
+
                 self.EMBEDDINGS_MODEL_NAME = self._llama_model_map.get("embeddings")
+
                 if self.EMBEDDINGS_MODEL_NAME:
+
                     logger.info(
+
                         f"Setting up llama.cpp embeddings using role 'embeddings' (File: {self.EMBEDDINGS_MODEL_NAME})")
-                    # The LlamaCppEmbeddingsWrapper handles loading the actual model via _get_loaded_llama_instance when used
+
+                    # The wrapper now handles delegation to llama-embedding via the worker process
+
                     self.embeddings = LlamaCppEmbeddingsWrapper(ai_provider=self)
+
                     logger.info(f"LlamaCppEmbeddingsWrapper initialized for role 'embeddings'.")
+
                 else:
+
                     logger.error(
+
                         "❌ No GGUF file specified for 'embeddings' role in LLAMA_CPP_MODEL_MAP. Embeddings disabled.")
+
                     self.embeddings = None
 
                 # --- Setup Chat Models (Wrappers only) ---
+
                 logger.info("Creating llama.cpp chat wrappers for configured roles...")
+
                 default_temp = DEFAULT_LLM_TEMPERATURE  # from CortexConfiguration.py
 
                 for role, gguf_filename_in_map in self._llama_model_map.items():
+
                     if role == "embeddings":  # Skip embeddings role for chat models
+
                         continue
 
                     # Determine model_kwargs for this role
+
                     role_specific_kwargs = {"temperature": default_temp}
 
-                    # For system roles that need to output full JSON/structured data without being cut off
-                    # These roles use the "router" model which is deepscaler.gguf
+                    # Roles outputting structured JSON require unlimited max_tokens (-1)
+
                     system_task_roles = ["router", "action_analyzer", "classifier", "tot_json_formatter",
-                                         "deep_translation_analyzer_role"]  # Add other specific system roles as needed
+
+                                         "deep_translation_analyzer_role"]
 
                     if role in system_task_roles:
-                        role_specific_kwargs["max_tokens"] = -1  # -1 for llama.cpp often means "up to context limit"
-                        logger.info(
-                            f"Setting max_tokens=-1 (unlimited within context) for system role: '{role}' (using model file: {gguf_filename_in_map})")
-                    else:
-                        # For general chat, VLM, code, math, translator etc., use the global TOPCAP_TOKENS from CortexConfiguration.py
-                        role_specific_kwargs["max_tokens"] = TOPCAP_TOKENS  # TOPCAP_TOKENS from CortexConfiguration.py
-                        logger.info(
-                            f"Setting max_tokens={TOPCAP_TOKENS} for role: '{role}' (using model file: {gguf_filename_in_map})")
 
-                    # Add chat format if specified for the role in LLAMA_CPP_MODEL_MAP (e.g., role_chat_format)
-                    # Example: "router_chat_format": "chatml" could be in LLAMA_CPP_MODEL_MAP if needed
-                    # For now, LlamaCppChatWrapper's _call will pass a default to the worker if not in kwargs
-                    # Or, the worker itself has a default chat_format for chat tasks.
-                    # Let's assume chat_format is handled by worker default or passed via kwargs if a model needs a specific one.
+                        role_specific_kwargs["max_tokens"] = -1
+
+                        logger.info(f"Setting max_tokens=-1 (unlimited) for system role: '{role}'")
+
+                    else:
+
+                        role_specific_kwargs["max_tokens"] = TOPCAP_TOKENS
+
+                        logger.info(f"Setting max_tokens={TOPCAP_TOKENS} for role: '{role}'")
+
+                    # Initialize the wrapper; _call will handle the subprocess execution
 
                     logger.debug(
-                        f"  Creating LlamaCppChatWrapper for role '{role}' (model file '{gguf_filename_in_map}') with kwargs: {role_specific_kwargs}")
+                        f"  Creating LlamaCppChatWrapper for role '{role}' (model file '{gguf_filename_in_map}')")
+
                     self.models[role] = LlamaCppChatWrapper(
-                        ai_provider=self,  # Pass reference to this CortexEngine instance
+
+                        ai_provider=self,
+
                         model_role=role,
+
                         model_kwargs=role_specific_kwargs
+
                     )
 
                 # Assign the default chat model wrapper explicitly
-                default_chat_role_key = MODEL_DEFAULT_CHAT_LLAMA_CPP  # from CortexConfiguration.py, e.g., "general"
+
+                default_chat_role_key = MODEL_DEFAULT_CHAT_LLAMA_CPP  # e.g., "general"
+
                 if default_chat_role_key in self.models:
+
                     self.models["default"] = self.models[default_chat_role_key]
-                    logger.info(f"Assigned model for role '{default_chat_role_key}' as the default chat model.")
-                elif "general" in self.models:  # Fallback if MODEL_DEFAULT_CHAT_LLAMA_CPP isn't in models (e.g. typo)
+
+                    logger.info(f"Assigned role '{default_chat_role_key}' as the default chat model.")
+
+                elif "general" in self.models:
+
                     self.models["default"] = self.models["general"]
-                    logger.warning(
-                        f"Default chat role '{default_chat_role_key}' not found, falling back to 'general' as default chat model.")
+
+                    logger.warning(f"Default chat role '{default_chat_role_key}' not found, falling back to 'general'.")
+
                 else:
-                    logger.error(
-                        f"Neither default chat role '{default_chat_role_key}' nor 'general' role found in configured models! Default chat will be unavailable.")
-            else:
-                raise ValueError(
-                    f"❌ Invalid PROVIDER specified in config: '{self.provider_name}'. Supported: 'llama_cpp'.")
+
+                    logger.error(f"Neither default chat role '{default_chat_role_key}' nor 'general' role found!")
 
             # --- Final Check for essential components ---
             if not self.embeddings:
@@ -1725,22 +1657,6 @@ class CortexEngine:
 
         #logger.info("Attempting to acquire lock for explicit model unload...")
         pass
-        with self._llama_model_access_lock: # Acquire lock to safely modify shared state
-            if self._loaded_llama_instance:
-                logger.warning(f"Explicitly unloading llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
-                try:
-                    del self._loaded_llama_instance
-                except Exception as del_err:
-                    logger.error(f"Error during explicit deletion of Llama instance: {del_err}")
-                self._loaded_llama_instance = None
-                self._loaded_gguf_path = None
-                self._last_task_type = None
-                gc.collect()
-                logger.info("llama.cpp model unloaded via explicit call.")
-            else:
-                #logger.info("Explicit unload called, but no llama.cpp model was loaded.")
-                pass
-            pass
         # Lock released here
 
 # --- Optional: Add a shutdown hook specific to CortexEngine for llama.cpp ---
