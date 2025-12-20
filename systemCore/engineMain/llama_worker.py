@@ -40,7 +40,7 @@ base_cmd = [
     "--n-gpu-layers", str(args.n_gpu_layers),
     "--simple-io",
     "-no-cnv",               # Use single dash as per your terminal test
-    "--no-mmap",
+    "--mmap",
     "--reasoning-budget", "0" # Kill thinking blocks for clean output
 ]
 
@@ -378,12 +378,55 @@ def main():
         sys.exit(1)
 
     # --- Determine n_ctx for Llama model loading ---
+    original_kwargs_from_provider = request_data_dict.get("kwargs", {})
+    if args.task_type == "chat":
+        # For chat, the provider sends 'messages'
+        messages_from_provider = request_data_dict.get("messages", [])
+        prompt_for_llm = format_messages_as_string(messages_from_provider)  # Ensure you have this helper
+    else:
+        # For raw_text_completion, it sends 'prompt'
+        prompt_for_llm = request_data_dict.get("prompt", "")
+
     if args.task_type == "embedding":
         calculated_n_ctx_for_model_load = EMBEDDING_CTX_CONFIG
         log_worker("INFO", f"Forcing n_ctx to EMBEDDING_CTX_CONFIG ({EMBEDDING_CTX_CONFIG}) for embedding task, ignoring CLI args.")
     elif args.n_ctx is not None:
         calculated_n_ctx_for_model_load = args.n_ctx
         log_worker("INFO", f"Using n_ctx={calculated_n_ctx_for_model_load} from cortex_backbone_provider override.")
+    elif args.task_type == "vision":
+        # 1. Vision models REQUIRE the projector file
+        # We expect the provider to send this in the JSON request data
+        mmproj_path = request_data_dict.get("mmproj_path")
+        image_path = request_data_dict.get("image_path")
+        
+        # 2. Construct the LMMultiModal command
+        vision_cmd = [
+            "LMMultiModal", # Renamed from llama-mtmd-cli
+            "--model", args.model_path,
+            "--mmproj", mmproj_path,
+            "--image", image_path,
+            "--n-gpu-layers", "-1",
+            "--temp", str(original_kwargs_from_provider.get("temperature", 0.8)),
+            "-n", "256", # Limit generation for descriptions
+            "-p", prompt_for_llm
+        ]
+
+        # 3. Execute with Stdout bridge and Stderr suppression
+        process = subprocess.run(
+            vision_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, # Silence hardware logs
+            text=True
+        )
+
+        # 4. Extract only the generated text
+        raw_response = process.stdout.strip()
+        # Clean up any leftover prompt text or thinking tags
+        cleaned_response = extract_final_answer(raw_response)
+        
+        completion_result_dict = {
+            "choices": [{"message": {"content": cleaned_response}, "finish_reason": "stop"}]
+        }
 
     # ------------------- MODIFIED BLOCK FOR CONTEXT BINNING -------------------
     elif input_tokens_for_dynamic_ctx > 0:
@@ -507,7 +550,6 @@ def main():
                 "--prompt-cache-all",  # Cache the prompt for future turns
                 "--simple-io",  # Use basic IO for subprocesses
                 "-no-cnv",
-                "--no-mmap",
                 "--log-disable"  # Prevent logs from polluting stdout
             ]
 
@@ -602,151 +644,79 @@ def main():
         else:
             raise ValueError(f"Unknown task type in processing block: {args.task_type}")
         if args.task_type != "embedding":
-            if not completion_result_dict: raise RuntimeError("LLM call did not return a result dictionary on first attempt.")
+            # --- 1. Ensure completion_result_dict is a dictionary for legacy checks ---
+            if isinstance(completion_result_dict, str):
+                raw_text_captured = completion_result_dict
+                completion_result_dict = {
+                    "choices": [
+                        {
+                            "text": raw_text_captured,
+                            "message": {"content": raw_text_captured},
+                            "finish_reason": "stop"
+                        }
+                    ]
+                }
+
+            if not completion_result_dict:
+                raise RuntimeError("LLM call did not return a result dictionary on first attempt.")
+
+            # --- 2. Extract Text for Cleanup ---
             raw_generated_text = ""
             if args.task_type == "chat":
-                if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices'] and isinstance(completion_result_dict['choices'][0].get('message'), dict)): raw_generated_text = completion_result_dict['choices'][0]['message'].get('content', "")
+                choices = completion_result_dict.get('choices', [])
+                if choices and isinstance(choices[0].get('message'), dict):
+                    raw_generated_text = choices[0]['message'].get('content', "")
             elif args.task_type == "raw_text_completion":
-                if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices']): raw_generated_text = completion_result_dict['choices'][0].get('text', "")
+                choices = completion_result_dict.get('choices', [])
+                if choices:
+                    raw_generated_text = choices[0].get('text', "")
+
             cleaned_text = cleanup_initial_think_tag(str(raw_generated_text or ""))
             token_count_after_cleanup = count_tokens_cl100k(cleaned_text)
+
+            # --- 3. Empty Response Handling (Rerequest Logic) ---
             if TIKTOKEN_AVAILABLE and token_count_after_cleanup == 0:
-                rerequest_kwargs = original_kwargs_from_provider.copy()
+                log_worker("WARNING", "Empty response detected. Attempting re-request with system nudge.")
+
                 complaint_prefix = "[System Note: Previous response was empty. Please provide a substantive answer.]\n"
+
+                # Setup base command common to both rerequest types
+                rereq_base = [
+                    "LMExec", "--model", args.model_path,
+                    "--n-gpu-layers", str(args.n_gpu_layers),
+                    "--ctx-size", str(calculated_n_ctx_for_model_load),
+                    "--simple-io", "-no-cnv", "--no-display-prompt",
+                    "--no-show-timings", "--log-disable"
+                ]
+
                 if args.task_type == "chat":
-                    modified_messages_for_rerequest = request_data_dict.get("messages", []).copy()
-                    if isinstance(modified_messages_for_rerequest, list): modified_messages_for_rerequest.append({"role": "system", "content": complaint_prefix.strip()})
-                    input_tokens_rerequest_chat = count_tokens_cl100k(modified_messages_for_rerequest)
-                    max_gen_tokens_rereq_chat = min(calculated_n_ctx_for_model_load // 2, calculated_n_ctx_for_model_load - input_tokens_rerequest_chat - 128)
-                    if max_gen_tokens_rereq_chat <= 0: max_gen_tokens_rereq_chat = 128
-                    rerequest_kwargs["max_tokens"] = max_gen_tokens_rereq_chat
-                    chat_cmd = base_cmd + [
-                        "--no-display-prompt",
-                        "--chat-template", args.chat_format or "chatml",
-                        "--prompt", format_messages_as_string(messages_for_llm), # You'll need a small helper here
-                        "--n-predict", str(max_gen_tokens_chat)
+                    # Chat Rerequest Logic
+                    modified_prompt = complaint_prefix + format_messages_as_string(
+                        request_data_dict.get("messages", []))
+                    rereq_cmd = rereq_base + [
+                        "--n-predict", str(calculated_n_ctx_for_model_load // 2),
+                        "--prompt", modified_prompt
                     ]
-
-                    # Execute and capture stdout
-                    result = subprocess.run(chat_cmd, capture_output=True, text=True)
-                    raw_generated_text = result.stdout
-                    raw_generated_text = extract_final_answer(raw_generated_text)
-                    completion_result_dict = {
-                        "id": f"chatcmpl-{int(time.time())}",
-                        "object": "chat.completion",
-                        "created": int(time.time()),
-                        "model": os.path.basename(args.model_path),
-                        "choices": [
-                            {
-                                "index": 0,
-                                "message": {
-                                    "role": "assistant",
-                                    "content": cleanup_initial_think_tag(raw_generated_text)
-                                    # Reuse your existing helper
-                                },
-                                "finish_reason": "stop"
-                            }
-                        ],
-                        "usage": {
-                            "prompt_tokens": input_tokens_for_dynamic_ctx,
-                            "completion_tokens": count_tokens_cl100k(raw_generated_text),  # Reuse your token counter
-                            "total_tokens": input_tokens_for_dynamic_ctx + count_tokens_cl100k(raw_generated_text)
-                        }
-                    }
-                    result_payload = {"result": completion_result_dict}
-                    completion_result_dict = raw_generated_text
-                elif args.task_type == "raw_text_completion":
-                    prompt_from_provider = request_data_dict.get("prompt")
-                    if not prompt_from_provider or not isinstance(prompt_from_provider, str):
-                        raise ValueError("Missing or invalid 'prompt' for 'raw_text_completion' task.")
-
-                    # 1. Calculate and Truncate Prompt
-                    # We reserve a buffer for generation to avoid context overflow
-                    target_input_prompt_max_tokens = calculated_n_ctx_for_model_load - GENERATION_OUTPUT_BUFFER_TOKENS
-                    if target_input_prompt_max_tokens <= 0:
-                        target_input_prompt_max_tokens = calculated_n_ctx_for_model_load // 2
-
-                    prompt_for_llm = adaptive_middle_truncate(prompt_from_provider, target_input_prompt_max_tokens,
-                                                              calculated_n_ctx_for_model_load)
-                    current_input_token_count_raw = count_tokens_cl100k(prompt_for_llm)
-
-                    # 2. Determine Max Prediction Tokens
-                    max_gen_tokens_raw = min(
-                        original_kwargs_from_provider.get("max_tokens", calculated_n_ctx_for_model_load // 2),
-                        calculated_n_ctx_for_model_load - current_input_token_count_raw - 64
-                    )
-                    if max_gen_tokens_raw <= 0:
-                        max_gen_tokens_raw = GENERATION_OUTPUT_BUFFER_TOKENS // 2
-
-                    # 3. Construct LMExec Command
-                    # Use --simple-io for subprocess stability and --log-disable to keep stdout clean
-                    cli_cmd = [
-                        "LMExec",
-                        "--model", args.model_path,
-                        "--n-gpu-layers", str(args.n_gpu_layers),
-                        "--ctx-size", str(calculated_n_ctx_for_model_load),
-                        "--prompt", prompt_for_llm,
+                else:
+                    # Raw Text Rerequest Logic
+                    modified_prompt = complaint_prefix + request_data_dict.get("prompt", "")
+                    rereq_cmd = rereq_base + [
                         "--n-predict", str(max_gen_tokens_raw),
-                        "--prompt-cache", state_file_path,  # Native binary KV caching
-                        "--prompt-cache-all",  # Cache the entire session for speed
-                        "--simple-io",
-                        "-no-cnv",
-                        "--log-disable"
+                        "--prompt", modified_prompt
                     ]
 
-                    # Add stop sequences if provided
-                    stop_seqs = original_kwargs_from_provider.get("stop", ["<|im_end|>"])
-                    if isinstance(stop_seqs, list):
-                        for stop in stop_seqs:
-                            cli_cmd.extend(["--reverse-prompt", stop])
+                # Execute Rerequest
+                process = subprocess.run(rereq_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                raw_generated_text_attempt2 = extract_final_answer(process.stdout.strip())
+                cleaned_text_attempt2 = cleanup_initial_think_tag(raw_generated_text_attempt2)
 
-                    # 4. Execute Subprocess
-                    log_worker("INFO",
-                               f"Executing LMExec for raw_text_completion (Input: {current_input_token_count_raw} tokens)")
-                    process = subprocess.run(
-                        cli_cmd,
-                        stdout=subprocess.PIPE,  # Capture the JSON result
-                        stderr=subprocess.DEVNULL,  # Kill the ggml_metal chatter
-                        text=True
-                    )
-
-                    if process.returncode != 0:
-                        log_worker("ERROR", f"LMExec execution failed: {process.stderr}")
-                        raise RuntimeError(f"LMExec error: {process.stderr}")
-
-                    # 5. Standardize Output (OpenAI Format)
-                    # This ensures compatibility with cortex_backbone_provider.py
-                    raw_generated_text = process.stdout.strip()
-                    cleaned_text = cleanup_initial_think_tag(raw_generated_text)
-                    gen_token_count = count_tokens_cl100k(cleaned_text)
-
-                    completion_result_dict = {
-                        "id": f"cmpl-{int(time.time())}",
-                        "object": "text_completion",
-                        "created": int(time.time()),
-                        "model": os.path.basename(args.model_path),
-                        "choices": [
-                            {
-                                "text": cleaned_text,
-                                "index": 0,
-                                "logprobs": None,
-                                "finish_reason": "stop"
-                            }
-                        ],
-                        "usage": {
-                            "prompt_tokens": current_input_token_count_raw,
-                            "completion_tokens": gen_token_count,
-                            "total_tokens": current_input_token_count_raw + gen_token_count
-                        }
-                    }
-                    result_payload = {"result": completion_result_dict}
+                # Update the result dictionary with the new content
                 if args.task_type == "chat":
-                    if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices'] and isinstance(completion_result_dict['choices'][0].get('message'), dict)): raw_generated_text_attempt2 = completion_result_dict['choices'][0]['message'].get('content', "")
-                elif args.task_type == "raw_text_completion":
-                    if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices']): raw_generated_text_attempt2 = completion_result_dict['choices'][0].get('text', "")
-                cleaned_text_attempt2 = cleanup_initial_think_tag(str(raw_generated_text_attempt2 or ""))
-                if args.task_type == "chat": completion_result_dict['choices'][0]['message']['content'] = cleaned_text_attempt2
-                elif args.task_type == "raw_text_completion": completion_result_dict['choices'][0]['text'] = cleaned_text_attempt2
+                    completion_result_dict['choices'][0]['message']['content'] = cleaned_text_attempt2
+                else:
+                    completion_result_dict['choices'][0]['text'] = cleaned_text_attempt2
+
+            # --- 4. Final Payload Packaging ---
             result_payload = {"result": completion_result_dict}
         task_processing_duration_ms = (time.monotonic() - task_processing_start_time) * 1000
         log_worker("INFO", f"Task '{args.task_type}' core processing completed in {task_processing_duration_ms:.2f} ms.")

@@ -11,9 +11,11 @@ import subprocess  # Added for worker management
 import shlex       # <<< --- ADD THIS LINE --- >>>
 import asyncio
 import re
+import tempfile
+import base64
 import signal
 from loguru import logger # Logging library
-from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 try:
     import tiktoken
     TIKTOKEN_AVAILABLE = True
@@ -159,11 +161,83 @@ def strip_initial_think_block(text: str) -> str:
         # logger.trace("No initial think block found to strip.")
         return text.lstrip()
 
+
+class LlamaCppVisionWrapper:
+    def __init__(self, model_path, mmproj_path, provider_ref):
+        self.model_path = model_path
+        self.mmproj_path = mmproj_path
+        self.provider = provider_ref
+
+    def invoke(self, input_data, config=None):
+        # 1. Adelaide sends: [HumanMessage(content=[{"type": "image_url"...}, {"type": "text"...}])]
+        # We extract the content parts from the LangChain message
+        messages = input_data if isinstance(input_data, list) else [input_data]
+        prompt_text = ""
+        image_b64 = None
+
+        for msg in messages:
+            content = getattr(msg, "content", [])
+            if isinstance(content, list):
+                for part in content:
+                    if part.get("type") == "text":
+                        prompt_text = part.get("text", "")
+                    elif part.get("type") == "image_url":
+                        # Standard format: "data:image/png;base64,..."
+                        url_val = part["image_url"].get("url", "")
+                        if "base64," in url_val:
+                            image_b64 = url_val.split("base64,")[1]
+
+        # 2. Vision binaries need a physical file path
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            if image_b64:
+                tmp.write(base64.b64decode(image_b64))
+            temp_image_path = tmp.name
+
+        # 3. Use the provider's execution logic to call the worker
+        # We signal task_type="vision" so the worker knows to use LMMultiModal
+        priority = config.get("priority", 0) if config else 0
+
+        payload = {
+            "task_type": "vision",
+            "model_path": self.model_path,
+            "mmproj_path": self.mmproj_path,
+            "image_path": temp_image_path,
+            "prompt": prompt_text,
+            "kwargs": {"temperature": 0.2}
+        }
+
+        # 4. Delegate to your existing worker execution bridge
+        # Assuming you have a method like _run_worker_sync in your provider
+        result = self.provider._execute_worker_task_sync(payload, priority=priority)
+
+        # 5. Cleanup
+        if os.path.exists(temp_image_path):
+            os.remove(temp_image_path)
+
+        # 6. Extract the generated text from the standard worker dict
+        if result and "choices" in result:
+            return result["choices"][0]["message"].get("content", "")
+        return "[Vision Bridge Error]"
+
+    # Support the | StrOutputParser() syntax used in Adelaide
+    def __or__(self, other):
+        return RunnableLambda(self.invoke) | other
+
 # --- Chat Model Wrapper ---
 class LlamaCppChatWrapper(SimpleChatModel):
     ai_provider: 'CortexEngine'
     model_role: str
     model_kwargs: Dict[str, Any]
+
+    def __init__(self, ai_provider: Any, model_role: str, model_kwargs: Dict[str, Any], **kwargs):
+        # 2. Pass everything as KEYWORDS to the superclass (SimpleChatModel/BaseModel)
+        super().__init__(
+            ai_provider=ai_provider,
+            model_role=model_role,
+            model_kwargs=model_kwargs,
+            **kwargs
+        )
+
 
 
     def _call(
@@ -669,6 +743,43 @@ class CortexEngine:
         # VVVVVVVVVV THIS IS THE LINE TO CHANGE VVVVVVVVVV
         self._setup_image_generator_config() # Renamed: Validates image gen worker config
         # ^^^^^^^^^^ THIS IS THE LINE TO CHANGE ^^^^^^^^^^
+
+    async def get_vlm_description(self, image_path: str, prompt: str) -> Optional[str]:
+        """
+        New VLM Bridge: Fetches both the model and mmproj paths from the model map
+        and delegates the 'vision' task to the llama_worker.
+        """
+        # 1. Retrieve the specific filenames from your updated model map
+        vlm_model_file = LLAMA_CPP_MODEL_MAP.get("vlm")
+        mmproj_file = LLAMA_CPP_MODEL_MAP.get("vlm_mmproj")
+
+        if not vlm_model_file or not mmproj_file:
+            logger.error("VLM or mmproj model file not defined in LLAMA_CPP_MODEL_MAP.")
+            return None
+
+        # 2. Build absolute paths
+        vlm_path = os.path.join(LLAMA_CPP_GGUF_DIR, vlm_model_file)
+        mmproj_path = os.path.join(LLAMA_CPP_GGUF_DIR, mmproj_file)
+
+        # 3. Construct the payload for the llama_worker subprocess
+        payload = {
+            "task_type": "vision", # Matches the new block in llama_worker.py
+            "model_path": vlm_path,
+            "mmproj_path": mmproj_path,
+            "image_path": image_path,
+            "prompt": prompt,
+            "temperature": 0.2 # Recommended low temp for accurate descriptions
+        }
+
+        # 4. Call the worker (reusing your existing internal worker caller)
+        # This assumes you have an internal method like _execute_worker_task
+        response = await self._execute_worker_task(payload)
+
+        # 5. Extract the text from the standardized worker response
+        if response and "choices" in response:
+            return response["choices"][0]["message"].get("content")
+        
+        return None
 
     async def save_llama_session_async(self, model_role: str, state_name: str, priority: int = ELP0) -> Dict[str, Any]:
         """
@@ -1500,15 +1611,28 @@ class CortexEngine:
             duration_ms = (time.monotonic() - start_time) * 1000
             logger.debug(f"⏱️ AI Provider setup method took {duration_ms:.2f} ms.")
 
-    def get_model(self, model_role: str = "default") -> Optional[Any]:
-        """Gets the Langchain model wrapper (Chat or Embeddings)."""
-        # ... (Logic remains the same - it returns the *wrapper* object) ...
-        model_instance = self.models.get(model_role)
-        if not model_instance:
-             logger.error(f"Model/Wrapper for role '{model_role}' not available.")
-             if model_role != "default": logger.warning("Falling back to default model/wrapper."); return self.models.get("default")
-             else: return None
-        return model_instance
+    def get_model(self, role: str):
+        # Fetch filenames from your updated model map
+        model_filename = LLAMA_CPP_MODEL_MAP.get(role)
+        if not model_filename:
+            return None
+
+        model_path = os.path.join(LLAMA_CPP_GGUF_DIR, model_filename)
+
+        # NEW: Seamless Vision Routing
+        if role == "vlm":
+            mmproj_filename = LLAMA_CPP_MODEL_MAP.get("vlm_mmproj")
+            mmproj_path = os.path.join(LLAMA_CPP_GGUF_DIR, mmproj_filename) if mmproj_filename else None
+
+            # Return the wrapper that pretends to be a LangChain model
+            return LlamaCppVisionWrapper(model_path, mmproj_path, self)
+
+        # Standard text models return your existing LlamaCppChatWrapper
+        return LlamaCppChatWrapper(
+            ai_provider=self,
+            model_role=role,
+            model_kwargs={"temperature": 0.8}  # or your default kwargs
+        )
 
     def get_embeddings(self) -> Optional[Embeddings]:
         """Returns the configured embeddings instance."""

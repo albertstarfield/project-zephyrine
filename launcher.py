@@ -203,14 +203,25 @@ MODELS_TO_DOWNLOAD = [
     },
     #Image Encoder to Decoder
     {
-        "filename": "Qwen3-VL-ImageDescripter.gguf",
-        "url": "https://huggingface.co/NexaAI/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct.Q4_K.gguf?download=true",
+        "filename": "Qwen3-VL-ImageDescripter_v2.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct-UD-IQ2_XXS.gguf?download=true",
         "description": "Qwen3 Image Descriptor VL Model"
+    },
+    {
+        "filename": "Qwen3-VL-ImageDescripter_v2_mmproj.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-F16.gguf?download=true",
+        "description": "Qwen3 Image Descriptor VL mmproj Model"
     },
     {
     #https://huggingface.co/Mungert/olmOCR-7B-0225-preview-GGUF/resolve/main/olmOCR-7B-0225-preview-q4_k_m.gguf?download=true    
         "filename": "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf",
-        "url": "https://huggingface.co/Mungert/olmOCR-7B-0225-preview-GGUF/resolve/main/olmOCR-7B-0225-preview-q4_k_m.gguf?download=true",
+        "url": "https://huggingface.co/unsloth/Qwen2.5-VL-7B-Instruct-GGUF/resolve/main/Qwen2.5-VL-7B-Instruct-UD-Q3_K_XL.gguf?download=true",
+        "description": "Qwen 2.5 Document Image Descripter"
+    },
+    {
+    #https://huggingface.co/Mungert/olmOCR-7B-0225-preview-GGUF/resolve/main/olmOCR-7B-0225-preview-q4_k_m.gguf?download=true    
+        "filename": "Qwen2.5-OCR-Document-VL-ImageDescripter_mmproj.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen2.5-VL-7B-Instruct-GGUF/resolve/main/mmproj-F16.gguf?download=true",
         "description": "Qwen 2.5 Document Image Descripter"
     },
     #Computer agent
@@ -5093,7 +5104,8 @@ if __name__ == "__main__":
                             binary_mapping = {
                                 "llama-cli": "llamacpp_TUI",
                                 "llama-completion": "LMExec",
-                                "llama-embedding": "LMText2Vector"
+                                "llama-embedding": "LMText2Vector",
+                                "llama-mtmd-cli": "LMMultiModal"
                             }
 
                             # 2. Determine OS extension
@@ -5113,6 +5125,9 @@ if __name__ == "__main__":
                                     # shutil.copy2 preserves permissions (important for execution)
                                     shutil.copy2(src_bin_path, dest_bin_path)
                                     print_system(f"  -> Successfully migrated: {src_filename} as {target_filename}")
+                                    with open(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE, 'w',
+                                              encoding='utf-8') as f_lcpp_flag:
+                                        f_lcpp_flag.write("")
                                 else:
                                     print_error(
                                         f"  -> CRITICAL: Source binary {src_filename} not found in build directory.")
