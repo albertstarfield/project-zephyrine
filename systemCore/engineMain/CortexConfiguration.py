@@ -371,7 +371,16 @@ LLAMA_CPP_MODEL_MAP = {
         "LLAMA_CPP_MODEL_ROUTER_FILE", "deepscaler.gguf"
     ),  # Adelaide Zephyrine Charlotte Persona
     "vlm": os.getenv(
-        "LLAMA_CPP_MODEL_VLM_FILE", "Qwen3-VL-ImageDescripter.gguf"
+        "LLAMA_CPP_MODEL_VLM_FILE", "Qwen3-VL-ImageDescripter_v2.gguf"
+    ),  # Use LatexMind as VLM for now
+    "vlm_mmproj": os.getenv(
+        "LLAMA_CPP_MODEL_VLM_FILE", "Qwen3-VL-ImageDescripter_v2_mmproj.gguf"
+    ),  # Use LatexMind as VLM for now
+    "OCR_lm": os.getenv(
+        "LLAMA_CPP_MODEL_VLM_FILE", "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf"
+    ),  # Use LatexMind as VLM for now
+    "OCR_lm_mmproj": os.getenv(
+        "LLAMA_CPP_MODEL_VLM_FILE", "Qwen2.5-OCR-Document-VL-ImageDescripter_mmproj.gguf"
     ),  # Use LatexMind as VLM for now
     "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf"),
     # "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"), #This model doesn't seem to work properly (use olmocr instead)
@@ -386,6 +395,9 @@ LLAMA_CPP_MODEL_MAP = {
     "general": os.getenv(
         "LLAMA_CPP_MODEL_GENERAL_FILE", "Qwen3DeepseekDecomposer.gguf"
     ),  # Use router as general
+    "default": os.getenv(
+        "LLAMA_CPP_MODEL_GENERAL_FILE", "Qwen3DeepseekDecomposer.gguf"
+    ),
     "general_fast": os.getenv(
         "LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "Qwen3LowLatency.gguf"
     ),
@@ -402,6 +414,9 @@ LLAMA_CPP_MODEL_MAP = {
 LLAMA_CPP_MODEL_DESCRIPTIONS = {
     "router": "A meta-controller for routing tasks to other specialists. Use 'general' for routing.",
     "vlm": "Analyzes the content of images.",
+    "vlm_mmproj": "NOT for USE DIRECT LOAD ONLY FOR VLM COMPLEMENTARY PROJECTION",
+    "OCR_lm": "Analyzes the content of document of the images into LaTeX for instance for ease of use and understanding and recostruct graphic using TikZ.",
+    "OCR_lm_mmproj": "NOT for USE DIRECT LOAD ONLY FOR VLM COMPLEMENTARY PROJECTION",
     "latex": "Generates and interprets complex mathematical formulas in LaTeX and TikZ.",
     "rnj_1_general_STEM": "A general expert for Science, Technology, Engineering, and Math. Good for multi-disciplinary problems.",
     "physics": "Specialist for physics problems, including mechanics, aerodynamics, and thermodynamics.",
@@ -411,6 +426,7 @@ LLAMA_CPP_MODEL_DESCRIPTIONS = {
     "computer_ui_interaction": "Designs plans for computer automation and user interface interaction.",
     "language_to_actionCall_Actuator": "Converts natural language commands into specific, structured tool calls.",
     "general": "Default model for creative writing, summarization, and general conversation.",
+    "default": "Default model for fallback.",
     "general_fast": "A very fast but less detailed model for quick checks and simple tasks.",
     "translator": "Translates text between different languages.",
 }

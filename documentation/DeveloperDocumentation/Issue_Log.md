@@ -55,3 +55,7 @@
     *   Dele tes the legacy `trickshot_simple_flight_computer.py`.
     *   Increases RAG context limits (`RAG_URL_COUNT`, fuzzy search interaction fetch).
     *   Adjusts logging and disables the "mistype" feature.
+-   **ID:** CORTEX-FEAT-005
+-   **Title:** Integrate native Llama.cpp multimodal VLM for image processing
+-   **Status:** Resolved
+-   **Description:** This feature integrates the new `llama-mtmd-cli` (renamed to `LMMultiModal`) from `llama.cpp` for native, high-performance vision language model (VLM) execution. This replaces the previous, less efficient VLM handling. A new `LlamaCppVisionWrapper` and a dedicated `vision` task type in the `llama_worker` have been implemented. The `launcher` and `CortexConfiguration` have been updated with the new Unsloth Qwen VLM models and their required `mmproj` files.
