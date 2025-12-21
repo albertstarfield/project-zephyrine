@@ -59,3 +59,7 @@
 -   **Title:** Integrate native Llama.cpp multimodal VLM for image processing
 -   **Status:** Resolved
 -   **Description:** This feature integrates the new `llama-mtmd-cli` (renamed to `LMMultiModal`) from `llama.cpp` for native, high-performance vision language model (VLM) execution. This replaces the previous, less efficient VLM handling. A new `LlamaCppVisionWrapper` and a dedicated `vision` task type in the `llama_worker` have been implemented. The `launcher` and `CortexConfiguration` have been updated with the new Unsloth Qwen VLM models and their required `mmproj` files.
+-   **ID:** CORE-REFACTOR-001
+-   **Title:** Refactor VLM image description pipeline
+-   **Status:** Resolved
+-   **Description:** Centralized the Vision Language Model (VLM) image description logic into the `llama_worker.py` script. This removes the `get_vlm_description` method from `cortex_backbone_provider.py` and introduces a dedicated "vision" task type in the worker. The changes also include improved error handling, input processing, and a longer timeout for Ollama streaming to enhance stability with slower models.

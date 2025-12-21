@@ -6489,9 +6489,31 @@ class CortexThoughts:
         logger.info(f"{log_prefix} START -> Session: {session_id}")
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
-
+        
         # --- 1. COMPLEXITY CHECK ---
         input_token_count = self._count_tokens(user_input)
+        
+        # VLM Just in case
+
+        if image_b64 and not vlm_description:
+            logger.info(f"{log_prefix}: Image detected. Running ELP1 VLM analysis...")
+            # We call the helper with ELP1 priority for speed
+            desc, err = await self._describe_image_async(
+                db, 
+                session_id, 
+                image_b64, 
+                prompt_type="direct_generate_elp1", 
+                priority=ELP1 
+            )
+            if desc:
+                vlm_description = desc
+                logger.success(f"{log_prefix}: VLM description obtained.")
+            elif err:
+                logger.error(f"{log_prefix}: VLM failed: {err}")
+                # We append the error to context so the LLM knows why it can't see the image
+                vlm_description = f"[System Error: The user attached an image, but VLM processing failed: {err}]"
+
+        
         
         # Keywords that suggest a multi-step or technical structure is needed
         complex_triggers = ["prove", "derive", "solve", "calculate", "equation", "explain", "analyze", "design", "how", "outline", "compare"]
@@ -10887,7 +10909,7 @@ def _ollama_pseudo_stream_sync_generator(
                 # Break the loop to proceed with retrieving the result.
                 break
         try:
-            final_response_text = message_queue.get(timeout=10)
+            final_response_text = message_queue.get(timeout=600)
             logger.info(
                 "Ollama generator retrieved final response from background thread."
             )
@@ -12258,11 +12280,16 @@ def _stream_openai_chat_response_generator_flask(
                 loop.close()
 
         background_thread = threading.Thread(
+            target=run_async_generate_in_thread, daemon=True
+        )
+        background_thread.start()
+
+        """background_thread = threading.Thread(
             target=run_async_generate_in_thread,
             args=(message_queue, session_id, user_input, classification, image_b64),
             daemon=True,
         )
-        background_thread.start()
+        background_thread.start()"""
 
         # Check if the pre-buffered content was successfully loaded at startup.
         if _PREBUFFERED_THINK_CONTENT:
