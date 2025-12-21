@@ -53,9 +53,6 @@ process = subprocess.run(
                 )
 generated_text = process.stdout.strip()
 
-if args.verbose:
-    base_cmd.remove("--log-disable")
-
 
 # --- Try importing tiktoken ---
 try:
@@ -340,7 +337,7 @@ def main():
     # --- Argument Parsing ---
     parser = argparse.ArgumentParser(description="Llama.cpp Worker Process with Automatic KV Caching and Dynamic Context")
     parser.add_argument("--model-path", required=True, help="Path to GGUF model file")
-    parser.add_argument("--task-type", required=True, choices=["chat", "embedding", "raw_text_completion"],
+    parser.add_argument("--task-type", required=True, choices=["chat", "embedding", "raw_text_completion", "vision"],
                         help="Task type")
     parser.add_argument("--n-gpu-layers", type=int, default=-1, help="Number of GPU layers")
     parser.add_argument("--n-ctx", type=int, default=None,
@@ -358,27 +355,46 @@ def main():
     #llm: Optional[llama_cpp.Llama] = None
     result_payload: Dict[str, Any] = {"error": "Worker did not process a valid task."}
 
-    # --- Pre-computation and Stdin Read ---
+    #original_kwargs_from_provider = request_data_dict.get("kwargs", {})
+    #original_kwargs_from_provider = request_data_dict.get("kwargs", {}).copy()
+    
     try:
-        log_worker("INFO", "Reading request data from stdin for dynamic n_ctx calculation...")
+        log_worker("INFO", "Reading request data from stdin...")
         request_data_str = sys.stdin.read()
-        if not request_data_str.strip(): raise ValueError("Received empty input string from stdin.")
+        if not request_data_str.strip():
+            raise ValueError("Received empty input string from stdin.")
+        
+        # This is the critical change: assign here and check immediately.
         request_data_dict = json.loads(request_data_str)
-        log_worker("DEBUG", f"Request data JSON parsed for n_ctx calc. Task: {args.task_type}")
+        if not isinstance(request_data_dict, dict):
+            raise TypeError("Parsed stdin is not a dictionary.")
+            
+        log_worker("DEBUG", f"Request data JSON parsed. Task: {args.task_type}")
+
+        # Now that we know request_data_dict is valid, we can define this.
+        original_kwargs_from_provider = request_data_dict.get("kwargs", {})
+
+        # Token counting for dynamic context (if applicable)
+        input_tokens_for_dynamic_ctx = 0
         if args.task_type == "chat":
             messages_for_count = request_data_dict.get("messages")
-            if messages_for_count: input_tokens_for_dynamic_ctx = count_tokens_cl100k(messages_for_count)
+            if messages_for_count:
+                input_tokens_for_dynamic_ctx = count_tokens_cl100k(messages_for_count)
         elif args.task_type == "raw_text_completion":
             prompt_for_count = request_data_dict.get("prompt")
-            if prompt_for_count: input_tokens_for_dynamic_ctx = count_tokens_cl100k(prompt_for_count)
+            if prompt_for_count:
+                input_tokens_for_dynamic_ctx = count_tokens_cl100k(prompt_for_count)
+        
         log_worker("INFO", f"Initial estimated input tokens (for n_ctx calc): {input_tokens_for_dynamic_ctx}")
-    except Exception as e_stdin:
+
+    except (json.JSONDecodeError, ValueError, TypeError) as e_stdin:
         log_worker("CRITICAL", f"Failed to read/parse stdin: {e_stdin}\n{traceback.format_exc()}")
+        # This ensures the script stops and reports the error correctly.
         print(json.dumps({"error": f"Worker critical error: Failed to read/parse request: {e_stdin}"}))
         sys.exit(1)
 
-    # --- Determine n_ctx for Llama model loading ---
-    original_kwargs_from_provider = request_data_dict.get("kwargs", {})
+
+    # --- Determine n_ctx (CTX binning, NOT main execution of the LMExec or LMMultiModal) for Llama model loading ---
     if args.task_type == "chat":
         # For chat, the provider sends 'messages'
         messages_from_provider = request_data_dict.get("messages", [])
@@ -393,40 +409,6 @@ def main():
     elif args.n_ctx is not None:
         calculated_n_ctx_for_model_load = args.n_ctx
         log_worker("INFO", f"Using n_ctx={calculated_n_ctx_for_model_load} from cortex_backbone_provider override.")
-    elif args.task_type == "vision":
-        # 1. Vision models REQUIRE the projector file
-        # We expect the provider to send this in the JSON request data
-        mmproj_path = request_data_dict.get("mmproj_path")
-        image_path = request_data_dict.get("image_path")
-        
-        # 2. Construct the LMMultiModal command
-        vision_cmd = [
-            "LMMultiModal", # Renamed from llama-mtmd-cli
-            "--model", args.model_path,
-            "--mmproj", mmproj_path,
-            "--image", image_path,
-            "--n-gpu-layers", "-1",
-            "--temp", str(original_kwargs_from_provider.get("temperature", 0.8)),
-            "-n", "256", # Limit generation for descriptions
-            "-p", prompt_for_llm
-        ]
-
-        # 3. Execute with Stdout bridge and Stderr suppression
-        process = subprocess.run(
-            vision_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, # Silence hardware logs
-            text=True
-        )
-
-        # 4. Extract only the generated text
-        raw_response = process.stdout.strip()
-        # Clean up any leftover prompt text or thinking tags
-        cleaned_response = extract_final_answer(raw_response)
-        
-        completion_result_dict = {
-            "choices": [{"message": {"content": cleaned_response}, "finish_reason": "stop"}]
-        }
 
     # ------------------- MODIFIED BLOCK FOR CONTEXT BINNING -------------------
     elif input_tokens_for_dynamic_ctx > 0:
@@ -482,7 +464,7 @@ def main():
         # 3. Process the Task
         task_processing_start_time = time.monotonic()
         completion_result_dict: Optional[Dict[str, Any]] = None
-        original_kwargs_from_provider = request_data_dict.get("kwargs", {}).copy()
+        
         GENERATION_OUTPUT_BUFFER_TOKENS = max(256, calculated_n_ctx_for_model_load // 4)
         if args.task_type == "chat":
             messages_for_llm = request_data_dict.get("messages")
@@ -587,6 +569,7 @@ def main():
                     }
                 ]
             }
+        
         elif args.task_type == "embedding":
             texts_to_embed = request_data_dict.get("texts", [])
             embedding_results = []
@@ -641,28 +624,60 @@ def main():
                     completion_result_dict = {"error": "Embedding binary execution failed"}
 
             result_payload = {"result": embedding_results}
+        
+        elif args.task_type == "vision":
+            # 1. Vision models REQUIRE the projector file
+            # We expect the provider to send this in the JSON request data
+            mmproj_path = request_data_dict.get("mmproj_path")
+            image_path = request_data_dict.get("image_path")
+
+           # prompt_for_llm = request_data_dict.get("messages")
+            prompt_for_llm = request_data_dict.get("prompt", "Describe this image. with all the atributes environment and activity")
+            
+            # 2. Construct the LMMultiModal command
+            vision_cmd = [
+                "LMMultiModal", # Renamed from llama-mtmd-cli
+                "--model", args.model_path,
+                "--mmproj", mmproj_path,
+                "--image", image_path,
+                "--n-gpu-layers", "-1",
+                "--temp", str(original_kwargs_from_provider.get("temperature", 0.8)),
+                "-n", "256", # Limit generation for descriptions
+                "-p", prompt_for_llm
+            ]
+
+            # 3. Execute with Stdout bridge and Stderr suppression
+            process = subprocess.run(
+                vision_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, # Silence hardware logs
+                text=True
+            )
+
+            # 4. Extract only the generated text
+            raw_response = process.stdout.strip()
+            # Clean up any leftover prompt text or thinking tags
+            cleaned_response = extract_final_answer(raw_response)
+            
+            completion_result_dict = {
+                "choices": [{"message": {"content": cleaned_response}, "finish_reason": "stop"}]
+            }
+            
         else:
             raise ValueError(f"Unknown task type in processing block: {args.task_type}")
         if args.task_type != "embedding":
-            # --- 1. Ensure completion_result_dict is a dictionary for legacy checks ---
+            # --- 1. Ensure completion_result_dict is a dictionary ---
             if isinstance(completion_result_dict, str):
-                raw_text_captured = completion_result_dict
-                completion_result_dict = {
-                    "choices": [
-                        {
-                            "text": raw_text_captured,
-                            "message": {"content": raw_text_captured},
-                            "finish_reason": "stop"
-                        }
-                    ]
-                }
-
+                completion_result_dict = {"choices": [{"text": completion_result_dict}]}
             if not completion_result_dict:
-                raise RuntimeError("LLM call did not return a result dictionary on first attempt.")
+                raise RuntimeError("LLM call did not return a result dictionary.")
 
-            # --- 2. Extract Text for Cleanup ---
+            # --- 2. Extract Text and Initialize max_gen_tokens_raw ---
             raw_generated_text = ""
-            if args.task_type == "chat":
+            # <<< FIX: Initialize the variable here to guarantee it exists >>>
+            max_gen_tokens_raw = 0
+
+            if args.task_type == "chat" or args.task_type == "vision":
                 choices = completion_result_dict.get('choices', [])
                 if choices and isinstance(choices[0].get('message'), dict):
                     raw_generated_text = choices[0]['message'].get('content', "")
@@ -670,6 +685,13 @@ def main():
                 choices = completion_result_dict.get('choices', [])
                 if choices:
                     raw_generated_text = choices[0].get('text', "")
+                
+                # We still need to calculate this for the rerequest logic if this path is taken
+                current_input_token_count_raw = count_tokens_cl100k(prompt_for_llm)
+                if current_input_token_count_raw == -1: current_input_token_count_raw = len(prompt_for_llm) // 3
+                max_gen_tokens_raw = min(original_kwargs_from_provider.get("max_tokens", calculated_n_ctx_for_model_load // 2), calculated_n_ctx_for_model_load - current_input_token_count_raw - 64)
+                if max_gen_tokens_raw <= 0:
+                    max_gen_tokens_raw = GENERATION_OUTPUT_BUFFER_TOKENS // 2
 
             cleaned_text = cleanup_initial_think_tag(str(raw_generated_text or ""))
             token_count_after_cleanup = count_tokens_cl100k(cleaned_text)
@@ -679,8 +701,6 @@ def main():
                 log_worker("WARNING", "Empty response detected. Attempting re-request with system nudge.")
 
                 complaint_prefix = "[System Note: Previous response was empty. Please provide a substantive answer.]\n"
-
-                # Setup base command common to both rerequest types
                 rereq_base = [
                     "LMExec", "--model", args.model_path,
                     "--n-gpu-layers", str(args.n_gpu_layers),
@@ -689,29 +709,27 @@ def main():
                     "--no-show-timings", "--log-disable"
                 ]
 
-                if args.task_type == "chat":
-                    # Chat Rerequest Logic
-                    modified_prompt = complaint_prefix + format_messages_as_string(
-                        request_data_dict.get("messages", []))
+                if args.task_type == "chat" or args.task_type == "vision":
+                    modified_prompt = complaint_prefix + format_messages_as_string(request_data_dict.get("messages", []))
                     rereq_cmd = rereq_base + [
                         "--n-predict", str(calculated_n_ctx_for_model_load // 2),
                         "--prompt", modified_prompt
                     ]
-                else:
-                    # Raw Text Rerequest Logic
+                else:  # raw_text_completion
                     modified_prompt = complaint_prefix + request_data_dict.get("prompt", "")
+                    if max_gen_tokens_raw <= 0:
+                        log_worker("WARNING", "max_gen_tokens_raw was 0 for re-request, defaulting to 256.")
+                        max_gen_tokens_raw = 256
                     rereq_cmd = rereq_base + [
                         "--n-predict", str(max_gen_tokens_raw),
                         "--prompt", modified_prompt
                     ]
 
-                # Execute Rerequest
                 process = subprocess.run(rereq_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
                 raw_generated_text_attempt2 = extract_final_answer(process.stdout.strip())
                 cleaned_text_attempt2 = cleanup_initial_think_tag(raw_generated_text_attempt2)
 
-                # Update the result dictionary with the new content
-                if args.task_type == "chat":
+                if args.task_type == "chat" or args.task_type == "vision":
                     completion_result_dict['choices'][0]['message']['content'] = cleaned_text_attempt2
                 else:
                     completion_result_dict['choices'][0]['text'] = cleaned_text_attempt2

@@ -208,7 +208,12 @@ class LlamaCppVisionWrapper:
 
         # 4. Delegate to your existing worker execution bridge
         # Assuming you have a method like _run_worker_sync in your provider
-        result = self.provider._execute_worker_task_sync(payload, priority=priority)
+        result = self.provider._execute_in_worker(
+            model_role="vlm", 
+            task_type="vision", 
+            request_data=payload, 
+            priority=priority
+        )
 
         # 5. Cleanup
         if os.path.exists(temp_image_path):
@@ -740,46 +745,8 @@ class CortexEngine:
                 logger.error("  CRITICAL: CortexEngine embeddings object LACKS required embedding methods!")
         else:
             logger.error("CRITICAL: CortexEngine.embeddings is None after setup_provider!")
-        # VVVVVVVVVV THIS IS THE LINE TO CHANGE VVVVVVVVVV
         self._setup_image_generator_config() # Renamed: Validates image gen worker config
-        # ^^^^^^^^^^ THIS IS THE LINE TO CHANGE ^^^^^^^^^^
 
-    async def get_vlm_description(self, image_path: str, prompt: str) -> Optional[str]:
-        """
-        New VLM Bridge: Fetches both the model and mmproj paths from the model map
-        and delegates the 'vision' task to the llama_worker.
-        """
-        # 1. Retrieve the specific filenames from your updated model map
-        vlm_model_file = LLAMA_CPP_MODEL_MAP.get("vlm")
-        mmproj_file = LLAMA_CPP_MODEL_MAP.get("vlm_mmproj")
-
-        if not vlm_model_file or not mmproj_file:
-            logger.error("VLM or mmproj model file not defined in LLAMA_CPP_MODEL_MAP.")
-            return None
-
-        # 2. Build absolute paths
-        vlm_path = os.path.join(LLAMA_CPP_GGUF_DIR, vlm_model_file)
-        mmproj_path = os.path.join(LLAMA_CPP_GGUF_DIR, mmproj_file)
-
-        # 3. Construct the payload for the llama_worker subprocess
-        payload = {
-            "task_type": "vision", # Matches the new block in llama_worker.py
-            "model_path": vlm_path,
-            "mmproj_path": mmproj_path,
-            "image_path": image_path,
-            "prompt": prompt,
-            "temperature": 0.2 # Recommended low temp for accurate descriptions
-        }
-
-        # 4. Call the worker (reusing your existing internal worker caller)
-        # This assumes you have an internal method like _execute_worker_task
-        response = await self._execute_worker_task(payload)
-
-        # 5. Extract the text from the standardized worker response
-        if response and "choices" in response:
-            return response["choices"][0]["message"].get("content")
-        
-        return None
 
     async def save_llama_session_async(self, model_role: str, state_name: str, priority: int = ELP0) -> Dict[str, Any]:
         """
