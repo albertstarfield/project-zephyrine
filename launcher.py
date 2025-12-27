@@ -204,7 +204,7 @@ MODELS_TO_DOWNLOAD = [
     #Image Encoder to Decoder
     {
         "filename": "Qwen3-VL-ImageDescripter_v2.gguf",
-        "url": "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct-UD-IQ2_XXS.gguf?download=true",
+        "url": "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct-Q4_K_S.gguf?download=true",
         "description": "Qwen3 Image Descriptor VL Model"
     },
     {

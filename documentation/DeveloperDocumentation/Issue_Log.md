@@ -1,3 +1,8 @@
+-   **ID:** CORE-FEAT-016
+-   **Title:** Implement Dynamic Agentic Relaxation, Enhanced Ollama Compatibility, and VLM Improvements
+-   **Status:** In-Progress
+-   **Description:** This feature introduces a comprehensive set of improvements. A new "Dynamic Agentic Relaxation" system has been implemented in the `PriorityQuotaLock` to intelligently throttle background ELP0 tasks based on system state (CPU, power, user idle time), significantly improving responsiveness. Ollama compatibility has been greatly enhanced with new API endpoints (`/api/show`), and major refactoring of the streaming generators (`_ollama_pseudo_stream_sync_generator` and `_stream_openai_chat_response_generator_flask`) to provide live log streaming. The Vision Language Model (VLM) pipeline has been made more robust, with its priority elevated to ELP1 and its context handling improved. The default VLM model has been updated to a higher quality quantization. Additionally, numerous performance and stability improvements have been made to the `llama_worker` and `AdelaideAlbertCortex`.
+
 -   **ID:** LLAMA-FIX-001
 -   **Title:** Disable memory mapping in llama_worker for stability
 -   **Status:** Resolved

@@ -39,9 +39,14 @@ base_cmd = [
     "--model", args.model_path,
     "--n-gpu-layers", str(args.n_gpu_layers),
     "--simple-io",
+    "--offline",
+    "--no-warmup",
+    "--no-host",
     "-no-cnv",               # Use single dash as per your terminal test
     "--mmap",
-    "--reasoning-budget", "0" # Kill thinking blocks for clean output
+    "--cpu-strict", "1",
+    "-ot", ".ffn_.*_exps.=CPU",
+    "-fa", "off"
 ]
 
 # Run the command and capture the output
@@ -475,9 +480,10 @@ def main():
             if max_gen_tokens_chat <= 0: max_gen_tokens_chat = GENERATION_OUTPUT_BUFFER_TOKENS // 2
             original_kwargs_from_provider["max_tokens"] = max_gen_tokens_chat
             chat_cmd = base_cmd + [
+                "-c", str(calculated_n_ctx_for_model_load),
                 "--no-display-prompt",
                 "--chat-template", args.chat_format or "chatml",
-                "--prompt", format_messages_as_string(messages_for_llm), # You'll need a small helper here
+                "--prompt", format_messages_as_string(messages_for_llm),
                 "--n-predict", str(max_gen_tokens_chat)
             ]
 
@@ -525,12 +531,15 @@ def main():
                 "LMExec",
                 "--model", args.model_path,
                 "--n-gpu-layers", str(args.n_gpu_layers),
-                "--ctx-size", str(calculated_n_ctx_for_model_load),
+                "-c", str(calculated_n_ctx_for_model_load),
                 "--prompt", prompt_for_llm,
                 "--n-predict", str(max_gen_tokens_raw),
                 "--prompt-cache", state_file_path,  # Native binary KV cache
                 "--prompt-cache-all",  # Cache the prompt for future turns
                 "--simple-io",  # Use basic IO for subprocesses
+                "--offline",
+                "--no-host",
+                "--no-warmup",
                 "-no-cnv",
                 "--log-disable"  # Prevent logs from polluting stdout
             ]
@@ -640,9 +649,17 @@ def main():
                 "--model", args.model_path,
                 "--mmproj", mmproj_path,
                 "--image", image_path,
+                "--mmap",
+                "--cpu-strict", "1",
+                "-fa", "off",
+                "-ot", ".ffn_.*_exps.=CPU", #Unsloth recommendation on optimizaiton of memory
+                "--no-warmup",
+                "--offline",
+                "--no-host",
                 "--n-gpu-layers", "-1",
+                "-c", "4096", #maintain context window limitation for limiting memory consumption issue (Was sabotaged by Gemini)
                 "--temp", str(original_kwargs_from_provider.get("temperature", 0.8)),
-                "-n", "256", # Limit generation for descriptions
+                "-n", "2048", # Limit generation for descriptions
                 "-p", prompt_for_llm
             ]
 
@@ -704,8 +721,8 @@ def main():
                 rereq_base = [
                     "LMExec", "--model", args.model_path,
                     "--n-gpu-layers", str(args.n_gpu_layers),
-                    "--ctx-size", str(calculated_n_ctx_for_model_load),
-                    "--simple-io", "-no-cnv", "--no-display-prompt",
+                    "-c", str(calculated_n_ctx_for_model_load),
+                    "--simple-io", "-no-cnv", "--no-display-prompt", "--no-warmup",
                     "--no-show-timings", "--log-disable"
                 ]
 

@@ -76,7 +76,7 @@ FUZZY_SEARCH_THRESHOLD_CONTEXT = getattr(
 BENCHMARK_ELP1_TIME_MS = 600000.0  # before hard defined error timeout (30 seconds max)
 
 DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
-DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 13)) #quick switch based on tkoen to peer review everphase architecture
+DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 30)) #quick switch based on tkoen to peer review everphase architecture
 DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT = int(os.getenv("DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT", 8192)) #each specialist model "peer review everphase" max token gen
 
 
@@ -247,9 +247,36 @@ if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
 # Can be a string preset or a number from 0 to 100 (%).
 # 0 or "Default": No relaxation, ELP0 tasks run at full capacity.
 # 100 or "EmergencyReservative": ELP0 tasks are Nearly fully suspended.
-AGENTIC_RELAXATION_MODE = os.getenv(
+"""AGENTIC_RELAXATION_MODE = os.getenv(
     "AGENTIC_RELAXATION_MODE", "default"
-)  # Preset: Default, Relaxed, Vacation, HyperRelaxed, Conservative, ExtremePowerSaving, EmergencyReservative
+) """ 
+#Testing only.
+AGENTIC_RELAXATION_MODE = os.getenv(
+    "AGENTIC_RELAXATION_MODE", "interactivityPowerResourcePrioritization_HaltContinue"
+)
+# Static Preset: Default, Relaxed, Vacation, HyperRelaxed, Conservative, ExtremePowerSaving, EmergencyReservative
+   # Dynamic Mode: reservativesharedresources (-1), powerSource_BasedConservation (-2), interactivityPrioritization_haltContinue (-3), interactivityPowerPrioritization_HaltContinue (-4), interactivityPowerResourcePrioritization_HaltContinue (-5)
+
+"""
+Dynamic Mode Explanation:
+While static is just alias about percentage and aggresiveness of an percentage on halting the ELP0
+
+Dynamic mode is another whole different story. its value is reserved minus value (e.g. -1 -2 -3 -4 -5 etc)
+reservativesharedresources (-1) : Reserve resources mode when The resources memory ram is full and the CPU usage is full throttle back down and switch to "EmergencyReservative" 100% PWM mode internally to make sure the system doesn't locked up.
+
+!!!Note: Interactivity only available if and only if the system or daemon or whatever of the ProjectZephyrine have access to monitor the user session Power, but if it doesn't then it won't work. and May cause issue that it never release the ELP0!!!
+
+powerSource_BasedConservation (-2) : Switch to emergencyreservative (when on battery) or doing full throttle (default 0) when on charging mode. based on the power source  
+
+!!!Note: Interactivity only available if and only if the system or daemon or whatever of the Project-Zephyrine have access to monitor the monitor, but if it doesn't then it won't work. and May cause issue that it never release the ELP0!!!
+
+interactivityPrioritization_haltContinue (-3) : Monitors the Interaction or Idle of the system (and if it's idling for 1800 second) then it will release the ELP0 lock from the 100 cycle mode. but if it's goes to 0 or below 1800 seconds then it will halt the ELP0 and goes to 100% PWM cycle halt mode
+
+interactivityPowerPrioritization_HaltContinue (-4) : Monitors the Interaction or Idle of the system (and if it's idling for 1800 second AND having (Relatively Unlimited Power budget, such as plugged into the wall)) then it will release the ELP0 lock from the 100 cycle mode. but if it's goes to 0 or below 1800 seconds or goes back to for instance limited power budget then it will halt the ELP0 and goes to 100% PWM cycle halt mode. 
+
+interactivityPowerResourcePrioritization_HaltContinue (-5) : Monitors the Interaction or Idle of the system (and if it's idling for 300 second AND having (Relatively Unlimited Power budget, such as plugged into the wall) AND (Resources are Free to Use at that Time [Before used by Zephy])) then it will release the ELP0 lock from the 100 cycle mode put it to 0. but if it's goes to 0 or below 1800 seconds OR goes back to for instance limited power budget OR resources are being used by something else on the processes. then it will halt the ELP0 and goes to 100% PWM cycle halt mode. 
+
+"""  
 
 AGENTIC_RELAXATION_PRESETS = {
     "default": 0,
@@ -260,10 +287,14 @@ AGENTIC_RELAXATION_PRESETS = {
     "extremepowersaving": 98,
     "emergencyreservative": 100,
     "reservativesharedresources": -1,  # Special value for dynamic mode
+    "powerSource_BasedConservation": -2,  # Special value for dynamic mode (Only for the one that can read the System Status)
+    "interactivityPrioritization_haltContinue": -3,  # Special value for dynamic mode (Only for the one that can read the System Status)
+    "interactivityPowerPrioritization_HaltContinue": -4,  # Special value for dynamic mode (Only for the one that can read the System Status)
+    "interactivityPowerResourcePrioritization_HaltContinue": -5,  # Special value for dynamic mode (Only for the one that can read the System Status)
 }
 
-# The time period (in seconds) over which the PWM cycle occurs.
-AGENTIC_RELAXATION_PERIOD_SECONDS = 2.0
+# The time period (in seconds) over which the PWM cycle occurs. #default 60 seconds
+AGENTIC_RELAXATION_PERIOD_SECONDS = 60
 
 
 USER_AGENTS = [
@@ -358,12 +389,12 @@ META_MODEL_OWNER = "zephyrine-foundation"
 TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha"  # Client-facing TTS model name
 ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal"  # New constant for ASR
 IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
-META_MODEL_FAMILY = "zephyrine"
+META_MODEL_FAMILY = "Zephyrine"
 META_MODEL_PARAM_SIZE = "77.05B"  # As requested
 META_MODEL_PARAM_SIZE = "77.05B"  # As requested
 META_MODEL_QUANT_LEVEL = "fp16"  # As requested
 META_MODEL_FORMAT = "gguf"  # Common format assumption for Ollama compatibility
-
+META_MODEL_LICENSE="HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV"
 
 # --- Mapping logical roles to GGUF filenames within LLAMA_CPP_GGUF_DIR ---
 LLAMA_CPP_MODEL_MAP = {
@@ -1852,14 +1883,10 @@ assistant
 """
 
 PROMPT_VLM_AUGMENTED_ANALYSIS = """
-You are an expert image analyst. Your task is to provide a comprehensive description of the provided image.
-
-You have two sources of information:
-1. The raw image data.
-2. A list of text strings that have been automatically extracted from the image using an Optical Character Recognition (OCR) tool. This OCR data is provided as a ground truth for any text present in the image.
+Your task is to provide a comprehensive description of the provided image. You can encode it into LaTeX too if you needed it
 
 Your instructions:
-- First, describe the image visually: what are the main objects, the setting, the style, the composition, and any notable actions or relationships?
+- First, describe the image visually: what are the main objects, the setting, the style, the composition, and any notable actions or relationships and the context?
 - Second, integrate the provided OCR text into your description. If you see text in the image, use the OCR data to accurately state what it says. You can use it to correct any visual misinterpretations you might have made.
 - Combine these observations into a single, coherent, and detailed description.
 
@@ -1868,7 +1895,8 @@ OCR-EXTRACTED TEXT (Use this as ground truth for any text in the image):
 {ocr_text}
 ---
 
-Your comprehensive description of the image, incorporating the OCR text:
+Your comprehensive description of the image, incorporating the OCR text below.
+assistant:
 """
 
 PROMPT_TREE_OF_THOUGHTS_V2 = """system

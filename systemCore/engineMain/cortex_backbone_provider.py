@@ -15,7 +15,7 @@ import tempfile
 import base64
 import signal
 from loguru import logger # Logging library
-from langchain_core.runnables import RunnableConfig, RunnableLambda
+from langchain_core.runnables import RunnableConfig, RunnableLambda, Runnable
 try:
     import tiktoken
     TIKTOKEN_AVAILABLE = True
@@ -162,18 +162,33 @@ def strip_initial_think_block(text: str) -> str:
         return text.lstrip()
 
 
-class LlamaCppVisionWrapper:
+class LlamaCppVisionWrapper(Runnable):
     def __init__(self, model_path, mmproj_path, provider_ref):
         self.model_path = model_path
         self.mmproj_path = mmproj_path
         self.provider = provider_ref
 
-    def invoke(self, input_data, config=None):
+    def invoke(self, input: Any, config: Optional[RunnableConfig] = None, **kwargs: Any) -> str:
         # 1. Adelaide sends: [HumanMessage(content=[{"type": "image_url"...}, {"type": "text"...}])]
         # We extract the content parts from the LangChain message
-        messages = input_data if isinstance(input_data, list) else [input_data]
+        messages = input if isinstance(input, list) else [input]
         prompt_text = ""
         image_b64 = None
+
+        logger.info(f"invoked remove this later llamacppvisionwrapper debug msg metadata")
+
+        priority = 0
+        if config:
+            # 1. Check metadata (The correct LangChain way)
+            priority = config.get("metadata", {}).get("priority", priority)
+            # 2. Check configurable (Another LangChain standard)
+            if priority == 0 and "configurable" in config:
+                priority = config["configurable"].get("priority", priority)
+            # 3. Check top-level (Legacy/Direct way)
+            if priority == 0:
+                priority = config.get("priority", priority)
+
+        logger.info(f"invoked remove this later llamacppvisionwrapper [Turd Code Debug] debug msg raw data caught {priority}")
 
         for msg in messages:
             content = getattr(msg, "content", [])
@@ -195,7 +210,6 @@ class LlamaCppVisionWrapper:
 
         # 3. Use the provider's execution logic to call the worker
         # We signal task_type="vision" so the worker knows to use LMMultiModal
-        priority = config.get("priority", 0) if config else 0
 
         payload = {
             "task_type": "vision",
@@ -203,30 +217,33 @@ class LlamaCppVisionWrapper:
             "mmproj_path": self.mmproj_path,
             "image_path": temp_image_path,
             "prompt": prompt_text,
-            "kwargs": {"temperature": 0.2}
+            "kwargs": {"temperature": 0.8}
         }
-
+        logger.info(f"llamacppvisionwrapper invoke [Turd Code Debug] payload w/ pri {priority} L payload {payload}")
         # 4. Delegate to your existing worker execution bridge
         # Assuming you have a method like _run_worker_sync in your provider
         result = self.provider._execute_in_worker(
-            model_role="vlm", 
-            task_type="vision", 
-            request_data=payload, 
+            model_role="vlm",
+            task_type="vision",
+            request_data=payload,
             priority=priority
         )
 
+        logger.info(f"llamacppvisionwrapper invoke [Turd Code Debug] w/ pri {priority} raw result {result}")
         # 5. Cleanup
         if os.path.exists(temp_image_path):
             os.remove(temp_image_path)
 
-        # 6. Extract the generated text from the standard worker dict
-        if result and "choices" in result:
-            return result["choices"][0]["message"].get("content", "")
-        return "[Vision Bridge Error]"
+        # 6. Extract the generated text safely
+        if result:
+            # Handle double wrapping {'result': {'choices': ...}}
+            inner = result.get("result", result)
 
-    # Support the | StrOutputParser() syntax used in Adelaide
-    def __or__(self, other):
-        return RunnableLambda(self.invoke) | other
+            if isinstance(inner, dict) and "choices" in inner:
+                choices = inner["choices"]
+                if choices and isinstance(choices, list):
+                    return choices[0]["message"].get("content", "")
+        return "[Vision Bridge Error: No content returned]"
 
 # --- Chat Model Wrapper ---
 class LlamaCppChatWrapper(SimpleChatModel):
@@ -263,20 +280,16 @@ class LlamaCppChatWrapper(SimpleChatModel):
         provider_logger = getattr(self.ai_provider, 'logger', logger)
         wrapper_log_prefix = f"LlamaCppChatWrapper(Role:{self.model_role})"
 
-        # ================================================================= #
-        # <<< THIS IS THE CORRECTED FIX >>>
-        # ================================================================= #
-        priority = ELP0  # Default priority
-
-        # 1. First, check the `config` object passed by LangChain's invoke.
+        priority = ELP0
+        # 1. Check kwargs (direct call overrides)
         if 'priority' in kwargs:
             priority = kwargs.pop('priority')
-            # 2. Then, check the LangChain config object, which overrides kwargs
-        elif config and isinstance(config.get("configurable"), dict):
+        # 2. Check config metadata (LangChain standard)
+        elif config and "metadata" in config:
+            priority = config["metadata"].get("priority", priority)
+        # 3. Check config configurable (Another LangChain standard)
+        elif config and "configurable" in config:
             priority = config["configurable"].get("priority", priority)
-        # ================================================================= #
-        # <<< END OF FIX >>>
-        # ================================================================= #
 
         is_raw_chatml_prompt_mode = isinstance(messages, str)
 
