@@ -4518,7 +4518,8 @@ class CortexThoughts:
         # Only ELP0 tasks will attempt retries on interruption
         max_retries = LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES if priority == ELP0 else 0
         retry_delay_seconds = LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY
-
+        #debug remove later
+        logger.info(f"LLMcall call llm with timing invoked PRI_{priority}")
         attempt_count = 0
         while attempt_count <= max_retries:
             attempt_count += 1
@@ -4530,21 +4531,25 @@ class CortexThoughts:
                     f"{log_prefix_call}: Invoking chain/model {type(chain)}..."
                 )
 
-                llm_call_config = {"priority": priority}  # For LlamaCppChatWrapper
-
+                llm_call_config = {"metadata": {"priority": priority}}
+                #debug remove later
+                logger.info(f"LLMcall call llm with timing invoked PRI_{priority} call_config {llm_call_config}")
                 # The actual call to the LLM (via chain or model)
                 if hasattr(chain, "invoke") and callable(
                     chain.invoke
                 ):  # Langchain runnable
                     response_from_llm = chain.invoke(inputs, config=llm_call_config)
+                    logger.info(f"LLMcall call llm with timing invoked res {response_from_llm}")
                 elif callable(
                     chain
                 ):  # Direct model call (e.g., for raw ChatML in direct_generate)
                     # Assuming 'chain' is the model and 'inputs' is the raw prompt string.
                     # The LlamaCppChatWrapper._call method handles 'priority' from CortexConfiguration.
+                    logger.info(f"LLMcall call llm with timing invoked call {llm_call_config}")
                     response_from_llm = chain(
                         messages=inputs, stop=[CHATML_END_TOKEN], **llm_call_config
                     )
+                    logger.info(f"LLMcall call llm with timing invoked res {response_from_llm}")
                 else:
                     raise TypeError(
                         f"Unsupported chain/model type for _call_llm_with_timing: {type(chain)}"
@@ -6513,10 +6518,13 @@ class CortexThoughts:
                 # We append the error to context so the LLM knows why it can't see the image
                 vlm_description = f"[System Error: The user attached an image, but VLM processing failed: {err}]"
 
-        
+        if vlm_description:
+            logger.info(f"{log_prefix}: Injecting VLM context into User Input.")
+            user_input = f"[Image Context (Details and Text if available): {vlm_description}]\n\nUser Query: {user_input}"
         
         # Keywords that suggest a multi-step or technical structure is needed
-        complex_triggers = ["prove", "derive", "solve", "calculate", "equation", "explain", "analyze", "design", "how", "outline", "compare"]
+        #complex_triggers = ["prove", "derive", "solve", "calculate", "equation", "explain", "analyze", "design", "how", "outline", "compare"]
+        complex_triggers = ["93001r0a8sdas"] #Just disable it, it can create strange result tbh when accidentally triggered.
         is_complex = any(t in user_input.lower() for t in complex_triggers)
         
         # --- PATH A: FAST PATH (One-Shot) ---
@@ -7138,7 +7146,7 @@ class CortexThoughts:
         session_id: str,
         image_b64: str,
         prompt_type: str = "initial_description",
-        priority: int = ELP0,
+        priority: int = ELP1,
         is_avif: bool = False,
     ) -> Tuple[Optional[str], Optional[str]]:
         """
@@ -7240,7 +7248,8 @@ class CortexThoughts:
                 "session_id": session_id,
                 "mode": f"vlm_ocr_description_{prompt_type}",
             }
-
+            #info debug
+            logger.info(f"{log_prefix} Calling callLLMfrom directGenerateLogic Augmented VLM Direct Generate Logic preempt Pri {priority}.")
             response_text = await asyncio.to_thread(
                 self._call_llm_with_timing,
                 vlm_chain,
@@ -10790,216 +10799,179 @@ def _format_ollama_chat_response_nonstream(
 
 
 def _ollama_pseudo_stream_sync_generator(
-    session_id: str, user_input: str, image_b64: Optional[str], model_name: str
+    session_id: str, 
+    user_input: str, 
+    image_b64: Optional[str], 
+    model_name: str
 ):
     """
-    Takes a completed text string and yields it word-by-word in the
-    Ollama-compatible streaming SSE format. This version is robustly designed
-    to prevent client-side 'reading content of undefined' errors.
+    The definitive Ollama-Compatible Stream Generator.
+    POLISHED V6: Streams thoughts + live logs (with typing effect) -> final answer -> metrics.
     """
-    logger.info(
-        f"OLLAMA_STREAM_V3: Calling Classical AI LLM/SLM paradigm Streaming Emulator)."
-    )
-    # Timing variables
+    logger.info("OLLAMA_STREAM_V6: Starting generator with live log streaming.")
+    
+    # Timing variables for Ollama metrics
     total_start_time = time.monotonic()
-    eval_duration_ns = 0
-
+    
+    # 1. Helper to format Ollama NDJSON chunks
     def format_ollama_chunk(
         content: Optional[str] = None,
         done: bool = False,
         final_metrics: Optional[dict] = None,
     ) -> str:
-        """
-        A specialized helper to format data into the precise Ollama streaming JSON structure.
-        Returns the JSON string followed by a newline.
-        """
         chunk = {
             "model": model_name,
             "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "done": done,
         }
-
-        # For content chunks (done=False), include the message object.
         if content is not None:
             chunk["message"] = {"role": "assistant", "content": content}
-
-        # For the final "done" chunk, include an empty message for compatibility
-        # and merge in the final performance metrics.
         if done:
-            chunk["message"] = {"role": "assistant", "content": ""}
+            # Ollama expects an empty message obj on the final chunk sometimes
+            # chunk["message"] = {"role": "assistant", "content": ""} 
             if final_metrics:
                 chunk.update(final_metrics)
-
         return json.dumps(chunk) + "\n"
 
+    # Queue Protocol: ("LOG", msg), ("RESULT", text), ("ERROR", text)
+    message_queue = queue.Queue()
+    sink_id_holder = [None]
+
     try:
-        # Check if the pre-buffered content was successfully loaded at startup.
-        if _PREBUFFERED_THINK_CONTENT:
-            # Prepend the <think> tag to the monologue for the UI.
-            # We will send the closing </think> tag later.
-            think_monologue = "<think>\n" + _PREBUFFERED_THINK_CONTENT
+        # 2. Open Think Tag
+        yield format_ollama_chunk(content="<think>\n")
 
-            # Split the monologue into words to simulate typing.
-            think_words = think_monologue.split(" ")
-            for word in think_words:
-                # Use our new helper to format each word as a valid Ollama chunk.
-                yield format_ollama_chunk(content=word + " ")
-
-                # A small delay to create the typing effect.
-                time.sleep(0.01)
-        message_queue = queue.Queue()
-
+        # 3. Define Background Task
         def run_async_generate_in_thread():
-            """
-            Target function for the background thread. Runs the async direct_generate
-            logic in a new event loop and puts the final result onto the queue.
-            """
+            log_context_id = f"{session_id}-{threading.get_ident()}-ollama"
+            
+            def log_sink(message):
+                record = message.record
+                if record["extra"].get("request_session_id") == log_context_id:
+                    clean_msg = record['message']
+                    formatted_log = f"\n> {clean_msg}"
+                    try:
+                        message_queue.put_nowait(("LOG", formatted_log))
+                    except queue.Full:
+                        pass
+
+            if STREAM_INTERNAL_LOGS:
+                sink_id_holder[0] = logger.add(
+                    log_sink,
+                    level="INFO",
+                    filter=lambda r: r["extra"].get("request_session_id") == log_context_id
+                )
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
-            final_text_result = "Error: Background thread failed to produce a result."
             db_session: Optional[Session] = None
+            
             try:
                 db_session = SessionLocal()
-                if not db_session:
-                    raise RuntimeError(
-                        "Failed to create DB session for background direct_generate."
+                with logger.contextualize(request_session_id=log_context_id):
+                    result = loop.run_until_complete(
+                        cortex_text_interaction.direct_generate(
+                            db=db_session,
+                            user_input=user_input,
+                            session_id=session_id,
+                            image_b64=image_b64,
+                        )
                     )
-
-                # Run the async direct_generate function until it's complete.
-                result = loop.run_until_complete(
-                    cortex_text_interaction.direct_generate(
-                        db=db_session,
-                        user_input=user_input,
-                        session_id=session_id,
-                        image_b64=image_b64,
-                    )
-                )
-                final_text_result = result
+                    message_queue.put(("RESULT", result))
             except Exception as e:
-                logger.error(
-                    f"Background direct_generate task EXCEPTION (Ollama Stream): {e}",
-                    exc_info=True,
-                )
-                final_text_result = f"[Error during generation: {type(e).__name__}]"
+                logger.error(f"Ollama BG Task Error: {e}", exc_info=True)
+                message_queue.put(("ERROR", f"[Error: {type(e).__name__} - {e}]"))
             finally:
-                # Put the final result (or error message) onto the queue.
-                message_queue.put(final_text_result)
-                if db_session:
-                    db_session.close()
+                if db_session: db_session.close()
                 loop.close()
+                if sink_id_holder[0] is not None:
+                    logger.remove(sink_id_holder[0])
 
-        # Create and start the background thread.
-        # The main generator thread will not wait for this to finish;
-        # it will continue immediately to the next step (the ellipsis loop).
-        background_thread = threading.Thread(
-            target=run_async_generate_in_thread, daemon=True
-        )
+        # 4. Start Thread
+        background_thread = threading.Thread(target=run_async_generate_in_thread, daemon=True)
         background_thread.start()
 
-        while background_thread.is_alive():
-            # Check the queue for the final result without blocking.
-            if message_queue.empty():
-                # Yield a single dot, formatted as a valid Ollama chunk.
-                yield format_ollama_chunk(content=".")
-                # Wait for a moment to create a "pulsing" ellipsis effect.
-                time.sleep(0.01)
-            else:
-                # The result has arrived in the queue. The thread is done.
-                # Break the loop to proceed with retrieving the result.
-                break
-        try:
-            final_response_text = message_queue.get(timeout=600)
-            logger.info(
-                "Ollama generator retrieved final response from background thread."
-            )
-        except queue.Empty:
-            logger.error(
-                "CRITICAL (Ollama Stream): Background thread finished, but the queue was empty."
-            )
-            final_response_text = (
-                "[System Error: Failed to retrieve response from generation thread.]"
-            )
+        # 5. Pre-buffered Thoughts
+        if _PREBUFFERED_THINK_CONTENT:
+            think_words = _PREBUFFERED_THINK_CONTENT.split(" ")
+            for word in think_words:
+                yield format_ollama_chunk(content=word + " ")
+                time.sleep(0.0001)
 
-        yield format_ollama_chunk(content="\n</think>\n\n")
+        # 6. Stream Live Logs
+        final_response_text = None
+        
+        while True:
+            try:
+                item = message_queue.get(timeout=STREAM_ANIMATION_DELAY_SECONDS)
+                msg_type, msg_content = item
+                
+                if msg_type == "LOG":
+                    if STREAM_INTERNAL_LOGS:
+                        # Sanitize brackets for UI safety
+                        safe_content = msg_content.replace("<", "＜").replace(">", "＞")
+                        
+                        # Smart Catch-up: Dump if queue is backing up, Type if clear
+                        if message_queue.qsize() > 1:
+                            yield format_ollama_chunk(content=safe_content)
+                        else:
+                            for char in safe_content:
+                                yield format_ollama_chunk(content=char)
+                                time.sleep(0.0001)
+                
+                elif msg_type == "RESULT":
+                    final_response_text = msg_content
+                    break
+                
+                elif msg_type == "ERROR":
+                    final_response_text = msg_content
+                    break
+            
+            except queue.Empty:
+                if not background_thread.is_alive():
+                    final_response_text = "[System Error: Thread died without output.]"
+                    break
+                
+                if not STREAM_INTERNAL_LOGS:
+                    yield format_ollama_chunk(content=".")
 
-        # Now, stream the actual response that we retrieved from the background thread.
-        # First, check if the response is an error message.
-        if "[Error" in final_response_text:
-            logger.warning(
-                f"Ollama Stream: Streaming an error message to the client: {final_response_text}"
-            )
+        # 7. Close Think Tag
+        yield format_ollama_chunk(content="\n\n</think>\n\n")
+
+        # 8. Stream Final Result
+        if "[Error" in final_response_text or "Interrupted" in final_response_text:
             yield format_ollama_chunk(content=final_response_text)
-            # The final "done" chunk will be sent in the `finally` block.
         else:
-            zephy_prefix_pattern = re.compile(r"(?i)\s*Zephy\s*:\s*(.*)", re.DOTALL)
-            parts = zephy_prefix_pattern.split(final_response_text)
-            messages = [p.strip() for p in parts if p.strip()]
-
-            messages_to_stream = messages if messages else [final_response_text]
-
-            if len(messages_to_stream) > 1:
-                logger.warning(
-                    f"Ollama Streamer: Multi-message response detected ({len(messages_to_stream)} parts). Yielding warning."
-                )
-
-                # 1. Yield the warning chunk first
-                warning_message = "[The Engine is responding with more than one message or response, Unfortunately it is incompatible with the standard status quo OpenAI and Ollama standard one query get answer instantly short formatted answer tiktok/short/reels paradigm specification API format]\n\n"
-                yield format_ollama_chunk(content=warning_message)
-                time.sleep(0.1)
-
-                # 2. Loop and stream each message with a prefix
-                for msg_index, message_text in enumerate(messages_to_stream):
-                    prefixed_message = f"Zephy [{msg_index + 1}]: {message_text}\n\n"
-
-                    # Stream this part word-by-word
-                    words = prefixed_message.split(" ")
-                    for i, word in enumerate(words):
-                        content_to_send = word + (" " if i < len(words) - 1 else "")
-                        yield format_ollama_chunk(content=content_to_send)
-                        time.sleep(0.01)
-            else:
-                # 3. Original behavior: only one message, stream it normally
-                logger.info(
-                    f"Ollama Streamer: Streaming single response normally ({len(messages_to_stream[0])} chars)."
-                )
-                words = messages_to_stream[0].split(" ")
-                for i, word in enumerate(words):
-                    content_to_send = word + (" " if i < len(words) - 1 else "")
-                    yield format_ollama_chunk(content=content_to_send)
-                    time.sleep(0.01)
+            # Strip Zephy prefix if present
+            clean_text = re.sub(r"(?i)\s*Zephy\s*:\s*(.*)", r"\1", final_response_text, flags=re.DOTALL)
+            
+            # Simple word streaming
+            words = clean_text.split(" ")
+            for i, word in enumerate(words):
+                content_to_send = word + (" " if i < len(words) - 1 else "")
+                yield format_ollama_chunk(content=content_to_send)
+                time.sleep(0.0001)
 
     except GeneratorExit:
-        logger.warning("OLLAMA_STREAM_V3: Client disconnected from stream.")
+        logger.warning("OLLAMA_STREAM_V6: Client disconnected.")
+        if sink_id_holder[0] is not None:
+            logger.remove(sink_id_holder[0])
+            
     except Exception as e:
-        logger.exception(
-            "OLLAMA_STREAM_V3: Unhandled exception during stream generation."
-        )
-        # Attempt to send a final error message if an exception occurs mid-stream
-        try:
-            error_chunk = {
-                "model": model_name,
-                "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-                "done": True,
-                "error": f"Server-side streaming error: {type(e).__name__}",
-            }
-            yield json.dumps(error_chunk) + "\n"
-        except:
-            pass  # The generator may already be closed
+        logger.error(f"OLLAMA_STREAM_V6 Error: {e}")
+        yield format_ollama_chunk(content=f"\n[STREAM ERROR: {e}]")
     finally:
-        # This block is GUARANTEED to run.
-
-        # Calculate final performance metrics for the Ollama "done" message.
+        # 9. Final Done Chunk with Metrics
         total_duration_ns = int((time.monotonic() - total_start_time) * 1_000_000_000)
-        final_metrics = {
+        metrics = {
             "total_duration": total_duration_ns,
-            "eval_duration": eval_duration_ns,
-            # Other metrics like prompt_eval_count could be added here if tracked
+            "load_duration": 0,
+            "prompt_eval_count": 0,
+            "eval_count": 0,
+            "eval_duration": 0
         }
-
-        # Yield the final, compliant "done" message.
-        yield format_ollama_chunk(done=True, final_metrics=final_metrics)
-        logger.info(f"OLLAMA_STREAM_V3: Finished. Sent final 'done' chunk.")
+        yield format_ollama_chunk(done=True, final_metrics=metrics)
+        logger.info("OLLAMA_STREAM_V6: Finished.")
 
 
 # --- Classical Legacy AI Olama & OpenAI Response Formatting Helpers ---
@@ -11925,7 +11897,7 @@ def _async_compatible_openai_streamer(
         for i, word in enumerate(words):
             chunk_content = word + (" " if i < len(words) - 1 else "")
             yield yield_chunk(delta_content=chunk_content)
-            time.sleep(0.01)  # Small delay for typing effect
+            time.sleep(0.0001)  # Small delay for typing effect
 
         # Yield the final stop chunk
         yield yield_chunk(finish_reason="stop")
@@ -11994,7 +11966,7 @@ def _pseudo_stream_sync_generator(
         for i, word in enumerate(words):
             chunk_content = word + (" " if i < len(words) - 1 else "")
             yield yield_chunk(delta_content=chunk_content)
-            time.sleep(0.02)
+            time.sleep(0.0001)
 
         yield yield_chunk(finish_reason="stop")
 
@@ -12091,39 +12063,30 @@ GENERATION_DONE_SENTINEL = object()
 
 
 def _stream_openai_chat_response_generator_flask(
-    session_id: str,
-    user_input: str,
-    classification: str,
-    image_b64: Optional[str],
-    model_name: str = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream",
+        session_id: str,
+        user_input: str,
+        classification: str,
+        image_b64: Optional[str],
+        model_name: str = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream",
 ):
     """
-    The definitive Server-Sent Events (SSE) generator for Flask. It orchestrates the
-    dual-generate process by running the fast ELP1 logic in a background thread while
-    streaming results. Features configurable live log streaming or a processing animation,
-    and robustly parses the final <think>/<speak> output.
+    The definitive Server-Sent Events (SSE) generator for Flask.
+    POLISHED V6:
+    - Streams pre-buffered thoughts.
+    - Streams LIVE LOGS with a "typing" effect (smart catch-up).
+    - Sanitizes logs to prevent UI breakage.
+    - Cleanly closes the thought block before the final answer.
     """
     resp_id = f"chatcmpl-{uuid.uuid4()}"
     timestamp = int(time.time())
-    logger.debug(
-        f"FLASK_STREAM_V3 {resp_id}: Starting definitive generator for session {session_id}"
-    )
+    logger.debug(f"FLASK_STREAM_V6 {resp_id}: Starting generator with smart log streaming.")
 
-    message_queue = queue.Queue()
-    background_thread: Optional[threading.Thread] = None
-    final_result_data = {
-        "text": "Error: Generation failed to return a result from the background thread.",
-        "finish_reason": "error",
-        "error": None,
-    }
-    sink_id_holder = [None]  # Use a list to pass the sink ID by reference
-
+    # 1. Helper to format chunks
     def yield_chunk(
-        delta_content: Optional[str] = None,
-        role: Optional[str] = None,
-        finish_reason: Optional[str] = None,
+            delta_content: Optional[str] = None,
+            role: Optional[str] = None,
+            finish_reason: Optional[str] = None,
     ):
-        """Helper to format data into the OpenAI SSE chunk structure."""
         delta = {}
         if role:
             delta["role"] = role
@@ -12138,271 +12101,165 @@ def _stream_openai_chat_response_generator_flask(
         }
         return f"data: {json.dumps(chunk_payload)}\n\n"
 
-    def run_async_generate_in_thread(
-        q: queue.Queue,
-        sess_id: str,
-        u_input: str,
-        classi_param: str,
-        img_b64_param: Optional[str],
-    ):
-        """
-        Target function for the background thread. Runs the async direct_generate logic
-        in a new event loop, captures logs, and puts the final result onto the queue.
-        """
-        log_session_id = f"{sess_id}-{threading.get_ident()}"
-        thread_final_text = "Error: Processing failed within the background thread."
-        thread_final_reason = "error"
-        thread_final_error_obj = None
-        db_session: Optional[Session] = None
+    # Queue Protocol:
+    # 1. ("LOG", "Log message string")
+    # 2. ("RESULT", "Final Text String")
+    # 3. ("ERROR", "Error String")
+    message_queue = queue.Queue()
+    sink_id_holder = [None]
 
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+    try:
+        # 2. Send initial Role and Open Think Tag
+        yield yield_chunk(role="assistant", delta_content="<think>\n")
+
+        # 3. Define the Background Task
+        def run_async_generate_in_thread():
+            log_context_id = f"{session_id}-{threading.get_ident()}"
 
             def log_sink(message):
                 record = message.record
-                if record["extra"].get("request_session_id") == log_session_id:
-                    log_entry = f"[{record['time'].strftime('%H:%M:%S.%f')[:-3]} {record['level'].name}] {record['message']}"
+                if record["extra"].get("request_session_id") == log_context_id:
+                    clean_msg = record['message']
+                    # Add newline for UI separation
+                    formatted_log = f"\n> {clean_msg}"
                     try:
-                        q.put_nowait(("LOG", log_entry))
+                        message_queue.put_nowait(("LOG", formatted_log))
                     except queue.Full:
                         pass
 
-            sink_id_holder[0] = logger.add(
-                log_sink,
-                level=LOG_SINK_LEVEL,
-                format=LOG_SINK_FORMAT,
-                filter=lambda r: r["extra"].get("request_session_id") == log_session_id,
-            )
-
-            async def run_generate_with_logging_inner():
-                nonlocal \
-                    db_session, \
-                    thread_final_text, \
-                    thread_final_reason, \
-                    thread_final_error_obj
-                try:
-                    db_session = SessionLocal()
-                    if not db_session:
-                        raise RuntimeError(
-                            "Failed to create DB session for direct_generate."
-                        )
-
-                    with logger.contextualize(request_session_id=log_session_id):
-                        # Use the global cortex_text_interaction instance
-                        result_text = await cortex_text_interaction.direct_generate(
-                            db=db_session,
-                            user_input=u_input,
-                            session_id=sess_id,
-                            vlm_description=None,
-                            image_b64=img_b64_param,
-                        )
-                        thread_final_text = result_text
-                        thread_final_reason = "stop"
-                except Exception as e:
-                    with logger.contextualize(request_session_id=log_session_id):
-                        logger.error(
-                            f"Async direct_generate task EXCEPTION: {e}", exc_info=True
-                        )
-                    thread_final_error_obj = e
-                    thread_final_text = f"[Error during direct generation for streaming: {type(e).__name__} - {e}]"
-                    thread_final_reason = "error"
-                finally:
-                    if db_session:
-                        db_session.close()
-
-            loop.run_until_complete(run_generate_with_logging_inner())
-
-        except Exception as e:
-            thread_final_error_obj = e
-            thread_final_text = f"Error in background thread setup: {e}"
-            thread_final_reason = "error"
-        finally:
-            q.put(
-                (
-                    "RESULT",
-                    (thread_final_text, thread_final_reason, thread_final_error_obj),
+            if STREAM_INTERNAL_LOGS:
+                sink_id_holder[0] = logger.add(
+                    log_sink,
+                    level="INFO",
+                    filter=lambda r: r["extra"].get("request_session_id") == log_context_id
                 )
-            )
-            q.put(GENERATION_DONE_SENTINEL)
-            if sink_id_holder[0] is not None:
-                logger.remove(sink_id_holder[0])
-            loop.close()
 
-    # --- Main Generator Logic (Runs in the Flask Request Thread) ---
-    try:
-        # The very first action is to send the opening <think> tag to the client.
-        # This provides instant feedback.
-        yield yield_chunk(role="assistant", delta_content="<think>\n")
-
-        # This queue will be used by the background thread to send back the final result.
-        message_queue = queue.Queue()
-
-        def run_async_generate_in_thread():
-            """
-            Target function for the background thread. Runs the async direct_generate
-            logic in a new event loop and puts the final result onto the queue.
-            """
-            # This function is synchronous, but it creates and manages its own
-            # asyncio event loop to run our async direct_generate function.
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
-            final_text_result = "Error: Background thread failed to produce a result."
             db_session: Optional[Session] = None
+
             try:
                 db_session = SessionLocal()
-                if not db_session:
-                    raise RuntimeError(
-                        "Failed to create DB session for background direct_generate."
+                with logger.contextualize(request_session_id=log_context_id):
+                    result = loop.run_until_complete(
+                        cortex_text_interaction.direct_generate(
+                            db=db_session,
+                            user_input=user_input,
+                            session_id=session_id,
+                            image_b64=image_b64,
+                        )
                     )
-
-                # Run the async direct_generate function until it's complete.
-                result = loop.run_until_complete(
-                    cortex_text_interaction.direct_generate(
-                        db=db_session,
-                        user_input=user_input,
-                        session_id=session_id,
-                        image_b64=image_b64,
-                    )
-                )
-                final_text_result = result
+                    message_queue.put(("RESULT", result))
             except Exception as e:
-                logger.error(
-                    f"Background direct_generate task EXCEPTION: {e}", exc_info=True
-                )
-                final_text_result = f"[Error during generation: {type(e).__name__}]"
+                logger.error(f"BG Task Error: {e}", exc_info=True)
+                message_queue.put(("ERROR", f"[Error: {type(e).__name__} - {e}]"))
             finally:
-                # Put the final result (or error message) onto the queue.
-                message_queue.put(final_text_result)
-                if db_session:
-                    db_session.close()
+                if db_session: db_session.close()
                 loop.close()
+                if sink_id_holder[0] is not None:
+                    logger.remove(sink_id_holder[0])
 
-        background_thread = threading.Thread(
-            target=run_async_generate_in_thread, daemon=True
-        )
+        # 4. Start the Background Thread
+        background_thread = threading.Thread(target=run_async_generate_in_thread, daemon=True)
         background_thread.start()
 
-        """background_thread = threading.Thread(
-            target=run_async_generate_in_thread,
-            args=(message_queue, session_id, user_input, classification, image_b64),
-            daemon=True,
-        )
-        background_thread.start()"""
-
-        # Check if the pre-buffered content was successfully loaded at startup.
+        # 5. Play Pre-buffered "Fake Thinking" (Typing effect)
         if _PREBUFFERED_THINK_CONTENT:
-            # Split the cached monologue into words to simulate typing.
             think_words = _PREBUFFERED_THINK_CONTENT.split(" ")
             for word in think_words:
-                # Yield each word with a trailing space.
                 yield yield_chunk(delta_content=word + " ")
-                # A small, fixed delay to create the typing effect.
-                time.sleep(0.05)  # You can adjust this value for desired speed.
+                time.sleep(0.0001)
 
-        try:
-            final_response_text = message_queue.get(
-                timeout=10
-            )  # 10-second safety timeout
-            logger.info(
-                "Main generator thread retrieved final response from background thread."
-            )
-        except queue.Empty:
-            logger.error(
-                "CRITICAL: Background thread finished, but the message queue was empty. This should not happen."
-            )
-            final_response_text = (
-                "[System Error: Failed to retrieve response from generation thread.]"
-            )
+                # 6. Stream Live Logs with Smart Typing Effect
+        final_response_text = None
 
-        yield yield_chunk(delta_content="\n</think>\n\n")
-        # Now, stream the actual response that we retrieved from the background thread.
-        # First, check if the response is an error message.
-        if "[Error" in final_response_text:
-            logger.warning(
-                f"Streaming an error message to the client: {final_response_text}"
-            )
+        while True:
+            try:
+                # Poll queue
+                item = message_queue.get(timeout=STREAM_ANIMATION_DELAY_SECONDS)
+
+                msg_type, msg_content = item
+
+                if msg_type == "LOG":
+                    if STREAM_INTERNAL_LOGS:
+                        # Sanitize to prevent breaking the UI <think> block
+                        # Replace brackets with fullwidth or HTML entities so they aren't parsed as tags
+                        safe_content = msg_content.replace("<", "＜").replace(">", "＞")
+
+                        # SMART CATCH-UP LOGIC
+                        # If the queue has backed up (more than 1 item waiting), dump the text instantly.
+                        # If the queue is clear, type it out character-by-character for the cool effect.
+                        if message_queue.qsize() > 1:
+                            yield yield_chunk(delta_content=safe_content)
+                        else:
+                            # Typewriter effect
+                            for char in safe_content:
+                                yield yield_chunk(delta_content=char)
+                                # 2ms delay = ~500 chars/sec. Fast but visible.
+                                time.sleep(0.0001)
+
+                elif msg_type == "RESULT":
+                    final_response_text = msg_content
+                    break
+
+                elif msg_type == "ERROR":
+                    final_response_text = msg_content
+                    break
+
+            except queue.Empty:
+                if not background_thread.is_alive():
+                    final_response_text = "[System Error: Generation thread died without output.]"
+                    break
+
+                # Heartbeat if logs are off
+                if not STREAM_INTERNAL_LOGS:
+                    yield yield_chunk(delta_content=".")
+
+                    # 7. Close Think Tag
+        # We add newlines to ensure visual separation before closing
+        yield yield_chunk(delta_content="\n\n</think>\n\n")
+
+        # 8. Stream the Actual Result
+        if "[Error" in final_response_text or "Interrupted" in final_response_text:
             yield yield_chunk(delta_content=final_response_text)
-            # Signal that the stream finished with an error.
             yield yield_chunk(finish_reason="error")
         else:
-            # The response is valid, so stream it word-by-word.
             zephy_prefix_pattern = re.compile(r"(?i)\s*Zephy\s*:\s*(.*)", re.DOTALL)
             parts = zephy_prefix_pattern.split(final_response_text)
             messages = [p.strip() for p in parts if p.strip()]
-
-            # Determine the effective message list to stream
             messages_to_stream = messages if messages else [final_response_text]
 
             if len(messages_to_stream) > 1:
-                logger.warning(
-                    f"OpenAI Streamer: Multi-message response detected ({len(messages_to_stream)} parts). Yielding warning."
-                )
-
-                # 1. Yield the warning chunk first
-                warning_message = "[The Engine is responding with more than one message or response, Unfortunately it is incompatible with the standard status quo OpenAI and Ollama standard one query get answer instantly short formatted answer tiktok/short/reels paradigm specification API format]\n\n"
+                warning_message = "[The Engine is responding with more than one message...]\n\n"
                 yield yield_chunk(delta_content=warning_message)
-                time.sleep(0.1)  # Small pause after the warning
+                time.sleep(0.1)
 
-                # 2. Loop and stream each message with a prefix
                 for msg_index, message_text in enumerate(messages_to_stream):
-                    # Add the prefix
                     prefixed_message = f"Zephy [{msg_index + 1}]: {message_text}\n\n"
-
-                    # Stream this part word-by-word for a typing effect
                     words = prefixed_message.split(" ")
                     for i, word in enumerate(words):
                         content_to_send = word + (" " if i < len(words) - 1 else "")
                         yield yield_chunk(delta_content=content_to_send)
                         time.sleep(0.01)
-
             else:
-                # 3. Original behavior: only one message, stream it normally
-                logger.info(
-                    f"OpenAI Streamer: Streaming single response normally ({len(messages_to_stream[0])} chars)."
-                )
                 words = messages_to_stream[0].split(" ")
                 for i, word in enumerate(words):
                     content_to_send = word + (" " if i < len(words) - 1 else "")
                     yield yield_chunk(delta_content=content_to_send)
                     time.sleep(0.01)
 
-            # Signal that the stream finished successfully.
             yield yield_chunk(finish_reason="stop")
 
     except GeneratorExit:
-        # This block is executed if the client (e.g., the browser) closes the connection
-        # before the stream is finished. It's a clean way to handle disconnects.
-        logger.warning(f"FLASK_STREAM_V3 {resp_id}: Client disconnected from stream.")
-        # No need to yield anything here, as the connection is already gone.
+        logger.warning(f"FLASK_STREAM_V6 {resp_id}: Client disconnected.")
+        if sink_id_holder[0] is not None:
+            logger.remove(sink_id_holder[0])
 
     except Exception as e:
-        # This is a catch-all for any unexpected errors that might happen within the
-        # generator's logic (e.g., a problem with the queue, a unicode error, etc.).
-        logger.error(
-            f"FLASK_STREAM_V3 {resp_id}: Unhandled error in streaming generator: {e}",
-            exc_info=True,
-        )
-        try:
-            # Attempt to send a final error message to the client if the stream is still open.
-            yield yield_chunk(
-                delta_content=f"\n\n[STREAMING ORCHESTRATION ERROR: {e}]",
-                finish_reason="error",
-            )
-        except Exception as final_err:
-            logger.error(
-                f"FLASK_STREAM_V3 {resp_id}: Could not even send the final error chunk: {final_err}"
-            )
-
+        logger.error(f"FLASK_STREAM_V6 {resp_id}: Orchestration Error: {e}")
+        yield yield_chunk(delta_content=f"\n[STREAM ERROR: {e}]", finish_reason="error")
     finally:
-        # This block is GUARANTEED to run, no matter what happens: success, error,
-        # or client disconnection.
-
-        # Always send the [DONE] signal to gracefully close the stream for compliant clients.
         yield "data: [DONE]\n\n"
-        logger.debug(f"FLASK_STREAM_V3 {resp_id}: Generator function fully finished.")
-
 
 @contextlib.contextmanager
 def managed_webdriver(no_images=False):
@@ -13673,16 +13530,34 @@ async def handle_interaction():
     # This part of the logic is synchronous and does not require any changes.
     # It will execute correctly within an async function.
     if request.method in ["GET", "HEAD"]:
+        # Force consumption of request body to satisfy ASGI state machine
+        _ = request.get_data()
+        
         user_agent = request.headers.get("User-Agent", "")
 
         browser_fingerprint = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 
         if FUZZY_AVAILABLE and fuzz and user_agent:
             ollama_score = fuzz.partial_ratio("ollama", user_agent.lower())
-            if ollama_score >= 85:
+            if ollama_score >= 60 :
                 logger.info(
                     f"Ollama Compatibility: Responding 200 OK to {request.method} from User-Agent '{user_agent}' (Score: {ollama_score})"
                 )
+                
+                if request.method == "HEAD":
+                    # 1. Force request consumption (Keep this from your previous attempt)
+                    _ = request.get_data()
+                    
+                    # 2. [THE FIX] Trick Flask into sending a body.
+                    # Flask strips the body for HEAD requests, which causes the Hypercorn
+                    # wrapper to skip sending headers (bug). By changing the method in the
+                    # environ to 'GET', Flask will yield the body (""), triggering the headers.
+                    request.environ['REQUEST_METHOD'] = 'GET'
+                    
+                    # 2. Return EMPTY body. This sets Content-Length to 0.
+                    # This prevents the wrapper from waiting for a body that will never come.
+                    return Response("", status=200, mimetype="text/plain")
+                
                 return Response(
                     "Adelaide/Zephy is running (Ollama compatibility mode).",
                     status=200,
@@ -16923,14 +16798,36 @@ async def handle_api_push_dummy():
 
 
 @system.route("/api/show", methods=["POST"])
-async def handle_api_show_dummy():
-    """Async dummy endpoint for /api/show."""
-    logger.warning(
-        "⚠️ Received async request for dummy endpoint: /api/show Ollama impostor activated!"
-    )
-    return jsonify(
-        {"error": "Showing model details not implemented in this server"}
-    ), 501
+async def handle_api_show():
+    """
+    Handles the /api/show request from Ollama.
+    Returns the Modelfile and details for the requested model.
+    """
+    try:
+        request_data = request.get_json()
+        model_name = request_data.get("model")
+        logger.info(f"Ollama requested details for model: {model_name}")
+
+        # You can customize this based on the 'model_name' if you have multiple
+        response_data = {
+            "license": f"{META_MODEL_LICENSE}",
+            "modelfile": f"# Modelfile for {model_name}\nFROM {model_name}\nSYSTEM \"You are Adelaide.\"",
+            "parameters": "stop \"<|im_end|>\"\nstop \"<|endoftext|>\"",
+            "template": "{{ .System }}\n{{ .Prompt }}",
+            "details": {
+                "parent_model": f"{META_MODEL_FAMILY}",
+                "format": "gguf",
+                "family": f"{META_MODEL_FAMILY}",
+                "families": ["llama"],
+                "parameter_size": f"{META_MODEL_PARAM_SIZE}",
+                "quantization_level": f"{META_MODEL_QUANT_LEVEL}"
+            }
+        }
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        logger.error(f"Error in /api/show: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @system.route("/api/delete", methods=["DELETE"])
@@ -16976,7 +16873,7 @@ async def handle_api_blobs_dummy(digest: str):
 async def handle_api_version():
     """Async endpoint for /api/version."""
     logger.info("Received async request for /api/version")
-    version_string = "Adelaide-Zephyrine-Charlotte-MetacognitionArtificialQuellia-0.0.1"
+    version_string = "Zephyrine-AZC-0.1.0-Alpha"
     response_data = {"version": version_string}
     return jsonify(response_data), 200
 
