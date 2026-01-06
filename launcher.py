@@ -1499,7 +1499,8 @@ apt-get install -y --install-recommends \\
     build-essential ca-certificates cmake git gettext \\
     python3-pip python3-dev libc6-dev libc6 \\
     libvulkan-dev vulkan-tools libudev-dev llvm-dev \\
-    libgmp-dev libssl-dev libffi-dev
+    libgmp-dev libssl-dev libffi-dev \\
+    libglib2.0-0 libsm6 libxext6 libxrender1
 
 echo "--> Removing any system-level Node.js and npm to avoid conflicts..."
 # Use || true to prevent the script from failing if the packages aren't installed.
@@ -1644,6 +1645,10 @@ fi
 echo "--> Restoring .bashrc and launching application..."
 LAUNCH_DIR="{ROOT_DIR}"
 echo 'export PS1="[\\\\u@\\\\h \\\\W]\\\\$ "' > ~/.bashrc
+if [ -d "$LAUNCH_DIR/miniforge3_local/bin" ]; then
+    export PATH="$LAUNCH_DIR/miniforge3_local/bin:$PATH"
+    echo "export PATH=\"$LAUNCH_DIR/miniforge3_local/bin:\$PATH\"" >> ~/.bashrc
+fi
 if [ -d "$LAUNCH_DIR" ]; then
     cd "$LAUNCH_DIR"
     python3 launcher.py
@@ -1945,7 +1950,7 @@ def find_conda_executable(attempt_number: int):
                         except IOError as e_cache_write:
                             print_warning(f"Could not write to Conda path cache file: {e_cache_write}")
                         return CONDA_EXECUTABLE
-            time.sleep(0.0001)
+            time.sleep(0.0000001)
 
     print_error("Conda executable could not be found even after recursive search.")
     CONDA_EXECUTABLE = None
@@ -4428,9 +4433,65 @@ if __name__ == "__main__":
                     else:
                         print_error("CRITICAL: Conda executable could not be determined. Conda package installs will fail.")
 
+
+            #Safety part just to make sure if it's going through the first one
             if globals().get('CONDA_EXECUTABLE') is None:
                 print_error("CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL.")
                 setup_failures.append("Failed to install/ensure critical tool: conda is not found on operational runtime")
+
+            #for proot it is a MUST to use jemalloc due to strange ness of the memory management
+            if IS_IN_PROOT_ENV:
+                print_system("--- CRITICAL: Enforcing System Jemalloc (via apt) for Termux/Proot stability ---")
+                
+                # 1. Install libjemalloc2 via system APT
+                # We use DEBIAN_FRONTEND=noninteractive to prevent hanging on prompts
+                apt_env = os.environ.copy()
+                apt_env["DEBIAN_FRONTEND"] = "noninteractive"
+                
+                print_system("Updating apt cache...")
+                # We ignore errors on update in case of network blips, we try install anyway
+                run_command(["apt-get", "update"], ROOT_DIR, "APT-UPDATE", check=False, env_override=apt_env)
+                
+                print_system("Installing libjemalloc2...")
+                if not run_command(["apt-get", "install", "-y", "libjemalloc2"], ROOT_DIR, "APT-INSTALL-JEMALLOC", check=True, env_override=apt_env):
+                    print_error("FATAL: Failed to install libjemalloc2 via apt.")
+                    print_error("This is required to prevent Exit 127 errors on Node/Conda.")
+                    sys.exit(1) # Fatal as requested
+
+                # 2. Locate the shared library file
+                # Debian/Ubuntu puts it in arch-specific folders. We check common ones.
+                jemalloc_path = None
+                possible_paths = [
+                    "/usr/lib/aarch64-linux-gnu/libjemalloc.so.2", # Standard ARM64
+                    "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2", # Standard x86_64
+                    "/usr/lib/libjemalloc.so.2"                     # Fallback
+                ]
+
+                for p in possible_paths:
+                    if os.path.exists(p):
+                        jemalloc_path = p
+                        break
+                
+                # If standard paths fail, try a quick find
+                if not jemalloc_path:
+                    try:
+                        print_warning("Standard jemalloc paths empty. Searching /usr/lib...")
+                        # This finds the file and returns the first line
+                        find_cmd = ["find", "/usr/lib", "-name", "libjemalloc.so.2", "-print", "-quit"]
+                        found = subprocess.check_output(find_cmd, text=True).strip()
+                        if found:
+                            jemalloc_path = found
+                    except Exception as e:
+                        print_warning(f"Search for jemalloc failed: {e}")
+
+                # 3. Inject into environment
+                if jemalloc_path:
+                    print_system(f"Found system jemalloc at: {jemalloc_path}")
+                    print_system("Injecting LD_PRELOAD...")
+                    os.environ["LD_PRELOAD"] = jemalloc_path
+                else:
+                    print_error("FATAL: libjemalloc2 package installed, but .so file could not be located.")
+                    sys.exit(1) # Fatal as requested
 
             # --- Read AUTODETECTED environment variables ---
             AUTO_PRIMARY_GPU_BACKEND = os.getenv("AUTODETECTED_PRIMARY_GPU_BACKEND", "cpu")
