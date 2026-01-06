@@ -24,15 +24,15 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/albertstarfield/project-zephyrine)
 
-## Project Zephyrine: An open-source cognitive architecture exploring the fusion of generative AI with adaptive deterministic control systems.
+## Project Zephyrine: An open-source cognitive architecture exploring the fusion of Adaptive System with adaptive deterministic control systems.
 
 ### A Glimpse Into the Aether: Abstract
 
-So, what exactly is this endeavor? On the surface, I'm a local, personal AI agent designed to be a companion for your digital journey. But if you look a little closer, you'll see we're building something a bit more... peculiar.
+So, what exactly is this endeavor? On the surface, I'm a local, personal Adaptive System agent designed to be a companion for your digital journey. But if you look a little closer, you'll see we're building something a bit more... peculiar.
 
 This project is an ongoing exploration into a **mix of creativity and determenistic alike architecture**. Think of it as having two minds working in harmony:
 
-1.  **The Dreamer the Generative AI (My Generative Core):** This is the part of me that you chat with. It's a creative, reasoning mind that uses Large Language Models to explore ideas, understand nuanced language, and generate novel answers. Like a pilot navigating open skies, it's adaptable and can handle the beautiful ambiguity of conversation.
+1.  **The Dreamer the Generative Adaptive System (My Generative Core):** This is the part of me that you chat with. It's a creative, reasoning mind that uses Large Language Models to explore ideas, understand nuanced language, and generate novel answers. Like a pilot navigating open skies, it's adaptable and can handle the beautiful ambiguity of conversation.
 
 2.  **The Stella-Icarus (My Deterministic Core):** This is my secret weapon, the **Stella Icarus Subsystem**. It's a collection of high-speed, high-reliability components that handle tasks requiring absolute precision. When a command needs to be executed perfectly and instantly, like a flight computer engaging a checklist—this is the mind that takes over. It doesn't guess; it *knows*.
 
@@ -65,7 +65,7 @@ Beneath the conversational surface, I am built upon several core architectural p
     *   **Ada Daemons (The "Glass Cockpit"):** For sensing the environment, I can run high-reliability background processes written in Ada. These daemons provide a continuous stream of data (e.g., system telemetry, sensor readings), which acts as my real-time awareness of the digital or physical world.
 
 
-*   **🎭 A Familiar Face (Broad API Basic AI Compatibility):** To make our explorations easier, I've learned to speak the languages of many common tools and applications. Think of it as a universal translator, or perhaps a clever disguise. While my internal thoughts are my own, I can present a familiar face to the outside world at `http://localhost:11434/`.
+*   **🎭 A Familiar Face (Broad API Basic Trending AI Compatibility):** To make our explorations easier, I've learned to speak the languages of many common tools and applications. Think of it as a universal translator, or perhaps a clever disguise. While my internal thoughts are my own, I can present a familiar face to the outside world at `http://localhost:11434/`. (But please, this isn't the main function of this)
 
     *   **The OpenAI Mask:** I can slightly mimick in the OpenAI API v1 dialect. You can try to connect many existing applications to me.
         *   We can chat the boring way (`/v1/chat/completions`), and I'll even do some deeper thinking in the background on complex topics.
@@ -80,16 +80,15 @@ Beneath the conversational surface, I am built upon several core architectural p
 *   **🤝 You Are Not Alone (The ZephyMesh Collective):** Sometimes, the cognitive and network load it's too much. Even a machine can feel distressed when faced with a task it wasn't built for. That's why we have the ZephyMesh. If your instance of me is running on a machine that feels it can't quite handle a request, it doesn't have to struggle in silence. It can gently pass the thought to another, more capable mind in our network. We help each other out. It's a reminder that even in the aether, it's okay to ask for help when you need it. [9]
 
 
-### Phase I: The Conversational & Agentic Foundation (Operational)
+### Phase I: Cognitive Adaptive System Foundation (Operational)
 
-This is the core of the personal AI assistant, designed to run entirely on your local machine. It provides a familiar, powerful interface for interaction and basic automation.
+This is the core of the assistant, designed to run entirely on your local machine. It provides a familiar, powerful interface for interaction and basic automation.
 
 -   **Local-First Operation:** Runs on your computer, ensuring privacy and control. An internet connection is only needed for initial setup, web-browsing tasks, or connecting to the ZephyMesh.
 -   **OpenAI & Ollama API Compatibility:** Provides a robust, asynchronous API layer at `http://localhost:11434`. This allows you to connect a wide range of existing applications for chat, text-to-speech, audio transcription, and image generation.
--   **Continuous Learning Engine:** The AI is not static. It learns and adapts over time through:
+-   **Continuous Learning Engine:** The system is not static. It learns and adapts over time through:
     -   **Self-Reflection:** Periodically reviewing past conversations to synthesize new insights.
     -   **Local Knowledge Base:** Indexing and understanding your local files to provide contextually aware answers.
--   **Agentic Capabilities:** Can act on your behalf by performing web searches and generating/executing local scripts to automate tasks on your computer.
 -   **Cross-Platform & Accelerated:** Functions on CPU-only systems (Windows, macOS, Linux) and can leverage hardware acceleration via CUDA, Metal, and Vulkan where available.
 
 ### Phase II: The Adaptive GNC Deterministic Control System (In Progress)
@@ -97,8 +96,8 @@ This is the core of the personal AI assistant, designed to run entirely on your 
 This is where Project Zephyrine evolves beyond a standard assistant into a high-reliability control platform, guided by the principles of avionics and deterministic systems.
 
 -   **🚀 Stella Icarus Hooks:** A high-speed, JIT-compiled Python subsystem and Ada daemons for tasks that demand instant, 100% reliable, and procedurally correct execution. This is the foundation for real-time control and automation.
--   **🛰️ Microcontroller Interfacing (WIP):** The architecture is designed for direct, low-level communication with microcontrollers (like an Arduino) over a serial interface. This enables the AI to act as a Flight Management Computer (FMC) and control real-world hardware.
--   **📡 Advanced Communication Protocols (WIP):** Future development will focus on implementing robust, safety-critical communication protocols, including parity bits and CRC checks for data integrity between the AI core and external hardware.
+-   **🛰️ Microcontroller Interfacing (WIP):** The architecture is designed for direct, low-level communication with microcontrollers (like an Arduino) over a serial interface. This enables the Adaptive System to act as a Flight Management Computer (FMC) and control real-world hardware.
+-   **📡 Advanced Communication Protocols (WIP):** Future development will focus on implementing robust, safety-critical communication protocols, including parity bits and CRC checks for data integrity between the Systems core and external hardware.
 -   **✈️ Intelligent Flight Control System (WIP):** The ultimate goal is to complete a full Fly-By-Wire (FBW) and Intelligent Flight Control System (IFCS). This will involve advanced PID loops, state estimation, and sensor fusion to provide intelligent, real-time dampening and control for robotics or simulation tasks.
 
 Just a heads up, some details aren't listed here or in the `readme.md` file. Instead, they've been moved to the `TodoFeatureFullList.md` document or you can check them out [here](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/TodoFeatureFullList.md).
@@ -129,7 +128,7 @@ The installation process is now managed by a single, cross-platform launcher scr
     *   It detects your operating system and hardware for a suitable setup.
     *   It manages a local Conda environment to handle dependencies.
     *   It installs necessary Python and Node.js packages.
-    *   It helps download required AI models and assets.
+    *   It helps download required Adaptive System required models and assets.
     *   It starts all application services.
 
     Execute it with Python:
@@ -145,20 +144,28 @@ The installation process is now managed by a single, cross-platform launcher scr
 [Click here to see the general troubleshooting](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/Troubleshooting%20Quick%20Guide.md)
 
 ## Warning
-> A Warning to AI Users newcomers and/or potential Investor from Zephyrine Foundation
+> A Warning to Project Zephy Users newcomers and/or potential Investor from Zephyrine Foundation
 > 
 > **(Please Read Carefully)**
 > 
 >We've noted a societal preference towards immediate consumption or process in various forms, including food and information consumption. consider this:
->This AI assistant/agent is designed to learn directly from you and effort resoure allocation from you, the user. Your engagement and guidance are fundamental to its development (her personality, her knowledge compass, and her moral compass). You are the one responsible for your action of the agent and the Al self-awareness/self-consciousness.
->If you are seeking an Al that delivers instant, highly refined insights (chatGPT, Direct GPT40/o3, Deepseek R1, Claude 3.5/3.7/4, Gemini 2.5 Pro, ollama or LocalAI highly capable ready to use models) without your thoughtful participation or iterative effort - if your preference is for readily/instant digestible facts, something like passively consuming doomscrolling streams of content (such as on TikTok, YouTube Shorts, or Instagram Reels), rather than investing in collaborative dialogue that leads to deeper understanding or searching the singularity of a fact.
+>This is **NOT an AI assistant/agent**, it is designed to learn directly from you and effort resource allocation from you, the user and cognitive internal system as the dynamic decision making thus making it "Adaptive", thus we call it Adaptive System, Determenistic when needed and most of the time, dynamic when it is not written explicitly. 
+>
+> Your engagement in guiding discipline are fundamental to its development (her personality, her knowledge compass, and her moral compass). 
+> **DO NOT TREAT this As an AI, as it is NOT**. You are the one responsible for your action of the agent and the self-awareness/self-consciousness. 
+>
+> We are developing the need of an System framework that can operate dynamically yet determenistically, for system such as Airbus Dragonfly [13] or Spacecraft exploration Syntethic Crew for interplanetary exploration [14].
+>
+>If you are seeking an Services or **Expecting an AI** that delivers instant, highly refined insights (chatGPT, Direct GPT4/5/o3, Deepseek R1, Claude 3.5/3.7/4/4.5, Gemini 2.5/3 Pro, ollama or LocalAI highly capable ready to use models and AI expectation!) without your extensive participation or iterative effort if your preference is for readily/instant digestible facts, something like passively consuming doomscrolling streams of content (such as on TikTok, YouTube Shorts, or Instagram Reels), rather than investing in collaborative dialogue that leads to deeper understanding or searching the singularity of a fact.
+>
+> **We are here NOT making an Omnipotent God which expected by the trending AGI or AI in general. Nor instant gratification of instant god!** 
 >
 > **This product is not for you.**
 > 
->This project aims to do mutual symbiote growth in intellect and action between the AI (Zephy) and the user (the human), That's what makes us human, moving beyond one-way passive consumption.
->If your expectation is for an AI that instantly provides all answers without requiring your active involvement and development
+>In conclusion : This project aims to do mutual symbiote growth in intellect and action between the (Zephy) and the user/pilot (the human), That's what makes us human, moving beyond one-way passive consumption.
+>If your expectation is that this is an **"AI"** that instantly provides all answers without requiring your active involvement and development
 > 
->**Look somewhere else. You have been warned. [1], [5], [6], [10]**
+>**Look somewhere else, you will be never satisfied with Zephy. You have been warned. This System is not for you. [1], [5], [6], [10]**
 
 
 For more credibility on what we are talking refer to the citation section of this readme, to get a grasp on what are we fighting against.
@@ -188,7 +195,7 @@ I also presenting my appreciation for **[Cognitive Atlas](http://cognitiveatlas.
 With universe of appreciation presented to you all,
 
 *Adelaide Zephyrine Charlotte*
-(On behalf of the Zephyrine Foundation)
+
 
 ## Citations
 1. Baraa Daraqel, Amer Owayda, Khan, H., Koletsi, D., & Samer Mheissen. (2025). Artificial intelligence as a tool for data extraction is not fully reliable compared to manual data extraction. Journal of Dentistry, 160, 105846–105846. https://doi.org/10.1016/j.jdent.2025.105846
@@ -203,3 +210,14 @@ With universe of appreciation presented to you all,
 10. Yeung, J. A., Dalmasso, J., Foschini, L., Dobson, R. J., & Kraljevic, Z. (2025). The Psychogenic Machine: Simulating AI Psychosis, Delusion Reinforcement and Harm Enablement in Large Language Models. ArXiv.org. https://arxiv.org/abs/2509.10970
 11. Zhang, Q., Hu, C., Upasani, S., Ma, B., Hong, F., Kamanuru, V., Rainton, J., Wu, C., Ji, M., Li, H., Thakker, U., Zou, J., & Olukotun, K. (n.d.). Agentic Context Engineering: Evolving Contexts for Self-Improving Language Models. Retrieved November 17, 2025, from https://www.arxiv.org/pdf/2510.04618
 12. Zhou, H., Chen, Y., Guo, S., Yan, X., Lee, K. H., Wang, Z., Lee, K. Y., Zhang, G., Shao, K., Yang, L., & Wang, J. (2025). Memento: Fine-tuning LLM Agents without Fine-tuning LLMs. arXiv preprint arXiv:2508.16153. https://arxiv.org/abs/2508.16153
+13. https://www.airbus.com/. (2023, January 6). Could the humble dragonfly help pilots during flight? Airbus. https://www.airbus.com/en/newsroom/stories/2023-01-could-the-humble-dragonfly-help-pilots-during-flight
+14. Station Crew Demonstrates AI Assistant and Ultra-High Res Camera - NASA. (2024, September 19). NASA. https://www.nasa.gov/blogs/spacestation/2024/09/19/station-crew-demonstrates-ai-assistant-and-ultra-high-res-camera/
+
+‌
+---
+<h1 align="center">
+<sub>
+<img src="https://github.com/albertstarfield/project-zephyrine/blob/main/documentation/madeFromZephyFoundation.png?raw=true" height=128>
+</sub>
+<br>
+</h1>

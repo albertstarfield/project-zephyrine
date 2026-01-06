@@ -1,3 +1,8 @@
+-   **ID:** STELLA-REFACTOR-002
+-   **Title:** Remove CX3 Flight Calculator and Refactor Trickshot Benchmark
+-   **Status:** Resolved
+-   **Description:** This refactor removes the deprecated CX3 flight calculator (`flight_cx3_core.cpp`, `flight_core_ultimate.cpp`, and their associated compiled objects). The `trickshot_stellaicarus_benchmark_simplearitmatic.py` has been updated to use picoseconds for higher precision, and now dynamically recompiles its C++ core only when the source code changes. The benchmark's output has also been enhanced to include its own source code for better introspection. Jemalloc is now enforced in proot environments for stability, and the miniforge path has been added to the environment.
+
 -   **ID:** CORE-FEAT-016
 -   **Title:** Implement Dynamic Agentic Relaxation, Enhanced Ollama Compatibility, and VLM Improvements
 -   **Status:** In-Progress

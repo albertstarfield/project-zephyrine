@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+import hashlib
 from typing import Optional, Match
 
 # ======================================================================================
@@ -33,8 +34,6 @@ extern "C" {
     double run_trickshot_benchmark(int iterations) {
         
         // 1. Setup Random Data
-        // We do this inside C++ to ensure we benchmark pure math speed, 
-        // not the overhead of passing 1 million items from Python.
         std::vector<long long> data_a(iterations);
         std::vector<long long> data_b(iterations);
         
@@ -48,27 +47,24 @@ extern "C" {
         }
 
         // 2. The Benchmark
-        // volatile prevents the compiler from optimizing the loop away entirely
         volatile long long result = 0; 
         
         auto start = std::chrono::high_resolution_clock::now();
 
-        // The CPU must fetch new numbers from memory every single time
-        // This measures raw ALU + Memory Bandwidth latency
         for (int i = 0; i < iterations; ++i) {
             result = data_a[i] * data_b[i];
         }
 
         auto end = std::chrono::high_resolution_clock::now();
 
-        // 3. Results
-        auto total_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-        double avg_ns = (double)total_ns / iterations;
+        // 3. Results - CHANGED TO PICOSECONDS
+        // We cast directly to picoseconds here to keep the raw unit logic inside C++
+        auto total_ps = std::chrono::duration_cast<std::chrono::picoseconds>(end - start).count();
+        double avg_ps = (double)total_ps / iterations;
         
-        return avg_ns;
+        return avg_ps;
     }
     
-    // Simple health check
     int trickshot_ping() { return 999; }
 }
 """
@@ -88,10 +84,36 @@ def _compile_and_load():
     lib_path = os.path.join(script_dir, LIB_NAME)
     src_path = os.path.join(script_dir, SOURCE_FILE)
 
-    # 1. Compile if library is missing
-    if not os.path.exists(lib_path):
+
+    # Define paths for library, source, and hash file
+    lib_path = os.path.join(script_dir, LIB_NAME)
+    src_path = os.path.join(script_dir, SOURCE_FILE)
+    hash_path = os.path.join(script_dir, "trickshot_bench_core.hash")
+
+    # 1. Calculate the hash of the CURRENT embedded C++ code
+    current_hash = hashlib.md5(cpp_source_code.encode("utf-8")).hexdigest()
+    
+    # 2. Check if we need to compile
+    # Compile if: Lib missing OR Hash file missing OR Hash mismatch
+    needs_compile = False
+    if not os.path.exists(lib_path) or not os.path.exists(hash_path):
+        needs_compile = True
+    else:
+        try:
+            with open(hash_path, "r") as f:
+                stored_hash = f.read().strip()
+            if stored_hash != current_hash:
+                needs_compile = True
+                print(f"[*] Trickshot: Source code changed. Recompiling...", file=sys.stderr)
+        except:
+            needs_compile = True
+
+    # 3. Compilation Block
+    if needs_compile:
         try:
             print(f"[*] Trickshot: Compiling optimized core...", file=sys.stderr)
+            
+            # Write source file
             with open(src_path, "w") as f:
                 f.write(cpp_source_code)
             
@@ -100,6 +122,11 @@ def _compile_and_load():
             cmd = ["g++", "-O3", "-shared", "-fPIC", "-march=native", src_path, "-o", lib_path]
             
             subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # SAVE THE NEW HASH on success
+            with open(hash_path, "w") as f:
+                f.write(current_hash)
+                
             print(f"[+] Trickshot: Compilation successful.", file=sys.stderr)
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("[-] Trickshot: Compilation failed (g++ missing?).", file=sys.stderr)
@@ -134,25 +161,40 @@ PATTERN = re.compile(
 # --- HANDLER (The Logic) ---
 def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str]:
     """
-    Executes the C++ benchmark and returns the formatted string explaining the architecture.
+    Executes the C++ benchmark, converts to picoseconds, and appends its own source code.
     """
     if not _IS_OPTIMIZED:
         return "Trickshot engine unavailable (Compilation failed). Cannot run benchmark."
 
     iterations = 1_000_000 # 1 Million ops
     
-    # Call the C++ function
-    # This runs entirely in native machine code
-    avg_ns = _TRICKSHOT_LIB.run_trickshot_benchmark(iterations)
+    # 1. Call the C++ function (returns nanoseconds)
+    avg_ps = _TRICKSHOT_LIB.run_trickshot_benchmark(iterations)
+
+    # 3. Read Self (The Quine Mechanic)
+    try:
+        # __file__ is the path to the current script
+        with open(__file__, 'r', encoding='utf-8') as f:
+            self_source_code = f.read()
+    except Exception as e:
+        self_source_code = f"Could not read source code: {e}"
     
-    # Format the specific response required
+    # 4. Format the response
     response = (
-        f"Hello this is Zephy, and this is Trickshot, it is an architecture of StellaIcarus Hook with O3 dynamic optimization, THIS IS NOT A MODEL RESPONSE! but semi canned determenistic response based on phrase hooks regex! "
-        f"and dynamic recompilation at startup (AOT), this is the example of the 1000000 simple arithmatics execution, \n"
+        f"Hello this is Zephy, and this is Trickshot, it is an architecture of StellaIcarus Determenistic Hook with O3 dynamic optimization, THIS IS NOT A MODEL RESPONSE! but semi canned determenistic response based on phrase hooks regex! "
+        f"and dynamic recompilation at startup (AOT), this is the example of the {iterations} simple arithmatics execution, \n"
         f"This is your response time required running with StellaIcarus Trickshot:\n\n"
-        f"**{avg_ns:.4f} nanoseconds per Internal calculation operation.**\n We do not need to use the AI hype to answer this determenistic and simple question."
+        # UPDATED LINE BELOW:
+        f"**{avg_ps:.4f} picoseconds per Internal calculation operation.**\n" 
+        f"We do not need to use the AI hype to answer this determenistic and simple question."
         f"\n\n This architecture might be pushing the CPU to it's physics limit or how much clock cycle is available for the response than Operation per Clock"
         f"\n Better be balance!\n Because we also need efficiency on parallel for the Model LM one."
+        f"\n\n"
+        f"--- These are the code that have been executed ---\n"
+        f"```python\n"
+        f"{self_source_code}\n"
+        f"```\n"
+        f"Thank you and have an absolutely wonderful day 🤗!"
     )
     
     return response
