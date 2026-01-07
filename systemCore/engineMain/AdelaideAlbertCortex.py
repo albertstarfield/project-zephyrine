@@ -1673,9 +1673,13 @@ class CortexThoughts:
                 baseline_chain = fast_model | StrOutputParser()
                 # We pass the raw formatted prompt or the messages
                 baseline_response = await asyncio.to_thread(
-                    baseline_chain.invoke,
-                    user_prompt_str,
-                    config={"priority": ELP1},  # Run fast!
+                    self._call_llm_with_timing,
+                    baseline_chain,       # The executable chain
+                    user_prompt_str,      # The input
+                    {},                   # No specific interaction metadata needed here
+                    ELP1,                 # Priority
+                    db,
+                    session_id
                 )
             except Exception as e:
                 logger.warning(f"{log_prefix} Baseline generation failed: {e}")
@@ -4547,6 +4551,7 @@ class CortexThoughts:
         """
         # --- 🛡️ WARDEN LOGIC START (PRE-FLIGHT CHECK) ---
         previous_bin_setting = None
+        #logger.info(f"LLMCall|Warden [DEBUG REMOVE WHEN DEPLOY]: Recieved command PRI{priority} chain{chain} input{inputs}")
 
         # 1. Sanitize/Extract Text for Measurement
         prompt_text_for_check = ""
@@ -4582,7 +4587,8 @@ class CortexThoughts:
             if not found and hasattr(chain, "steps"):
                 for step in chain.steps:
                     found = get_role(step)
-                    if found: break
+                    if found: 
+                        break
 
             if found:
                 target_role = found
@@ -4593,47 +4599,50 @@ class CortexThoughts:
 
         # Now we get the path for the ACTUAL model (e.g., DeepSeek Coder or VLM)
         model_path = self.provider.get_model_path(target_role)
-
-        # If lookup failed (e.g. role 'router' maps to nothing in specific), fallback to general
-        if not model_path or not os.path.exists(model_path):
-            model_path = self.provider.get_model_path("general")
+        logger.info(f"LLMCall|Warden: post-check model parser : req parsed model_path {model_path}")
 
         req_gb = self.provider.calculate_required_memory_gb(model_path, ideal_bin)
 
-        final_bin = ideal_bin
+        final_bin = ideal_bin #fallback
+        logger.info(f"LLMCall|Warden: post-check model parser : final_bin fallback set first {model_path}")
+        # If we are OOM, which we definitely going to espescially handling 77.05B + scarcity of RAM we're needing to do this negotiation. (thank you microsoft and openAI we are having difficulty to run this Adaptive System)
+        logger.info(f"LLMCall|Warden: RAM Contention Monitoring Alloc debug: (Need {req_gb:.2f}GB, Have {avail_gb:.2f}GB).")
+        # 1. Define the limit (85% of available RAM as per your snippet)
+        limit_with_tolerance = avail_gb * 0.85
+        logger.info(f"LLMCall|Warden: 👮 RAM Limit set to {limit_with_tolerance:.2f}GB (85% of {avail_gb:.2f}GB free)")
 
-        # If we are OOM, downgrade bin
+        feasible_bins = []
         if req_gb > avail_gb:
             logger.warning(f"LLMCall|Warden: ⚠️ RAM Contention (Need {req_gb:.2f}GB, Have {avail_gb:.2f}GB). Negotiating...")
-            
             feasible_bin = None
             # Check smaller bins (largest to smallest)
             for b in sorted(self.provider.ctx_bins, reverse=True):
-                if b < ideal_bin:
+                # We only care about bins that are useful (<= ideal_bin)
+                # If you want to allow EXACT match, use <=. Your code had <.
+                if b <= ideal_bin: 
                     cost = self.provider.calculate_required_memory_gb(model_path, b)
                     
-                    # SMART TOLERANCE: Allow 20% overdraft for "Best Effort" fit
-                    # (MacOS/Linux will handle slight overflow via compression/swap)
-                    limit_with_tolerance = avail_gb * 1.20
-                    
                     if cost <= limit_with_tolerance:
-                        feasible_bin = b
-                        logger.info(f"LLMCall|Warden: 📉 Found feasible bin {b} (Cost {cost:.2f}GB <= {limit_with_tolerance:.2f}GB)")
-                        break
+                        feasible_bins.append((b, cost))
+                        logger.debug(f"LLMCall|Warden: ✅ Bin {b} fits! (Cost {cost:.2f}GB)")
                     else:
-                        # Log why we skipped this bin so you can see the "Step by Step" logic
-                        logger.debug(f"LLMCall|Warden: Skipped Bin {b} (Cost {cost:.2f}GB > {limit_with_tolerance:.2f}GB)")
-            
-            if feasible_bin:
-                final_bin = feasible_bin
+                        logger.debug(f"LLMCall|Warden: ❌ Bin {b} too fat (Cost {cost:.2f}GB > Limit)")
+
+            # 3. Select the Winner
+            if feasible_bins:
+                # Sort by context size (descending) to get the "Highest Selection"
+                best_candidate = sorted(feasible_bins, key=lambda x: x[0], reverse=True)[0]
+                feasible_bin = best_candidate[0]
+                final_cost = best_candidate[1]
+                logger.info(f"LLMCall|Warden: 🏆 Selected Best Fit: Bin {feasible_bin} (Est Cost {final_cost:.2f}GB)")
             else:
-                # If absolutely nothing fits, stick to the lowest configured bin (e.g., 512)
-                # Do NOT go lower than your config allows.
-                final_bin = sorted(self.provider.ctx_bins)[0]
-                logger.error(f"LLMCall|Warden: ❌ CRITICAL. Even smallest bin {final_bin} exceeds safety. Forcing execution anyway.")
+                # Fallback: If absolutely nothing fits, take the smallest bin (Safety Net)
+                smallest_bin = min(self.provider.ctx_bins)
+                logger.warning(f"LLMCall|Warden: ⚠️ No bins fit within strict limit. Forcing smallest bin {smallest_bin}.")
+                feasible_bin = smallest_bin
 
         # 4. Truncation & Flush (The Sandwich)
-        max_safe_tokens = final_bin - 512
+        max_safe_tokens = final_bin - 128
         current_est_tokens = self.provider._estimate_tokens_fast(prompt_text_for_check)
 
         final_inputs = inputs
@@ -6631,94 +6640,94 @@ class CortexThoughts:
             return clean_chunk
 
     async def _apply_edits_via_code_model(
-        self, 
-        db: Session, 
-        session_id: str, 
-        current_buffer: str, 
-        new_content_request: str,
-        section_title: str
+            self,
+            db: Session,
+            session_id: str,
+            current_buffer: str,
+            new_content_request: str,
+            section_title: str
     ) -> Tuple[str, bool]:
         """
-        Orchestrates the Code Model to generate a Diff/Patch and applies it.
-        Retries up to 10 times with error logs if application fails.
+        Diff text editing
+        Uses <<<<< SEARCH / ===== REPLACE / >>>>> format to avoid Gemini logical Ketololan syntax crashes.
         """
-        # Select the 'code' model, fallback to 'general' if not set
         code_model = self.provider.get_model("code") or self.provider.get_model("general")
         if not code_model:
             logger.error("DiffApply: No Code/General model available.")
             return current_buffer, False
 
-        max_retries = 10
-        last_error = ""
-        
-        # We use a permissive Python script format for the patch
-        
-        for attempt in range(1, max_retries + 1):
-            log_prefix = f"🧩 DiffApply|Att{attempt}"
-            
-            # Construct command dynamic system for the Code Model
-            command = f"""[SYSTEM] You are a Text Editing Engine. Your job is to incorporate new content into an existing document string.
-            
-            [GOAL] Add/Merge the section "{section_title}" containing the following content into the document.
-            [NEW CONTENT TO ADD]
-            {new_content_request}
-            
-            [CURRENT DOCUMENT STATE (Truncated end)]
-            ...{current_buffer[-2500:]}
-            
-            [INSTRUCTION]
-            Return a Python script that defines a variable `updated_text`.
-            The script acts on a variable `text` (which contains the current document).
-            
-            - If this is a new section, simply append it.
-            - If you need to fix or replace text, use `.replace()`.
-            
-            Example Append:
-            ```python
-            updated_text = text + "\\n\\n## {section_title}\\n" + \"\"\"{new_content_request}\"\"\"
-            ```
-            
-            [PREVIOUS ERROR] (Fix this if present)
-            {last_error}
-            
-            Output ONLY the Python code block.
-            """
-            
-            try:
-                # Bind priority and invoke
-                chain = code_model.bind(priority=ELP1) | StrOutputParser()
-                # Run sync in thread to avoid blocking
-                response = await asyncio.to_thread(chain.invoke, command)
-                
-                # Extract Code Block
-                code_match = re.search(r"```python(.*?)```", response, re.DOTALL)
-                if not code_match:
-                    # Fallback: assume raw text if no backticks found (risky but handles some LLM quirks)
-                    code_block = response
-                else:
-                    code_block = code_match.group(1)
-                
-                # Safe Execution Sandbox
-                # We pass 'text' (current buffer) in, expect 'updated_text' out.
-                local_scope = {"text": current_buffer}
-                
-                def execute_patch():
-                    exec(code_block, {}, local_scope)
-                    return local_scope.get("updated_text", "")
+        max_retries = 2
+        updated_buffer = current_buffer
+        success = False
 
-                updated_buffer = await asyncio.to_thread(execute_patch)
-                
-                # Validation: The text should not shrink significantly or become empty
-                if updated_buffer and len(updated_buffer) >= len(current_buffer):
-                    logger.info(f"{log_prefix}: Patch applied successfully.")
+        for attempt in range(1, max_retries + 1):
+            log_prefix = f"🧩 DiffApply|Attempt_{attempt}"
+
+            # The simplified command using your documented /no_think prefix
+            command = f"""/no_think
+[GOAL] Update the document by replacing a specific anchor with new content.
+[INSTRUCTION] 
+Find the header "## {section_title}" and replace it with the new content.
+Output your response EXACTLY in this format:
+
+<<<<< SEARCH
+## {section_title}
+=====
+{new_content_request}
+>>>>>
+"""
+            try:
+                # Execute with ELP1 Priority
+                chain = code_model.bind(priority=ELP1) | StrOutputParser()
+                #response = await asyncio.to_thread(chain.invoke, command)
+                response = await asyncio.to_thread(
+                    self._call_llm_with_timing,
+                    chain,                 # The chain to run
+                    command,                # The input
+                    interaction_data={},   # interaction_data (can be empty for internal loops)
+                    priority=ELP1,         # Ensure high priority
+                    db=db,
+                    session_id=session_id
+                )
+
+                # PARSING LOGIC: Extract the SEARCH and REPLACE or ===== blocks
+                if "<<<<< SEARCH" in response and ">>>>>" in response:
+                    try:
+                        core_block = response.split("<<<<< SEARCH")[1].split(">>>>>")[0]
+                        if "=====" in core_block:
+                            search_part = core_block.split("=====")[0].strip()
+                            replace_part = core_block.split("=====")[1].strip()
+
+                            if search_part in current_buffer:
+                                updated_buffer = current_buffer.replace(search_part, replace_part)
+                                success = True
+                            else:
+                                logger.warning(
+                                    f"{log_prefix}: Search anchor not found in buffer. Trying simple append.")
+                                updated_buffer = current_buffer + f"\n\n## {section_title}\n{new_content_request}"
+                                success = True
+                    except Exception as parse_err:
+                        logger.error(f"{log_prefix}: Failed to parse markers: {parse_err}")
+
+                # If markers failed but model output something, fallback to direct append to prevent data loss
+                if not success:
+                    logger.warning(f"{log_prefix}: Format mismatch. Falling back to default append logic.")
+                    updated_buffer = current_buffer + f"\n\n## {section_title}\n{new_content_request}"
+                    success = True
+
+                # YOUR REQUESTED DEBUG LOG
+                logger.info(
+                    f"{log_prefix}:\n [TurdCodeDebugApplyDiffApply] snippets that is attempted {response} "
+                    f"\n\n with the reformatted from contentReq: {new_content_request} "
+                    f"\n\n from {current_buffer} -> to {updated_buffer}"
+                )
+
+                if success:
                     return updated_buffer, True
-                else:
-                    last_error = "Execution resulted in empty string or shrinking text (invalid for addition)."
-            
+
             except Exception as e:
-                logger.warning(f"{log_prefix}: Patch failed: {e}")
-                last_error = f"Python Execution Error: {e}"
-        
+                logger.error(f"{log_prefix}: Inference or Application failure: {e}")
+
         logger.error(f"❌ Diff/Patch failed after {max_retries} attempts.")
         return current_buffer, False
 
@@ -6859,7 +6868,7 @@ class CortexThoughts:
 
         # --- PATH B: SNOWBALL LoD PATH (Complex/Long) (Complex/Long - Whimsically Cute snowball Fairytale alike architecture) ---
         else:
-            logger.info(f"{log_prefix}: Complex query detected. Entering Snowball-Enaga Loop...")
+            logger.info(f"{log_prefix}: long query detected. Entering Snowball-Enaga Loop...")
 
             # 1. Generate Skeleton (The Plan)
             # This breaks the query into logical "Grid Nodes"
@@ -6873,7 +6882,7 @@ class CortexThoughts:
                 history_experience_learned_rag_str,
                 recent_direct_history_str
             )
-            
+            logger.info(f"[debugskeleton Snowball] Skeleton Text to be edited Buffer dumpraw:\n --- \n {skeleton} \n --- \n")
             # --- [FEATURE 0] SKELETON DB FLUSH ---
             # Immediately save the plan so RAG can see the structure
             try:
@@ -6889,8 +6898,10 @@ class CortexThoughts:
                 logger.error(f"{log_prefix}: Failed to flush skeleton: {e}")
 
             # 2. Execute Grid (The Mutable Document Buffer)
-            # Initialize buffer. 
-            current_document_buffer = f"# Analysis: {user_input[:100]}...\n\n"
+            # Initialize buffer. (GEMINI GOBLOK MORONIC MANIAC. SKELETON LAH yang di Initialize YANG DIGANTI for kalau current_buffer FULL RESULT )
+            #current_document_buffer = f"# Analysis: {user_input[:100]}...\n\n"
+            #current_document_buffer = f"{skeleton}"
+            current_document_buffer = "" + "\n\n".join([f"## {title}\n" for title in skeleton])
             
             # Prepare optional VLM context
             vlm_context_str = f"Image Context: {vlm_description}\n" if vlm_description else ""
@@ -8922,7 +8933,16 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         try:
             chain = repair_model.bind(priority=ELP1) | StrOutputParser()
             # Run sync in thread to avoid blocking main loop
-            fixed_response = await asyncio.to_thread(chain.invoke, prompt)
+            #fixed_response = await asyncio.to_thread(chain.invoke, prompt)
+            fixed_response = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,                 # The chain to run
+                prompt,                # The input
+                interaction_data={},   # interaction_data (can be empty for internal loops)
+                priority=ELP1,         # Ensure high priority
+                db=None,
+                session_id=session_id
+            )
 
             # 4. Final Polish (Regex Clean)
             # Remove any lingering markdown code blocks key might still output
@@ -8964,7 +8984,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         # Limit the scope to keep ELP1 fast
         prompt = f"""[SYSTEM]
         You are a Structural Architect. Plan the structure for a helpful response to the user's request.
-        Break the response into 2 to 4 logical sections.
+        Break the response into 2 to 10 logical/sublogical sections. 
         
         [USER REQUEST]
         "{user_input}"
@@ -8977,7 +8997,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
 
         [INSTRUCTION]
         Output ONLY a JSON list of section headers strings.
-        Example: ["Concept Definition", "Mathematical Derivation", "Practical Example"]
+        for Example: ["Overview Topic", "The reasoning we are asking these", "Concept Fundamental Definitions", "Axiom Concepts and and it's Methodology finally Logical Derivation", "Practical Example Analogies and Literature Review", "Conclusion", "Critiques/Discussion/Socratic Questioning"]
         
         JSON LIST:
         """
@@ -8987,7 +9007,16 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         try:
             bound_model = model.bind(priority=ELP1, max_tokens=4096)
             chain = bound_model | StrOutputParser()
-            raw_plan = await asyncio.to_thread(chain.invoke, prompt)
+            #raw_plan = await asyncio.to_thread(chain.invoke, prompt)
+            raw_plan = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,                 # The chain to run
+                prompt,                # The input
+                interaction_data={},   # interaction_data (can be empty for internal loops)
+                priority=ELP1,         # Ensure high priority
+                db=db,
+                session_id=session_id
+            )
         except Exception as e:
             logger.error(f"{log_prefix}: Failed to generate skeleton: {e}")
             return ["Detailed Answer"]
@@ -9081,7 +9110,18 @@ Extract the section titles and output them as a strict, valid JSON list of strin
             bound_model = model.bind(priority=ELP1, max_tokens=DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT)
             chain = bound_model | StrOutputParser()
             
-            content = await asyncio.to_thread(chain.invoke, prompt)
+            #content = await asyncio.to_thread(chain.invoke, prompt)
+            
+            content = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,                 # The chain to run
+                prompt,                # The input
+                interaction_data={},   # interaction_data (can be empty for internal loops)
+                priority=ELP1,         # Ensure high priority
+                db=db,
+                session_id=session_id
+            )
+            
             
             # Clean think tags
             content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE).strip()
@@ -9149,7 +9189,16 @@ Extract the section titles and output them as a strict, valid JSON list of strin
             bound_checker = checker_model.bind(priority=ELP1)
             chain = bound_checker | StrOutputParser()
             
-            raw_decision = await asyncio.to_thread(chain.invoke, prompt)
+            #raw_decision = await asyncio.to_thread(chain.invoke, prompt)
+            raw_decision = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,                 # The chain to run
+                prompt,                # The input
+                interaction_data={},   # interaction_data (can be empty for internal loops)
+                priority=ELP1,         # Ensure high priority
+                db=db,
+                session_id=session_id
+            )
             
             # 4. Aggressive "Fail-First" Fuzzy Logic
             score_no = fuzz.partial_ratio("NO", raw_decision.upper())
@@ -9195,7 +9244,16 @@ Extract the section titles and output them as a strict, valid JSON list of strin
             bound_model = model.bind(priority=ELP1)
             chain = bound_model | StrOutputParser()
             
-            cleaned_response = await asyncio.to_thread(chain.invoke, prompt)
+            #cleaned_response = await asyncio.to_thread(chain.invoke, prompt)
+            cleaned_response = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,                 # The chain to run
+                prompt,                # The input
+                interaction_data={},   # interaction_data (can be empty for internal loops)
+                priority=ELP1,         # Ensure high priority
+                db=None,
+                session_id=session_id
+            )
             
             # Basic sanity check: don't return empty if something goes wrong
             if not cleaned_response or len(cleaned_response) < 100:
@@ -9246,7 +9304,17 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         try:
             bound_router = router_model.bind(priority=ELP1)
             chain = bound_router | StrOutputParser()
-            raw_selection = await asyncio.to_thread(chain.invoke, prompt)
+            #raw_selection = await asyncio.to_thread(chain.invoke, prompt)
+            
+            raw_selection = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,                 # The chain to run
+                prompt,                # The input
+                interaction_data={},   # interaction_data (can be empty for internal loops)
+                priority=ELP1,         # Ensure high priority
+                db=None,
+                session_id=session_id
+            )
             
             #logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW OUTPUT STRIP: '{raw_selection.strip()}'")
             #logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW INPUT STRIP: '{prompt.strip()}'")
@@ -9323,7 +9391,17 @@ Extract the section titles and output them as a strict, valid JSON list of strin
             )
             chain = bound_model | StrOutputParser()
             
-            raw_continuation = await asyncio.to_thread(chain.invoke, prompt)
+            #raw_continuation = await asyncio.to_thread(chain.invoke, prompt)
+            
+            raw_continuation = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,                 # The chain to run
+                prompt,                # The input
+                interaction_data={},   # interaction_data (can be empty for internal loops)
+                priority=ELP1,         # Ensure high priority
+                db=db,
+                session_id=session_id
+            )
             
             # Error Checking
             error_sig = "LLAMA_CPP_RAW_CHATML_WRAPPER_WORKER_ERROR"
@@ -13744,13 +13822,6 @@ async def _get_and_process_proactive_interaction():
             priority=ELP0,
             db=db,
             session_id=None
-        )
-
-        decision = decision_chain.invoke(
-            {
-                "past_user_input": past_interaction.user_input,
-                "past_ai_response": past_interaction.llm_response,
-            }
         )
 
         if "yes" not in decision.lower():

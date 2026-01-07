@@ -17,17 +17,18 @@ MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))  # Max at 20
 ANSWER_SIZE_WORDS = int(
     os.getenv("ANSWER_SIZE_WORDS", 16384)
 )  # Target for *quick* answers (token generation? I forgot)
+
+INFERCOMPLETION_CTX_BINNING=[512, 1024, 2048, 4096, 8192] #Binning for ctx lock on cortex_backbone_provider.py (let's make this hardcore, Allow it to get 512 ctx token so it allows to run on pocket computer which makes it "smartphone")
 TOPCAP_TOKENS = int(
-    os.getenv("TOPCAP_TOKENS", 32768)
+    os.getenv("TOPCAP_TOKENS", INFERCOMPLETION_CTX_BINNING[-1])
 )  # Default token limit for LLM calls
-INFERCOMPLETION_CTX_BINNING=[512, 1024, 2048, 4096, 8192, 16384, 32768] #Binning for ctx lock on cortex_backbone_provider.py (let's make this hardcore, Allow it to get 512 ctx token so it allows to run on pocket computer which makes it "smartphone")
 SYSTEMBUFFER_SAFE_PERCENTAGE=5 #Calculate from total memory then get the percentage and that's the buffer safe percentage so for instance 16GB * 5% = 800MB
 BUFFER_TOKENS_FOR_RESPONSE = int(
     os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)
 )  # Default token limit for LLM calls
 # No longer in use
 MAX_TOKENS_PER_CHUNK = 384  # direct_generate chunking preventing horrific quality and increase quality by doing ctx augmented rollover
-MAX_CHUNKS_PER_RESPONSE = 32768  # Safety limit to prevent infinite loops (32768 * 256 = 8388608 tokens max response) (Yes 8 Million tokens that zephy can answer directly ELP1) (but for testing purposes let's set it to 10
+MAX_CHUNKS_PER_RESPONSE = 8192  # Safety limit to prevent infinite loops (32768 * 256 = 8388608 tokens max response) (Yes 8 Million tokens that zephy can answer directly ELP1) (but for testing purposes let's set it to 10
 # --- Parameters for Background Generate's Iterative Elaboration ---
 BACKGROUND_MAX_TOKENS_PER_CHUNK = 512  # How large each elaboration chunk is
 BACKGROUND_MAX_CHUNKS = 16  # Safety limit for the elaboration loop
@@ -73,17 +74,17 @@ FILE_INDEXER_IDLE_WAIT_SECONDS = int(
 FUZZY_SEARCH_THRESHOLD_CONTEXT = getattr(
     globals(), "FUZZY_SEARCH_THRESHOLD", 90
 )  # Default to 90 if not from which is 30% set it not 0.3 but 30 
-# Sidenote: I was experimenting on cracking down on the mechanism of making zephy becoming psychosis (& scizophrenic) and it seems that fuzzy threshold if it's going down it's going everywhere
+# Sidenote: I was experimenting on cracking down on the mechanism of making zephy becoming psychosis (& scizophrenic) and it seems that fuzzy threshold if it's going down it's going everywhere. This research found might be useful to help someone?
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0  # before hard defined error timeout (30 seconds max)
 
 DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
-DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 100)) #quick switch based on tkoen to peer review everphase architecture
-DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT = int(os.getenv("DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT", 8192)) #each specialist model "peer review everphase" max token gen
+DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 100)) #quick switch based on tkoen to peer review Snowball-Enaga architecture
+DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT = int(os.getenv("DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT", 8192)) #each specialist model "peer review Snowball Enaga" max token gen
 DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT = int(os.getenv("DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT", 128)) #Turn off Stellaicarus hook if it's becoming long then disable stella icarus to not falsely triggered hook
 TOKENTRUNCATEVECTORDIRECT_truncatechar = int(os.getenv("TOKENTRUNCATEVECTORDIRECT_truncatechar", 2048)) # Maximum characters allowed in the Direct Generate PROMPT before truncation
-
+DisallowParallelBinaryExec = True # Parallel Binary Exec is essentially allowing to allocate more memory and GPU resources or multiple processor if it's detected, by disallowing it that means everything need to wait until one that is running finishes thus makes room for other allocatable (rather than making computer crashes and OOM) (This is essentially additional safetyguard to prevent if ELP0 and ELP1 isn't being followed correctly.)
 
 _default_max_bg_tasks = 100000000000
 MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(
@@ -123,7 +124,7 @@ VLM_TARGET_EXTENSIONS = {
 
 
 FUZZY_SEARCH_THRESHOLD = int(
-    os.getenv("FUZZY_SEARCH_THRESHOLD", 50)
+    os.getenv("FUZZY_SEARCH_THRESHOLD", 85)
 )  # Max at 85 ( Fallback from vector search if no results )
 
 MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1))  # Unused
@@ -450,12 +451,12 @@ LLAMA_CPP_MODEL_MAP = {
 
 LLAMA_CPP_MODEL_DESCRIPTIONS = {
     "router": "A meta-controller for routing tasks to other specialists. Use 'general' for routing.",
-    "vlm": "Analyzes the content of images.",
+    "vlm": "Analyzes the content of images. (ONLY AND ONLY IF THEREs IMAGE if it's not DO NOT SELECT)",
     "vlm_mmproj": "NOT for USE DIRECT LOAD ONLY FOR VLM COMPLEMENTARY PROJECTION",
     "OCR_lm": "Analyzes the content of document of the images into LaTeX for instance for ease of use and understanding and recostruct graphic using TikZ.",
     "OCR_lm_mmproj": "NOT for USE DIRECT LOAD ONLY FOR VLM COMPLEMENTARY PROJECTION",
     "latex": "Generates and interprets complex mathematical formulas in LaTeX and TikZ.",
-    "rnj_1_general_STEM": "A general expert for Science, Technology, Engineering, and Math. Good for multi-disciplinary problems.",
+    "rnj_1_general_STEM": "A general expert for Science, Technology, Engineering, and Math. Good for STEM problems.",
     "physics": "Specialist for physics problems, including mechanics, aerodynamics, and thermodynamics.",
     "chemistry": "Specialist for chemistry, chemical reactions, and molecular structures.",
     "biology": "Specialist for biology, biochemistry, and life sciences.",
