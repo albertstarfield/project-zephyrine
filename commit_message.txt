@@ -1,0 +1,15 @@
+refactor(engineMain): evolve Snowball architecture to Enaga diff/patch loop
+
+This commit marks a significant evolution of the content generation architecture from the "Snowball LoD" path to the "Snowball-Enaga" loop.
+
+The new architecture introduces several key improvements:
+- **Diff/Patch Generation**: Instead of simply appending new sections, the system now uses a code model (`_apply_edits_via_code_model`) to generate a Python script that applies the new content as a patch to the existing document buffer. This allows for more intelligent merging and editing, improving the coherence of the final output.
+- **Skeleton Repair**: A new `_repair_skeleton_via_code_model` function has been added. If the initial skeleton generation model produces malformed JSON, this function uses a strict code model to repair the output and extract a valid plan, increasing the reliability of the entire process.
+- **Input Truncation and Flushing**: For very long user inputs, the system now automatically applies a "sandwich" truncation, keeping the beginning and end of the input while summarizing the middle. The full, untruncated input is immediately flushed to the interaction database, making it available to the RAG system for subsequent steps, ensuring no context is lost.
+- **Robustness Improvements**: The `llama_worker` has been updated to handle multiple different JSON output formats from the embedding binary, preventing parsing errors. The `launcher.py` script now ensures `bash` is installed via conda and includes a more robust re-installation mechanism for `libiconv` if it's missing.
+
+Configuration in `CortexConfiguration.py` has been updated to support these new features, including new thresholds and truncation limits.
+
+Implements: CORE-REFACTOR-003
+Have I read the Code of Conduct?: Yes
+idonotcondoneanycorruptionormisuselying070120266
