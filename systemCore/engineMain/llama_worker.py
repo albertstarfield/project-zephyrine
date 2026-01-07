@@ -603,30 +603,42 @@ def main():
                     stderr=subprocess.DEVNULL,  # Kill the ggml_metal chatter
                     text=True
                 )
-
+                output_data = "Placeholder... Before process.stdout fails?"
                 if process.returncode == 0:
                     try:
                         # 3. Parse the captured stdout
                         # The binary returns: {"embedding": [0.123, -0.456, ...]}
-                        output_data = json.loads(process.stdout)
+                        output_data = json.loads(process.stdout) # recieve the stdio (THIS IS RAW DATA So it is debug target!)
 
-                        # 4. Extract the vector list
-                        vector = output_data.get("embedding", [])
-
-                        # 5. Package for cortex_backbone_provider.py
-                        # This matches the OpenAI-compatible dict the provider expects
-                        completion_result_dict = {
-                            "data": [
-                                {
-                                    "object": "embedding",
-                                    "index": 0,
-                                    "embedding": vector
-                                }
-                            ]
-                        }
+                        vector = []
+                        
+                        # CASE A: OpenAI Style (What your binary is returning)
+                        # {"object": "list", "data": [{"embedding": [...]}]}
+                        if isinstance(output_data, dict) and "data" in output_data and isinstance(output_data["data"], list):
+                            if len(output_data["data"]) > 0:
+                                vector = output_data["data"][0].get("embedding", [])
+                        
+                        # CASE B: Flat Dict (Some llama.cpp versions)
+                        # {"embedding": [...]}
+                        elif isinstance(output_data, dict) and "embedding" in output_data:
+                            vector = output_data.get("embedding", [])
+                            
+                        # CASE C: List of Dicts (Legacy/Other)
+                        # [{"embedding": [...]}]
+                        elif isinstance(output_data, list) and len(output_data) > 0:
+                            vector = output_data[0].get("embedding", [])
+                            
+                        if vector and isinstance(vector, list):
+                            log_worker("INFO", "Parsed Successfully")
+                            embedding_results.append(vector)
+                        else:
+                            log_worker("ERROR", f"Parsed JSON did not contain 'embedding' field. Debug Dump: {output_data} with Key Dump {output_data.keys() if isinstance(output_data, dict) else 'List'}")
+                            # Append empty list to maintain index alignment if needed, or fail
+                            # embedding_results.append([])
+                            
                     except json.JSONDecodeError as e:
                         # Log the error if the binary output wasn't valid JSON
-                        log_worker("ERROR", f"Failed to parse LMText2Vector JSON: {e}")
+                        log_worker("ERROR", f"Failed to parse LMText2Vector JSON: {e} Debug Dump: {output_data}")
                         completion_result_dict = {"error": "Invalid JSON from embedding binary"}
                 else:
                     log_worker("ERROR", f"LMText2Vector failed with code {process.returncode}")

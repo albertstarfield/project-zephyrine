@@ -6472,6 +6472,98 @@ class CortexThoughts:
             # clean, original, and factually correct chunk.
             return clean_chunk
 
+    async def _apply_edits_via_code_model(
+        self, 
+        db: Session, 
+        session_id: str, 
+        current_buffer: str, 
+        new_content_request: str,
+        section_title: str
+    ) -> Tuple[str, bool]:
+        """
+        Orchestrates the Code Model to generate a Diff/Patch and applies it.
+        Retries up to 10 times with error logs if application fails.
+        """
+        # Select the 'code' model, fallback to 'general' if not set
+        code_model = self.provider.get_model("code") or self.provider.get_model("general")
+        if not code_model:
+            logger.error("DiffApply: No Code/General model available.")
+            return current_buffer, False
+
+        max_retries = 10
+        last_error = ""
+        
+        # We use a permissive Python script format for the patch
+        
+        for attempt in range(1, max_retries + 1):
+            log_prefix = f"🧩 DiffApply|Att{attempt}"
+            
+            # Construct command dynamic system for the Code Model
+            command = f"""[SYSTEM] You are a Text Editing Engine. Your job is to incorporate new content into an existing document string.
+            
+            [GOAL] Add/Merge the section "{section_title}" containing the following content into the document.
+            [NEW CONTENT TO ADD]
+            {new_content_request}
+            
+            [CURRENT DOCUMENT STATE (Truncated end)]
+            ...{current_buffer[-2500:]}
+            
+            [INSTRUCTION]
+            Return a Python script that defines a variable `updated_text`.
+            The script acts on a variable `text` (which contains the current document).
+            
+            - If this is a new section, simply append it.
+            - If you need to fix or replace text, use `.replace()`.
+            
+            Example Append:
+            ```python
+            updated_text = text + "\\n\\n## {section_title}\\n" + \"\"\"{new_content_request}\"\"\"
+            ```
+            
+            [PREVIOUS ERROR] (Fix this if present)
+            {last_error}
+            
+            Output ONLY the Python code block.
+            """
+            
+            try:
+                # Bind priority and invoke
+                chain = code_model.bind(priority=ELP1) | StrOutputParser()
+                # Run sync in thread to avoid blocking
+                response = await asyncio.to_thread(chain.invoke, command)
+                
+                # Extract Code Block
+                code_match = re.search(r"```python(.*?)```", response, re.DOTALL)
+                if not code_match:
+                    # Fallback: assume raw text if no backticks found (risky but handles some LLM quirks)
+                    code_block = response
+                else:
+                    code_block = code_match.group(1)
+                
+                # Safe Execution Sandbox
+                # We pass 'text' (current buffer) in, expect 'updated_text' out.
+                local_scope = {"text": current_buffer}
+                
+                def execute_patch():
+                    exec(code_block, {}, local_scope)
+                    return local_scope.get("updated_text", "")
+
+                updated_buffer = await asyncio.to_thread(execute_patch)
+                
+                # Validation: The text should not shrink significantly or become empty
+                if updated_buffer and len(updated_buffer) >= len(current_buffer):
+                    logger.info(f"{log_prefix}: Patch applied successfully.")
+                    return updated_buffer, True
+                else:
+                    last_error = "Execution resulted in empty string or shrinking text (invalid for addition)."
+            
+            except Exception as e:
+                logger.warning(f"{log_prefix}: Patch failed: {e}")
+                last_error = f"Python Execution Error: {e}"
+        
+        logger.error(f"❌ Diff/Patch failed after {max_retries} attempts.")
+        return current_buffer, False
+
     async def _direct_generate_logic(
         self,
         db: Session,
@@ -6494,10 +6586,49 @@ class CortexThoughts:
         logger.info(f"{log_prefix} START -> Session: {session_id}")
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
-        
-        # --- 1. COMPLEXITY CHECK ---
         input_token_count = self._count_tokens(user_input)
+        # --- 0. Truncation Rollover Check to spilloff to the Memory Vector DB ---
         
+        #if User_input token is greater than 2048, then try to do truncation :1024 (this is characters not token truncation but that's okay) and then the rest other user_input is Save to interaction database and then vectorize it so later on it can be retrieved from RAG and/or fuzzy logic of direct generate 
+        # Aha it's better to use Sandwich and put in the middle [See Your Memory For Context!]
+        # Controlled from TOKENTRUNCATEVECTORDIRECT_truncatechar from CortexConfiguration
+        # This allowed to get 10000000+ tokens or even unlimited 1.84467441e19 tokens. mapped inside the embedding and the memory.
+        limit = TOKENTRUNCATEVECTORDIRECT_truncatechar
+        if len(user_input) > limit:
+            logger.warning(
+            f"Input Tokens total ({input_token_count}) exceeds limit of Gear 1 Normal Mode chars ({limit}). Applying Sandwich Truncation and Switching Gear 2 capturing the whole context... Token {input_token_count}"
+            )
+            #Save the entire User_input directly and immediately! so later on it can be retrieved
+            try:
+                # we perform this specifically to "flush" the vectors index or fuzzy later on
+                await asyncio.to_thread(
+                    add_interaction,
+                    db,
+                    session_id=session_id,
+                    mode="chat",
+                    input_type="text",
+                    user_input=user_input,
+                    llm_response="[System: Input Received - Flushing for RAG Availability]",
+                    classification="input_flush"
+                )
+                logger.info(f"✅ Immediate Flush: Saved {len(user_input)} chars to DB/Vector Memory.")
+            except Exception as e:
+                logger.error(f"⚠️ Failed to perform immediate flush save: {e}")
+            # modify it to do sandwith mid remove
+            half_limit = int(limit / 2)
+            front_chunk = user_input[:half_limit]
+            back_chunk = user_input[-half_limit:]
+            # Construct the Sandwich
+            user_input = (
+                f"{front_chunk}\n"
+                f"...\n [See your Memory for Reference!]\n"
+                f"...\n{back_chunk}"
+            )
+        else:
+            # No truncation needed
+            user_input = user_input
+
+        # --- 1. COMPLEXITY CHECK (moved before the step 0) ---
         # VLM Just in case
 
         if image_b64 and not vlm_description:
@@ -6532,7 +6663,7 @@ class CortexThoughts:
             logger.info(f"{log_prefix}: Simple query detected (<{DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD} tokens). Using Fast Path.")
             
             # Simple RAG
-            history_rag_str = await self._get_direct_rag_context_elp1(db, user_input, session_id)
+            history_experience_learned_rag_str = await self._get_direct_rag_context_elp1(db, user_input, session_id)
             direct_hist = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
             recent_direct_history_str = self._format_direct_history(direct_hist)
 
@@ -6549,7 +6680,7 @@ class CortexThoughts:
             chain = (ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE) | bound_model | StrOutputParser())
             
             prompt_placeholders = {
-                "history_rag": history_rag_str,
+                "history_rag": history_experience_learned_rag_str,
                 "recent_direct_history": recent_direct_history_str,
                 "input": user_input,
                 "augmented_prediction_context": "", 
@@ -6568,42 +6699,112 @@ class CortexThoughts:
                 logger.error(f"🚦 {log_prefix} Fast Path INTERRUPTED: {tie}")
                 return f"[System Error: Interrupted by priority task.]"
 
-        # --- PATH B: SNOWBALL LoD PATH (Complex/Long) ---
+        # --- PATH B: SNOWBALL LoD PATH (Complex/Long) (Complex/Long - Whimsically Cute snowball Fairytale alike architecture) ---
         else:
-            logger.info(f"{log_prefix}: Complex query. Generating LoD Skeleton...")
+            logger.info(f"{log_prefix}: Complex query detected. Entering Snowball-Enaga Loop...")
+
+            # 1. Generate Skeleton (The Plan)
+            # This breaks the query into logical "Grid Nodes"
+            # Shooting Context
+            history_experience_learned_rag_str = await self._get_direct_rag_context_elp1(db, user_input, session_id)
+            direct_hist = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
+            recent_direct_history_str = self._format_direct_history(direct_hist)
+            #Create skeleton so later we can put it into the buffer
+            skeleton = await self._generate_lod_skeleton(
+                db, user_input, session_id,
+                history_experience_learned_rag_str,
+                recent_direct_history_str
+            )
             
-            # 1. Generate Skeleton
-            skeleton = await self._generate_lod_skeleton(db, user_input, session_id)
-            skeleton_len = len(skeleton)
+            # --- [FEATURE 0] SKELETON DB FLUSH ---
+            # Immediately save the plan so RAG can see the structure
+            try:
+                skeleton_text = "\n".join([f"- {s}" for s in skeleton])
+                await asyncio.to_thread(
+                    add_interaction, db, session_id=session_id, mode="chat", 
+                    input_type="skeleton_plan", user_input="[System: Generated Execution Skeleton]", 
+                    llm_response=skeleton_text, classification="internal_plan"
+                )
+                await asyncio.to_thread(db.commit)
+                logger.info(f"💾 {log_prefix}: Skeleton flushed to DB for RAG availability.")
+            except Exception as e:
+                logger.error(f"{log_prefix}: Failed to flush skeleton: {e}")
+
+            # 2. Execute Grid (The Mutable Document Buffer)
+            # Initialize buffer. 
+            current_document_buffer = f"# Analysis: {user_input[:100]}...\n\n"
             
-            # 2. Execute Grid (Generate content for each section)
-            final_output_parts = []
-            
-            # Helper to handle VLM context if present
+            # Prepare optional VLM context
             vlm_context_str = f"Image Context: {vlm_description}\n" if vlm_description else ""
 
+            # Loop through every node in the skeleton
             for i, section_title in enumerate(skeleton):
-                logger.info(f"{log_prefix}: Processing Grid Node {i+1}/{len(skeleton)}: '{section_title}'")
+                logger.info(f"{log_prefix}: Processing Node {i+1}/{len(skeleton)}: '{section_title}'")
                 
-                # Combine user input with VLM context for the section generator
+                # A. Specialist Generation (Raw Text)
+                # We inject the VLM context + User Input.
+                # Crucially, we pass the TAIL of the current buffer so the model knows what came before.
                 section_input_context = f"{vlm_context_str}{user_input}"
 
-                # Generate content (Handles Routing + RAG + Fallback)
-                content = await self._generate_section_content(
-                    db, section_title, skeleton, section_input_context, session_id
+                # Recursively Every loop shoot different rays into the database it changes the RAG History Fetch (so it's not static)
+                history_experience_learned_rag_str = await self._get_direct_rag_context_elp1(db, section_input_context, session_id)
+                recent_history_str = self._format_direct_history(direct_hist)
+
+                raw_specialist_content = await self._generate_section_content(
+                    db=db,
+                    section_title=section_title,
+                    full_plan=skeleton,
+                    user_input=user_input,
+                    section_input_context=section_input_context,
+                    session_id=session_id,
+                    existing_buffer_context=current_document_buffer,
+                    recent_history_str=recent_history_str,
+                    history_experience_learned_rag_str=history_experience_learned_rag_str
+                )
+
+                # B. Code Model -> Diff/Patch Application (The "Enaga" Step)
+                # Instead of blindly appending, we ask the Code Model to "patch" the document.
+                logger.info(f"{log_prefix}: Handing off to Code Model for Diff/Patch application...")
+                
+                new_buffer_state, success = await self._apply_edits_via_code_model(
+                    db, 
+                    session_id, 
+                    current_buffer=current_document_buffer, 
+                    new_content_request=raw_specialist_content,
+                    section_title=section_title
                 )
                 
-                # Format the section
-                formatted_section = f"## {section_title}\n{content}"
-                final_output_parts.append(formatted_section)
-                
-                # Stream this section as a proactive thought chunk
-                # This gives the user immediate feedback as sections finish
-                sse_payload = {"userId": "user_placeholder", "message": f"\n\n{formatted_section}"}
-                sse_notification_queue.put(format_sse_notification(sse_payload, "proactive_thought"))
+                if success:
+                    current_document_buffer = new_buffer_state
+                else:
+                    # Fallback: Just append if diffing fails completely after retries
+                    logger.warning(f"{log_prefix}: Diff pipeline failed. Appending raw content as fallback.")
+                    current_document_buffer += f"\n\n## {section_title}\n{raw_specialist_content}"
 
-            # 3. Assembly
-            final_response_text = "\n\n".join(final_output_parts)
+                # --- [FEATURE 1] DB FLUSH EACH CHANGE ---
+                # Save the new content immediately so it's indexed for the NEXT section's RAG lookup.
+                try:
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=session_id, mode="chat",
+                        input_type="snowball_chunk",
+                        user_input=f"[Section Complete: {section_title}]",
+                        llm_response=raw_specialist_content, # Index the raw text
+                        classification="internal_draft_chunk"
+                    )
+                    await asyncio.to_thread(db.commit)
+                    logger.info(f"💾 {log_prefix}: Section '{section_title}' flushed to DB.")
+                except Exception as e:
+                    logger.error(f"{log_prefix}: Failed to flush section: {e}")
+
+                # Optional: Stream progress to UI if you have SSE setup
+                try:
+                    sse_payload = {"userId": "user_placeholder", "message": f"\n\n## {section_title}\n..."}
+                    sse_notification_queue.put(format_sse_notification(sse_payload, "proactive_thought"))
+                except NameError:
+                    pass # Ignore if SSE not configured
+
+            # 3. Final Assembly
+            final_response_text = current_document_buffer
 
         # --- 4. SAFETY & POST-PROCESSING ---
 
@@ -6653,7 +6854,7 @@ class CortexThoughts:
         queue_interaction_for_batch_logging(**interaction_data)
 
         logger.info(
-            f"{log_prefix} END Snowball V10. Sections: {skeleton_len}. Duration: {final_duration_ms:.2f}ms"
+            f"{log_prefix} END Snowball Enaga V10. Duration: {final_duration_ms:.2f}ms"
         )
         return humanized_final_text
 
@@ -6689,13 +6890,16 @@ class CortexThoughts:
             final_response_text = ""  # Initialize a variable to hold the result
             hook_response: Optional[str] = None
             logger.info(
-                f"{log_prefix} Orchestrator START -> Session: {session_id}, Input: '{user_input[:50]}...'"
+                f"{log_prefix} Orchestrator START -> Session: {session_id}, Input: '{user_input[:10]}...'"
             )
 
-            if self.stella_icarus_manager and ENABLE_STELLA_ICARUS_HOOKS:
+            #input_token_count
+            input_token_count = self._count_tokens(user_input)
+            
+            if self.stella_icarus_manager and ENABLE_STELLA_ICARUS_HOOKS and input_token_count <= DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT:
                 try:
                     logger.debug(
-                        f"Checking StellaIcarusHooks for input: '{user_input[:70]}...'"
+                        f"Checking StellaIcarusHooks for this input.'"
                     )
 
                     # The try_hooks method is synchronous, so it's safe to call directly.
@@ -6720,6 +6924,8 @@ class CortexThoughts:
                         f"Error during StellaIcarusHook execution: {e}", exc_info=True
                     )
                     # If hooks crash, we log the error and fall through to the LLM path for resilience.
+            else:
+                logger.info(f"Hook are skipped due to these parameters {ENABLE_STELLA_ICARUS_HOOKS} input token {input_token_count}")
 
             # Check if benchmark has run. If not, run without the watchdog.
             if BENCHMARK_ELP1_TIME_MS <= 0:
@@ -6732,7 +6938,7 @@ class CortexThoughts:
 
             timeout_event = asyncio.Event()
             task_done_event = asyncio.Event()
-            timeout_duration_sec = BENCHMARK_ELP1_TIME_MS / 1000.0
+            timeout_duration_sec = BENCHMARK_ELP1_TIME_MS * 10 / 1000.0 #we add *10 because we might run into issue when it started to build text diff on Snowball architecture which uses other than small model
             logger.info(
                 f"{log_prefix}: Starting ELP1 task with a timeout of {timeout_duration_sec:.2f} seconds."
             )
@@ -8598,8 +8804,79 @@ class CortexThoughts:
 
         # In AdelaideAlbertCortex.py, inside the CortexThoughts class
 
+    async def _repair_skeleton_via_code_model(self, broken_text_output: str, session_id: str) -> List[str]:
+        """
+        Helper: Uses the strict 'code' model to extract a valid JSON list
+        from a malformed/chatty output provided by the Decomposer.
+        """
+        log_prefix = f"🔧 SkelRepair|{session_id}"
+        logger.warning(f"{log_prefix}: Decomposer output was malformed. Engaging Code Model for JSON repair...")
+
+        # 1. Select the Code Model (Best for strict syntax)
+        # fallback to 'general' if 'code' isn't loaded, but 'code' is preferred per config
+        repair_model = self.provider.get_model("code") or self.provider.get_model("general")
+
+        if not repair_model:
+            logger.error(f"{log_prefix}: No suitable model found for repair.")
+            return ["Main Explanation"]  # Ultimate fallback
+
+        # 2. The "Janitor" Prompt
+        # We strip the input to the last 2000 chars to avoid overflowing context with useless "thinking" traces
+        truncated_broken_text = broken_text_output[-2000:]
+
+        prompt = f"""[SYSTEM] You are a JSON Repair Engine. 
+The user will provide text that *contains* a list of section titles, but is formatted incorrectly (e.g. has markdown, chat text, or invalid syntax).
+
+[YOUR GOAL]
+Extract the section titles and output them as a strict, valid JSON list of strings.
+
+[RULES]
+1. Output ONLY the JSON. No introduction, no markdown backticks, no "Here is the list".
+2. Fix any missing brackets or quotes.
+3. Ensure the result is a flat list of strings: ["Title 1", "Title 2", "Title 3"]
+
+[BROKEN INPUT DATA]
+...
+{truncated_broken_text}
+...
+
+[CORRECTED JSON OUTPUT]
+"""
+
+        # 3. Execute Repair
+        try:
+            chain = repair_model.bind(priority=ELP1) | StrOutputParser()
+            # Run sync in thread to avoid blocking main loop
+            fixed_response = await asyncio.to_thread(chain.invoke, prompt)
+
+            # 4. Final Polish (Regex Clean)
+            # Remove any lingering markdown code blocks key might still output
+            clean_json_text = re.sub(r"```json|```", "", fixed_response).strip()
+
+            # 5. Parse
+            recovered_list = json.loads(clean_json_text)
+
+            if isinstance(recovered_list, list) and len(recovered_list) > 0:
+                logger.info(f"✅ {log_prefix}: Repair successful! Recovered {len(recovered_list)} sections.")
+                return [str(item) for item in recovered_list]  # Ensure all items are strings
+
+        except json.JSONDecodeError as je:
+            logger.error(f"❌ {log_prefix}: JSON repair failed even after Code Model pass: {je}")
+            logger.debug(f"Failed Repair Output: {fixed_response}")
+        except Exception as e:
+            logger.error(f"❌ {log_prefix}: Unexpected error during repair: {e}")
+
+        # Ultimate fallback if the repair model also piece of crap and garbage.
+        return ["Analysis", "Detailed Explanation", "Conclusion"]
+
     async def _generate_lod_skeleton(
-        self, db: Session, user_input: str, session_id: str
+            self,
+            db: Session,
+            user_input: str,
+            session_id: str,
+            # NEW ARGS
+            history_rag_str: str,
+            recent_history_str: str
     ) -> List[str]:
         """
         LoD 0: Creates a structural plan (Skeleton) for the response.
@@ -8616,6 +8893,12 @@ class CortexThoughts:
         
         [USER REQUEST]
         "{user_input}"
+        
+        [CONVERSATION HISTORY]
+        {recent_history_str}
+        
+        [BACKGROUND KNOWLEDGE]
+        {history_rag_str[:2000]}... (Truncated)
 
         [INSTRUCTION]
         Output ONLY a JSON list of section headers strings.
@@ -8624,34 +8907,43 @@ class CortexThoughts:
         JSON LIST:
         """
 
+        # Try to generate the Skeleton first using the modelbing command
+        raw_plan = ["Main_explanation"]
         try:
             bound_model = model.bind(priority=ELP1, max_tokens=4096)
             chain = bound_model | StrOutputParser()
             raw_plan = await asyncio.to_thread(chain.invoke, prompt)
-            
-            # Extract JSON list
-            json_candidate = self._extract_json_candidate_string(raw_plan, log_prefix)
-            if json_candidate:
-                plan = json.loads(json_candidate)
-                if isinstance(plan, list):
-                    # Hard limit sections to 4 for speed
-                    logger.info(f"{log_prefix}: Generated plan: {plan[:4]}")
-                    return plan[:4]
-            
-            # Fallback if JSON fails
-            return ["Main Explanation"]
-
         except Exception as e:
             logger.error(f"{log_prefix}: Failed to generate skeleton: {e}")
             return ["Detailed Answer"]
-        
+
+        #Extracting parsing the JSON
+        try:
+            clean_text = re.sub(r"```json|```", "", raw_plan).strip()
+            # Regex to find the first bracketed list [...]
+            list_match = re.search(r"\[.*\]", clean_text, re.DOTALL)
+            if list_match:
+                skeleton = json.loads(list_match.group(0))
+                return skeleton
+        except Exception as e:
+            # THIS IS THE PART YOU WANTED TO CHANGE
+            # Instead of returning a static list, we trigger the repair loop.
+            logger.warning(f"Skeleton|{session_id}: Standard parse failed ({e}). Re-routing to Code Model...")
+
+            # Call the new helper function
+            return await self._repair_skeleton_via_code_model(raw_plan, session_id)
+
     async def _generate_section_content(
-        self, 
-        db: Session, 
-        section_title: str, 
-        full_plan: List[str],
-        user_input: str, 
-        session_id: str
+            self,
+            db: Session,
+            section_title: str,
+            full_plan: List[str],
+            user_input: str,
+            section_input_context: str,
+            session_id: str,
+            existing_buffer_context: str,  # From previous step
+            recent_history_str: str,
+            history_experience_learned_rag_str: str
     ) -> str:
         """
         LoD 1: Generates content for a SINGLE node in the grid.
@@ -8688,12 +8980,26 @@ class CortexThoughts:
         [USER GOAL]
         {user_input}
 
+        [USER GOAL/CONTEXT]
+        {section_input_context}
+
+        [RECENT CONVERSATION]
+        {recent_history_str}
+        
+        [INTERACTON EXPERIENCE (General Context)]
+        {history_experience_learned_rag_str[:3000]}
+        
+        [PREVIOUSLY WRITTEN SECTIONS (Context)]
+        ...{existing_buffer_context[-1500:]}
+
         [RELEVANT KNOWLEDGE]
         {section_context}
 
         [INSTRUCTION]
         Write the content for the '{section_title}' section. 
-        Be direct and detailed. Do not write an intro or conclusion for the whole essay, just this part.
+        - Be direct and detailed.
+        - Maintain consistency with the 'Previously Written Sections'.
+        - Do not write an intro or conclusion for the whole essay, just this part.
         """
 
         try:
@@ -8780,7 +9086,7 @@ class CortexThoughts:
             
             # If it doesn't say NO, it must say YES very confidently to pass.
             score_yes = fuzz.partial_ratio("YES", raw_decision.upper())
-            if score_yes > 95:
+            if score_yes > 85:
                 logger.debug(f"{log_prefix}: Response PASSED fact-check.")
                 return True
             
@@ -8867,11 +9173,11 @@ class CortexThoughts:
             chain = bound_router | StrOutputParser()
             raw_selection = await asyncio.to_thread(chain.invoke, prompt)
             
-            logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW OUTPUT STRIP: '{raw_selection.strip()}'")
-            logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW INPUT STRIP: '{prompt.strip()}'")
-            
-            logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW OUTPUT: '{raw_selection}'")
-            logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW INPUT: '{prompt}'")
+            #logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW OUTPUT STRIP: '{raw_selection.strip()}'")
+            #logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW INPUT STRIP: '{prompt.strip()}'")
+
+            #logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW OUTPUT: '{raw_selection}'")
+            #logger.info(f"[DEBUG_ELP1_ROUTER] : ROUTER RAW INPUT: '{prompt}'")
             
             # Fuzzy matching remains the same
             available_keys = list(LLAMA_CPP_MODEL_MAP.keys())
@@ -9052,14 +9358,52 @@ class CortexThoughts:
         self.current_session_id = session_id
 
         input_log_snippet = (
-            f"'{user_input}...'" if user_input else "'None (reflection task)'"
+            f"'{user_input[:20]}...'" if user_input else "'None (reflection task)'"
         )
         logger.info(
-            f"{log_prefix} START --> Session: {session_id}, Class: '{classification}', Input: {input_log_snippet}, "
+            f"{log_prefix} START --> Session: {session_id[:50]}, Class: '{classification[:20]}', Input: {input_log_snippet[:50]}, "
             f"Img: {'Yes' if image_b64 else 'No'}, Target ID: {update_interaction_id or 'N/A'}"
         )
 
         request_start_time = time.monotonic()
+
+        # since the interaction data is already inside the interaction databse we can directly just trim it
+        # TOKENTRUNCATEVECTORBACKGROUND_truncatechar  # Maximum characters allowed in the Direct Generate PROMPT before truncation
+        input_token_count = self._count_tokens(user_input)
+        limit = TOKENTRUNCATEVECTORDIRECT_truncatechar
+        if len(user_input) > limit:
+            logger.warning(
+                f"Input Tokens total ({input_token_count}) exceeds limit of Gear 1 Normal Mode chars ({limit}). Applying Sandwich Truncation and Switching Gear 2 capturing the whole context... Token {input_token_count}"
+            )
+            # Save the entire User_input directly and immediately! so later on it can be retrieved
+            try:
+                # we perform this specifically to "flush" the vectors index or fuzzy later on
+                await asyncio.to_thread(
+                    add_interaction,
+                    db,
+                    session_id=session_id,
+                    mode="chat",
+                    input_type="text",
+                    user_input=user_input,
+                    llm_response="[System: Input Received - Flushing for RAG Availability]",
+                    classification="input_flush"
+                )
+                logger.info(f"✅ Immediate Flush: Saved {len(user_input)} chars to DB/Vector Memory.")
+            except Exception as e:
+                logger.error(f"⚠️ Failed to perform immediate flush save: {e}")
+            # modify it to do sandwith mid remove
+            half_limit = int(limit / 2)
+            front_chunk = user_input[:half_limit]
+            back_chunk = user_input[-half_limit:]
+            # Construct the Sandwich
+            user_input = (
+                f"{front_chunk}\n"
+                f"...\n [See your Memory for Reference!]\n"
+                f"...\n{back_chunk}"
+            )
+        else:
+            # No truncation needed
+            user_input = user_input
 
         interaction_data: Dict[str, Any] = {
             "session_id": session_id,
@@ -10896,7 +11240,7 @@ def _ollama_pseudo_stream_sync_generator(
             think_words = _PREBUFFERED_THINK_CONTENT.split(" ")
             for word in think_words:
                 yield format_ollama_chunk(content=word + " ")
-                time.sleep(0.0001)
+                time.sleep(0.001)
 
         # 6. Stream Live Logs
         final_response_text = None
@@ -10917,7 +11261,7 @@ def _ollama_pseudo_stream_sync_generator(
                         else:
                             for char in safe_content:
                                 yield format_ollama_chunk(content=char)
-                                time.sleep(0.0001)
+                                time.sleep(0.001)
                 
                 elif msg_type == "RESULT":
                     final_response_text = msg_content
@@ -10950,7 +11294,7 @@ def _ollama_pseudo_stream_sync_generator(
             for i, word in enumerate(words):
                 content_to_send = word + (" " if i < len(words) - 1 else "")
                 yield format_ollama_chunk(content=content_to_send)
-                time.sleep(0.0001)
+                time.sleep(0.001)
 
     except GeneratorExit:
         logger.warning("OLLAMA_STREAM_V6: Client disconnected.")
@@ -11897,7 +12241,7 @@ def _async_compatible_openai_streamer(
         for i, word in enumerate(words):
             chunk_content = word + (" " if i < len(words) - 1 else "")
             yield yield_chunk(delta_content=chunk_content)
-            time.sleep(0.0001)  # Small delay for typing effect
+            time.sleep(0.001)  # Small delay for typing effect
 
         # Yield the final stop chunk
         yield yield_chunk(finish_reason="stop")
@@ -11966,7 +12310,7 @@ def _pseudo_stream_sync_generator(
         for i, word in enumerate(words):
             chunk_content = word + (" " if i < len(words) - 1 else "")
             yield yield_chunk(delta_content=chunk_content)
-            time.sleep(0.0001)
+            time.sleep(0.001)
 
         yield yield_chunk(finish_reason="stop")
 
@@ -12168,7 +12512,7 @@ def _stream_openai_chat_response_generator_flask(
             think_words = _PREBUFFERED_THINK_CONTENT.split(" ")
             for word in think_words:
                 yield yield_chunk(delta_content=word + " ")
-                time.sleep(0.0001)
+                time.sleep(0.001)
 
                 # 6. Stream Live Logs with Smart Typing Effect
         final_response_text = None
@@ -12196,7 +12540,7 @@ def _stream_openai_chat_response_generator_flask(
                             for char in safe_content:
                                 yield yield_chunk(delta_content=char)
                                 # 2ms delay = ~500 chars/sec. Fast but visible.
-                                time.sleep(0.0001)
+                                time.sleep(0.001)
 
                 elif msg_type == "RESULT":
                     final_response_text = msg_content

@@ -151,7 +151,7 @@ The installation process is now managed by a single, cross-platform launcher scr
 >We've noted a societal preference towards immediate consumption or process in various forms, including food and information consumption. consider this:
 >This is **NOT an AI assistant/agent**, it is designed to learn directly from you and effort resource allocation from you, the user and cognitive internal system as the dynamic decision making thus making it "Adaptive", thus we call it Adaptive System, Determenistic when needed and most of the time, dynamic when it is not written explicitly. 
 >
-> Your engagement in guiding discipline are fundamental to its development (her personality, her knowledge compass, and her moral compass). 
+> Your engagement in guiding discipline are fundamental to its development (her personality, her knowledge compass, and her moral compass), (even if zephy have an internal limit and )
 > **DO NOT TREAT this As an AI, as it is NOT**. You are the one responsible for your action of the agent and the self-awareness/self-consciousness. 
 >
 > We are developing the need of an System framework that can operate dynamically yet determenistically, for system such as Airbus Dragonfly [13] or Spacecraft exploration Syntethic Crew for interplanetary exploration [14].

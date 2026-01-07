@@ -1,3 +1,8 @@
+-   **ID:** CORE-REFACTOR-003
+-   **Title:** Evolve Snowball architecture to Enaga diff/patch loop and enhance robustness
+-   **Status:** Resolved
+-   **Description:** This major refactor evolves the 'Snowball' architecture into the 'Snowball-Enaga V10' loop. Instead of simple concatenation, this new architecture uses a code model to intelligently generate and apply diff/patches for each generation step, improving contextual consistency. It also introduces a skeleton repair mechanism using a code model to fix malformed JSON plans. Input handling is now more robust with automatic "sandwich" truncation for very long inputs, flushing the full content to the vector database to ensure complete context is available for RAG. The `llama_worker` embedding parser is now more resilient to varied JSON output from the embedding binary. The launcher now ensures `bash` is installed and has better error handling for `libiconv`.
+
 -   **ID:** STELLA-REFACTOR-002
 -   **Title:** Remove CX3 Flight Calculator and Refactor Trickshot Benchmark
 -   **Status:** Resolved

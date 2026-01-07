@@ -76,15 +76,17 @@ FUZZY_SEARCH_THRESHOLD_CONTEXT = getattr(
 BENCHMARK_ELP1_TIME_MS = 600000.0  # before hard defined error timeout (30 seconds max)
 
 DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
-DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 30)) #quick switch based on tkoen to peer review everphase architecture
+DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 100)) #quick switch based on tkoen to peer review everphase architecture
 DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT = int(os.getenv("DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT", 8192)) #each specialist model "peer review everphase" max token gen
-
+DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT = int(os.getenv("DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT", 128)) #Turn off Stellaicarus hook if it's becoming long then disable stella icarus to not falsely triggered hook
+TOKENTRUNCATEVECTORDIRECT_truncatechar = int(os.getenv("TOKENTRUNCATEVECTORDIRECT_truncatechar", 2048)) # Maximum characters allowed in the Direct Generate PROMPT before truncation
 
 
 _default_max_bg_tasks = 100000000000
 MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(
     os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks)
 )
+TOKENTRUNCATEVECTORBACKGROUND_truncatechar = int(os.getenv("TOKENTRUNCATEVECTORDIRECT_truncatechar", 2048)) # Maximum characters allowed in the background Generate PROMPT before truncation
 SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = int(
     os.getenv("SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS", 30)
 )  # e.g., 1/2 minutes
@@ -1419,7 +1421,7 @@ PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = """你是一个共生体助手，一个�
 -   当你完成了当前片段的一个完整思路后，必须用特殊令牌 `{self_termination_token}` 来结束你的输出。
 
 ---
-**焦点窗口 (FOCUS WINDOW - 最高优先级上下文)**
+**焦点窗口 (FOCUS MEMORY WINDOW - 最高优先级上下文)**
 
 [近期对话历史 (Immediate Conversation History)]:
 {direct_history}
@@ -2488,6 +2490,35 @@ PROMPT_GENERATE_FILE_SEARCH_QUERY = """
 # Based on the context provided above, generate ONLY the keywords for the search query.
 
 Search Keywords:
+"""
+
+PROMPT_LOD_SKELETON = """<|im_start|>system
+You are the Decomposer Architect for the Zephyrine Engine.
+Your goal is to break down a complex user query into a logical, sequential "Grid Node" execution plan (Skeleton).
+
+**RULES:**
+1. Do NOT answer the question. Only plan the structure.
+2. The plan must be detailed enough that a separate specialist model can write a full section based solely on your bullet points.
+3. Use the exact format below. Do not deviate.
+4. Enclose the entire output in <|skeleton_start|> and <|skeleton_end|>.
+
+**REQUIRED FORMAT:**
+<|skeleton_start|>
+[SECTION 1]: <Title of First Section>
+- <Key detail or argument to cover>
+- <Specific example or historical reference>
+
+[SECTION 2]: <Title of Second Section>
+- <Key detail>
+- <Key detail>
+
+...
+<|skeleton_end|>
+
+**USER QUERY:**
+{input}
+<|im_end|>
+<|im_start|>assistant
 """
 
 PROMPT_COMPLEXITY_CLASSIFICATION = """Analyze the following user query and the recent conversation context. Classify the query into ONE of the following categories based on how it should be processed:
