@@ -2449,7 +2449,24 @@ def _ensure_libiconv_copy() -> bool:
 
     # 2. Verify that the source of our copy (.so.2) exists.
     if not os.path.exists(so_2_path):
-        print_error(f"CRITICAL: 'libiconv.so.2' not found at '{so_2_path}' after installation.")
+        print_warning(f"libiconv.so.2 is missing at '{so_2_path}'. Forcing clean re-installation...")
+        reinstall_cmd = [
+            CONDA_EXECUTABLE, "install", "--yes", "--force-reinstall",
+            "--prefix", TARGET_RUNTIME_ENV_PATH,
+            "-c", "conda-forge",
+            "libiconv"
+        ]
+        if not run_command(reinstall_cmd, cwd=ROOT_DIR, name="FORCE-REINSTALL-LIBICONV", check=True):
+            print_error("Failed to force reinstall libiconv.")
+            return False
+    else:
+        # If file exists, ensure package is registered normally
+        if not _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True):
+            print_error("Failed to install the base 'libiconv' package.")
+            return False
+
+    if not os.path.exists(so_2_path):
+        print_error(f"CRITICAL: 'libiconv.so.2' not found at '{so_2_path}' even after installation.")
         return False
 
     # 3. If .so.1 is missing, create a physical copy.
@@ -4730,6 +4747,8 @@ if __name__ == "__main__":
                 # The function handles its own error printing. We just need to record the failure.
                 setup_failures.append("Failed to install a compatible version of libiconv providing libiconv.so.1")
             print_system("--- Ensuring executable patching utility (patchelf) ---")
+            if not _ensure_conda_package("bash", executable_to_check="bash", is_critical=True):
+                setup_failures.append("Failed to install Conda bash, which is critical for script execution.")
             if not _ensure_conda_package("patchelf", is_critical=True):
                 setup_failures.append("Failed to install patchelf, which is critical for fixing library paths.")
             if not _ensure_conda_package("ncurses", is_critical=True):
