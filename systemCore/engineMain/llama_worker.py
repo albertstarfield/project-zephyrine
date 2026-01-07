@@ -8,10 +8,12 @@ import traceback
 import argparse
 import subprocess
 import shlex
+import psutil
 import re
 import pickle
 from typing import Union, List, Dict, Any, Optional  # Added for type hints
 from cortex_backbone_provider import INFERCOMPLETION_CTX_BINNING
+from CortexConfiguration import DisallowParallelBinaryExec
 
 # --- Try importing llama_cpp ---
 """try:
@@ -300,6 +302,46 @@ def adaptive_middle_truncate(text: str, target_max_tokens: int, model_actual_n_c
         log_worker("TRACE", "adaptive_middle_truncate: No truncation was performed.")
         return truncated_text
 
+
+#binary waiter
+def wait_for_binary_clearance():
+    """
+    Blocks execution if DisallowParallelBinaryExec is True and 
+    any competing LLM binaries are currently running.
+    """
+    if not DisallowParallelBinaryExec:
+        return
+
+    # The binaries we must wait for
+    restricted_binaries = ["LMExec", "LMText2Vector", "LMMultiModal"]
+    
+    # Simple backoff logging
+    logged_wait = False
+    
+    while True:
+        conflict_detected = False
+        
+        # Iterate over all running processes
+        for proc in psutil.process_iter(['pid', 'name', 'status']):
+            try:
+                # Check if process name is in our restricted list
+                # AND ensure it's not a zombie process (already dead but not reaped)
+                if proc.info['name'] in restricted_binaries and proc.info['status'] != psutil.STATUS_ZOMBIE:
+                    conflict_detected = True
+                    if not logged_wait:
+                        log_worker("INFO", f"Serialization Active: Waiting for {proc.info['name']} (PID {proc.info['pid']}) to finish...")
+                        logged_wait = True
+                    break # Stop checking, we found a blocker
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        
+        if not conflict_detected:
+            if logged_wait:
+                log_worker("INFO", "Serialization Clear: All competing binaries finished. Proceeding.")
+            break
+        
+        # Wait before checking again to prevent CPU thrashing and to wait for memory or Kernel memory clearing/dealloc first
+        time.sleep(2)
 
 def format_messages_as_string(messages: list) -> str:
     """
@@ -803,4 +845,5 @@ def main():
 
 
 if __name__ == "__main__":
+    wait_for_binary_clearance() #checking any parallel binary running
     main()
