@@ -1691,7 +1691,7 @@ class CortexThoughts:
                 expert_chain,
                 prompt_inputs,
                 timing_data,
-                priority=priority,
+                priority=ELP1,
                 db=db,
                 session_id=session_id
             )
@@ -4535,7 +4535,7 @@ class CortexThoughts:
             chain: Any,
             inputs: Any,
             interaction_data: Dict[str, Any],
-            priority: int = ELP0,
+            priority: int = ELP1,
             db: Session = None,
             session_id: str = None
     ):
@@ -4562,27 +4562,75 @@ class CortexThoughts:
         avail_gb = mem_status.get("safe_available_gb", 0)
 
         # 3. Calculate Cost & Negotiate
-        model_path = self.provider.get_model_path("general")
+        target_role = "general"  # Default fallback
+
+        try:
+            # Helper to check a single object for the 'role' attribute
+            def get_role(obj):
+                # Check direct attribute (LlamaCppChatWrapper)
+                if hasattr(obj, "role"):
+                    return obj.role
+                # Check if it's a Bound object (model.bind(...))
+                if hasattr(obj, "bound") and hasattr(obj.bound, "role"):
+                    return obj.bound.role
+                return None
+
+            # Case A: Chain is the Model itself (or Bound Model)
+            found = get_role(chain)
+
+            # Case B: Chain is a Sequence (Prompt | Model | Parser)
+            if not found and hasattr(chain, "steps"):
+                for step in chain.steps:
+                    found = get_role(step)
+                    if found: break
+
+            if found:
+                target_role = found
+                # logger.debug(f"LLMCall|Warden: Detected specific model role: '{target_role}'")
+
+        except Exception as e:
+            logger.warning(f"LLMCall|Warden: Could not auto-detect model role from chain. Using 'general'. Error: {e}")
+
+        # Now we get the path for the ACTUAL model (e.g., DeepSeek Coder or VLM)
+        model_path = self.provider.get_model_path(target_role)
+
+        # If lookup failed (e.g. role 'router' maps to nothing in specific), fallback to general
+        if not model_path or not os.path.exists(model_path):
+            model_path = self.provider.get_model_path("general")
+
         req_gb = self.provider.calculate_required_memory_gb(model_path, ideal_bin)
 
         final_bin = ideal_bin
 
         # If we are OOM, downgrade bin
         if req_gb > avail_gb:
-            logger.warning(
-                f"LLMCall|Warden: ⚠️ RAM Contention (Need {req_gb:.1f}GB, Have {avail_gb:.1f}GB). Negotiating...")
+            logger.warning(f"LLMCall|Warden: ⚠️ RAM Contention (Need {req_gb:.2f}GB, Have {avail_gb:.2f}GB). Negotiating...")
+            
             feasible_bin = None
+            # Check smaller bins (largest to smallest)
             for b in sorted(self.provider.ctx_bins, reverse=True):
                 if b < ideal_bin:
-                    if self.provider.calculate_required_memory_gb(model_path, b) <= avail_gb:
+                    cost = self.provider.calculate_required_memory_gb(model_path, b)
+                    
+                    # SMART TOLERANCE: Allow 20% overdraft for "Best Effort" fit
+                    # (MacOS/Linux will handle slight overflow via compression/swap)
+                    limit_with_tolerance = avail_gb * 1.20
+                    
+                    if cost <= limit_with_tolerance:
                         feasible_bin = b
+                        logger.info(f"LLMCall|Warden: 📉 Found feasible bin {b} (Cost {cost:.2f}GB <= {limit_with_tolerance:.2f}GB)")
                         break
+                    else:
+                        # Log why we skipped this bin so you can see the "Step by Step" logic
+                        logger.debug(f"LLMCall|Warden: Skipped Bin {b} (Cost {cost:.2f}GB > {limit_with_tolerance:.2f}GB)")
+            
             if feasible_bin:
                 final_bin = feasible_bin
-                logger.warning(f"LLMCall|Warden: 📉 Downgraded Context to {final_bin}")
             else:
-                final_bin = self.provider.ctx_bins[0]  # Emergency minimum
-                logger.error(f"LLMCall|Warden: ❌ CRITICAL MEMORY. Forced to minimum bin {final_bin}")
+                # If absolutely nothing fits, stick to the lowest configured bin (e.g., 512)
+                # Do NOT go lower than your config allows.
+                final_bin = sorted(self.provider.ctx_bins)[0]
+                logger.error(f"LLMCall|Warden: ❌ CRITICAL. Even smallest bin {final_bin} exceeds safety. Forcing execution anyway.")
 
         # 4. Truncation & Flush (The Sandwich)
         max_safe_tokens = final_bin - 512
