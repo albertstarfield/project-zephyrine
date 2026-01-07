@@ -215,6 +215,8 @@ try:
     )
     from cortex_backbone_provider import CortexEngine
 
+
+
     # Import all config variables (prompts, settings, etc.)
     from CortexConfiguration import *  # Ensure this includes the SQLite DATABASE_URL and all prompts/models
 
@@ -1583,8 +1585,15 @@ class CortexThoughts:
             # Execute (ELP0)
             timing_data = {"session_id": session_id, "mode": "temporal_decision"}
             raw_response = await asyncio.to_thread(
-                self._call_llm_with_timing, chain, prompt_input, timing_data, priority=ELP0
+                self._call_llm_with_timing,
+                chain,
+                prompt_input,
+                timing_data,
+                priority=ELP0,
+                db=db,
+                session_id=session_id
             )
+            #raw_response = self._call_llm_with_timing(chain, prompt, interaction_data, priority=ELP1)
 
             # Parse JSON (Same as before)
             json_candidate = self._extract_json_candidate_string(raw_response, log_prefix)
@@ -1683,6 +1692,8 @@ class CortexThoughts:
                 prompt_inputs,
                 timing_data,
                 priority=priority,
+                db=db,
+                session_id=session_id
             )
         except Exception as e:
             logger.error(f"{log_prefix} Expert generation failed: {e}")
@@ -1978,7 +1989,13 @@ class CortexThoughts:
         try:
             # _call_llm_with_timing runs at ELP0 by default and handles interruptions.
             raw_llm_response = await asyncio.to_thread(
-                self._call_llm_with_timing, chain, prompt_input, timing_data
+                self._call_llm_with_timing,
+                chain,
+                prompt_input,
+                timing_data,
+                priority=ELP0,  # Explicitly pass default priority if missing
+                db=db,
+                session_id=session_id
             )
 
             # Use the robust JSON helper functions to extract and parse the response.
@@ -2125,6 +2142,8 @@ class CortexThoughts:
                 prompt_inputs,
                 timing_data,
                 priority=priority,
+                db=db,
+                session_id=session_id
             )
             logger.trace(
                 f"{log_prefix}: LLM Raw Output for Image Prompt:\n```\n{refined_prompt_raw}\n```"
@@ -2307,6 +2326,8 @@ class CortexThoughts:
                 prompt_inputs,
                 timing_data,
                 priority=ELP0,
+                db=db,
+                session_id=session_id
             )
 
             if not generated_prompt_raw:
@@ -2764,6 +2785,8 @@ class CortexThoughts:
                 prompt_inputs,
                 timing_data,
                 priority=ELP0,
+                db=db,
+                session_id=session_id
             )
 
             if (
@@ -3497,7 +3520,13 @@ class CortexThoughts:
         }
         try:
             generated_query_raw = await asyncio.to_thread(
-                self._call_llm_with_timing, chain, prompt_input, query_gen_timing_data
+                self._call_llm_with_timing,
+                chain,
+                prompt_input,
+                query_gen_timing_data,
+                priority=ELP0,
+                db=db,
+                session_id=session_id
             )
             logger.debug(
                 f"{query_gen_id}: generatedRaw Query _generate_file_search_query_async {generated_query_raw}"
@@ -3869,6 +3898,8 @@ class CortexThoughts:
                 prompt_input,
                 corrector_timing_data,
                 priority=ELP0,  # Explicitly set ELP0 priority
+                db=db,
+                session_id=session_id
             )
             logger.info(
                 f"{log_prefix} Refinement LLM call complete. Raw length: {len(refined_response_raw)}"
@@ -4498,148 +4529,199 @@ class CortexThoughts:
 
         return modified_text
 
+    #Updated with warden memory protection to not overflow and crashes and needed to reset by the watchdogd
     def _call_llm_with_timing(
-        self,
-        chain: Any,
-        inputs: Any,
-        interaction_data: Dict[str, Any],
-        priority: int = ELP0,
+            self,
+            chain: Any,
+            inputs: Any,
+            interaction_data: Dict[str, Any],
+            priority: int = ELP0,
+            db: Session = None,
+            session_id: str = None
     ):
+        from CortexConfiguration import LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT
         """
         Wrapper to call LLM chain/model, measure time, log, and handle priority/interruptions.
+        NOW INCLUDES: Resource Warden (Memory Check & Sandwich Truncation).
         Implements retries for ELP0 tasks if they encounter TaskInterruptedException.
         """
-        request_start_time = (
-            time.monotonic()
-        )  # Time for the whole operation including retries
+        # --- 🛡️ WARDEN LOGIC START (PRE-FLIGHT CHECK) ---
+        previous_bin_setting = None
+
+        # 1. Sanitize/Extract Text for Measurement
+        prompt_text_for_check = ""
+        if isinstance(inputs, str):
+            prompt_text_for_check = inputs
+        elif isinstance(inputs, list):  # List[BaseMessage]
+            prompt_text_for_check = " ".join([m.content for m in inputs if hasattr(m, 'content')])
+
+        # 2. Hardware Oracle Check (Sync)
+        # Ask provider: "What bin do I need?" and "What RAM do we have?"
+        ideal_bin = self.provider.get_ideal_bin_for_text(prompt_text_for_check)
+        mem_status = self.provider.get_memory_status()
+        avail_gb = mem_status.get("safe_available_gb", 0)
+
+        # 3. Calculate Cost & Negotiate
+        model_path = self.provider.get_model_path("general")
+        req_gb = self.provider.calculate_required_memory_gb(model_path, ideal_bin)
+
+        final_bin = ideal_bin
+
+        # If we are OOM, downgrade bin
+        if req_gb > avail_gb:
+            logger.warning(
+                f"LLMCall|Warden: ⚠️ RAM Contention (Need {req_gb:.1f}GB, Have {avail_gb:.1f}GB). Negotiating...")
+            feasible_bin = None
+            for b in sorted(self.provider.ctx_bins, reverse=True):
+                if b < ideal_bin:
+                    if self.provider.calculate_required_memory_gb(model_path, b) <= avail_gb:
+                        feasible_bin = b
+                        break
+            if feasible_bin:
+                final_bin = feasible_bin
+                logger.warning(f"LLMCall|Warden: 📉 Downgraded Context to {final_bin}")
+            else:
+                final_bin = self.provider.ctx_bins[0]  # Emergency minimum
+                logger.error(f"LLMCall|Warden: ❌ CRITICAL MEMORY. Forced to minimum bin {final_bin}")
+
+        # 4. Truncation & Flush (The Sandwich)
+        max_safe_tokens = final_bin - 512
+        current_est_tokens = self.provider._estimate_tokens_fast(prompt_text_for_check)
+
+        final_inputs = inputs
+
+        if current_est_tokens > max_safe_tokens:
+            tokens_to_cut = current_est_tokens - max_safe_tokens
+            logger.warning(f"LLMCall|Warden: ✂️ Sandwich Triggered. Cutting ~{tokens_to_cut} tokens.")
+
+            # A. FLUSH TO DB (Synchronous Call)
+            if db:  # <--- UPDATED: Checks for DB only. Session ID is optional.
+                try:
+                    # If session_id is missing, label it as orphaned so we can find it later
+                    effective_sid = session_id if session_id else "orphaned_flush"
+
+                    add_interaction(
+                        db,
+                        session_id=effective_sid,
+                        mode="chat",
+                        input_type="text",
+                        user_input=prompt_text_for_check,
+                        llm_response="[System: Input Received - Flushing for RAG Availability]",
+                        classification="input_flush"
+                    )
+                    logger.info(
+                        f"✅ Immediate Flush: Saved {len(prompt_text_for_check)} chars to DB (Session: {effective_sid}).")
+                except Exception as e:
+                    logger.error(f"⚠️ Flush failed: {e}")
+
+            # B. SANDWICH CUT
+            chars_keep = int(max_safe_tokens * 3.5)
+            head_chars = int(chars_keep * 0.25)
+            tail_chars = int(chars_keep * 0.75)
+
+            # Force conversion to string if it was a List[Messages] to allow slicing
+            if not isinstance(prompt_text_for_check, str):
+                logger.warning(f"LLMCall|Warden: Input structure flattened to string for memory survival.")
+
+            head_text = prompt_text_for_check[:head_chars]
+            tail_text = prompt_text_for_check[-tail_chars:]
+            marker = f"\n\n[...SYSTEM: MEMORY OPTIMIZATION - {tokens_to_cut} TOKENS ARCHIVED...]\n\n"
+
+            # Update inputs to the raw truncated string
+            final_inputs = head_text + marker + tail_text
+
+        # 5. Apply Lock (Override Global Config)
+        previous_bin_setting = LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT
+        LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = final_bin
+
+        # --- 🛡️ WARDEN LOGIC END ---
+
+        request_start_time = time.monotonic()
         response_from_llm = None
 
         # Determine retry parameters based on priority
-        # Only ELP0 tasks will attempt retries on interruption
         max_retries = LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES if priority == ELP0 else 0
         retry_delay_seconds = LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY
-        #debug remove later
+
+        # debug remove later
         logger.info(f"LLMcall call llm with timing invoked PRI_{priority}")
         attempt_count = 0
-        while attempt_count <= max_retries:
-            attempt_count += 1
-            call_start_time = time.monotonic()  # Time for this specific attempt
-            log_prefix_call = f"LLMCall|ELP{priority}|Attempt-{attempt_count}"
 
-            try:
-                logger.trace(
-                    f"{log_prefix_call}: Invoking chain/model {type(chain)}..."
-                )
+        try:  # Outer Try/Finally to ensure Config Reset
+            while attempt_count <= max_retries:
+                attempt_count += 1
+                call_start_time = time.monotonic()
+                log_prefix_call = f"LLMCall|ELP{priority}|Attempt-{attempt_count}"
 
-                llm_call_config = {"metadata": {"priority": priority}}
-                #debug remove later
-                logger.info(f"LLMcall call llm with timing invoked PRI_{priority} call_config {llm_call_config}")
-                # The actual call to the LLM (via chain or model)
-                if hasattr(chain, "invoke") and callable(
-                    chain.invoke
-                ):  # Langchain runnable
-                    response_from_llm = chain.invoke(inputs, config=llm_call_config)
-                    logger.info(f"LLMcall call llm with timing invoked res {response_from_llm}")
-                elif callable(
-                    chain
-                ):  # Direct model call (e.g., for raw ChatML in direct_generate)
-                    # Assuming 'chain' is the model and 'inputs' is the raw prompt string.
-                    # The LlamaCppChatWrapper._call method handles 'priority' from CortexConfiguration.
-                    logger.info(f"LLMcall call llm with timing invoked call {llm_call_config}")
-                    response_from_llm = chain(
-                        messages=inputs, stop=[CHATML_END_TOKEN], **llm_call_config
-                    )
-                    logger.info(f"LLMcall call llm with timing invoked res {response_from_llm}")
-                else:
-                    raise TypeError(
-                        f"Unsupported chain/model type for _call_llm_with_timing: {type(chain)}"
-                    )
+                try:
+                    logger.trace(f"{log_prefix_call}: Invoking chain/model {type(chain)}...")
 
-                call_duration_ms = (time.monotonic() - call_start_time) * 1000
-                # Log duration for this specific attempt
-                logger.info(
-                    f"⏱️ {log_prefix_call}: Succeeded in {call_duration_ms:.2f} ms"
-                )
+                    llm_call_config = {"metadata": {"priority": priority}}
+                    # debug remove later
+                    logger.info(f"LLMcall invoked PRI_{priority} call_config {llm_call_config}")
 
-                # Update total execution time in interaction_data with this attempt's duration
-                interaction_data["execution_time_ms"] = (
-                    interaction_data.get("execution_time_ms", 0) + call_duration_ms
-                )
-
-                # Check if the response string itself indicates an interruption (from worker)
-                if (
-                    isinstance(response_from_llm, str)
-                    and interruption_error_marker in response_from_llm
-                ):
-                    logger.warning(
-                        f"🚦 {log_prefix_call}: Task Interrupted (marker found in LLM response string)."
-                    )
-                    raise TaskInterruptedException(
-                        response_from_llm
-                    )  # Trigger retry logic
-
-                return response_from_llm  # Successful call, exit retry loop
-
-            except TaskInterruptedException as tie:
-                call_duration_ms_on_interrupt = (
-                    time.monotonic() - call_start_time
-                ) * 1000
-                interaction_data["execution_time_ms"] = (
-                    interaction_data.get("execution_time_ms", 0)
-                    + call_duration_ms_on_interrupt
-                )
-                logger.warning(
-                    f"🚦 {log_prefix_call}: Caught TaskInterruptedException after {call_duration_ms_on_interrupt:.2f}ms: {tie}"
-                )
-
-                if priority == ELP0 and attempt_count <= max_retries:
-                    logger.info(
-                        f"    Retrying ELP0 task (attempt {attempt_count}/{max_retries + 1}) after {retry_delay_seconds}s due to interruption..."
-                    )
-                    # For asyncio.to_thread compatibility, use synchronous time.sleep
-                    time.sleep(retry_delay_seconds)
-                    # Loop continues for the next attempt
-                else:
-                    # Max retries reached for ELP0, or it's not an ELP0 task, or error from non-LLM part
-                    if priority == ELP0:
-                        logger.error(
-                            f"    ELP0 task giving up after {attempt_count} interruption attempts."
+                    # The actual call to the LLM
+                    if hasattr(chain, "invoke") and callable(chain.invoke):  # Langchain runnable
+                        # Use final_inputs (possibly truncated)
+                        response_from_llm = chain.invoke(final_inputs, config=llm_call_config)
+                        logger.info(f"LLMcall result: {response_from_llm}")
+                    elif callable(chain):  # Direct model call
+                        logger.info(f"LLMcall direct call: {llm_call_config}")
+                        # Use final_inputs (possibly truncated)
+                        response_from_llm = chain(
+                            messages=final_inputs, stop=[CHATML_END_TOKEN], **llm_call_config
                         )
-                    raise  # Re-raise TaskInterruptedException to be handled by the caller (e.g., background_generate)
+                        logger.info(f"LLMcall direct result: {response_from_llm}")
+                    else:
+                        raise TypeError(f"Unsupported chain/model type: {type(chain)}")
 
-            except (
-                Exception
-            ) as e:  # Handles other exceptions not related to TaskInterruptedException
-                call_duration_ms_on_error = (time.monotonic() - call_start_time) * 1000
-                interaction_data["execution_time_ms"] = (
-                    interaction_data.get("execution_time_ms", 0)
-                    + call_duration_ms_on_error
-                )
-                log_err_msg = f"LLM Chain/Model Error (ELP{priority}, Attempt {attempt_count}): {e}"
-                logger.error(f"❌ {log_err_msg}")
-                # Log full traceback for these non-interruption errors
-                logger.exception(
-                    f"Traceback for LLM Chain/Model error ({log_prefix_call}):"
-                )
+                    call_duration_ms = (time.monotonic() - call_start_time) * 1000
+                    logger.info(f"⏱️ {log_prefix_call}: Succeeded in {call_duration_ms:.2f} ms")
 
-                # Log this error to DB (simplified for brevity, actual DB logging in background_generate)
-                session_id_for_log = interaction_data.get(
-                    "session_id", "unknown_session"
-                )
-                # add_interaction(db, session_id=session_id_for_log, ..., llm_response=log_err_msg)
+                    interaction_data["execution_time_ms"] = (
+                            interaction_data.get("execution_time_ms", 0) + call_duration_ms
+                    )
 
-                raise  # Re-raise the original non-interruption error; these are not retried by this loop
+                    # Check for interruption marker in response
+                    if isinstance(response_from_llm, str) and interruption_error_marker in response_from_llm:
+                        logger.warning(f"🚦 {log_prefix_call}: Task Interrupted (marker found).")
+                        raise TaskInterruptedException(response_from_llm)
 
-        # This part of the function should ideally not be reached if the loop logic is correct,
-        # as success returns directly, and exceptions (including TaskInterruptedException after max retries) are re-raised.
-        # This is a fallback.
+                    return response_from_llm
+
+                except TaskInterruptedException as tie:
+                    call_duration_ms_on_interrupt = (time.monotonic() - call_start_time) * 1000
+                    interaction_data["execution_time_ms"] = (
+                            interaction_data.get("execution_time_ms", 0) + call_duration_ms_on_interrupt
+                    )
+                    logger.warning(
+                        f"🚦 {log_prefix_call}: Interrupted after {call_duration_ms_on_interrupt:.2f}ms: {tie}")
+
+                    if priority == ELP0 and attempt_count <= max_retries:
+                        logger.info(f"    Retrying ELP0 task (attempt {attempt_count}/{max_retries + 1})...")
+                        time.sleep(retry_delay_seconds)
+                    else:
+                        if priority == ELP0:
+                            logger.error(f"    ELP0 task giving up after {attempt_count} attempts.")
+                        raise
+
+                except Exception as e:
+                    call_duration_ms_on_error = (time.monotonic() - call_start_time) * 1000
+                    interaction_data["execution_time_ms"] = (
+                            interaction_data.get("execution_time_ms", 0) + call_duration_ms_on_error
+                    )
+                    logger.error(f"❌ LLM Chain/Model Error (ELP{priority}, Attempt {attempt_count}): {e}")
+                    logger.exception(f"Traceback ({log_prefix_call}):")
+                    raise
+
+        finally:
+            # 6. RESET CONFIG (Crucial Cleanup)
+            LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = previous_bin_setting
+            # logger.debug(f"LLMCall: Config reset. Override removed.")
+
         total_duration_ms = (time.monotonic() - request_start_time) * 1000
-        interaction_data["execution_time_ms"] = (
-            total_duration_ms  # Ensure total time is updated
-        )
-        logger.error(
-            f"{log_prefix_call}: LLM call failed after all retries or was not retriable. Returning error indication."
-        )
+        interaction_data["execution_time_ms"] = total_duration_ms
+        logger.error(f"{log_prefix_call}: LLM call failed after all retries.")
         return f"[LLM_CALL_UNEXPECTED_EXIT_ELP{priority}]"
 
     def _extract_json_candidate_string(
@@ -4857,6 +4939,8 @@ class CortexThoughts:
                     prompt_inputs_for_classification,
                     interaction_data_for_metrics,  # For timing
                     priority=ELP0,
+                    db=db,
+                    session_id=None #session_id doesn't exists on this method/function!
                 )
                 raw_llm_response_for_final_log = (
                     raw_llm_text_this_attempt  # Save last raw output
@@ -4939,6 +5023,8 @@ class CortexThoughts:
                 reformat_prompt_input,
                 interaction_data_for_metrics,
                 priority=ELP0,
+                db=db,
+                session_id=None
             )
 
             if reformatted_llm_output_text and not (
@@ -5057,11 +5143,14 @@ class CortexThoughts:
                     "input": user_input,
                     "context": rag_context_str,
                     "history_rag": history_rag_str,
-                    "file_index_context": file_index_context_str,  # Added here
+                    "file_index_context": file_index_context_str,
                     "log_context": log_context_str,
                     "recent_direct_history": recent_direct_history_str,
                 },
                 interaction_data,
+                priority=ELP0,
+                db=db,
+                session_id=None
             )
             tot_result = llm_result
             logger.info(
@@ -5185,7 +5274,10 @@ class CortexThoughts:
             analysis = self._call_llm_with_timing(
                 chain,
                 {"input": user_input, "history_summary": history_summary},
-                interaction_data,  # Pass the main interaction_data for timing updates
+                interaction_data,
+                priority=ELP0,  # Explicitly set to ELP0
+                db=db,
+                session_id=None
             )
 
             # Clean up the analysis string
@@ -5515,6 +5607,8 @@ class CortexThoughts:
                     prompt_input_initial,
                     action_timing_data,
                     priority=ELP0,
+                    db=db,
+                    session_id=session_id
                 )
                 raw_llm_output_from_initial_loop = raw_llm_text
                 json_candidate = self._extract_json_candidate_string(
@@ -5579,6 +5673,8 @@ class CortexThoughts:
                 reformat_prompt_input,
                 action_timing_data,
                 priority=ELP0,
+                db=db,
+                session_id=session_id
             )
 
             if reformatted_llm_output_text and not (
@@ -5723,6 +5819,8 @@ class CortexThoughts:
                 prompt,  # Input is the prompt string
                 timing_data,
                 priority=ELP0,  # Set ELP0 priority
+                db=None, #this will not work with unlimited context, but rather sandwiched missing context
+                session_id=None
             )
             # ---
 
@@ -5876,6 +5974,8 @@ class CortexThoughts:
                     prompt_input_for_router,
                     router_timing_data,
                     priority=ELP0,
+                    db=db,
+                    session_id=session_id
                 )
                 raw_llm_output_from_initial_loop = raw_llm_text_this_attempt
                 logger.trace(
@@ -5947,6 +6047,8 @@ class CortexThoughts:
             reformat_prompt_input,
             router_timing_data,
             priority=ELP0,
+            db=db,
+            session_id=session_id
         )
 
         if reformatted_llm_output_text and not (
@@ -6104,6 +6206,8 @@ class CortexThoughts:
                 {"user_input": user_input},
                 timing_data,
                 priority=priority,
+                db=db,
+                session_id=None
             )
             logger.info(f"{log_prefix} Extracted Narrative Anchors:\n{anchors}")
             return anchors.strip()
@@ -6143,6 +6247,8 @@ class CortexThoughts:
                 },
                 timing_data,
                 priority=priority,
+                db=db,
+                session_id=None
             )
             cleaned_summary = summary.strip().replace("\n", " ")
             logger.info(
@@ -6230,6 +6336,8 @@ class CortexThoughts:
                 prompt_input,
                 timing_data,
                 priority=priority,
+                db=db,
+                session_id=None
             )
 
             # Clean up the raw output from the model: remove leading/trailing whitespace and any extraneous newlines.
@@ -6443,6 +6551,8 @@ class CortexThoughts:
                 {"text_to_humanize": clean_chunk},
                 timing_data,
                 priority=priority,
+                db=None, #This will have missing chunk issue going on here! and won't be retrievable or recoverable!
+                session_id=None
             )
             # --- Quality Gate ---
             # As a safety check, if the humanized text is wildly different in length (more than 50% different),
@@ -6689,7 +6799,7 @@ class CortexThoughts:
             
             try:
                 raw_output = await asyncio.to_thread(
-                    self._call_llm_with_timing, chain, prompt_placeholders, timing_data, priority=ELP1
+                    self._call_llm_with_timing, chain, prompt_placeholders, timing_data, priority=ELP1, db=db, session_id=session_id
                 )
                 _, final_response_text = self._parse_think_speak_output(raw_output)
                 # Set skeleton count to 1 for logging
@@ -7462,6 +7572,8 @@ class CortexThoughts:
                 vlm_messages,
                 timing_data,
                 priority=priority,
+                db=db,
+                session_id=session_id
             )
 
             if response_text:
@@ -7689,6 +7801,8 @@ class CortexThoughts:
                     llm_input_for_tot,
                     interaction_data_for_tot_llm_call,
                     priority=ELP0,
+                    db=db,
+                    session_id=None
                 )
                 raw_llm_output_from_initial_loop = raw_llm_text_this_attempt
                 logger.trace(
@@ -7762,6 +7876,8 @@ class CortexThoughts:
                 reformat_prompt_input,
                 interaction_data_for_tot_llm_call,
                 priority=ELP0,
+                db=db,
+                session_id=None
             )
 
             if reformatted_llm_output_text and not (
@@ -8198,95 +8314,6 @@ class CortexThoughts:
                     logger.error(
                         f"{stream_id}: Failed to log successful LaTeX/TikZ results: {db_log_err}"
                     )
-
-    # --- (rest of CortexThoughts class, including the modified generate method) ---
-
-    def process_image(self, db: Session, image_b64: str, session_id: str = None):
-        """Processes image, gets description/LaTeX, returns description for non-VLM flow."""
-        logger.info(f"🖼️ Processing image for session: {session_id}")
-        self.current_session_id = session_id
-        # Log initial interaction attempt
-        interaction_data = {
-            "session_id": session_id,
-            "mode": "chat",
-            "input_type": "image",
-            "user_input": "[Image Uploaded]",
-            "image_data": "...",  # Placeholder
-        }
-        self.vectorstore_url = None
-        logger.info("🧹 Cleared URL context due to image upload.")
-
-        # Use VLM to get description
-        vlm = self.provider.get_model("vlm")
-        if not vlm:
-            desc = "Error: Visual model (VLM) not available for image description."
-            logger.error(desc)
-            interaction_data["llm_response"] = desc
-            valid_keys = {c.name for c in Interaction.__table__.columns}
-            db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-            add_interaction(db, **db_kwargs)
-            return desc, None  # Return description and None for image content
-
-        try:
-            base64.b64decode(image_b64)  # Validate base64
-            image_uri = f"data:image/jpeg;base64,{image_b64}"
-        except Exception as e:
-            desc = f"Error: Invalid image data format. {e}"
-            logger.error(desc)
-            interaction_data["llm_response"] = desc
-            valid_keys = {c.name for c in Interaction.__table__.columns}
-            db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-            add_interaction(db, **db_kwargs)
-            return desc, None
-
-        # Prepare VLM input
-        image_content_part = {"type": "image_url", "image_url": {"url": image_uri}}
-        # Use a simple description prompt
-        vlm_messages = [
-            HumanMessage(
-                content=[
-                    image_content_part,
-                    {"type": "text", "text": "Describe this image concisely."},
-                ]
-            )
-        ]
-        vlm_chain = vlm | StrOutputParser()
-        vlm_timing_data = {
-            "session_id": session_id,
-            "mode": "chat",
-            "execution_time_ms": 0,
-        }
-
-        try:
-            logger.info("Calling VLM for image description...")
-            image_description = self._call_llm_with_timing(
-                vlm_chain, vlm_messages, vlm_timing_data
-            )
-            logger.info(f"🖼️ VLM Description: {image_description[:200]}...")
-            # Log this VLM interaction
-            interaction_data["llm_response"] = f"[VLM Description: {image_description}]"
-            interaction_data["image_description"] = (
-                image_description  # Store description
-            )
-            interaction_data["image_data"] = image_b64  # Store image data
-            interaction_data["execution_time_ms"] = vlm_timing_data["execution_time_ms"]
-            valid_keys = {c.name for c in Interaction.__table__.columns}
-            db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-            add_interaction(db, **db_kwargs)
-            # Return the description to be added to the user prompt for non-VLM models
-            return (
-                image_description,
-                image_content_part,
-            )  # Return description and original image content part
-
-        except Exception as e:
-            desc = f"Error getting description from VLM: {e}"
-            logger.error(desc)
-            interaction_data["llm_response"] = desc
-            valid_keys = {c.name for c in Interaction.__table__.columns}
-            db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-            add_interaction(db, **db_kwargs)
-            return desc, None
 
     def process_url(self, db: Session, url: str, session_id: str = None):
         """Extracts text from URL, creates vectorstore (synchronous)."""
@@ -10233,6 +10260,8 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                             elaboration_prompt_input,
                             timing_data_chunk,
                             priority=ELP0,
+                            db=db,
+                            session_id=session_id
                         )
 
                         # 5. Log the EXACT prompt and RAW response.
@@ -10471,6 +10500,8 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                                     summary_prompt_input,
                                     summary_timing_data,
                                     priority=ELP0,
+                                    db=db,
+                                    session_id=original_chat_session_id
                                 )
 
                                 # 3. Log the EXACT prompt and RAW response.
@@ -11609,6 +11640,8 @@ async def _process_mesh_chat_request_and_get_result(
         specialist_payload,
         timing_data_specialist,
         priority=ELP0,
+        db=None, #This won't work! for context spillover! it won't be retrievable when it is overloaded (for mesh request cognitive)
+        session_id=session_id
     )
 
     logger.debug(f"{log_prefix}: Correcting draft response at ELP0...")
@@ -13661,6 +13694,8 @@ async def _get_and_process_proactive_interaction():
             inputs=decision_prompt_input,
             interaction_data=timing_data,
             priority=ELP0,
+            db=db,
+            session_id=None
         )
 
         decision = decision_chain.invoke(
@@ -16222,6 +16257,8 @@ async def handle_openai_audio_translations():
             trans_prompt_input,
             trans_timing_data,
             priority=ELP1,
+            db=db,
+            session_id=None
             # type: ignore
         )
         if not quick_translated_text_for_client or (

@@ -20,6 +20,8 @@ ANSWER_SIZE_WORDS = int(
 TOPCAP_TOKENS = int(
     os.getenv("TOPCAP_TOKENS", 32768)
 )  # Default token limit for LLM calls
+INFERCOMPLETION_CTX_BINNING=[512, 1024, 2048, 4096, 8192, 16384, 32768] #Binning for ctx lock on cortex_backbone_provider.py (let's make this hardcore, Allow it to get 512 ctx token so it allows to run on pocket computer which makes it "smartphone")
+SYSTEMBUFFER_SAFE_PERCENTAGE=5 #Calculate from total memory then get the percentage and that's the buffer safe percentage so for instance 16GB * 5% = 800MB
 BUFFER_TOKENS_FOR_RESPONSE = int(
     os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)
 )  # Default token limit for LLM calls
@@ -230,7 +232,7 @@ if ENABLE_CASUAL_MISTYPES:
         f"   - QWERTY Typo (per word) Chance: {MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD * 100:.1f}%"
     )
 
-
+LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = 4096 # define just in case
 LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = os.getenv("LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT")
 if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
     try:
@@ -242,7 +244,8 @@ if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
         logger.warning(
             f"Invalid value for LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT ('{LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT}'). It will be ignored."
         )
-        LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = None
+        LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = 4096
+
 
 
 # Controls the duty cycle of the ELP0 priority lock to reduce sustained CPU/GPU load.
