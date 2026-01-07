@@ -1,3 +1,8 @@
+-   **ID:** CORTEX-FEAT-006
+-   **Title:** Implement Warden Memory Protection for LLM Calls
+-   **Status:** In-Progress
+-   **Description:** This feature introduces the "Warden" system, a proactive memory management and resource negotiation layer for all LLM calls within the Cortex. The Warden is designed to prevent context overflow and subsequent application crashes by dynamically assessing system memory, probing GGUF model metadata to predict RAM requirements, and selecting an appropriate context size ('bin') for the operation. If the required memory exceeds safe available limits, the Warden will negotiate a smaller context bin. If a prompt is too large for the selected bin, the Warden performs "sandwich truncation," preserving the head and tail of the prompt while flushing the full, original text to the vector database for RAG availability. This ensures both stability under memory pressure and full contextual awareness for the system.
+
 -   **ID:** CORE-REFACTOR-003
 -   **Title:** Evolve Snowball architecture to Enaga diff/patch loop and enhance robustness
 -   **Status:** Resolved

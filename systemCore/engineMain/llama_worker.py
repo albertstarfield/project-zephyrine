@@ -11,6 +11,7 @@ import shlex
 import re
 import pickle
 from typing import Union, List, Dict, Any, Optional  # Added for type hints
+from cortex_backbone_provider import INFERCOMPLETION_CTX_BINNING
 
 # --- Try importing llama_cpp ---
 """try:
@@ -111,12 +112,17 @@ except ImportError:
 os.makedirs(STATE_SAVE_DIR, exist_ok=True)
 # --- End Configuration Import ---
 
+
+#For Max Dynamic N CTX
+# MAX_DYNAMIC_N_CTX define it using available memory
+
+
 # --- Constants for Dynamic Context ---
-N_CTX_BINS = [2048, 4096, 8192, 16384, 32768]
-DEFAULT_N_CTX_FOR_FALLBACK = 4096  # If token counting fails or not applicable
-MIN_DYNAMIC_N_CTX = 2048  # Minimum context size for dynamic calculation (can be tuned)
-MAX_DYNAMIC_N_CTX = 32768  # Maximum context size for dynamic calculation
-DEFAULT_N_CTX_FOR_FALLBACK = 4096  # If token counting fails or not applicable
+N_CTX_BINS = INFERCOMPLETION_CTX_BINNING
+DEFAULT_N_CTX_FOR_FALLBACK = INFERCOMPLETION_CTX_BINNING[2]  # If token counting fails or not applicable
+MIN_DYNAMIC_N_CTX = INFERCOMPLETION_CTX_BINNING[1]  # Minimum context size for dynamic calculation (can be tuned)
+
+MAX_DYNAMIC_N_CTX = INFERCOMPLETION_CTX_BINNING[-1]  # Maximum context size for dynamic calculation
 EMBEDDING_N_CTX = 4096  # Fixed context for embedding tasks
 
 # --- Think Tag Cleanup Helper ---

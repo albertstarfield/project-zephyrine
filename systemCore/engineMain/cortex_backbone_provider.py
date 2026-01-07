@@ -11,11 +11,20 @@ import subprocess  # Added for worker management
 import shlex       # <<< --- ADD THIS LINE --- >>>
 import asyncio
 import re
+import psutil
+import struct
+import math
 import tempfile
 import base64
 import signal
 from loguru import logger # Logging library
 from langchain_core.runnables import RunnableConfig, RunnableLambda, Runnable
+
+try:
+    import torch
+except ImportError:
+    torch = None
+
 try:
     import tiktoken
     TIKTOKEN_AVAILABLE = True
@@ -25,7 +34,12 @@ except ImportError:
     TIKTOKEN_AVAILABLE = False
     tiktoken = None # Placeholder
 
-
+try:
+    from database import add_interaction
+except ImportError:
+    # Fallback if database.py isn't found/circular import, prevents crash
+    logger.warning("Could not import add_interaction from database. Warden flushing will be disabled.")
+    add_interaction = None
 
 
 # --- NEW: Import the custom lock ---
@@ -131,7 +145,44 @@ class TaskInterruptedException(Exception):
     """Custom exception raised when an ELP0 task is interrupted by ELP1."""
     pass
 
-# === llama-cpp-python Langchain Wrappers ===
+
+#global var init
+
+def _get_encoder():
+    if TIKTOKEN_AVAILABLE and tiktoken is not None:
+        try:
+            # cl100k_base is the standard encoder for modern OpenAI models
+            text_encoder = tiktoken.get_encoding("cl100k_base")
+        except Exception as e:
+            logger.error(f"Failed to get tiktoken encoder 'cl100k_base', falling back. Error: {e}")
+            try:
+                # Fallback for older environments or different tiktoken versions
+                text_encoder = tiktoken.encoding_for_model("gpt-4")
+            except Exception as e2:
+                logger.critical(f"Could not initialize any tiktoken encoder: {e2}")
+    return text_encoder
+
+def _count_tokens(texts: List[str]) -> int:
+    """
+    Counts the total number of tokens in a list of texts using tiktoken.
+    Falls back to a character-based estimation if tiktoken is unavailable.
+    """
+    if not texts:
+        return 0
+
+    encoder = _get_encoder()
+    if encoder:
+        total_tokens = 0
+        for text in texts:
+            # Ensure text is a string to prevent errors
+            if not isinstance(text, str):
+                text = str(text)
+            total_tokens += len(encoder.encode(text))
+        return total_tokens
+    else:
+        # Fallback to character-based estimation if tiktoken failed
+        total_chars = sum(len(str(text)) for text in texts)
+        return total_chars // 4 # Rough but consistent fallback
 
 def strip_initial_think_block(text: str) -> str:
     """
@@ -462,48 +513,12 @@ class LlamaCppChatWrapper(SimpleChatModel):
 class LlamaCppEmbeddingsWrapper(Embeddings):
     ai_provider: 'CortexEngine'
     model_role: str = "embeddings"
-    _encoder = None  # Class attribute for lazy-loading the tokenizer
 
     def __init__(self, ai_provider: 'CortexEngine'):
         super().__init__()
         self.ai_provider = ai_provider
 
-    def _get_encoder(self):
-        """Lazily loads and returns the tiktoken encoder to avoid startup overhead."""
-        if self._encoder is None and TIKTOKEN_AVAILABLE and tiktoken is not None:
-            try:
-                # cl100k_base is the standard encoder for modern OpenAI models
-                self._encoder = tiktoken.get_encoding("cl100k_base")
-            except Exception as e:
-                logger.error(f"Failed to get tiktoken encoder 'cl100k_base', falling back. Error: {e}")
-                try:
-                    # Fallback for older environments or different tiktoken versions
-                    self._encoder = tiktoken.encoding_for_model("gpt-4")
-                except Exception as e2:
-                    logger.critical(f"Could not initialize any tiktoken encoder: {e2}")
-        return self._encoder
 
-    def _count_tokens(self, texts: List[str]) -> int:
-        """
-        Counts the total number of tokens in a list of texts using tiktoken.
-        Falls back to a character-based estimation if tiktoken is unavailable.
-        """
-        if not texts:
-            return 0
-
-        encoder = self._get_encoder()
-        if encoder:
-            total_tokens = 0
-            for text in texts:
-                # Ensure text is a string to prevent errors
-                if not isinstance(text, str):
-                    text = str(text)
-                total_tokens += len(encoder.encode(text))
-            return total_tokens
-        else:
-            # Fallback to character-based estimation if tiktoken failed
-            total_chars = sum(len(str(text)) for text in texts)
-            return total_chars // 4 # Rough but consistent fallback
 
     def embed_documents(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:
         provider_logger = getattr(self.ai_provider, 'logger', logger)
@@ -521,7 +536,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
 
         # --- SAFEGUARD LOGIC ---
         # Check if this single query text exceeds the token limit.
-        token_count = self._count_tokens([text])
+        token_count = _count_tokens([text])
         
         text_to_embed = text
         if token_count > MAX_EMBEDDING_TOKENS_PER_BATCH:
@@ -532,8 +547,8 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
             
             # Truncate the text. We use a simple character-based truncation as a fallback.
             # A more precise method could use tiktoken to encode, slice, and decode.
-            if TIKTOKEN_AVAILABLE and self._get_encoder():
-                encoder = self._get_encoder()
+            if TIKTOKEN_AVAILABLE and _get_encoder():
+                encoder = _get_encoder()
                 tokens = encoder.encode(text)
                 truncated_tokens = tokens[:MAX_EMBEDDING_TOKENS_PER_BATCH]
                 text_to_embed = encoder.decode(truncated_tokens, errors='ignore')
@@ -572,7 +587,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
 
         for i, text in enumerate(texts):
             text_str = str(text) if not isinstance(text, str) else text
-            text_tokens = self._count_tokens([text_str])
+            text_tokens = _count_tokens([text_str])
             
             # =================== THIS IS THE FIX ===================
             # Safeguard: If a single text item (chunk) is larger than the entire
@@ -585,7 +600,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
                 )
                 
                 # Use tiktoken for precise truncation if available
-                encoder = self._get_encoder()
+                encoder = _get_encoder()
                 if TIKTOKEN_AVAILABLE and encoder:
                     tokens = encoder.encode(text_str)
                     truncated_tokens = tokens[:MAX_EMBEDDING_TOKENS_PER_BATCH]
@@ -596,7 +611,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
                     text_str = text_str[:safe_chars]
                 
                 # Recalculate the token count after truncation
-                text_tokens = self._count_tokens([text_str])
+                text_tokens = _count_tokens([text_str])
                 provider_logger.warning(f"{log_prefix}: Truncated item now has {text_tokens} tokens.")
             # ================= END OF THE FIX ===================
 
@@ -644,7 +659,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
 
         # --- GATEKEEPER LOGIC ---
         # Count the tokens of the incoming list of texts.
-        total_tokens = self._count_tokens(texts)
+        total_tokens = _count_tokens(texts)
         provider_logger.debug(f"{log_prefix}: Received {len(texts)} texts with a total of {total_tokens} tokens.")
 
         # Compare against the safe limit.
@@ -714,6 +729,8 @@ class CortexEngine:
         #self._loaded_llama_instance: Optional[llama_cpp.Llama] = None
         #self._loaded_gguf_path: Optional[str] = None
         #self._last_task_type: Optional[str] = None
+        self.ctx_bins = INFERCOMPLETION_CTX_BINNING #Imported from CortexConfiguration *
+        self.safe_pct = SYSTEMBUFFER_SAFE_PERCENTAGE #Imported from CortexConfiguration *
 
         self.loop = None # For scheduler
 
@@ -760,6 +777,179 @@ class CortexEngine:
             logger.error("CRITICAL: CortexEngine.embeddings is None after setup_provider!")
         self._setup_image_generator_config() # Renamed: Validates image gen worker config
 
+    def get_model_path(self, role: str) -> str:
+        """
+        Helper: Returns the absolute path to the GGUF file for a given role.
+        Used by the Resource Warden to probe file metadata before loading.
+        """
+        # Ensure we are in a mode that supports GGUF paths
+        if self.provider_name != "llama_cpp" or not getattr(self, '_llama_model_map', None):
+            return ""
+
+        # 1. Resolve Filename from Map
+        filename = self._llama_model_map.get(role)
+
+        # Simple Fallback: if 'general' is requested but not mapped, try 'default'
+        if not filename and role == "general":
+            filename = self._llama_model_map.get("default")
+
+        if not filename:
+            # logger.error(f"get_model_path: No file mapped for role '{role}'")
+            return ""
+
+        # 2. Join with Directory
+        # self._llama_gguf_dir is initialized in setup_provider
+        return os.path.join(self._llama_gguf_dir, filename)
+
+    def _estimate_tokens_fast(self, text: str) -> int:
+        """
+        Agnostic token estimator. Uses Tiktoken if available (accurate),
+        falls back to char/3.5 (approximate) to avoid heavy deps.
+        """
+        if not text: return 0
+
+        # Try accurate count if Embeddings wrapper loaded tiktoken
+        if self.embeddings and hasattr(self.embeddings, '_get_encoder'):
+            enc = _get_encoder()
+            if enc:
+                try:
+                    return len(enc.encode(text))
+                except:
+                    pass  # Fallback to math
+
+        # Fallback: Rule of thumb for English/Code (3.5 chars per token)
+        return int(len(text) / 3.5)
+
+    def probe_gguf_metadata(self, model_path: str) -> Dict:
+        """
+        Robustly reads GGUF header to get 'context_length', 'file_type', etc.
+        Skips large arrays safely to avoid crashing.
+        """
+        metadata = {"valid": False, "ctx_train": 2048, "type_id": 0, "file_size_gb": 0.0}
+
+        if not os.path.exists(model_path): return metadata
+        metadata["file_size_gb"] = os.path.getsize(model_path) / (1024 ** 3)
+
+        try:
+            with open(model_path, 'rb') as f:
+                if f.read(4) != b'GGUF': return metadata
+                f.read(4)  # Version
+                f.read(8)  # Tensor Count
+                kv_count = struct.unpack('<Q', f.read(8))[0]
+
+                for _ in range(kv_count):
+                    # Read Key
+                    len_k = struct.unpack('<Q', f.read(8))[0]
+                    key = f.read(len_k).decode('utf-8', errors='ignore')
+
+                    # Read Type
+                    val_type = struct.unpack('<I', f.read(4))[0]
+
+                    # Read Value (with Array Skip logic)
+                    if val_type == 8:  # String
+                        l = struct.unpack('<Q', f.read(8))[0];
+                        f.seek(l, 1)
+                    elif val_type == 9:  # Array
+                        type_a = struct.unpack('<I', f.read(4))[0]
+                        len_a = struct.unpack('<Q', f.read(8))[0]
+                        sz = 1
+                        if type_a in [4, 5, 6]:
+                            sz = 4
+                        elif type_a in [10, 11, 12]:
+                            sz = 8
+                        if type_a == 8:  # String Array - Slow skip
+                            for _ in range(len_a):
+                                l = struct.unpack('<Q', f.read(8))[0];
+                                f.seek(l, 1)
+                        else:  # Scalar Array - Fast skip
+                            f.seek(sz * len_a, 1)
+                    else:  # Scalars
+                        sz = 4 if val_type not in [10, 11, 12] else 8
+                        if val_type in [0, 1, 7]: sz = 1
+                        val_bytes = f.read(sz)
+
+                        if "context_length" in key and "rope" not in key:
+                            metadata["ctx_train"] = struct.unpack('<I' if sz == 4 else '<Q', val_bytes)[0]
+                        elif key == "general.file_type":
+                            metadata["type_id"] = struct.unpack('<I', val_bytes)[0]
+
+                metadata["valid"] = True
+        except Exception as e:
+            logger.error(f"GGUF Probe Error: {e}")
+
+        return metadata
+
+    def get_memory_status(self) -> dict:
+        """
+        Returns memory stats.
+        Fixes the '0.0GB' issue on macOS by trusting 'available' more.
+        """
+        vm = psutil.virtual_memory()
+        
+        # 1. Get raw available (OS estimate of what can be given to a new app)
+        # On macOS, this correctly includes file cache that can be evicted.
+        real_available_gb = vm.available / (1024 ** 3)
+        
+        # 2. Define Safety Buffer
+        # OLD LOGIC: subtracted 4GB+ regardless, causing 0.0GB result.
+        # NEW LOGIC: Dynamic buffer.
+        
+        # If we have lots of RAM (>32GB total), we can afford a 4GB buffer.
+        # If we are tight (e.g., 16GB or 8GB laptop), a 4GB buffer is suicide for the calculation.
+        total_ram_gb = vm.total / (1024 ** 3)
+        
+        if total_ram_gb > 32:
+            safety_buffer = 4.0 
+        elif total_ram_gb > 16:
+            safety_buffer = 2.0
+        else:
+            # On 8GB/16GB machines, trust the OS 'available' metric almost fully.
+            # Just keep 500MB for kernel panics.
+            safety_buffer = 0.5 
+
+        # 3. Calculate "Safe" Available
+        safe_available_gb = real_available_gb - safety_buffer
+        
+        # 4. Floor it at 0.5GB instead of 0.0
+        # If the OS says we have space, we likely do. Don't block completely unless critical.
+        if safe_available_gb < 0.5:
+             # If we are truly negative, it means we are swapping heavily.
+             # We report a tiny amount to force the Warden to choose the smallest bin,
+             # but we don't report 0.0 which looks like an error.
+             safe_available_gb = 0.5
+
+        return {
+            "total_gb": total_ram_gb,
+            "available_gb": real_available_gb,
+            "safe_available_gb": round(safe_available_gb, 2),
+            "percent_used": vm.percent
+        }
+
+    def calculate_required_memory_gb(self, model_path: str, ctx_bin: int) -> float:
+        """Calculates expected RAM usage (Weights + KV Cache) for a specific bin."""
+        meta = self.probe_gguf_metadata(model_path)
+
+        # 1. Weights (Static) - Approx File Size + 5% overhead
+        weights_gb = meta["file_size_gb"] * 1.05
+
+        # 2. KV Cache (Dynamic) - 0.5 MB/token upper bound (F16)
+        kv_gb = (ctx_bin * 0.5) / 1024
+
+        # 3. Compute Overhead
+        overhead_gb = 0.5
+
+        return weights_gb + kv_gb + overhead_gb
+
+    def get_ideal_bin_for_text(self, text_input: str) -> int:
+        """Finds the smallest bin from config that fits the input text."""
+        # Estimate tokens (1 token ~= 3.5 chars) + Buffer
+        est_tokens = int(len(text_input) / 3.5) + 512
+
+        sorted_bins = sorted(self.ctx_bins)
+        for b in sorted_bins:
+            if b >= est_tokens:
+                return b
+        return sorted_bins[-1]  # Cap at max
 
     async def save_llama_session_async(self, model_role: str, state_name: str, priority: int = ELP0) -> Dict[str, Any]:
         """
@@ -1590,6 +1780,16 @@ class CortexEngine:
         finally:
             duration_ms = (time.monotonic() - start_time) * 1000
             logger.debug(f"⏱️ AI Provider setup method took {duration_ms:.2f} ms.")
+
+    def get_hardware_memory_gb(self) -> float:
+        """
+        Hardware Agnostic check of AVAILABLE System RAM in GB.
+        Crucial for Mac (Unified), AMD, and CPU inference.
+        """
+        vm = psutil.virtual_memory()
+        # .available is better than .free because it includes reclaimable buffers/cache
+        available_gb = vm.available / (1024 ** 3)
+        return available_gb
 
     def get_model(self, role: str):
         # Fetch filenames from your updated model map
