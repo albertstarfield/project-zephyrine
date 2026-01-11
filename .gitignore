@@ -177,3 +177,4 @@ systemCore/UIEngine/backend-service/zephyrine-backend
 systemCore/engineMain/StellaIcarus/stella_math_core.so
 
 /llama_cpp_direct
+.llama_cpp_direct_installed_v1

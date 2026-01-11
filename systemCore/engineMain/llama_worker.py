@@ -46,7 +46,7 @@ base_cmd = [
     "--no-warmup",
     "--no-host",
     "-no-cnv",               # Use single dash as per your terminal test
-    "--mmap",
+    "--no-mmap",
     "--cpu-strict", "1",
     "-ot", ".ffn_.*_exps.=CPU",
     "-fa", "off"
@@ -309,7 +309,7 @@ def wait_for_binary_clearance():
     Blocks execution if DisallowParallelBinaryExec is True and 
     any competing LLM binaries are currently running.
     """
-    if not DisallowParallelBinaryExec:
+    if not DisallowParallelBinaryExec or DisallowParallelBinaryExec == False:
         return
 
     # The binaries we must wait for
@@ -693,52 +693,78 @@ def main():
                     completion_result_dict = {"error": "Embedding binary execution failed"}
 
             result_payload = {"result": embedding_results}
-        
+
         elif args.task_type == "vision":
             # 1. Vision models REQUIRE the projector file
             # We expect the provider to send this in the JSON request data
             mmproj_path = request_data_dict.get("mmproj_path")
             image_path = request_data_dict.get("image_path")
 
-           # prompt_for_llm = request_data_dict.get("messages")
-            prompt_for_llm = request_data_dict.get("prompt", "Describe this image. with all the atributes environment and activity")
-            
-            # 2. Construct the LMMultiModal command
-            vision_cmd = [
-                "LMMultiModal", # Renamed from llama-mtmd-cli
-                "--model", args.model_path,
-                "--mmproj", mmproj_path,
-                "--image", image_path,
-                "--mmap",
-                "--cpu-strict", "1",
-                "-fa", "off",
-                "-ot", ".ffn_.*_exps.=CPU", #Unsloth recommendation on optimizaiton of memory
-                "--no-warmup",
-                "--offline",
-                "--no-host",
-                "--n-gpu-layers", "-1",
-                "-c", "4096", #maintain context window limitation for limiting memory consumption issue (Was sabotaged by Gemini)
-                "--temp", str(original_kwargs_from_provider.get("temperature", 0.8)),
-                "-n", "2048", # Limit generation for descriptions
-                "-p", prompt_for_llm
-            ]
+            # --- [START] IMAGE VALIDATION LOGIC ---
+            # Default error message
+            vision_error_msg = "I can't see anything, there's nothing here. Perhaps you are selecting the wrong Model or Image is broken"
+            should_skip_vision_proc = False
 
-            # 3. Execute with Stdout bridge and Stderr suppression
-            process = subprocess.run(
-                vision_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL, # Silence hardware logs
-                text=True
-            )
+            # Check 1: Does file exist?
+            if not image_path or not os.path.exists(image_path):
+                log_worker("WARNING", f"Vision Task: Image path not found: {image_path}")
+                should_skip_vision_proc = True
 
-            # 4. Extract only the generated text
-            raw_response = process.stdout.strip()
-            # Clean up any leftover prompt text or thinking tags
-            cleaned_response = extract_final_answer(raw_response)
-            
-            completion_result_dict = {
-                "choices": [{"message": {"content": cleaned_response}, "finish_reason": "stop"}]
-            }
+            # Check 2: Is file too small (< 1024 bytes)?
+            elif os.path.getsize(image_path) < 1024:
+                size = os.path.getsize(image_path)
+                log_worker("WARNING", f"Vision Task: Image too small ({size} bytes). Treating as broken/empty.")
+                should_skip_vision_proc = True
+
+            if should_skip_vision_proc:
+                # Bypass the binary execution and return the canned response immediately
+                completion_result_dict = {
+                    "choices": [{"message": {"content": vision_error_msg}, "finish_reason": "stop"}]
+                }
+            # --- [END] IMAGE VALIDATION LOGIC ---
+
+            else:
+                # Only proceed to binary execution if validation passed
+                prompt_for_llm = request_data_dict.get("prompt",
+                                                       "Describe this image. with all the atributes environment and activity")
+
+                # 2. Construct the LMMultiModal command
+                vision_cmd = [
+                    "LMMultiModal",  # Renamed from llama-mtmd-cli
+                    "--model", args.model_path,
+                    "--mmproj", mmproj_path,
+                    "--image", image_path,
+                    "--no-mmap",
+                    "--cpu-strict", "1",
+                    "-fa", "off",
+                    "-ot", ".ffn_.*_exps.=CPU",  # Unsloth recommendation on optimizaiton of memory
+                    "--no-warmup",
+                    "--offline",
+                    "--no-host",
+                    "--n-gpu-layers", "-1",
+                    "-c", calculated_n_ctx_for_model_load,
+                    # maintain context window limitation for limiting memory consumption issue (Was sabotaged by Gemini)
+                    "--temp", str(original_kwargs_from_provider.get("temperature", 0.8)),
+                    "-n", "2048",  # Limit generation for descriptions
+                    "-p", prompt_for_llm
+                ]
+
+                # 3. Execute with Stdout bridge and Stderr suppression
+                process = subprocess.run(
+                    vision_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,  # Silence hardware logs
+                    text=True
+                )
+
+                # 4. Extract only the generated text
+                raw_response = process.stdout.strip()
+                # Clean up any leftover prompt text or thinking tags
+                cleaned_response = extract_final_answer(raw_response)
+
+                completion_result_dict = {
+                    "choices": [{"message": {"content": cleaned_response}, "finish_reason": "stop"}]
+                }
             
         else:
             raise ValueError(f"Unknown task type in processing block: {args.task_type}")
