@@ -4607,9 +4607,9 @@ class CortexThoughts:
         logger.info(f"LLMCall|Warden: post-check model parser : final_bin fallback set first {model_path}")
         # If we are OOM, which we definitely going to espescially handling 77.05B + scarcity of RAM we're needing to do this negotiation. (thank you microsoft and openAI we are having difficulty to run this Adaptive System)
         logger.info(f"LLMCall|Warden: RAM Contention Monitoring Alloc debug: (Need {req_gb:.2f}GB, Have {avail_gb:.2f}GB).")
-        # 1. Define the limit (85% of available RAM as per your snippet)
-        limit_with_tolerance = avail_gb * 0.85
-        logger.info(f"LLMCall|Warden: 👮 RAM Limit set to {limit_with_tolerance:.2f}GB (85% of {avail_gb:.2f}GB free)")
+        # 1. Define the limit (65% of available RAM as per your snippet)
+        limit_with_tolerance = avail_gb * 0.65
+        logger.info(f"LLMCall|Warden: 👮 RAM Limit set to {limit_with_tolerance:.2f}GB (65% of {avail_gb:.2f}GB free)")
 
         feasible_bins = []
         if req_gb > avail_gb:
@@ -4721,9 +4721,9 @@ class CortexThoughts:
                     if hasattr(chain, "invoke") and callable(chain.invoke):  # Langchain runnable
                         # Use final_inputs (possibly truncated)
                         response_from_llm = chain.invoke(final_inputs, config=llm_call_config)
-                        logger.info(f"LLMcall result: {response_from_llm}")
+                        #logger.info(f"LLMcall [DEBUG Disable if not needed] result: {response_from_llm}")
                     elif callable(chain):  # Direct model call
-                        logger.info(f"LLMcall direct call: {llm_call_config}")
+                        #logger.info(f"LLMcall [DEBUG Disable if not needed] direct call: {llm_call_config}")
                         # Use final_inputs (possibly truncated)
                         response_from_llm = chain(
                             messages=final_inputs, stop=[CHATML_END_TOKEN], **llm_call_config
@@ -5949,7 +5949,7 @@ class CortexThoughts:
             # Return the original text as a fallback on error
             return text
 
-    # --- NEW HELPER: Routing ---
+    # This is Router for ELP0 background_generate! not for Snowball-Enaga
     async def _route_to_specialist(
         self,
         db: Session,
@@ -6717,9 +6717,9 @@ Output your response EXACTLY in this format:
 
                 # YOUR REQUESTED DEBUG LOG
                 logger.info(
-                    f"{log_prefix}:\n [TurdCodeDebugApplyDiffApply] snippets that is attempted {response} "
-                    f"\n\n with the reformatted from contentReq: {new_content_request} "
-                    f"\n\n from {current_buffer} -> to {updated_buffer}"
+                    f"{log_prefix}:\n [TurdCodeDebugApplyDiffApply] snippets that is attempted {response[:10]} "
+                    f"\n\n with the reformatted from contentReq: {new_content_request[:10]} "
+                    f"\n\n from {current_buffer[:10]} -> to {updated_buffer[:10]}" #to see the full content for debug remove the [:number]
                 )
 
                 if success:
@@ -6741,12 +6741,25 @@ Output your response EXACTLY in this format:
     ) -> str:
         """
         CODENAME: Snowball-Enaga LoD Engine (V10)
-        Strategy: 
-        1. Analyze Complexity.
+        Strategy:
+        There's multiple gear mode or shift
+
+        Gear 0: below 100 token use general_fast to do answering and it's memory
+        Gear 1: Above 100 Switch LoD Skeleton Plan and do Fill in the blanks with it's memory (Mode: LoD)
+        Gear 2: Above 2000(?) or Your available memory (Warden Memory Management), do Context Mapping (Mode: LoD) ()
+        Gear 1(Standard_Agentic) : Above 100, definitely   ELP1 (Agentic Command JSON recieved -> Answer -> Reconstruct JSON Code respons) (Mode: Agentic Command no LoD)
+        Gear 2(Standard Agentic) : Above 2000, context flushing then reconstruct  ELP1 (Code : Agentic Command JSON recievedAgentic Command -> LoD -> Reconstruct JSON Code)
+
+
+
+        General Pipeline (switch LoD)
+        (for LoD)
+        1. Analyze Complexity or context.
         2. If Complex: Generate LoD Skeleton (Plan).
         3. Execute Grid: Generate content for each section using specific specialists.
         4. Fallback: If a specialist fails (e.g., missing model), auto-switch to general model.
         5. Assembly & Humanization.
+
         """
         direct_req_id = f"dgen-snowball-v10-{uuid.uuid4()}"
         log_prefix = f"❄️ {direct_req_id}|ELP1"
@@ -6836,12 +6849,6 @@ Output your response EXACTLY in this format:
 
             # Fast Model Generation
             fast_model = self.provider.get_model("general_fast")
-            if not fast_model:
-                # Fallback to general if fast not available
-                fast_model = self.provider.get_model("general")
-            
-            if not fast_model:
-                 return "[System Error: No suitable model found for fast generation.]"
 
             bound_model = fast_model.bind(max_tokens=LLAMA_CPP_N_CTX // 2, stop=[CHATML_END_TOKEN], priority=ELP1)
             chain = (ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE) | bound_model | StrOutputParser())
@@ -8978,11 +8985,12 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         Returns a list of section headers.
         """
         log_prefix = f"🦴 Skeleton|{session_id}"
-        model = self.provider.get_model("general_fast")
+        model = self.provider.get_model("general")
         if not model: return ["Response"]
 
         # Limit the scope to keep ELP1 fast
-        prompt = f"""[SYSTEM]
+        prompt = f"""/no_think
+        [SYSTEM]
         You are a Structural Architect. Plan the structure for a helpful response to the user's request.
         Break the response into 2 to 10 logical/sublogical sections. 
         
@@ -9073,7 +9081,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
 
         # 3. Generation Prompt
         prompt = f"""[SYSTEM]
-        You are writing ONE section of a larger response. Focus ONLY on the topic provided.
+        You are an specialist contributing an paper writing ONE section of a larger paper. Focus ONLY on the topic provided.
         
         [OVERALL PLAN]
         {json.dumps(full_plan)}
@@ -9104,6 +9112,11 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         - Be direct and detailed.
         - Maintain consistency with the 'Previously Written Sections'.
         - Do not write an intro or conclusion for the whole essay, just this part.
+        - DO NOT WRITE need introduction "Certainly, or Prewriting. Just Output the Section Content!"
+        - DO NOT write need conclusion or Overall, or In conclusion, the study or Anything Except it's an Conclusion Section!
+        - DO NOT WRITE THE INSTRUCTION TO THE SPITTING OUT
+        
+        :
         """
 
         try:
@@ -9270,7 +9283,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         self, current_text: str, original_user_input: str, session_id: str
     ) -> str:
         """
-        Uses the Router model (ELP1) to pick the specialist.
+        Uses the Router model (ELP1) to pick the specialist. (For Snowball-Enaga) NOT for Background_generate
         V2 UPDATE: Now provides the router with explicit model descriptions.
         """
         log_prefix = f"🔀 ContRouter|{session_id}"
@@ -9280,13 +9293,13 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         # --- Build the descriptive model list for the prompt ---
         models_with_descriptions = []
         for key, description in LLAMA_CPP_MODEL_DESCRIPTIONS.items():
-            if key not in ["router", "embeddings", "general_fast"]: # Exclude non-content models
+            if key not in ["router", "embeddings", "general_fast", "vlm", "rnj_1_general_STEM"]: # Exclude non-content and Non ELP1 optimized models (add vlm because this router or the pipeline doesn't add the image into the pipeline except from the beginning)
                 models_with_descriptions.append(f"- `{key}`: {description}")
         
         models_str = "\n".join(models_with_descriptions)
 
         prompt = f"""[SYSTEM]
-        You are only a router that hands into another model and NOT to answer the question or original Query or goal or input.
+        You are a router that hands into another model and NOT to answer the question or original Query or goal or input.
 
         [USER'S ORIGINAL GOAL]
         "{original_user_input}"
@@ -9299,7 +9312,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         
         [INSTRUCTION]
         Based on the user's goal, which specialist is best suited to provide the missing information?
-        Answer ONLY model name (e.g., 'physics').
+        Answer ONLY model name (e.g., 'physics'). 
         """
         try:
             bound_router = router_model.bind(priority=ELP1)
@@ -9382,6 +9395,8 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         3.  **Ignore and correct any errors** in the "Incomplete Text So Far". Do not repeat them.
         4.  If the problem requires a numerical solver or a table lookup (e.g., Prandtl-Meyer), state this as the method. Do not invent formulas. but you may allow to derive from the established axioms
         5.  Output ONLY the next paragraph of the correct explanation.
+        6. No need introduction "Certainly, or Prewriting. Just Output the Section Content!"
+        7. DO NOT write need conclusion or Overall, or In conclusion, the study or Anything Except it's an Conclusion Section!
         """
 
         try:

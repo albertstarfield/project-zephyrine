@@ -331,10 +331,11 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     MELO_TTS_LIB_INSTALLED_FLAG_FILE,
     MELO_TTS_DATA_INSTALLED_FLAG_FILE,
     CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE,
+    LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE, #aargh i forgot about this folder, it caused an catastrophic failure when zephyrineRuntimeVenv removed it doesn't removed llamacpp thus it doesn't compile and fails everything
     CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE,
     CONDA_PATH_CACHE_FILE,
     PYWHISPERCPP_INSTALLED_FLAG_FILE,
-    ARIA2P_INSTALLED_FLAG_FILE, # From previous step
+    ARIA2P_INSTALLED_FLAG_FILE,
     CHATTERBOX_TTS_INSTALLED_FLAG_FILE,
     LATEX_OCR_INSTALLED_FLAG_FILE,
     PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE,
@@ -5205,7 +5206,7 @@ if __name__ == "__main__":
                                     # shutil.copy2 preserves permissions (important for execution)
                                     shutil.copy2(src_bin_path, dest_bin_path)
                                     print_system(f"  -> Successfully migrated: {src_filename} as {target_filename}")
-                                    with open(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE, 'w',
+                                    with open(LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE, 'w',
                                               encoding='utf-8') as f_lcpp_flag:
                                         f_lcpp_flag.write("")
                                 else:
