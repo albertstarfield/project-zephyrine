@@ -1,1 +1,0 @@
-cJSON (Note: This is a C library, likely needs to be installed via system package manager or built from source, not conda.)
