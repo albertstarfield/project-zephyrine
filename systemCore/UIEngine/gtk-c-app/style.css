@@ -1,0 +1,95 @@
+/* style.css */
+
+/* style.css */
+
+/* General window styling */
+window {
+    background-color: #343541; /* --background */
+    color: #d1d5db; /* --primary-text */
+    font-family: "Urbanist", sans-serif;
+}
+
+/* Sidebar styling */
+.sidebar {
+    background-color: #3a3b43; /* --sidebar-background */
+    padding: 6px;
+    border-right: 1px solid rgb(64, 65, 79); /* --border */
+}
+
+/* Button styling */
+button {
+    background-color: #202123; /* --background-alt */
+    color: #d1d5db; /* --primary-text */
+    border: 1px solid rgb(64, 65, 79); /* --border */
+    border-radius: 10px; /* --rounded-border */
+    padding: 6px 12px;
+    font-weight: bold;
+}
+
+button:hover {
+    background-color: #2c2d30; /* --background-mid */
+}
+
+.send-button {
+    background-color: #f17b26; /* --accent */
+    color: #202123; /* --background-alt */
+}
+
+.send-button:hover {
+    background-color: #ff581b; /* --oppositeaccent */
+}
+
+
+/* Input entry styling */
+entry {
+    background-color: #202123; /* --background-alt */
+    color: #d1d5db; /* --primary-text */
+    border: 1px solid rgb(64, 65, 79); /* --border */
+    border-radius: 10px; /* --rounded-border */
+    padding: 10px;
+    caret-color: #f17b26; /* --accent */
+}
+
+/* Header bar styling */
+headerbar {
+    background-color: #202123; /* --background-alt */
+    color: #d1d5db; /* --primary-text */
+    border-bottom: 1px solid rgb(64, 65, 79); /* --border */
+}
+
+/* Chat feed styling */
+.chat-feed {
+    padding: 10px;
+}
+
+.user-message {
+    background-color: #f17b26; /* --user-message-bg */
+    color: #202123; /* --user-message-text-color */
+    padding: 10px;
+    border-radius: 15px 15px 0px 15px;
+    margin: 5px;
+    max-width: 70%;
+    word-wrap: break-word;
+}
+
+.assistant-message {
+    background-color: #62c645; /* --assistant-message-bg */
+    color: #ececf1; /* --assistant-message-text-color */
+    padding: 10px;
+    border-radius: 15px 15px 15px 0px;
+    margin: 5px;
+    max-width: 70%;
+    word-wrap: break-word;
+}
+
+.input-box {
+    padding: 10px;
+    background-color: #202123; /* --background-alt */
+    border-top: 1px solid rgb(64, 65, 79); /* --border */
+}
+
+scrolledwindow {
+    border: none;
+}
+
+
