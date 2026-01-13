@@ -1,0 +1,14 @@
+name = "zephyrine_host"
+description = ""
+version = "0.1.0-dev"
+
+authors = ["Your Name"]
+maintainers = ["Your Name <example@example.com>"]
+licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = []
+
+executables = ["zephyrine_host"]
+
+[[depends-on]]
+aws = "^25.2.0"

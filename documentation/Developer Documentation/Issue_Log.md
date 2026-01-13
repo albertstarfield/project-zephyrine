@@ -499,3 +499,14 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** "Trickshot" refactor of math hook with C++ and Numba tiers.
     -   **Status:** `Resolved`
     -   **Description:** The `basic_math_hook` in StellaIcarus was refactored for maximum performance using a tiered "trickshot" approach. It now attempts to compile and use a native C++ library for calculations first. If that fails, it falls back to a Numba JIT-compiled function. The final fallback is a pure Python implementation. This significantly speeds up the execution of simple math queries.
+
+---
+
+## **UI ENGINE (UI)**
+
+### Refactors
+
+-   **ID:** `UI-REFACTOR-001`
+    -   **Title:** Refactor frontend to be served by a dedicated Ada web host.
+    -   **Status:** `Resolved`
+    -   **Description:** Replaced the Node.js/Vite development server (`npm run dev`) with a compiled Ada web server (`zephyrine_host`) for serving the frontend. The `launcher.py` script now builds the static React assets (`npm run build`), copies them to the Ada host's directory, and compiles the Ada server. This change aims to create a more robust, self-contained, and performant frontend deployment, reducing reliance on Node.js at runtime.

@@ -6,6 +6,7 @@ models/*
 ./build/**
 **build**
 dist
+dev-dist
 .DS_Store
 /release-builds/
 **.wav**
