@@ -49,8 +49,10 @@ import "./styles/components/_wingModePage.css"; // [cite: uploaded:externalAnaly
 
 
 
-const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
-
+//const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
+import { FrontendBackendRecieve } from './config'; // Import the helper
+const backendHttpUrl = window.FrontendBackendRecieve || "http://localhost:3001";
+const WEBSOCKET_URL = backendHttpUrl.replace(/^http/, 'ws');
 const AppContent = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
