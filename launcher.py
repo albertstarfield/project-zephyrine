@@ -56,8 +56,13 @@ _sys_exec_dir = os.path.dirname(sys.executable)
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENGINE_MAIN_DIR = os.path.join(ROOT_DIR, "systemCore", "engineMain")
-BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "backend-service")
-FRONTEND_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "frontend-face-zephyrine")
+#BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "backend-service") #Old Legacy Golang 
+BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "frontfacebackendservice") # New Ada frontfacebackend service proxy for the UI
+#frontend_host_assets = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "frontend-face-zephyrine") #Legacy Frontend User
+frontend_host_assets = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "zephyrine_frontend_host_assets") #Host Assets image and etc that going to be compiled
+ZEPHYRINE_HOST_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "zephyrine_host")
+
+#Rather than npm run dev using node.js as base-end we use Ada now.
 LICENSE_DIR = os.path.join(ROOT_DIR, "licenses")
 LICENSE_FLAG_FILE = os.path.join(ROOT_DIR, ".license_accepted_v1")
 CUDA_TOOLKIT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".CUDA_Toolkit_Installed")
@@ -488,7 +493,7 @@ def _compile_and_run_watchdogs():
     go_exe_path = os.path.join(go_watchdog_dir, go_exe_name)
     if os.path.exists(go_exe_path):
         # Define the process names for all targets
-        backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+        backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
         backend_process_name = backend_exe_name.replace(".exe", "")
 
         # The process name is derived from the binary file name, without the .exe
@@ -514,7 +519,7 @@ def _compile_and_run_watchdogs():
         # to the Ada watchdog.
 
         # Define the command for the Go watchdog (same as before)
-        backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+        backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
         backend_process_name = backend_exe_name.replace(".exe", "")
         go_watchdog_command = [
             go_exe_path,
@@ -1034,38 +1039,108 @@ def start_engine_main():
 
 def start_backend_service():
     """
-    Launches the Go backend service.
-    First runs 'go mod tidy', then starts the server with 'go run .'.
+    Launches the Ada backend service (Frontface).
+    Compiles using Alire/gprbuild before starting to ensure latest binary.
     """
     name = "BACKEND"
-    # The directory is already defined globally as BACKEND_SERVICE_DIR
     print_system(f"Preparing to launch {name} service from: {BACKEND_SERVICE_DIR}")
 
     if not os.path.isdir(BACKEND_SERVICE_DIR):
         print_error(f"Backend service directory not found: {BACKEND_SERVICE_DIR}")
-        sys.exit(1) # This is a critical failure
-    backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
-    backend_exe_path = os.path.join(BACKEND_SERVICE_DIR, backend_exe_name) #pointing to the compiled backend temp golang binary
-
-    # --- Step 1: Run 'go mod tidy' ---
-    # We use your 'run_command' helper because this is a one-off task we need to wait for.
-    print_system(f"Building Go backend binary to: {backend_exe_path}")
-    build_command = ["go", "build", "-o", backend_exe_path, "."]
-    # We use run_command here because building is a one-time task we must wait for.
-    if not run_command(build_command, cwd=BACKEND_SERVICE_DIR, name=f"{name}-BUILD", check=True):
-        print_error("Failed to build Go backend. Backend service cannot start.")
         sys.exit(1)
 
-    # --- Step 2: Launch 'go run .' ---
-    # We use your 'start_service_process' helper as it correctly handles
-    # long-running services, adds them to the cleanup list, and streams output.
-    start_service_process([backend_exe_path], BACKEND_SERVICE_DIR, name)
+    # 1. Check for Alire (alr)
+    if not shutil.which("alr"):
+        print_error("CRITICAL: 'alr' (Alire) not found. Cannot compile backend service.")
+        sys.exit(1)
 
+    # --- NEW: Ensure Dependencies (Auto-Install) ---
+    print_system(f"Ensuring Alire dependencies for {name} (AWS, GNATColl)...")
+    # We add dependencies programmatically. 'alr with' is idempotent.
+    # Note: We do not use '-y' as alr with is non-interactive by default.
+    deps_cmd = ["alr", "with", "aws", "gnatcoll_sqlite", "gnatcoll_json"]
+    if not run_command(deps_cmd, cwd=BACKEND_SERVICE_DIR, name=f"{name}-DEPS", check=False):
+        print_warning(f"Dependency check for {name} returned warnings (This is normal if already installed).")
+
+    # 2. Construct Build Command
+    build_cmd = ["alr", "exec", "--"]
+    
+    if not IS_WINDOWS:
+        build_cmd.extend(["env", "-u", "BUILD", "-u", "MODE", "-u", "bld", "-u", "mode"])
+    
+    # Standard gprbuild command
+    build_cmd.extend(["gprbuild", "-p"])
+
+    # macOS/Darwin Specific Linker Flags
+    if platform.system() == "Darwin":
+        try:
+            sdk_path = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
+            build_cmd.extend(["-largs", f"-L{sdk_path}/usr/lib"])
+            print_system(f"Applied macOS SDK flags for linker: {sdk_path}")
+        except Exception as e:
+            print_warning(f"Could not determine macOS SDK path: {e}. Build might fail.")
+
+    # 3. Execute Build
+    print_system(f"Building Ada backend to bin/: {' '.join(build_cmd)}")
+    if not run_command(build_cmd, cwd=BACKEND_SERVICE_DIR, name=f"{name}-BUILD", check=True):
+        print_error("Failed to build Ada backend service.")
+        sys.exit(1)
+
+    # 4. Locate and Launch Binary
+    binary_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+    binary_path = os.path.join(BACKEND_SERVICE_DIR, "bin", binary_name)
+
+    if not os.path.exists(binary_path):
+        print_error(f"Build appeared successful, but binary missing at: {binary_path}")
+        sys.exit(1)
+
+    # MODIFIED: Added arguments for Proxy Target and Cognitive Backend
+    # --frontfaceProxyTarget: The port this service LISTENS on (11431)
+    # --backendCognitiveTarget: The port where the AI Engine (Hypercorn) runs (11434)
+    command = [
+        binary_path, 
+        "--frontfaceProxyTarget", "127.0.0.1:11431", 
+        "--backendCognitiveTarget", "http://127.0.0.1:11434"
+    ]
+
+    start_service_process(command, BACKEND_SERVICE_DIR, name)
 
 def start_frontend():
-    name = "FRONTEND"
-    command = [NPM_CMD, "run", "dev"]
-    start_service_process(command, FRONTEND_DIR, name, use_shell_windows=True)
+    name = "FRONTEND-HOST"
+    
+    # 1. Configuration
+    HOST_IP = "127.0.0.1"
+    HOST_PORT = "5173"
+
+    # 2. Locate Binary
+    binary_name = "zephyrine_host.exe" if IS_WINDOWS else "zephyrine_host"
+    binary_path = os.path.join(ZEPHYRINE_HOST_DIR, "bin", binary_name)
+
+    # Logic to build if missing or ensure deps
+    if os.path.isdir(ZEPHYRINE_HOST_DIR):
+        print_system(f"Ensuring Alire dependencies for {name} (AWS)...")
+        # Ensure AWS is present for the host
+        if not run_command(["alr", "with", "aws"], cwd=ZEPHYRINE_HOST_DIR, name=f"{name}-DEPS", check=False):
+            print_warning(f"Dependency check for {name} returned warnings.")
+
+        # If binary missing, we force a build (logic already exists in main block, 
+        # but usually start_frontend assumes it might be built. 
+        # If you want forced build here, copy the build logic from the main block.)
+    
+    if not os.path.exists(binary_path):
+        print_error(f"CRITICAL: Frontend Host binary missing at {binary_path}")
+        print_error("Cannot start UI. Please run the full setup again to compile the host.")
+        sys.exit(1) 
+
+    # 4. Construct Command with Args
+    command = [
+        binary_path, 
+        "--frontface", f"{HOST_IP}:{HOST_PORT}", 
+        "--backendRecieve", "http://127.0.0.1:11431"
+    ]
+
+    print_system(f"Launching Zephyrine UI Frontend on {HOST_IP}:{HOST_PORT}")
+    start_service_process(command, ZEPHYRINE_HOST_DIR, name)
 
 
 def check_and_restart_services():
@@ -1125,17 +1200,25 @@ def check_and_restart_services():
                     print_warning(f"No restart rule found for dead service '{name}'. It will not be restarted.")
 
 def start_backend_service_fast():
-    """Fast-path version: Assumes the backend is already compiled."""
+    """Fast-path version: Assumes the Ada backend is already compiled in bin/."""
     name = "BACKEND"
-    backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
-    backend_exe_path = os.path.join(BACKEND_SERVICE_DIR, backend_exe_name)
+    
+    # The binary is located in the 'bin' subdirectory defined in the .gpr file
+    binary_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+    binary_path = os.path.join(BACKEND_SERVICE_DIR, "bin", binary_name)
 
-    if not os.path.exists(backend_exe_path):
-        print_error(f"FATAL (Fast Path): Backend executable not found at {backend_exe_path}. Please run a full setup.")
-        # In a fast path, this is a critical failure.
+    if not os.path.exists(binary_path):
+        print_error(f"FATAL (Fast Path): Backend executable not found at {binary_path}. Please run a full setup.")
         return
 
-    start_service_process([backend_exe_path], BACKEND_SERVICE_DIR, name)
+    # MODIFIED: Added arguments for Proxy Target and Cognitive Backend
+    command = [
+        binary_path, 
+        "--frontfaceProxyTarget", "127.0.0.1:11431", 
+        "--backendCognitiveTarget", "http://127.0.0.1:11434"
+    ]
+
+    start_service_process(command, BACKEND_SERVICE_DIR, name)
 
 def start_zephymesh_service_fast():
     """Fast-path version: Assumes ZephyMesh is compiled and launches it without waiting."""
@@ -1162,7 +1245,7 @@ def start_watchdogs_service_fast():
     go_exe_name = "watchdog_thread1.exe" if IS_WINDOWS else "watchdog_thread1"
     go_exe_path = os.path.join(go_watchdog_dir, go_exe_name)
     if os.path.exists(go_exe_path):
-        backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+        backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
         backend_process_name = backend_exe_name.replace(".exe", "")
         mesh_process_name = "zephymesh_node_compiled"
         watchdog_command = [
@@ -1180,7 +1263,7 @@ def start_watchdogs_service_fast():
     ada_exe_path = os.path.join(ada_watchdog_dir, "bin", ada_exe_name)
     if os.path.exists(ada_exe_path):
         # The logic for the Ada watchdog supervising the Go watchdog remains the same.
-        backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+        backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
         backend_process_name = backend_exe_name.replace(".exe", "")
         go_watchdog_command = [
             go_exe_path,
@@ -4809,12 +4892,84 @@ if __name__ == "__main__":
                 print_system("Python wrapper for Aria2 (aria2p) previously installed (flag file found).")
             print_system("--- Core command-line tools check/install complete ---")
 
-            # --- Frontend Node.js Dependencies ---
-            print_system("--- Installing/Checking Frontend Node.js Dependencies ---")
-            # This will now use the Node.js/npm ensured by the block above
-            if not run_command([NPM_CMD, "install"], FRONTEND_DIR, "NPM-FRONTEND"):
-                print_error("NPM Frontend install failed. Exiting."); setup_failures.append(f"Failed to install/ensure critical legacy tool: npm node failed to install")
-            print_system("--- Frontend Node.js Dependencies installed ---")
+            # --- Frontend Setup: Build React & Compile Ada Host ---
+            print_system("--- Setting up Frontend (React Build + Ada Host) ---")
+            
+            # 1. Install NPM Dependencies
+            print_system("Installing/Verifying Node.js dependencies...")
+            if not run_command([NPM_CMD, "install"], frontend_host_assets, "NPM-INSTALL"):
+                print_error("NPM Install failed. Exiting.")
+                setup_failures.append("Frontend npm install failed")
+            
+            # 2. Build Static Assets (Vite)
+            print_system("Building React frontend (Vite)...")
+            if not run_command([NPM_CMD, "run", "build"], frontend_host_assets, "NPM-BUILD"):
+                print_error("NPM Build failed.")
+                setup_failures.append("Frontend npm run build failed")
+            else:
+                # 3. Copy 'dist' to Ada Host Directory
+                # The Ada server expects 'dist' to be in its working directory (ZEPHYRINE_HOST_DIR)
+                src_dist = os.path.join(frontend_host_assets, "dist")
+                dst_dist = os.path.join(ZEPHYRINE_HOST_DIR, "dist")
+                
+                if os.path.exists(src_dist):
+                    print_system(f"Copying built assets from {src_dist} to {dst_dist}...")
+                    try:
+                        if os.path.exists(dst_dist):
+                            shutil.rmtree(dst_dist)
+                        shutil.copytree(src_dist, dst_dist)
+                        print_system("Assets copied successfully.")
+                    except Exception as e_copy:
+                        print_error(f"Failed to copy dist folder: {e_copy}")
+                        setup_failures.append("Failed to copy frontend dist folder to Ada host")
+                else:
+                    print_error(f"Vite build seemed successful, but 'dist' folder missing at {src_dist}")
+                    setup_failures.append("Frontend dist folder missing after build")
+
+            # 4. Compile Ada UI Engine
+            if os.path.isdir(ZEPHYRINE_HOST_DIR):
+                print_system(f"--- Compiling Ada UI Engine in {ZEPHYRINE_HOST_DIR} ---")
+                
+                # Check for Alire
+                if not shutil.which("alr"):
+                    print_error("'alr' not found. Cannot compile Ada host.")
+                    setup_failures.append("Alire (alr) not found for Ada host build")
+                else:
+                    # Construct the Build Command
+                    # We start with the basic alire exec command
+                    # We intentionally sanitize BUILD/MODE/bld/mode env vars for the command execution
+                    # to prevent the "arm64 vs Release" naming collision we fixed earlier.
+                    
+                    build_cmd = ["alr", "exec", "--"]
+                    
+                    # On Linux/macOS, we use 'env -u' to strip the conflicting vars from the inner scope
+                    if not IS_WINDOWS:
+                        build_cmd.extend(["env", "-u", "BUILD", "-u", "MODE", "-u", "bld", "-u", "mode"])
+                    
+                    build_cmd.append("gprbuild")
+
+                    # macOS Specific Linker Flags
+                    if platform.system() == "Darwin":
+                        try:
+                            sdk_path = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
+                            # We append the flags to the END of the command
+                            build_cmd.extend(["-largs", f"-L{sdk_path}/usr/lib"])
+                            print_system(f"Applied macOS SDK flags: {sdk_path}")
+                        except Exception as e_sdk:
+                            print_warning(f"Could not detect macOS SDK path: {e_sdk}. Build may fail.")
+
+                    # Run the build
+                    if not run_command(build_cmd, cwd=ZEPHYRINE_HOST_DIR, name="ADA-BUILD"):
+                        print_error("Ada Host compilation failed.")
+                        setup_failures.append("Zephyrine Ada Host compilation failed")
+                    else:
+                        print_system("✅ Ada UI Engine compiled successfully.")
+            else:
+                print_error(f"Ada Host directory not found at: {ZEPHYRINE_HOST_DIR}")
+                print_error("Please ensure you have initialized the 'zephyrine_host' project inside the frontend directory.")
+                setup_failures.append("Ada Host directory missing")
+
+            print_system("--- Frontend Setup Complete ---")
 
 
             # Ensure `tiktoken` for license reading time estimation
