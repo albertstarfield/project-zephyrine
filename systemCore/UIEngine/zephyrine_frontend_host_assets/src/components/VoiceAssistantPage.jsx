@@ -27,7 +27,7 @@ const VoiceAssistantPage = () => {
     formData.append('file', audioBlob, 'audio.webm');
     formData.append('model', 'whisper-1'); // Or your model
 
-    const response = await fetch('/api/v1/audio/transcriptions', {
+    const response = await fetch('/v1/audio/transcriptions', {
       method: 'POST',
       body: formData,
     });
@@ -40,7 +40,7 @@ const VoiceAssistantPage = () => {
     setAssistantStatus('processing_llm'); // LLM is processing
     chatHistory.current.push({ role: 'user', content: text });
 
-    const response = await fetch('/api/v1/chat/completions', {
+    const response = await fetch('/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

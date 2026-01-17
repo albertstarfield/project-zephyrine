@@ -119,6 +119,9 @@ begin
    AWS.Config.Set.Server_Host (Conf, To_String (Target_Host));
    AWS.Config.Set.Reuse_Address (Conf, True); -- Go typically allows reuse
    
+   -- This enables AWS to buffer the payload so AWS.Status.Payload works.
+   AWS.Config.Set.Upload_Size_Limit (Conf, 10_485_760);
+
    -- 2. Apply Configuration: Timeouts (Matching Go's 600s for LLM support)
    -- Go: ReadTimeout -> AWS: Receive_Timeout
    AWS.Config.Set.Receive_Timeout (Conf, 600.0); 

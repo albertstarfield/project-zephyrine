@@ -4,6 +4,7 @@ import atexit  # To signal shutdown
 import base64  # Used for image handling
 import contextlib  # For ensuring driver quit
 import datetime as dt
+from datetime import datetime
 import hashlib
 import io
 import json
@@ -98,7 +99,7 @@ from flask import (  # Use Flask imports
 )
 from flask_cors import CORS
 from network_internet_knowledge_fetcher import search_and_scrape_web_async
-from sqlalchemy import desc
+from sqlalchemy import desc, asc
 
 # --- SQLAlchemy Imports ---
 from sqlalchemy.orm import Session  # Import sessionmaker
@@ -225,6 +226,7 @@ try:
         _DB_HEALTH_OK_EVENT,
         FileIndex,
         Interaction,
+        ZepZepAdaUI,
         SessionLocal,
         SystemInteractionScriptAttempt,
         UploadedFileRecord,
@@ -1124,10 +1126,251 @@ def _programmatic_json_parse_and_fix(
     return None
 
 
+# --- 1. The Native WebSocket Handler ---
+async def zep_ui_websocket_handler(scope, receive, send):
+    """
+    Directly handles the /zepzepadaui WebSocket protocol.
+    Bypasses Flask to provide high-speed, state-aware communication for the UI.
+    """
+    # Accept the connection
+    await send({"type": "websocket.accept"})
+    logger.info("🔌 ZepZepAdaUI: Client Connected")
+
+    try:
+        while True:
+            message = await receive()
+
+            if message["type"] == "websocket.disconnect":
+                logger.info("🔌 ZepZepAdaUI: Client Disconnected")
+                break
+
+            if message["type"] == "websocket.receive" and "text" in message:
+                try:
+                    # Parse UI Message
+                    data = json.loads(message["text"])
+                    msg_type = data.get("type")
+                    payload = data.get("payload", {})
+
+                    # --- ROUTER ---
+                    if msg_type == "get_chat_history_list":
+                        await handle_ws_get_history_list(send, payload)
+                    elif msg_type == "get_messages":
+                        await handle_ws_get_messages(send, payload)
+                    elif msg_type == "chat":
+                        await handle_ws_chat(send, payload)
+                    elif msg_type == "delete_chat":
+                        await handle_ws_delete_chat(send, payload)
+                    elif msg_type == "rename_chat":
+                        # We acknowledge the rename to keep UI happy, though Interaction log is immutable
+                        await send_ws_json(send, "chat_renamed", {
+                            "chatId": payload.get("chatId"),
+                            "newTitle": payload.get("newTitle")
+                        })
+                    elif msg_type == "stop":
+                        await send_ws_json(send, "stopped", {"message": "Generation stopped"})
+                    else:
+                        logger.warning(f"ZepZepAdaUI: Unknown message type '{msg_type}'")
+
+                except Exception as e:
+                    logger.error(f"ZepZepAdaUI Error: {e}")
+                    await send_ws_json(send, "error", {"message": f"System Error: {str(e)}"})
+
+    except Exception as connection_err:
+        logger.error(f"ZepZepAdaUI Connection Error: {connection_err}")
+
+
+# --- 2. Helper Functions (The Logic) ---
+
+async def send_ws_json(send, type_str, payload):
+    """Encodes and sends a JSON message back to the UI."""
+    msg = json.dumps({"type": type_str, "payload": payload})
+    await send({"type": "websocket.send", "text": msg})
+
+
+async def handle_ws_get_history_list(send, payload):
+    """Scans the ZepZepAdaUI table for the clean sidebar chat list."""
+    user_id = payload.get("userId")
+    db = SessionLocal()
+    try:
+        # Fetch unique session_ids from the UI table
+        # We assume 'component_name'='chat_message' represents valid chat entries
+        ui_entries = db.query(
+            ZepZepAdaUI.session_id, 
+            ZepZepAdaUI.created_at, 
+            ZepZepAdaUI.ui_state_json
+        ).filter(
+            ZepZepAdaUI.component_name == 'chat_message'
+        ).order_by(desc(ZepZepAdaUI.created_at)).all()
+
+        seen_sessions = set()
+        chat_list = []
+
+        for sess_id, ts, state_json in ui_entries:
+            if sess_id and sess_id not in seen_sessions:
+                seen_sessions.add(sess_id)
+                
+                # Extract clean preview text from the JSON
+                try:
+                    state_data = json.loads(state_json)
+                    preview_text = state_data.get("content", "")[:30] + "..."
+                except:
+                    preview_text = "New Chat"
+
+                chat_list.append({
+                    "id": sess_id,
+                    "title": preview_text,
+                    "updated_at": ts.isoformat() if ts else datetime.now().isoformat()
+                })
+                if len(chat_list) >= 50: break
+
+        await send_ws_json(send, "chat_history_list", {"chats": chat_list})
+    finally:
+        db.close()
+
+
+async def handle_ws_get_messages(send, payload):
+    """Reconstructs the chat transcript strictly from ZepZepAdaUI table."""
+    chat_id = payload.get("chatId")
+    if not chat_id: return
+
+    db = SessionLocal()
+    try:
+        # Only fetch entries explicitly marked as chat messages for the UI
+        rows = db.query(ZepZepAdaUI).filter(
+            ZepZepAdaUI.session_id == chat_id,
+            ZepZepAdaUI.component_name == "chat_message"
+        ).order_by(asc(ZepZepAdaUI.created_at)).all()
+
+        messages = []
+        for r in rows:
+            try:
+                data = json.loads(r.ui_state_json)
+                messages.append({
+                    "id": f"{r.id}", # Use simple DB ID
+                    "sender": data.get("sender", "unknown"),
+                    "content": data.get("content", ""),
+                    "created_at": r.created_at.isoformat()
+                })
+            except json.JSONDecodeError:
+                continue
+
+        await send_ws_json(send, "chat_history", {"chatId": chat_id, "messages": messages})
+    finally:
+        db.close()
+
+
+async def handle_ws_chat(send, payload):
+    """
+    Handles chat by:
+    1. Saving User Msg to ZepZepAdaUI (Clean View)
+    2. Calling Brain (writes to Interaction Table mostly)
+    3. Saving AI Response to ZepZepAdaUI (Clean View)
+    """
+    messages = payload.get("messages", [])
+    if not messages: return
+
+    last_msg = messages[-1]
+    user_content = last_msg.get("content", "")
+    chat_id = payload.get("chatId")
+    opt_id = payload.get("optimisticMessageId")
+
+    db = SessionLocal()
+    try:
+        # --- 1. Save User Message to UI Table ---
+        user_ui_entry = ZepZepAdaUI(
+            session_id=chat_id,
+            component_name="chat_message",
+            ui_state_json=json.dumps({
+                "sender": "user",
+                "content": user_content
+            })
+        )
+        db.add(user_ui_entry)
+        db.commit()
+
+        # Acknowledge to UI
+        await send_ws_json(send, "user_message_saved", {
+            "id": opt_id,
+            "chat_id": chat_id,
+            "sender": "user",
+            "content": user_content,
+            "created_at": datetime.now().isoformat()
+        })
+
+        # --- 2. GENERATE (The Brain) ---
+        response_text = "System Notice: Cortex Agent not linked."
+        if 'cortex_text_interaction' in globals():
+            # This will write to the 'Interaction' table internally for the brain's use
+            response_text = await cortex_text_interaction.direct_generate(
+                db=db,
+                user_input=user_content,
+                session_id=chat_id
+            )
+
+        # --- 3. Save AI Response to UI Table ---
+        ai_ui_entry = ZepZepAdaUI(
+            session_id=chat_id,
+            component_name="chat_message",
+            ui_state_json=json.dumps({
+                "sender": "assistant",
+                "content": response_text
+            })
+        )
+        db.add(ai_ui_entry)
+        db.commit()
+
+        # Send back to UI
+        await send_ws_json(send, "full_response", {
+            "content": response_text,
+            "optimisticMessageId": opt_id,
+            "chatId": chat_id
+        })
+    except Exception as e:
+        logger.error(f"Generation Failed: {e}")
+        await send_ws_json(send, "error", {"message": "Thinking process failed."})
+    finally:
+        db.close()
+
+
+async def handle_ws_delete_chat(send, payload):
+    chat_id = payload.get("chatId")
+    db = SessionLocal()
+    try:
+        # Only delete from the UI view, keeping the brain's memories (Interaction table) intact
+        # or delete both if you prefer total amnesia. Here we delete just UI view.
+        db.query(ZepZepAdaUI).filter(ZepZepAdaUI.session_id == chat_id).delete()
+        db.commit()
+        await send_ws_json(send, "chat_deleted", {"chatId": chat_id})
+    finally:
+        db.close()
+
+
+# --- 3. The Middleware (The Glue) ---
+class AdaptiveSystemMiddleware:
+    """
+    Wraps the Flask app to intercept /zepzepadaui traffic.
+    Routes WebSockets to the Native Handler above.
+    Routes HTTP REST to Flask (via WsgiToAsgi).
+    """
+
+    def __init__(self, flask_app, ws_handler):
+        from asgiref.wsgi import WsgiToAsgi
+        self.flask_asgi = WsgiToAsgi(flask_app)
+        self.ws_handler = ws_handler
+
+    async def __call__(self, scope, receive, send):
+        # Intercept WebSocket handshake for our specific route
+        if scope["type"] == "websocket" and scope["path"] == "/zepzepadaui":
+            await self.ws_handler(scope, receive, send)
+        else:
+            # Pass everything else to the Flask System
+            await self.flask_asgi(scope, receive, send)
+
+
 # --- System Setup ---
 SYSTEM_START_TIME = time.monotonic()
-system = Flask(__name__)  # Use Flask app
-
+system = Flask(__name__)  # Use Flask Server
+systemSocketPlug = AdaptiveSystemMiddleware(system, zep_ui_websocket_handler) #websocket glue system
 # Allowing recieving big dataset
 system.config["MAX_CONTENT_LENGTH"] = None
 
@@ -6837,6 +7080,13 @@ Output your response EXACTLY in this format:
         #complex_triggers = ["prove", "derive", "solve", "calculate", "equation", "explain", "analyze", "design", "how", "outline", "compare"]
         complex_triggers = ["93001r0a8sdas"] #Just disable it, it can create strange result tbh when accidentally triggered.
         is_complex = any(t in user_input.lower() for t in complex_triggers)
+        
+        skip_thinking = "/no_think" in user_input
+        if skip_thinking:
+            logger.info(f"🚀 No-Think Override: Bypassing snowball multi-node logic for {session_id}")
+            # Strip the command from the prompt to keep context clean
+            is_complex = False
+            user_input = user_input.replace("/no_think", "").strip()
         
         # --- PATH A: FAST PATH (One-Shot) ---
         if not is_complex and input_token_count < DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD:
@@ -13750,8 +14000,6 @@ def get_current_configurable_settings():
         "AGENTIC_RELAXATION_MODE",
         "AGENTIC_RELAXATION_PERIOD_SECONDS",
         # Llama.cpp Specific
-        "LLAMA_CPP_N_GPU_LAYERS",
-        "LLAMA_CPP_N_CTX",
         "LLAMA_CPP_VERBOSE",
         "LLAMA_WORKER_TIMEOUT",
         # Image Generation (FLUX & Refiner)
@@ -14514,6 +14762,9 @@ def handle_cortex_config():
     return jsonify({"error": "Method not allowed"}), 405
 
 
+# --- WEBSOCKET HANDLER FOR UI ---
+# This route MUST be handled by a server that supports websockets (Hypercorn)
+# Moved into the top
 # === NEW OpenAI Compatible Embeddings Route ===
 # AdelaideAlbertCortex -> Flask Routes Section
 
@@ -14524,41 +14775,34 @@ def handle_cortex_config():
 def handle_primed_ready_status():
     """
     Custom endpoint for the GUI to check if the initial startup benchmark
-    has completed, using an avionics-style "Power-on Self Test" message.
+    has completed, using the legacy T-minus countdown format.
     """
     req_id = f"req-primedready-{uuid.uuid4()}"
     logger.info(f"🚀 {req_id}: Received GET /primedready status check.")
+    
     elapsed_seconds = time.monotonic() - SYSTEM_START_TIME
-    expected_duration_seconds = 60.0
+    expected_duration_seconds = 10.0  # Set to 10 seconds per your request
+    
+    # Check if we are still in the priming phase
     if SYSTEM_IS_PRIMING and elapsed_seconds < expected_duration_seconds:
-        # If we are still within the expected time, show progress.
-        if elapsed_seconds < expected_duration_seconds:
-            status_payload = {
-                "primed_and_ready": False,
-                "status": f"Power-on Self Test in progress... Initializing core components (Expected T-{expected_duration_seconds - elapsed_seconds:.0f}s).",
-                "elp1_benchmark_ms": None,
-            }
-        # If startup is running longer than expected, show a warning.
-        else:
-            status_payload = {
-                "primed_and_ready": False,
-                "status": "POST WARNING: Power-on Self Test exceeded expected duration. System initialization is slow or may have stalled. Upgrade your system Zephy might upgraded itself beyond your system can handle",
-                "elp1_benchmark_ms": None,
-            }
-
-        return jsonify(status_payload), 200
-
-    # Case 2: The startup_tasks function has completed.
-    else:
-        # The system is now fully operational.
+        # math.ceil ensures we see "10" at start rather than "9"
+        remaining_time = math.ceil(expected_duration_seconds - elapsed_seconds)
+        
         status_payload = {
-            "primed_and_ready": True,
-            "status": "Power-on Self Test complete. All systems nominal. Ready for engagement.",
-            "elp1_benchmark_ms": BENCHMARK_ELP1_TIME_MS,  # The benchmark result is now valid to show
+            "primed_and_ready": False,
+            "status": f"Power-on Self Test in progress... T-minus {remaining_time:.0f} seconds.",
+            "elp1_benchmark_ms": None,
         }
         return jsonify(status_payload), 200
 
-    return jsonify(status_payload), 200
+    # The system is now fully operational
+    else:
+        status_payload = {
+            "primed_and_ready": True,
+            "status": "Power-on Self Test complete. All systems nominal. Ready for engagement.",
+            "elp1_benchmark_ms": BENCHMARK_ELP1_TIME_MS, 
+        }
+        return jsonify(status_payload), 200
 
 
 # --- Zephy specific SSE Notification Endpoint ---

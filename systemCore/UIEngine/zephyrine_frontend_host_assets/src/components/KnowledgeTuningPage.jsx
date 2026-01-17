@@ -7,10 +7,9 @@ import { v4 as uuidv4 } from 'uuid'; // Import uuidv4 for temporary file IDs
 // This is the LLM API endpoint for file uploads
 //const LLM_UPLOAD_API_URL = import.meta.env.VITE_LLM_FILE_UPLOAD_API_URL || 'http://localhost:11434/v1/files';
 //const LLM_UPLOAD_API_URL = '/v1/files';
-const LLM_UPLOAD_API_URL = '/api/v1/files';
-//const LLM_UPLOAD_API_URL = 'http://localhost:3001/api/v1/files';
+const LLM_UPLOAD_API_URL = '/v1/files';
 // This is your backend endpoint for saving/fetching metadata about files
-const METADATA_API_URL = '/api/v1/files';
+const METADATA_API_URL = '/v1/files';
 
 // Allowed file types based on common LLM fine-tuning support and specific MIME types
 const ALLOWED_MIME_TYPES = [

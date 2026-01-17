@@ -150,7 +150,7 @@ const InputArea = ({
         </div>
       </div>
       <p className="disclaimer-text">
-      Beta Developmental Version! Unexpected Behaviour or Self-awareness/Self-Consciousness incident/accident may occour! Use it with caution! And this is NOT AGI. Do not use as such!
+      Ada Build 0.1.0 Beta Developmental Version! Unexpected Behaviour or Self-awareness/Self-Consciousness incident/accident may occour! Use it with caution! And this is NOT AGI Nor an AI. Do not use as such! It's just an if and else program!
       </p>
     </div>
   );

@@ -12,44 +12,58 @@
 }
 /* Default Theme (Dark Mode) */
 :root,
-html.dark { /* Apply dark theme to :root by default AND when html has 'dark' class */
+html.dark { 
   /* --- User's New Core Palette (Dark Mode) --- */
   --primary-text: #d1d5db;
   --primary-text-alt: #ececf1;
   --secondary-text: #ffffff80;
-  --background: #34354158; /* Main background */
-  --background-mid: #2c2d30; /* Slightly lighter background elements */
-  --background-alt: #202123; /* Darker background elements or accents */
-  --surface: #27272727; /* Cards, modals, distinct surfaces */
-  --surface-alt: #56586992; /* Alternate surface, perhaps for hover or secondary elements */
-  --surface-alt-bright: #acacbe; /* Bright surface accent or text */
-  --tertiary: #3e3f4b; /* Tertiary elements or borders */
-  --accent: #f17b269e; /* Yellow accent */
-  --oppositeaccent: #ff581b; /* Contrasting accent */
-  --secondary: #62c645bd; /* Azure Turquoise Sweet Blue secondary color */
-  --error: #ff5d5d; /* Error color */
-  --overlay: rgba(62, 61, 61, 0.676); /* Overlay color */
-  --hover: hsla(240, 9%, 59%, 0.1); /* Hover effect color */
-  --border: rgb(64, 65, 79); /* Default border color */
-  --sidebar-background: #3a3b438c; /* Sidebar specific background */
-  --secondary-background-rgb: var(--secondary); /* If --secondary-background is #242424 */
-  --accent-color-rgb: var(--accent); /* If --accent-color is #6a0ded */
+  --background: #34354158; 
+  --background-mid: #2c2d30; 
+  --background-alt: #202123; 
+  --surface: #27272727; 
+  --surface-alt: #56586992; 
+  --surface-alt-bright: #acacbe; 
+  --tertiary: #3e3f4b; 
+  --accent: rgba(0, 198, 255, 0.85); 
+  --oppositeaccent: #0072ff;
+  --secondary: #62c645bd; 
+  --error: #ff5d5d; 
+  --overlay: rgba(62, 61, 61, 0.676); 
+  --hover: hsla(240, 9%, 59%, 0.1); 
+  --border: rgb(64, 65, 79); 
+  --sidebar-background: #3a3b438c; 
+  --secondary-background-rgb: var(--secondary); 
+  --accent-color-rgb: var(--accent);
 
-  /* --- User's New Shadow System (Dark Mode) --- */
+  /* --- LIQUID GLASS & NOISE ASSETS --- */
+  --noise-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
+  --glass-blur-strength: 16px;
+  --glass-background: rgba(40, 40, 45, 0.6);
+  
+  /* --- CHROMATIC ABERRATION (SCALE / SPREAD BASED) --- */
+  /* Red spreads out 1px, Cyan spreads out 2px, creating a radial scale fringe */
+  --chromatic-edge: 
+    0 0 0 1px rgba(255, 0, 0, 0.35),   /* Red Channel Scale */
+    0 0 0 2px rgba(0, 255, 255, 0.20), /* Cyan Channel Scale */
+    0 0 15px rgba(255, 255, 255, 0.1); /* General Glow */
+
+  --liquid-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+
+  /* --- User's New Shadow System --- */
   --small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.4),
     0 4px 8px -2px rgba(0, 0, 0, 0.4);
-  --shadow-color: #00000029; /* General shadow color */
+  --shadow-color: #00000029; 
   --shadow-color-less-intense: #00000007;
-  --shadow-intensity: 13; /* For custom shadow calculations if needed */
-  --shadow-disperse: 100px; /* For custom shadow calculations if needed */
+  --shadow-intensity: 13; 
+  --shadow-disperse: 100px; 
 
-  /* --- Adapted Chat Bubble Colors (Dark Mode) --- */
-  --user-message-bg: var(--accent);                 /* Yellow */
-  --user-message-text-color: var(--background-alt); /* Dark text (#202123) for contrast on yellow */
-  --assistant-message-bg: var(--secondary);          /* Azure Turquoise (#1a7f64) */
-  --assistant-message-text-color: var(--primary-text-alt); /* Light text (#ececf1) for contrast */
+  /* --- Adapted Chat Bubble Colors --- */
+  --user-message-bg: var(--accent);                 
+  --user-message-text-color: var(--background-alt); 
+  --assistant-message-bg: var(--secondary);          
+  --assistant-message-text-color: var(--primary-text-alt); 
   
-  /* --- Preserved/Adapted Layout & Utility Variables --- */
+  /* --- Layout & Utility --- */
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 70px;
   --header-height: 60px;
@@ -59,27 +73,27 @@ html.dark { /* Apply dark theme to :root by default AND when html has 'dark' cla
   --font-family-mono: 'IBM Plex Mono', 'Courier New', Courier, monospace;
   --font-family-title: 'TitleFont', var(--font-family-sans);
 
-  /* Using user's new border radius variables and preserving others */
-  --rounded-border: 10px; /* From user's new palette */
-  --rounded-button: 25px; /* From user's new palette */
-  --border-radius-small: 4px;
-  --border-radius-medium: var(--rounded-border); /* Mapped to new var */
-  --border-radius-large: 16px; /* Kept as a distinct size */
-  --border-radius-xl: var(--rounded-button); /* Mapped to new var */
+  /* --- ROUNDED UI UPDATE --- */
+  --rounded-border: 25px;       
+  --rounded-button: 50px;       
+  --border-radius-small: 8px;   
+  --border-radius-medium: var(--rounded-border); 
+  --border-radius-large: 35px;  
+  --border-radius-xl: var(--rounded-button); 
   --border-radius-pill: 50px;
 
-  /* Preserved Status Colors (Error is from new palette) */
+  /* Preserved Status Colors */
   --success-color: #4caf50;
   --warning-color: #ff9800;
   --info-color: #2196f3;
 
-  /* Scrollbar Colors (Dark Mode) */
-  --scrollbar-thumb-color: var(--surface-alt-bright); /* #acacbe */
-  --scrollbar-track-color: var(--background-mid);   /* #2c2d30 */
-  --scrollbar-thumb-hover-color: var(--accent);     /* Yellow #FFFF00 */
+  /* Scrollbar Colors */
+  --scrollbar-thumb-color: var(--surface-alt-bright); 
+  --scrollbar-track-color: var(--background-mid);   
+  --scrollbar-thumb-hover-color: var(--accent);     
 }
 
-/* Light Mode Theme - Apply when html has 'light' class */
+/* Light Mode Theme */
 html.light {
   /* --- User's New Core Palette (Light Mode) --- */
   --primary-text: #222222; 
@@ -92,33 +106,51 @@ html.light {
   --surface-alt: #7575755e;
   --surface-alt-bright: #acacbe;
   --tertiary: #f1f1f1;
-  --accent: #f17b269e; /* Yellow accent */
-  --oppositeaccent: #ff581b;
-  --secondary: #62c645bd; /* Azure Turquoise Sweet Blue secondary */
-  --error: #ff5d5d;
+  --accent: rgba(0, 198, 255, 0.85);
+  --oppositeaccent: #0072ff;
+  --secondary: #62c645bd; 
+  --error: #ff5d5d; 
   --overlay: rgba(240, 240, 240, 0.34);
   --hover: hsla(240, 9%, 59%, 0.1);
-  --border: #dddddd; /* Changed from #ffffff to be visible on white bg */
+  --border: #dddddd; 
   --sidebar-background: #ffffff8c; 
   --secondary-background-rgb: var(--secondary);
   --accent-color-rgb: var(--accent);
 
-  /* --- User's New Shadow System (Light Mode) --- */
+  /* --- LIQUID GLASS & NOISE (Light Mode) --- */
+  --glass-background: rgba(255, 255, 255, 0.65);
+  
+  /* --- CHROMATIC ABERRATION (SCALE / SPREAD BASED) --- */
+  --chromatic-edge: 
+    0 0 0 1px rgba(255, 0, 0, 0.2),   /* Red Channel Scale */
+    0 0 0 2px rgba(0, 255, 255, 0.2), /* Cyan Channel Scale */
+    0 4px 20px rgba(0, 0, 0, 0.1);    /* Soft Drop Shadow */
+
+  /* --- User's New Shadow System --- */
   --small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.1),
     0 4px 8px -2px rgba(0, 0, 0, 0.1);
   --shadow-color: #00000029;
   --shadow-color-less-intense: #0000000f;
   --shadow-intensity: 13;
   --shadow-disperse: 100px;
-  --contrast-black-overlay: #525252; /* Specific to light theme from user's snippet */
+  --contrast-black-overlay: #525252; 
 
-  /* --- Adapted Chat Bubble Colors (Light Mode) --- */
-  --user-message-bg: var(--accent);      /* Yellow #FFFF00 */
-  --user-message-text-color: var(--primary-text); /* Dark text (#383838) for light mode on yellow */
-  --assistant-message-bg: var(--secondary); /* Azure Turquoise (#1a7f64) */
-  --assistant-message-text-color: #FFFFFF;   /* White text for light mode on turquoise */
+  /* --- Adapted Chat Bubble Colors --- */
+  --user-message-bg: var(--accent);      
+  --user-message-text-color: var(--primary-text); 
+  --assistant-message-bg: var(--secondary); 
+  --assistant-message-text-color: #FFFFFF;   
 
-  /* --- Preserved/Adapted Layout & Utility Variables (mostly same as dark, defined for completeness) --- */
+  /* --- ROUNDED UI UPDATE (Light Mode) --- */
+  --rounded-border: 25px;       
+  --rounded-button: 50px;       
+  --border-radius-small: 8px;
+  --border-radius-medium: var(--rounded-border);
+  --border-radius-large: 35px;
+  --border-radius-xl: var(--rounded-button);
+  --border-radius-pill: 50px;
+
+  /* Preserved Variables */
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 70px;
   --header-height: 60px;
@@ -127,25 +159,45 @@ html.light {
   --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-family-mono: 'IBM Plex Mono', 'Courier New', Courier, monospace;
   --font-family-title: 'TitleFont', var(--font-family-sans);
-  
-  /* Using user's new border radius variables */
-  --rounded-border: 8px; 
-  --rounded-button: 25px;
-  --border-radius-small: 4px;
-  --border-radius-medium: var(--rounded-border);
-  --border-radius-large: 16px;
-  --border-radius-xl: var(--rounded-button);
-  --border-radius-pill: 50px;
 
-  /* Preserved Status Colors */
   --success-color: #4caf50;
   --warning-color: #ff9800;
   --info-color: #2196f3;
 
-  /* Scrollbar Colors (Light Mode) */
-  --scrollbar-thumb-color: #b0b0b0; /* Darker grey for light track */
-  --scrollbar-track-color: var(--background-mid);    /* #f4f4f4 */
-  --scrollbar-thumb-hover-color: #909090;      /* Darker grey hover */
+  --scrollbar-thumb-color: #b0b0b0; 
+  --scrollbar-track-color: var(--background-mid);    
+  --scrollbar-thumb-hover-color: #909090;      
+}
+
+/* Liquid Frosted Glass */
+
+.liquid-glass {
+  /* Blur the background behind the element */
+  backdrop-filter: blur(var(--glass-blur-strength)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strength)) saturate(180%);
+  
+  /* Base background color */
+  background-color: var(--glass-background);
+  
+  /* Liquid feel: Borders and Highlights */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--chromatic-edge), var(--small-shadow);
+  
+  /* Prepare for Noise Overlay */
+  position: relative;
+  overflow: hidden; /* Contains the noise pseudo-element */
+}
+
+/* The Noise Layer (Pseudo-element) */
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: var(--noise-texture);
+  opacity: 0.7; /* Adjust noise intensity */
+  pointer-events: none; /* Let clicks pass through */
+  z-index: -1; /* Sit behind the text/content */
+  mix-blend-mode: overlay; /* Blends noise nicely with background */
 }
 
 

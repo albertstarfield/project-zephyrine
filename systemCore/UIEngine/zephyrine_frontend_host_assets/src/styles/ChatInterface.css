@@ -22,21 +22,30 @@
   /* margin-bottom: 0.5rem; */
 }
 
+
 .chat-interface {
+  position: relative; 
   display: flex;
-  justify-content: center; /* Center the selector */
-  padding: 0.75rem 1rem; /* Padding around the selector */
-  margin-bottom: 0.5rem; /* Space below selector */
-  /* background-color: var(--surface-low); Optional background */
-  border-radius: 0.5rem; /* Optional rounding */
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  text-align: center;
-  color: var(--text-primary);
-  font-weight: 500;
-  font-size: 1rem;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
+
+/* The scrollable feed */
+.chat-feed {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1rem;
+  
+  /* CRITICAL: Add huge bottom padding so the last message 
+     clears the floating input capsule */
+  padding-top: 120px; /* Space for the floating top input */
+  padding-bottom: 20px; /* Reset bottom padding */
+  
+  scroll-behavior: smooth;
+}
+
 
 .chat-model-selector:hover {
   background-color: var(--background-hover);
@@ -49,19 +58,10 @@
 }
 
 /* Adjust padding/margin within the chat area wrapper */
-.chat-area-wrapper #feed {
-  /* Adjust padding if selector takes up space */
-  /* padding-top: 0; */ /* Example: remove top padding if selector handles it */
-}
+
 
 /* --- Collapsible History Styles --- */
 
-.chat-interface {
-  display: flex;
-  flex-direction: column;
-  height: 100%; /* Ensure it takes full height */
-  overflow: hidden; /* Prevent main container scroll */
-}
 
 .chat-history-header {
   display: flex;

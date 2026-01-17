@@ -20,7 +20,7 @@ import SplashScreen from "./components/SplashScreen";
 // NEW: Import PreSplashScreen
 import PreSplashScreen from "./components/PreSplashScreen";
 
-import ShuttleDisplay from "./components/ShuttleDisplay"; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/components/WingModePage.jsx]
+import ShuttleDisplay from "./components/ShuttleDisplay"; 
 import SettingsModal from "./components/SettingsModal";
 import ThemedBackground from "./components/ThemedBackground";
 
@@ -32,7 +32,7 @@ import { useThemedBackground } from './hooks/useThemedBackground';
 
 import { useStarBackground } from './hooks/useStarBackground';
 import StarParticle from './components/StarParticle';
-import { useWingModeTransition } from './hooks/useWingModeTransition'; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/hooks/useWingModeTransition.js]
+import { useWingModeTransition } from './hooks/useWingModeTransition'; 
 
 
 // Stylesheet Imports
@@ -45,14 +45,15 @@ import 'katex/dist/katex.min.css';
 import "./styles/components/_splashScreen.css";
 // NEW: Import pre-splash screen CSS
 import "./styles/components/_preSplashScreen.css";
-import "./styles/components/_wingModePage.css"; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/styles/components/_wingModePage.css]
+import "./styles/components/_wingModePage.css"; 
 
 
 
 //const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
 import { FrontendBackendRecieve } from './config'; // Import the helper
 const backendHttpUrl = window.FrontendBackendRecieve || "http://localhost:3001";
-const WEBSOCKET_URL = backendHttpUrl.replace(/^http/, 'ws');
+//const WEBSOCKET_URL = backendHttpUrl.replace(/^http/, 'ws');
+const WEBSOCKET_URL = backendHttpUrl.replace(/^http/, 'ws') + "/zepzepadaui";
 const AppContent = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -177,7 +178,8 @@ const AppContent = () => {
     handleDeleteChat
   } = useChatHistory(getWsInstance);
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // MODIFIED: Set default state to false (Collapsed)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   //const [isVoiceAssistantVisible, setIsVoiceAssistantVisible] = useState(false); 
   const [isConnected, setIsConnected] = useState(false);
 
@@ -316,7 +318,8 @@ const AppContent = () => {
 
       <ThemedBackground />
 
-      <div className={`sidebar-overlay ${!isSidebarOpen ? 'active' : ''}`} onClick={toggleSidebar}></div>
+      {/* MODIFIED: Overlay should be active when sidebar IS open, not when it is NOT open */}
+      <div className={`sidebar-overlay ${isSidebarOpen ? 'active' : ''}`} onClick={toggleSidebar}></div>
     
 
       <div id="main-app-content" style={{ 

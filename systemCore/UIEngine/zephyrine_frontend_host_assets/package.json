@@ -35,7 +35,8 @@
     "uuid": "^10.0.0",
     "vite-plugin-pwa": "^0.2.1",
     "pixi-live2d-display": "^0.4.0",
-    "pixi.js": "^7.4.2" 
+    "pixi.js": "^7.4.2",
+    "html2canvas": "^1.4.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

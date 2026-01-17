@@ -22,8 +22,6 @@ const settingMetadata = {
     RESPONSE_TIMEOUT_MS: { desc: "Timeout in milliseconds for a multi-step generation process to complete.", min: 5000, max: 60000, step: 1000 },
     AGENTIC_RELAXATION_PERIOD_SECONDS: { desc: "The time period (in seconds) over which the agentic relaxation cycle occurs.", min: 0.1, max: 10, step: 0.1 },
     ACTIVE_CYCLE_PAUSE_SECONDS: { desc: "Brief pause between batches during an active reflection cycle.", min: 0, max: 5, step: 0.1 },
-    LLAMA_CPP_N_GPU_LAYERS: { desc: "Number of model layers to offload to the GPU (-1 for all possible).", min: -1, max: 128, step: 1 },
-    LLAMA_CPP_N_CTX: { desc: "The context window size for the LLM.", min: 2048, max: 32768, step: 1024 },
     LLAMA_CPP_VERBOSE: { desc: "Enable verbose logging from the llama.cpp backend." },
     REFINEMENT_MODEL_ENABLED: { desc: "Enable the secondary model to refine generated images." },
     REFINEMENT_STRENGTH: { desc: "How much the refiner model alters the initial image (0.0-1.0).", min: 0, max: 1, step: 0.05 },
@@ -42,12 +40,12 @@ const settingMetadata = {
 const settingCategories = [
   { title: "UI Theme", emoji: "🎨", keys: ["THEME"] },
   { title: "General", emoji: "⚙️", keys: ["MEMORY_SIZE", "ANSWER_SIZE_WORDS", "TOPCAP_TOKENS", "DEFAULT_LLM_TEMPERATURE"] },
-  { title: "RAG & Indexing", emoji: "📚", keys: ["ENABLE_FILE_INDEXER", "RAG_FILE_INDEX_COUNT", "RAG_URL_COUNT", "FUZZY_SEARCH_THRESHOLD"] },
+  { title: "Augmented Indexing", emoji: "📚", keys: ["ENABLE_FILE_INDEXER", "RAG_FILE_INDEX_COUNT", "RAG_URL_COUNT", "FUZZY_SEARCH_THRESHOLD"] },
   // START: Updated Category Title
-  { title: "Self Improvement: Augmented Fine-Tuning", emoji: "🧠", keys: ["ENABLE_SELF_REFLECTION", "ENABLE_PROACTIVE_RE_REFLECTION", "PROACTIVE_RE_REFLECTION_CHANCE", "MIN_AGE_FOR_RE_REFLECTION_DAYS", "SELF_REFLECTION_MAX_TOPICS", "REFLECTION_BATCH_SIZE"] },
+  { title: "Augmented Self Improvement", emoji: "🧠", keys: ["ENABLE_SELF_REFLECTION", "ENABLE_PROACTIVE_RE_REFLECTION", "PROACTIVE_RE_REFLECTION_CHANCE", "MIN_AGE_FOR_RE_REFLECTION_DAYS", "SELF_REFLECTION_MAX_TOPICS", "REFLECTION_BATCH_SIZE"] },
   // END: Updated Category Title
   { title: "Image Generation", emoji: "🖼️", keys: ["REFINEMENT_MODEL_ENABLED", "REFINEMENT_STRENGTH", "REFINEMENT_CFG_SCALE", "REFINEMENT_ADD_NOISE_STRENGTH"] },
-  { title: "LLM Backend", emoji: "🚀", keys: ["LLAMA_CPP_N_GPU_LAYERS", "LLAMA_CPP_N_CTX", "LLAMA_CPP_VERBOSE"] },
+  { title: "Lang Model Backend", emoji: "🚀", keys: ["LLAMA_CPP_N_GPU_LAYERS", "LLAMA_CPP_N_CTX", "LLAMA_CPP_VERBOSE"] },
   { title: "Stella Icarus Accelerator", emoji: "✈️", keys: ["ENABLE_STELLA_ICARUS_DAEMON", "ENABLE_STELLA_ICARUS_HOOKS", "INSTRUMENT_STREAM_RATE_HZ"] },
   { title: "System & DB", emoji: "💾", keys: ["ENABLE_DB_SNAPSHOTS", "DB_SNAPSHOT_INTERVAL_MINUTES", "DB_SNAPSHOT_RETENTION_COUNT", "LOG_BATCH_SIZE", "LOG_FLUSH_INTERVAL_SECONDS"] },
   { title: "Advanced", emoji: "🔬", keys: ["DEEP_THOUGHT_RETRY_ATTEMPTS", "RESPONSE_TIMEOUT_MS", "AGENTIC_RELAXATION_PERIOD_SECONDS", "ACTIVE_CYCLE_PAUSE_SECONDS"] },
@@ -171,7 +169,6 @@ const SettingsModal = ({ isVisible, onClose, onApply, isCriticalMission, onForce
     <div className="settings-modal-overlay" onClick={onClose}>
       <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="settings-modal-header">
-            <img src="/img/ProjectZephy023LogoRenewal.png" alt="Logo" className="settings-logo" />
             <h2>Settings</h2>
             <div className="warning-icon-placeholder">⚠️</div>
         </div>

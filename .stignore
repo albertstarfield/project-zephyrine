@@ -30,6 +30,7 @@ systemCore/engineMain/reverseEngineeringAssets/models
 **pythonBridgeRuntime**
 **universalPrompt.txt**
 **.log**
+**.flag**
 **.lock**
 *.log
 systemCore/main.log

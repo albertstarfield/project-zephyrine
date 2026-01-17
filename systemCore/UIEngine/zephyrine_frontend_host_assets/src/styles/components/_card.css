@@ -19,6 +19,7 @@
 .category:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 25px rgba(0, 0, 0, 0.25);
+  border-radius: 2rem;
 }
 
 .category-icon {
@@ -51,11 +52,11 @@
 
 /* Example Card within Category */
 .example-card {
-  background-color: rgba(240, 240, 245, 0.9); /* Use variables if possible */
+  background-color: rgba(240, 240, 245, 0.073); /* Use variables if possible */
   padding: 0;
   letter-spacing: 0.1px;
   font-size: 0.9rem; /* Default size */
-  border-radius: 10px;
+  border-radius: 2rem;
   width: 100%;
   color: #333; /* Use variables if possible */
   min-height: auto;
@@ -72,7 +73,7 @@
 .example-card button {
   width: 100%;
   height: 100%;
-  padding: 16px 20px; /* Default padding */
+  padding: 4px 5px; /* Default padding */
   text-align: center;
   background: none;
   border: none;
@@ -80,12 +81,13 @@
   font-size: 15px; /* Default size */
   line-height: 1.5;
   cursor: pointer;
+  border-radius: 2rem;
   transition: background-color 0.2s;
   font-family: "Inter", sans-serif;
 }
 
 .example-card:hover {
-  background-color: rgba(250, 250, 255, 1); /* Use variables if possible */
+  background-color: rgba(250, 250, 255, 0.167); /* Use variables if possible */
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }

@@ -1,23 +1,21 @@
 /*
  * Full _nightSky.css
- * Defines the dark blue gradient background and styles for SVG star particles.
- * This file is intended to be imported into a main stylesheet (e.g., App.css)
- * and works in conjunction with a conditional rendering of the `.svg-star-background`
- * element (typically when in dark mode).
+ * Defines the dark blue gradient background, styles for SVG star particles,
+ * and the drifting night clouds.
  */
 
 /*
- * Container for the SVG star particles and the night sky gradient.
- * This element will be rendered in App.jsx when in dark mode.
+ * Container for the SVG star particles, clouds, and night sky gradient.
+ * This element is rendered in ThemedBackground.jsx when theme === 'dark'.
  */
- .svg-star-background {
-  position: absolute; /* Occupy the full space of its parent (.background-container) */
+.svg-star-background {
+  position: absolute; /* Occupy the full space of its parent */
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none; /* Ensure stars don't interfere with mouse events */
-  overflow: hidden; /* Prevent scrollbars if stars extend beyond viewport */
+  pointer-events: none; /* Ensure background doesn't interfere with mouse events */
+  overflow: hidden; /* Prevent scrollbars */
 
   /* The dark blue gradient for the night sky */
   background: linear-gradient(
@@ -29,10 +27,27 @@
   background-size: 100% 100%;
 }
 
-/*
- * New Animation: Pop in, oscillate, then fade out
- * This animation will be applied to each individual SVG particle.
+/* * --- MOON GLOW (Optional Atmosphere) --- 
+ * Adds a subtle radial glow to the top-left corner
  */
+.svg-star-background::before {
+  content: "";
+  position: absolute;
+  top: -100px;
+  left: -100px;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(60, 80, 120, 0.2) 0%, transparent 70%);
+  filter: blur(50px);
+  z-index: 2; /* Sits above stars but below clouds/UI */
+  pointer-events: none;
+}
+
+/*
+ * --- STAR PARTICLES ---
+ */
+
+/* Star Animation: Pop in, oscillate, then fade out */
 @keyframes pop-oscillate-fade {
   0% {
     opacity: 0;
@@ -62,24 +77,105 @@
   }
 }
 
-/*
- * Styling for individual SVG particles.
- * Each SVG will be absolutely positioned and animated.
- */
+/* Styling for individual SVG star particles */
 .svg-star-background .star-particle-svg {
   position: absolute;
   transform: translate(-50%, -50%);
-  /* REMOVE THESE LINES: width and height will be set dynamically via inline style from component */
-  /* width: 25px; */
-  /* height: 25px; */
-  /* The animation will be applied dynamically in the React component (StarParticle.jsx) */
+  /* Size is set dynamically via inline styles in React */
+  
+  /* NEW: Add bloom effect matching the star color (#ffd885) */
+  /* We use two shadows: a tight, bright one for intensity, and a wider one for the glow */
+  filter: drop-shadow(0 0 2px rgba(255, 216, 133, 0.9)) drop-shadow(0 0 8px rgba(255, 216, 133, 0.6));
+  
+  /* Optional: Hint to browser for performance optimization */
+  will-change: transform, opacity;
 }
 
-/* Optional: Responsive adjustments for very small screens if needed */
+
+/*
+ * --- NIGHT CLOUDS ---
+ * Drifting, semi-transparent clouds for the dark theme.
+ */
+
+.night-cloud-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 3; /* Above stars and moon glow */
+  pointer-events: none;
+}
+
+/* Base Cloud Shape using CSS shadows to create "fluff" */
+.night-cloud {
+  position: absolute;
+  background: transparent;
+  width: 200px;
+  height: 60px;
+  border-radius: 200px;
+  opacity: 0.15; /* Very subtle opacity */
+  
+  /* The "Cloud" shape is created by casting multiple shadows from the main div */
+  box-shadow: 
+    0 0 40px 10px rgba(180, 200, 220, 0.4),  /* Moonlight Glow */
+    60px -30px 50px 15px rgba(180, 200, 220, 0.4),
+    120px 10px 60px 15px rgba(180, 200, 220, 0.4);
+    
+  /* Filter to blur it further for a wispy look */
+  filter: blur(20px); 
+}
+
+/* Specific Cloud Instances & Animations */
+
+.night-cloud-1 {
+  top: 15%;
+  left: -20%;
+  transform: scale(1.5);
+  animation: driftNight 120s linear infinite;
+}
+
+.night-cloud-2 {
+  top: 40%;
+  left: -20%;
+  transform: scale(1.2);
+  animation: driftNight 180s linear infinite;
+  animation-delay: -50s; /* Start halfway through animation */
+  opacity: 0.1; /* Even fainter */
+}
+
+.night-cloud-3 {
+  top: 70%;
+  left: -20%;
+  transform: scale(1.8);
+  animation: driftNight 150s linear infinite;
+  animation-delay: -20s;
+}
+
+/* Cloud Animation Keyframes */
+@keyframes driftNight {
+  0% {
+    left: -30%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.15; /* Fade in */
+  }
+  90% {
+    opacity: 0.15;
+  }
+  100% {
+    left: 110%; /* Move completely off screen */
+    opacity: 0;
+  }
+}
+
+/* Responsive adjustments */
 @media (max-width: 768px) {
-  .svg-star-background .star-particle-svg {
-    /* REMOVE THESE LINES TOO, or adjust the JS size generation range for mobile */
-    /* width: 18px; */
-    /* height: 18px; */
+  /* Optional: Adjust cloud size or count for mobile */
+  .night-cloud {
+    opacity: 0.1; /* Reduce opacity on smaller screens to avoid clutter */
+    transform: scale(0.8);
   }
 }

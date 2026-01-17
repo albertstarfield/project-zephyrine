@@ -13,8 +13,10 @@
 
 .character-image {
   width: 100%;
-  height: auto;
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2)); /* Use variables? */
+  height: 100%; /* Changed from auto to fill the container */
+  object-fit: cover; /* Ensures the image covers the circle without stretching */
+  border-radius: 50%; /* Crops the image to a circle */
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2)); 
   transition: transform 0.3s ease;
 }
 
