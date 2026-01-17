@@ -502,7 +502,7 @@ def _compile_and_run_watchdogs():
         # Construct the command with the new target included
         watchdog_command = [
             go_exe_path,
-            f"--targets={backend_process_name},node,{mesh_process_name}",  # ADDED mesh_process_name
+            f"--targets={backend_process_name},{mesh_process_name}",  # ADDED mesh_process_name
             f"--pid-file={ENGINE_PID_FILE}"
         ]
         start_service_process(watchdog_command, go_watchdog_dir, "GO-WATCHDOG")
@@ -519,11 +519,12 @@ def _compile_and_run_watchdogs():
         # to the Ada watchdog.
 
         # Define the command for the Go watchdog (same as before)
-        backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
-        backend_process_name = backend_exe_name.replace(".exe", "")
+        #backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+        #backend_process_name = backend_exe_name.replace(".exe", "")
+        # We do not use the classical Web "APP" anymore
         go_watchdog_command = [
             go_exe_path,
-            f"--targets={backend_process_name},node,{mesh_process_name}",
+            f"--targets={mesh_process_name}",
             f"--pid-file={ENGINE_PID_FILE}"
         ]
 
@@ -1021,9 +1022,11 @@ def start_engine_main():
 
     command = [
         HYPERCORN_EXECUTABLE,
-        "AdelaideAlbertCortex:system",
+        "AdelaideAlbertCortex:systemSocketPlug",
         "--bind", "127.0.0.1:11434",
         "--workers", "1",
+        "--keep-alive", "60",
+        "--graceful-timeout", "120",
         "--log-level", "info",
         "--pid", ENGINE_PID_FILE
     ]
@@ -1036,77 +1039,8 @@ def start_engine_main():
     # Based on the original code, this seems to be the intent.
     start_service_process(command, ENGINE_MAIN_DIR, name)
 
-
-def start_backend_service():
-    """
-    Launches the Ada backend service (Frontface).
-    Compiles using Alire/gprbuild before starting to ensure latest binary.
-    """
-    name = "BACKEND"
-    print_system(f"Preparing to launch {name} service from: {BACKEND_SERVICE_DIR}")
-
-    if not os.path.isdir(BACKEND_SERVICE_DIR):
-        print_error(f"Backend service directory not found: {BACKEND_SERVICE_DIR}")
-        sys.exit(1)
-
-    # 1. Check for Alire (alr)
-    if not shutil.which("alr"):
-        print_error("CRITICAL: 'alr' (Alire) not found. Cannot compile backend service.")
-        sys.exit(1)
-
-    # --- NEW: Ensure Dependencies (Auto-Install) ---
-    print_system(f"Ensuring Alire dependencies for {name} (AWS, GNATColl)...")
-    # We add dependencies programmatically. 'alr with' is idempotent.
-    # Note: We do not use '-y' as alr with is non-interactive by default.
-    deps_cmd = ["alr", "with", "aws", "gnatcoll_sqlite", "gnatcoll_json"]
-    if not run_command(deps_cmd, cwd=BACKEND_SERVICE_DIR, name=f"{name}-DEPS", check=False):
-        print_warning(f"Dependency check for {name} returned warnings (This is normal if already installed).")
-
-    # 2. Construct Build Command
-    build_cmd = ["alr", "exec", "--"]
-    
-    if not IS_WINDOWS:
-        build_cmd.extend(["env", "-u", "BUILD", "-u", "MODE", "-u", "bld", "-u", "mode"])
-    
-    # Standard gprbuild command
-    build_cmd.extend(["gprbuild", "-p"])
-
-    # macOS/Darwin Specific Linker Flags
-    if platform.system() == "Darwin":
-        try:
-            sdk_path = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
-            build_cmd.extend(["-largs", f"-L{sdk_path}/usr/lib"])
-            print_system(f"Applied macOS SDK flags for linker: {sdk_path}")
-        except Exception as e:
-            print_warning(f"Could not determine macOS SDK path: {e}. Build might fail.")
-
-    # 3. Execute Build
-    print_system(f"Building Ada backend to bin/: {' '.join(build_cmd)}")
-    if not run_command(build_cmd, cwd=BACKEND_SERVICE_DIR, name=f"{name}-BUILD", check=True):
-        print_error("Failed to build Ada backend service.")
-        sys.exit(1)
-
-    # 4. Locate and Launch Binary
-    binary_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
-    binary_path = os.path.join(BACKEND_SERVICE_DIR, "bin", binary_name)
-
-    if not os.path.exists(binary_path):
-        print_error(f"Build appeared successful, but binary missing at: {binary_path}")
-        sys.exit(1)
-
-    # MODIFIED: Added arguments for Proxy Target and Cognitive Backend
-    # --frontfaceProxyTarget: The port this service LISTENS on (11431)
-    # --backendCognitiveTarget: The port where the AI Engine (Hypercorn) runs (11434)
-    command = [
-        binary_path, 
-        "--frontfaceProxyTarget", "127.0.0.1:11431", 
-        "--backendCognitiveTarget", "http://127.0.0.1:11434"
-    ]
-
-    start_service_process(command, BACKEND_SERVICE_DIR, name)
-
 def start_frontend():
-    name = "FRONTEND-HOST"
+    name = "ZepZepAdaUI"
     
     # 1. Configuration
     HOST_IP = "127.0.0.1"
@@ -1136,7 +1070,7 @@ def start_frontend():
     command = [
         binary_path, 
         "--frontface", f"{HOST_IP}:{HOST_PORT}", 
-        "--backendRecieve", "http://127.0.0.1:11431"
+        "--backendRecieve", "http://127.0.0.1:11434"
     ]
 
     print_system(f"Launching Zephyrine UI Frontend on {HOST_IP}:{HOST_PORT}")
@@ -1154,7 +1088,6 @@ def check_and_restart_services():
     # We use the "_fast" versions for restarts to avoid re-compiling.
     restart_function_map = {
         "ENGINE": start_engine_main,
-        "BACKEND": start_backend_service_fast,
         "FRONTEND": start_frontend,
         "ZEPHYMESH-NODE": start_zephymesh_service_fast,
         "GO-WATCHDOG": start_watchdogs_service_fast, # Restarting one watchdog will restart both
@@ -1199,26 +1132,6 @@ def check_and_restart_services():
                 else:
                     print_warning(f"No restart rule found for dead service '{name}'. It will not be restarted.")
 
-def start_backend_service_fast():
-    """Fast-path version: Assumes the Ada backend is already compiled in bin/."""
-    name = "BACKEND"
-    
-    # The binary is located in the 'bin' subdirectory defined in the .gpr file
-    binary_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
-    binary_path = os.path.join(BACKEND_SERVICE_DIR, "bin", binary_name)
-
-    if not os.path.exists(binary_path):
-        print_error(f"FATAL (Fast Path): Backend executable not found at {binary_path}. Please run a full setup.")
-        return
-
-    # MODIFIED: Added arguments for Proxy Target and Cognitive Backend
-    command = [
-        binary_path, 
-        "--frontfaceProxyTarget", "127.0.0.1:11431", 
-        "--backendCognitiveTarget", "http://127.0.0.1:11434"
-    ]
-
-    start_service_process(command, BACKEND_SERVICE_DIR, name)
 
 def start_zephymesh_service_fast():
     """Fast-path version: Assumes ZephyMesh is compiled and launches it without waiting."""
@@ -1250,7 +1163,7 @@ def start_watchdogs_service_fast():
         mesh_process_name = "zephymesh_node_compiled"
         watchdog_command = [
             go_exe_path,
-            f"--targets={backend_process_name},node,{mesh_process_name}",
+            f"--targets={backend_process_name},{mesh_process_name}",
             f"--pid-file={ENGINE_PID_FILE}"
         ]
         start_service_process(watchdog_command, go_watchdog_dir, "GO-WATCHDOG")
@@ -1306,7 +1219,6 @@ def launch_all_services_in_parallel_and_monitor():
     core_dependency_threads = []
     tasks_to_launch_first = {
         "ZephyMesh": start_zephymesh_service_fast,
-        "Backend": start_backend_service_fast,
     }
     for name, task_func in tasks_to_launch_first.items():
         thread = threading.Thread(target=task_func, name=f"LaunchThread-{name}", daemon=True)
@@ -2185,10 +2097,7 @@ def restart_service_if_dead(process_entry):
         # start_engine_main appends to running_processes, so we will have a duplicate if we aren't careful.
         # The calling loop needs to handle the list update.
         return None # Signal that the list needs refreshing from the global
-        
-    elif name == "BACKEND":
-        start_backend_service_fast()
-        return None
+
         
     return process_entry
 
@@ -5542,8 +5451,6 @@ if __name__ == "__main__":
                     return
 
                 # Start Backend Service and Frontend
-                service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
-                time.sleep(2)
                 service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
 
                 print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.", "SUCCESS")

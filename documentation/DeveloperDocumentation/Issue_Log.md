@@ -1,3 +1,8 @@
+-   **ID:** UI-REFACTOR-006
+-   **Title:** Deprecate Ada Frontface and Integrate Native WebSocket UI
+-   **Status:** Resolved
+-   **Description:** This major refactor removes the Ada-based `frontfacebackendservice` and replaces it with a direct, high-performance WebSocket connection to the main Python backend (`AdelaideAlbertCortex.py`). A new native ASGI WebSocket handler (`/zepzepadaui`) has been implemented. The frontend has been completely overhauled with a new "liquid glass" design, a floating chat input, improved animations, and a streamlined user experience. A new `ZepZepAdaUI` database table has been introduced to separate UI state from the core interaction log.
+
 -   **ID:** CORTEX-FEAT-006
 -   **Title:** Implement Warden Memory Protection for LLM Calls
 -   **Status:** In-Progress
