@@ -323,12 +323,39 @@ const ChatFeed = ({
                     <p>Scroll down for usage examples</p>
                 </div>
                 <div className="example-categories">
-                    <div className="category"><div className="category-icon sun"><SunIconSVG /></div><h3>Plan Vacation</h3><div className="example-card"><button onClick={() => onExampleClick("Hi there, I want to have a relaxing summer vacation here. Can you make a list of recommended places where I should go?")}>"Hi there, I want to have a relaxing summer vacation here. Can you make a list of recommended places where I should go?"</button></div></div>
-                    <div className="category"><div className="category-icon sun"><SunIconSVG /></div><h3>Write Code</h3><div className="example-card"><button onClick={() => onExampleClick("Write a Python function to perform a quicksort on a list of integers.")}>"Write a Python function to perform a quicksort on a list of integers."</button></div></div>
-                    <div className="category"><div className="category-icon sun"><SunIconSVG /></div><h3>Summarize Text</h3><div className="example-card"><button onClick={() => onExampleClick("Summarize the main points of this article: [Paste article text or link here]")}>"Summarize the main points of this article: [Paste article text or link here]"</button></div></div>
-                    <div className="category"><div className="category-icon sun"><SunIconSVG /></div><h3>Explain Concept</h3><div className="example-card"><button onClick={() => onExampleClick("Explain the concept of quantum entanglement in simple terms.")}>"Explain the concept of quantum entanglement in simple terms."</button></div></div>
-                    <div className="category"><div className="category-icon sun"><SunIconSVG /></div><h3>Brainstorm Ideas</h3><div className="example-card"><button onClick={() => onExampleClick("Brainstorm some creative ideas for a new mobile app about personal finance.")}>"Brainstorm some creative ideas for a new mobile app about personal finance."</button></div></div>
-                    <div className="category"><div className="category-icon sun"><SunIconSVG /></div><h3>Recipe Suggestion</h3><div className="example-card"><button onClick={() => onExampleClick("Suggest a healthy dinner recipe using chicken and broccoli.")}>"Suggest a healthy dinner recipe using chicken and broccoli."</button></div></div>
+                    <div className="category">
+                        {/* Changed from h3 to span with class */}
+                        <span className="category-title">Casual</span>
+                        
+                        <div className="example-card">
+                            <button onClick={() => onExampleClick("Hi there, I want to have a relaxing summer vacation here. Can you make a list of recommended places where I should go?")}>
+                                "Hi there, I want to have a relaxing summer vacation here. Can you make a list of recommended places where I should go?"
+                            </button>
+                            <button onClick={() => onExampleClick("Brainstorm some creative ideas for a new mobile app about personal finance.")}>
+                                "Brainstorm some creative ideas for a new mobile app about personal finance."
+                            </button>
+                            <button onClick={() => onExampleClick("Suggest a healthy dinner recipe using chicken and broccoli.")}>
+                                "Suggest a healthy dinner recipe using chicken and broccoli."
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="category">
+                        {/* Changed from h3 to span with class */}
+                        <span className="category-title">Some Deep Dive</span>
+                        
+                        <div className="example-card">
+                            <button onClick={() => onExampleClick("Write a Python function to perform a quicksort on a list of integers.")}>
+                                "Write a Python function to perform a quicksort on a list of integers."
+                            </button>
+                            <button onClick={() => onExampleClick("Explain the concept of quantum entanglement in simple terms.")}>
+                                "Explain the concept of quantum entanglement in simple terms."
+                            </button>
+                            <button onClick={() => onExampleClick("Summarize the main points of this article: [Paste article text or link here]")}>
+                                "Summarize the main points of this article: [Paste article text or link here]"
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         );

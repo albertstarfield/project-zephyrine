@@ -28,7 +28,7 @@ except ImportError:
 
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, DateTime, Float, Boolean,
-    ForeignKey, Index, MetaData, update, desc, select, inspect as sql_inspect,
+    ForeignKey, Index, MetaData, update, desc, asc, select, inspect as sql_inspect,
     UniqueConstraint, text, CheckConstraint, Enum, JSON, or_
 )
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base, Session
@@ -322,6 +322,23 @@ class FileIndex(Base):
         return f"<FileIndex(path='{self.file_path[:50]}...', status='{self.index_status}', hash='{self.md5_hash}')>"
 
 
+
+class ZepZepAdaUI(Base):
+    __tablename__ = "zep_zep_ada_ui"
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # General purpose fields to support pulling Go/UI functions
+    session_id = Column(String, index=True, nullable=True)
+    user_id = Column(String, index=True, nullable=True)
+    component_name = Column(String, index=True, nullable=True) # e.g. "sidebar", "chat_config"
+    ui_state_json = Column(Text, nullable=True) # JSON blob for flexible state
+    
+    # You can add specific columns here if you have exact requirements from the Go backend
+    
+    def __repr__(self):
+        return f"<ZepZepAdaUI(id={self.id}, component='{self.component_name}')>"
 
 # --- END Database Models ---
 
@@ -1358,8 +1375,8 @@ EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = None
 
 print(f"[alembic/env.py] === STARTING IMPORTS ===", file=sys.stderr)
 try:
-    print(f"[alembic/env.py] Attempting: from database import Base, Interaction, SystemInteractionScriptAttempt, FileIndex, ScheduledThoughtTask", file=sys.stderr)
-    from database import Base, Interaction, SystemInteractionScriptAttempt, FileIndex, ScheduledThoughtTask
+    print(f"[alembic/env.py] Attempting: from database import Base, Interaction, SystemInteractionScriptAttempt, FileIndex, ScheduledThoughtTask, ZepZepAdaUI", file=sys.stderr)
+    from database import Base, Interaction, SystemInteractionScriptAttempt, FileIndex, ScheduledThoughtTask, ZepZepAdaUI
     print(f"[alembic/env.py]   Successfully imported from 'database'. Type of Base: {{type(Base)}}", file=sys.stderr)
 
     if Base is not None and hasattr(Base, 'metadata'):
@@ -1681,7 +1698,15 @@ datefmt = %H:%M:%S
         try:
             inspector = sql_inspect(engine_instance)
             table_names = inspector.get_table_names()
-            expected_tables = {'alembic_version', 'interactions', 'scriptingseqprogramminginterface_attempts', 'file_index', 'uploaded_file_records'}
+            expected_tables = {
+                'alembic_version', 
+                'interactions', 
+                'scriptingseqprogramminginterface_attempts', 
+                'file_index', 
+                'uploaded_file_records',
+                'scheduled_thought_tasks', # Missing in your current V17
+                'zep_zep_ada_ui'           # The new UI state table
+            }
             if not expected_tables.issubset(set(table_names)):
                 missing_tbl_str = f"Missing expected tables: {expected_tables - set(table_names)}"
                 logger.error(f"‼️ {log_prefix}: {missing_tbl_str}")

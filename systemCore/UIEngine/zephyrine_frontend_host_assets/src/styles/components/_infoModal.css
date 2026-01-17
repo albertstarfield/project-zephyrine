@@ -25,14 +25,42 @@
   }
   
   .info-modal-content {
-    background-color: var(--sidebar-background);
+    /* REMOVE or OVERRIDE previous solid backgrounds */
+    /* background-color: var(--sidebar-background); */
+    
+    /* APPLY Liquid Glass Styles directly */
+    backdrop-filter: blur(var(--glass-blur-strength)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--glass-blur-strength)) saturate(180%);
+    background-color: var(--glass-background);
+    box-shadow: var(--chromatic-edge), var(--small-shadow);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    
+    /* Standard Layout props */
     padding: 2rem 2.5rem;
     border-radius: var(--rounded-border);
-    border: 1px solid var(--border);
-    box-shadow: var(--small-shadow);
     text-align: center;
     max-width: 450px;
     animation: modalContentSlideIn 0.4s ease-out forwards;
+    
+    /* Enable Noise Pseudo-element positioning */
+    position: relative;
+    overflow: hidden; 
+  }
+  .info-modal-content::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: var(--noise-texture);
+    opacity: 0.6;
+    pointer-events: none;
+    z-index: 0; /* Background layer */
+    mix-blend-mode: overlay;
+  }
+
+  /* Ensure content sits above noise */
+  .info-modal-content > * {
+    position: relative;
+    z-index: 1;
   }
   
   .info-modal-content p {

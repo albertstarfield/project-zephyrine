@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import '../styles/components/_wingModePage.css';
 
 // API endpoint for the instrument data stream (now proxied via backend)
-const INSTRUMENT_DATA_API_URL = '/api/instrumentviewportdatastreamlowpriopreview';
+const INSTRUMENT_DATA_API_URL = '/instrumentviewportdatastreamlowpriopreview';
 
 const WingModePage = () => {
   const [instrumentData, setInstrumentData] = useState(null);

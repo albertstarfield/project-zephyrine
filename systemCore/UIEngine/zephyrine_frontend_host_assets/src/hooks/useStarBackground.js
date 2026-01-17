@@ -13,9 +13,9 @@ export const useStarBackground = () => {
   const newStarDataRef = useRef([]);
 
   const generateSingleStar = useCallback(() => {
-    const size = Math.random() * 2 + 1; // Range: 1 to 3 pixels for star size
+    const size = Math.random() * 14 + 7; // Range: 1 to 3 pixels for star size
     // NEW: Generate a random animation duration between 10 and 30 seconds
-    const duration = Math.random() * 20 + 10; // Range: 10 to 30 seconds
+    const duration = Math.random() * 30 + 10; // Range: 10 to 30 seconds
     return {
       id: Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 9),
       left: `${Math.random() * 100}%`,

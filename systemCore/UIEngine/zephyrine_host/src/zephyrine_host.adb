@@ -38,10 +38,20 @@ procedure Zephyrine_Host is
       -- Helper to determine if we should proxy
       function Is_Backend_Route return Boolean is
       begin
-         -- FIX: Ensure we include /health in the proxy rules if the frontend calls it directly
          return (URI'Length >= 4 and then URI (1 .. 4) = "/api")
            or else (URI'Length >= 3 and then URI (1 .. 3) = "/ws")
-           --or else (URI = "/health")
+           
+           -- 1. OpenAI Standard (Fixes /v1/files, /v1/chat, /v1/models)
+           or else (URI'Length >= 3 and then URI (1 .. 3) = "/v1")
+
+           -- 2. Your Custom System Routes
+           or else (URI = "/ZephyCortexConfig")
+           or else (URI = "/zepzepadaui")
+           
+           -- 3. The Stream Preview (NOW ENABLED)
+           or else (URI = "/instrumentviewportdatastreamlowpriopreview")
+
+           -- 4. Legacy Health Check
            or else (URI'Length >= 12 and then URI (1 .. 12) = "/primedready");
       end Is_Backend_Route;
 
@@ -71,7 +81,7 @@ procedure Zephyrine_Host is
             Result     : AWS.Response.Data;
             Method     : constant String := AWS.Status.Method (Request);
          begin
-            if URI = "/api/instrumentviewportdatastreamlowpriopreview" then
+            if URI = "/instrumentviewportdatastreamlowpriopreview" then
                Target_URI := To_Unbounded_String ("/instrumentviewportdatastreamlowpriopreview");
             end if;
 

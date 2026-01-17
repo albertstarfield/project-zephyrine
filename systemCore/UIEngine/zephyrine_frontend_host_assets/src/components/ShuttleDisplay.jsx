@@ -8,7 +8,7 @@ import '../styles/components/_shuttleDisplay.css';
 import '../styles/components/_hsiDisplay.css'; // <-- ADD THIS IMPORT
 
 
-const INSTRUMENT_DATA_API_URL = '/api/instrumentviewportdatastreamlowpriopreview';
+const INSTRUMENT_DATA_API_URL = '/instrumentviewportdatastreamlowpriopreview';
 
 const ShuttleDisplay = () => {
   const [instrumentData, setInstrumentData] = useState(null);

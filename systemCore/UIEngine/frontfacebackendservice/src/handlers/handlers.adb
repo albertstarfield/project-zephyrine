@@ -7,6 +7,8 @@ with Ada.Exceptions;
 
 with AWS.Messages;          use AWS.Messages;
 with AWS.MIME;
+with Ada.Streams;
+with AWS.Headers;
 with AWS.Status;
 with AWS.Response;
 with AWS.Client;            -- Required for Proxying
@@ -19,6 +21,35 @@ with Database;              -- Now we use the Database
 with Models;
 
 package body Handlers is
+
+   procedure Debug_Response (Resp : AWS.Response.Data; Context : String) is
+      use AWS.Messages;
+      use AWS.Headers;
+      H_List : constant AWS.Headers.List := AWS.Response.Header (Resp);
+   begin
+      Ada.Text_IO.Put_Line ("--- [DEBUG RESPONSE: " & Context & "] ---");
+      Ada.Text_IO.Put_Line ("Status: " & Image (AWS.Response.Status_Code (Resp)));
+      
+      for I in 1 .. Count (H_List) loop
+         Ada.Text_IO.Put_Line (Get_Name (H_List, I) & ": " & Get_Value (H_List, I));
+      end loop;
+      
+      -- FIX: Add String'(...) to resolve ambiguity
+      Ada.Text_IO.Put_Line ("Body Length: " & 
+        String'(AWS.Response.Message_Body (Resp))'Length'Image);
+        
+      Ada.Text_IO.Put_Line ("--------------------------------------");
+   end Debug_Response;
+
+   procedure Debug_Raw_Response (Resp : AWS.Response.Data; Context : String) is
+   begin
+      Ada.Text_IO.Put_Line ("--- [RAW DATA DEBUG: " & Context & "] ---");
+      
+      -- We explicitly qualify with String'(...) to avoid the 'ambiguous prefix' error
+      Ada.Text_IO.Put_Line ("Body: " & String'(AWS.Response.Message_Body (Resp)));
+      
+      Ada.Text_IO.Put_Line ("--------------------------------------");
+   end Debug_Raw_Response;
 
    ------------------
    -- Health_Check --
@@ -152,15 +183,26 @@ package body Handlers is
    ----------------------
    function Chat_Completions (Request : AWS.Status.Data) return AWS.Response.Data is
       use GNATCOLL.JSON;
-      Body_Str       : constant String := AWS.Status.Payload (Request);
+      -- AWS now fills this because of the Upload_Size_Limit config
+      Body_Str : constant String := AWS.Status.Payload (Request);
+      
       JSON_Req       : JSON_Value;
       Input_Sequence : Unbounded_String;
       System_Output  : Unbounded_String;
       JSON_Res       : JSON_Value := Create_Object;
    begin
+      -- Log to confirm the 39 bytes arrived
+      Ada.Text_IO.Put_Line ("[Debug] Chat Input: [" & Body_Str & "]");
+
+      if Body_Str = "" then
+         return AWS.Response.Build 
+           (Status_Code  => AWS.Messages.S400, 
+            Content_Type => AWS.MIME.Text_Plain,
+            Message_Body => "Empty Payload");
+      end if;
+
       begin
          JSON_Req := Read (Body_Str);
-         -- FIXED: Explicit typing to resolve ambiguity
          declare
             Prompt : constant String := JSON_Req.Get ("prompt");
          begin
@@ -171,7 +213,7 @@ package body Handlers is
             return AWS.Response.Build 
               (Status_Code  => AWS.Messages.S400, 
                Content_Type => AWS.MIME.Text_Plain,
-               Message_Body => "Invalid Data Sequence");
+               Message_Body => "Invalid JSON Format");
       end;
 
       System_Output := To_Unbounded_String
@@ -182,6 +224,7 @@ package body Handlers is
       JSON_Res.Set_Field ("reply", To_String (System_Output));
       JSON_Res.Set_Field ("model", "Snowball-Enaga");
       JSON_Res.Set_Field ("status", "nominal");
+
       return AWS.Response.Build 
         (Content_Type => AWS.MIME.Application_JSON, 
          Message_Body => Write (JSON_Res));
@@ -228,28 +271,21 @@ package body Handlers is
    function Instrument_Viewport_Preview (Request : AWS.Status.Data) return AWS.Response.Data is
       pragma Unreferenced (Request);
       
-      -- 1. Construct the target URL (e.g., http://localhost:11434/instrument...)
+      -- This targets the AI Engine (11434)
       Target_URL : constant String := 
          Cognitive_Lang_Resp.Get_Backend_URL & "/instrumentviewportdatastreamlowpriopreview";
-      
       Result : AWS.Response.Data;
    begin
-      Ada.Text_IO.Put_Line ("[Handler] Proxying Telemetry to: " & Target_URL);
-
-      -- 2. Fetch the REAL data from your Main Server (Python/Ollama/Flask)
+      -- AWS.Client.Get automatically handles the GET request to 11434
       Result := AWS.Client.Get(URL => Target_URL);
-
-      -- 3. Return the exact JSON received from the main server
       return Result;
-      
    exception
       when E : others =>
-         -- If the main server is offline, return a 502 Bad Gateway so the Frontend knows to show "NO CARRIER"
-         Ada.Text_IO.Put_Line ("[Error] Telemetry Stream Failed: " & Ada.Exceptions.Exception_Message (E));
-         return AWS.Response.Build 
+         -- FIX: Added Content_Type parameter
+         return AWS.Response.Build
            (Status_Code  => AWS.Messages.S502, 
-            Content_Type => AWS.MIME.Text_Plain, 
-            Message_Body => "Upstream Flight Computer Offline");
+            Content_Type => AWS.MIME.Text_Plain,
+            Message_Body => "Telemetry Offline");
    end Instrument_Viewport_Preview;
 
 
@@ -318,9 +354,12 @@ package body Handlers is
       Result     : AWS.Response.Data;
    begin
       Ada.Text_IO.Put_Line ("[Handler] Checking System Readiness: " & Target_URL);
-      
+      Debug_Response (Result, "/primedready step0 debug");
       -- Proxy the GET request directly to the AI Engine
       Result := AWS.Client.Get(URL => Target_URL);
+
+      Debug_Response (Result, "/primedready step1 debug");
+      Debug_Raw_Response (Result, "/primedready Step PrimedReady Body Content DEBUG");
       
       return Result;
    exception

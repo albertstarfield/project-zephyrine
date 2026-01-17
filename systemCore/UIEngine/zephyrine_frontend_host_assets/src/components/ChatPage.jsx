@@ -11,7 +11,8 @@ import "../styles/utils/_overlay.css";
 //const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
 import { FrontendBackendRecieve } from '../config'; // Import the helper
 const backendHttpUrl = window.FrontendBackendRecieve || "http://localhost:3001";
-const WEBSOCKET_URL = backendHttpUrl.replace(/^http/, 'ws');
+//const WEBSOCKET_URL = backendHttpUrl.replace(/^http/, 'ws');
+const WEBSOCKET_URL = backendHttpUrl.replace(/^http/, 'ws') + "/zepzepadaui";
 
 function ChatPage({
   systemInfo = { assistantName: "Zephyrine" },

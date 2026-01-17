@@ -13,18 +13,17 @@ package body Connection_Manager is
       procedure Add (User_ID : String; Socket : AWS.Net.WebSocket.Object) is
          New_Client : Client_Record;
       begin
-         New_Client.User_ID := To_Unbounded_String (User_ID);
-         New_Client.Socket_ID := Socket;
+         New_Client.User_ID      := To_Unbounded_String (User_ID);
+         New_Client.Socket_ID    := Socket;
          New_Client.Connected_At := 
-            Ada.Calendar.Formatting.Image (Ada.Calendar.Clock);
+           Ada.Calendar.Formatting.Image (Ada.Calendar.Clock)(1 .. 19);
 
-         -- Insert or Update
-         if Map.Contains (User_ID) then
-            Map.Replace (User_ID, New_Client);
-            Ada.Text_IO.Put_Line ("[WS_Manager] Updated connection for: " & User_ID);
+         if Clients.Contains (User_ID) then
+            Clients.Replace (User_ID, New_Client);
+            Ada.Text_IO.Put_Line ("[WS_Manager] Updated: " & User_ID);
          else
-            Map.Insert (User_ID, New_Client);
-            Ada.Text_IO.Put_Line ("[WS_Manager] New connection registered: " & User_ID);
+            Clients.Insert (User_ID, New_Client);
+            Ada.Text_IO.Put_Line ("[WS_Manager] New: " & User_ID);
          end if;
       end Add;
 
@@ -33,8 +32,8 @@ package body Connection_Manager is
       ------------
       procedure Remove (User_ID : String) is
       begin
-         if Map.Contains (User_ID) then
-            Map.Delete (User_ID);
+         if Clients.Contains (User_ID) then
+            Clients.Delete (User_ID);
             Ada.Text_IO.Put_Line ("[WS_Manager] Removed: " & User_ID);
          end if;
       end Remove;
@@ -44,28 +43,49 @@ package body Connection_Manager is
       ---------------
       function Is_Online (User_ID : String) return Boolean is
       begin
-         return Map.Contains (User_ID);
+         return Clients.Contains (User_ID);
       end Is_Online;
 
       -------------
       -- Send_To --
       -------------
       procedure Send_To (User_ID : String; Message : String) is
-         Client : Client_Record;
+         -- FIX: We need a local variable to act as a 'variable' actual parameter
+         Target_Client : Client_Record;
       begin
-         if Map.Contains (User_ID) then
-            Client := Map.Element (User_ID);
+         if Clients.Contains (User_ID) then
+            Target_Client := Clients.Element (User_ID);
+            AWS.Net.WebSocket.Send (Target_Client.Socket_ID, Message);
             
-            -- AWS Thread-Safe Send
-            AWS.Net.WebSocket.Send (Client.Socket_ID, Message);
-         else
-            Ada.Text_IO.Put_Line ("[WS_Manager] Warn: User not found for send: " & User_ID);
+            -- If Send modifies the socket state, we might need to 
+            -- replace the element back in the map, but usually, 
+            -- AWS Sockets are handles where this isn't strictly necessary.
          end if;
       exception
          when others =>
             Ada.Text_IO.Put_Line ("[WS_Manager] Error sending to: " & User_ID);
-            Remove (User_ID); -- Auto-cleanup on broken pipe
       end Send_To;
+
+      ---------------
+      -- Broadcast --
+      ---------------
+      procedure Broadcast (Message : String) is
+         use Client_Maps;
+         C : Cursor := Clients.First;
+         -- FIX: Local variable to hold the element during iteration
+         Current_Client : Client_Record;
+      begin
+         while Has_Element (C) loop
+            Current_Client := Element (C);
+            begin
+               AWS.Net.WebSocket.Send (Current_Client.Socket_ID, Message);
+            exception
+               when others => 
+                  Ada.Text_IO.Put_Line ("[WS_Manager] Failed broadcast item");
+            end;
+            Next (C);
+         end loop;
+      end Broadcast;
 
    end Store;
 

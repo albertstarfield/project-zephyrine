@@ -1,5 +1,6 @@
 pragma Ada_2022;
 with Ada.Text_IO;
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNATCOLL.SQL.Exec;     use GNATCOLL.SQL.Exec;
 with GNATCOLL.SQL.Sqlite;
@@ -133,7 +134,9 @@ package body Database is
    procedure Store_File_Record 
      (Filename, Filetype, User_ID, LLM_ID, Status : String) is
       Conn : Database_Connection := Get_Conn;
-      ID   : constant String := UUIDs.V4.UUID4'Image;
+      -- FIX: Trim the leading space from 'Image
+      Raw_ID : constant String := UUIDs.V4.UUID4'Image;
+      ID : constant String := Ada.Strings.Fixed.Trim (Raw_ID, Ada.Strings.Both);
    begin
       Execute
         (Conn,

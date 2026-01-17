@@ -18,28 +18,213 @@
 
 /* Apply dynamic positioning only on larger screens (desktop/tablet) */
 
-.input-container {
-  /* REMOVED margin: 0 auto; rely on parent flexbox */
-  margin: 0; /* Explicitly remove auto margins */
-  padding: 0 1rem 1rem; /* Default padding - keep left/right for internal spacing */
-  max-width: 40rem; /* Default max width */
-  width: 100%; /* Allow it to take available width *up to* max-width */
-  position: relative; /* Changed as requested */
-  /* bottom: 20px; // Handled by #form positioning */
-  background-color: transparent;
+.chat-interface {
   display: flex;
-  gap: 0.5rem;
-  align-items: flex-end; /* Align textarea and button bottom */
-  z-index: 51; /* Above form background */
-  pointer-events: none; /* Container itself isn't interactive */
-  box-sizing: border-box; /* Include padding in width calculation */
+  justify-content: center; /* Center the selector */
+  padding: 0.75rem 1rem; /* Padding around the selector */
+  margin-bottom: 0.5rem; /* Space below selector */
+  /* background-color: var(--surface-low); Optional background */
+  border-radius: 0.5rem; /* Optional rounding */
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  text-align: center;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 1rem;
+  flex-shrink: 0; /* Prevent shrinking */
 }
+
+.disclaimer-text {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--secondary-text); /* Ensure this isn't transparent */
+  margin-top: 8px;
+  opacity: 0.8;
+  width: 100%;
+}
+.input-wrapper.top-aligned {
+  position: absolute;
+  top: 15px; /* Aligned to the very top */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 850px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-area-container {
+  width: 100%;
+  border-radius: 50px;
+  background: var(--glass-background);
+  backdrop-filter: blur(var(--glass-blur-strength)) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: var(--chromatic-edge), var(--small-shadow);
+  display: flex;
+  align-items: flex-end;
+  padding: 8px;
+}
+
+.top-disclaimer {
+  font-size: 0.65rem;
+  color: var(--secondary-text);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 15px;
+  border-radius: 20px;
+  text-align: center;
+  backdrop-filter: blur(5px);
+  margin-bottom: 5px;
+}
+.input-area-container {
+  /* Absolute Positioning: This creates the true "Floating" effect */
+  position: absolute;
+  bottom: 2rem; /* Hover 2rem above the bottom edge */
+  left: 50%;
+  transform: translateX(-50%); /* Center it horizontally */
+  
+  /* Size Constraints */
+  width: 90%;
+  max-width: 800px;
+  min-height: 60px;
+  z-index: 1000; /* Ensure it sits ON TOP of chat messages */
+
+  /* Visuals: Glass Capsule */
+  border-radius: 50px; 
+  background: var(--glass-background);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 10px 40px -10px rgba(0, 0, 0, 0.5), /* Deep shadow for lift */
+    var(--chromatic-edge);                /* Subtle edge glow */
+
+  /* Internal Layout */
+  display: flex;
+  align-items: flex-end; 
+  padding: 0.5rem;
+  gap: 0.75rem;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.input-area-container:focus-within {
+  bottom: 2.2rem; /* Slight lift on focus */
+  background: rgba(40, 40, 50, 0.85); 
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 
+    0 20px 50px -10px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.chat-input {
+  flex-grow: 1;
+  background: transparent;
+  border: none;
+  color: var(--primary-text);
+  font-family: var(--font-family-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+  padding: 0.8rem 0.5rem;
+  min-height: 24px;
+  max-height: 200px;
+  resize: none;
+  outline: none;
+}
+
+.chat-input::placeholder {
+  color: var(--secondary-text);
+  opacity: 0.7;
+}
+
 
 .input-action-button.mic-active {
   color: var(--accent, #FFFF00); /* Use your theme's accent color */
   background-color: var(--hover, hsla(240, 9%, 59%, 0.1));
   box-shadow: 0 0 8px var(--accent, #FFFF00);
   animation: pulse-mic 1.5s infinite;
+}
+
+
+
+.input-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-bottom: 0.25rem;
+}
+
+/* Common Round Button Style */
+.input-action-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%; /* Perfect Circle */
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bouncy spring */
+  color: white;
+}
+
+.input-action-btn.secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--primary-text);
+}
+
+.input-action-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.1);
+}
+
+/* SEND BUTTON - The Fix */
+.input-action-btn.send-btn {
+  /* REPLACED 'var(--accent)' (Yellow/Orange) with a new Gradient */
+  background: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%); /* Electric Blue */
+  box-shadow: 0 4px 12px rgba(0, 114, 255, 0.4);
+}
+
+.input-action-btn.send-btn:hover:not(:disabled) {
+  transform: scale(1.1) rotate(-10deg); /* Playful tilt */
+  box-shadow: 0 6px 16px rgba(0, 114, 255, 0.6);
+  filter: brightness(1.1);
+}
+
+.input-action-btn.send-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.input-action-btn.send-btn:disabled {
+  background: #444;
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+/* Stop Button (Red) */
+.input-action-btn.stop-btn {
+  background: linear-gradient(135deg, #FF512F 0%, #DD2476 100%);
+  box-shadow: 0 4px 12px rgba(221, 36, 118, 0.4);
+}
+
+.input-action-btn.stop-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(221, 36, 118, 0.6);
+}
+
+.input-action-btn svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+}
+
+/* Adjustments for Mobile */
+@media (max-width: 768px) {
+  .input-area-container {
+    margin: 0 0.5rem 1rem 0.5rem;
+    border-radius: 30px;
+  }
 }
 
 @keyframes pulse-mic {
@@ -55,16 +240,15 @@
 }
 
 .input-field {
-  /* ... (styles for the inner field remain the same) ... */
   display: flex;
   align-items: center; /* Changed from flex-end to center */
   padding: 0.4rem;
   box-sizing: border-box;
-  background: var(--surface);
-  backdrop-filter: blur(10px);
+  background: var(--glass-background);
+  backdrop-filter: blur(var(--glass-blur-strength)) saturate(180%);
   box-shadow: 0 0 var(--shadow-disperse, 6px)
     var(--shadow-color, rgba(0, 0, 0, 0.1));
-  border-radius: 1.5rem;
+  border-radius: 3rem;
   border: solid 1px var(--hover);
   pointer-events: all;
   margin: 0;

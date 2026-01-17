@@ -65,13 +65,67 @@
 /* Layout for example categories */
 .example-categories {
   display: flex;
-  flex-direction: column; /* Stack vertically by default */
-  gap: 1.5rem; /* Space between categories */
+  flex-direction: column; /* Forces vertical list */
+  gap: 0.4rem; /* Reduced gap for a tighter list */
   padding: 0;
-  margin: 2rem auto 80px; /* Space around the category list */
+  margin: 1rem auto 4rem;
   width: 100%;
-  max-width: 800px; /* Match greeting text */
-  align-items: center; /* Center categories horizontally */
+  max-width: 600px; /* Constrain width for better readability */
+  align-items: stretch; /* Stretch items to fill width */
+}
+
+
+.category {
+  display: flex;
+  flex-direction: column; /* Stack Title and Button vertically */
+  text-align: left; /* Align text to the left */
+  width: 100%;
+}
+
+.category-title {
+  font-size: 0.85rem;
+  font-weight: 700; /* Bold */
+  color: var(--secondary-text);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+  margin-bottom: 0.8rem; /* Space between title and first button */
+  margin-left: 4px; /* Slight offset to align nicely with the button curve */
+}
+
+.category h3 {
+  margin: 0 0 0.5rem 0.5rem; /* Add slight indentation for the title */
+  font-size: 0.9rem;
+  color: var(--secondary-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.8;
+}
+
+.example-card {
+  display: flex;
+  flex-direction: column; /* Stack buttons vertically */
+  gap: 0.8rem; /* Adds spacing between each button inside the card */
+  width: 100%;
+}
+
+.example-card button {
+  width: 100%;
+  text-align: left;
+  padding: 1rem;
+  background-color: rgba(255, 255, 255, 0.05); /* Subtle background */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  color: var(--primary-text);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.example-card button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(5px); /* Subtle slide effect on hover */
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Input placeholder is styled in _input.css */
@@ -99,12 +153,12 @@
     } */
 
     .example-categories {
-      display: grid; /* Change to grid */
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* 3 columns, flexible width */
-      gap: 1.5rem; /* Space between grid items */
-      max-width: 960px; /* Adjust max-width for 3 columns */
-      align-items: flex-start; /* Align items to the start of their grid area */
-  }
+      /* Ensure it stays as a column even on large screens */
+      display: flex;
+      flex-direction: column;
+      max-width: 1024px; 
+      align-items: stretch;
+    }
   .category {
      width: auto; /* Let grid handle width */
      max-width: none; /* Remove max-width constraint for grid items */
