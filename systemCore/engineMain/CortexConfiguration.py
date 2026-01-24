@@ -47,7 +47,7 @@ FUZZY_DUPLICATION_THRESHOLD = 80  # Threshold for detecting rephrased/similar co
 # --- Constants for Embedding Chunking ---
 # This is the n_ctx the embedding model worker is configured with.
 # The log shows this was forced to 4096.
-EMBEDDING_MODEL_N_CTX = 4096
+EMBEDDING_MODEL_N_CTX = 4096 # all this time it was running on 4096 let's try again on 512 (nvm it's just go back to 4096)
 # Safety margin (15%) to account for tokenization differences and special tokens.
 EMBEDDING_TOKEN_SAFETY_MARGIN = 0.15
 # The final calculated token limit for any single batch sent to the embedding worker.

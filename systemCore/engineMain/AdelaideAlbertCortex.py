@@ -4902,6 +4902,17 @@ class CortexThoughts:
                 smallest_bin = min(self.provider.ctx_bins)
                 logger.warning(f"LLMCall|Warden: ⚠️ No bins fit within strict limit. Forcing smallest bin {smallest_bin}.")
                 feasible_bin = smallest_bin
+                
+        n_gpu_layers_override = None
+        
+        # Check if we are in a high-pressure scenario
+        if req_gb > avail_gb: 
+            logger.warning(f"LLMCall|Warden: 🛡️ Memory Pressure Detected (Req {req_gb:.2f}GB > Avail {avail_gb:.2f}GB).")
+            
+            # If we are strictly relying on the fallback (lowest bin) OR the pressure is significant:
+            if feasible_bin == min(self.provider.ctx_bins):
+                logger.warning("LLMCall|Warden: 🛑 PREVENTING UMA CRASH: Forcing n_gpu_layers to 0 (CPU Only Mode).")
+                n_gpu_layers_override = 0
 
         # 4. Truncation & Flush (The Sandwich)
         max_safe_tokens = final_bin - 128
@@ -4975,7 +4986,12 @@ class CortexThoughts:
                 try:
                     logger.trace(f"{log_prefix_call}: Invoking chain/model {type(chain)}...")
 
-                    llm_call_config = {"metadata": {"priority": priority}}
+                    llm_call_config = {
+                        "metadata": {
+                            "priority": priority,
+                            "n_gpu_layers_override": n_gpu_layers_override
+                        }
+                    }
                     # debug remove later
                     logger.info(f"LLMcall invoked PRI_{priority} call_config {llm_call_config}")
 
@@ -10029,8 +10045,11 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                         f"🧬 {log_prefix} DCTD: Running Vector Trajectory Prediction..."
                     )
 
-                    prediction_result = self.branch_predictor.predict_future_vector(
-                        temporal_sieve_data, current_embedding, previous_embedding
+                    prediction_result = await asyncio.to_thread( #Found out that this once ELP0 launched the /primedready become unresponsive why? there's a thread blocking and it turns out i forgot to do this part
+                        self.branch_predictor.predict_future_vector,
+                        temporal_sieve_data, 
+                        current_embedding, 
+                        previous_embedding
                     )
 
                     if prediction_result:
