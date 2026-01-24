@@ -92,3 +92,7 @@
     -   **Title:** Add initial GTK C application for native UI experiments.
     -   **Status:** In-Progress
     -   **Description:** This adds the initial directory structure and boilerplate for a GTK-based desktop application written in C. This is an experimental feature to explore native UI options for the UIEngine.
+-   **ID:** `SYS-REFACTOR-011`
+-   **Title:** Overhaul UI architecture, service naming, and persona.
+-   **Status:** `Resolved`
+-   **Description:** This commit introduces a major refactoring across the system. The frontend UI has been significantly reworked, replacing virtualized scrolling with a more direct rendering approach and implementing a more robust "fire-and-forget" WebSocket messaging architecture. The splash screen sequence was redesigned to include a warning. Service names within the launcher (`launcher.py`) have been standardized (e.g., `ZEPHYMESH-NODE` to `zephymeshHand`). The core assistant persona and system prompts in `CortexConfiguration.py` have been updated to be less confident and more cautious.

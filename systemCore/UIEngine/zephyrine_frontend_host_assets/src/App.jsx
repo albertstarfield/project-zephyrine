@@ -144,7 +144,7 @@ const AppContent = () => {
         if (logoElement) {
           logoElement.style.animation = 'splash-logo-fade-out 1s ease-in forwards';
         }
-      }, 2500); // Start logo fade-out after 2.5 seconds (adjust timing as needed)
+      }, 2500); 
 
       // Phase 3: After logo fades out (1s duration), fade out the overlay
       overlayFadeOutTimer = setTimeout(() => {
@@ -152,7 +152,8 @@ const AppContent = () => {
         if (overlayElement) {
           overlayElement.classList.remove('visible'); // Triggers fade-out via CSS
         }
-      }, 3500); // Start overlay fade-out after 3.5 seconds (adjust timing)
+      }, 16000); // Start overlay fade-out (TimeBudget)
+      // Splash Screen timing total budget (If you add something on thhe Splash Screen and need additional time, don't forget to add this too keyword: TotalTimefraemBudgetSplash)
 
       // Phase 4: This will now be handled by onTransitionEnd in SplashScreen.jsx -> handleSplashScreenFadeOutComplete
     }

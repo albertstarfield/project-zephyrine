@@ -14,6 +14,27 @@ const backendHttpUrl = window.FrontendBackendRecieve || "http://localhost:3001";
 //const WEBSOCKET_URL = backendHttpUrl.replace(/^http/, 'ws');
 const WEBSOCKET_URL = backendHttpUrl.replace(/^http/, 'ws') + "/zepzepadaui";
 
+/* ARCHITECTURAL NOTE: "Async Recieve / Not Idealistic Sent"
+   ---------------------------------------------------------
+   This component implements a "Fire-and-Forget" messaging model.
+   
+   1. SENT (The Trigger): 
+      When the user clicks send, we capture the timestamp immediately (Client Time) 
+      and render an optimistic bubble. We do NOT wait for the server to acknowledge 
+      receipt before letting the user continue. The request is "thrown" to the backend.
+   
+   2. RECIEVED (The Eventual Consistency):
+      The backend processes the message at its own pace (async). When it's done, 
+      it emits a 'user_message_saved' event. The frontend listens for this 
+      asynchronously.
+      
+   3. RECONCILIATION:
+      When the 'received' event arrives, we locate the original "sent" bubble 
+      (using the optimistic ID or content matching) and stamp it as 'delivered'.
+      We do not block. We do not enforce a strict "Turn-Based" (flip-flop) lock.
+      Multiple messages can be "in-flight" simultaneously.
+*/
+
 function ChatPage({
   systemInfo = { assistantName: "Zephyrine" },
   user = null,
@@ -41,9 +62,7 @@ function ChatPage({
   const currentAssistantMessageId = useRef(null);
   const accumulatedContentRef = useRef("");
   const isConnected = useRef(false);
-  //const streamingStartTimeRef = useRef(0);
-  const latestRequestRef = useRef(null); // <-- Add this line
-
+  
   useEffect(() => {
     setIsLoadingHistory(true);
     setError(null);
@@ -139,7 +158,6 @@ function ChatPage({
         setVisibleMessages(newVisibleMessages);
         setVisibleRange({ start: newStart, end: visibleRange.end });
 
-        // Preserve scroll position
         requestAnimationFrame(() => {
           const newScrollHeight = scrollContainerRef.current.scrollHeight;
           scrollContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
@@ -160,10 +178,10 @@ function ChatPage({
   }, [handleScroll]);
 
   useEffect(() => {
-    if (bottomRef.current && (visibleMessages[visibleMessages.length - 1]?.sender === 'user' || streamingAssistantMessage)) {
+    if (bottomRef.current && (visibleMessages[visibleMessages.length - 1]?.sender === 'user' || isGenerating)) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [visibleMessages]);
+  }, [visibleMessages, isGenerating]);
 
   const updateVisibleMessages = (newAllMessages) => {
     const messageCount = newAllMessages.length;
@@ -177,11 +195,6 @@ function ChatPage({
   const handleWebSocketMessage = useCallback((data) => {
     try {
       const message = JSON.parse(data);
-
-      if ((message.type === 'chunk' || message.type === 'end') && message.payload.optimisticMessageId !== latestRequestRef.current) {
-        // This message is from an old, cancelled stream. Ignore it completely.
-        return; 
-      }
 
       switch (message.type) {
         case "chat_history":
@@ -209,110 +222,139 @@ function ChatPage({
         case "full_response":
         case "chat":
           setIsGenerating(false);
-          const { content, optimisticMessageId, id: assistantMessageId } = message.payload; // Destructure new 'id' for assistant message
+          const { 
+            content: assistantContent, 
+            optimisticMessageId, 
+            id: assistantMessageId,
+            userMessage 
+          } = message.payload;
 
-          if (optimisticMessageId !== latestRequestRef.current) {
-            // This message is from an old, cancelled request. Ignore it completely.
-            console.warn("ChatPage: Incoming 'chat' message ignored due to old optimistic ID.");
-            return;
+          if (assistantContent && assistantContent.includes("*NoResponseForThisQuery*")) {
+              console.log("ChatPage: Received '*NoResponseForThisQuery*' flag. Silencing response.");
+              if (optimisticMessageId) {
+                  setAllMessages((prev) => {
+                      const updatedMessages = [...prev];
+                      let userIdx = updatedMessages.findIndex(m => m.id === optimisticMessageId);
+                      
+                      // Fallback: search by content + sending status
+                      if (userIdx === -1) {
+                         userIdx = updatedMessages.findIndex(m => 
+                            m.sender === 'user' && m.status === 'sending' && userMessage && m.content === userMessage.content
+                         );
+                      }
+
+                      if (userIdx !== -1) {
+                          updatedMessages[userIdx] = {
+                              ...updatedMessages[userIdx],
+                              id: userMessage && userMessage.id ? userMessage.id : updatedMessages[userIdx].id,
+                              status: 'delivered'
+                          };
+                          updateVisibleMessages(updatedMessages);
+                          return updatedMessages;
+                      }
+                      return prev;
+                  });
+              }
+              accumulatedContentRef.current = "";
+              currentAssistantMessageId.current = null;
+              return; 
           }
 
-          // Clear any streaming state, as this is a full response
-          
-          //accumulatedContentRef.current = "";
-          currentAssistantMessageId.current = null;
-
-
-          // Find the optimistic user message and append the assistant response
           setAllMessages((prev) => {
-            const updatedMessages = [];
-            let foundOptimisticUserMessage = false;
-            for (const msg of prev) {
-              updatedMessages.push(msg);
-              if (msg.id === optimisticMessageId && msg.sender === 'user') {
-                foundOptimisticUserMessage = true;
-                // Add the new assistant message after the user's optimistic message
-                updatedMessages.push({
-                  id: assistantMessageId || uuidv4(), // Use ID from backend payload, or generate
-                  sender: "assistant",
-                  content: content,
-                  chat_id: chatId,
-                  created_at: new Date().toISOString(),
-                  isLoading: false, // Mark as fully loaded
-                });
-              }
+            let updatedMessages = [...prev];
+
+            // Resolve the Pending User Message (sent via Optimistic UI)
+            let userIdx = -1;
+            if (optimisticMessageId) {
+                userIdx = updatedMessages.findIndex(m => m.id === optimisticMessageId);
             }
-            if (!foundOptimisticUserMessage) {
-                console.warn("ChatPage: Optimistic user message not found for incoming 'chat' type. Appending assistant message.");
-                updatedMessages.push({
-                    id: assistantMessageId || uuidv4(),
-                    sender: "assistant",
-                    content: content,
-                    chat_id: chatId,
-                    created_at: new Date().toISOString(),
-                    isLoading: false,
-                });
+            
+            // Fallback strategy if ID is missing (find last sending message with same content)
+            if (userIdx === -1 && userMessage) {
+                userIdx = updatedMessages.findIndex(m => 
+                    m.sender === 'user' && m.status === 'sending' && m.content === userMessage.content
+                );
             }
+
+            if (userIdx !== -1 && userMessage && userMessage.id) {
+                updatedMessages[userIdx] = {
+                  ...updatedMessages[userIdx],
+                  id: userMessage.id,
+                  status: 'delivered'
+                  // We do NOT update created_at here to preserve the "clicked time"
+                };
+            } else if (userIdx !== -1) {
+                updatedMessages[userIdx] = { ...updatedMessages[userIdx], status: 'delivered' };
+            }
+
+            const assistantExists = updatedMessages.some(m => m.id === assistantMessageId);
+            
+            if (!assistantExists) {
+              updatedMessages.push({
+                id: assistantMessageId || uuidv4(),
+                sender: "assistant",
+                content: assistantContent,
+                chat_id: chatId,
+                created_at: new Date().toISOString(),
+                isLoading: false,
+              });
+            }
+
             updateVisibleMessages(updatedMessages);
             return updatedMessages;
           });
 
-          // Trigger sidebar refresh if this was the first assistant response
-          const userMessagesInHistoryForChat = allMessages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
-          if (userMessagesInHistoryForChat === 1 && allMessages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
-                console.log("ChatPage: First assistant response (incoming 'chat' type) complete, calling triggerSidebarRefresh.");
-                triggerSidebarRefresh();
-          }
+          accumulatedContentRef.current = "";
+          currentAssistantMessageId.current = null;
           break;
 
-        
-        // --- START: Added Case to Handle Backend Errors ---
         case "error":
             console.error("ChatPage: Received error from backend:", message.payload?.message);
             setError(message.payload?.message || "An unknown error occurred on the backend.");
             setIsGenerating(false);
-            
             break;
-        // --- END: Added Case ---
 
         case "chunk":
           setIsGenerating(true);
           const contentChunk = message.payload.content;
           accumulatedContentRef.current += contentChunk;
 
-          const currentTime = Date.now();
-          const currentChars = accumulatedContentRef.current.length;
-          let tokensPerSecond = 0;
-
-
-          
-
           const currentContent = accumulatedContentRef.current;
           const displayContent = currentContent.replace(/<think>[\s\S]*?<\/think>/g, "");
           const hasOpenThink = currentContent.includes("<think>") && !currentContent.includes("</think>");
-          const isCurrentlyThinking = hasOpenThink;
           
-          setStreamingAssistantMessage((prev) => {
-            const newId = prev?.id || currentAssistantMessageId.current || `temp-stream-${uuidv4()}`;
-            if (!currentAssistantMessageId.current && !prev?.id) {
-                currentAssistantMessageId.current = newId;
-            }
-            return {
-              id: newId,
-              sender: "assistant",
-              //content: accumulatedContentRef.current, // (It's too long, and it's not needed most of the time)
-              content: displayContent,
-              chat_id: chatId,
-              created_at: prev?.created_at || new Date().toISOString(),
-              isLoading: true,
-              tokensPerSecond: tokensPerSecond.toFixed(1),
-              isThinking: isCurrentlyThinking,
-            };
-          });
+           if (typeof setStreamingAssistantMessage === 'function') {
+              setStreamingAssistantMessage((prev) => {
+                const newId = prev?.id || currentAssistantMessageId.current || `temp-stream-${uuidv4()}`;
+                if (!currentAssistantMessageId.current && !prev?.id) {
+                    currentAssistantMessageId.current = newId;
+                }
+                return {
+                  id: newId,
+                  sender: "assistant",
+                  content: displayContent,
+                  chat_id: chatId,
+                  created_at: prev?.created_at || new Date().toISOString(),
+                  isLoading: true,
+                  isThinking: hasOpenThink,
+                };
+              });
+           }
           break;
         case "end":
           setIsGenerating(false);
           const finalContent = accumulatedContentRef.current;
+
+          if (finalContent.includes("*NoResponseForThisQuery*")) {
+             console.log("ChatPage: Stream ended with NoResponse flag. Discarding.");
+             accumulatedContentRef.current = "";
+             currentAssistantMessageId.current = null;
+             if (typeof setStreamingAssistantMessage === 'function') {
+                setStreamingAssistantMessage(null);
+             }
+             return;
+          }
+
           const hasOpenThinkFinal = finalContent.replace(/<think>[\s\S]*?<\/think>/g, "");
           const isCurrentlyThinkingFinal = hasOpenThinkFinal;
 
@@ -322,9 +364,9 @@ function ChatPage({
               sender: "assistant",
               content: finalContent,
               chat_id: chatId,
-              created_at: streamingAssistantMessage?.created_at || new Date().toISOString(),
+              created_at: new Date().toISOString(),
               isLoading: false,
-              isThinking: isCurrentlyThinkingFinal,
+              isThinking: isCurrentlyThinkingFinal, 
             };
             setAllMessages((prev) => {
                 const existing = prev.find(msg => msg.id === finalMessage.id);
@@ -337,7 +379,8 @@ function ChatPage({
                 updateVisibleMessages(newMessages);
                 return newMessages;
             });
-            const userMessagesInHistory = allMessages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
+            // FIX 1: Safely handle integer IDs via String() cast
+            const userMessagesInHistory = allMessages.filter(m => m.sender === 'user' && !String(m.id).startsWith('temp-')).length;
             if (userMessagesInHistory === 1 && allMessages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
                  console.log("ChatPage: First assistant response complete, calling triggerSidebarRefresh.");
                  triggerSidebarRefresh();
@@ -346,24 +389,57 @@ function ChatPage({
           
           accumulatedContentRef.current = "";
           currentAssistantMessageId.current = null;
-          //streamingStartTimeRef.current = 0;
           break;
         case "user_message_saved":
-            const savedMessage = {
-                id: message.payload.id,
-                sender: message.payload.sender,
-                content: message.payload.content,
-                chat_id: message.payload.chat_id,
-                created_at: message.payload.created_at,
-                isLoading: false,
-                status: 'delivered',
-            };
-            setAllMessages(prev => {
-                const newAllMessages = [...prev, savedMessage];
-                updateVisibleMessages(newAllMessages);
-                return newAllMessages;
-            });
-            break;
+          // ARCHITECTURAL NOTE: "Recieved (The Eventual Consistency)"
+          setAllMessages(prev => {
+              // 1. Primary Strategy: Find the local message by Optimistic ID
+              let existingIndex = -1;
+              if (message.payload.optimisticMessageId) {
+                  existingIndex = prev.findIndex(m => m.id === message.payload.optimisticMessageId);
+              }
+
+              // 2. Fallback Strategy: Find by Content & Status
+              if (existingIndex === -1) {
+                  // Search backwards to find the most recent matching request
+                  for (let i = prev.length - 1; i >= 0; i--) {
+                      if (prev[i].sender === 'user' && 
+                          prev[i].status === 'sending' && 
+                          prev[i].content === message.payload.content) {
+                          existingIndex = i;
+                          break;
+                      }
+                  }
+              }
+              
+              const savedUserMessage = {
+                  id: message.payload.id,
+                  sender: message.payload.sender,
+                  content: message.payload.content,
+                  chat_id: message.payload.chat_id,
+                  created_at: message.payload.created_at, // Server time
+                  isLoading: false,
+                  status: 'delivered', 
+              };
+
+              let newAllMessages;
+              if (existingIndex !== -1) {
+                  // Found the pending message! Replace it.
+                  newAllMessages = [...prev];
+                  newAllMessages[existingIndex] = {
+                      ...savedUserMessage,
+                      // CRITICAL: Keep local timestamp to avoid visual jump
+                      created_at: prev[existingIndex].created_at 
+                  };
+              } else {
+                  // Not found (maybe a refresh happened?), append as new.
+                  newAllMessages = [...prev, savedUserMessage];
+              }
+              
+              updateVisibleMessages(newAllMessages);
+              return newAllMessages;
+          });
+          break;
         case "title_updated":
           console.log("ChatPage: Received title_updated:", message.payload);
           triggerSidebarRefresh(); 
@@ -416,8 +492,9 @@ function ChatPage({
       return;
     }
 
+    // FIX 2: Safely handle integer IDs here as well
     const historyBeforeEdit = allMessages.slice(0, editedMessageIndex)
-        .filter(m => !m.isLoading && !m.id?.startsWith('temp-'))
+        .filter(m => !m.isLoading && !String(m.id).startsWith('temp-'))
         .map(m => ({ sender: m.sender, content: m.content }));
     
     const editedUserMessageForLlm = { sender: "user", content: newContent };
@@ -448,14 +525,16 @@ function ChatPage({
 
         accumulatedContentRef.current = "";
         currentAssistantMessageId.current = `temp-assistant-${uuidv4()}`;
-        setStreamingAssistantMessage({
-            id: currentAssistantMessageId.current,
-            sender: "assistant",
-            content: "",
-            chat_id: chatId,
-            created_at: new Date().toISOString(),
-            isLoading: true,
-        });
+        if (typeof setStreamingAssistantMessage === 'function') {
+            setStreamingAssistantMessage({
+                id: currentAssistantMessageId.current,
+                sender: "assistant",
+                content: "",
+                chat_id: chatId,
+                created_at: new Date().toISOString(),
+                isLoading: true,
+            });
+        }
 
     } catch (sendError) {
         console.error("ChatPage: WebSocket send error during edit:", sendError);
@@ -465,8 +544,6 @@ function ChatPage({
         setAllMessages(originalMessages);
     }
   };
-
-  // --- START: Reordered Functions ---
 
   const handleStopGeneration = useCallback((isSilent = false) => {
     if (!isGenerating) return;
@@ -486,27 +563,42 @@ function ChatPage({
       return;
     }
     
-    // Stop any currently active generation.
-    if (isGenerating) {
-      handleStopGeneration(true);
-    }
     setError(null);
 
-    // 1. Prepare history for the backend, including the new message.
+    const tempOptimisticId = uuidv4(); 
+    
+    // --- KEY CHANGE: Capture the timestamp here ---
+    const currentTimestamp = new Date().toISOString(); 
+
+    // ARCHITECTURAL NOTE: "Sent (The Trigger)"
+    // We display immediately (Optimistic UI) and throw the request to the server.
+    const optimisticUserMessage = {
+        id: tempOptimisticId,
+        sender: "user",
+        content: contentToSend + (fileData ? `\n[File: ${fileData.name}]` : ''),
+        chat_id: chatId,
+        created_at: currentTimestamp, // Use captured time
+        status: 'sending',
+    };
+
+    if (!isRegeneration) {
+        setAllMessages(prev => {
+            const updated = [...prev, optimisticUserMessage];
+            updateVisibleMessages(updated);
+            return updated;
+        });
+    }
+
+    const finalContent = contentToSend + (fileData ? `\n[File: ${fileData.name}]` : '');
+
     const baseMessages = isRegeneration
       ? allMessages.slice(0, allMessages.findLastIndex(m => m.sender === 'assistant'))
       : allMessages;
 
     const historyForBackend = [
         ...baseMessages.map(m => ({ role: m.sender, content: m.content })),
-        { role: 'user', content: contentToSend + (fileData ? `\n[File: ${fileData.name}]` : '') }
+        { role: 'user', content: finalContent }
     ];
-
-    const tempOptimisticId = uuidv4();
-    latestRequestRef.current = tempOptimisticId;
-
-    const NON_STREAMING_MODEL = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"; // <-- REPLACE WITH YOUR EXACT NON-STREAMING MODEL NAME
-    const isNonStreamingRequest = selectedModel === NON_STREAMING_MODEL;
 
     const messagePayload = {
       messages: historyForBackend,
@@ -514,33 +606,29 @@ function ChatPage({
       chatId: chatId,
       userId: user?.id,
       optimisticMessageId: tempOptimisticId,
-      stream: !isNonStreamingRequest,
+      created_at: currentTimestamp, 
+      stream: false, 
     };
 
-    // 2. Perform all state updates and side effects sequentially, but DO NOT add the user message to the UI.
     setInputValue("");
     setFileData(null);
     setShowPlaceholder(false);
     setIsGenerating(true);
     accumulatedContentRef.current = "";
-    currentAssistantMessageId.current = `temp-assistant-${uuidv4()}`;
-
+    
     ws.current.send(JSON.stringify({ type: "chat", payload: messagePayload }));
 
-  }, [chatId, fileData, isGenerating, selectedModel, user, handleStopGeneration, allMessages]);
-
-  // --- END: Reordered Functions ---
+}, [chatId, fileData, isGenerating, selectedModel, user, handleStopGeneration, allMessages]);
 
   const handleSendMessage = () => {
-    // The guard should ONLY prevent sending empty messages.
-    // The sendMessageOrRegenerate function will handle the isGenerating logic.
     if (!inputValue.trim() && !fileData) return;
     sendMessageOrRegenerate(inputValue, false);
   };
 
   const handleRegenerate = () => {
     if (isGenerating || !allMessages.length) return;
-    const relevantMessages = allMessages.filter(m => !m.isLoading && !m.id?.startsWith('temp-'));
+    // FIX 3: Safely handle integer IDs here
+    const relevantMessages = allMessages.filter(m => !m.isLoading && !String(m.id).startsWith('temp-'));
     const lastUserMessage = [...relevantMessages].reverse().find((msg) => msg.sender === "user");
 
     if (lastUserMessage) {
@@ -565,8 +653,9 @@ function ChatPage({
     setInputValue(text);
   };
 
+  // FIX 4: Safely handle integer IDs here
   const lastValidAssistantMessageIndex = allMessages
-      .filter(m => !m.isLoading && !m.id?.startsWith('temp-'))
+      .filter(m => !m.isLoading && !String(m.id).startsWith('temp-'))
       .findLastIndex((msg) => msg.sender === "assistant");
 
   return (
@@ -626,4 +715,4 @@ ChatPage.propTypes = {
 };
 
 //export default ChatPage;
-export default React.memo(ChatPage); // Wrap the export
+export default React.memo(ChatPage);

@@ -7,7 +7,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.9); /* Slightly darker for better contrast */
+  background-color: rgba(0, 0, 0, 0.95);
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
   display: flex;
@@ -15,12 +15,9 @@
   justify-content: center;
   z-index: 9999;
   
-  /* Initial state */
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-
-  /* Transition for overlay visibility */
   transition: opacity 0.5s ease-out, visibility 0s linear 0.5s;
 }
 
@@ -31,7 +28,6 @@
   transition: opacity 0.5s ease-out; 
 }
 
-/* Overlay fade-out state (already correct) */
 .splash-screen-overlay.fade-out {
   opacity: 0;
   pointer-events: none;
@@ -39,33 +35,70 @@
   transition: opacity 0.8s ease-out, visibility 0s linear 0.8s;
 }
 
-/* Content (Logo container) */
+/* Content Container */
 .splash-screen-content {
   text-align: center;
-  /* Removed automatic animation trigger from here to allow JS control */
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-/* Logo Image */
+/* --- Logos --- */
 .splash-screen-logo {
   max-width: 400px;
   width: 80vw;
   height: auto;
   filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.4));
-  opacity: 0; /* Start hidden, let animation handle opacity */
+  /* Start hidden so animation can take over */
+  opacity: 0; 
 }
 
-
-.splash-screen-logo.logo-fade-in {
-  animation: splash-logo-fade-in 1.5s ease-out forwards;
+/* --- Warning Text Box --- */
+.splash-warning-container {
+  max-width: 800px;
+  width: 90%;
+  padding: 2rem;
+  border: 2px solid rgba(255, 50, 50, 0.5);
+  background: rgba(20, 0, 0, 0.8);
+  border-radius: 8px;
+  text-align: center;
+  /* Start hidden so animation can take over */
+  opacity: 0;
 }
 
-.splash-screen-logo.logo-fade-out {
-  animation: splash-logo-fade-out 0.5s ease-in forwards;
+.warning-title {
+  font-family: 'Courier New', monospace;
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+  letter-spacing: 4px;
+  font-weight: bold;
+  color: #ff2222;
+  text-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
+  animation: pulse-red 2s infinite;
 }
 
+.splash-warning-text {
+  font-family: 'Courier New', monospace;
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: #ffcccc;
+  font-weight: 500;
+}
 
-/* Keyframe Animations (already correct) */
-@keyframes splash-logo-fade-in {
+/* --- Animations --- */
+
+/* Apply this class when an item appears */
+.content-fade-in {
+  animation: splash-content-in 1.5s ease-out forwards;
+}
+
+/* Apply this class when an item leaves */
+.content-fade-out {
+  animation: splash-content-out 0.5s ease-in forwards;
+}
+
+@keyframes splash-content-in {
   from {
     opacity: 0;
     transform: translateY(20px) scale(0.95);
@@ -76,7 +109,7 @@
   }
 }
 
-@keyframes splash-logo-fade-out {
+@keyframes splash-content-out {
   from {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -85,4 +118,10 @@
     opacity: 0;
     transform: translateY(-10px) scale(0.95);
   }
+}
+
+@keyframes pulse-red {
+  0% { text-shadow: 0 0 10px rgba(255, 0, 0, 0.6); }
+  50% { text-shadow: 0 0 20px rgba(255, 0, 0, 1); }
+  100% { text-shadow: 0 0 10px rgba(255, 0, 0, 0.6); }
 }

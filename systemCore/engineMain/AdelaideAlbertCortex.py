@@ -1262,7 +1262,7 @@ async def handle_ws_get_messages(send, payload):
 async def handle_ws_chat(send, payload):
     """
     Handles chat by:
-    1. Saving User Msg to ZepZepAdaUI (Clean View)
+    1. Saving User Msg to ZepZepAdaUI (Clean View) with TIME LOGIC
     2. Calling Brain (writes to Interaction Table mostly)
     3. Saving AI Response to ZepZepAdaUI (Clean View)
     """
@@ -1274,12 +1274,27 @@ async def handle_ws_chat(send, payload):
     chat_id = payload.get("chatId")
     opt_id = payload.get("optimisticMessageId")
 
+    # --- TIME LOGIC START ---
+    # Default to server time
+    final_created_at = datetime.now()
+    
+    # Check if the client provided an explicit timestamp
+    explicit_time_str = payload.get("created_at")
+    if explicit_time_str:
+        try:
+            # Parse ISO string (handle 'Z' for UTC if present)
+            final_created_at = datetime.fromisoformat(explicit_time_str.replace('Z', '+00:00'))
+        except ValueError:
+            logger.warning(f"ZepZepAdaUI: Invalid timestamp format '{explicit_time_str}'. Falling back to server time.")
+    # --- TIME LOGIC END ---
+
     db = SessionLocal()
     try:
         # --- 1. Save User Message to UI Table ---
         user_ui_entry = ZepZepAdaUI(
             session_id=chat_id,
             component_name="chat_message",
+            created_at=final_created_at, # <--- HERE IS THE FIX: Use the resolved time
             ui_state_json=json.dumps({
                 "sender": "user",
                 "content": user_content
@@ -1289,12 +1304,14 @@ async def handle_ws_chat(send, payload):
         db.commit()
 
         # Acknowledge to UI
+        # Crucial: Send back the EXACT time used so the frontend matches
         await send_ws_json(send, "user_message_saved", {
-            "id": opt_id,
+            "id": user_ui_entry.id, # Send back the real DB ID
+            "optimisticMessageId": opt_id, # Send back the temp ID for mapping
             "chat_id": chat_id,
             "sender": "user",
             "content": user_content,
-            "created_at": datetime.now().isoformat()
+            "created_at": final_created_at.isoformat() 
         })
 
         # --- 2. GENERATE (The Brain) ---
@@ -1311,6 +1328,7 @@ async def handle_ws_chat(send, payload):
         ai_ui_entry = ZepZepAdaUI(
             session_id=chat_id,
             component_name="chat_message",
+            # AI response time is always "now" (server time)
             ui_state_json=json.dumps({
                 "sender": "assistant",
                 "content": response_text
@@ -1323,7 +1341,8 @@ async def handle_ws_chat(send, payload):
         await send_ws_json(send, "full_response", {
             "content": response_text,
             "optimisticMessageId": opt_id,
-            "chatId": chat_id
+            "chatId": chat_id,
+            "id": ai_ui_entry.id # Send back assistant message ID
         })
     except Exception as e:
         logger.error(f"Generation Failed: {e}")
@@ -7239,7 +7258,7 @@ Output your response EXACTLY in this format:
             norm_user = "".join(filter(str.isalnum, user_input.lower()))
             norm_resp = "".join(filter(str.isalnum, final_response_text[: len(user_input) + 20].lower()))
             if len(norm_user) > 15 and norm_resp.startswith(norm_user):
-                return "[System Error: Input spit-back detected.]"
+                return "[Adaptive System Resp: NoResponseForThisQuery_spbresp]"
 
         # Standard Zephy cleanup (Prefix Removal)
         zephy_prefix_pattern = re.compile(r"(?i)\s*Zephy\s*:\s*(.*)", re.DOTALL)
@@ -11695,7 +11714,7 @@ def _ollama_pseudo_stream_sync_generator(
             
             except queue.Empty:
                 if not background_thread.is_alive():
-                    final_response_text = "[System Error: Thread died without output.]"
+                    final_response_text = "[Adaptive System Resp: NoResponseForThisQuery_CogThrdDied]"
                     break
                 
                 if not STREAM_INTERNAL_LOGS:
@@ -12976,7 +12995,7 @@ def _stream_openai_chat_response_generator_flask(
 
             except queue.Empty:
                 if not background_thread.is_alive():
-                    final_response_text = "[System Error: Generation thread died without output.]"
+                    final_response_text = "[Adaptive System Resp: NoResponseForThisQuery_CogThrdDied]"
                     break
 
                 # Heartbeat if logs are off
