@@ -191,6 +191,25 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** The file ingestion service has been significantly enhanced to parse and process structured data files, including `.jsonl`, `.csv`, and `.parquet`. This allows the system to learn from various conversational AI dataset formats (Alpaca, DPO, etc.) by extracting user/assistant interactions and queuing them for background reflection.
 
+-   **ID:** `CORE-FEAT-016`
+    -   **Title:** Implement DCTD Temporal Scheduler for future task execution.
+    -   **Status:** `Resolved`
+    -   **Description:** Introduced the DCTD (Dancing in the Celestial Timeline) Temporal Scheduler. This system allows the AI to schedule "thoughts" (background tasks) for execution at a specific time in the future. It includes a database table `scheduled_thought_tasks` to persist the schedule, logic for collision avoidance, and a daemon thread to execute due tasks. This enables more complex, long-term reasoning and self-reflection.
+
+-   **ID:** `CORE-FEAT-017`
+    -   **Title:** Add new models for OCR, UI interaction, and language-to-action.
+    -   **Status:** `Resolved`
+    -   **Description:** Expanded the model ecosystem by adding three new models: `Qwen2.5-OCR-Document-VL-ImageDescripter` for document OCR, `fara7b-compagent-Interact` for computer UI interaction, and `Octopus-v2-word-to-action` for translating language commands into actions. This increases the system's capabilities in document understanding and agentic control.
+
+-   **ID:** `CORE-FEAT-018`
+    -   **Title:** Add semaphore for ELP1 direct generation queue concurrency control.
+    -   **Status:** `Resolved`
+    -   **Description:** Implemented an asyncio.Semaphore (`direct_generate_task_semaphore`) to limit the number of concurrent ELP1 (high-priority) generation tasks. This prevents resource exhaustion and ensures system stability under high load by queueing requests gracefully instead of overwhelming the backend.
+-   **ID:** `CORE-FEAT-019`
+    -   **Title:** Implement Memory Pressure Warden to prevent UMA crashes.
+    -   **Status:** `In-Progress`
+    -   **Description:** A "Warden" mechanism has been added to monitor VRAM pressure before model invocation. If the estimated required memory exceeds available memory, it dynamically forces the model to run on the CPU (`n_gpu_layers=0`) to prevent a catastrophic crash, especially in Unified Memory Architecture (UMA) environments.
+
 ### Defects (Bugs)
 
 -   **ID:** `CORE-BUG-001`
@@ -216,6 +235,20 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Fix streaming implementation in LlamaCppChatWrapper.
     -   **Status:** `In-Progress`
     -   **Description:** Removed the `_stream` method from `LlamaCppChatWrapper` as it was incompatible with raw prompt mode and causing errors.
+
+-   **ID:** `CORE-BUG-006`
+    -   **Title:** Potential memory leak in audio_worker.py
+    -   **Status:** `Open`
+    -   **Description:** The audio_worker.py process shows a gradual increase in memory usage over time, suggesting a potential memory leak. This needs to be investigated and patched to ensure long-term stability.
+
+-   **ID:** `CORE-BUG-007`
+    -   **Title:** Fix corrupted SQLAlchemy extensions on Python 3.13.
+    -   **Status:** `Resolved`
+    -   **Description:** Added a critical fix to `launcher.py` that forces the reinstallation of SQLAlchemy. This resolves compilation issues with SQLAlchemy's C extensions on newer Python versions like 3.13, preventing runtime crashes related to the database connection.
+-   **ID:** `CORE-BUG-008`
+    -   **Title:** Fix branch predictor blocking async event loop.
+    -   **Status:** `In-Progress`
+    -   **Description:** The synchronous call to the `branch_predictor.predict_future_vector` was blocking the main asyncio event loop, causing the `/primedready` endpoint and other async operations to become unresponsive. The call has been wrapped in `asyncio.to_thread` to execute it in a separate thread, resolving the blocking behavior.
 
 ### Refactors
 
@@ -468,30 +501,6 @@ This document serves as the master list for all tracked requirements, features, 
 ---
 
 ## **CORE ENGINE (CORE)**
-
-### Features
-
--   **ID:** `CORE-FEAT-016`
-    -   **Title:** Implement DCTD Temporal Scheduler for future task execution.
-    -   **Status:** `Resolved`
-    -   **Description:** Introduced the DCTD (Dancing in the Celestial Timeline) Temporal Scheduler. This system allows the AI to schedule "thoughts" (background tasks) for execution at a specific time in the future. It includes a database table `scheduled_thought_tasks` to persist the schedule, logic for collision avoidance, and a daemon thread to execute due tasks. This enables more complex, long-term reasoning and self-reflection.
-
--   **ID:** `CORE-FEAT-017`
-    -   **Title:** Add new models for OCR, UI interaction, and language-to-action.
-    -   **Status:** `Resolved`
-    -   **Description:** Expanded the model ecosystem by adding three new models: `Qwen2.5-OCR-Document-VL-ImageDescripter` for document OCR, `fara7b-compagent-Interact` for computer UI interaction, and `Octopus-v2-word-to-action` for translating language commands into actions. This increases the system's capabilities in document understanding and agentic control.
-
--   **ID:** `CORE-FEAT-018`
-    -   **Title:** Add semaphore for ELP1 direct generation queue concurrency control.
-    -   **Status:** `Resolved`
-    -   **Description:** Implemented an asyncio.Semaphore (`direct_generate_task_semaphore`) to limit the number of concurrent ELP1 (high-priority) generation tasks. This prevents resource exhaustion and ensures system stability under high load by queueing requests gracefully instead of overwhelming the backend.
-
-### Defects (Bugs)
-
--   **ID:** `CORE-BUG-007`
-    -   **Title:** Fix corrupted SQLAlchemy extensions on Python 3.13.
-    -   **Status:** `Resolved`
-    -   **Description:** Added a critical fix to `launcher.py` that forces the reinstallation of SQLAlchemy. This resolves compilation issues with SQLAlchemy's C extensions on newer Python versions like 3.13, preventing runtime crashes related to the database connection.
 
 ### Refactors
 

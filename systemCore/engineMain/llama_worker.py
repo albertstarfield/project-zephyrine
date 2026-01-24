@@ -127,6 +127,7 @@ MIN_DYNAMIC_N_CTX = INFERCOMPLETION_CTX_BINNING[1]  # Minimum context size for d
 MAX_DYNAMIC_N_CTX = INFERCOMPLETION_CTX_BINNING[-1]  # Maximum context size for dynamic calculation
 EMBEDDING_N_CTX = 4096  # Fixed context for embedding tasks
 
+
 # --- Think Tag Cleanup Helper ---
 def cleanup_initial_think_tag(text: str) -> str:
     if not text: return ""

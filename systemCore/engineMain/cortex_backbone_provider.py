@@ -239,6 +239,10 @@ class LlamaCppVisionWrapper(Runnable):
             if priority == 0:
                 priority = config.get("priority", priority)
 
+        n_gpu_override = None
+        if config and "metadata" in config:
+            n_gpu_override = config["metadata"].get("n_gpu_layers_override")
+
         logger.info(f"invoked remove this later llamacppvisionwrapper [Turd Code Debug] debug msg raw data caught {priority}")
 
         for msg in messages:
@@ -268,7 +272,7 @@ class LlamaCppVisionWrapper(Runnable):
             "mmproj_path": self.mmproj_path,
             "image_path": temp_image_path,
             "prompt": prompt_text,
-            "kwargs": {"temperature": 0.8}
+            "kwargs": {"temperature": 0.8},
         }
         logger.info(f"llamacppvisionwrapper invoke [Turd Code Debug] payload w/ pri {priority} L payload {payload}")
         # 4. Delegate to your existing worker execution bridge
@@ -277,7 +281,8 @@ class LlamaCppVisionWrapper(Runnable):
             model_role="vlm",
             task_type="vision",
             request_data=payload,
-            priority=priority
+            priority=priority,
+            n_gpu_layers_override=n_gpu_override
         )
 
         logger.info(f"llamacppvisionwrapper invoke [Turd Code Debug] w/ pri {priority} raw result {result}")
@@ -331,6 +336,10 @@ class LlamaCppChatWrapper(SimpleChatModel):
         provider_logger = getattr(self.ai_provider, 'logger', logger)
         wrapper_log_prefix = f"LlamaCppChatWrapper(Role:{self.model_role})"
 
+        n_gpu_override = None
+        if config and "metadata" in config:
+            n_gpu_override = config["metadata"].get("n_gpu_layers_override")
+
         priority = ELP0
         # 1. Check kwargs (direct call overrides)
         if 'priority' in kwargs:
@@ -379,7 +388,8 @@ class LlamaCppChatWrapper(SimpleChatModel):
                 model_role=self.model_role,
                 task_type=task_type_for_worker,
                 request_data=request_payload,
-                priority=priority
+                priority=priority,
+                n_gpu_layers_override=n_gpu_override
             )
 
             if not worker_result or not isinstance(worker_result, dict):
@@ -1104,7 +1114,7 @@ class CortexEngine:
         return False
 
     # <<< --- NEW: Worker Execution Method --- >>>
-    def _execute_in_worker(self, model_role: str, task_type: str, request_data: Dict[str, Any], priority: int = ELP0) -> \
+    def _execute_in_worker(self, model_role: str, task_type: str, request_data: Dict[str, Any], priority: int = ELP0, n_gpu_layers_override: Optional[int] = None) -> \
     Optional[Dict[str, Any]]:
         provider_logger = getattr(self, 'logger', logger)
         worker_log_prefix = f"WORKER_MGR(ELP{priority}|{model_role}/{task_type})"
@@ -1138,14 +1148,18 @@ class CortexEngine:
                 f"{worker_log_prefix}: Lock acquired (waited {lock_wait_duration:.2f}s). Starting worker process.")
             try:
                 worker_script_path = os.path.join(os.path.dirname(__file__), "llama_worker.py")
+                final_gpu_layers = str(LLAMA_CPP_N_GPU_LAYERS)
+                if n_gpu_layers_override is not None:
+                    final_gpu_layers = str(n_gpu_layers_override)
+                    provider_logger.info(f"{worker_log_prefix}: 🛡️ WARDEN OVERRIDE: Setting n_gpu_layers={final_gpu_layers}")
+
                 command = [
                     self._python_executable,
                     worker_script_path,
                     "--model-path", model_path,
                     "--task-type", task_type,
-                    "--n-gpu-layers", str(LLAMA_CPP_N_GPU_LAYERS),
+                    "--n-gpu-layers", final_gpu_layers,
                 ]
-
                 # === MODIFIED n_ctx LOGIC ===
                 if task_type == "embedding":
                     # Embeddings always get a fixed n_ctx (e.g., 512, or LLAMA_CPP_N_CTX if that was intended for override)
