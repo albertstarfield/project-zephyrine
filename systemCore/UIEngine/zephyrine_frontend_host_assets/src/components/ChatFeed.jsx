@@ -85,7 +85,116 @@ LazyThinkBlock.propTypes = {
     'data-content': PropTypes.string.isRequired,
 };
 
+
+
+const MessageItem = memo(({ 
+    message, 
+    index, 
+    prevMessage, 
+    nextMessage, 
+    assistantName, 
+    onCopy, 
+    onRegenerate, 
+    onEditSave, 
+    copySuccessId, 
+    isLastAssistantMessage, 
+    isGenerating,
+    renderMessageContent,
+    editingMessageId,
+    editedContent,
+    setEditedContent,
+    handleSaveEdit,
+    handleCancelEdit,
+    handleEditClick,
+    isStreaming = false
+}) => {
+    const editTextAreaRef = useRef(null);
+
+    // Grouping logic
+    const isFirstInGroup = !prevMessage || prevMessage.sender !== message.sender;
+    const isLastInGroup = !nextMessage || nextMessage.sender !== message.sender;
+
+    let messageGroupClass = '';
+    if (isFirstInGroup && isLastInGroup) messageGroupClass = 'group-single';
+    else if (isFirstInGroup) messageGroupClass = 'group-start';
+    else if (isLastInGroup) messageGroupClass = 'group-end';
+    else messageGroupClass = 'group-middle';
+
+    useEffect(() => {
+        if (editingMessageId === message.id && editTextAreaRef.current) {
+            editTextAreaRef.current.style.height = "auto";
+            editTextAreaRef.current.style.height = `${editTextAreaRef.current.scrollHeight}px`;
+        }
+    }, [editedContent, editingMessageId, message.id]);
+
+    return (
+        <li className={`message ${message.sender} ${messageGroupClass}`}>
+            <div className="message-avatar-wrapper">
+                {isLastInGroup && (
+                    <div className="message-avatar">
+                        {message.sender === 'user' ? 'U' : <img src="/img/AdelaideEntity.png" alt="Assistant" className="avatar-image" />}
+                    </div>
+                )}
+            </div>
+            <div className="message-content-container">
+                {editingMessageId === message.id ? (
+                    <div className="message-edit-area">
+                        <textarea
+                            ref={editTextAreaRef}
+                            value={editedContent}
+                            onChange={(e) => setEditedContent(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit(); }
+                                if (e.key === 'Escape') { e.preventDefault(); handleCancelEdit(); }
+                            }}
+                            rows={1}
+                        />
+                        <div className="message-edit-actions">
+                            <button onClick={handleSaveEdit} className="message-action-button"><Check size={16} /></button>
+                            <button onClick={handleCancelEdit} className="message-action-button"><X size={16} /></button>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {message.sender === 'assistant' && isFirstInGroup && (
+                            <div className="message-sender-name">{assistantName}</div>
+                        )}
+                        <div className="message-content">
+                            {renderMessageContent(message.content)}
+                            {message.error && <span className="message-error"> ({message.error})</span>}
+                            {isStreaming && <span className="streaming-cursor" />}
+                        </div>
+                        {message.created_at && (
+                            <div className="message-timestamp">
+                                {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                            </div>
+                        )}
+                        {message.sender === 'user' && (
+                            <div className="message-status-icons">
+                                {message.status === 'sending' && <Check size={14} className="status-sending" />}
+                                {(message.status === 'delivered' || message.status === 'read') && <CheckCheck size={14} className={`status-${message.status}`} />}
+                            </div>
+                        )}
+                        <div className="message-actions">
+                            {message.sender === 'user' && !isGenerating && (
+                                <button onClick={() => handleEditClick(message)} className="message-action-button" title="Edit"><Edit size={14} /></button>
+                            )}
+                            <button onClick={() => onCopy(message.content, message.id)} className="message-action-button" title="Copy">
+                                {copySuccessId === message.id ? 'Copied!' : <Copy size={14} />}
+                            </button>
+                            {message.sender === 'assistant' && isLastAssistantMessage && !isGenerating && (
+                                <button onClick={() => onRegenerate(message.id)} className="message-action-button" title="Regenerate"><RefreshCw size={14} /></button>
+                            )}
+                        </div>
+                    </>
+                )}
+            </div>
+        </li>
+    );
+});
+
 // --- Main ChatFeed Component ---
+
 
 const ChatFeed = ({
     messages,
@@ -363,19 +472,54 @@ const ChatFeed = ({
 
     // --- Render Chat View (from current code with Virtuoso) ---
     return (
-        <div id="messages-container" className="message-list" ref={scrollContainerRef} style={{ height: '100%', width: '100%', flex: 1, overflowX: 'hidden', overflowY: 'auto' }}>
-            {isLoadingPrevious && <div className="loading-indicator">Loading...</div>}
-            <List
-                className="message-list-content"
-                height={scrollContainerRef.current?.clientHeight || 0}
-                itemCount={messages.length}
-                itemSize={150} // Average item size, can be a function for variable sizes
-                width={scrollContainerRef.current?.clientWidth || 0}
-            >
-                {Row}
-            </List>
+        <div 
+            id="messages-container" 
+            className="message-list" 
+            ref={scrollContainerRef} 
+            style={{ height: '100%', width: '100%', flex: 1, overflowX: 'hidden', overflowY: 'auto' }}
+        >
+            {isLoadingPrevious && <div className="loading-indicator">Loading history...</div>}
+            
+            <ul className="message-list-content" style={{ listStyle: 'none', padding: '0 1rem', margin: 0 }}>
+                {messages.map((message, index) => (
+                    <MessageItem
+                        key={message.id}
+                        message={message}
+                        index={index}
+                        prevMessage={messages[index - 1]}
+                        nextMessage={messages[index + 1]}
+                        assistantName={assistantName}
+                        onCopy={onCopy}
+                        onRegenerate={onRegenerate}
+                        onEditSave={onEditSave}
+                        copySuccessId={copySuccessId}
+                        isLastAssistantMessage={index === lastAssistantMessageIndex}
+                        isGenerating={isGenerating}
+                        renderMessageContent={renderMessageContent}
+                        editingMessageId={editingMessageId}
+                        editedContent={editedContent}
+                        setEditedContent={setEditedContent}
+                        handleSaveEdit={handleSaveEdit}
+                        handleCancelEdit={handleCancelEdit}
+                        handleEditClick={handleEditClick}
+                    />
+                ))}
 
-            <div id="bottom"></div>
+                {/* Render the streaming message immediately as it arrives */}
+                {streamingMessage && (
+                    <MessageItem
+                        key={streamingMessage.id || "streaming-temp"}
+                        message={streamingMessage}
+                        assistantName={assistantName}
+                        renderMessageContent={renderMessageContent}
+                        isStreaming={true}
+                        isGenerating={isGenerating}
+                    />
+                )}
+                
+                {/* Invisible anchor for automatic scrolling */}
+                <div ref={messagesEndRef} id="bottom" style={{ height: '1px', clear: 'both' }} />
+            </ul>
         </div>
     );
 };

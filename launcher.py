@@ -505,7 +505,7 @@ def _compile_and_run_watchdogs():
             f"--targets={backend_process_name},{mesh_process_name}",  # ADDED mesh_process_name
             f"--pid-file={ENGINE_PID_FILE}"
         ]
-        start_service_process(watchdog_command, go_watchdog_dir, "GO-WATCHDOG")
+        start_service_process(watchdog_command, go_watchdog_dir, "watchdogThread0")
     else:
         print_error(f"Go watchdog executable not found after compile: {go_exe_path}")
 
@@ -536,7 +536,7 @@ def _compile_and_run_watchdogs():
 
         # The working directory should be the project root so that relative paths
         # in the supervised command (like for the PID file) work correctly.
-        start_service_process(ada_watchdog_command, ROOT_DIR, "ADA-WATCHDOG")
+        start_service_process(ada_watchdog_command, ROOT_DIR, "watchdogThread1")
     else:
         print_error(f"Ada watchdog executable not found after compile: {ada_exe_path}")
 
@@ -1089,9 +1089,9 @@ def check_and_restart_services():
     restart_function_map = {
         "ENGINE": start_engine_main,
         "FRONTEND": start_frontend,
-        "ZEPHYMESH-NODE": start_zephymesh_service_fast,
-        "GO-WATCHDOG": start_watchdogs_service_fast, # Restarting one watchdog will restart both
-        "ADA-WATCHDOG": start_watchdogs_service_fast,
+        "zephymeshHand": start_zephymesh_service_fast,
+        "watchdogThread0": start_watchdogs_service_fast, # Restarting one watchdog will restart both
+        "watchdogThread1": start_watchdogs_service_fast,
     }
 
     with process_lock:
@@ -1135,7 +1135,7 @@ def check_and_restart_services():
 
 def start_zephymesh_service_fast():
     """Fast-path version: Assumes ZephyMesh is compiled and launches it without waiting."""
-    name = "ZEPHYMESH-NODE"
+    name = "zephymeshHand"
     mesh_exe_name = "zephymesh_node_compiled.exe" if IS_WINDOWS else "zephymesh_node_compiled"
     mesh_exe_path = os.path.join(ZEPHYMESH_DIR, mesh_exe_name)
 
@@ -1166,7 +1166,7 @@ def start_watchdogs_service_fast():
             f"--targets={backend_process_name},{mesh_process_name}",
             f"--pid-file={ENGINE_PID_FILE}"
         ]
-        start_service_process(watchdog_command, go_watchdog_dir, "GO-WATCHDOG")
+        start_service_process(watchdog_command, go_watchdog_dir, "watchdogThread0")
     else:
         print_error(f"FATAL (Fast Path): Go watchdog executable not found at {go_exe_path}.")
 
@@ -1184,7 +1184,7 @@ def start_watchdogs_service_fast():
             f"--pid-file={ENGINE_PID_FILE}"
         ]
         ada_watchdog_command = [ada_exe_path] + go_watchdog_command
-        start_service_process(ada_watchdog_command, ROOT_DIR, "ADA-WATCHDOG")
+        start_service_process(ada_watchdog_command, ROOT_DIR, "watchdogThread1")
     else:
         print_error(f"FATAL (Fast Path): Ada watchdog executable not found at {ada_exe_path}.")
 
@@ -3631,7 +3631,7 @@ def _ensure_and_launch_zephymesh():
             os.remove(ZEPHYMESH_PORT_INFO_FILE)
 
         # Use the standard service starter. This is the crucial change for cleanup.
-        start_service_process([mesh_exe_path], ROOT_DIR, "ZEPHYMESH-NODE")
+        start_service_process([mesh_exe_path], ROOT_DIR, "zephymeshHand")
 
         # --- Step 3: Wait for the node to be ready ---
         print_system(f"Waiting for ZephyMesh port file: {ZEPHYMESH_PORT_INFO_FILE}")
@@ -3643,7 +3643,7 @@ def _ensure_and_launch_zephymesh():
             mesh_proc_obj = None
             with process_lock:
                 for proc, name, _, _ in running_processes:
-                    if name == "ZEPHYMESH-NODE":
+                    if name == "zephymeshHand":
                         mesh_proc_obj = proc
                         break
 

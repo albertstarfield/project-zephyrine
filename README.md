@@ -65,9 +65,9 @@ Beneath the conversational surface, I am built upon several core architectural p
     *   **Ada Daemons (The "Glass Cockpit"):** For sensing the environment, I can run high-reliability background processes written in Ada. These daemons provide a continuous stream of data (e.g., system telemetry, sensor readings), which acts as my real-time awareness of the digital or physical world.
 
 
-*   **🎭 A Familiar Face (Broad API Basic Trending AI Compatibility):** To make our explorations easier, I've learned to speak the languages of many common tools and applications. Think of it as a universal translator, or perhaps a clever disguise. While my internal thoughts are my own, I can present a familiar face to the outside world at `http://localhost:11434/`. (But please, this isn't the main function of this)
+*   **🎭 A Familiar Face (Broad API Trending Compatibility):** To make our explorations easier, I've learned to speak the languages of many common tools. Think of it as a universal translator, or perhaps a clever disguise. While my internal thoughts are my own, I can present a familiar face to the outside world at `http://localhost:11434/`. (But please, this isn't the main function of this)
 
-    *   **The OpenAI Mask:** I can slightly mimick in the OpenAI API v1 dialect. You can try to connect many existing applications to me.
+    *   **The OpenAI Mask:** I can slightly mimick in the OpenAI API v1 dialect. You can try to connect many existing clients to me.
         *   We can chat the boring way (`/v1/chat/completions`), and I'll even do some deeper thinking in the background on complex topics.
         *   I can generate vector embeddings (`/v1/embeddings`) and offer thoughts on content safety, sort of (`/v1/moderations`).
         *   Our senses can expand into other modalities, too! I can speak my thoughts aloud (`/v1/audio/speech`), listen to and understand yours (`/v1/audio/transcriptions`), and even dream up images from your descriptions (`/v1/images/generations`).
@@ -85,20 +85,20 @@ Beneath the conversational surface, I am built upon several core architectural p
 This is the core of the assistant, designed to run entirely on your local machine. It provides a familiar, powerful interface for interaction and basic automation.
 
 -   **Local-First Operation:** Runs on your computer, ensuring privacy and control. An internet connection is only needed for initial setup, web-browsing tasks, or connecting to the ZephyMesh.
--   **OpenAI & Ollama API Compatibility:** Provides a robust, asynchronous API layer at `http://localhost:11434`. This allows you to connect a wide range of existing applications for chat, text-to-speech, audio transcription, and image generation.
+-   **OpenAI & Ollama API Compatibility:** Provides a robust, asynchronous API layer at `http://localhost:11434`. This allows you to connect a wide range of existing clients for chat, text-to-speech, audio transcription, and image generation (Not Recommended).
 -   **Continuous Learning Engine:** The system is not static. It learns and adapts over time through:
     -   **Self-Reflection:** Periodically reviewing past conversations to synthesize new insights.
     -   **Local Knowledge Base:** Indexing and understanding your local files to provide contextually aware answers.
--   **Cross-Platform & Accelerated:** Functions on CPU-only systems (Windows, macOS, Linux) and can leverage hardware acceleration via CUDA, Metal, and Vulkan where available.
+-   **Cross-Platform & Accelerated:** Functions on CPU-only systems (NT Based System, Darwin/XNU, Linux) and can leverage hardware acceleration via CUDA, Metal, and Vulkan where available.
 
 ### Phase II: The Adaptive GNC Deterministic Control System (In Progress)
 
 This is where Project Zephyrine evolves beyond a standard assistant into a high-reliability control platform, guided by the principles of avionics and deterministic systems.
 
--   **🚀 Stella Icarus Hooks:** A high-speed, JIT-compiled Python subsystem and Ada daemons for tasks that demand instant, 100% reliable, and procedurally correct execution. This is the foundation for real-time control and automation.
--   **🛰️ Microcontroller Interfacing (WIP):** The architecture is designed for direct, low-level communication with microcontrollers (like an Arduino) over a serial interface. This enables the Adaptive System to act as a Flight Management Computer (FMC) and control real-world hardware.
--   **📡 Advanced Communication Protocols (WIP):** Future development will focus on implementing robust, safety-critical communication protocols, including parity bits and CRC checks for data integrity between the Systems core and external hardware.
--   **✈️ Intelligent Flight Control System (WIP):** The ultimate goal is to complete a full Fly-By-Wire (FBW) and Intelligent Flight Control System (IFCS). This will involve advanced PID loops, state estimation, and sensor fusion to provide intelligent, real-time dampening and control for robotics or simulation tasks.
+-   **🚀 Stella Icarus Hooks:** A high-speed, JIT-compiled Python O3 compiled C++ hybrid subsystem and Ada daemons for tasks that demand instant, 100% reliable, and procedurally correct execution. This is the foundation for real-time control and automation.
+-   **🛰️ Microcontroller Interfacing (Under development SPARK):** The architecture is designed for direct, low-level communication with microcontrollers (like an Arduino) over a serial interface. This enables the Adaptive System to act as a Flight Management Computer (FMC) and control real-world hardware.
+-   **📡 Advanced Communication Protocols (Next on the list):** Future development will focus on implementing robust, safety-critical communication protocols, including parity bits and CRC checks for data integrity between the Systems core and external hardware.
+-   **✈️ Intelligent Flight Control System (Next on the list):** The ultimate goal is to complete a full Fly-By-Wire (FBW) and Intelligent Flight Control System (IFCS). This will involve advanced PID loops, state estimation, and sensor fusion to provide intelligent, real-time dampening and control for robotics or simulation tasks.
 
 Just a heads up, some details aren't listed here or in the `readme.md` file. Instead, they've been moved to the `TodoFeatureFullList.md` document or you can check them out [here](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/TodoFeatureFullList.md).
 
@@ -110,7 +110,7 @@ A glimpse into the user interface and capabilities of Project Zephyrine.
 |                                                    Light Mode & Standard Chat                                                    |                                                         Settings Screen                                                          |                                                      Voice Interaction Mode                                                      |
 |:--------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------:|
 | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-0.png" width="250">  | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-1.jpeg" width="250"> | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-2.jpeg" width="250"> |
-|                                                     **Normal Chatbot Mode**                                                      |                                                        **Splash screen**                                                         |                                                           **PFD Mode**                                                           |
+|                                                     **Normal Conversation Mode**                                                      |                                                        **Splash screen**                                                         |                                                           **PFD Mode**                                                           |
 | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-3.jpeg" width="250"> | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-4.jpeg" width="250"> | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-5.jpeg" width="250"> |
 
 ## 🚀 Quick Start Guide
@@ -125,11 +125,11 @@ The installation process is now managed by a single, cross-platform launcher scr
 
 2.  **Run the Launcher:**
     The `launcher.py` script is designed to handle the setup for you:
-    *   It detects your operating system and hardware for a suitable setup.
-    *   It manages a local Conda environment to handle dependencies.
-    *   It installs necessary Python and Node.js packages.
+    *   It detects your operating system (Only Linux, Darwin/XNU, NT) and hardware for a suitable setup (Processor arm64 and amd64 for now).
+    *   It manages a local sandbox environment to handle dependencies.
+    *   It installs necessary Packages.
     *   It helps download required Adaptive System required models and assets.
-    *   It starts all application services.
+    *   It starts all services.
 
     Execute it with Python:
     ```bash
