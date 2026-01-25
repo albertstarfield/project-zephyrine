@@ -58,7 +58,7 @@
 -   **ID:** CORTEX-FEAT-003
 -   **Title:** Integrate STEM Compass MoE Models
 -   **Status:** Resolved
--   **Description:** This feature integrates a suite of specialized Mixture-of-Experts (MoE) models, collectively named "STEM Compass," into the cortex. The launcher (`launcher.py`) has been updated to download these new GGUF models, and the `CortexConfiguration.py` has been modified to map them for use by the LLM worker. The total model parameter count has been updated to 77.05B to reflect these additions. The `.gitignore` file was also updated to exclude temporary build artifacts.
+-   **Description:** This feature integrates a suite of specialized Mixture-of-Experts (MoE) models, collectively named "STEM Compass," into the cortex. The launcher (`launcher.py`) has been updated to download these new GGUF models, and the `CortexConfiguration.py` has been modified to map them for use by the LLM worker. The total model parameter count has been updated to 78.15B to reflect these additions. The `.gitignore` file was also updated to exclude temporary build artifacts.
 -   **ID:** SYS-PERF-004
 -   **Title:** Tune resource limits, improve logging, and relax dependency pinning
 -   **Status:** Resolved

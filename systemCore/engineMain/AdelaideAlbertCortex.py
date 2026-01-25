@@ -4867,7 +4867,7 @@ class CortexThoughts:
 
         final_bin = ideal_bin #fallback
         logger.info(f"LLMCall|Warden: post-check model parser : final_bin fallback set first {model_path}")
-        # If we are OOM, which we definitely going to espescially handling 77.05B + scarcity of RAM we're needing to do this negotiation. (thank you microsoft and openAI we are having difficulty to run this Adaptive System)
+        # If we are OOM, which we definitely going to espescially handling 78.15B + scarcity of RAM we're needing to do this negotiation. (thank you microsoft and openAI we are having difficulty to run this Adaptive System)
         logger.info(f"LLMCall|Warden: RAM Contention Monitoring Alloc debug: (Need {req_gb:.2f}GB, Have {avail_gb:.2f}GB).")
         # 1. Define the limit (65% of available RAM as per your snippet)
         limit_with_tolerance = avail_gb * 0.65
@@ -5009,6 +5009,73 @@ class CortexThoughts:
                         logger.info(f"LLMcall direct result: {response_from_llm}")
                     else:
                         raise TypeError(f"Unsupported chain/model type: {type(chain)}")
+                    
+                    if isinstance(response_from_llm, str):
+                        # Remove "User: " if present
+                        if "User: " in response_from_llm:
+                            response_from_llm = response_from_llm.replace("User: ", "")
+                        
+                        # Remove "Assistant: " if present
+                        if "Assistant: " in response_from_llm:
+                            response_from_llm = response_from_llm.replace("Assistant: ", "")
+                            
+                        # Remove "Response: " if present
+                        if "Response: " in response_from_llm:
+                            response_from_llm = response_from_llm.replace("Response: ", "")
+
+                    elif hasattr(response_from_llm, "content") and isinstance(response_from_llm.content, str):
+                        # If it's an AIMessage object, clean its .content field
+                        clean_content = response_from_llm.content
+                        if "User: " in clean_content:
+                            clean_content = clean_content.replace("User: ", "")
+                        if "Assistant: " in clean_content:
+                            clean_content = clean_content.replace("Assistant: ", "")
+                        if "Response: " in clean_content:
+                            clean_content = clean_content.replace("Response: ", "")
+                        
+                        # Apply change back to the object
+                        response_from_llm.content = clean_content
+
+                    # =================================================================
+                    # FUZZY REPETITION FILTER (First Line Only)
+                    # =================================================================
+                    # Check if the first line is just a repetition of the user's question
+                    if isinstance(response_from_llm, str) and response_from_llm.strip():
+                        try:
+                            from thefuzz import fuzz
+                            
+                            # 1. Identify User Input from interaction_data
+                            user_ref_text = None
+                            if interaction_data:
+                                user_ref_text = interaction_data.get("user_input") or interaction_data.get("input")
+                            
+                            if user_ref_text:
+                                # 2. Isolate the first non-empty line
+                                temp_content = response_from_llm.strip()
+                                lines = temp_content.splitlines()
+                                first_line = lines[0].strip()
+                                
+                                # 3. Compare (Ratio handles near-matches like "So, [Question]" vs "[Question]")
+                                if first_line:
+                                    similarity = fuzz.ratio(user_ref_text.lower(), first_line.lower())
+                                    
+                                    if similarity >= 80:
+                                        logger.warning(f"{log_prefix}: ✂️ Fuzzy Filter: Removing first line (Match {similarity}% >= 80%). Removed: '{first_line[:50]}...'")
+                                        
+                                        # 4. Remove the first line
+                                        if len(lines) > 1:
+                                            # Rejoin the rest
+                                            response_from_llm = "\n".join(lines[1:]).strip()
+                                        else:
+                                            # If the entire response was just the question, clear it (or keep it if you prefer avoiding empty responses)
+                                            response_from_llm = ""
+                                            
+                        except ImportError:
+                            # Fallback if 'thefuzz' isn't installed (though Config uses it)
+                            pass
+                        except Exception as e_fuzz:
+                            logger.error(f"{log_prefix}: Error in fuzzy filter: {e_fuzz}")
+                    # =================================================================
 
                     call_duration_ms = (time.monotonic() - call_start_time) * 1000
                     logger.info(f"⏱️ {log_prefix_call}: Succeeded in {call_duration_ms:.2f} ms")
@@ -9331,103 +9398,103 @@ Extract the section titles and output them as a strict, valid JSON list of strin
             return await self._repair_skeleton_via_code_model(raw_plan, session_id)
 
     async def _generate_section_content(
-            self,
-            db: Session,
-            section_title: str,
-            full_plan: List[str],
-            user_input: str,
-            section_input_context: str,
-            session_id: str,
-            existing_buffer_context: str,  # From previous step
-            recent_history_str: str,
-            history_experience_learned_rag_str: str
+        self,
+        db: Session,
+        section_title: str,
+        full_plan: List[str],
+        user_input: str,
+        section_input_context: str,
+        session_id: str,
+        existing_buffer_context: str, 
+        recent_history_str: str,
+        history_experience_learned_rag_str: str
     ) -> str:
         """
         LoD 1: Generates content for a SINGLE node in the grid.
-        Performs its own Routing and RAG specifically for this section title.
+        Includes "Snowball Check": Retries if output is < 42 tokens.
         """
         log_prefix = f"🧱 BuildNode|'{section_title}'"
-        
-        # 1. Focused RAG: Search ONLY for this section's topic
-        # This is the "Unloading" magic. We don't pollute context with unrelated stuff.
+
+        # 1. Focused RAG (Run once per section, reused for retries)
         search_query = f"{user_input} {section_title}"
         section_context = await self._get_direct_rag_context_elp1(
             db, search_query, session_id
         )
 
-        # 2. Route specifically for this section
-        # (e.g., "Math Derivation" -> Math model, "Conclusion" -> General model)
-        target_model_key = await self._router_select_specialist_for_continuation(
-            section_title, user_input, session_id # We pass title as "current text" for context
-        )
+        blacklisted_models = []
+        max_retries = 3 
         
-        model = self.provider.get_model(target_model_key)
-        if not model: model = self.provider.get_model("general")
-
-        # 3. Generation Prompt
-        prompt = f"""[SYSTEM]
-        You are an specialist contributing an paper writing ONE section of a larger paper. Focus ONLY on the topic provided.
-        
-        [OVERALL PLAN]
-        {json.dumps(full_plan)}
-        
-        [CURRENT SECTION TO WRITE]
-        *** {section_title} ***
-
-        [USER GOAL]
-        {user_input}
-
-        [USER GOAL/CONTEXT]
-        {section_input_context}
-
-        [RECENT CONVERSATION]
-        {recent_history_str}
-        
-        [INTERACTON EXPERIENCE (General Context)]
-        {history_experience_learned_rag_str[:3000]}
-        
-        [PREVIOUSLY WRITTEN SECTIONS (Context)]
-        ...{existing_buffer_context[-1500:]}
-
-        [RELEVANT KNOWLEDGE]
-        {section_context}
-
-        [INSTRUCTION]
-        Write the content for the '{section_title}' section. 
-        - Be direct and detailed.
-        - Maintain consistency with the 'Previously Written Sections'.
-        - Do not write an intro or conclusion for the whole essay, just this part.
-        - DO NOT WRITE need introduction "Certainly, or Prewriting. Just Output the Section Content!"
-        - DO NOT write need conclusion or Overall, or In conclusion, the study or Anything Except it's an Conclusion Section!
-        - DO NOT WRITE THE INSTRUCTION TO THE SPITTING OUT
-        
-        :
-        """
-
-        try:
-            bound_model = model.bind(priority=ELP1, max_tokens=DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT)
-            chain = bound_model | StrOutputParser()
-            
-            #content = await asyncio.to_thread(chain.invoke, prompt)
-            
-            content = await asyncio.to_thread(
-                self._call_llm_with_timing,
-                chain,                 # The chain to run
-                prompt,                # The input
-                interaction_data={},   # interaction_data (can be empty for internal loops)
-                priority=ELP1,         # Ensure high priority
-                db=db,
-                session_id=session_id
+        for attempt in range(max_retries):
+            # 2. Route specifically for this section (Reselect model)
+            target_model_key = await self._router_select_specialist_for_continuation(
+                section_title, 
+                user_input, 
+                session_id,
+                excluded_models=blacklisted_models # <--- Pass the blacklist
             )
             
-            
-            # Clean think tags
-            content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE).strip()
-            return content
+            logger.info(f"{log_prefix}: Attempt {attempt+1}/{max_retries}. Selected: '{target_model_key}'")
 
-        except Exception as e:
-            logger.error(f"{log_prefix}: Generation failed: {e}")
-            return "[Content generation failed]"
+            model = self.provider.get_model(target_model_key)
+            if not model:
+                model = self.provider.get_model("general")
+
+            # 3. Generation Prompt
+            prompt = f"""[SYSTEM] You are an specialist contributing an paper writing ONE section of a larger paper. Focus ONLY on the topic provided.
+[OVERALL PLAN] {json.dumps(full_plan)}
+[CURRENT SECTION TO WRITE] *** {section_title} ***
+[USER GOAL] {user_input}
+[USER GOAL/CONTEXT] {section_input_context}
+[RECENT CONVERSATION] {recent_history_str}
+[INTERACTON EXPERIENCE (General Context)] {history_experience_learned_rag_str[:3000]}
+[PREVIOUSLY WRITTEN SECTIONS (Context)] ...{existing_buffer_context[-1500:]}
+[RELEVANT KNOWLEDGE] {section_context}
+[INSTRUCTION] Write the content for the '{section_title}' section.
+- Be direct and detailed.
+- Maintain consistency with the 'Previously Written Sections'.
+- Do not write an intro or conclusion for the whole essay, just this part.
+- DO NOT WRITE need introduction "Certainly, or Prewriting. Just Output the Section Content!" 
+- DO NOT write need conclusion or Overall, or In conclusion, the study or Anything Except it's an Conclusion Section!
+- DO NOT WRITE THE INSTRUCTION TO THE SPITTING OUT : 
+"""
+            try:
+                bound_model = model.bind(priority=ELP1, max_tokens=DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT)
+                chain = bound_model | StrOutputParser()
+
+                content = await asyncio.to_thread(
+                    self._call_llm_with_timing,
+                    chain,
+                    prompt,
+                    {}, 
+                    priority=ELP1,
+                    db=db,
+                    session_id=session_id
+                )
+
+                # Clean think tags
+                content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL | re.IGNORECASE).strip()
+
+                # --- SNOWBALL ENAGA CHECK ---
+                token_len = self._count_tokens(content)
+                if token_len < 42:
+                    logger.warning(f"{log_prefix}: ⚠️ Not detailed answer! (Tokens: {token_len} < 42). Retrying and blacklisting '{target_model_key}'...")
+                    blacklisted_models.append(target_model_key)
+                    # If this was the last attempt, we might just have to accept it or fail
+                    if attempt == max_retries - 1:
+                        logger.error(f"{log_prefix}: ❌ Exhausted retries on short content. Accepting potentially weak response.")
+                        return content
+                    continue # Loop back, reselect model
+                
+                # If we get here, content is good
+                return content
+
+            except Exception as e:
+                logger.error(f"{log_prefix}: Generation failed: {e}")
+                blacklisted_models.append(target_model_key) # Blacklist on crash too
+                if attempt == max_retries - 1:
+                    return "[Content generation failed]"
+        
+        return "[Content generation failed]"
 
     
 
@@ -9565,21 +9632,37 @@ Extract the section titles and output them as a strict, valid JSON list of strin
             return text_to_fix
 
     async def _router_select_specialist_for_continuation(
-        self, current_text: str, original_user_input: str, session_id: str
+        self,
+        current_text: str,
+        original_user_input: str,
+        session_id: str,
+        excluded_models: List[str] = None 
     ) -> str:
         """
         Uses the Router model (ELP1) to pick the specialist. (For Snowball-Enaga) NOT for Background_generate
         V2 UPDATE: Now provides the router with explicit model descriptions.
         """
-        log_prefix = f"🔀 ContRouter|{session_id}"
+        log_prefix = f"🔀 ContRouter|{session_id}"        
         router_model = self.provider.get_model("router")
-        if not router_model: return "general" 
-
+        if not router_model:
+            return "general"
+            
+        if excluded_models is None:
+            excluded_models = []
         # --- Build the descriptive model list for the prompt ---
         models_with_descriptions = []
         for key, description in LLAMA_CPP_MODEL_DESCRIPTIONS.items():
-            if key not in ["router", "embeddings", "general_fast", "vlm", "rnj_1_general_STEM"]: # Exclude non-content and Non ELP1 optimized models (add vlm because this router or the pipeline doesn't add the image into the pipeline except from the beginning)
-                models_with_descriptions.append(f"- `{key}`: {description}")
+            # Exclude non-content models AND models in the blacklist
+            if key in excluded_models:
+                continue # Skip blacklisted model
+                
+            if key not in ["router", "embeddings", "general_fast", "vlm", "rnj_1_general_STEM"]: 
+                models_with_descriptions.append(f"- {key}: {description}")
+        
+        # If we filtered everything out (rare), fallback to general
+        if not models_with_descriptions:
+            logger.warning(f"{log_prefix}: All specialists excluded. Falling back to 'general'.")
+            return "general"
         
         models_str = "\n".join(models_with_descriptions)
 
@@ -9863,7 +9946,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
             "mode": "chat",
             "input_type": "text",
             "user_input": user_input,
-            "llm_response": "[Processing background task...]",
+            "llm_response": "Ill try to think about this, and learn about this overnight. in the mean time just do other things.",
             "execution_time_ms": 0,
             "classification": classification,
             "classification_reason": None,

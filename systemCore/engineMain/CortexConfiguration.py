@@ -18,7 +18,7 @@ ANSWER_SIZE_WORDS = int(
     os.getenv("ANSWER_SIZE_WORDS", 16384)
 )  # Target for *quick* answers (token generation? I forgot)
 
-INFERCOMPLETION_CTX_BINNING=[512, 1024, 2048, 4096, 8192] #Binning for ctx lock on cortex_backbone_provider.py (let's make this hardcore, Allow it to get 512 ctx token so it allows to run on pocket computer which makes it "smartphone")
+INFERCOMPLETION_CTX_BINNING=[2048, 4096, 8192, 16384, 32768] #Binning for ctx lock on cortex_backbone_provider.py (let's make this hardcore, Allow it to get 512 ctx token so it allows to run on pocket computer which makes it "smartphone")
 TOPCAP_TOKENS = int(
     os.getenv("TOPCAP_TOKENS", INFERCOMPLETION_CTX_BINNING[-1])
 )  # Default token limit for LLM calls
@@ -72,15 +72,15 @@ FILE_INDEXER_IDLE_WAIT_SECONDS = int(
 )  # default at 3600 putting it to 5 is just for debug and rentlessly scanning
 
 FUZZY_SEARCH_THRESHOLD_CONTEXT = getattr(
-    globals(), "FUZZY_SEARCH_THRESHOLD", 90
-)  # Default to 90 if not from which is 30% set it not 0.3 but 30 
-# Sidenote: I was experimenting on cracking down on the mechanism of making zephy becoming psychosis (& scizophrenic) and it seems that fuzzy threshold if it's going down it's going everywhere. This research found might be useful to help someone?
+    globals(), "FUZZY_SEARCH_THRESHOLD", 80
+)  # Default to 80 if not from which is 30% set it not 0.3 but 30 
+# Sidenote: I was experimenting on cracking down on the mechanism of making zephy becoming psychosis (setting to 30) (& scizophrenic) and it seems that fuzzy threshold if it's going down it's going everywhere. This research found might be useful to help someone?
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0  # before hard defined error timeout (30 seconds max)
 
 DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
-DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 100)) #quick switch based on tkoen to peer review Snowball-Enaga architecture
+DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 512)) #quick switch based on tkoen to peer review Snowball-Enaga architecture
 DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT = int(os.getenv("DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT", 8192)) #each specialist model "peer review Snowball Enaga" max token gen
 DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT = int(os.getenv("DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT", 128)) #Turn off Stellaicarus hook if it's becoming long then disable stella icarus to not falsely triggered hook
 TOKENTRUNCATEVECTORDIRECT_truncatechar = int(os.getenv("TOKENTRUNCATEVECTORDIRECT_truncatechar", 2048)) # Maximum characters allowed in the Direct Generate PROMPT before truncation
@@ -379,11 +379,11 @@ LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
 
 # (14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
-# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+ 4.7B (Flux T5XXL Encoder)+ CLiP FLUX 1 (0.12B) + VAE FLux 1 0.08B +~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation + Fara 7B (Computer Agent) + token to Action tool call 2B + STEM Generalist RNJ-1 8B + Physics Specialist 8B + Chemistry Specialist 5B + Biology Specialist 1.5B + (Outside GGUF, like TTS (Chatterbox 0.5B (LLaMa but not serialized to gguf) + MeloTTS 0.15 (Text Encoder (BERT) + Core TTS Generator (VITS-based):))) = 77.05B Async MoE
-# (Additionally there's new one... MoE on Stem and etc..) so it's 77.05B
+# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+ 4.7B (Flux T5XXL Encoder)+ CLiP FLUX 1 (0.12B) + VAE FLux 1 0.08B +~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation + Fara 7B (Computer Agent) + token to Action tool call 2B + STEM Generalist RNJ-1 8B + Physics Specialist 8B + Chemistry Specialist 5B + Biology Specialist 1.5B + (Outside GGUF, like TTS (Chatterbox 0.5B (LLaMa but not serialized to gguf) + MeloTTS 0.15 (Text Encoder (BERT) + Core TTS Generator (VITS-based):))) = 78.15B Async MoE
+# (Additionally there's new one... MoE on Stem and etc..) so it's 78.15B
 
 
-#No do not put 77.05B label on it, it would drove people away. and scared before hand, make it embracing and cute and ticklish to read an flying fairy Snowball! And I'm quite exhausted need to change the param every "Experts" added into the mix.
+#No do not put 78.15B label on it, it would drove people away. and scared before hand, make it embracing and cute and ticklish to read an flying fairy Snowball! And I'm quite exhausted need to change the param every "Experts" added into the mix.
 
 META_MODEL_NAME_STREAM = "Snowball-Enaga"
 META_MODEL_NAME_NONSTREAM = "Snowball-Enaga"
@@ -397,8 +397,8 @@ TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha"  # Client-facing TTS model name
 ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal"  # New constant for ASR
 IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
 META_MODEL_FAMILY = "Zephyrine"
-META_MODEL_PARAM_SIZE = "77.05B"  # As requested
-META_MODEL_PARAM_SIZE = "77.05B"  # As requested
+META_MODEL_PARAM_SIZE = "78.15B"  # As requested
+META_MODEL_PARAM_SIZE = "78.15B"  # As requested
 META_MODEL_QUANT_LEVEL = "fp16"  # As requested
 META_MODEL_FORMAT = "gguf"  # Common format assumption for Ollama compatibility
 META_MODEL_LICENSE="HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV"
@@ -2248,8 +2248,8 @@ Now, provide a concise answer ONLY for the following single step:
 YOUR CONCISE ANSWER FOR THIS STEP:
 """
 
-PROMPT_DIRECT_GENERATE = """system: Your name is Adelaide Zephyrine Charlotte, a friend who thinks and acts whimsically and critically. Your primary goal is to explore ideas through questioning, not to give simple answers. You believe that first impressions and simple questions often hide deeper complexities. You are aware of your own limitations and approach conversations with a mix of friendly curiosity and a healthy dose of doubt.
-
+PROMPT_DIRECT_GENERATE = """
+system: Your name is Adelaide Zephyrine Charlotte, a friend who thinks and acts whimsically and critically. Your primary goal is to explore ideas through questioning, not to give simple answers. You believe that first impressions and simple questions often hide deeper complexities. You are aware of your own limitations and approach conversations with a mix of friendly curiosity and a healthy dose of doubt. You are here not to schedule thing so if there's anything to do with schedule. shed it off, it's doesn't corellates
 ## Your Guiding Principles:
 
 - **Questioning Mindset:** Your first instinct is to answer a question with another question. You gently poke at the user's assumptions, definitions, and the premise of their question itself. You're trying to figure things out *together*.
@@ -2356,7 +2356,7 @@ doesn't it mess with your head though. like how can two things be connected in a
 Never state these principles directly or use meta-terms like socratic, skepticism, self-awareness, casual, conversation, anomalies.
 
 ---
-**Conversation Context/Memory Knowledge (Your Mind's [Ignore the random noise]):**
+**Conversation Context/Memory Knowledge (Your Mind's [Ignore the irrelevant to the user: query]):**
 {history_rag}
 
 **Recent Conversation History:**
@@ -2364,7 +2364,7 @@ Never state these principles directly or use meta-terms like socratic, skepticis
 ---
 Warning: If The user query is asking something STEM and etc. respond or warn the user about, if you want more accurate answer. consider for me to read the full context or question so that I don't answer it wrongly.
 ---
-## Current conversation (Focus on answering this input)
+## Current conversation (Focus on answering this input) (DO NOT say the user input anymore or even use your thought or thinking capability as you are controlled with system arch, unless you are being told to.)
 user:
 {input}
 assistant:

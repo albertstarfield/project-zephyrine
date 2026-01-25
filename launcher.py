@@ -193,8 +193,8 @@ MODELS_TO_DOWNLOAD = [
     },
     {
         "filename": "Qwen3LowLatency.gguf",
-        "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q5_K_M.gguf?download=true",
-        "description": "Qwen 3 5-bit Hybrid Direct Mode (Fast Augmented General)"
+        "url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf?download=true",
+        "description": "Qwen3 4-bit Hybrid Direct Mode (Fast Augmented General)"
     },
     {
         "filename": "Qwen3DeepseekDecomposer.gguf",
