@@ -176,11 +176,22 @@ function ChatPage({
       };
     }
   }, [handleScroll]);
+  
+  const lastMessageIdRef = useRef(null);
 
   useEffect(() => {
-    if (bottomRef.current && (visibleMessages[visibleMessages.length - 1]?.sender === 'user' || isGenerating)) {
+    if (!bottomRef.current || !visibleMessages.length) return;
+
+    const lastMessage = visibleMessages[visibleMessages.length - 1];
+    const isNewMessage = lastMessage.id !== lastMessageIdRef.current;
+
+    // Only scroll if it's actually a NEW message or we are actively generating text
+    if (isNewMessage || isGenerating) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
+
+    // Update tracker
+    lastMessageIdRef.current = lastMessage.id;
   }, [visibleMessages, isGenerating]);
 
   const updateVisibleMessages = (newAllMessages) => {
@@ -228,9 +239,14 @@ function ChatPage({
             id: assistantMessageId,
             userMessage 
           } = message.payload;
+          
+          const shouldSilence = 
+              !assistantContent || 
+              assistantContent.trim() === "" || 
+              /NoResponseForThisQuery/i.test(assistantContent);
 
-          if (assistantContent && assistantContent.includes("*NoResponseForThisQuery*")) {
-              console.log("ChatPage: Received '*NoResponseForThisQuery*' flag. Silencing response.");
+          if (shouldSilence) {
+              console.log("ChatPage: Silencing response (Flag detected or empty content).");
               if (optimisticMessageId) {
                   setAllMessages((prev) => {
                       const updatedMessages = [...prev];
@@ -357,8 +373,8 @@ function ChatPage({
 
           const hasOpenThinkFinal = finalContent.replace(/<think>[\s\S]*?<\/think>/g, "");
           const isCurrentlyThinkingFinal = hasOpenThinkFinal;
-
-          if (finalContent && currentAssistantMessageId.current) {
+          // if (finalContent && finalContent.trim().length > 0 && currentAssistantMessageId.current) {
+          if (finalContent && finalContent.trim().length > 0 && currentAssistantMessageId.current) {
             const finalMessage = {
               id: currentAssistantMessageId.current,
               sender: "assistant",
