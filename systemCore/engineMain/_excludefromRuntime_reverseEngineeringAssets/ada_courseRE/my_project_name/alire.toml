@@ -1,4 +1,4 @@
-name = "zephyrine_host"
+name = "my_project_name"
 description = ""
 version = "0.1.0-dev"
 
@@ -8,10 +8,4 @@ licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
 website = ""
 tags = []
 
-executables = ["zephyrine_host"]
-
-[[depends-on]]
-aws = "^25.2.0"
-
-[[depends-on]]
-gnatprove = "^15.1.0"
+executables = ["my_project_name"]

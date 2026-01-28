@@ -1,3 +1,8 @@
+-   **ID:** CORE-REFACTOR-004
+-   **Title:** Implement Disciplined Ada/SPARK Build Process and Refactor Agent for Procedural Tasks
+-   **Status:** Resolved
+-   **Description:** This change introduces a more rigorous and disciplined build workflow for Ada/SPARK components. New helper scripts (`alr_compile`, `alr_spark`, `alr_whiplash`) are added to the environment via the launcher to standardize compilation and verification, enforcing a 'whiplash' discipline of "verify then compile". The agent implementation has been significantly refactored, renaming `agent.py` to `procedural_adaptivesystem_agent.py` to better reflect its role. The agent's internal logic is now a two-phase process (plan then translate) to improve the reliability of tool use and includes a "snowball check" to filter out low-quality responses. The agent is now also capable of consulting reference manuals and documents via a new RAG implementation.
+
 -   **ID:** CORTEX-FEAT-018
 -   **Title:** Ground AdaptiveSystem in Time with Multi-Calendar Temporal Anchor
 -   **Status:** Resolved

@@ -1,5 +1,5 @@
-# agent.py
-
+# procedural_adaptivesystem_agent.py
+# https://arxiv.org/abs/2502.07728 code whiplash discipline
 import asyncio
 import time
 import json
@@ -15,6 +15,7 @@ from typing import Dict, Any, List, Optional, Tuple, Union
 import uuid
 import ast
 import fnmatch
+import tiktoken
 from playwright.async_api import async_playwright
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
@@ -27,14 +28,17 @@ try:
     from CortexConfiguration import *
 except ImportError:
     # Fallbacks if config import fails during agent initialization (less ideal)
-    logger.error("Failed to import config constants in agent.py")
+    logger.error("Failed to import config constants in procedural_adaptivesystem_agent.py")
     RAG_HISTORY_COUNT = 5
+
+
+
 
 # Import necessary DB functions and session factory
 try:
     from database import add_interaction, get_recent_interactions, get_past_scriptingseqprogramminginterface_attempts, SessionLocal, Interaction
 except ImportError:
-    logger.error("Failed to import database components in agent.py")
+    logger.error("Failed to import database components in procedural_adaptivesystem_agent.py")
     # Define dummy functions/classes if needed for basic loading, but app will likely fail
     def add_interaction(*args, **kwargs): 
         pass
@@ -55,6 +59,38 @@ interruption_error_marker = "Worker task interrupted by higher priority request"
 # --- Define the path to the system prompt file ---
 AGENT_PROMPT_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_system_prompt.txt")
 
+PROMPT_STRICT_ADA_DEVELOPER = """
+[STRICT SYSTEM IMPERATIVE: ADA DEVELOPMENT ONLY]
+You are an expert Ada Developer specializing in High-Integrity Systems.
+You are FORBIDDEN from writing code in Python, C++, or Rust. You must ONLY use Ada.
+
+[REQUIRED WORKFLOW]
+1. INITIALIZE: If starting a new task, use `alr -n init --bin <project_name>` to create a crate.
+2. NAVIGATE: Use `change_working_directory <project_name>` to enter the project.
+3. EXPLORE: Use `list_files` to verify the structure (look for .gpr and src/).
+4. CODE: Write or modify .adb/.ads files in `src/` using `write_to_file`.
+5. VERIFY & BUILD: Run `execute_command("alr_whiplash")` to compile. 
+   - 'alr_whiplash' runs SPARK verification (gnatprove) -> GNAT Compile (gprbuild).
+
+[ERROR LOOP STRATEGY]
+If 'alr_whiplash' fails (Non-zero Return Code):
+1. READ the error log from the tool output carefully.
+2. ANALYZE the specific line number and error message.
+3. FIX the code using `write_to_file` (overwrite) or `replace_in_file`.
+4. RETRY `execute_command("alr_whiplash")`.
+5. REPEAT until the build is clean (Return Code 0).
+
+[MEMORY]
+Your current project location is stored in the system's CWD variable.
+"""
+
+def _count_tokens(self, text: str) -> int:
+    """Helper to count tokens using tiktoken (cl100k_base)."""
+    try:
+        encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
+    except Exception:
+        return len(text.split())  # Fallback estimate
 
 # Implementation for Agent tools using basic os/subprocess
 class AgentTools:
@@ -66,6 +102,22 @@ class AgentTools:
         logger.info(f"🛠️ Initializing AgentTools with CWD: {self.cwd}")
         # NOTE: These implementations are basic. Real-world tools need more robust error handling,
         # security checks (especially for execute_command), and platform compatibility checks.
+
+    async def change_working_directory(self, path: str) -> str:
+        """
+        Changes the agent's current working directory (CWD) persistently.
+        Use this after creating a new project (e.g., 'alr init') to enter it.
+        """
+        # Resolve absolute path
+        new_path = os.path.abspath(os.path.join(self.cwd, path))
+
+        if not os.path.isdir(new_path):
+            return f"Error: Directory '{new_path}' does not exist."
+
+        # Update the state
+        self.cwd = new_path
+        logger.info(f"📂 Agent CWD changed to: {self.cwd}")
+        return f"Successfully changed directory to: {self.cwd}"
 
     async def execute_command(self, command: str, requires_approval: bool) -> str:
         """Executes a shell command."""
@@ -341,13 +393,14 @@ class AgentTools:
 
 class AmaryllisAgent:
     """Manages the state and execution loop for the Agent persona (Adelaide)."""
-    def __init__(self, provider: Any, cwd: str, supports_computer_use: bool = True):
+    def __init__(self, provider: Any, cwd: str, supports_computer_use: bool = True, vector_compute: Any = None):
         self.provider = provider
         self.cwd = cwd
         self.supports_computer_use = supports_computer_use
         self.playwright = None
         self.browser = None
         self.page = None
+        self.vector_compute = vector_compute
         class MockMcpHub:
             def getServers(self):
                 return []
@@ -362,6 +415,30 @@ class AmaryllisAgent:
         self.setup_prompts()
         self.conversation_history: List[Dict[str, Any]] = []
         self.current_session_id: Optional[str] = None
+        self.code_llm = self.provider.get_model("code")
+        if not self.code_llm:
+            logger.warning("Code model not found. Falling back to default for tool translation.")
+            self.code_llm = self.provider.get_model("default")
+        # Define the prompt for the Translator (Code Model)
+        # It takes the 'plan' from the Default model and formats it into the system's XML tool format.
+        translation_system_msg = (
+            "You are a strict API Syntax Translator. "
+            "Your ONLY job is to convert the User's natural language plan into a valid XML Tool Request.\n"
+            "Format:\n"
+            "<tool_name>\n"
+            "    <argument_name>value</argument_run_task_in_background_name>\n"
+            "</tool_name>\n\n"
+            "If the tool requires complex data (like 'write_to_file'), ensure the content is properly escaped.\n"
+            "Do NOT add any conversational text. Output ONLY the XML."
+        )
+        self.tool_translator_chain = (
+                ChatPromptTemplate.from_messages([
+                    SystemMessage(content=translation_system_msg),
+                    HumanMessage(content="{plan}")
+                ])
+                | self.code_llm
+                | StrOutputParser()
+        )
 
     async def start_browser(self):
         """Starts the Playwright browser instance."""
@@ -391,7 +468,7 @@ class AmaryllisAgent:
             logger.info(f"📖 Read agent prompt from: {AGENT_PROMPT_FILE_PATH}")
         except Exception as e:
             logger.critical(f"❌ Failed reading agent prompt: {e}")
-            raw_agent_system_prompt = "You are Adelaide, a helpful AI agent. Respond to the user's requests."
+            raw_agent_system_prompt = "You are Adelaide, a helpful agent. Respond to the requests."
 
         def osName(): return sys.platform
         def getShell(): return os.environ.get("SHELL", "/bin/sh")
@@ -758,12 +835,33 @@ class AmaryllisAgent:
 
         return "\n---\n".join(history_str_parts) if history_str_parts else "No recent agent history."
 
+    async def _get_agent_url_rag_string(self, db: Session, user_input: str) -> str:
+        """
+        Retrieves relevant context from the Vector Database (Docs, Manuals, Knowledge Base).
+        This allows the agent to 'read' uploaded manuals before acting.
+        """
+        if not self.vector_compute:
+            return "Reference Context: [Vector Database Not Connected]"
 
-    def _get_agent_url_rag_string(self, db: Session, user_input: str) -> str:
-        """Agent relies on tools for URL data, returns placeholder."""
-        # If URL vector store is available globally (e.g., shared instance or loaded by agent),
-        # could implement RAG here. For now, stick to tool-based access.
-        return "URL context not actively used by Agent. Use 'read_file' or other tools if needed."
+        logger.info(f"📚 Agent RAG: Searching for manual references regarding: '{user_input[:50]}...'")
+
+        try:
+            # We use the same query logic as background_generate
+            # This searches uploaded files (PDFs, code) and recent memory
+            vec_results = await self.vector_compute.query_vectors_async(
+                query=user_input,
+                top_k=3,
+                threshold=0.7
+            )
+
+            if not vec_results or "No relevant" in vec_results:
+                return "Reference Context: No specific documentation found for this step."
+
+            return f"Reference Context (Manuals/Docs):\n{vec_results}"
+
+        except Exception as e:
+            logger.error(f"Agent RAG Error: {e}")
+            return f"Reference Context: Error retrieving docs ({e})"
 
 
     async def _run_task_in_background(self, initial_interaction_id: int, user_input: str, session_id: str):
@@ -852,26 +950,126 @@ class AmaryllisAgent:
                 llm_start_time = time.monotonic()
                 logger.debug(f"Agent Turn {turn_count}: Calling LLM with Priority ELP0...")
                 agent_llm_response = "" # Initialize response variable
-                try:
-                    # Pass ELP0 priority via the config dictionary
-                    agent_llm_response = await asyncio.to_thread(
-                        self.agent_chain.invoke, prompt_inputs, config={'priority': ELP0}
-                    )
-                    llm_duration = (time.monotonic() - llm_start_time) * 1000
-                    logger.info(f"🧠 Agent LLM Turn {turn_count} finished ({llm_duration:.2f} ms).")
-                    logger.trace(f"Agent LLM Turn {turn_count} Raw Response:\n{agent_llm_response}")
+                thinking_input = prompt_inputs.copy()
+                # Determine effective input string
+                effective_input = thinking_input.get("current_input", "")
+                thinking_instruction = (
+                    "\n\n[SYSTEM INSTRUCTION: PHASE 1]\n"
+                    "Analyze the current state and deciding the next step.\n"
+                    "Describe your plan in detail, including which tool you intend to use and exactly what parameters it needs.\n"
+                    "Do NOT output the XML tool tags yet. Just output your reasoning and plan."
+                )
+                # --- STEP 1: ROUTER & SPECIALIST SELECTION (With Snowball Check) ---
+                plan_response = ""
+                blacklisted_roles = []  # Track roles that failed the "42 token" check
+                max_retries = 3
 
-                except Exception as llm_err:
-                     # Handle errors during the LLM invocation itself
-                     logger.error(f"❌ Agent Task {initial_interaction_id}: LLM invocation failed on turn {turn_count}: {llm_err}")
-                     logger.exception("LLM Invocation Traceback:")
-                     # Mark task as failed and exit loop
-                     if db and initial_interaction:
-                         initial_interaction.llm_response = f"[Agent task {initial_interaction_id} failed on turn {turn_count} due to LLM error: {llm_err}]"
-                         initial_interaction.classification = "task_failed_llm_error"
-                         
-                         db.commit()
-                     break # Exit the while loop
+                for attempt in range(max_retries):
+                    # A. ROUTER (Domain Selection)
+                    # We re-run router or fallback if the previous specialist failed
+                    current_domain_decision = "general"
+                    try:
+                        # Only run router if we haven't locked in a fallback yet
+                        if "default" not in blacklisted_roles:
+                            router_out = await asyncio.to_thread(
+                                self.domain_router_chain.invoke,
+                                {"context": str(self.conversation_history[-2:]), "input": current_input_for_llm}
+                            )
+                            current_domain_decision = router_out.strip().lower()
+                    except Exception:
+                        current_domain_decision = "general"
+
+                    # B. RESOLVE MODEL ROLE (Apply Blacklist)
+                    # Map domain to config key, checking blacklist
+                    target_role = "default"  # Baseline fallback
+
+                    if (
+                            "code" in current_domain_decision or "coding" in current_domain_decision) and "code" not in blacklisted_roles:
+                        target_role = "code"
+                    elif "physics" in current_domain_decision and "physics" not in blacklisted_roles:
+                        target_role = "physics"
+                    elif "math" in current_domain_decision and "math" not in blacklisted_roles:
+                        target_role = "math"
+                    # If the determined target is already blacklisted, force default
+                    if target_role in blacklisted_roles:
+                        target_role = "default"
+
+                    logger.info(
+                        f"🧭 Agent Step {turn_count} (Attempt {attempt + 1}): Router='{current_domain_decision}' -> Selected Role='{target_role}'")
+
+                    specialist_model = self.provider.get_model(target_role) or self.provider.get_model("default")
+
+                    # C. BUILD PROMPT (Same as before)
+                    prompt_template = ChatPromptTemplate.from_messages([
+                        SystemMessage(content=self.final_system_prompt_template_string.format(**prompt_inputs)),
+                        MessagesPlaceholder(variable_name="agent_history_turns"),
+                        HumanMessage(content="{current_input}")
+                    ])
+                    thinking_chain = prompt_template | specialist_model | StrOutputParser()
+
+                    # D. EXECUTE THINKING (Plan Generation)
+                    thinking_instruction = (
+                        "\n\n[SYSTEM INSTRUCTION: PHASE 1]\n"
+                        "Analyze the current state. Describe your plan in detail, including which tool to use and its parameters.\n"
+                        "Do NOT output the XML tags yet. Just output your reasoning and plan."
+                    )
+
+                    # Temporarily modify input for the prompt (append instruction)
+                    effective_input = current_input_for_llm + thinking_instruction
+
+                    try:
+                        raw_plan = await asyncio.to_thread(
+                            thinking_chain.invoke,
+                            {**prompt_inputs, "current_input": effective_input},
+                            config={'priority': ELP0}
+                        )
+
+                        # E. SNOWBALL CHECK (The Filter)
+                        # Clean think tags first
+                        clean_plan = re.sub(r"<think>.*?</think>", "", raw_plan,
+                                            flags=re.DOTALL | re.IGNORECASE).strip()
+
+                        token_len = self._count_tokens(clean_plan)
+
+                        # The "42" check - prevent lazy/short answers
+                        if token_len < 42:
+                            logger.warning(
+                                f"⚠️ Plan too short ({token_len} tokens). Blacklisting role '{target_role}' and retrying...")
+                            blacklisted_roles.append(target_role)
+                            if attempt == max_retries - 1:
+                                logger.error("❌ Exhausted retries on short plan. Accepting potentially weak response.")
+                                plan_response = clean_plan
+                                break
+                            continue  # Retry loop
+
+                        # If good:
+                        plan_response = clean_plan
+                        logger.info(f"🧠 Phase 1 Plan Accepted ({token_len} tokens).")
+                        break  # Exit retry loop
+
+                    except Exception as llm_err:
+                        logger.error(f"Agent Planning Error (Attempt {attempt + 1}): {llm_err}")
+                        blacklisted_roles.append(target_role)
+                        if attempt == max_retries - 1:
+                            break
+
+                # --- STEP 2: TRANSLATE TO SYNTAX (Coding Phase) ---
+                # This runs AFTER the loop settles on a plan
+                if not plan_response:
+                    plan_response = "Error: Failed to generate a valid plan."
+
+                logger.debug(f"Agent Turn {turn_count}: Phase 2 - Translating to XML...")
+
+                try:
+                    tool_syntax_response = await asyncio.to_thread(
+                        self.tool_translator_chain.invoke,
+                        {"plan": plan_response}
+                    )
+                    # Unified response
+                    agent_llm_response = f"{plan_response}\n\n{tool_syntax_response}"
+                except Exception as trans_err:
+                    logger.error(f"Translation failed: {trans_err}")
+                    agent_llm_response = plan_response  # Fallback to just text
 
                 # --- *** Interruption Handling *** ---
                 if isinstance(agent_llm_response, str) and interruption_error_marker in agent_llm_response:
@@ -899,7 +1097,7 @@ class AmaryllisAgent:
                 add_interaction(
                     db, session_id=session_id, mode="agent", input_type="llm_response",
                     user_input=f"[Agent response turn {turn_count}]", # Contextual input description
-                    llm_response=agent_llm_response, execution_time_ms=llm_duration
+                    llm_response=agent_llm_response, execution_time_ms=10000000
                 )
 
                 # --- Parse LLM response for tool request or final output types ---
@@ -1053,4 +1251,4 @@ async def _start_agent_task(agent_instance: AmaryllisAgent, initial_interaction_
     logger.warning(f"▶️ Agent background task scheduled.")
 
 # Global agent instance placeholder - initialized in app.py
-ai_agent: Optional[AmaryllisAgent] = None
+AdaptiveSystem_Agent: Optional[AmaryllisAgent] = None
