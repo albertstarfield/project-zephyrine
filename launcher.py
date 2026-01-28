@@ -3510,6 +3510,112 @@ def _ensure_alire_and_gnat_toolchain():
     return True
 
 
+def _create_alire_helper_scripts():
+    """
+    Ada/SPARK compiler helper tool for Adaptive system not only on Launcher but the systemCore uses unified command that is planted on the virtual runtime environment
+    Creates 'alr_compile', 'alr_spark', and 'alr_whiplash' wrapper scripts in the Conda environment's bin directory.
+    - alr_compile: Wrapper for 'gprbuild'
+    - alr_spark: Wrapper for 'gnatprove' (SPARK)
+    - alr_whiplash: Runs 'gnatprove' first, and if successful, runs 'gprbuild' (Compile)
+
+    Handles platform-specific environment variable sanitization (removing BUILD/MODE)
+    required for successful Ada/SPARK builds on macOS/Linux.
+    """
+    print_system("--- Creating Alire helper scripts (alr_compile, alr_spark, alr_whiplash) ---")
+
+    # Determine the target bin directory inside the Conda environment
+    bin_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "bin")
+    if IS_WINDOWS and not os.path.exists(bin_dir):
+        bin_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "Scripts")
+
+    os.makedirs(bin_dir, exist_ok=True)
+
+    # --- Script Definitions ---
+
+    # 1. alr_compile (Wraps gprbuild)
+    compile_filename = "alr_compile.bat" if IS_WINDOWS else "alr_compile"
+
+    # 2. alr_spark (Wraps gnatprove with -j 0)
+    spark_filename = "alr_spark.bat" if IS_WINDOWS else "alr_spark"
+
+    # 3. alr_whiplash (Wraps gnatprove THEN gprbuild)
+    whiplash_filename = "alr_whiplash.bat" if IS_WINDOWS else "alr_whiplash"
+
+    # --- Content Generation ---
+    if IS_WINDOWS:
+        # Windows Batch Scripts
+        compile_content = (
+            "@echo off\n"
+            "alr exec -- gprbuild %*\n"
+        )
+        spark_content = (
+            "@echo off\n"
+            "alr exec -- gnatprove -j 0 %*\n"
+        )
+        # Whiplash: Check errorlevel after prove before compiling
+        whiplash_content = (
+            "@echo off\n"
+            "echo [Whiplash] Phase 1: SPARK Verification...\n"
+            "call alr exec -- gnatprove -j 0 %*\n"
+            "if %errorlevel% neq 0 (\n"
+            "    echo [Whiplash] Verification failed. Aborting compilation.\n"
+            "    exit /b %errorlevel%\n"
+            ")\n"
+            "echo [Whiplash] Phase 2: GNAT Compilation...\n"
+            "alr exec -- gprbuild %*\n"
+        )
+    else:
+        # Linux/macOS Shell Scripts
+        compile_content = (
+            "#!/bin/sh\n"
+            "# Wrapper to sanitize environment before running gprbuild via alr\n"
+            "exec alr exec -- env -u BUILD -u MODE -u bld -u mode gprbuild \"$@\"\n"
+        )
+        spark_content = (
+            "#!/bin/sh\n"
+            "# Wrapper to sanitize environment before running gnatprove via alr\n"
+            "exec alr exec -- env -u BUILD -u MODE -u bld -u mode gnatprove -j 0 \"$@\"\n"
+        )
+        # Whiplash: Run prove, check exit code, then run build
+        whiplash_content = (
+            "#!/bin/sh\n"
+            "# Wrapper to sanitize environment before running gnatprove THEN gprbuild\n"
+            "echo \"[Whiplash] Phase 1: SPARK Verification...\"\n"
+            "alr exec -- env -u BUILD -u MODE -u bld -u mode gnatprove -j 0 \"$@\"\n"
+            "if [ $? -ne 0 ]; then\n"
+            "    echo \"[Whiplash] Verification failed. Aborting compilation.\"\n"
+            "    exit 1\n"
+            "fi\n"
+            "echo \"[Whiplash] Phase 2: GNAT Compilation...\"\n"
+            "exec alr exec -- env -u BUILD -u MODE -u bld -u mode gprbuild \"$@\"\n"
+        )
+
+    # --- Write Files ---
+    scripts_to_create = [
+        (compile_filename, compile_content),
+        (spark_filename, spark_content),
+        (whiplash_filename, whiplash_content)
+    ]
+
+    try:
+        for fname, content in scripts_to_create:
+            fpath = os.path.join(bin_dir, fname)
+
+            # Write the file
+            with open(fpath, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(content)
+
+            # Make executable on Unix
+            if not IS_WINDOWS:
+                current_mode = os.stat(fpath).st_mode
+                os.chmod(fpath, current_mode | 0o111)  # Add executable bit
+
+            print_system(f"  -> Created helper: {fpath}")
+
+        return True
+    except Exception as e:
+        print_error(f"Failed to create Alire helper scripts: {e}")
+        return False
 
 def _check_and_repair_conda_env(env_path: str) -> bool:
     """
@@ -4771,6 +4877,8 @@ if __name__ == "__main__":
             if not _ensure_conda_package("go=1.23", executable_to_check="go", conda_channel="conda-forge", is_critical=True): setup_failures.append("Failed to install go, which is critical for terminal operations. requesting post install retry")
             # Ensure Alire/GNAT for Ada compilation
             if not _ensure_alire_and_gnat_toolchain(): setup_failures.append(f"Failed to install/ensure critical tool: Ada toolchain failed to install")
+
+            _create_alire_helper_scripts() #creates alr_compile and alr_prove (add suffix.bat for NT) for call zephy internal to use and platform quirkiness being planted and subjugated here.
 
             # ffmpeg (non-critical, can fallback)
             _ensure_conda_package("ffmpeg", executable_to_check="ffmpeg", is_critical=False)
