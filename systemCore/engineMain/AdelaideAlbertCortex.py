@@ -16,7 +16,7 @@ import os
 import queue
 import random
 import re
-import subprocess  # Used in AgentTools (agent.py)
+import subprocess  # Used in AgentTools (procedural_adaptivesystem_agent.py)
 import sys
 import tempfile
 
@@ -221,7 +221,7 @@ direct_generate_task_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DIRECT_GENERAT
 
 # --- Local Imports with Error Handling ---
 try:
-    from agent import (  # Keep Agent imports
+    from procedural_adaptivesystem_agent import (  # Keep Agent imports
         AgentTools,
         AmaryllisAgent,
         _start_agent_task,
@@ -5599,7 +5599,9 @@ class CortexThoughts:
                             logger.warning(
                                 f"{log_prefix} Invalid category '{classification_val}' from reformat. Defaulting."
                             )
-                            classification_val = "chat_simple"
+                            classification_val = "chat_simple""chat_simple",
+                            "chat_complex",
+                            "agent_task",
                         interaction_data_for_metrics["classification"] = (
                             classification_val
                         )
@@ -9559,7 +9561,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
             db, search_query, session_id
         )
 
-        blacklisted_models = []
+        blacklisted_models = ["router", "vlm", "general_fast", "language_to_actionCall_Actuator", "latex"]
         max_retries = 3 
         
         for attempt in range(max_retries):
@@ -17959,7 +17961,7 @@ try:
     cortex_text_interaction = CortexThoughts(cortex_backbone_provider)  # compatibility
     AGENT_CWD = os.path.dirname(os.path.abspath(__file__))
     SUPPORTS_COMPUTER_USE = True
-    ai_agent = AmaryllisAgent(
+    AdaptiveSystem_Agent = AmaryllisAgent(
         cortex_backbone_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE
     )
     logger.success("✅ AI Instances Initialized.")
@@ -19435,7 +19437,7 @@ else:
     if (
         cortex_backbone_provider is None
         or cortex_text_interaction is None
-        or ai_agent is None
+        or AdaptiveSystem_Agent is None
     ):
         logger.critical(
             "AdelaideAlbertCortex: 🔥🔥 Core AI components (cortex_backbone_provider, cortex_text_interaction, ai_agent) are NOT INITIALIZED. Application cannot start properly."

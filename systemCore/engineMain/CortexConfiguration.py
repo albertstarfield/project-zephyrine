@@ -2485,9 +2485,9 @@ Your goal is to break down a complex user query into a logical, sequential "Grid
 """
 
 PROMPT_COMPLEXITY_CLASSIFICATION = """Analyze the following user query and the recent conversation context. Classify the query into ONE of the following categories based on how it should be processed:
-1.  `chat_simple`: Straightforward question/statement, direct answer needed.
-2.  `chat_complex`: Requires deeper thought/analysis (ToT simulation), but still conversational.
-3.  `agent_task`: Requires external actions using tools (files, commands, etc.).
+1. `chat_simple`: Straightforward question/statement, direct answer needed.
+2. `chat_complex`: Requires deeper thought/analysis (Procedural processing), but still conversational.
+3. `agent_task`: Requires changes in files, modification, or coding in a specific place or file.
 
 User Query: {{input}}
 Conversation Context: {{history_summary}}

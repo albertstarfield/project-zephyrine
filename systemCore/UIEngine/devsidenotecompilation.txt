@@ -1,0 +1,4 @@
+
+alr exec -- env -u BUILD -u MODE -u bld -u mode gnatprove -largs -L$(xcrun --show-sdk-path)/usr/lib #darwin compilation seq
+# lazy way to check bug
+alr exec -- env -u BUILD -u MODE -u bld -u mode gnatprove -j 6

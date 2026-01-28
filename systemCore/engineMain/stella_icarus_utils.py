@@ -231,14 +231,16 @@ class StellaIcarusAdaDaemonManager:
         if not self.is_enabled: return
 
         logger.info("--- Building all discovered StellaIcarus Ada projects... ---")
+        build_command = ["alr_compile.bat"] if os.name == "nt" else ["alr_compile"]
+
         for project in self.ada_projects:
             logger.info(f"Building '{project['name']}' in '{project['path']}'...")
             try:
                 # Capture BOTH stdout and stderr to catch all compiler messages
                 process = subprocess.run(
-                    ["alr", "build"],
+                    build_command,
                     cwd=project["path"],
-                    capture_output=True, text=True, check=False, timeout=300
+                    capture_output=True, text=True, check=False, timeout=1800
                 )
                 
                 if process.returncode == 0:

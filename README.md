@@ -212,6 +212,7 @@ With universe of appreciation presented to you all,
 12. Zhou, H., Chen, Y., Guo, S., Yan, X., Lee, K. H., Wang, Z., Lee, K. Y., Zhang, G., Shao, K., Yang, L., & Wang, J. (2025). Memento: Fine-tuning LLM Agents without Fine-tuning LLMs. arXiv preprint arXiv:2508.16153. https://arxiv.org/abs/2508.16153
 13. https://www.airbus.com/. (2023, January 6). Could the humble dragonfly help pilots during flight? Airbus. https://www.airbus.com/en/newsroom/stories/2023-01-could-the-humble-dragonfly-help-pilots-during-flight
 14. Station Crew Demonstrates AI Assistant and Ultra-High Res Camera - NASA. (2024, September 19). NASA. https://www.nasa.gov/blogs/spacestation/2024/09/19/station-crew-demonstrates-ai-assistant-and-ultra-high-res-camera/
+15. Cramer, M., & McIntyre, L. (2025). Verifying LLM-Generated Code in the Context of Software Verification with Ada/SPARK. ArXiv.org. https://arxiv.org/abs/2502.07728
 
 ‌
 ---
