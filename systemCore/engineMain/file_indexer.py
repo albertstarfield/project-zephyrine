@@ -1382,7 +1382,8 @@ class FileIndexer:
                     logger.info(f"{log_prefix}: Text extracted. Proceeding to initial embedding...")
                     await self._embed_and_store(record_to_embed, content, db_session, is_final_embedding=False)
                 elif not content:
-                    logger.debug(f"{log_prefix}: No content extracted, skipping initial embedding.")
+                    #logger.debug(f"{log_prefix}: No content extracted, skipping initial embedding.") #only for debugging purposes
+                    pass
 
         except Exception as e_phase1:
             logger.error(f"{log_prefix}: Unhandled error in Phase 1 for {file_path}: {e_phase1}", exc_info=True)
