@@ -4,7 +4,7 @@ import sys
 import time
 import threading
 import gc # For garbage collection
-from typing import Dict, Any, Optional, List, Iterator, Tuple, Union
+from typing import Dict, Any, Optional, List, Iterator, Tuple, Union, cast
 from loguru import logger
 import json        # Added for worker communication
 import subprocess  # Added for worker management
@@ -237,7 +237,8 @@ class LlamaCppVisionWrapper(Runnable):
                 priority = config["configurable"].get("priority", priority)
             # 3. Check top-level (Legacy/Direct way)
             if priority == 0:
-                priority = config.get("priority", priority)
+                #priority = config.get("priority", priority)
+                priority = cast(dict, config).get("priority", priority)
 
         n_gpu_override = None
         if config and "metadata" in config:
@@ -857,7 +858,7 @@ class CortexEngine:
 
                     # Read Value (with Array Skip logic)
                     if val_type == 8:  # String
-                        l = struct.unpack('<Q', f.read(8))[0];
+                        l = struct.unpack('<Q', f.read(8))[0]
                         f.seek(l, 1)
                     elif val_type == 9:  # Array
                         type_a = struct.unpack('<I', f.read(4))[0]
@@ -869,7 +870,7 @@ class CortexEngine:
                             sz = 8
                         if type_a == 8:  # String Array - Slow skip
                             for _ in range(len_a):
-                                l = struct.unpack('<Q', f.read(8))[0];
+                                l = struct.unpack('<Q', f.read(8))[0]
                                 f.seek(l, 1)
                         else:  # Scalar Array - Fast skip
                             f.seek(sz * len_a, 1)
@@ -1642,7 +1643,7 @@ class CortexEngine:
 
                 # We no longer check for the llama-cpp-python library (LLAMA_CPP_AVAILABLE).
 
-                # Instead, we rely on the llama-cli binary located in the environment path.
+                # Instead, we rely on the LMExec binary located in the environment path.
 
                 self._llama_gguf_dir = LLAMA_CPP_GGUF_DIR  # from CortexConfiguration.py
 
@@ -1661,18 +1662,6 @@ class CortexEngine:
 
                 conda_bin_dir = os.path.dirname(self._python_executable)
 
-                cli_bin_name = "llama-cli" if os.name != "nt" else "llama-cli.exe"
-
-                embed_bin_name = "llama-embedding" if os.name != "nt" else "llama-embedding.exe"
-
-                if not os.path.isfile(os.path.join(conda_bin_dir, cli_bin_name)):
-                    logger.warning(
-                        f"⚠️ {cli_bin_name} not found in {conda_bin_dir}. Ensure launcher.py finished the direct build.")
-
-                if not os.path.isfile(os.path.join(conda_bin_dir, embed_bin_name)):
-                    logger.warning(
-                        f"⚠️ {embed_bin_name} not found in {conda_bin_dir}. Ensure launcher.py finished the direct build.")
-
                 # --- Setup Embeddings ---
 
                 self.EMBEDDINGS_MODEL_NAME = self._llama_model_map.get("embeddings")
@@ -1683,7 +1672,7 @@ class CortexEngine:
 
                         f"Setting up llama.cpp embeddings using role 'embeddings' (File: {self.EMBEDDINGS_MODEL_NAME})")
 
-                    # The wrapper now handles delegation to llama-embedding via the worker process
+                    # The wrapper now handles delegation to LMText2Vector via the worker process
 
                     self.embeddings = LlamaCppEmbeddingsWrapper(ai_provider=self)
 

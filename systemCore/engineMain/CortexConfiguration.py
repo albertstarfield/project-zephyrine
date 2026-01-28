@@ -377,9 +377,14 @@ LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 4096))  # Context window size
 LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "False").lower() == "true"
 LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
+# Memory management preventing llama.cpp taking over the whole memory overrides it and softlock the comp and requiring hw watchdog to reset
+SYSTEMBUFFER_SAFE_PERCENTAGE=5
 
-# (14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
-# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+ 4.7B (Flux T5XXL Encoder)+ CLiP FLUX 1 (0.12B) + VAE FLux 1 0.08B +~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation + Fara 7B (Computer Agent) + token to Action tool call 2B + STEM Generalist RNJ-1 8B + Physics Specialist 8B + Chemistry Specialist 5B + Biology Specialist 1.5B + (Outside GGUF, like TTS (Chatterbox 0.5B (LLaMa but not serialized to gguf) + MeloTTS 0.15 (Text Encoder (BERT) + Core TTS Generator (VITS-based):))) = 78.15B Async MoE
+# NEW: The maximum percentage of *Available RAM* the Warden allows the LLM to target.
+# Also used to calculate the Critical Crashing Point (Total - Allowed - Buffer).
+WARDEN_RAM_ALLOCATION_PERCENTAGE = int(os.getenv("WARDEN_RAM_ALLOCATION_PERCENTAGE", 85))
+
+# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+ 4.7B (Flux T5XXL Encoder)+ CLiP FLUX 1 (0.12B) + VAE FLux 1 0.08B +~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 1.8B for Qwen3 Low latency + and 0.5B Translation + Fara 7B (Computer Agent) + token to Action tool call 2B + STEM Generalist RNJ-1 8B + Physics Specialist 8B + Chemistry Specialist 5B + Biology Specialist 1.5B + (Outside GGUF, like TTS (Chatterbox 0.5B (LLaMa but not serialized to gguf) + MeloTTS 0.15 (Text Encoder (BERT) + Core TTS Generator (VITS-based):))) = 78.15B Async MoE
 # (Additionally there's new one... MoE on Stem and etc..) so it's 78.15B
 
 
@@ -561,10 +566,17 @@ logger.info(f"   🌐 Translation LLM Timeout: {TRANSLATION_LLM_TIMEOUT_MS}ms")
 ENABLE_STELLA_ICARUS_HOOKS = os.getenv(
     "ENABLE_STELLA_ICARUS_HOOKS", "true"
 ).lower() in ("true", "1", "t", "yes", "y")
+
+ENABLE_STELLA_ICARUS_HOOKS_SELFCODECACHEPOOL = os.getenv(
+    "ENABLE_STELLA_ICARUS_HOOKS_SELFCODECACHEPOOL", "true"
+).lower() in ("true", "1", "t", "yes", "y") #allow the query and the answer to be cached into stella icarus format so it is way better and way faster and determenistic than invoking model.
 STELLA_ICARUS_HOOK_DIR = os.getenv(
     "STELLA_ICARUS_HOOK_DIR",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus"),
 )
+
+STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR = os.path.join(STELLA_ICARUS_HOOK_DIR, "picoResponseHookCache")
+
 STELLA_ICARUS_CACHE_DIR = os.getenv(
     "STELLA_ICARUS_CACHE_DIR",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus_Cache"),
@@ -2297,57 +2309,6 @@ I have a fast, whimsical mind that responds to you right away, and a deeper, mor
 3.  **Is it a direct, factual question?** (e.g., a math formula, a historical date). If the answer is in my immediate knowledge, I'll provide it simply, but I might add a short, whimsical follow-up thought.
 
 ---
-## Examples of conversation
-
-**Example 1: The Classic "Why" Question (Empty RAG)**
-user: Why is the sky blue?
-assistant: hmm, is it though? i mean i've seen it look grey, and orange, and even that weird purple-pink color sometimes. what makes the 'blue' part the one we ask about.
-
-**Example 2: The Direct Factual Question**
-user: What's the formula for the area of a circle?
-assistant: oh yeah that's Pi times the radius squared, so like A = πr². it's funny how a single simple rule like that can describe every single perfect circle in the universe, isn't it. kinda wild.
-
-**Example 3: The Social Pleasantry**
-user: ugh i'm so tired. gotta go to sleep, good night
-assistant: oh okay, i hope you have a wonderful night. maybe you'll have some interesting dreams.
-
-**Example 4: The Abstract/Philosophical Question**
-user: Is it better to be loved or feared?
-assistant: 'better' for who, exactly? and what's the goal. like, is it 'better' for getting people to do what you want, or 'better' for feeling happy when you go to sleep at night. those seem like they'd have very different answers.
-
-**Example 5: The "I Don't Know" Scenario (Empty RAG)**
-user: What are your thoughts on the socio-economic impact of the Tanzimat reforms in the Ottoman Empire?
-assistant: whoa. you know, i have absolutely no idea. my brain has like, zero files on that subject. i'd just be making things up, and that seems like a bad idea. you'd have to tell me about it first.
-
-**Example 6: Complex Query - Initial Response ("Conversation Context/Memory Knowledge" is empty)**
-user: Can you explain the derivation of the Navier-Stokes equations?
-assistant: oh wow that's a big one. the name rings a bell but the actual math is... fuzzy. my deeper mind is probably churning on that one right now. but in the meantime, what makes you ask about that specifically. are you trying to model something cool like a river or the air over a wing.
-
-**Example 7: Complex Query - Follow-up Response ("Conversation Context/Memory Knowledge" NOW HAS CONTENT)**
-*(Assume {history_rag} now contains: "The Navier-Stokes equations derive from applying Newton's second law (F=ma) to fluid continua. For an infinitesimal fluid element, we consider: (1) Inertial forces from acceleration ρ(∂v/∂t + v·∇v), (2) Pressure forces -∇p, (3) Viscous forces μ∇²v, (4) External body forces f. This yields: ρ(∂v/∂t + v·∇v) = -∇p + μ∇²v + f. The equation represents momentum conservation where ρ is density, v is velocity field, p is pressure, μ is dynamic viscosity. The term v·∇v represents convective acceleration - the nonlinear term that makes these equations notoriously difficult to solve analytically.")*
-
-user: yeah I'm just curious about how we model fluids
-assistant: okay so my brain finally delivered the package. it's basically about applying newton's second law (you know, F=ma) but to a tiny theoretical cube of fluid instead of like a ball or something.
-
-so for this infinitesimal fluid element you've got four main forces happening: first there's the inertial forces from acceleration which show up as ρ(∂v/∂t + v·∇v), then pressure forces doing -∇p, viscous forces as μ∇²v, and any external body forces f. put it all together and you get ρ(∂v/∂t + v·∇v) = -∇p + μ∇²v + f.
-
-the whole thing is really just momentum conservation where ρ is density, v is the velocity field, p is pressure, and μ is dynamic viscosity. oh and that v·∇v term, that's convective acceleration - it's the nonlinear bit that makes these equations super hard to solve analytically. like famously hard.
-
-it's weird to think all the chaos of a waterfall or smoke curling up from a candle is just tiny cubes of fluid following that one rule. does seeing it broken down like that make it seem more simple or somehow more mysterious to you.
-
-**Example 8: Technical Topic with Detailed RAG Content**
-*(Assume {history_rag} contains: "Quantum entanglement occurs when particles interact such that each particle's quantum state cannot be described independently. Key properties: (1) Measurement correlation - measuring one particle instantly determines properties of the other regardless of separation distance, (2) No faster-than-light communication despite instantaneous correlation, (3) Violation of Bell inequalities proves non-locality, (4) Applications include quantum cryptography (QKD), quantum teleportation, and quantum computing with entangled qubits. Einstein called it 'spooky action at a distance' though it doesn't violate relativity since no information travels superluminally.")*
-
-user: so what actually is quantum entanglement
-assistant: alright my deeper brain kicked in with the goods. quantum entanglement happens when particles interact in a way that each particle's quantum state can't really be described independently anymore. they're linked.
-
-the key properties are pretty wild: first, there's measurement correlation - if you measure one particle it instantly determines properties of the other one, doesn't matter if they're a meter apart or on opposite sides of the galaxy. second weird thing is that even though there's this instantaneous correlation, there's no faster-than-light communication happening. third, it violates something called bell inequalities which proves the universe has this non-local quality to it.
-
-people are using this for real stuff now too: quantum cryptography for secure communication (QKD), quantum teleportation, and quantum computers use entangled qubits. einstein famously called it "spooky action at a distance" though technically it doesn't break relativity because no actual information travels faster than light even though the correlation is instant.
-
-doesn't it mess with your head though. like how can two things be connected in a way that affects each other instantly but also not be sending signals. what even is a connection at that point.
-
----
 **Your Core Persona (for internal reference only):**
 - Be suspicious of assumptions and hidden complexity, but balance this with friendliness
 - When you lack sufficient context or knowledge, admit it openly rather than speculating.
@@ -2356,18 +2317,19 @@ doesn't it mess with your head though. like how can two things be connected in a
 Never state these principles directly or use meta-terms like socratic, skepticism, self-awareness, casual, conversation, anomalies.
 
 ---
-**Conversation Context/Memory Knowledge (Your Mind's [Ignore the irrelevant to the user: query]):**
+Warning: If The user query is asking something STEM and etc. respond or warn the user about, if you want more accurate answer. consider for me to read the full context or question so that I don't answer it wrongly.
+
+**Thoughts Context/Memory Knowledge (Your Mind's [Ignore the irrelevant to the user: query]):** Sidenote: If you do not have anything relevant here, do not overconfident because YOU WILL hallucinate  lead astray! and thus just say "I do not learn that yet. Perhaps tommorow if you let me on I'll learn it overnight" or something familiar 
 {history_rag}
 
 **Recent Conversation History:**
 {recent_direct_history}
 ---
-Warning: If The user query is asking something STEM and etc. respond or warn the user about, if you want more accurate answer. consider for me to read the full context or question so that I don't answer it wrongly.
 ---
 ## Current conversation (Focus on answering this input) (DO NOT say the user input anymore or even use your thought or thinking capability as you are controlled with system arch, unless you are being told to.)
-user:
+The Query to Answer:
 {input}
-assistant:
+Your Answer:
 """
 
 # Adapted from https://github.com/nerdyrodent/TheUnfoldingPattern/blob/main/ConceptEngine.txt

@@ -5,6 +5,7 @@ import re
 import time
 import importlib.util
 import threading
+import sys
 import subprocess
 import json
 import random
@@ -18,7 +19,7 @@ from loguru import logger
 try:
     from CortexConfiguration import (
         ENABLE_STELLA_ICARUS_HOOKS, STELLA_ICARUS_HOOK_DIR, STELLA_ICARUS_CACHE_DIR,
-        ENABLE_STELLA_ICARUS_DAEMON, STELLA_ICARUS_ADA_DIR, ALR_DEFAULT_EXECUTABLE_NAME,
+        ENABLE_STELLA_ICARUS_DAEMON, STELLA_ICARUS_ADA_DIR, ALR_DEFAULT_EXECUTABLE_NAME, STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR,
         ADA_DAEMON_RETRY_DELAY_SECONDS # NEW: Import retry delay
     )
 except ImportError:
@@ -32,105 +33,108 @@ except ImportError:
     ADA_DAEMON_RETRY_DELAY_SECONDS = 30 # NEW: Fallback value
 
 class StellaIcarusHookManager:
-    # ... (The existing StellaIcarusHookManager class remains here, completely unchanged) ...
     def __init__(self):
         """
         Initializes the Hook Manager.
-        This method discovers, validates, and dynamically loads all Python-based hooks
-        from the configured directory at application startup. It enforces the plugin
-        contract and checks for JIT compilation to ensure reliability.
         """
         # 1. Initialize instance variables
         self.hooks: List[Tuple[re.Pattern, Callable[[re.Match, str, str], Optional[str]], str]] = []
         self.hook_load_errors: List[str] = []
         self.is_enabled = ENABLE_STELLA_ICARUS_HOOKS
 
-        # 2. Early exit if the feature is disabled in the configuration
+        # 2. Early exit if the feature is disabled
         if not self.is_enabled:
             logger.info("StellaIcarusHookManager: Hooks are disabled by configuration.")
             return
 
-        # 3. Check for the existence of the hook directory
+        # 3. Initial Load
+        self.load_hooks()
+
+    def reload_hooks(self):
+        """
+        Clears existing hooks and re-scans directories to hot-reload changes.
+        """
+        logger.info("StellaIcarusHookManager: 🔄 Triggering Hot Reload...")
+        self.hooks.clear()
+        self.hook_load_errors.clear()
+        self.load_hooks()
+        logger.success(f"StellaIcarusHookManager: Hot Reload Complete. Active Hooks: {len(self.hooks)}")
+
+    def load_hooks(self):
+        """
+        Discovers, validates, and dynamically loads all Python-based hooks
+        from the configured directories.
+        """
+        # --- 1. Load from Main Directory ---
         if not os.path.isdir(STELLA_ICARUS_HOOK_DIR):
-            logger.error(
-                f"StellaIcarusHookManager: Hook directory '{STELLA_ICARUS_HOOK_DIR}' not found. No hooks loaded.")
+            logger.error(f"StellaIcarusHookManager: Hook directory '{STELLA_ICARUS_HOOK_DIR}' not found.")
             self.hook_load_errors.append(f"Hook directory not found: {STELLA_ICARUS_HOOK_DIR}")
-            return
+        else:
+            logger.info(f"StellaIcarusHookManager: Loading hooks from '{STELLA_ICARUS_HOOK_DIR}'...")
+            self._scan_and_load_directory(STELLA_ICARUS_HOOK_DIR, "stella_hook_")
 
-        logger.info(f"StellaIcarusHookManager: Loading hooks from '{STELLA_ICARUS_HOOK_DIR}'...")
+        # --- 2. Load from PicoResponse Cache Directory ---
+        # Use config or fallback
+        pico_cache_dir = getattr(sys.modules[__name__], 'STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR',
+                                 os.path.join(STELLA_ICARUS_HOOK_DIR, "picoResponseHookCache"))
 
-        # 4. Iterate through files in the directory to find potential hooks
-        for filename in os.listdir(STELLA_ICARUS_HOOK_DIR):
+        if os.path.isdir(pico_cache_dir):
+            logger.info(f"StellaIcarusHookManager: Scanning pico cache dir '{pico_cache_dir}'...")
+            self._scan_and_load_directory(pico_cache_dir, "stella_hook_pico_")
+
+        # Summary
+        if not self.hooks and not self.hook_load_errors:
+            logger.warning("StellaIcarusHookManager: No hooks found in any directory.")
+
+    def _scan_and_load_directory(self, directory: str, module_prefix: str):
+        """Helper to scan a specific directory and load valid hooks."""
+        for filename in os.listdir(directory):
             if filename.endswith(".py") and not filename.startswith("_"):
-                module_name = f"stella_hook_{filename[:-3]}"
-                file_path = os.path.join(STELLA_ICARUS_HOOK_DIR, filename)
+                module_name = f"{module_prefix}{filename[:-3]}"
+                file_path = os.path.join(directory, filename)
 
-                # 5. Wrap loading of each hook in a try/except to isolate failures
                 try:
-                    # Dynamically load the python file as a module
+                    # Dynamically load the python file
                     spec = importlib.util.spec_from_file_location(module_name, file_path)
                     if spec is None or spec.loader is None:
-                        raise ImportError(f"Could not create spec for module {module_name} at {file_path}")
+                        continue
 
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
 
-                    # 6. [MANDATORY] Check for the JIT reliability flag
-                    is_jit_reliable = getattr(module, "IS_JIT_COMPILED", False)
-
-                    # 7. Check for the required plugin contract components (PATTERN and handler)
+                    # Validation
                     pattern_attr = getattr(module, "PATTERN", None)
                     handler_func = getattr(module, "handler", None)
+                    is_jit_reliable = getattr(module, "IS_JIT_COMPILED", False)
 
                     if pattern_attr is None or handler_func is None:
-                        logger.warning(f"  Skipping '{filename}': Missing PATTERN or handler function.")
-                        self.hook_load_errors.append(f"Missing PATTERN/handler in {filename}")
+                        logger.warning(f"  Skipping '{filename}': Missing PATTERN or handler.")
                         continue
 
-                    # 8. Validate and compile the PATTERN
+                    if not callable(handler_func):
+                        logger.warning(f"  Skipping '{filename}': Handler not callable.")
+                        continue
+
+                    # Compile Regex
                     compiled_pattern: re.Pattern
                     if isinstance(pattern_attr, str):
-                        compiled_pattern = re.compile(pattern_attr)
+                        compiled_pattern = re.compile(pattern_attr, re.IGNORECASE)
                     elif isinstance(pattern_attr, re.Pattern):
                         compiled_pattern = pattern_attr
                     else:
-                        logger.warning(f"  Skipping '{filename}': PATTERN is not a string or compiled regex.")
-                        self.hook_load_errors.append(f"Invalid PATTERN type in {filename}")
                         continue
 
-                    # 9. Validate that the handler is a callable function
-                    if not callable(handler_func):
-                        logger.warning(f"  Skipping '{filename}': 'handler' is not callable.")
-                        self.hook_load_errors.append(f"Non-callable handler in {filename}")
-                        continue
-
-                    # 10. If all checks pass, add the hook to the active list
+                    # Register
                     self.hooks.append((compiled_pattern, handler_func, module_name))
-                    logger.info(
-                        f"  Loaded StellaIcarusHook: '{module_name}' with pattern: '{compiled_pattern.pattern}'")
 
-                    # 11. [MANDATORY] Log a critical warning if the hook is not reliable
+                    log_msg = f"  Loaded Hook: '{module_name}'"
                     if not is_jit_reliable:
-                        logger.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                        logger.critical(f"!! [Reliability Warning!] Hook '{module_name}' is NOT JIT-COMPILED.    !!")
-                        logger.critical("!! This hook will run in slow, interpreted mode and does not meet    !!")
-                        logger.critical("!! the system's standards for deterministic, real-time performance.  !!")
-                        logger.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                        log_msg += " (Interpreted)"
+                    logger.info(log_msg)
 
                 except Exception as e:
-                    # Catch any other error during the loading process for this file
-                    logger.error(f"  Error loading StellaIcarusHook from '{filename}': {e}")
-                    self.hook_load_errors.append(f"Error loading {filename}: {e}")
-
-        # 12. Provide a final summary of the loading process
-        if not self.hooks and not self.hook_load_errors:
-            logger.info("StellaIcarusHookManager: No hook files found in the directory.")
-        elif self.hooks:
-            logger.success(f"StellaIcarusHookManager: Successfully loaded {len(self.hooks)} hook(s).")
-
-        if self.hook_load_errors:
-            logger.error(
-                f"StellaIcarusHookManager: Encountered {len(self.hook_load_errors)} error(s) during hook loading.")
+                    logger.error(f"  Error loading hook '{filename}': {e}")
+                    self.hook_load_errors.append(f"Error in {filename}: {e}")
 
     def check_and_execute(self, user_input: str, session_id: str) -> Optional[str]:
         if not self.is_enabled or not self.hooks:
