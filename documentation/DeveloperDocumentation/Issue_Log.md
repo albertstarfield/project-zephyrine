@@ -1,3 +1,8 @@
+-   **ID:** CORTEX-FEAT-018
+-   **Title:** Ground AI in Time with Multi-Calendar Temporal Anchor
+-   **Status:** Resolved
+-   **Description:** This feature enhances the AI's contextual awareness by injecting a temporal anchor into its prompts. At the start of a task, a string is generated containing the current date and time in multiple formats: Gregorian (Common Era), Holocene (Human Era), Hebrew, and Islamic (Hijri). This provides a rich, multi-faceted sense of the current time, intended to improve the model's ability to reason about and retrieve time-sensitive information. Requires the `convertdate` library.
+
 -   **ID:** UI-REFACTOR-006
 -   **Title:** Deprecate Ada Frontface and Integrate Native WebSocket UI
 -   **Status:** Resolved
