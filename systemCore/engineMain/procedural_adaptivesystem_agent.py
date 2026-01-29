@@ -84,13 +84,16 @@ If 'alr_whiplash' fails (Non-zero Return Code):
 Your current project location is stored in the system's CWD variable.
 """
 
-def _count_tokens(self, text: str) -> int:
-    """Helper to count tokens using tiktoken (cl100k_base)."""
-    try:
-        encoding = tiktoken.get_encoding("cl100k_base")
-        return len(encoding.encode(text))
-    except Exception:
-        return len(text.split())  # Fallback estimate
+PROMPT_DOMAIN_ROUTER = """
+You are a classification system. Analyze the User Input and Context to select the best Specialist.
+Classify the request into ONE of these domains:
+- CODE: Writing scripts, programming, html, css, sql, python, ada, software architecture.
+- PHYSICS: Physics questions, simulations, scientific principles.
+- MATH: Calculations, logic puzzles, mathematical proofs.
+- GENERAL: Conversational, simple tasks, or anything fitting none of the above.
+
+Reply ONLY with the single word category name (e.g., "CODE").
+"""
 
 # Implementation for Agent tools using basic os/subprocess
 class AgentTools:
@@ -440,6 +443,26 @@ class AmaryllisAgent:
                 | StrOutputParser()
         )
 
+        # Initialize Domain Router Chain
+        router_model = self.provider.get_model("router") or self.provider.get_model("default")
+
+        self.domain_router_chain = (
+                ChatPromptTemplate.from_messages([
+                    SystemMessage(content=PROMPT_DOMAIN_ROUTER),
+                    HumanMessage(content="Context: {context}\n\nUser Input: {input}")
+                ])
+                | router_model
+                | StrOutputParser()
+        )
+
+    def _count_tokens(self, text: str) -> int:
+        """Helper to count tokens using tiktoken (cl100k_base)."""
+        try:
+            encoding = tiktoken.get_encoding("cl100k_base")
+            return len(encoding.encode(text))
+        except Exception:
+            return len(text.split())  # Fallback estimate
+
     async def start_browser(self):
         """Starts the Playwright browser instance."""
         if self.playwright is None:
@@ -512,6 +535,7 @@ class AmaryllisAgent:
 
 
         final_system_prompt_template_string = f"{formatted_base_prompt_content.strip()}\n{user_custom_instructions_content.strip()}\n====\nCURRENT ENVIRONMENT DETAILS\n# Mode: {{mode}}\nFile list:\n{{file_list}}\nActively Running Terminals:\n{{running_terminals}}\n====\nCONVERSATION HISTORY SNIPPETS (RAG)\n{{agent_history_rag}}\n====\nRAG CONTEXT FROM DOCUMENTS/URLS\n{{url_rag_context}}\n====\n"
+        self.final_system_prompt_template_string = final_system_prompt_template_string
 
         self.agent_prompt_template = ChatPromptTemplate.from_messages([ SystemMessage(content=final_system_prompt_template_string), MessagesPlaceholder(variable_name="agent_history_turns"), HumanMessage(content="{current_input}"),])
 
@@ -998,6 +1022,43 @@ class AmaryllisAgent:
                         f"🧭 Agent Step {turn_count} (Attempt {attempt + 1}): Router='{current_domain_decision}' -> Selected Role='{target_role}'")
 
                     specialist_model = self.provider.get_model(target_role) or self.provider.get_model("default")
+
+                    # --- Conditional Ada/SPARK Enforcement ---
+                    # We dynamically inject the strict Ada prompt ONLY if the task and RAG context
+                    # indicate a need for high-integrity programming.
+
+                    effective_system_prompt = self.final_system_prompt_template_string.format(**prompt_inputs)
+
+                    if target_role == "code":
+                        try:
+                            # 1. Prepare a lightweight classification check
+                            # We include the RAG Context (url_rag_context) so the model knows if the 'Manuals' imply a specific language.
+                            classifier_prompt = (
+                                "Analyze the User Request and the Reference Context.\n"
+                                f"User Request: {current_input_for_llm[:500]}\n"
+                                f"Reference Context: {url_rag_context_string[:500]}\n\n"
+                                "Does this task require creating or modifying a formal software project, high-integrity system, or using Ada/SPARK?\n"
+                                "Reply strictly with 'YES' or 'NO'."
+                            )
+
+                            # 2. Run the check (using the specialist model for convenience)
+                            classification_response = await asyncio.to_thread(
+                                specialist_model.invoke,
+                                [HumanMessage(content=classifier_prompt)]
+                            )
+
+                            classification_text = classification_response.content.strip().upper()
+
+                            # 3. Enforce if YES
+                            if "YES" in classification_text:
+                                logger.info(f"🛡️ Strict Ada/SPARK Discipline ENFORCED for this task.")
+                                effective_system_prompt += f"\n\n{PROMPT_STRICT_ADA_DEVELOPER}"
+                            else:
+                                logger.info(
+                                    "🆓 Coding task classified as generic/scripting. No strict language enforcement.")
+
+                        except Exception as e:
+                            logger.warning(f"Ada enforcement check failed: {e}. Defaulting to no strict enforcement.")
 
                     # C. BUILD PROMPT (Same as before)
                     prompt_template = ChatPromptTemplate.from_messages([

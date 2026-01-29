@@ -1,3 +1,8 @@
+-   **ID:** CORE-REFACTOR-005
+-   **Title:** Refactor Task Classification and Enhance Contextual Retrieval
+-   **Status:** In-Progress
+-   **Description:** This change introduces a more structured approach to handling tasks. A new classification system routes incoming requests to specialized domains (e.g., CODE, PHYSICS). For coding tasks, a verification step is added to enforce stricter development standards when high-integrity code (like Ada/SPARK) is detected. A new standard vector computation adapter has been integrated to allow for more effective retrieval of information from the indexed knowledge base. This reframes the system's operation towards a more procedural and rule-based workflow.
+
 -   **ID:** CORE-REFACTOR-004
 -   **Title:** Implement Disciplined Ada/SPARK Build Process and Refactor Agent for Procedural Tasks
 -   **Status:** Resolved
