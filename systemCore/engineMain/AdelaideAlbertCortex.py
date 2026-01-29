@@ -10,6 +10,7 @@ import io
 import json
 import math
 import mimetypes
+import difflib
 
 # --- Standard Library Imports ---
 import os
@@ -29,7 +30,7 @@ from urllib.parse import urlparse
 
 import easyocr
 import langcodes
-import numpy as np  # NEW: For LSH calculations
+import numpy as np  
 import pandas as pd
 
 
@@ -250,7 +251,7 @@ try:
         get_past_tot_interactions,  # Added SystemInteractionScriptAttempt if needed here
         get_pending_tot_result,
         get_recent_interactions,
-        init_db,  # <<< REMOVED get_db
+        init_db,  
         mark_tot_delivered,
         queue_interaction_for_batch_logging,
         search_file_index,
@@ -3846,6 +3847,8 @@ class CortexThoughts:
             logger.exception("Hybrid RAG Retriever Traceback:")
             return None, None, None, ""
 
+
+
     async def _generate_file_search_query_async(
         self,
         db: Session,
@@ -7272,6 +7275,88 @@ Output your response EXACTLY in this format:
         logger.error(f"❌ Diff/Patch failed after {max_retries} attempts.")
         return current_buffer, False
 
+
+    def _detect_agentic_usage(self, user_input: str, mode: str) -> bool:
+        """
+        Detects if the request is from an external agent (AgentPrecMode).
+        Checks for:
+        1. Explicit 'agent_prec' mode flag.
+        2. Known API signatures (e.g., OpenAI-like JSON structure in text).
+        """
+        # 1. Explicit Mode Check
+        if mode == "agent_prec":
+            return True
+
+        # 2. Heuristic Check on Input (looking for JSON-like structure or specific headers)
+        input_stripped = user_input.strip()
+        if input_stripped.startswith("{") and "messages" in input_stripped:
+            # Simple heuristic for JSON payloads resembling OpenAI API
+            return True
+        
+        # 3. Keyword Check (optional fallback)
+        if "[AGENT_API_CALL]" in user_input:
+            return True
+
+        return False
+
+    def _detect_and_trim_loops(self, text: str) -> str:
+        """
+        Detects semantic looping (repeating thoughts) and trims the text at the point where the loop begins.
+        Uses fuzzy line comparison to catch slight variations.
+        """
+        if not text:
+            return text
+
+        lines = [line for line in text.split('\n') if line.strip()]
+        if len(lines) < 4:
+            return text
+
+        # Configuration for loop detection
+        LOOKBACK_WINDOW = 20  # How far back to check for a match
+        SIMILARITY_THRESHOLD = 0.85  # 85% similarity triggers a match
+        MIN_SEQUENCE_MATCH = 2  # Need 2 consecutive matching lines to declare a loop
+
+        # Iterate through lines starting from the second one
+        for i in range(1, len(lines)):
+            current_line = lines[i]
+            # Look back at previous lines
+            start_lookback = max(0, i - LOOKBACK_WINDOW)
+
+            for j in range(start_lookback, i):
+                prev_line = lines[j]
+
+                # Check similarity
+                similarity = difflib.SequenceMatcher(None, current_line, prev_line).ratio()
+
+                if similarity > SIMILARITY_THRESHOLD:
+                    # Potential loop start detected.
+                    # Now check if the NEXT lines also match (sequence check)
+                    is_sequence = True
+                    for k in range(1, MIN_SEQUENCE_MATCH):
+                        if (i + k >= len(lines)) or (j + k >= i):
+                            is_sequence = False  # Out of bounds
+                            break
+
+                        next_sim = difflib.SequenceMatcher(
+                            None, lines[i + k], lines[j + k]
+                        ).ratio()
+
+                        if next_sim <= SIMILARITY_THRESHOLD:
+                            is_sequence = False
+                            break
+
+                    if is_sequence:
+                        # We found a loop!
+                        # i is the start of the repetition
+                        logger.warning(f"🔄 Semantic Loop Detected at line: '{current_line[:30]}...'. Trimming output.")
+
+                        # Reconstruct text up to line i
+                        trimmed_lines = lines[:i]
+                        return "\n".join(trimmed_lines) + "\n(Output trimmed to prevent repetition)"
+
+        return text
+
+
     async def _direct_generate_logic(
         self,
         db: Session,
@@ -7279,6 +7364,7 @@ Output your response EXACTLY in this format:
         session_id: str,
         vlm_description: Optional[str] = None,
         image_b64: Optional[str] = None,
+        mode: str = "chat",
     ) -> str:
         """
         CODENAME: Snowball-Enaga LoD Engine (V10)
@@ -7377,6 +7463,96 @@ Output your response EXACTLY in this format:
         if vlm_description:
             logger.info(f"{log_prefix}: Injecting VLM context into User Input.")
             user_input = f"[Image Context (Details and Text if available): {vlm_description}]\n\nUser Query: {user_input}"
+        
+        
+        # BOTTOM GEAR switch
+        # --- MODE: AgentPrecMode (BOTTOM Gear / External API) ---
+        if self._detect_agentic_usage(user_input, mode):
+            logger.info("⚙️ AgentPrecMode Detected: Engaging Dynamic Router -> Specialist -> Code(JSON) Pipeline.")
+            
+            # [RAG Logic Here - same as before] ...
+            rag_context_str = "..." 
+
+            try:
+                # 1. Router Step (Dynamic Selection from Config)
+                router_model = self.provider.get_model("router") or self.provider.get_model("default")
+                
+                # --- Build Model Descriptions Dynamically ---
+                # This matches the "Snowball LoD" logic by using the config
+                models_with_descriptions = []
+                
+                # Filter out utility models that shouldn't handle content
+                ignored_keys = [
+                    "router", "embeddings", "vlm", "vlm_mmproj", 
+                    "OCR_lm", "OCR_lm_mmproj", "translator", "default"
+                ]
+                
+                for key, description in LLAMA_CPP_MODEL_DESCRIPTIONS.items():
+                    if key not in ignored_keys:
+                        models_with_descriptions.append(f"- {key}: {description}")
+                
+                models_str = "\n".join(models_with_descriptions)
+                
+                # Inject into the new prompt
+                router_prompt = PROMPT_AGENT_PREC_ROUTER.format(
+                    model_descriptions=models_str,
+                    input=user_input[:1024] # Truncate for router speed
+                )
+                
+                # 2. Execute Router
+                domain_decision_raw = await asyncio.to_thread(router_model.invoke, router_prompt)
+                
+                # 3. Clean and Validate Decision
+                # Remove punctuation/whitespace to get a clean key
+                target_role = str(domain_decision_raw).strip().lower().replace('"', '').replace("'", "")
+                
+                # Fallback if the model hallucinated a non-existent key
+                if target_role not in LLAMA_CPP_MODEL_DESCRIPTIONS:
+                    logger.warning(f"⚙️ AgentPrecMode: Router suggested invalid role '{target_role}'. Fallback to 'general'.")
+                    target_role = "general"
+                
+                specialist_model = self.provider.get_model(target_role) or self.provider.get_model("default")
+                logger.info(f"⚙️ AgentPrecMode: Routed to '{target_role}' specialist.")
+
+                # 3. Specialist Generation (ELP1 Priority)
+                # We use the ELP1 lock (User Priority)
+                async with getattr(self.provider, "_priority_quota_lock", asyncio.Lock()): # Fallback lock if missing
+                    raw_specialist_response = await asyncio.to_thread(
+                        specialist_model.invoke, 
+                        f"Context: {rag_context_str}\n\nUser Query: {user_input}"
+                    )
+                    # Handle LangChain output types
+                    if hasattr(raw_specialist_response, 'content'):
+                        raw_specialist_response = raw_specialist_response.content
+
+                # 4. Code Model Formatting (JSON Reformatting)
+                code_model = self.provider.get_model("code") or self.provider.get_model("default")
+                formatter_prompt = PROMPT_AGENT_PREC_MODE_JSON_FORMATTER.format(
+                    raw_response=raw_specialist_response
+                )
+                
+                final_json_response = await asyncio.to_thread(code_model.invoke, formatter_prompt)
+                if hasattr(final_json_response, 'content'):
+                    final_json_response = final_json_response.content
+
+                # Clean up any potential markdown fencing from the code model
+                final_json_response = final_json_response.replace("```json", "").replace("```", "").strip()
+
+                # 5. Database Memory Persistence (Same Saving Step)
+                # We rely on the caller (generate_response) to save the final return value,
+                # OR we explicitly save here if _direct_generate_logic is responsible for saving.
+                # Assuming 'add_interaction' is handled by the caller or we do it here:
+                # (If your existing flow saves the return of this function, we just return)
+                
+                return final_json_response
+
+            except Exception as e:
+                logger.error(f"AgentPrecMode Failure: {e}")
+                return json.dumps({
+                    "status": "error",
+                    "content": "Internal processing error during AgentPrecMode.",
+                    "error_details": str(e)
+                })
         
         # Keywords that suggest a multi-step or technical structure is needed
         #complex_triggers = ["prove", "derive", "solve", "calculate", "equation", "explain", "analyze", "design", "how", "outline", "compare"]
@@ -7606,6 +7782,7 @@ Output your response EXACTLY in this format:
         session_id: str,
         vlm_description: Optional[str] = None,
         image_b64: Optional[str] = None,
+        mode: str = "chat",
     ) -> str:
         async with direct_generate_task_semaphore:
             """
@@ -7746,10 +7923,10 @@ Output your response EXACTLY in this format:
             else:
                 # This block runs if the response came from a hook.
                 logger.info("Hook provided the response. Skipping background_generate.")
-
-            # --- END OF NEW CODE BLOCK ---
-
-            # The final return statement of the function.
+                
+            if final_response_text:
+                final_response_text = self._detect_and_trim_loops(final_response_text) #cleanup any potential loop
+            
             return final_response_text
 
     async def _get_vector_search_file_index_context(

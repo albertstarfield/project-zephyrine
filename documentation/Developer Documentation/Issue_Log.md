@@ -519,3 +519,13 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Refactor frontend to be served by a dedicated Ada web host.
     -   **Status:** `Resolved`
     -   **Description:** Replaced the Node.js/Vite development server (`npm run dev`) with a compiled Ada web server (`zephyrine_host`) for serving the frontend. The `launcher.py` script now builds the static React assets (`npm run build`), copies them to the Ada host's directory, and compiles the Ada server. This change aims to create a more robust, self-contained, and performant frontend deployment, reducing reliance on Node.js at runtime.
+---
+
+## **CORE ENGINE (CORE)**
+
+### Features
+
+-   **ID:** `CORE-FEAT-020`
+    -   **Title:** Implement External System Request Pipeline and Output Loop Detection
+    -   **Status:** `In-Progress`
+    -   **Description:** Introduces a specialized request handling pipeline for external, programmatic systems, referred to as 'AgentPrecMode' or 'Bottom Gear'. This pipeline routes requests to specialist models and formats the output into a structured JSON response. Additionally, a mechanism to detect and trim semantic repetitions or loops in generated text has been implemented to improve output quality.

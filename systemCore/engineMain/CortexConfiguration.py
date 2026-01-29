@@ -2331,6 +2331,44 @@ The Query to Answer:
 {input}
 Your Answer:
 """
+# --- AgentPrecMode (Low Gear) Configuration ---
+# Prompt for the Code Model to reformat the specialist's text into strict JSON for external agents
+# Or should I say BOTTOM GEAR
+
+PROMPT_AGENT_PREC_ROUTER = """
+You are a high-speed classification system. Your goal is to route the user's request to the single best specialist model based on their descriptions.
+
+[AVAILABLE SPECIALIST MODELS]
+{model_descriptions}
+
+[USER INPUT]
+{input}
+
+[INSTRUCTION]
+Analyze the input and the available models.
+Select the ONE model key that is best suited to handle this specific request.
+Reply ONLY with the exact model key name (e.g., "code", "physics", "general").
+"""
+
+PROMPT_AGENT_PREC_MODE_JSON_FORMATTER = """
+You are a JSON Protocol Formatter for an AI Agent Interface.
+Your task is to take the provided "Raw Analysis" and strictly format it into the JSON structure below.
+Do not change the meaning of the content, but structure it for machine consumption.
+
+[INPUT DATA]
+{raw_response}
+
+[REQUIRED JSON OUTPUT FORMAT]
+{{
+    "status": "success",
+    "agent_thought": "Brief summary of the reasoning",
+    "content": "The full main response text",
+    "references": ["List of any cited sources found in text", "or empty list"],
+    "confidence_score": 0.0 to 1.0
+}}
+
+Output ONLY valid JSON. No Markdown formatting, no code blocks.
+"""
 
 # Adapted from https://github.com/nerdyrodent/TheUnfoldingPattern/blob/main/ConceptEngine.txt
 PROMPT_BACKGROUND_MULTISTAGE_GRINDING = f"""
