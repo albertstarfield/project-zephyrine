@@ -1688,6 +1688,66 @@ def setup_assistant_proxy():
     # Temporary directory tmpdir is automatically cleaned up
 
 
+class StandardEmbeddingVectorCompute:
+    """
+    Lightweight adapter that allows the Agent to query the File Index
+    using the system's standard embedding model.
+    """
+
+    def __init__(self, provider):
+        self.provider = provider  # The CortexEngine instance
+
+    async def query_vectors_async(self, query: str, top_k: int = 3, threshold: float = 0.7) -> str:
+        """
+        Calculates vector using standard embeddings and queries the global file index.
+        """
+        # Lazy import to ensure the store is initialized
+        from file_indexer import get_global_file_index_vectorstore
+
+        vs = get_global_file_index_vectorstore()
+        if not vs:
+            return "Reference Context: [Knowledge Base Not Loaded / No Files Indexed]"
+
+        try:
+            # 1. Calculate Vector using the Standard Embedding Model
+            # We use ELP1 (User Priority) for this agent query
+            if not self.provider.embeddings:
+                return "Reference Context: [Embeddings Model Unavailable]"
+
+            query_vector = await asyncio.to_thread(
+                self.provider.embeddings.embed_query,
+                query,
+                priority=1
+            )
+
+            if not query_vector:
+                return "Reference Context: [Embedding Generation Failed]"
+
+            # 2. Query the Vector Store (Chroma)
+            # We use similarity_search_by_vector which matches the Agent's need
+            docs = await asyncio.to_thread(
+                vs.similarity_search_by_vector,
+                embedding=query_vector,
+                k=top_k
+            )
+
+            if not docs:
+                return "Reference Context: No relevant documentation found in the index."
+
+            # 3. Format the results for the Agent
+            formatted_results = []
+            for d in docs:
+                source = d.metadata.get('file_name') or d.metadata.get('source') or "Unknown File"
+                content = d.page_content.strip()
+                formatted_results.append(f"Source: {source}\nContent: {content}")
+
+            return "Reference Context (Standard Embeddings):\n" + "\n---\n".join(formatted_results)
+
+        except Exception as e:
+            logger.error(f"StandardEmbeddingVectorCompute Error: {e}")
+            return f"Reference Context: Error querying knowledge base ({str(e)})"
+
+
 # === AI Chat Logic (Amaryllis - SQLite RAG with Fuzzy Search) ===
 class CortexThoughts:
     """Handles Chat Mode interactions with RAG, ToT, Action Analysis, Multi-LLM routing, and VLM preprocessing."""
@@ -17961,8 +18021,9 @@ try:
     cortex_text_interaction = CortexThoughts(cortex_backbone_provider)  # compatibility
     AGENT_CWD = os.path.dirname(os.path.abspath(__file__))
     SUPPORTS_COMPUTER_USE = True
+    vector_adapter = StandardEmbeddingVectorCompute(cortex_backbone_provider)
     AdaptiveSystem_Agent = AmaryllisAgent(
-        cortex_backbone_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE
+        cortex_backbone_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE, vector_compute=vector_adapter
     )
     logger.success("✅ AI Instances Initialized.")
 except Exception as e:
