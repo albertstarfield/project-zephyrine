@@ -1216,7 +1216,9 @@ class CortexEngine:
                 except subprocess.TimeoutExpired:
                     provider_logger.error(
                         f"{worker_log_prefix}: Worker process timed out after {LLAMA_WORKER_TIMEOUT}s.")
-                    worker_process.kill()
+                    self._kill_process_tree(worker_process.pid)
+                    #worker_process.kill()
+                    # Recursively kill the binary (Grandchild) FIRST
                     stdout_data, stderr_data = worker_process.communicate()
                     self._priority_quota_lock.release()
                     return {"error": "Worker process timed out"}
@@ -1229,15 +1231,17 @@ class CortexEngine:
                     except:
                         pass
                     stdout_data, stderr_data = worker_process.communicate()  # Try to get any final output
+                    self._kill_process_tree(worker_process.pid)
                     self._priority_quota_lock.release()
                     return {"error": interruption_error_marker}  # Use the consistent marker
                 except Exception as comm_err:
                     provider_logger.error(f"{worker_log_prefix}: Error communicating with worker: {comm_err}")
                     if worker_process and worker_process.poll() is None:
                         try:
-                            worker_process.kill(); worker_process.communicate()
+                            self._kill_process_tree(worker_process.pid); worker_process.communicate()
                         except:
                             pass
+
                     self._priority_quota_lock.release()
                     return {"error": f"Communication error with worker: {comm_err}"}
 
@@ -1613,6 +1617,41 @@ class CortexEngine:
 
     # <<< --- END NEW Worker Execution Method --- >>>
 
+    def _kill_process_tree(self, pid: int):
+        """
+        Recursively kills a process and all its children (orphaned binaries).
+        Essential for cleaning up LMExec/LMText2Vector when the python worker is killed.
+        """
+        if not psutil:
+            logger.warning("psutil not available, falling back to os.kill (unsafe for children).")
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except:
+                pass
+            return
+
+        try:
+            parent = psutil.Process(pid)
+            children = parent.children(recursive=True)
+
+            # Kill children first (the binaries)
+            for child in children:
+                logger.warning(f"🔪 Killing orphaned child process {child.pid} ({child.name()})")
+                child.send_signal(signal.SIGKILL)
+
+            # Kill parent (the python worker)
+            logger.warning(f"🔪 Killing parent worker process {pid}")
+            parent.send_signal(signal.SIGKILL)
+
+            # Wait for them to actually die to prevent zombies
+            gone, alive = psutil.wait_procs(children + [parent], timeout=3.0)
+            for p in alive:
+                logger.error(f"🧟 Process {p} survived SIGKILL. System unstable.")
+
+        except psutil.NoSuchProcess:
+            pass  # Already dead
+        except Exception as e:
+            logger.error(f"Failed to clean up process tree for PID {pid}: {e}")
 
     def setup_provider(self):
         """Sets up the AI models based on the configured PROVIDER."""

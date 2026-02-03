@@ -201,7 +201,7 @@ With universe of appreciation presented to you all,
 1. Baraa Daraqel, Amer Owayda, Khan, H., Koletsi, D., & Samer Mheissen. (2025). Artificial intelligence as a tool for data extraction is not fully reliable compared to manual data extraction. Journal of Dentistry, 160, 105846–105846. https://doi.org/10.1016/j.jdent.2025.105846
 2. Bosworth, J. (2007). F-15 IFCS: Intelligent Flight Control System. Nasa.gov. https://ntrs.nasa.gov/citations/20070035126
 3. Calero, I., Petit, S., Gómez, M. E., & Sahuquillo, J. (2025). Power, energy, and performance analysis of single- and multi-threaded applications in the ARM ThunderX2. Journal of Parallel and Distributed Computing, 204, 105118. https://doi.org/10.1016/j.jpdc.2025.105118
-4. Cognitive Atlas. (n.d.). Retrieved December 6, 2025, from http://cognitiveatlas.org/
+4. Cognitive Atlas. (2026). Cognitiveatlas.org. https://www.cognitiveatlas.org/concept/id/trm_4a3fd79d098b2/
 5. Dohnány, S., Kurth-Nelson, Z., Spens, E., Luettgau, L., Reid, A., Gabriel, I., Summerfield, C., Shanahan, M., & Nour, M. M. (2025). Technological folie à deux: Feedback Loops Between AI Chatbots and Mental Illness. ArXiv (Cornell University). https://doi.org/10.48550/arxiv.2507.19218
 6. Guillaume-Anthony Odri, & Ji, D. (2023). Detecting generative artificial intelligence in scientific articles: Evasion techniques and implications for scientific integrity. Orthopaedics & Traumatology Surgery & Research, 109(8), 103706–103706. https://doi.org/10.1016/j.otsr.2023.103706
 7. Huang, Y., Chen, Y., Zhang, H., Li, K., Fang, M., Yang, L., Li, X., Shang, L., Xu, S., Hao, J., & others. (2025). Deep Research Agents: A Systematic Examination And Roadmap. arXiv preprint arXiv:2506.18096.
@@ -213,12 +213,17 @@ With universe of appreciation presented to you all,
 13. https://www.airbus.com/. (2023, January 6). Could the humble dragonfly help pilots during flight? Airbus. https://www.airbus.com/en/newsroom/stories/2023-01-could-the-humble-dragonfly-help-pilots-during-flight
 14. Station Crew Demonstrates AI Assistant and Ultra-High Res Camera - NASA. (2024, September 19). NASA. https://www.nasa.gov/blogs/spacestation/2024/09/19/station-crew-demonstrates-ai-assistant-and-ultra-high-res-camera/
 15. Cramer, M., & McIntyre, L. (2025). Verifying LLM-Generated Code in the Context of Software Verification with Ada/SPARK. ArXiv.org. https://arxiv.org/abs/2502.07728
-
-‌
+16. RagVerus: Repository-Level Program Verification with LLMs using Retrieval Augmented Generation. (2024). Arxiv.org. https://arxiv.org/html/2502.05344v1
+17. Cognitive Atlas. (2026). Cognitiveatlas.org. https://www.cognitiveatlas.org/concept/id/trm_4a3fd79d0a275/
+18. Cognitive Atlas. (2026). Cognitiveatlas.org. https://www.cognitiveatlas.org/concept/id/trm_4a3fd79d0a7bb/
 ---
 <h1 align="center">
 <sub>
 <img src="https://github.com/albertstarfield/project-zephyrine/blob/main/documentation/madeFromZephyFoundation.png?raw=true" height=128>
 </sub>
+<h5 align="center">
+Made with Love, Dreams, and Disciplines.
+Zephyrine Foundation 2023-2026
+</h5>
 <br>
 </h1>

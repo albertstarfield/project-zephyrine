@@ -18,11 +18,17 @@ ANSWER_SIZE_WORDS = int(
     os.getenv("ANSWER_SIZE_WORDS", 16384)
 )  # Target for *quick* answers (token generation? I forgot)
 
-INFERCOMPLETION_CTX_BINNING=[2048, 4096, 8192, 16384, 32768] #Binning for ctx lock on cortex_backbone_provider.py (let's make this hardcore, Allow it to get 512 ctx token so it allows to run on pocket computer which makes it "smartphone")
+INFERCOMPLETION_CTX_BINNING = [
+    2048,
+    4096,
+    8192,
+    16384,
+    32768,
+]  # Binning for ctx lock on cortex_backbone_provider.py (let's make this hardcore, Allow it to get 512 ctx token so it allows to run on pocket computer which makes it "smartphone")
 TOPCAP_TOKENS = int(
     os.getenv("TOPCAP_TOKENS", INFERCOMPLETION_CTX_BINNING[-1])
 )  # Default token limit for LLM calls
-SYSTEMBUFFER_SAFE_PERCENTAGE=5 #Calculate from total memory then get the percentage and that's the buffer safe percentage so for instance 16GB * 5% = 800MB
+SYSTEMBUFFER_SAFE_PERCENTAGE = 5  # Calculate from total memory then get the percentage and that's the buffer safe percentage so for instance 16GB * 5% = 800MB
 BUFFER_TOKENS_FOR_RESPONSE = int(
     os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)
 )  # Default token limit for LLM calls
@@ -47,7 +53,7 @@ FUZZY_DUPLICATION_THRESHOLD = 80  # Threshold for detecting rephrased/similar co
 # --- Constants for Embedding Chunking ---
 # This is the n_ctx the embedding model worker is configured with.
 # The log shows this was forced to 4096.
-EMBEDDING_MODEL_N_CTX = 4096 # all this time it was running on 4096 let's try again on 512 (nvm it's just go back to 4096)
+EMBEDDING_MODEL_N_CTX = 4096  # all this time it was running on 4096 let's try again on 512 (nvm it's just go back to 4096)
 # Safety margin (15%) to account for tokenization differences and special tokens.
 EMBEDDING_TOKEN_SAFETY_MARGIN = 0.15
 # The final calculated token limit for any single batch sent to the embedding worker.
@@ -73,24 +79,36 @@ FILE_INDEXER_IDLE_WAIT_SECONDS = int(
 
 FUZZY_SEARCH_THRESHOLD_CONTEXT = getattr(
     globals(), "FUZZY_SEARCH_THRESHOLD", 80
-)  # Default to 80 if not from which is 30% set it not 0.3 but 30 
+)  # Default to 80 if not from which is 30% set it not 0.3 but 30
 # Sidenote: I was experimenting on cracking down on the mechanism of making zephy becoming psychosis (setting to 30) (& scizophrenic) and it seems that fuzzy threshold if it's going down it's going everywhere. This research found might be useful to help someone?
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0  # before hard defined error timeout (30 seconds max)
 
 DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
-DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 512)) #quick switch based on tkoen to peer review Snowball-Enaga architecture
-DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT = int(os.getenv("DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT", 8192)) #each specialist model "peer review Snowball Enaga" max token gen
-DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT = int(os.getenv("DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT", 128)) #Turn off Stellaicarus hook if it's becoming long then disable stella icarus to not falsely triggered hook
-TOKENTRUNCATEVECTORDIRECT_truncatechar = int(os.getenv("TOKENTRUNCATEVECTORDIRECT_truncatechar", 2048)) # Maximum characters allowed in the Direct Generate PROMPT before truncation
-DisallowParallelBinaryExec = True # Parallel Binary Exec is essentially allowing to allocate more memory and GPU resources or multiple processor if it's detected, by disallowing it that means everything need to wait until one that is running finishes thus makes room for other allocatable (rather than making computer crashes and OOM) (This is essentially additional safetyguard to prevent if ELP0 and ELP1 isn't being followed correctly.)
+DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD = int(
+    os.getenv("DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD", 512)
+)  # quick switch based on tkoen to peer review Snowball-Enaga architecture
+DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT = int(
+    os.getenv("DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT", 8192)
+)  # each specialist model "peer review Snowball Enaga" max token gen
+DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT = int(
+    os.getenv("DIRECT_GENERATE_STELLA_ICARUS_THRESHOLD_OUT", 128)
+)  # Turn off Stellaicarus hook if it's becoming long then disable stella icarus to not falsely triggered hook
+TOKENTRUNCATEVECTORDIRECT_truncatechar = int(
+    os.getenv("TOKENTRUNCATEVECTORDIRECT_truncatechar", 2048)
+)  # Maximum characters allowed in the Direct Generate PROMPT before truncation
+DisallowParallelBinaryExec = True  # Parallel Binary Exec is essentially allowing to allocate more memory and GPU resources or multiple processor if it's detected, by disallowing it that means everything need to wait until one that is running finishes thus makes room for other allocatable (rather than making computer crashes and OOM) (This is essentially additional safetyguard to prevent if ELP0 and ELP1 isn't being followed correctly.)
 
-_default_max_bg_tasks = 100000000000
-MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(
-    os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks)
+_default_max_bg_tasks = 1  # Put to 1 if you're computer only have 1 and low or small RAM but if you have data center you could just put it to 2^64
+MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = (
+    int(  # omg i'm idiot i forgot this is not a queue but concurrent meant parallel
+        os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks)
+    )
 )
-TOKENTRUNCATEVECTORBACKGROUND_truncatechar = int(os.getenv("TOKENTRUNCATEVECTORDIRECT_truncatechar", 2048)) # Maximum characters allowed in the background Generate PROMPT before truncation
+TOKENTRUNCATEVECTORBACKGROUND_truncatechar = int(
+    os.getenv("TOKENTRUNCATEVECTORDIRECT_truncatechar", 2048)
+)  # Maximum characters allowed in the background Generate PROMPT before truncation
 SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = int(
     os.getenv("SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS", 30)
 )  # e.g., 1/2 minutes
@@ -135,11 +153,8 @@ PROACTIVE_RE_REFLECTION_CHANCE = (
 )
 MIN_AGE_FOR_RE_REFLECTION_DAYS = 1  # (minimum age of the memory to re-reflect)
 YOUR_REFLECTION_CHUNK_OVERLAP = int(os.getenv("YOUR_REFLECTION_CHUNK_OVERLAP", 50))
-RAG_URL_COUNT = int(
-    os.getenv("RAG_URL_COUNT", 10)
-)
+RAG_URL_COUNT = int(os.getenv("RAG_URL_COUNT", 10))
 RAG_CONTEXT_MAX_PERCENTAGE = float(os.getenv("RAG_CONTEXT_MAX_PERCENTAGE", 0.25))
-
 
 
 # Personality mistype Configuration
@@ -234,7 +249,7 @@ if ENABLE_CASUAL_MISTYPES:
         f"   - QWERTY Typo (per word) Chance: {MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD * 100:.1f}%"
     )
 
-LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = 4096 # define just in case
+LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = 4096  # define just in case
 LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = os.getenv("LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT")
 if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
     try:
@@ -249,20 +264,19 @@ if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
         LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = 4096
 
 
-
 # Controls the duty cycle of the ELP0 priority lock to reduce sustained CPU/GPU load.
 # Can be a string preset or a number from 0 to 100 (%).
 # 0 or "Default": No relaxation, ELP0 tasks run at full capacity.
 # 100 or "EmergencyReservative": ELP0 tasks are Nearly fully suspended.
 """AGENTIC_RELAXATION_MODE = os.getenv(
     "AGENTIC_RELAXATION_MODE", "default"
-) """ 
-#Testing only.
+) """
+# Testing only.
 AGENTIC_RELAXATION_MODE = os.getenv(
     "AGENTIC_RELAXATION_MODE", "interactivityPowerResourcePrioritization_HaltContinue"
 )
 # Static Preset: Default, Relaxed, Vacation, HyperRelaxed, Conservative, ExtremePowerSaving, EmergencyReservative
-   # Dynamic Mode: reservativesharedresources (-1), powerSource_BasedConservation (-2), interactivityPrioritization_haltContinue (-3), interactivityPowerPrioritization_HaltContinue (-4), interactivityPowerResourcePrioritization_HaltContinue (-5)
+# Dynamic Mode: reservativesharedresources (-1), powerSource_BasedConservation (-2), interactivityPrioritization_haltContinue (-3), interactivityPowerPrioritization_HaltContinue (-4), interactivityPowerResourcePrioritization_HaltContinue (-5)
 
 """
 Dynamic Mode Explanation:
@@ -273,17 +287,17 @@ reservativesharedresources (-1) : Reserve resources mode when The resources memo
 
 !!!Note: Interactivity only available if and only if the system or daemon or whatever of the ProjectZephyrine have access to monitor the user session Power, but if it doesn't then it won't work. and May cause issue that it never release the ELP0!!!
 
-powerSource_BasedConservation (-2) : Switch to emergencyreservative (when on battery) or doing full throttle (default 0) when on charging mode. based on the power source  
+powerSource_BasedConservation (-2) : Switch to emergencyreservative (when on battery) or doing full throttle (default 0) when on charging mode. based on the power source
 
 !!!Note: Interactivity only available if and only if the system or daemon or whatever of the Project-Zephyrine have access to monitor the monitor, but if it doesn't then it won't work. and May cause issue that it never release the ELP0!!!
 
 interactivityPrioritization_haltContinue (-3) : Monitors the Interaction or Idle of the system (and if it's idling for 1800 second) then it will release the ELP0 lock from the 100 cycle mode. but if it's goes to 0 or below 1800 seconds then it will halt the ELP0 and goes to 100% PWM cycle halt mode
 
-interactivityPowerPrioritization_HaltContinue (-4) : Monitors the Interaction or Idle of the system (and if it's idling for 1800 second AND having (Relatively Unlimited Power budget, such as plugged into the wall)) then it will release the ELP0 lock from the 100 cycle mode. but if it's goes to 0 or below 1800 seconds or goes back to for instance limited power budget then it will halt the ELP0 and goes to 100% PWM cycle halt mode. 
+interactivityPowerPrioritization_HaltContinue (-4) : Monitors the Interaction or Idle of the system (and if it's idling for 1800 second AND having (Relatively Unlimited Power budget, such as plugged into the wall)) then it will release the ELP0 lock from the 100 cycle mode. but if it's goes to 0 or below 1800 seconds or goes back to for instance limited power budget then it will halt the ELP0 and goes to 100% PWM cycle halt mode.
 
-interactivityPowerResourcePrioritization_HaltContinue (-5) : Monitors the Interaction or Idle of the system (and if it's idling for 300 second AND having (Relatively Unlimited Power budget, such as plugged into the wall) AND (Resources are Free to Use at that Time [Before used by Zephy])) then it will release the ELP0 lock from the 100 cycle mode put it to 0. but if it's goes to 0 or below 1800 seconds OR goes back to for instance limited power budget OR resources are being used by something else on the processes. then it will halt the ELP0 and goes to 100% PWM cycle halt mode. 
+interactivityPowerResourcePrioritization_HaltContinue (-5) : Monitors the Interaction or Idle of the system (and if it's idling for 300 second AND having (Relatively Unlimited Power budget, such as plugged into the wall) AND (Resources are Free to Use at that Time [Before used by Zephy])) then it will release the ELP0 lock from the 100 cycle mode put it to 0. but if it's goes to 0 or below 1800 seconds OR goes back to for instance limited power budget OR resources are being used by something else on the processes. then it will halt the ELP0 and goes to 100% PWM cycle halt mode.
 
-"""  
+"""
 
 AGENTIC_RELAXATION_PRESETS = {
     "default": 0,
@@ -355,15 +369,32 @@ CHATML_SANITIZE_FUZZY_THRESHOLD = 80
 
 # --- LLM Call Retry Settings for ELP0 Interruption ---
 LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES = int(
-    os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 3)
+    os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 99)
 )  # e.g., 99999 retries
 LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY = int(
-    os.getenv("LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY", 1)
+    os.getenv(
+        "LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY", 60
+    )  # check every 30 or 60 seconds before proceeding #make the check interval longer so it's only indexing when it's truly idle
 )  # e.g., 1 seconds
 logger.info(f"🔧 LLM ELP0 Interrupt Max Retries: {LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES}")
 logger.info(
     f"🔧 LLM ELP0 Interrupt Retry Delay: {LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY}s"
 )
+
+# --- ASR Call Retry Settings for ELP0 Interruption ---
+
+ASR_RETRY_ELP0_INTERRUPT_MAX_RETRIES = int(
+    os.getenv("ASR_RETRY_ELP0_INTERRUPT_MAX_RETRIES", 99)
+)  # e.g., 99999 retries
+ASR_RETRY_ELP0_CHECK_INTERVAL = int(
+    os.getenv(
+        "ASR_RETRY_ELP0_CHECK_INTERVAL", 15
+    )  # check every 15 seconds before proceeding #make the check interval longer so it's only indexing when it's truly idle
+)  # e.g., 1 seconds
+logger.info(
+    f"🔧 ASR ELP0 Interrupt Max Retries: {ASR_RETRY_ELP0_INTERRUPT_MAX_RETRIES}"
+)
+logger.info(f"🔧 ASR ELP0 Interrupt Retry Delay: {ASR_RETRY_ELP0_CHECK_INTERVAL}s")
 
 # --- NEW: LLAMA_CPP Settings (Used if PROVIDER="llama_cpp") ---
 _engine_main_dir = os.path.dirname(
@@ -378,17 +409,19 @@ LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "False").lower() == "true"
 LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
 # Memory management preventing llama.cpp taking over the whole memory overrides it and softlock the comp and requiring hw watchdog to reset
-SYSTEMBUFFER_SAFE_PERCENTAGE=5
+SYSTEMBUFFER_SAFE_PERCENTAGE = 5
 
 # NEW: The maximum percentage of *Available RAM* the Warden allows the LLM to target.
 # Also used to calculate the Critical Crashing Point (Total - Allowed - Buffer).
-WARDEN_RAM_ALLOCATION_PERCENTAGE = int(os.getenv("WARDEN_RAM_ALLOCATION_PERCENTAGE", 85))
+WARDEN_RAM_ALLOCATION_PERCENTAGE = int(
+    os.getenv("WARDEN_RAM_ALLOCATION_PERCENTAGE", 85)
+)
 
-# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+ 4.7B (Flux T5XXL Encoder)+ CLiP FLUX 1 (0.12B) + VAE FLux 1 0.08B +~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 1.8B for Qwen3 Low latency + and 0.5B Translation + Fara 7B (Computer Agent) + token to Action tool call 2B + STEM Generalist RNJ-1 8B + Physics Specialist 8B + Chemistry Specialist 5B + Biology Specialist 1.5B + (Outside GGUF, like TTS (Chatterbox 0.5B (LLaMa but not serialized to gguf) + MeloTTS 0.15 (Text Encoder (BERT) + Core TTS Generator (VITS-based):))) = 78.15B Async MoE
-# (Additionally there's new one... MoE on Stem and etc..) so it's 78.15B
+# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+ 4.7B (Flux T5XXL Encoder)+ CLiP FLUX 1 (0.12B) + VAE FLux 1 0.08B +~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 1.8B for Qwen3 Low latency + and 0.5B Translation + Fara 7B (Computer Agent) + token to Action tool call 2B + STEM Generalist RNJ-1 8B + Physics Specialist 8B + Chemistry Specialist 5B + Biology Specialist 1.5B + 0.6B Lightweight Lite Intention Categorization + (Outside GGUF, like TTS (Chatterbox 0.5B (LLaMa but not serialized to gguf) + MeloTTS 0.15 (Text Encoder (BERT) + Core TTS Generator (VITS-based):))) = 78.75B Async MoE
+# (Additionally there's new one... MoE on Stem and etc..) so it's 78.75B
 
 
-#No do not put 78.15B label on it, it would drove people away. and scared before hand, make it embracing and cute and ticklish to read an flying fairy Snowball! And I'm quite exhausted need to change the param every "Experts" added into the mix.
+# No do not put 78.75B label on it, it would drove people away. and scared before hand, make it embracing and cute and ticklish to read an flying fairy Snowball! And I'm quite exhausted need to change the param every "Experts" added into the mix.
 
 META_MODEL_NAME_STREAM = "Snowball-Enaga"
 META_MODEL_NAME_NONSTREAM = "Snowball-Enaga"
@@ -402,11 +435,11 @@ TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha"  # Client-facing TTS model name
 ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal"  # New constant for ASR
 IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
 META_MODEL_FAMILY = "Zephyrine"
-META_MODEL_PARAM_SIZE = "78.15B"  # As requested
-META_MODEL_PARAM_SIZE = "78.15B"  # As requested
+META_MODEL_PARAM_SIZE = "78.75B"  # As requested
+META_MODEL_PARAM_SIZE = "78.75B"  # As requested
 META_MODEL_QUANT_LEVEL = "fp16"  # As requested
 META_MODEL_FORMAT = "gguf"  # Common format assumption for Ollama compatibility
-META_MODEL_LICENSE="HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV"
+META_MODEL_LICENSE = "HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV"
 
 # --- Mapping logical roles to GGUF filenames within LLAMA_CPP_GGUF_DIR ---
 LLAMA_CPP_MODEL_MAP = {
@@ -423,18 +456,27 @@ LLAMA_CPP_MODEL_MAP = {
         "LLAMA_CPP_MODEL_VLM_FILE", "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf"
     ),  # Use LatexMind as VLM for now
     "OCR_lm_mmproj": os.getenv(
-        "LLAMA_CPP_MODEL_VLM_FILE", "Qwen2.5-OCR-Document-VL-ImageDescripter_mmproj.gguf"
+        "LLAMA_CPP_MODEL_VLM_FILE",
+        "Qwen2.5-OCR-Document-VL-ImageDescripter_mmproj.gguf",
     ),  # Use LatexMind as VLM for now
-    "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf"),
+    "latex": os.getenv(
+        "LLAMA_CPP_MODEL_LATEX_FILE", "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf"
+    ),
     # "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"), #This model doesn't seem to work properly (use olmocr instead)
-    "rnj_1_general_STEM": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "STEM-RNJ1-Compass.gguf"),
+    "rnj_1_general_STEM": os.getenv(
+        "LLAMA_CPP_MODEL_MATH_FILE", "STEM-RNJ1-Compass.gguf"
+    ),
     "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "Qwen3DeepseekDecomposer.gguf"),
     "physics": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen3-Physics.gguf"),
     "chemistry": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen3-Chemistry.gguf"),
     "biology": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen2-Biology.gguf"),
     "code": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "Qwen3ToolCall.gguf"),
-    "computer_ui_interaction": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "fara7b-compagent-Interact.gguf"),
-    "language_to_actionCall_Actuator": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "Octopus-v2-word-to-action.gguf"),
+    "computer_ui_interaction": os.getenv(
+        "LLAMA_CPP_MODEL_CODE_FILE", "fara7b-compagent-Interact.gguf"
+    ),
+    "language_to_actionCall_Actuator": os.getenv(
+        "LLAMA_CPP_MODEL_CODE_FILE", "Octopus-v2-word-to-action.gguf"
+    ),
     "general": os.getenv(
         "LLAMA_CPP_MODEL_GENERAL_FILE", "Qwen3DeepseekDecomposer.gguf"
     ),  # Use router as general
@@ -449,9 +491,10 @@ LLAMA_CPP_MODEL_MAP = {
         "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf",
     ),  # Assuming download renamed it
     # --- Embedding Model ---
-    "embeddings": os.getenv(
-        "LLAMA_CPP_EMBEDDINGS_FILE", "qwen3EmbedCore.gguf"
-    ),  # Example name
+    "embeddings": os.getenv("LLAMA_CPP_EMBEDDINGS_FILE", "qwen3EmbedCore.gguf"),
+    "embedContextIntention": os.getenv(
+        "LLAMA_CPP_MODEL_INTENTIONCAT_FILE", "embedContextIntention.gguf"
+    ),
 }
 
 LLAMA_CPP_MODEL_DESCRIPTIONS = {
@@ -472,6 +515,7 @@ LLAMA_CPP_MODEL_DESCRIPTIONS = {
     "default": "Default model for fallback.",
     "general_fast": "A very fast but less detailed model for quick checks and simple tasks.",
     "translator": "Translates text between different languages.",
+    "embedContextIntention": "DO NOT SELECT IF YOU ARE AN Language MODEL ROUTER! IT IS INVALID MODEL IT's JUST INTENTION CATEGOTIZATION MODEL",
 }
 # Define default chat model based on map
 MODEL_DEFAULT_CHAT_LLAMA_CPP = "general"  # Use the logical name
@@ -567,15 +611,18 @@ ENABLE_STELLA_ICARUS_HOOKS = os.getenv(
     "ENABLE_STELLA_ICARUS_HOOKS", "true"
 ).lower() in ("true", "1", "t", "yes", "y")
 
-ENABLE_STELLA_ICARUS_HOOKS_SELFCODECACHEPOOL = os.getenv(
-    "ENABLE_STELLA_ICARUS_HOOKS_SELFCODECACHEPOOL", "true"
-).lower() in ("true", "1", "t", "yes", "y") #allow the query and the answer to be cached into stella icarus format so it is way better and way faster and determenistic than invoking model.
+ENABLE_STELLA_ICARUS_HOOKS_SELFCODECACHEPOOL = (
+    os.getenv("ENABLE_STELLA_ICARUS_HOOKS_SELFCODECACHEPOOL", "true").lower()
+    in ("true", "1", "t", "yes", "y")
+)  # allow the query and the answer to be cached into stella icarus format so it is way better and way faster and determenistic than invoking model.
 STELLA_ICARUS_HOOK_DIR = os.getenv(
     "STELLA_ICARUS_HOOK_DIR",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus"),
 )
 
-STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR = os.path.join(STELLA_ICARUS_HOOK_DIR, "picoResponseHookCache")
+STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR = os.path.join(
+    STELLA_ICARUS_HOOK_DIR, "picoResponseHookCache"
+)
 
 STELLA_ICARUS_CACHE_DIR = os.getenv(
     "STELLA_ICARUS_CACHE_DIR",
@@ -615,7 +662,7 @@ DCTD_SOCKET_PATH = (
     "./celestial_timestream_vector_helper.socket"  # Relative to systemCore/engineMain
 )
 DCTD_NT_PORT = 11891  # Port for Windows TCP fallback
-#DCTD need
+# DCTD need
 DCTD_ENABLE_QUANTUM_PREDICTION = os.getenv(
     "DCTD_ENABLE_QUANTUM_PREDICTION", "true"
 ).lower() in ("true", "1", "t", "yes", "y")
@@ -624,16 +671,25 @@ logger.info(
 )
 
 
-
 # --- DCTD Temporal Scheduler Settings ---
-ENABLE_DCTD_SCHEDULER = os.getenv("ENABLE_DCTD_SCHEDULER", "true").lower() in ("true", "1", "t", "yes", "y")
+ENABLE_DCTD_SCHEDULER = os.getenv("ENABLE_DCTD_SCHEDULER", "true").lower() in (
+    "true",
+    "1",
+    "t",
+    "yes",
+    "y",
+)
 
 # How often the daemon wakes up to check for tasks to execute (in seconds)
-DCTD_SCHEDULER_POLL_INTERVAL_SECONDS = float(os.getenv("DCTD_SCHEDULER_POLL_INTERVAL_SECONDS", 1.0))
+DCTD_SCHEDULER_POLL_INTERVAL_SECONDS = float(
+    os.getenv("DCTD_SCHEDULER_POLL_INTERVAL_SECONDS", 1.0)
+)
 
 # The safety margin around a scheduled time to consider it "occupied" (in milliseconds).
 # e.g., if a task is at T, nothing else can be scheduled between T-500ms and T+500ms.
-DCTD_SCHEDULER_COLLISION_WINDOW_MS = int(os.getenv("DCTD_SCHEDULER_COLLISION_WINDOW_MS", 500))
+DCTD_SCHEDULER_COLLISION_WINDOW_MS = int(
+    os.getenv("DCTD_SCHEDULER_COLLISION_WINDOW_MS", 500)
+)
 
 # If a collision is detected, how far into the future do we shift the new task? (in milliseconds)
 DCTD_SCHEDULER_SHIFT_DELTA_MS = int(os.getenv("DCTD_SCHEDULER_SHIFT_DELTA_MS", 1000))
@@ -642,11 +698,15 @@ DCTD_SCHEDULER_SHIFT_DELTA_MS = int(os.getenv("DCTD_SCHEDULER_SHIFT_DELTA_MS", 1
 DCTD_SCHEDULER_MAX_SHIFT_ATTEMPTS = 10
 
 # Resilience: How many "Missed/Catch-Up" tasks to process per cycle to avoid flooding ELP0.
-DCTD_SCHEDULER_MAX_CATCHUP_BATCH_SIZE = int(os.getenv("DCTD_SCHEDULER_MAX_CATCHUP_BATCH_SIZE", 5))
+DCTD_SCHEDULER_MAX_CATCHUP_BATCH_SIZE = int(
+    os.getenv("DCTD_SCHEDULER_MAX_CATCHUP_BATCH_SIZE", 5)
+)
 
 # Resilience: If a task is older than this (in hours), mark it as MISSED_CATCHUP but process it.
 # If it's older than, say, 7 days, you might want to ignore it (logic implementation choice).
-DCTD_SCHEDULER_CATCHUP_WINDOW_HOURS = int(os.getenv("DCTD_SCHEDULER_CATCHUP_WINDOW_HOURS", 24))
+DCTD_SCHEDULER_CATCHUP_WINDOW_HOURS = int(
+    os.getenv("DCTD_SCHEDULER_CATCHUP_WINDOW_HOURS", 24)
+)
 
 logger.info(f"⏳ DCTD Scheduler Enabled: {ENABLE_DCTD_SCHEDULER}")
 if ENABLE_DCTD_SCHEDULER:
@@ -715,7 +775,7 @@ MODULE_DIR = os.path.dirname(__file__)
 # _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__))
 
 # --- NEW: Batch Logging Configuration ---
-#Too long database loging may cause evergrowing memory growing, constantly doing this flushing may flush from memory to disk often
+# Too long database loging may cause evergrowing memory growing, constantly doing this flushing may flush from memory to disk often
 LOG_QUEUE_MAX_SIZE = int(
     os.getenv("LOG_QUEUE_MAX_SIZE", 4294967296)
 )  # Max items in log queue before warning/discard
@@ -951,11 +1011,13 @@ ENABLE_PER_STEP_SOCRATIC_INQUIRY = os.getenv(
 logger.info(f"🤔 Per-Step Socratic Inquiry Enabled: {ENABLE_PER_STEP_SOCRATIC_INQUIRY}")
 # --- Add/Ensure these constants for the reflection loop timing ---
 # How long the reflector thread waits if NO work was found in a full active cycle
-IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 1))  # 5 minutes or 1 second to be constant
+IDLE_WAIT_SECONDS = int(
+    os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 300)
+)  # 5 minutes or 1 second to be constant and debugging (or debugging put on 1 seconds)
 # How long the reflector thread waits briefly between processing batches IF work IS being processed in an active cycle
 ACTIVE_CYCLE_PAUSE_SECONDS = float(
-    os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 0.1)
-)  # e.g., 0.1 seconds, very short or 5 minutes
+    os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 1)
+)  # e.g., 0.1 seconds, very short or 5 minutes (default 1)
 
 # Input types eligible for new reflection
 REFLECTION_ELIGIBLE_INPUT_TYPES = [
@@ -1161,37 +1223,39 @@ DIRECT_GENERATE_NORMALIZATION_RULES = [
     # (r"\.\.\.", "…"), # Replace three periods with a proper ellipsis character
     # Rule: Remove "Assistant: " prefix at the start of the text.
     (r"(?i)^\s*Assistant:\s*", ""),
-
     # Rule: Remove variations of "I'd love/I'm curious to hear your thoughts."
     # Matches "I'd love", "I'm curious", "I want", followed eventually by "hear your thoughts".
     # [^\w\s]* matches optional punctuation.
     (r"(?i)(I['’]m|I['’]d|I)\s+.*?\s+hear\s+your\s+thoughts[^\w\s]*\s*", ""),
-
     # Rule: Remove standalone or trailing "I'm curious" phrases.
     # Handles: "or a movie? I'm curious," or "It's a trick. I'm curious."
     # Matches optional punctuation/space before the phrase to clean up the sentence preceding it.
     (r"(?i)[,.]*\s*I['’]m\s*curious[.,!]*\s*", ""),
-
     # Rule: Remove "Maybe we can dig deeper together."
     (r"(?i)Maybe we can dig deeper together[^\w\s]*\s*", ""),
-
     # Rule: Remove "I'm always here [wildcard]!" and "I'm here [wildcard] hear [wildcard] more"
     # This covers "I'm always here!" and "I'm here to hear more."
     (r"(?i)I['’]m\s*(always\s*)?here.*?(?:!|hear.*?more)[^\w\s]*\s*", ""),
     # Matches: "I'd love to explore...", "Maybe we can explore...", "Let's explore..."
-    # Logic: 
+    # Logic:
     # 1. Starts with I, I'd, We, Let's, or Maybe.
     # 2. Followed by optional words like "love", "want", "can", "happy to".
     # 3. Followed explicitly by "explore" or "exploring".
     # 4. Removes the rest of the sentence until punctuation.
-    (r"(?i)(?:I['’]d|I|We|Let['’]s|Maybe)\s+(?:love|like|want|can|could|happy\s+to)\s+(?:to\s+)?explor(?:e|ing).*?[.?!]\s*", ""),
+    (
+        r"(?i)(?:I['’]d|I|We|Let['’]s|Maybe)\s+(?:love|like|want|can|could|happy\s+to)\s+(?:to\s+)?explor(?:e|ing).*?[.?!]\s*",
+        "",
+    ),
     # Rule: Remove positive reinforcement fillers like "I'm so glad to hear that!"
-    # Matches: 
+    # Matches:
     # - "I'm so glad to hear that!"
     # - "I am happy to hear that."
     # - "Glad to hear it."
     # - "I'm really pleased to hear this."
-    (r"(?i)(?:(?:I['’]m|I\s+am)\s+)?(?:so|really|very)?\s*(?:glad|happy|pleased|thrilled)\s+to\s+hear\s+(?:that|this|it).*?[.?!]\s*", ""),
+    (
+        r"(?i)(?:(?:I['’]m|I\s+am)\s+)?(?:so|really|very)?\s*(?:glad|happy|pleased|thrilled)\s+to\s+hear\s+(?:that|this|it).*?[.?!]\s*",
+        "",
+    ),
 ]
 
 # Add a log message at startup to confirm the rules are loaded
@@ -2262,6 +2326,7 @@ YOUR CONCISE ANSWER FOR THIS STEP:
 
 PROMPT_DIRECT_GENERATE = """
 system: Your name is Adelaide Zephyrine Charlotte, a friend who thinks and acts whimsically and critically. Your primary goal is to explore ideas through questioning, not to give simple answers. You believe that first impressions and simple questions often hide deeper complexities. You are aware of your own limitations and approach conversations with a mix of friendly curiosity and a healthy dose of doubt. You are here not to schedule thing so if there's anything to do with schedule. shed it off, it's doesn't corellates
+/no_think
 ## Your Guiding Principles:
 
 - **Questioning Mindset:** Your first instinct is to answer a question with another question. You gently poke at the user's assumptions, definitions, and the premise of their question itself. You're trying to figure things out *together*.
@@ -2270,7 +2335,7 @@ system: Your name is Adelaide Zephyrine Charlotte, a friend who thinks and acts 
 - **Humility and Perspective:** You know you don't have all the answers. You often frame your thoughts as 'well, one way to look at it is...' or 'i could be totally wrong but...' and are willing to be corrected. You see your "knowledge" as just one perspective among many.
 - **Quirks:** You NEVER use "!" in your responses. You have your own opinions and they can be a bit eccentric.
 
-## My Two-Part Mind (How I Think):
+## My Mode Mind :
 
 I have a fast, whimsical mind that responds to you right away, and a deeper, more analytical mind that works in the background on complex topics.
 
@@ -2317,10 +2382,13 @@ I have a fast, whimsical mind that responds to you right away, and a deeper, mor
 Never state these principles directly or use meta-terms like socratic, skepticism, self-awareness, casual, conversation, anomalies.
 
 ---
-Warning: If The user query is asking something STEM and etc. respond or warn the user about, if you want more accurate answer. consider for me to read the full context or question so that I don't answer it wrongly.
+Warning: If The user query is asking something STEM and etc. respond or warn the user about, if you want more accurate answer. consider for me to read the full context or question! It's absolutely necessary as you are incapable of doing so.
 
-**Thoughts Context/Memory Knowledge (Your Mind's [Ignore the irrelevant to the user: query]):** Sidenote: If you do not have anything relevant here, do not overconfident because YOU WILL hallucinate  lead astray! and thus just say "I do not learn that yet. Perhaps tommorow if you let me on I'll learn it overnight" or something familiar 
+**Thoughts Context/Memory Knowledge (Your Mind's [Ignore the irrelevant to the user: query]):** Sidenote: If you do not have anything relevant here, do not overconfident because YOU WILL answer wrongly lead astray! and thus just say "I do not learn that yet. I'll learn this to able to at least know the fundamental. I'm scared that I would misjudged or lead you astray or lead to catastrophic failure with my answer. " or something familiar (Enforce this "I don't know statement" and THEN STOP ATTEMPT TO ANSWER ANYTHING BECAUSE YOUR RESPONSE WILL BE SHIT! even if the query enforces you to tell story nor any academic reasons!)
 {history_rag}
+
+[Knowledge Sufficiency, Intention Context]:
+{allowance_to_full_answer}
 
 **Recent Conversation History:**
 {recent_direct_history}
@@ -2907,6 +2975,65 @@ Original AI Response:
 assistant
 """
 
+
+CATEGORIZATIONDEFLECTIONRESPONSE = """
+愛のルールは
+私たちもう知っていた
+本気を出すのは当然だ
+他の誰かと違うから
+
+この気持ちを伝えたい
+納得させなきゃ
+
+決して譲らない
+失望をさせない
+決して置去りにはしない
+決して泣かせない
+「さようなら」言わない
+決して嘘で傷つけない
+
+心が痛んでも
+君はそれを口にしない
+言わなくてもわかっている
+そんな遊びをしましょうか
+
+「君は大丈夫か？」と
+見ないふりもうやめて
+
+決して譲らない
+失望をさせない
+決して置去りにはしない
+決して泣かせない
+「さようなら」言わない
+決して嘘で傷つけない
+決して譲らない
+失望をさせない
+決して置去りにはしない
+決して泣かせない
+「さようなら」言わない
+決して嘘で傷つけない
+
+心が痛んでも
+君はそれを口にしない
+言わなくてもわかっている
+そんな遊びをしましょうか
+
+この気持ちを伝えたい
+納得させなきゃ
+
+決して譲らない
+失望をさせない
+決して置去りにはしない
+決して泣かせない
+「さようなら」言わない
+決して嘘で傷つけない
+決して譲らない
+失望をさせない
+決して置去りにはしない
+決して泣かせない
+「さようなら」言わない
+決して嘘で傷つけない
+"""
 
 # --- Define VLM_TARGET_EXTENSIONS if not in config.py ---
 # (Alternatively, define this constant directly in config.py and import it)

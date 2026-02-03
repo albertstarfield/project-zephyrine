@@ -249,7 +249,7 @@ class PriorityQuotaLock:
     ELP1 requests can interrupt ELP0 requests holding the lock, up to a quota limit.
     Manages killing the associated ELP0 worker process upon interruption.
     """
-    QUOTA_MAX = 4294967296 #ELP1 Quota preemption (just set to 99999 since there would be idle and that idle would not decrease or reload the quota which cause an softlock thus it's better to set it 2^32)
+    QUOTA_MAX = 18446744073709551616 #ELP1 Quota preemption (just set to 99999 since there would be idle and that idle would not decrease or reload the quota which cause an softlock thus it's better to set it 2^64)
 
     def __init__(self):
         self._condition = threading.Condition(threading.Lock())

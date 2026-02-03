@@ -7,13 +7,11 @@ import time
 import traceback
 import argparse
 import subprocess
-import shlex
 import psutil
 import re
-import pickle
 from typing import Union, List, Dict, Any, Optional  # Added for type hints
 from cortex_backbone_provider import INFERCOMPLETION_CTX_BINNING
-from CortexConfiguration import DisallowParallelBinaryExec
+from CortexConfiguration import DisallowParallelBinaryExec, MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS
 
 # --- Try importing llama_cpp ---
 """try:
@@ -310,7 +308,7 @@ def wait_for_binary_clearance():
     Blocks execution if DisallowParallelBinaryExec is True and 
     any competing LLM binaries are currently running.
     """
-    if not DisallowParallelBinaryExec or DisallowParallelBinaryExec == False:
+    if not DisallowParallelBinaryExec or DisallowParallelBinaryExec == False and MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS > 1:
         return
 
     # The binaries we must wait for
