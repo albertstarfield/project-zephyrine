@@ -130,7 +130,7 @@ Okay, here's some major part that have been changed
 
 1. 
 2. I added ethical notes for Image generation because it is not ethical to create AI image as final image, thus because of that I added an overlay. also for Zephy that have image generation that was creted or generated from AI it will be replaced one by one. (not all instantly because I do not remember where did i put all of them). I am completely sorry for this. I'm currently trying to redraw everything with my hand now.
-3. Total Model param is now reaching 78.15B yet the memory usage is 4-7GB thanks to seperation of gguf and manual MoE
+3. Total Model param is now reaching 78.75B yet the memory usage is 4-7GB thanks to seperation of gguf and manual MoE
 4. We have made Stella Icarus hook where it is completely bypass Language Model using regex (Yes classical computer time) (Because, I found that AI trend on 2024-2025 is completely barbaric and using it for a simple thing instead of create a more lightweight optimized )
 5. The Stella Icarus has base structure guide have been changed from numba based python to C++ writing with library hook so that we can compile it using O3 and march native to use the all the possible CPU calculation, which is called "Trickshot architecture"
 6. within the gap of 2024-2025 there was a project called Project Manta [Project Manta/Mobula Rover](https://github.com/albertstarfield/Mobula-Rover-CFD/tree/master). However it is abandoned due to nobody able to do it after post Month 7-9
@@ -139,7 +139,7 @@ Okay, here's some major part that have been changed
 ❯ time curl -X POST http://localhost:11434/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Zephy-async-78.15B",
+    "model": "Zephy-async-78.75B",
     "messages": [
       {
         "role": "user",
@@ -147,7 +147,7 @@ Okay, here's some major part that have been changed
       }
     ]
   }'
-{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"Hello this is Zephy, and this is Trickshot, it is an architecture of StellaIcarus Hook with O3 dynamic optimization and dynamic recompilation at startup (AOT), this is the example of the 1000000 simple arithmatics execution, trying to bring O(1) on simple task rather than waste it on Power and Processing resources.\nThis is your response time required running with StellaIcarus Trickshot:\n\n**0.3348 nanoseconds per AI response operation.**\n\n This architecture might be pushing the CPU to it's physics limit or how fast the response by it's clock cycle rather than Operation per Clock\n Better be balance! Because we also need efficiency on parallel.","role":"assistant"}}],"created":1765940966,"id":"chatcmpl-7c8310f5-0a39-43ee-a134-40a839460d65","model":"Zephy-async-78.15B","object":"chat.completion","system_fingerprint":null,"usage":{"completion_tokens":0,"prompt_tokens":0,"total_tokens":0}}
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"Hello this is Zephy, and this is Trickshot, it is an architecture of StellaIcarus Hook with O3 dynamic optimization and dynamic recompilation at startup (AOT), this is the example of the 1000000 simple arithmatics execution, trying to bring O(1) on simple task rather than waste it on Power and Processing resources.\nThis is your response time required running with StellaIcarus Trickshot:\n\n**0.3348 nanoseconds per AI response operation.**\n\n This architecture might be pushing the CPU to it's physics limit or how fast the response by it's clock cycle rather than Operation per Clock\n Better be balance! Because we also need efficiency on parallel.","role":"assistant"}}],"created":1765940966,"id":"chatcmpl-7c8310f5-0a39-43ee-a134-40a839460d65","model":"Zephy-async-78.75B","object":"chat.completion","system_fingerprint":null,"usage":{"completion_tokens":0,"prompt_tokens":0,"total_tokens":0}}
 curl -X POST http://localhost:11434/v1/chat/completions -H  -d   0.01s user 0.01s system 13% cpu 0.142 total
 ```
 to be honest with you this is a useless benchmark. but at least it sort of can guess how many clock speed it can use which is another thing to be used for this benchmark like 0.3ns which mean around 3GHz for instance. It's will be usefull if it's used more complex algorithm and require determenistic for DAL C
@@ -156,7 +156,7 @@ to be honest with you this is a useless benchmark. but at least it sort of can g
 
 8. Thanks to HTTP API status quo your speed is now capped at 1ms response (i mean it's already pretty good and consistent within 1-3ms so there's that.) even monitor/screen mostly refresh at 120Hz 8.3ms so it's should be good enough.
 9. also the model i name it "Zephyrine-Orchestrator" I think it's more friendly on this one
-(and not the scary 78.15B label) just like hypersonic, the mach number is no longer matter or insignificant. Just like what my lecturer said
+(and not the scary 78.75B label) just like hypersonic, the mach number is no longer matter or insignificant. Just like what my lecturer said
 "Your Mach number doesn't matter nor significant (Shows the derivation) what matters is the chemical reaction"
 Indicating this:
 ", What you are here to do is use what you have and your ingenuity to survive."
@@ -166,7 +166,7 @@ Indicating this:
 
 12. We changed the license from MIT to HL3 Hippocratic for preventing potential misuse. DO NO HARM! 
 
-13. No do not put 78.15B label on it, it would drove people away. and scared before hand, make it embracing and cute and ticklish to read an flying fairy Snowball! 🥹 And I'm quite exhausted need to change the param every "Experts" added into the mix.
+13. No do not put 78.75B label on it, it would drove people away. and scared before hand, make it embracing and cute and ticklish to read an flying fairy Snowball! 🥹 And I'm quite exhausted need to change the param every "Experts" added into the mix.
 
 14. Thus the system is going to be built like this
 (ref: DO178C)
