@@ -1,50 +1,65 @@
 #!/usr/bin/env python3
-import os
-import sys
-import subprocess
-import threading
-import time
-import signal
+import argparse
 import atexit
-import shutil
-import platform
-from datetime import datetime, date
-import json  # For parsing conda info
-import traceback
 import compileall
 import hashlib
-#import requests #(Don't request at the top) But on the main after conda relaunch to make sure it's installed
-from typing import Optional, Dict
+import json  # For parsing conda info
+import os
+import platform
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+import traceback
+from datetime import date, datetime
+
+# --- ADD THESE DEFAULTS (Global Scope) ---
+ZEPHYRINE_COG_API_HOST = "127.0.0.1:11434"
+ZEPHYRINE_UI_HOST = "127.0.0.1:5173"
+
+# import requests #(Don't request at the top) But on the main after conda relaunch to make sure it's installed
+from typing import Dict, Optional
+
 try:
     from loguru import logger
+
     # Ensure default configuration for this module if needed
     logger.remove()
-    logger.add(sys.stderr, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>", level="DEBUG")
+    logger.add(
+        sys.stderr,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level="DEBUG",
+    )
     logger.info("📝 Loguru logger configured successfully.")
 except ImportError:
     import logging
+
     # Configure a basic logger that mimics loguru's method names
     logging.basicConfig(
         level=logging.DEBUG,
-        format='%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s',
-        stream=sys.stderr
+        format="%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s",
+        stream=sys.stderr,
     )
     logger = logging.getLogger(__name__)
+
     # Add a 'success' method for compatibility
     def success(msg, *args, **kwargs):
         logger.info(msg, *args, **kwargs)
+
     logger.success = success
     logger.warning("Loguru not found. Falling back to standard Python logging.")
 
 # --- TUI Imports (with fallback) ---
 try:
+    import psutil
+    from rich.text import Text
     from textual.app import App, ComposeResult
     from textual.containers import Grid
-    from textual.widgets import Header, Footer, Log, Static
     from textual.reactive import reactive
-    from rich.text import Text
-    from textual.widgets import Sparkline
-    import psutil
+    from textual.widgets import Footer, Header, Log, Sparkline, Static
+
     TUI_AVAILABLE = True
     logger.success("You have TUI available!")
 except ImportError:
@@ -56,57 +71,75 @@ _sys_exec_dir = os.path.dirname(sys.executable)
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENGINE_MAIN_DIR = os.path.join(ROOT_DIR, "systemCore", "engineMain")
-#BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "backend-service") #Old Legacy Golang 
-BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "frontfacebackendservice") # New Ada frontfacebackend service proxy for the UI
-#frontend_host_assets = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "frontend-face-zephyrine") #Legacy Frontend User
-frontend_host_assets = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "zephyrine_frontend_host_assets") #Host Assets image and etc that going to be compiled
+# BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "backend-service") #Old Legacy Golang
+BACKEND_SERVICE_DIR = os.path.join(
+    ROOT_DIR, "systemCore", "UIEngine", "frontfacebackendservice"
+)  # New Ada frontfacebackend service proxy for the UI
+# frontend_host_assets = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "frontend-face-zephyrine") #Legacy Frontend User
+frontend_host_assets = os.path.join(
+    ROOT_DIR, "systemCore", "UIEngine", "zephyrine_frontend_host_assets"
+)  # Host Assets image and etc that going to be compiled
 ZEPHYRINE_HOST_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "zephyrine_host")
 
-#Rather than npm run dev using node.js as base-end we use Ada now.
+# Rather than npm run dev using node.js as base-end we use Ada now.
 LICENSE_DIR = os.path.join(ROOT_DIR, "licenses")
 LICENSE_FLAG_FILE = os.path.join(ROOT_DIR, ".license_accepted_v1")
 CUDA_TOOLKIT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".CUDA_Toolkit_Installed")
-#Launcher Flag File
+# Launcher Flag File
 
 LAUNCHER_HASH_FILE = os.path.join(ROOT_DIR, ".currentLauncherHash.flag")
 
 # Near the top with other path configurations
-RELAUNCH_LOG_DIR = os.path.join(ROOT_DIR, "logs") # Or any preferred log directory
+RELAUNCH_LOG_DIR = os.path.join(ROOT_DIR, "logs")  # Or any preferred log directory
 RELAUNCH_STDOUT_LOG = os.path.join(RELAUNCH_LOG_DIR, "relaunched_launcher_stdout.log")
 RELAUNCH_STDERR_LOG = os.path.join(RELAUNCH_LOG_DIR, "relaunched_launcher_stderr.log")
 RELAUNCH_LOG_DIR = os.path.join(ROOT_DIR, "logs")
-ENGINE_PID_FILE = os.path.join(RELAUNCH_LOG_DIR, "engine.pid") # NEW: Path for the engine's PID file
+ENGINE_PID_FILE = os.path.join(
+    RELAUNCH_LOG_DIR, "engine.pid"
+)  # NEW: Path for the engine's PID file
 
 SETUP_COMPLETE_FLAG_FILE = os.path.join(ROOT_DIR, ".setup_complete_v2")
 
 # --- MeloTTS Configuration ---
 MELO_TTS_SUBMODULE_DIR_NAME = "MeloAudioTTS_SubEngine"
 MELO_TTS_PATH = os.path.join(ENGINE_MAIN_DIR, MELO_TTS_SUBMODULE_DIR_NAME)
-MELO_TTS_LIB_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".melo_tts_lib_installed_v1") # NEW: For the library itself
-MELO_TTS_DATA_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".melo_tts_data_installed_v1") # RENAMED: For data deps
+MELO_TTS_LIB_INSTALLED_FLAG_FILE = os.path.join(
+    ROOT_DIR, ".melo_tts_lib_installed_v1"
+)  # NEW: For the library itself
+MELO_TTS_DATA_INSTALLED_FLAG_FILE = os.path.join(
+    ROOT_DIR, ".melo_tts_data_installed_v1"
+)  # RENAMED: For data deps
 
 # --- ChatterboxTTS Configuration (NEW) ---
 CHATTERBOX_TTS_SUBMODULE_DIR_NAME = "ChatterboxTTS_subengine"
 CHATTERBOX_TTS_PATH = os.path.join(ENGINE_MAIN_DIR, CHATTERBOX_TTS_SUBMODULE_DIR_NAME)
-CHATTERBOX_TTS_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".chatterbox_tts_installed_v1")
+CHATTERBOX_TTS_INSTALLED_FLAG_FILE = os.path.join(
+    ROOT_DIR, ".chatterbox_tts_installed_v1"
+)
 # --- END ChatterboxTTS Configuration ---
 
 # --- LaTeX-OCR Local Sub-Engine Configuration ---
 LATEX_OCR_SUBMODULE_DIR_NAME = "LaTeX_OCR-SubEngine"
 LATEX_OCR_PATH = os.path.join(ENGINE_MAIN_DIR, LATEX_OCR_SUBMODULE_DIR_NAME)
-LATEX_OCR_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".latex_ocr_subengine_installed_v1")
+LATEX_OCR_INSTALLED_FLAG_FILE = os.path.join(
+    ROOT_DIR, ".latex_ocr_subengine_installed_v1"
+)
 
 
 # --- Playwright Flag Configuration
 
-PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".playwright_browsers_installed_v1")
+PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE = os.path.join(
+    ROOT_DIR, ".playwright_browsers_installed_v1"
+)
 
 # --- Conda Configuration ---
 # CONDA_ENV_NAME is no longer used for creation if prefix is used, but can be a descriptive base for the folder
 RUNTIME_ENV_FOLDER_NAME = "zephyrineRuntimeVenv"
 CONDA_EXECUTABLE = None
 # TARGET_RUNTIME_ENV_PATH will now be ROOT_DIR + RUNTIME_ENV_FOLDER_NAME
-TARGET_RUNTIME_ENV_PATH = os.path.join(ROOT_DIR, RUNTIME_ENV_FOLDER_NAME) # DIRECTLY DEFINE THE TARGET PATH
+TARGET_RUNTIME_ENV_PATH = os.path.join(
+    ROOT_DIR, RUNTIME_ENV_FOLDER_NAME
+)  # DIRECTLY DEFINE THE TARGET PATH
 ACTIVE_ENV_PATH = None
 
 if os.path.exists("/etc/debian_version") and "TERMUX_VERSION" not in os.environ:
@@ -116,12 +149,18 @@ else:
     # We are likely in the base Termux or a standard desktop Linux/macOS/Windows env
     _cache_suffix = "_main_env.txt"
 
-IS_IN_PROOT_ENV = os.path.exists("/etc/debian_version") and "TERMUX_VERSION" not in os.environ
+IS_IN_PROOT_ENV = (
+    os.path.exists("/etc/debian_version") and "TERMUX_VERSION" not in os.environ
+)
 
-CONDA_PATH_CACHE_FILE = os.path.join(ROOT_DIR, f".conda_executable_path_cache{_cache_suffix}")
+CONDA_PATH_CACHE_FILE = os.path.join(
+    ROOT_DIR, f".conda_executable_path_cache{_cache_suffix}"
+)
 
 # --- Node.js Configuration (NEW) ---
-REQUIRED_NODE_MAJOR = 20 # Or 18, if your project has a strict preference, but 20 is current LTS.
+REQUIRED_NODE_MAJOR = (
+    20  # Or 18, if your project has a strict preference, but 20 is current LTS.
+)
 REQUIRED_NPM_MAJOR = 10  # npm 10 comes bundled with Node.js 20.
 # --- END Node.js Configuration ---
 
@@ -134,7 +173,9 @@ FALLBACK_PYTHON_MINOR = 12
 
 # --- GNAT Ada Compiler Configuration ---
 GNAT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".gnat_compiler_installed_v1")
-GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".gnat_toolchain_installed_v1")
+GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE = os.path.join(
+    ROOT_DIR, ".gnat_toolchain_installed_v1"
+)
 GNAT_BUILD_DIR = os.path.join(ROOT_DIR, "gnat_community_build")
 GNAT_SOURCE_URL = "https://github.com/AdaCore/gnat-community-sources/archive/refs/tags/gnat-community-2021.tar.gz"
 GNAT_TAR_FILENAME = "gnat-community-2021.tar.gz"
@@ -146,24 +187,27 @@ MAX_SETUP_ATTEMPTS = 4  # Initial run + 3 retries
 final_setup_failures = []
 
 
-running_processes = [] # For services started by the current script instance
+running_processes = []  # For services started by the current script instance
 process_lock = threading.Lock()
 relaunched_conda_process_obj = None
 tui_shutdown_event = threading.Event()
 
 # --- Executable Paths (will be redefined after Conda activation) ---
-IS_WINDOWS = os.name == 'nt'
+IS_WINDOWS = os.name == "nt"
 PYTHON_EXECUTABLE = sys.executable
 PIP_EXECUTABLE = ""
 HYPERCORN_EXECUTABLE = ""
-NPM_CMD = 'npm.cmd' if IS_WINDOWS else 'npm'
-GIT_CMD = 'git.exe' if IS_WINDOWS else 'git'
-CMAKE_CMD = 'cmake.exe' if IS_WINDOWS else 'cmake'
+NPM_CMD = "npm.cmd" if IS_WINDOWS else "npm"
+GIT_CMD = "git.exe" if IS_WINDOWS else "git"
+CMAKE_CMD = "cmake.exe" if IS_WINDOWS else "cmake"
 
 # --- ZephyMesh Configuration (MODIFIED FOR GO) ---
 ZEPHYMESH_DIR = os.path.join(ROOT_DIR, "zephyMeshNetwork")
-ZEPHYMESH_NODE_BINARY = os.path.join(ZEPHYMESH_DIR, "zephymesh_node_compiled.exe" if IS_WINDOWS else "zephymesh_node_compiled")
-ZEPHYMESH_API_PORT = 22000 # The port you configured in the Go app's flags
+ZEPHYMESH_NODE_BINARY = os.path.join(
+    ZEPHYMESH_DIR,
+    "zephymesh_node_compiled.exe" if IS_WINDOWS else "zephymesh_node_compiled",
+)
+ZEPHYMESH_API_PORT = 22000  # The port you configured in the Go app's flags
 zephymesh_api_url: Optional[str] = f"http://127.0.0.1:{ZEPHYMESH_API_PORT}"
 zephymesh_process: Optional[subprocess.Popen] = None
 ZEPHYMESH_PORT_INFO_FILE = os.path.join(ROOT_DIR, "zephymesh_ports.json")
@@ -179,150 +223,165 @@ MODELS_TO_DOWNLOAD = [
     {
         "filename": "deepscaler.gguf",
         "url": "https://huggingface.co/bartowski/agentica-org_DeepScaleR-1.5B-Preview-GGUF/resolve/main/agentica-org_DeepScaleR-1.5B-Preview-f16.gguf?download=true",
-        "description": "DeepScaleR Model (Agent/Router)"
+        "description": "DeepScaleR Model (Agent/Router)",
     },
     {
         "filename": "qwen3EmbedCore.gguf",
         "url": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf?download=true",
-        "description": "Qwen3 Embedding Vectorization Model"
+        "description": "Qwen3 Embedding Vectorization Model",
     },
     {
         "filename": "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf",
         "url": "https://huggingface.co/mradermacher/NanoTranslator-immersive_translate-0.5B-GGUF/resolve/main/NanoTranslator-immersive_translate-0.5B.Q5_K_M.gguf?download=true",
-        "description": "NanoTranslator Model"
+        "description": "NanoTranslator Model",
     },
     {
         "filename": "Qwen3LowLatency.gguf",
         "url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf?download=true",
-        "description": "Qwen3 4-bit Hybrid Direct Mode (Fast Augmented General)"
+        "description": "Qwen3 4-bit Hybrid Direct Mode (Fast Augmented General)",
     },
     {
         "filename": "Qwen3DeepseekDecomposer.gguf",
         "url": "https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/resolve/main/DeepSeek-R1-0528-Qwen3-8B-Q4_K_S.gguf?download=true",
-        "description": "Qwen 3 Deepseek R1 Decomposer 8B model, suboptimal for toolcall but a really good thinker and decompose solve complex things"
+        "description": "Qwen 3 Deepseek R1 Decomposer 8B model, suboptimal for toolcall but a really good thinker and decompose solve complex things",
     },
     {
         "filename": "Qwen3ToolCall.gguf",
         "url": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf?download=true",
-        "description": "Qwen 3 Tool Calling, Not good thinker but good for controlling and tool calling and coding"
+        "description": "Qwen 3 Tool Calling, Not good thinker but good for controlling and tool calling and coding",
     },
-    #Image Encoder to Decoder
+    {
+        "filename": "embedContextIntention.gguf",
+        "url": "https://huggingface.co/QuantFactory/Qwen3Guard-Gen-0.6B-GGUF/resolve/main/Qwen3Guard-Gen-0.6B.Q3_K_M.gguf?download=true",
+        "description": "Embedding Model Intention Checker Context",
+    },
+    # Image Encoder to Decoder
     {
         "filename": "Qwen3-VL-ImageDescripter_v2.gguf",
         "url": "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct-Q4_K_S.gguf?download=true",
-        "description": "Qwen3 Image Descriptor VL Model"
+        "description": "Qwen3 Image Descriptor VL Model",
     },
     {
         "filename": "Qwen3-VL-ImageDescripter_v2_mmproj.gguf",
         "url": "https://huggingface.co/unsloth/Qwen3-VL-4B-Instruct-GGUF/resolve/main/mmproj-F16.gguf?download=true",
-        "description": "Qwen3 Image Descriptor VL mmproj Model"
+        "description": "Qwen3 Image Descriptor VL mmproj Model",
     },
     {
-    #https://huggingface.co/Mungert/olmOCR-7B-0225-preview-GGUF/resolve/main/olmOCR-7B-0225-preview-q4_k_m.gguf?download=true    
+        # https://huggingface.co/Mungert/olmOCR-7B-0225-preview-GGUF/resolve/main/olmOCR-7B-0225-preview-q4_k_m.gguf?download=true
         "filename": "Qwen2.5-OCR-Document-VL-ImageDescripter.gguf",
         "url": "https://huggingface.co/unsloth/Qwen2.5-VL-7B-Instruct-GGUF/resolve/main/Qwen2.5-VL-7B-Instruct-UD-Q3_K_XL.gguf?download=true",
-        "description": "Qwen 2.5 Document Image Descripter"
+        "description": "Qwen 2.5 Document Image Descripter",
     },
     {
-    #https://huggingface.co/Mungert/olmOCR-7B-0225-preview-GGUF/resolve/main/olmOCR-7B-0225-preview-q4_k_m.gguf?download=true    
+        # https://huggingface.co/Mungert/olmOCR-7B-0225-preview-GGUF/resolve/main/olmOCR-7B-0225-preview-q4_k_m.gguf?download=true
         "filename": "Qwen2.5-OCR-Document-VL-ImageDescripter_mmproj.gguf",
         "url": "https://huggingface.co/unsloth/Qwen2.5-VL-7B-Instruct-GGUF/resolve/main/mmproj-F16.gguf?download=true",
-        "description": "Qwen 2.5 Document Image Descripter"
+        "description": "Qwen 2.5 Document Image Descripter",
     },
-    #Computer agent
+    # Computer agent
     {
         "filename": "fara7b-compagent-Interact.gguf",
         "url": "https://huggingface.co/bartowski/microsoft_Fara-7B-GGUF/resolve/main/microsoft_Fara-7B-IQ4_XS.gguf?download=true",
-        "description": "Experimental Actuator for software interaction from language"
+        "description": "Experimental Actuator for software interaction from language",
     },
-    #Octopus LLM language to Action
-    { 
-        "filename": "Octopus-v2-word-to-action.gguf", #2b
+    # Octopus LLM language to Action
+    {
+        "filename": "Octopus-v2-word-to-action.gguf",  # 2b
         "url": "https://huggingface.co/QuantFactory/Octopus-v2-GGUF/resolve/main/Octopus-v2.Q5_K_M.gguf?download=true",
-        "description": "Experimental Actuator Non Realtime LM Model Language to Action"
+        "description": "Experimental Actuator Non Realtime LM Model Language to Action",
     },
-    #STEM Compass MoE
+    # STEM Compass MoE
     {
-        #Generalist STEM Compass RNJ-1
-        "filename": "STEM-RNJ1-Compass.gguf", #8b
+        # Generalist STEM Compass RNJ-1
+        "filename": "STEM-RNJ1-Compass.gguf",  # 8b
         "url": "https://huggingface.co/noctrex/rnj-1-instruct-GGUF/resolve/main/rnj-1-instruct-IQ4_XS.gguf?download=true",
-        "description": "Generalist Overview on Physics Chemistry Math. Or perhaps Biology."
+        "description": "Generalist Overview on Physics Chemistry Math. Or perhaps Biology.",
     },
     {
-        "filename": "qwen3-Physics.gguf", #8b
+        "filename": "qwen3-Physics.gguf",  # 8b
         "url": "https://huggingface.co/mradermacher/qwen3-8b-physics-i1-GGUF/resolve/main/qwen3-8b-physics.i1-Q4_K_S.gguf?download=true",
-        "description": "Specialist on Phhysics Science Domain or Model for Physics Science Skill"
+        "description": "Specialist on Phhysics Science Domain or Model for Physics Science Skill",
     },
     {
-        "filename": "qwen3-Chemistry.gguf", #5b
+        "filename": "qwen3-Chemistry.gguf",  # 5b
         "url": "https://huggingface.co/mradermacher/ChemQwen2-vL-i1-GGUF/resolve/main/ChemQwen2-vL.i1-Q5_K_M.gguf?download=true",
-        "description": "Specialist on Chemistry Science Domain or Model for Chemistry Skill"
+        "description": "Specialist on Chemistry Science Domain or Model for Chemistry Skill",
     },
     {
-        "filename": "qwen2-Biology.gguf", #1.5b
+        "filename": "qwen2-Biology.gguf",  # 1.5b
         "url": "https://huggingface.co/Agnuxo/Qwen2-1.5B-Instruct_MOE_BIOLOGY_assistant-GGUF_8bit/resolve/main/unsloth.Q8_0.gguf?download=true",
-        "description": "Specialist on Biology Science Domain or Model for Biology Skill"
+        "description": "Specialist on Biology Science Domain or Model for Biology Skill",
     },
-    #-=-=-=-=-=-=-=-=-=-
+    # -=-=-=-=-=-=-=-=-=-
     {
         "filename": "whisper-large-v3-q5_0.gguf",
         "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin?download=true",
-        "description": "Whisper Large v3 Model (ASR)"
+        "description": "Whisper Large v3 Model (ASR)",
     },
     {
         "filename": "whisper-lowlatency-direct.gguf",
         "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true",
-        "description": "Whisper Direct Low Latency (ASR)"
+        "description": "Whisper Direct Low Latency (ASR)",
     },
     {
         "filename": "flux1-schnell.gguf",
         "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/flux1-schnell-q2_k.gguf?download=true",
-        "description": "FLUX.1 Schnell GGUF (Main Q2_K)"
+        "description": "FLUX.1 Schnell GGUF (Main Q2_K)",
     },
     {
         "filename": "flux1-ae.gguf",
         "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/ae-f16.gguf?download=true",
-        "description": "FLUX.1 VAE GGUF (FP16)"
+        "description": "FLUX.1 VAE GGUF (FP16)",
     },
     {
         "filename": "flux1-clip_l.gguf",
         "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/clip_l-q8_0.gguf?download=true",
-        "description": "FLUX.1 CLIP L GGUF (Q8_0)"
+        "description": "FLUX.1 CLIP L GGUF (Q8_0)",
     },
     {
         "filename": "flux1-t5xxl.gguf",
         "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/t5xxl_q2_k.gguf?download=true",
-        "description": "FLUX.1 T5 XXL GGUF (Q2_K)"
+        "description": "FLUX.1 T5 XXL GGUF (Q2_K)",
     },
-    #https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q5_0.gguf?download=true
+    # https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q5_0.gguf?download=true
     {
         "filename": "sd-refinement.gguf",
         "url": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q5_0.gguf?download=true",
-        "description": "Stable Diffusion Refinement PostFlux"
-    }
+        "description": "Stable Diffusion Refinement PostFlux",
+    },
 ]
 
 # Llama.cpp Fork Configuration
 LLAMA_CPP_PYTHON_REPO_URL = "https://github.com/abetlen/llama-cpp-python.git"
 LLAMA_CPP_PYTHON_CLONE_DIR_NAME = "llama-cpp-python_build"
 LLAMA_CPP_PYTHON_CLONE_PATH = os.path.join(ROOT_DIR, LLAMA_CPP_PYTHON_CLONE_DIR_NAME)
-CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".custom_llama_cpp_installed_v1_conda")
+CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE = os.path.join(
+    ROOT_DIR, ".custom_llama_cpp_installed_v1_conda"
+)
 
 # --- Llama.cpp Direct Build Configuration ---
 LLAMA_CPP_DIRECT_REPO_URL = "https://github.com/ggerganov/llama.cpp.git"
 LLAMA_CPP_DIRECT_CLONE_DIR_NAME = "llama_cpp_direct"
 LLAMA_CPP_DIRECT_CLONE_PATH = os.path.join(ROOT_DIR, LLAMA_CPP_DIRECT_CLONE_DIR_NAME)
-LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".llama_cpp_direct_installed_v1")
+LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE = os.path.join(
+    ROOT_DIR, ".llama_cpp_direct_installed_v1"
+)
 
 # Stable Diffusion cpp python Configuration
-STABLE_DIFFUSION_CPP_PYTHON_REPO_URL = "https://github.com/william-murray1204/stable-diffusion-cpp-python.git"
+STABLE_DIFFUSION_CPP_PYTHON_REPO_URL = (
+    "https://github.com/william-murray1204/stable-diffusion-cpp-python.git"
+)
 STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME = "stable-diffusion-cpp-python_build"
-STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH = os.path.join(ROOT_DIR, STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME)
-CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".custom_sd_cpp_python_installed_v1_conda")
+STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH = os.path.join(
+    ROOT_DIR, STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME
+)
+CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE = os.path.join(
+    ROOT_DIR, ".custom_sd_cpp_python_installed_v1_conda"
+)
 
 # pywhispercpp python configuration
 PYWHISPERCPP_REPO_URL = "https://github.com/absadiki/pywhispercpp"
-PYWHISPERCPP_CLONE_DIR_NAME = "pywhispercpp_build" # Name for the local clone directory
+PYWHISPERCPP_CLONE_DIR_NAME = "pywhispercpp_build"  # Name for the local clone directory
 PYWHISPERCPP_CLONE_PATH = os.path.join(ROOT_DIR, PYWHISPERCPP_CLONE_DIR_NAME)
 PYWHISPERCPP_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".pywhispercpp_installed_v1")
 
@@ -336,7 +395,7 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     MELO_TTS_LIB_INSTALLED_FLAG_FILE,
     MELO_TTS_DATA_INSTALLED_FLAG_FILE,
     CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE,
-    LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE, #aargh i forgot about this folder, it caused an catastrophic failure when zephyrineRuntimeVenv removed it doesn't removed llamacpp thus it doesn't compile and fails everything
+    LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE,  # aargh i forgot about this folder, it caused an catastrophic failure when zephyrineRuntimeVenv removed it doesn't removed llamacpp thus it doesn't compile and fails everything
     CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE,
     CONDA_PATH_CACHE_FILE,
     PYWHISPERCPP_INSTALLED_FLAG_FILE,
@@ -344,7 +403,7 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     CHATTERBOX_TTS_INSTALLED_FLAG_FILE,
     LATEX_OCR_INSTALLED_FLAG_FILE,
     PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE,
-    CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE
+    CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE,
 ]
 
 
@@ -355,7 +414,7 @@ process_lock = threading.Lock()
 
 # --- Helper Functions ---
 def print_colored(prefix, message, color=None):
-    now = datetime.now().strftime('%H:%M:%S.%f')[:-3]
+    now = datetime.now().strftime("%H:%M:%S.%f")[:-3]
     prefix_color = "\033[94m"
     if prefix == "ERROR":
         prefix_color = "\033[91m"
@@ -365,9 +424,12 @@ def print_colored(prefix, message, color=None):
         prefix_color = "\033[92m"
     reset_color = "\033[0m"
     if sys.stdout.isatty():
-        print(f"[{now} | {prefix_color}{prefix.ljust(10)}{reset_color}] {message.strip()}")
+        print(
+            f"[{now} | {prefix_color}{prefix.ljust(10)}{reset_color}] {message.strip()}"
+        )
     else:
         print(f"[{now} | {prefix.ljust(10)}] {message.strip()}")
+
 
 def calculate_launcher_hash() -> str:
     """Calculates the SHA256 hash of the currently executing launcher.py file."""
@@ -375,13 +437,14 @@ def calculate_launcher_hash() -> str:
     # Read the file content, ignoring the .flag file itself if it exists, but since
     # this function is only called before comparison/removal, we just hash the content.
     try:
-        with open(launcher_path, 'rb') as f:
+        with open(launcher_path, "rb") as f:
             # We hash the entire content of the script
             return hashlib.sha256(f.read()).hexdigest()
     except Exception as e:
         print_error(f"Failed to calculate launcher hash: {e}")
         # Return a deterministic failure hash to force re-setup if the file can't be read.
         return "HASH_READ_FAILURE"
+
 
 def _compile_watchtowers() -> bool:
     """
@@ -405,22 +468,39 @@ def _compile_watchtowers() -> bool:
     if not os.path.exists(go_mod_path):
         print_warning(f"go.mod not found in {go_watchdog_dir}. Initializing module...")
         try:
-            subprocess.run(["go", "mod", "init", "ZephyWatchtower"], cwd=go_watchdog_dir, check=True)
+            subprocess.run(
+                ["go", "mod", "init", "ZephyWatchtower"],
+                cwd=go_watchdog_dir,
+                check=True,
+            )
         except Exception as e:
             print_error(f"Failed to initialize Go module: {e}")
             return False
 
     print_system("Ensuring Go module dependencies are downloaded ('go mod tidy')...")
-    if not run_command(["go", "mod", "tidy"], cwd=go_watchdog_dir, name="GO-MOD-TIDY-WATCHDOG"):
-        print_error("Failed to download Go dependencies for the watchdog. Build will likely fail.")
+    if not run_command(
+        ["go", "mod", "tidy"], cwd=go_watchdog_dir, name="GO-MOD-TIDY-WATCHDOG"
+    ):
+        print_error(
+            "Failed to download Go dependencies for the watchdog. Build will likely fail."
+        )
         # You can decide to return False here or let the build attempt fail.
         # Letting it continue gives a more specific error from the build command itself.
 
     try:
         build_command_go = ["go", "build", "-o", go_exe_path, "."]
-        process_go = subprocess.run(build_command_go, cwd=go_watchdog_dir, capture_output=True, text=True, check=False, timeout=180)
+        process_go = subprocess.run(
+            build_command_go,
+            cwd=go_watchdog_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=180,
+        )
         if process_go.returncode != 0:
-            print_error(f"Failed to build Go Watchdog. RC: {process_go.returncode}\nSTDERR: {process_go.stderr.strip()}")
+            print_error(
+                f"Failed to build Go Watchdog. RC: {process_go.returncode}\nSTDERR: {process_go.stderr.strip()}"
+            )
             return False
         print_system("Go Watchdog (Thread 1) built successfully.")
     except Exception as e:
@@ -436,7 +516,9 @@ def _compile_watchtowers() -> bool:
         return False
 
     if not shutil.which("alr"):
-        print_error("'alr' command not found. Cannot build Ada watchdog. Please ensure Alire is in your PATH.")
+        print_error(
+            "'alr' command not found. Cannot build Ada watchdog. Please ensure Alire is in your PATH."
+        )
         return False
 
     try:
@@ -446,25 +528,41 @@ def _compile_watchtowers() -> bool:
         build_command_ada = ["alr", "exec", "--", "gprbuild"]
 
         # Check if the OS is macOS and add the specific linker flag if it is.
-        if platform.system() == 'Darwin':
-            print_system("macOS detected, adding specific linker flags for Ada build...")
+        if platform.system() == "Darwin":
+            print_system(
+                "macOS detected, adding specific linker flags for Ada build..."
+            )
             try:
                 # Get the SDK path from the system
-                sdk_path_result = subprocess.run(['xcrun', '--show-sdk-path'], capture_output=True, text=True, check=True)
+                sdk_path_result = subprocess.run(
+                    ["xcrun", "--show-sdk-path"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
                 sdk_path = sdk_path_result.stdout.strip()
                 # Append the necessary linker arguments to the command
-                build_command_ada.extend(['-largs', f'-L{sdk_path}/usr/lib'])
+                build_command_ada.extend(["-largs", f"-L{sdk_path}/usr/lib"])
             except Exception as e:
                 print_error(f"Could not get macOS SDK path for Ada build: {e}")
                 return False
 
         ### MODIFICATION END ###
 
-        process_ada = subprocess.run(build_command_ada, cwd=ada_watchdog_dir, capture_output=True, text=True, check=False, timeout=300)
+        process_ada = subprocess.run(
+            build_command_ada,
+            cwd=ada_watchdog_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=300,
+        )
         if process_ada.returncode == 0:
             print_system("Ada Watchdog (Thread 2) built successfully.")
         else:
-            print_error(f"Failed to build Ada Watchdog. RC: {process_ada.returncode}\nSTDERR: {process_ada.stderr.strip()}")
+            print_error(
+                f"Failed to build Ada Watchdog. RC: {process_ada.returncode}\nSTDERR: {process_ada.stderr.strip()}"
+            )
             return False
     except Exception as e:
         print_error(f"An unexpected error occurred during Ada watchdog build: {e}")
@@ -472,6 +570,7 @@ def _compile_watchtowers() -> bool:
 
     print_system("--- All ZephyWatchtower components compiled successfully. ---")
     return True
+
 
 def _compile_and_run_watchdogs():
     """
@@ -493,7 +592,9 @@ def _compile_and_run_watchdogs():
     go_exe_path = os.path.join(go_watchdog_dir, go_exe_name)
     if os.path.exists(go_exe_path):
         # Define the process names for all targets
-        backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+        backend_exe_name = (
+            "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+        )
         backend_process_name = backend_exe_name.replace(".exe", "")
 
         # The process name is derived from the binary file name, without the .exe
@@ -503,7 +604,7 @@ def _compile_and_run_watchdogs():
         watchdog_command = [
             go_exe_path,
             f"--targets={backend_process_name},{mesh_process_name}",  # ADDED mesh_process_name
-            f"--pid-file={ENGINE_PID_FILE}"
+            f"--pid-file={ENGINE_PID_FILE}",
         ]
         start_service_process(watchdog_command, go_watchdog_dir, "watchdogThread0")
     else:
@@ -519,26 +620,29 @@ def _compile_and_run_watchdogs():
         # to the Ada watchdog.
 
         # Define the command for the Go watchdog (same as before)
-        #backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
-        #backend_process_name = backend_exe_name.replace(".exe", "")
+        # backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+        # backend_process_name = backend_exe_name.replace(".exe", "")
         # We do not use the classical Web "APP" anymore
         go_watchdog_command = [
             go_exe_path,
             f"--targets={mesh_process_name}",
-            f"--pid-file={ENGINE_PID_FILE}"
+            f"--pid-file={ENGINE_PID_FILE}",
         ]
 
         # Now, construct the command for the Ada watchdog.
         # It's the Ada executable, followed by the entire Go command.
         ada_watchdog_command = [ada_exe_path] + go_watchdog_command
 
-        print_system(f"ADA Watchdog will supervise command: {' '.join(go_watchdog_command)}")
+        print_system(
+            f"ADA Watchdog will supervise command: {' '.join(go_watchdog_command)}"
+        )
 
         # The working directory should be the project root so that relative paths
         # in the supervised command (like for the PID file) work correctly.
         start_service_process(ada_watchdog_command, ROOT_DIR, "watchdogThread1")
     else:
         print_error(f"Ada watchdog executable not found after compile: {ada_exe_path}")
+
 
 def _compile_and_get_watchdog_path() -> Optional[str]:
     """
@@ -562,19 +666,24 @@ def _compile_and_get_watchdog_path() -> Optional[str]:
 
     # --- NEW: Check for go.mod and initialize if missing ---
     if not os.path.exists(go_mod_path):
-        print_warning(f"go.mod file not found in {watchdog_dir}. Initializing module...")
+        print_warning(
+            f"go.mod file not found in {watchdog_dir}. Initializing module..."
+        )
         try:
             # The module name should match the directory for convention
             mod_init_command = ["go", "mod", "init", "ZephyWatchtower"]
             init_process = subprocess.run(
                 mod_init_command,
                 cwd=watchdog_dir,
-                capture_output=True, text=True, check=True, timeout=30
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
             )
             print_system(f"Go module 'ZephyWatchtower' initialized successfully.")
         except Exception as e:
             print_error(f"Failed to initialize Go module: {e}")
-            if hasattr(e, 'stderr'):
+            if hasattr(e, "stderr"):
                 print_error(f"STDERR: {e.stderr}")
             return None
     # --- END NEW ---
@@ -585,15 +694,20 @@ def _compile_and_get_watchdog_path() -> Optional[str]:
         process = subprocess.run(
             build_command,
             cwd=watchdog_dir,
-            capture_output=True, text=True, check=False, timeout=180
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=180,
         )
         if process.returncode == 0:
             print_system(f"Go watchdog built successfully: {watchdog_exe_path}")
             return watchdog_exe_path
         else:
             print_error(f"Failed to build Go watchdog. RC: {process.returncode}")
-            if process.stdout: print_error(f"STDOUT: {process.stdout.strip()}")
-            if process.stderr: print_error(f"STDERR: {process.stderr.strip()}")
+            if process.stdout:
+                print_error(f"STDOUT: {process.stdout.strip()}")
+            if process.stderr:
+                print_error(f"STDERR: {process.stderr.strip()}")
             return None
     except Exception as e:
         print_error(f"An unexpected error occurred during watchdog build: {e}")
@@ -610,7 +724,9 @@ def terminate_relaunched_process(process_obj, name="Relaunched Conda Process"):
         return  # Process doesn't exist or has already terminated.
 
     pid = process_obj.pid
-    print_system(f"Attempting to terminate '{name}' (PID: {pid}) and its entire process tree...")
+    print_system(
+        f"Attempting to terminate '{name}' (PID: {pid}) and its entire process tree..."
+    )
 
     # --- The psutil Method (Preferred) ---
     try:
@@ -618,6 +734,7 @@ def terminate_relaunched_process(process_obj, name="Relaunched Conda Process"):
         # This makes it an optional dependency for cleanup. If it's not installed,
         # we can fall back gracefully to the less reliable method.
         import psutil
+
         print_system(f"Using psutil for robust process tree termination.")
 
         # Get the psutil Process object for our main target process.
@@ -631,7 +748,9 @@ def terminate_relaunched_process(process_obj, name="Relaunched Conda Process"):
         # First, terminate all the descendant processes.
         # It's good practice to terminate children before the parent.
         for child in children:
-            print_system(f"  -> Terminating child process '{child.name()}' (PID: {child.pid})")
+            print_system(
+                f"  -> Terminating child process '{child.name()}' (PID: {child.pid})"
+            )
             try:
                 child.terminate()
             except psutil.NoSuchProcess:
@@ -642,30 +761,40 @@ def terminate_relaunched_process(process_obj, name="Relaunched Conda Process"):
 
         # If any children are still alive, kill them forcefully.
         for p in alive:
-            print_warning(f"  -> Child process {p.pid} did not terminate gracefully. Killing.")
+            print_warning(
+                f"  -> Child process {p.pid} did not terminate gracefully. Killing."
+            )
             try:
                 p.kill()
             except psutil.NoSuchProcess:
                 pass  # Already gone, fine.
 
         # Finally, terminate the main parent process itself.
-        print_system(f"  -> Terminating main process '{parent.name()}' (PID: {parent.pid})")
+        print_system(
+            f"  -> Terminating main process '{parent.name()}' (PID: {parent.pid})"
+        )
         try:
             parent.terminate()
             parent.wait(timeout=5)
         except psutil.NoSuchProcess:
             print_system(f"Main process (PID: {pid}) already gone.")
         except psutil.TimeoutExpired:
-            print_warning(f"Main process (PID: {pid}) did not terminate gracefully. Killing.")
+            print_warning(
+                f"Main process (PID: {pid}) did not terminate gracefully. Killing."
+            )
             parent.kill()
 
         print_system(f"Termination of '{name}' (PID: {pid}) tree complete.")
         return  # Success
 
     except ImportError:
-        print_warning("`psutil` library not found. Falling back to less reliable OS-level termination.")
+        print_warning(
+            "`psutil` library not found. Falling back to less reliable OS-level termination."
+        )
     except psutil.NoSuchProcess:
-        print_system(f"Process {pid} for '{name}' was already gone when cleanup started.")
+        print_system(
+            f"Process {pid} for '{name}' was already gone when cleanup started."
+        )
         return  # Success, it's already dead
     except Exception as e:
         print_error(f"An unexpected error occurred during psutil termination: {e}")
@@ -677,7 +806,7 @@ def terminate_relaunched_process(process_obj, name="Relaunched Conda Process"):
     try:
         if IS_WINDOWS:
             # Use taskkill to terminate the process tree. /F for force, /T for tree.
-            kill_cmd = ['taskkill', '/F', '/T', '/PID', str(pid)]
+            kill_cmd = ["taskkill", "/F", "/T", "/PID", str(pid)]
             subprocess.run(kill_cmd, check=False, capture_output=True, text=True)
         else:
             # On Unix, send SIGTERM to the entire process group.
@@ -688,42 +817,56 @@ def terminate_relaunched_process(process_obj, name="Relaunched Conda Process"):
         print_system(f"Fallback termination for '{name}' completed.")
     except (ProcessLookupError, subprocess.TimeoutExpired):
         # If it times out, try a more forceful kill on the original process
-        print_warning(f"Fallback termination for '{name}' timed out or failed. Attempting final kill.")
+        print_warning(
+            f"Fallback termination for '{name}' timed out or failed. Attempting final kill."
+        )
         process_obj.kill()
     except Exception as e:
         print_error(f"Error during fallback termination of '{name}' tree: {e}")
 
-#=-=-=-=- this is Printing style for the log sysout syserr on stdio, wait, this is python
-def print_system(message): print_colored("SYSTEM", message)
 
-def print_aetherhand(message): print_colored("AETHERHAND", message)
-
-def print_error(message): print_colored("ERROR", message)
-
-def print_warning(message): print_colored("WARNING", message)
+# =-=-=-=- this is Printing style for the log sysout syserr on stdio, wait, this is python
+def print_system(message):
+    print_colored("SYSTEM", message)
 
 
-def stream_output(pipe, name=None, tui_log_widget: Optional['Log'] = None):
+def print_aetherhand(message):
+    print_colored("AETHERHAND", message)
+
+
+def print_error(message):
+    print_colored("ERROR", message)
+
+
+def print_warning(message):
+    print_colored("WARNING", message)
+
+
+def stream_output(pipe, name=None, tui_log_widget: Optional["Log"] = None):
     """
     Streams output from a subprocess pipe. If a Textual Log widget is provided,
     writes to it in a thread-safe manner; otherwise, prints to stdout.
     """
     try:
         # Use iter(pipe.readline, '') to read line by line
-        for line in iter(pipe.readline, ''):
+        for line in iter(pipe.readline, ""):
             if line:
                 # If a TUI widget was provided...
                 if tui_log_widget:
                     # Use call_from_thread to safely update the UI from this background thread.
                     # This is the critical fix.
-                    tui_log_widget.app.call_from_thread(tui_log_widget.write, f"[{name.upper()}] {line.strip()}")
+                    tui_log_widget.app.call_from_thread(
+                        tui_log_widget.write, f"[{name.upper()}] {line.strip()}"
+                    )
                 else:
                     # Fallback to simple terminal output if not in TUI mode
                     sys.stdout.write(f"[{name.upper()}] {line.strip()}\n")
                     sys.stdout.flush()
     except Exception as e:
         # Avoid printing errors for closed files, which is normal on shutdown
-        if 'read of closed file' not in str(e).lower() and 'Stream is closed' not in str(e):
+        if "read of closed file" not in str(
+            e
+        ).lower() and "Stream is closed" not in str(e):
             # Log the error using the appropriate method
             log_line = f"[STREAM_ERROR] Error in stream '{name}': {e}"
             if tui_log_widget:
@@ -735,7 +878,7 @@ def stream_output(pipe, name=None, tui_log_widget: Optional['Log'] = None):
             try:
                 pipe.close()
             except Exception:
-                pass # Ignore errors on closing a pipe that might already be closed
+                pass  # Ignore errors on closing a pipe that might already be closed
 
 
 def _remove_flag_files(flags_to_remove: list):
@@ -748,11 +891,18 @@ def _remove_flag_files(flags_to_remove: list):
             except OSError as e:
                 print_warning(f"  Could not remove flag file {flag_file}: {e}")
         else:
-            print_system(f"  Flag file not found (already removed or never created): {flag_file}")
+            print_system(
+                f"  Flag file not found (already removed or never created): {flag_file}"
+            )
 
-def run_command(command, cwd, name, color=None, check=True, capture_output=False, env_override=None):
+
+def run_command(
+    command, cwd, name, color=None, check=True, capture_output=False, env_override=None
+):
     log_name_prefix = name if name else os.path.basename(command[0])
-    print_system(f"Running command in '{os.path.basename(cwd)}' for '{log_name_prefix}': {' '.join(command)}")
+    print_system(
+        f"Running command in '{os.path.basename(cwd)}' for '{log_name_prefix}': {' '.join(command)}"
+    )
     # Manually construct the environment to ensure Conda's paths are prioritized.
     env = os.environ.copy()
 
@@ -760,13 +910,17 @@ def run_command(command, cwd, name, color=None, check=True, capture_output=False
     conda_lib_path = os.path.join(TARGET_RUNTIME_ENV_PATH, "lib")
 
     # Force Conda's bin directory to be at the front of the PATH
-    env['PATH'] = f"{conda_bin_path}{os.pathsep}{env.get('PATH', '')}"
+    env["PATH"] = f"{conda_bin_path}{os.pathsep}{env.get('PATH', '')}"
 
     # Force Conda's lib directory to be at the front of the linker path
     if platform.system() == "Linux":
-        env['LD_LIBRARY_PATH'] = f"{conda_lib_path}{os.pathsep}{env.get('LD_LIBRARY_PATH', '')}"
+        env["LD_LIBRARY_PATH"] = (
+            f"{conda_lib_path}{os.pathsep}{env.get('LD_LIBRARY_PATH', '')}"
+        )
     elif platform.system() == "Darwin":  # macOS
-        env['DYLD_LIBRARY_PATH'] = f"{conda_lib_path}{os.pathsep}{env.get('DYLD_LIBRARY_PATH', '')}"
+        env["DYLD_LIBRARY_PATH"] = (
+            f"{conda_lib_path}{os.pathsep}{env.get('DYLD_LIBRARY_PATH', '')}"
+        )
 
     # Apply any specific overrides from the caller *after* setting our base env
     if env_override:
@@ -777,21 +931,38 @@ def run_command(command, cwd, name, color=None, check=True, capture_output=False
     command = [str(c) for c in command]
     use_shell = False
     if IS_WINDOWS:
-        if command[0] == NPM_CMD or command[0].lower().endswith('.cmd') or command[0].lower().endswith('.bat'):
+        if (
+            command[0] == NPM_CMD
+            or command[0].lower().endswith(".cmd")
+            or command[0].lower().endswith(".bat")
+        ):
             use_shell = True
 
     try:
         process = subprocess.Popen(
-            command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding='utf-8', errors='replace', bufsize=1,
-            shell=use_shell, env=env
+            command,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            shell=use_shell,
+            env=env,
         )
 
-        stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, f"{log_name_prefix}-OUT"),
-                                         daemon=True)
+        stdout_thread = threading.Thread(
+            target=stream_output,
+            args=(process.stdout, f"{log_name_prefix}-OUT"),
+            daemon=True,
+        )
         stdout_thread.start()
-        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{log_name_prefix}-LogStream"),
-                                         daemon=True)
+        stderr_thread = threading.Thread(
+            target=stream_output,
+            args=(process.stderr, f"{log_name_prefix}-LogStream"),
+            daemon=True,
+        )
         stderr_thread.start()
 
         process.wait()
@@ -801,10 +972,14 @@ def run_command(command, cwd, name, color=None, check=True, capture_output=False
         if check and process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode, command)
 
-        print_system(f"Command finished successfully for '{log_name_prefix}' in '{os.path.basename(cwd)}'.")
+        print_system(
+            f"Command finished successfully for '{log_name_prefix}' in '{os.path.basename(cwd)}'."
+        )
         return True
     except FileNotFoundError:
-        print_error(f"Command not found for '{log_name_prefix}': {command[0]}. Is it installed and in PATH?")
+        print_error(
+            f"Command not found for '{log_name_prefix}': {command[0]}. Is it installed and in PATH?"
+        )
         if command[0] == GIT_CMD:
             print_error("Ensure Git is installed: https://git-scm.com/downloads")
         elif command[0] == NPM_CMD:
@@ -812,15 +987,19 @@ def run_command(command, cwd, name, color=None, check=True, capture_output=False
         elif command[0] == CMAKE_CMD:
             print_error("Ensure CMake is installed: https://cmake.org/download/")
         elif command[0] == HYPERCORN_EXECUTABLE:
-            print_error(f"Ensure '{os.path.basename(HYPERCORN_EXECUTABLE)}' is installed in the Conda env.")
+            print_error(
+                f"Ensure '{os.path.basename(HYPERCORN_EXECUTABLE)}' is installed in the Conda env."
+            )
         return False
     except subprocess.CalledProcessError as e:
         print_error(
-            f"Command failed for '{log_name_prefix}' in '{os.path.basename(cwd)}' with exit code {e.returncode}.")
+            f"Command failed for '{log_name_prefix}' in '{os.path.basename(cwd)}' with exit code {e.returncode}."
+        )
         return False
     except Exception as e:
         print_error(
-            f"An unexpected error occurred while running command for '{log_name_prefix}' in '{os.path.basename(cwd)}': {e}")
+            f"An unexpected error occurred while running command for '{log_name_prefix}' in '{os.path.basename(cwd)}': {e}"
+        )
         return False
 
 
@@ -841,7 +1020,7 @@ def start_service_process(command, cwd, name, use_shell_windows=False):
 
     try:
         # Open the log file in write mode, which will truncate it on each start
-        log_file_handle = open(log_file_path, 'w', encoding='utf-8')
+        log_file_handle = open(log_file_path, "w", encoding="utf-8")
 
         shell_val = use_shell_windows if IS_WINDOWS else False
 
@@ -852,9 +1031,9 @@ def start_service_process(command, cwd, name, use_shell_windows=False):
             stdout=log_file_handle,
             stderr=log_file_handle,
             text=True,
-            encoding='utf-8',
-            errors='replace',
-            shell=shell_val
+            encoding="utf-8",
+            errors="replace",
+            shell=shell_val,
         )
 
         # Keep track of the process and its log file for the TUI to use
@@ -880,15 +1059,18 @@ def _terminate_service_robustly(process: subprocess.Popen, name: str):
     print_system(f"Terminating {name} (PID: {process.pid}) and its children...")
     try:
         import psutil
+
         parent = psutil.Process(process.pid)
         children = parent.children(recursive=True)
 
         for child in children:
             try:
-                print_system(f"  -> Terminating child {child.name()} (PID: {child.pid}) of {name}")
+                print_system(
+                    f"  -> Terminating child {child.name()} (PID: {child.pid}) of {name}"
+                )
                 child.terminate()
             except psutil.NoSuchProcess:
-                pass # Already gone
+                pass  # Already gone
 
         # Wait for children to die
         gone, alive = psutil.wait_procs(children, timeout=3)
@@ -905,14 +1087,18 @@ def _terminate_service_robustly(process: subprocess.Popen, name: str):
             parent.wait(timeout=5)
             print_system(f"{name} terminated gracefully.")
         except psutil.TimeoutExpired:
-            print_warning(f"{name} did not terminate gracefully, killing (PID: {parent.pid})...")
+            print_warning(
+                f"{name} did not terminate gracefully, killing (PID: {parent.pid})..."
+            )
             parent.kill()
             parent.wait(timeout=2)
             print_system(f"{name} killed.")
 
     except (ImportError, psutil.NoSuchProcess):
         # Fallback to the original method if psutil is not found or the process is already gone
-        print_warning(f"psutil not found or process gone. Using standard terminate for {name}.")
+        print_warning(
+            f"psutil not found or process gone. Using standard terminate for {name}."
+        )
         process.terminate()
         try:
             process.wait(timeout=5)
@@ -923,6 +1109,7 @@ def _terminate_service_robustly(process: subprocess.Popen, name: str):
         # Final resort: kill the original process handle
         if process.poll() is None:
             process.kill()
+
 
 def cleanup_processes():
     print_system("\nShutting down services...")
@@ -949,7 +1136,9 @@ def cleanup_processes():
     # --- Handle the main relaunched 'conda run' process ---
     if relaunched_conda_process_obj and relaunched_conda_process_obj.poll() is None:
         print_system("Terminating the 'conda run' process and its children...")
-        terminate_relaunched_process(relaunched_conda_process_obj, "Relaunched 'conda run' process")
+        terminate_relaunched_process(
+            relaunched_conda_process_obj, "Relaunched 'conda run' process"
+        )
         relaunched_conda_process_obj = None
 
     # --- Handle locally managed services (Engine, Backend, etc.) ---
@@ -968,7 +1157,10 @@ def cleanup_processes():
             pass  # Ignore errors on closing handle
 
         # Now, use our new robust terminator for the process
-        _terminate_service_robustly(proc, name) #Use the helper function instead of coagulate into one position
+        _terminate_service_robustly(
+            proc, name
+        )  # Use the helper function instead of coagulate into one position
+
 
 atexit.register(cleanup_processes)
 
@@ -980,11 +1172,17 @@ def signal_handler(sig, frame):
     # 130 for SIGINT (Ctrl+C), 128 + signal number for others.
     sys.exit(130 if sig == signal.SIGINT else 128 + sig)
 
-signal.signal(signal.SIGINT, signal_handler)
-if not IS_WINDOWS: # SIGTERM is not really a thing for console apps on Windows this way for Ctrl+C
-    signal.signal(signal.SIGTERM, signal_handler) # Handle SIGTERM for graceful shutdown requests on Unix
 
-def tail_log_to_widget(log_file_path: str, widget: 'Log'):
+signal.signal(signal.SIGINT, signal_handler)
+if (
+    not IS_WINDOWS
+):  # SIGTERM is not really a thing for console apps on Windows this way for Ctrl+C
+    signal.signal(
+        signal.SIGTERM, signal_handler
+    )  # Handle SIGTERM for graceful shutdown requests on Unix
+
+
+def tail_log_to_widget(log_file_path: str, widget: "Log"):
     """
     A function to be run in a background thread that tails a log file
     and writes new lines to a Textual Log widget.
@@ -1005,17 +1203,21 @@ def tail_log_to_widget(log_file_path: str, widget: 'Log'):
                 widget.app.call_from_thread(widget.write, line)
     except FileNotFoundError:
         if not tui_shutdown_event.is_set():  # Only log if not shutting down
-            widget.app.call_from_thread(widget.write, f"[ERROR] Log file not found: {log_file_path}")
+            widget.app.call_from_thread(
+                widget.write, f"[ERROR] Log file not found: {log_file_path}"
+            )
     except Exception as e:
         if not tui_shutdown_event.is_set():  # Only log if not shutting down
-            error_msg = f"[ERROR] Tailing failed for {os.path.basename(log_file_path)}: {e}"
+            error_msg = (
+                f"[ERROR] Tailing failed for {os.path.basename(log_file_path)}: {e}"
+            )
             logger.error(error_msg)
             widget.app.call_from_thread(widget.write, error_msg)
 
 
 def start_engine_main():
     name = "ENGINE"
-    MAX_UPLOAD_SIZE_BYTES = 2 ** 63
+    MAX_UPLOAD_SIZE_BYTES = 2**63
 
     if os.path.exists(ENGINE_PID_FILE):
         os.remove(ENGINE_PID_FILE)
@@ -1023,26 +1225,31 @@ def start_engine_main():
     command = [
         HYPERCORN_EXECUTABLE,
         "AdelaideAlbertCortex:systemSocketPlug",
-        "--bind", "127.0.0.1:11434",
-        "--workers", "1",
-        "--keep-alive", "60",
-        "--graceful-timeout", "120",
-        "--log-level", "info",
-        "--pid", ENGINE_PID_FILE
+        "--bind",
+        ZEPHYRINE_COG_API_HOST,
+        "--workers",
+        "1",
+        "--keep-alive",
+        "60",
+        "--graceful-timeout",
+        "120",
+        "--log-level",
+        "info",
+        "--pid",
+        ENGINE_PID_FILE,
     ]
-    hypercorn_env = {
-        "HYPERCORN_MAX_REQUEST_SIZE": str(MAX_UPLOAD_SIZE_BYTES)
-    }
+    hypercorn_env = {"HYPERCORN_MAX_REQUEST_SIZE": str(MAX_UPLOAD_SIZE_BYTES)}
     # The function name start_service_process is a bit of a misnomer here,
     # as we aren't passing hypercorn_env. Assuming that's intended.
     # If not, start_service_process would need to be updated to accept an env dict.
     # Based on the original code, this seems to be the intent.
     start_service_process(command, ENGINE_MAIN_DIR, name)
 
+
 def start_frontend():
     name = "ZepZepAdaUI"
-    
-    # 1. Configuration
+
+    # 1. Configuration (Default)
     HOST_IP = "127.0.0.1"
     HOST_PORT = "5173"
 
@@ -1054,23 +1261,32 @@ def start_frontend():
     if os.path.isdir(ZEPHYRINE_HOST_DIR):
         print_system(f"Ensuring Alire dependencies for {name} (AWS)...")
         # Ensure AWS is present for the host
-        if not run_command(["alr", "with", "aws"], cwd=ZEPHYRINE_HOST_DIR, name=f"{name}-DEPS", check=False):
+        if not run_command(
+            ["alr", "with", "aws"],
+            cwd=ZEPHYRINE_HOST_DIR,
+            name=f"{name}-DEPS",
+            check=False,
+        ):
             print_warning(f"Dependency check for {name} returned warnings.")
 
-        # If binary missing, we force a build (logic already exists in main block, 
-        # but usually start_frontend assumes it might be built. 
+        # If binary missing, we force a build (logic already exists in main block,
+        # but usually start_frontend assumes it might be built.
         # If you want forced build here, copy the build logic from the main block.)
-    
+
     if not os.path.exists(binary_path):
         print_error(f"CRITICAL: Frontend Host binary missing at {binary_path}")
-        print_error("Cannot start UI. Please run the full setup again to compile the host.")
-        sys.exit(1) 
+        print_error(
+            "Cannot start UI. Please run the full setup again to compile the host."
+        )
+        sys.exit(1)
 
     # 4. Construct Command with Args
     command = [
-        binary_path, 
-        "--frontface", f"{HOST_IP}:{HOST_PORT}", 
-        "--backendRecieve", "http://127.0.0.1:11434"
+        binary_path,
+        "--frontface",
+        ZEPHYRINE_UI_HOST,
+        "--backendRecieve",
+        f"http://{ZEPHYRINE_COG_API_HOST}",
     ]
 
     print_system(f"Launching Zephyrine UI Frontend on {HOST_IP}:{HOST_PORT}")
@@ -1090,7 +1306,7 @@ def check_and_restart_services():
         "ENGINE": start_engine_main,
         "FRONTEND": start_frontend,
         "zephymeshHand": start_zephymesh_service_fast,
-        "watchdogThread0": start_watchdogs_service_fast, # Restarting one watchdog will restart both
+        "watchdogThread0": start_watchdogs_service_fast,  # Restarting one watchdog will restart both
         "watchdogThread1": start_watchdogs_service_fast,
     }
 
@@ -1103,7 +1319,11 @@ def check_and_restart_services():
             proc, name, log_path, log_handle = entry
 
             if proc.poll() is not None:  # The process is DEAD
-                print_colored("ERROR", f"Service '{name}' is DEAD! Return Code: {proc.poll()}. Aggressively restarting...", "ERROR")
+                print_colored(
+                    "ERROR",
+                    f"Service '{name}' is DEAD! Return Code: {proc.poll()}. Aggressively restarting...",
+                    "ERROR",
+                )
 
                 # 1. Clean up the old, dead process entry
                 # First, close its log file handle to prevent resource leaks
@@ -1111,7 +1331,9 @@ def check_and_restart_services():
                     if log_handle and not log_handle.closed:
                         log_handle.close()
                 except Exception as e:
-                    print_warning(f"Could not close log handle for dead process '{name}': {e}")
+                    print_warning(
+                        f"Could not close log handle for dead process '{name}': {e}"
+                    )
 
                 # Remove the stale entry from the master list of running processes
                 if entry in running_processes:
@@ -1125,22 +1347,32 @@ def check_and_restart_services():
                         print_system(f"Executing restart function for '{name}'...")
                         # We run the restart in a new thread to avoid blocking the monitor loop,
                         # especially if a service has a slow startup.
-                        restart_thread = threading.Thread(target=restart_func, daemon=True)
+                        restart_thread = threading.Thread(
+                            target=restart_func, daemon=True
+                        )
                         restart_thread.start()
                     except Exception as e:
-                        print_error(f"Failed to execute restart function for '{name}': {e}")
+                        print_error(
+                            f"Failed to execute restart function for '{name}': {e}"
+                        )
                 else:
-                    print_warning(f"No restart rule found for dead service '{name}'. It will not be restarted.")
+                    print_warning(
+                        f"No restart rule found for dead service '{name}'. It will not be restarted."
+                    )
 
 
 def start_zephymesh_service_fast():
     """Fast-path version: Assumes ZephyMesh is compiled and launches it without waiting."""
     name = "zephymeshHand"
-    mesh_exe_name = "zephymesh_node_compiled.exe" if IS_WINDOWS else "zephymesh_node_compiled"
+    mesh_exe_name = (
+        "zephymesh_node_compiled.exe" if IS_WINDOWS else "zephymesh_node_compiled"
+    )
     mesh_exe_path = os.path.join(ZEPHYMESH_DIR, mesh_exe_name)
 
     if not os.path.exists(mesh_exe_path):
-        print_error(f"FATAL (Fast Path): ZephyMesh executable not found at {mesh_exe_path}. Please run a full setup.")
+        print_error(
+            f"FATAL (Fast Path): ZephyMesh executable not found at {mesh_exe_path}. Please run a full setup."
+        )
         return
 
     # Clean up old port file before starting
@@ -1148,6 +1380,7 @@ def start_zephymesh_service_fast():
         os.remove(ZEPHYMESH_PORT_INFO_FILE)
 
     start_service_process([mesh_exe_path], ROOT_DIR, name)
+
 
 def start_watchdogs_service_fast():
     """Fast-path version: Assumes watchdogs are compiled and launches them directly."""
@@ -1158,17 +1391,21 @@ def start_watchdogs_service_fast():
     go_exe_name = "watchdog_thread1.exe" if IS_WINDOWS else "watchdog_thread1"
     go_exe_path = os.path.join(go_watchdog_dir, go_exe_name)
     if os.path.exists(go_exe_path):
-        backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+        backend_exe_name = (
+            "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+        )
         backend_process_name = backend_exe_name.replace(".exe", "")
         mesh_process_name = "zephymesh_node_compiled"
         watchdog_command = [
             go_exe_path,
             f"--targets={backend_process_name},{mesh_process_name}",
-            f"--pid-file={ENGINE_PID_FILE}"
+            f"--pid-file={ENGINE_PID_FILE}",
         ]
         start_service_process(watchdog_command, go_watchdog_dir, "watchdogThread0")
     else:
-        print_error(f"FATAL (Fast Path): Go watchdog executable not found at {go_exe_path}.")
+        print_error(
+            f"FATAL (Fast Path): Go watchdog executable not found at {go_exe_path}."
+        )
 
     # Run Ada Watchdog
     ada_watchdog_dir = os.path.join(ROOT_DIR, "ZephyWatchtower", "watchdog_thread2")
@@ -1176,33 +1413,44 @@ def start_watchdogs_service_fast():
     ada_exe_path = os.path.join(ada_watchdog_dir, "bin", ada_exe_name)
     if os.path.exists(ada_exe_path):
         # The logic for the Ada watchdog supervising the Go watchdog remains the same.
-        backend_exe_name = "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+        backend_exe_name = (
+            "frontfacebackendservice.exe" if IS_WINDOWS else "frontfacebackendservice"
+        )
         backend_process_name = backend_exe_name.replace(".exe", "")
         go_watchdog_command = [
             go_exe_path,
             f"--targets={backend_process_name},node",
-            f"--pid-file={ENGINE_PID_FILE}"
+            f"--pid-file={ENGINE_PID_FILE}",
         ]
         ada_watchdog_command = [ada_exe_path] + go_watchdog_command
         start_service_process(ada_watchdog_command, ROOT_DIR, "watchdogThread1")
     else:
-        print_error(f"FATAL (Fast Path): Ada watchdog executable not found at {ada_exe_path}.")
+        print_error(
+            f"FATAL (Fast Path): Ada watchdog executable not found at {ada_exe_path}."
+        )
+
 
 def monitor_services_fallback():
     """The non-TUI monitoring loop. Now uses the centralized restart logic."""
-    print_colored("SUCCESS", "All services launching. Monitoring with aggressive auto-restart.", "SUCCESS")
+    print_colored(
+        "SUCCESS",
+        "All services launching. Monitoring with aggressive auto-restart.",
+        "SUCCESS",
+    )
     print_system("Press Ctrl+C to shut down.")
     try:
         while True:
             # Call our single, powerful monitoring function.
             check_and_restart_services()
-            
+
             # The check interval.
             time.sleep(3)
     except KeyboardInterrupt:
         print_system("\nKeyboardInterrupt received by main thread. Shutting down...")
     finally:
-        print_system("Launcher monitoring loop finished. Ensuring cleanup via atexit...")
+        print_system(
+            "Launcher monitoring loop finished. Ensuring cleanup via atexit..."
+        )
 
 
 def launch_all_services_in_parallel_and_monitor():
@@ -1212,7 +1460,7 @@ def launch_all_services_in_parallel_and_monitor():
     print_system("--- IGNITION: Launching all services in parallel ---")
 
     # --- PHASE 1: IGNITE MAIN ENGINE & COMPLEMENTARY SERVICES ---
-    print_system("Running main engine (Hypercorn)...")
+    print_system("Running main engine...")
     start_engine_main()
 
     # --- PHASE 2: LAUNCH CORE DEPENDENCIES ---
@@ -1221,7 +1469,9 @@ def launch_all_services_in_parallel_and_monitor():
         "ZephyMesh": start_zephymesh_service_fast,
     }
     for name, task_func in tasks_to_launch_first.items():
-        thread = threading.Thread(target=task_func, name=f"LaunchThread-{name}", daemon=True)
+        thread = threading.Thread(
+            target=task_func, name=f"LaunchThread-{name}", daemon=True
+        )
         core_dependency_threads.append(thread)
         print_system(f"Dispatching core dependency launch for: {name}")
         thread.start()
@@ -1230,7 +1480,9 @@ def launch_all_services_in_parallel_and_monitor():
 
     # Launch the Frontend immediately
     print_system("Dispatching complementary service launch for: Frontend")
-    threading.Thread(target=start_frontend, name="LaunchThread-Frontend", daemon=True).start()
+    threading.Thread(
+        target=start_frontend, name="LaunchThread-Frontend", daemon=True
+    ).start()
 
     # --- NEW: PHASE 3: SCHEDULE WATCHDOGS WITH A DELAY ---
     def delayed_watchdog_launch():
@@ -1245,13 +1497,17 @@ def launch_all_services_in_parallel_and_monitor():
     watchdog_timer.daemon = True  # Ensure it doesn't prevent the app from exiting
     watchdog_timer.start()
 
-    print_colored("SUCCESS", "All services Loaded! Zephy Loaded! Moving to monitoring.", "SUCCESS")
+    print_colored(
+        "SUCCESS", "All services Loaded! Zephy Loaded! Moving to monitoring.", "SUCCESS"
+    )
 
     # --- PHASE 4: MONITORING ---
     # Now, jump into the TUI or fallback monitoring loop.
     if TUI_LIBRARIES_AVAILABLE:
         print_system("TUI libraries found. Transitioning Zephyrine Terminal UI...")
-        time.sleep(1) # Give services a moment to create their log files before TUI tails them
+        time.sleep(
+            1
+        )  # Give services a moment to create their log files before TUI tails them
         try:
             app = ZephyrineTUI()
             app.run()
@@ -1261,21 +1517,21 @@ def launch_all_services_in_parallel_and_monitor():
             print_warning("Falling back to simple terminal output for monitoring.")
             monitor_services_fallback()
     else:
-        print_warning("Textual or psutil not found. Falling back to simple terminal output for monitoring.")
+        print_warning(
+            "Textual or psutil not found. Falling back to simple terminal output for monitoring."
+        )
         monitor_services_fallback()
-    
-    #-=-=-=--=-=-=-=- First Launch flag successfull fast shortcut
+
+    # -=-=-=--=-=-=-=- First Launch flag successfull fast shortcut
     print_system(f"Creating first boot success flag: {SETUP_COMPLETE_FLAG_FILE}")
     try:
-        with open(SETUP_COMPLETE_FLAG_FILE, 'w', encoding='utf-8') as f_flag:
+        with open(SETUP_COMPLETE_FLAG_FILE, "w", encoding="utf-8") as f_flag:
             f_flag.write(f"First Launch Completed: {datetime.now().isoformat()}\n")
             f_flag.write(f"Launcher Hash: {current_hash}\n")
             f_flag.write(f"System: {platform.system()} {platform.machine()}\n")
     except IOError as e_flag:
         print_error(f"Failed to write setup completion flag: {e_flag}")
         # Optional: setup_failures.append("Failed to create setup completion flag")
-
-
 
 
 # --- Conda Python Version Calculation ---
@@ -1295,8 +1551,9 @@ def get_conda_python_versions_to_try(current_dt=None):
 
     # --- New Semester-Based Calculation ---
     # Calculate the total number of full months that have passed since the epoch.
-    total_months_elapsed = (current_date_obj.year - epoch_date.year) * 12 + \
-                           (current_date_obj.month - epoch_date.month)
+    total_months_elapsed = (current_date_obj.year - epoch_date.year) * 12 + (
+        current_date_obj.month - epoch_date.month
+    )
 
     semesters_offset = 0
     if total_months_elapsed > 0:
@@ -1328,7 +1585,9 @@ def get_conda_python_versions_to_try(current_dt=None):
         if v_str not in final_versions_to_try:
             final_versions_to_try.append(v_str)
 
-    print_system(f"Calculated preferred Python versions for Conda (Stability First): {final_versions_to_try}")
+    print_system(
+        f"Calculated preferred Python versions for Conda (Stability First): {final_versions_to_try}"
+    )
     return final_versions_to_try
 
 
@@ -1339,20 +1598,33 @@ def _verify_conda_path(conda_path_to_verify):
         return False
 
     is_executable = os.access(conda_path_to_verify, os.X_OK)
-    if not is_executable and IS_WINDOWS and conda_path_to_verify.lower().endswith((".bat", ".exe")):
-        is_executable = True  # .bat/.exe might not report X_OK but are runnable on Windows
+    if (
+        not is_executable
+        and IS_WINDOWS
+        and conda_path_to_verify.lower().endswith((".bat", ".exe"))
+    ):
+        is_executable = (
+            True  # .bat/.exe might not report X_OK but are runnable on Windows
+        )
 
     if not is_executable:
         return False
 
     cmd_list = []
     if IS_WINDOWS and conda_path_to_verify.lower().endswith(".bat"):
-        cmd_list = ['cmd', '/c', conda_path_to_verify, 'info', '--base']
+        cmd_list = ["cmd", "/c", conda_path_to_verify, "info", "--base"]
     else:
-        cmd_list = [conda_path_to_verify, 'info', '--base']
+        cmd_list = [conda_path_to_verify, "info", "--base"]
 
     try:
-        proc = subprocess.run(cmd_list, capture_output=True, text=True, timeout=10, check=False, errors='replace')
+        proc = subprocess.run(
+            cmd_list,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+            errors="replace",
+        )
         if proc.returncode == 0 and proc.stdout and os.path.isdir(proc.stdout.strip()):
             return True  # Verified
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -1381,7 +1653,9 @@ def _find_shell_executable() -> Optional[str]:
             print_system(f"Found shell: {found_path}")
             return found_path
 
-    print_error("Could not find a suitable shell (bash, sh, or ash) in the system's PATH.")
+    print_error(
+        "Could not find a suitable shell (bash, sh, or ash) in the system's PATH."
+    )
     return None
 
 
@@ -1397,22 +1671,48 @@ def _handle_android_become_smartphone_setup() -> None:
     MAX_PROOT_INSTALL_ATTEMPTS = 3
 
     print_aetherhand("Handling Android incompatibility, executing other subroutines")
-    print_system("This entire process can consume over 5.69 GB of RAM and significant processing time.")
-    print_system("Smartphones are consumer devices designed for media consumption and doomscrolling;")
-    print_system("they are not designed to be locally and independently 'smart'. Remember that You own nothing and be happy.")
-    print_system("The Android OS is EXTREMELY AGGRESSIVE in killing background processes (SIGKILL 9) to save resources.")
-    print_warning("A device with 12GB of RAM or more is highly recommended for a chance of success.")
-    print_warning("An unlocked bootloader (superuser/root) is recommended to properly disable these limitations.")
-    print_colored("SYSTEM", "--- RECOMMENDED ACTION TO PREVENT RANDOM KILLS ---", "SYSTEM")
-    print_system("To disable Android's 'Phantom Process Killer', run these commands via ADB from a PC or adb wifi or Shizuku:")
-    print_colored("COMMAND", '    adb shell "/system/bin/device_config set_sync_disabled_for_tests persistent"',
-                  "SUCCESS")
-    print_colored("COMMAND",
-                  '    adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647"',
-                  "SUCCESS")
-    print_colored("COMMAND", '    adb shell settings put global settings_enable_monitor_phantom_procs false', "SUCCESS")
-    print_system("\nPausing for 10 seconds. Press Ctrl+C to abort if your device is not prepared...")
-
+    print_system(
+        "This entire process can consume over 5.69 GB of RAM and significant processing time."
+    )
+    print_system(
+        "Smartphones are consumer devices designed for media consumption and doomscrolling;"
+    )
+    print_system(
+        "they are not designed to be locally and independently 'smart'. Remember that You own nothing and be happy."
+    )
+    print_system(
+        "The Android OS is EXTREMELY AGGRESSIVE in killing background processes (SIGKILL 9) to save resources."
+    )
+    print_warning(
+        "A device with 12GB of RAM or more is highly recommended for a chance of success."
+    )
+    print_warning(
+        "An unlocked bootloader (superuser/root) is recommended to properly disable these limitations."
+    )
+    print_colored(
+        "SYSTEM", "--- RECOMMENDED ACTION TO PREVENT RANDOM KILLS ---", "SYSTEM"
+    )
+    print_system(
+        "To disable Android's 'Phantom Process Killer', run these commands via ADB from a PC or adb wifi or Shizuku:"
+    )
+    print_colored(
+        "COMMAND",
+        '    adb shell "/system/bin/device_config set_sync_disabled_for_tests persistent"',
+        "SUCCESS",
+    )
+    print_colored(
+        "COMMAND",
+        '    adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647"',
+        "SUCCESS",
+    )
+    print_colored(
+        "COMMAND",
+        "    adb shell settings put global settings_enable_monitor_phantom_procs false",
+        "SUCCESS",
+    )
+    print_system(
+        "\nPausing for 10 seconds. Press Ctrl+C to abort if your device is not prepared..."
+    )
 
     # 1. Ensure proot-distro is installed via apt
     print_system("Checking for 'proot-distro' package for containerization...")
@@ -1424,13 +1724,17 @@ def _handle_android_become_smartphone_setup() -> None:
             subprocess.run(["apt", "install", "proot-distro", "-y"], check=True)
             proot_distro_path = shutil.which("proot-distro")
             if not proot_distro_path:
-                raise RuntimeError("pkg install seemed to succeed, but 'proot-distro' is still not in PATH.")
+                raise RuntimeError(
+                    "pkg install seemed to succeed, but 'proot-distro' is still not in PATH."
+                )
             print_system("✅ 'proot-distro' installed successfully.")
         except Exception as e:
             print_error(f"Failed to install 'proot-distro': {e}")
             if isinstance(e, subprocess.CalledProcessError):
                 print_error(f"Stderr: {e.stderr.decode(errors='ignore')}")
-            print_error("Please install it manually ('pkg install proot-distro') and restart.")
+            print_error(
+                "Please install it manually ('pkg install proot-distro') and restart."
+            )
             sys.exit(1)
 
     # 2. Reliably find the base path for proot-distro root filesystems
@@ -1444,24 +1748,43 @@ def _handle_android_become_smartphone_setup() -> None:
         install_successful = False
         for attempt in range(1, MAX_PROOT_INSTALL_ATTEMPTS + 1):
             print_warning(
-                f"Distro '{PROOT_ALIAS}' not found or incomplete. Installing (Attempt {attempt}/{MAX_PROOT_INSTALL_ATTEMPTS})...")
+                f"Distro '{PROOT_ALIAS}' not found or incomplete. Installing (Attempt {attempt}/{MAX_PROOT_INSTALL_ATTEMPTS})..."
+            )
             print_system(f"Performing pre-install reset: Removing '{PROOT_ALIAS}'...")
-            subprocess.run([proot_distro_path, "remove", PROOT_ALIAS], check=False, capture_output=True)
+            subprocess.run(
+                [proot_distro_path, "remove", PROOT_ALIAS],
+                check=False,
+                capture_output=True,
+            )
             print_system("Reset complete.")
-            print_warning("This will download the debian rootfs and may take a long time.")
+            print_warning(
+                "This will download the debian rootfs and may take a long time."
+            )
             try:
-                install_cmd = [proot_distro_path, "install", "debian", "--override-alias", PROOT_ALIAS]
+                install_cmd = [
+                    proot_distro_path,
+                    "install",
+                    "debian",
+                    "--override-alias",
+                    PROOT_ALIAS,
+                ]
                 subprocess.run(install_cmd, check=True, capture_output=True)
-                print_system(f"✅ Virtual Environment '{PROOT_ALIAS}' installed successfully.")
+                print_system(
+                    f"✅ Virtual Environment '{PROOT_ALIAS}' installed successfully."
+                )
                 install_successful = True
                 break
             except subprocess.CalledProcessError as e:
-                print_error(f"Installation attempt {attempt} failed: {e.stderr.decode(errors='ignore').strip()}")
+                print_error(
+                    f"Installation attempt {attempt} failed: {e.stderr.decode(errors='ignore').strip()}"
+                )
                 if attempt < MAX_PROOT_INSTALL_ATTEMPTS:
                     print_warning("Retrying in 5 seconds...")
                     time.sleep(5)
         if not install_successful:
-            print_error(f"Failed to install proot-distro environment after {MAX_PROOT_INSTALL_ATTEMPTS} attempts.")
+            print_error(
+                f"Failed to install proot-distro environment after {MAX_PROOT_INSTALL_ATTEMPTS} attempts."
+            )
             sys.exit(1)
     else:
         print_system(f"Found existing and valid distro directory: '{PROOT_ALIAS}'.")
@@ -1667,18 +1990,27 @@ exit $?
         sys.exit(1)
 
     # 5. Re-execute the script inside the proot environment
-    print_colored("SYSTEM", "--- Relaunching inside glibc Compatibility Layer for Build ---", "SUCCESS")
+    print_colored(
+        "SYSTEM",
+        "--- Relaunching inside glibc Compatibility Layer for Build ---",
+        "SUCCESS",
+    )
     relaunch_env = os.environ.copy()
     proot_distro_path = shutil.which("proot-distro")
     relaunch_cmd = [proot_distro_path, "login", PROOT_ALIAS]
     try:
-        print_aetherhand("Executing Compatibility layer with Android with debian bootstrap")
+        print_aetherhand(
+            "Executing Compatibility layer with Android with debian bootstrap"
+        )
         os.execve(relaunch_cmd[0], relaunch_cmd, relaunch_env)
     except Exception as e:
         print_error(f"Failed to execve into proot-distro: {e}")
         print_error("Your environment is likely set up. Please try running manually:")
         print_colored("COMMAND", f"proot-distro login {PROOT_ALIAS}", "SUCCESS")
-        setup_failures.append("Failed to configure Hugging Face cache directory. Reporting to the launcher")
+        setup_failures.append(
+            "Failed to configure Hugging Face cache directory. Reporting to the launcher"
+        )
+
 
 def _install_miniforge_and_check_overall_environment() -> Optional[str]:
     """
@@ -1714,11 +2046,17 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
         # installation that might exist in the shared project directory.
         contaminated_path = os.path.join(ROOT_DIR, "miniforge3_local")
         if os.path.exists(contaminated_path):
-            print_warning(f"CRITICAL: Found contaminated Miniforge install at '{contaminated_path}'.")
-            print_warning("This is from a previous run and will be AGGRESSIVELY REMOVED to ensure a clean proot environment.")
+            print_warning(
+                f"CRITICAL: Found contaminated Miniforge install at '{contaminated_path}'."
+            )
+            print_warning(
+                "This is from a previous run and will be AGGRESSIVELY REMOVED to ensure a clean proot environment."
+            )
             try:
                 shutil.rmtree(contaminated_path)
-                print_system("Successfully removed contaminated Miniforge installation.")
+                print_system(
+                    "Successfully removed contaminated Miniforge installation."
+                )
             except Exception as e_clean:
                 print_error(f"Failed to remove contaminated Miniforge: {e_clean}")
                 print_error("Please remove this directory manually and restart.")
@@ -1729,21 +2067,39 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
         is_musl = False
         try:
             libc_name, _ = platform.libc_ver()
-            if 'musl' in libc_name.lower(): is_musl = True
+            if "musl" in libc_name.lower():
+                is_musl = True
         except Exception:
-            if os.path.exists(f"/lib/ld-musl-{py_arch}.so.1"): is_musl = True
+            if os.path.exists(f"/lib/ld-musl-{py_arch}.so.1"):
+                is_musl = True
 
         if is_musl:
-            print_warning("Detected 'musl' C library (e.g., Alpine Linux). Checking for glibc compatibility layer...")
+            print_warning(
+                "Detected 'musl' C library (e.g., Alpine Linux). Checking for glibc compatibility layer..."
+            )
             if not os.path.exists("/lib/libgcompat.so.0"):
-                print_colored("ERROR", "------------------ ACTION REQUIRED (Alpine/musl) ------------------", "ERROR")
-                print_error("This 'musl'-based system requires a compatibility layer to run Miniforge.")
-                print_system("Please run the following command with root privileges, then restart this launcher:")
+                print_colored(
+                    "ERROR",
+                    "------------------ ACTION REQUIRED (Alpine/musl) ------------------",
+                    "ERROR",
+                )
+                print_error(
+                    "This 'musl'-based system requires a compatibility layer to run Miniforge."
+                )
+                print_system(
+                    "Please run the following command with root privileges, then restart this launcher:"
+                )
                 print_colored("COMMAND", "    sudo apk add gcompat", "SUCCESS")
-                print_colored("ERROR", "-------------------------------------------------------------------", "ERROR")
+                print_colored(
+                    "ERROR",
+                    "-------------------------------------------------------------------",
+                    "ERROR",
+                )
                 return None
             else:
-                print_system("Found 'gcompat' compatibility layer. Proceeding with standard installer.")
+                print_system(
+                    "Found 'gcompat' compatibility layer. Proceeding with standard installer."
+                )
         py_os = "Linux"
         installer_filename = f"Miniforge3-{py_os}-{py_arch}.sh"
 
@@ -1767,25 +2123,31 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
     print_system(f"  from: {download_url}")
     print_system(f"  to:   {installer_local_path}")
     try:
-        with urllib.request.urlopen(download_url) as response, open(installer_local_path, 'wb') as out_file:
-            total_size = int(response.info().get('Content-Length', 0))
+        with (
+            urllib.request.urlopen(download_url) as response,
+            open(installer_local_path, "wb") as out_file,
+        ):
+            total_size = int(response.info().get("Content-Length", 0))
             bytes_so_far = 0
             chunk_size = 8192
 
             while True:
                 chunk = response.read(chunk_size)
-                if not chunk: break
+                if not chunk:
+                    break
                 out_file.write(chunk)
                 bytes_so_far += len(chunk)
                 if total_size > 0:
                     percent = float(bytes_so_far) / total_size * 100
                     sys.stdout.write(
-                        f"\r  Progress: [{int(percent / 5) * '#'}{int(20 - percent / 5) * ' '}] {percent:.1f}%")
+                        f"\r  Progress: [{int(percent / 5) * '#'}{int(20 - percent / 5) * ' '}] {percent:.1f}%"
+                    )
                     sys.stdout.flush()
         print("\nDownload complete.")
     except Exception as e:
         print_error(f"\nFailed to download Miniforge installer: {e}")
-        if os.path.exists(installer_local_path): os.remove(installer_local_path)
+        if os.path.exists(installer_local_path):
+            os.remove(installer_local_path)
         return None
     install_path = os.path.join(ROOT_DIR, "miniforge3_local")
     # Installation logic
@@ -1796,15 +2158,26 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
     try:
         if os_name in ["Linux", "Darwin"]:
             shell_executable = _find_shell_executable()
-            if not shell_executable: raise RuntimeError("Installation failed: No suitable shell found.")
+            if not shell_executable:
+                raise RuntimeError("Installation failed: No suitable shell found.")
             os.chmod(installer_local_path, 0o755)
-            install_cmd = [shell_executable, installer_local_path, "-b", "-p", install_path]
+            install_cmd = [
+                shell_executable,
+                installer_local_path,
+                "-b",
+                "-p",
+                install_path,
+            ]
             subprocess.run(install_cmd, check=True, capture_output=True, text=True)
-            is_in_proot_env = (os.path.exists("/etc/debian_version") and
-                               "TERMUX_VERSION" not in os.environ and
-                               os_name == "Linux")
+            is_in_proot_env = (
+                os.path.exists("/etc/debian_version")
+                and "TERMUX_VERSION" not in os.environ
+                and os_name == "Linux"
+            )
             if is_in_proot_env:
-                print_system("Proot environment detected. Adding Miniforge to shell PATH...")
+                print_system(
+                    "Proot environment detected. Adding Miniforge to shell PATH..."
+                )
                 # The install_path is where we just installed miniforge, e.g., /root/miniforge3_local
                 conda_bin_path = os.path.join(install_path, "bin")
                 bashrc_path = os.path.expanduser("~/.bashrc")
@@ -1813,22 +2186,37 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
                 try:
                     with open(bashrc_path, "a", encoding="utf-8") as f:
                         f.write(export_line)
-                    print_system(f"Successfully added '{conda_bin_path}' to '{bashrc_path}'.")
-                    print_warning("Please log out and log back into the proot shell for PATH changes to take full effect in manual sessions.")
+                    print_system(
+                        f"Successfully added '{conda_bin_path}' to '{bashrc_path}'."
+                    )
+                    print_warning(
+                        "Please log out and log back into the proot shell for PATH changes to take full effect in manual sessions."
+                    )
                 except Exception as e_bashrc:
-                    print_error(f"Failed to automatically add Conda to PATH: {e_bashrc}")
-                    print_warning("You may need to add it manually to your ~/.bashrc file.")
+                    print_error(
+                        f"Failed to automatically add Conda to PATH: {e_bashrc}"
+                    )
+                    print_warning(
+                        "You may need to add it manually to your ~/.bashrc file."
+                    )
         elif os_name == "Windows":
-            install_cmd = [installer_local_path, "/S", "/InstallationType=JustMe", "/RegisterPython=0",
-                           f"/D={install_path}"]
+            install_cmd = [
+                installer_local_path,
+                "/S",
+                "/InstallationType=JustMe",
+                "/RegisterPython=0",
+                f"/D={install_path}",
+            ]
             subprocess.run(install_cmd, check=True, capture_output=True, text=True)
         print_system("✅ Miniforge installed successfully.")
     except (subprocess.CalledProcessError, RuntimeError) as e:
         print_error("Miniforge installation failed.")
         if isinstance(e, subprocess.CalledProcessError):
             print_error(f"Return Code: {e.returncode}")
-            if e.stdout: print_error(f"Stdout: {e.stdout.strip()}")
-            if e.stderr: print_error(f"Stderr: {e.stderr.strip()}")
+            if e.stdout:
+                print_error(f"Stdout: {e.stdout.strip()}")
+            if e.stderr:
+                print_error(f"Stderr: {e.stderr.strip()}")
         else:
             print_error(f"Reason: {e}")
         return None
@@ -1845,9 +2233,10 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
     if os.path.exists(conda_exe_path):
         return conda_exe_path
     else:
-        print_error(f"Installation seemed to succeed, but conda executable not found at: {conda_exe_path}")
+        print_error(
+            f"Installation seemed to succeed, but conda executable not found at: {conda_exe_path}"
+        )
         return None
-
 
 
 def find_conda_executable(attempt_number: int):
@@ -1856,7 +2245,7 @@ def find_conda_executable(attempt_number: int):
     # 1. Check Cache First
     if os.path.exists(CONDA_PATH_CACHE_FILE):
         try:
-            with open(CONDA_PATH_CACHE_FILE, 'r', encoding='utf-8') as f_cache:
+            with open(CONDA_PATH_CACHE_FILE, "r", encoding="utf-8") as f_cache:
                 cached_path = f_cache.read().strip()
             if cached_path:
                 print_system(f"Found cached Conda path: '{cached_path}'. Verifying...")
@@ -1865,19 +2254,25 @@ def find_conda_executable(attempt_number: int):
                     return CONDA_EXECUTABLE
                 else:
                     # On retries (attempt > 1), or if the file doesn't exist, we must verify.
-                    print_system(f"Found cached Conda path: '{cached_path}'. Verifying (Attempt #{attempt_number})...")
+                    print_system(
+                        f"Found cached Conda path: '{cached_path}'. Verifying (Attempt #{attempt_number})..."
+                    )
                     if _verify_conda_path(cached_path):
                         CONDA_EXECUTABLE = cached_path
                         print_system(f"Using verified cached Conda: {CONDA_EXECUTABLE}")
                         return CONDA_EXECUTABLE
                     else:
-                        print_warning(f"Cached Conda path '{cached_path}' is invalid. Clearing cache and re-searching.")
+                        print_warning(
+                            f"Cached Conda path '{cached_path}' is invalid. Clearing cache and re-searching."
+                        )
                         try:
                             os.remove(CONDA_PATH_CACHE_FILE)
                         except OSError:
                             pass  # Ignore if removal fails
         except Exception as e_cache_read:
-            print_warning(f"Error reading Conda path cache file: {e_cache_read}. Proceeding with search.")
+            print_warning(
+                f"Error reading Conda path cache file: {e_cache_read}. Proceeding with search."
+            )
 
     # 2. Try shutil.which (standard PATH search)
     conda_exe_name = "conda.exe" if IS_WINDOWS else "conda"
@@ -1886,7 +2281,7 @@ def find_conda_executable(attempt_number: int):
         CONDA_EXECUTABLE = conda_path_from_which
         print_system(f"Found and verified Conda via PATH: {CONDA_EXECUTABLE}")
         try:  # Write to cache
-            with open(CONDA_PATH_CACHE_FILE, 'w', encoding='utf-8') as f_cache:
+            with open(CONDA_PATH_CACHE_FILE, "w", encoding="utf-8") as f_cache:
                 f_cache.write(CONDA_EXECUTABLE)
             print_system(f"Cached Conda path: {CONDA_EXECUTABLE}")
         except IOError as e_cache_write:
@@ -1896,55 +2291,96 @@ def find_conda_executable(attempt_number: int):
     # <<< MODIFICATION: CONTEXT-AWARE RECURSIVE SEARCH >>>
     # Only perform the slow, intensive recursive search if we are NOT in the base Termux environment.
     # The search fails due to permissions in Termux anyway, so it's pointless and generates errors.
-    IS_IN_BASE_TERMUX = "TERMUX_VERSION" in os.environ and not os.path.exists("/etc/debian_version")
+    IS_IN_BASE_TERMUX = "TERMUX_VERSION" in os.environ and not os.path.exists(
+        "/etc/debian_version"
+    )
 
     if IS_IN_BASE_TERMUX:
-        print_system("Termux environment detected. Skipping slow recursive file search due to permissions.")
+        print_system(
+            "Termux environment detected. Skipping slow recursive file search due to permissions."
+        )
         CONDA_EXECUTABLE = None
         return None
 
     # 3. If not found via PATH, perform recursive search
     print_warning(
-        f"'{conda_exe_name}' not found in PATH or cache was invalid. Attempting recursive search from system root(s)...")
-    print_warning("This can take a significant amount of time, especially on large file systems.")
+        f"'{conda_exe_name}' not found in PATH or cache was invalid. Attempting recursive search from system root(s)..."
+    )
+    print_warning(
+        "This can take a significant amount of time, especially on large file systems."
+    )
 
     search_roots = []
     if IS_WINDOWS:
         import string
-        available_drives = [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
-        if not available_drives: available_drives = ["C:\\"]
+
+        available_drives = [
+            f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")
+        ]
+        if not available_drives:
+            available_drives = ["C:\\"]
         search_roots.extend(available_drives)
     else:
         search_roots.append("/")
 
     target_filenames_to_search = [conda_exe_name]
-    if IS_WINDOWS: target_filenames_to_search.append("conda.bat")
+    if IS_WINDOWS:
+        target_filenames_to_search.append("conda.bat")
 
     for root_dir_to_search in search_roots:
         print_system(f"Searching for Conda in '{root_dir_to_search}'...")
-        for dirpath, dirnames, filenames_in_dir in os.walk(root_dir_to_search, topdown=True,
-                                                           onerror=lambda e: print_warning(
-                                                                   f"Permission or other error accessing {e.filename}, skipping.")):
+        for dirpath, dirnames, filenames_in_dir in os.walk(
+            root_dir_to_search,
+            topdown=True,
+            onerror=lambda e: print_warning(
+                f"Permission or other error accessing {e.filename}, skipping."
+            ),
+        ):
             if not IS_WINDOWS and root_dir_to_search == "/":
-                dirs_to_skip = ['proc', 'sys', 'dev', 'run', 'lost+found', '.gvfs', 'snap', 'mnt', 'media']
-                dirnames[:] = [d for d in dirnames if not (d.lower() in dirs_to_skip or (
-                            d.startswith('.') and len(d) > 1 and d not in ['.conda', '.config',
-                                                                           '.local'] and os.path.join(dirpath,
-                                                                                                      d) == os.path.join(
-                        root_dir_to_search, d)))]
+                dirs_to_skip = [
+                    "proc",
+                    "sys",
+                    "dev",
+                    "run",
+                    "lost+found",
+                    ".gvfs",
+                    "snap",
+                    "mnt",
+                    "media",
+                ]
+                dirnames[:] = [
+                    d
+                    for d in dirnames
+                    if not (
+                        d.lower() in dirs_to_skip
+                        or (
+                            d.startswith(".")
+                            and len(d) > 1
+                            and d not in [".conda", ".config", ".local"]
+                            and os.path.join(dirpath, d)
+                            == os.path.join(root_dir_to_search, d)
+                        )
+                    )
+                ]
 
             for target_fname in target_filenames_to_search:
                 if target_fname in filenames_in_dir:
                     potential_path = os.path.join(dirpath, target_fname)
                     if _verify_conda_path(potential_path):
                         CONDA_EXECUTABLE = potential_path
-                        print_system(f"Found and verified Conda via recursive search: {CONDA_EXECUTABLE}")
+                        print_system(
+                            f"Found and verified Conda via recursive search: {CONDA_EXECUTABLE}"
+                        )
                         try:  # Write to cache
-                            with open(CONDA_PATH_CACHE_FILE, 'w', encoding='utf-8') as f_cache:
+                            with open(
+                                CONDA_PATH_CACHE_FILE, "w", encoding="utf-8"
+                            ) as f_cache:
                                 f_cache.write(CONDA_EXECUTABLE)
                             print_system(f"Cached Conda path: {CONDA_EXECUTABLE}")
                         except IOError as e_cache_write:
-                            print_warning(f"Could not write to Conda path cache file: {e_cache_write}")
+                            print_warning(
+                                f"Could not write to Conda path cache file: {e_cache_write}"
+                            )
                         return CONDA_EXECUTABLE
             time.sleep(0.0000001)
 
@@ -1954,38 +2390,64 @@ def find_conda_executable(attempt_number: int):
 
 
 def get_conda_base_path():
-    if not CONDA_EXECUTABLE: return None
+    if not CONDA_EXECUTABLE:
+        return None
     try:
         cmd_list = [CONDA_EXECUTABLE, "info", "--base"]
         if IS_WINDOWS and CONDA_EXECUTABLE.lower().endswith(".bat"):
-            cmd_list = ['cmd', '/c', CONDA_EXECUTABLE, "info", "--base"]
-        result = subprocess.run(cmd_list, capture_output=True, text=True, check=True, timeout=10, errors='replace')
+            cmd_list = ["cmd", "/c", CONDA_EXECUTABLE, "info", "--base"]
+        result = subprocess.run(
+            cmd_list,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+            errors="replace",
+        )
         return result.stdout.strip()
     except Exception as e:
-        print_warning(f"Could not get conda base path using '{' '.join(cmd_list)}': {e}")
+        print_warning(
+            f"Could not get conda base path using '{' '.join(cmd_list)}': {e}"
+        )
         return None
 
 
-def get_conda_env_path(env_name_or_path):  # This function's usage for the *target* env is reduced
-    if not CONDA_EXECUTABLE: return None
+def get_conda_env_path(
+    env_name_or_path,
+):  # This function's usage for the *target* env is reduced
+    if not CONDA_EXECUTABLE:
+        return None
     # If it's already a path and looks like a conda env, return it
-    if os.path.isdir(env_name_or_path) and os.path.exists(os.path.join(env_name_or_path, 'conda-meta')):
+    if os.path.isdir(env_name_or_path) and os.path.exists(
+        os.path.join(env_name_or_path, "conda-meta")
+    ):
         return os.path.abspath(env_name_or_path)
 
     # If it's not a path, try to resolve it as a name (though we are moving away from this for the target env)
     cmd_list = [CONDA_EXECUTABLE, "info", "--envs", "--json"]
     if IS_WINDOWS and CONDA_EXECUTABLE.lower().endswith(".bat"):
-        cmd_list = ['cmd', '/c', CONDA_EXECUTABLE, "info", "--envs", "--json"]
+        cmd_list = ["cmd", "/c", CONDA_EXECUTABLE, "info", "--envs", "--json"]
 
     try:
-        result = subprocess.run(cmd_list, capture_output=True, text=True, check=True, timeout=15, errors='replace')
+        result = subprocess.run(
+            cmd_list,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=15,
+            errors="replace",
+        )
         envs_info = json.loads(result.stdout)
         # This part looks for environments by name in the standard envs_dirs
         for env_path_str in envs_info["envs"]:
-            if os.path.basename(env_path_str) == env_name_or_path:  # env_name_or_path here would be a name
+            if (
+                os.path.basename(env_path_str) == env_name_or_path
+            ):  # env_name_or_path here would be a name
                 return env_path_str
     except Exception as e:
-        print_warning(f"Could not list/parse conda envs using '{' '.join(cmd_list)}': {e}")
+        print_warning(
+            f"Could not list/parse conda envs using '{' '.join(cmd_list)}': {e}"
+        )
 
     # If env_name_or_path was a name and not found, and not a direct path, then it might not exist
     # or is not in the standard conda envs directories.
@@ -1993,7 +2455,9 @@ def get_conda_env_path(env_name_or_path):  # This function's usage for the *targ
     return None
 
 
-def create_conda_env(env_prefix_path, python_versions_to_try):  # Takes env_prefix_path directly
+def create_conda_env(
+    env_prefix_path, python_versions_to_try
+):  # Takes env_prefix_path directly
     if not CONDA_EXECUTABLE:
         print_error("Conda executable not found. Cannot create environment.")
         return False
@@ -2002,21 +2466,41 @@ def create_conda_env(env_prefix_path, python_versions_to_try):  # Takes env_pref
 
     for py_version in python_versions_to_try:
         print_system(
-            f"Attempting to create Conda environment at prefix '{env_prefix_path}' with Python {py_version}...")
-        cmd_list_base = ["create", "--yes", "--prefix", env_prefix_path, f"python={py_version}", "-c", "conda-forge"]
+            f"Attempting to create Conda environment at prefix '{env_prefix_path}' with Python {py_version}..."
+        )
+        cmd_list_base = [
+            "create",
+            "--yes",
+            "--prefix",
+            env_prefix_path,
+            f"python={py_version}",
+            "-c",
+            "conda-forge",
+        ]
 
         cmd_to_run = [CONDA_EXECUTABLE] + cmd_list_base
         if IS_WINDOWS and CONDA_EXECUTABLE.lower().endswith(".bat"):
-            cmd_to_run = ['cmd', '/c', CONDA_EXECUTABLE] + cmd_list_base
+            cmd_to_run = ["cmd", "/c", CONDA_EXECUTABLE] + cmd_list_base
 
         print_system(f"Executing: {' '.join(cmd_to_run)}")
         try:
-            process = subprocess.Popen(cmd_to_run, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                                       errors='replace')
-            stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, f"CONDA-CREATE-PREFIX-OUT"),
-                                             daemon=True)
-            stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"CONDA-CREATE-PREFIX-ERR"),
-                                             daemon=True)
+            process = subprocess.Popen(
+                cmd_to_run,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                errors="replace",
+            )
+            stdout_thread = threading.Thread(
+                target=stream_output,
+                args=(process.stdout, f"CONDA-CREATE-PREFIX-OUT"),
+                daemon=True,
+            )
+            stderr_thread = threading.Thread(
+                target=stream_output,
+                args=(process.stderr, f"CONDA-CREATE-PREFIX-ERR"),
+                daemon=True,
+            )
             stdout_thread.start()
             stderr_thread.start()
 
@@ -2026,36 +2510,53 @@ def create_conda_env(env_prefix_path, python_versions_to_try):  # Takes env_pref
 
             if process.returncode == 0:
                 print_system(
-                    f"Conda environment created successfully at prefix '{env_prefix_path}' with Python {py_version}.")
-                if not (os.path.isdir(env_prefix_path) and os.path.exists(os.path.join(env_prefix_path, 'conda-meta'))):
+                    f"Conda environment created successfully at prefix '{env_prefix_path}' with Python {py_version}."
+                )
+                if not (
+                    os.path.isdir(env_prefix_path)
+                    and os.path.exists(os.path.join(env_prefix_path, "conda-meta"))
+                ):
                     print_error(
-                        f"Critical: Conda environment at prefix '{env_prefix_path}' seems invalid post-creation.")
+                        f"Critical: Conda environment at prefix '{env_prefix_path}' seems invalid post-creation."
+                    )
                     return False
                 return True
             else:
                 print_warning(
-                    f"Failed to create Conda environment at prefix '{env_prefix_path}' with Python {py_version} (retcode: {process.returncode}).")
+                    f"Failed to create Conda environment at prefix '{env_prefix_path}' with Python {py_version} (retcode: {process.returncode})."
+                )
                 if os.path.exists(env_prefix_path):
-                    print_warning(f"Attempting to clean up partially created environment at '{env_prefix_path}'...")
+                    print_warning(
+                        f"Attempting to clean up partially created environment at '{env_prefix_path}'..."
+                    )
                     try:
                         shutil.rmtree(env_prefix_path)
-                        print_system(f"Successfully removed partially created environment: {env_prefix_path}")
+                        print_system(
+                            f"Successfully removed partially created environment: {env_prefix_path}"
+                        )
                     except Exception as e_rm:
-                        print_error(f"Could not remove partially created environment '{env_prefix_path}': {e_rm}")
+                        print_error(
+                            f"Could not remove partially created environment '{env_prefix_path}': {e_rm}"
+                        )
 
         except subprocess.TimeoutExpired:
             print_error(
-                f"Timeout while creating Conda environment at prefix '{env_prefix_path}' with Python {py_version}.")
-            if process and process.poll() is None: process.kill()
+                f"Timeout while creating Conda environment at prefix '{env_prefix_path}' with Python {py_version}."
+            )
+            if process and process.poll() is None:
+                process.kill()
         except Exception as e:
             print_error(
-                f"An unexpected error occurred while trying to create Conda environment at prefix '{env_prefix_path}' with Python {py_version}: {e}")
+                f"An unexpected error occurred while trying to create Conda environment at prefix '{env_prefix_path}' with Python {py_version}: {e}"
+            )
             print_error(
-                f"Failed to create Conda environment at prefix '{env_prefix_path}' with any of the specified Python versions: {python_versions_to_try}.")
+                f"Failed to create Conda environment at prefix '{env_prefix_path}' with any of the specified Python versions: {python_versions_to_try}."
+            )
             _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
 
     print_error(
-        f"Failed to create Conda environment at prefix '{env_prefix_path}' with any of the specified Python versions: {python_versions_to_try}.")
+        f"Failed to create Conda environment at prefix '{env_prefix_path}' with any of the specified Python versions: {python_versions_to_try}."
+    )
     return False
 
 
@@ -2064,15 +2565,19 @@ LICENSES_TO_ACCEPT = [
     ("APACHE_2.0.txt", "Primary Framework Components (Apache 2.0)"),
     ("MIT_Deepscaler.txt", "Deepscaler Model/Code Components (MIT)"),
     ("MIT_Zephyrine.txt", "Project Zephyrine Core & UI (MIT)"),
-    ("LICENSE_THIRD_PARTY_MODELS.txt", "Various licenses for bundled AI Models (see file for details)")
+    (
+        "LICENSE_THIRD_PARTY_MODELS.txt",
+        "Various licenses for bundled AI Models (see file for details)",
+    ),
 ]
+
 
 def restart_service_if_dead(process_entry):
     """Checks if a process is dead and restarts it if necessary."""
     proc, name, log_path, log_handle = process_entry
-    
+
     if proc.poll() is None:
-        return process_entry # Still alive, no change
+        return process_entry  # Still alive, no change
 
     print_warning(f"Service '{name}' died (RC: {proc.returncode}). Restarting...")
 
@@ -2090,15 +2595,14 @@ def restart_service_if_dead(process_entry):
         # Note: We rely on start_engine_main internal logic to handle the global running_processes list
         # But here we are manually managing the list entry, so we should be careful.
         # Ideally, refactor start_engine_main to return the proc, and call it here.
-        
+
         # Simpler approach: Just re-run the command that launched it
         # We can reconstruct it or simply call the specific function
-        start_engine_main() 
+        start_engine_main()
         # start_engine_main appends to running_processes, so we will have a duplicate if we aren't careful.
         # The calling loop needs to handle the list update.
-        return None # Signal that the list needs refreshing from the global
+        return None  # Signal that the list needs refreshing from the global
 
-        
     return process_entry
 
 
@@ -2113,14 +2617,15 @@ def load_licenses() -> tuple[dict[str, str], str]:
     for filename, description in LICENSES_TO_ACCEPT:
         filepath = os.path.join(LICENSE_DIR, filename)
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
             licenses_content[filename] = content
             combined_text += f"\n\n{'=' * 20} LICENSE: {filename} ({description}) {'=' * 20}\n\n{content}"
             print_system(f"  Loaded: {filename}")
         except FileNotFoundError:
             print_error(
-                f"License file not found: {filepath}. Please ensure all license files are present in the '{LICENSE_DIR}' directory.")
+                f"License file not found: {filepath}. Please ensure all license files are present in the '{LICENSE_DIR}' directory."
+            )
             sys.exit(1)
         except Exception as e:
             print_error(f"Error reading license file {filepath}: {e}")
@@ -2130,22 +2635,30 @@ def load_licenses() -> tuple[dict[str, str], str]:
 
 def calculate_reading_time(text: str) -> float:
     if not TIKTOKEN_AVAILABLE:
-        print_warning("tiktoken not found, cannot estimate reading time. Defaulting to 60s estimate.")
+        print_warning(
+            "tiktoken not found, cannot estimate reading time. Defaulting to 60s estimate."
+        )
         return 60.0
-    if not text: return 0.0
+    if not text:
+        return 0.0
 
     WORDS_PER_MINUTE = 200
     AVG_WORDS_PER_TOKEN = 0.75
 
     try:
         import tiktoken
+
         enc = tiktoken.get_encoding("cl100k_base")
     except Exception as e:
-        print_warning(f"Failed to get tiktoken encoding 'cl100k_base': {e}. Trying 'p50k_base'.")
+        print_warning(
+            f"Failed to get tiktoken encoding 'cl100k_base': {e}. Trying 'p50k_base'."
+        )
         try:
             enc = tiktoken.get_encoding("p50k_base")
         except Exception as e2:
-            print_warning(f"Failed to get tiktoken encoding 'p50k_base': {e2}. Defaulting reading time to 60s.")
+            print_warning(
+                f"Failed to get tiktoken encoding 'p50k_base': {e2}. Defaulting reading time to 60s."
+            )
             return 60.0
 
     try:
@@ -2155,16 +2668,21 @@ def calculate_reading_time(text: str) -> float:
         estimated_minutes = estimated_words / WORDS_PER_MINUTE
         estimated_seconds = estimated_minutes * 60
         print_system(
-            f"Estimated reading time for licenses: ~{estimated_minutes:.1f} minutes ({estimated_seconds:.0f} seconds, based on {num_tokens} tokens).")
+            f"Estimated reading time for licenses: ~{estimated_minutes:.1f} minutes ({estimated_seconds:.0f} seconds, based on {num_tokens} tokens)."
+        )
         return estimated_seconds
     except Exception as e:
-        print_warning(f"Failed to calculate reading time with tiktoken: {e}. Defaulting to 60s.")
+        print_warning(
+            f"Failed to calculate reading time with tiktoken: {e}. Defaulting to 60s."
+        )
         return 60.0
 
 
 def _stream_log_file(log_path, process_to_monitor, stream_name_prefix="LOG"):
     """Continuously streams a log file to stdout."""
-    print_system(f"[{stream_name_prefix}-STREAMER] Starting to monitor log file: {log_path}")
+    print_system(
+        f"[{stream_name_prefix}-STREAMER] Starting to monitor log file: {log_path}"
+    )
     initial_wait_tries = 10  # Try for 1 second (10 * 0.1s)
     file_ready = False
 
@@ -2172,23 +2690,29 @@ def _stream_log_file(log_path, process_to_monitor, stream_name_prefix="LOG"):
         if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
             file_ready = True
             break
-        if process_to_monitor.poll() is not None: # Child already exited
-            if os.path.exists(log_path): # Check one last time if file appeared
+        if process_to_monitor.poll() is not None:  # Child already exited
+            if os.path.exists(log_path):  # Check one last time if file appeared
                 file_ready = True
             break
         time.sleep(0.1)
 
     if not file_ready:
-        if os.path.exists(log_path): # Exists but is empty
-            print_warning(f"[{stream_name_prefix}-STREAMER] Log file {log_path} exists but is empty. Will monitor.")
-        else: # Does not exist
-            print_error(f"[{stream_name_prefix}-STREAMER] Log file {log_path} not found or empty after initial wait. Monitoring will likely fail if not created shortly.")
+        if os.path.exists(log_path):  # Exists but is empty
+            print_warning(
+                f"[{stream_name_prefix}-STREAMER] Log file {log_path} exists but is empty. Will monitor."
+            )
+        else:  # Does not exist
+            print_error(
+                f"[{stream_name_prefix}-STREAMER] Log file {log_path} not found or empty after initial wait. Monitoring will likely fail if not created shortly."
+            )
             # We still proceed to open, it might be created very soon.
 
     try:
-        with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
             # Optional: f.seek(0, os.SEEK_END) # If you only want *new* content after streamer starts
-            while process_to_monitor.poll() is None:  # Loop while the relaunched process is running
+            while (
+                process_to_monitor.poll() is None
+            ):  # Loop while the relaunched process is running
                 line = f.readline()
                 if line:
                     sys.stdout.write(f"[RL-{stream_name_prefix}] {line.strip()}\n")
@@ -2196,21 +2720,31 @@ def _stream_log_file(log_path, process_to_monitor, stream_name_prefix="LOG"):
                 else:
                     time.sleep(0.05)  # Wait for new content
             # After process ends, read any remaining lines
-            time.sleep(0.1) # Give a brief moment for final flushes from child
-            for line in f.readlines(): # Read all remaining lines
+            time.sleep(0.1)  # Give a brief moment for final flushes from child
+            for line in f.readlines():  # Read all remaining lines
                 if line:
-                    sys.stdout.write(f"[RL-{stream_name_prefix}|FINAL] {line.strip()}\n")
+                    sys.stdout.write(
+                        f"[RL-{stream_name_prefix}|FINAL] {line.strip()}\n"
+                    )
                     sys.stdout.flush()
     except FileNotFoundError:
         # This might happen if the process exits very quickly before the file is ever created/checked again
-        print_warning(f"[{stream_name_prefix}-STREAMER] Log file {log_path} was not found during active streaming attempt.")
+        print_warning(
+            f"[{stream_name_prefix}-STREAMER] Log file {log_path} was not found during active streaming attempt."
+        )
     except Exception as e:
-        print_error(f"[{stream_name_prefix}-STREAMER] Error streaming log file {log_path}: {e}")
+        print_error(
+            f"[{stream_name_prefix}-STREAMER] Error streaming log file {log_path}: {e}"
+        )
     finally:
-        print_system(f"[{stream_name_prefix}-STREAMER] Stopped monitoring log file: {log_path}")
+        print_system(
+            f"[{stream_name_prefix}-STREAMER] Stopped monitoring log file: {log_path}"
+        )
 
 
-def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds: float) -> tuple[bool, float]:
+def display_license_prompt(
+    stdscr, licenses_text_lines: list, estimated_seconds: float
+) -> tuple[bool, float]:
     # (This function is extracted from the launcher.py you provided)
     import curses  # Ensure curses is imported, typically done at the top of launcher.py
 
@@ -2225,18 +2759,32 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
     if curses.has_colors():
         curses.start_color()
         # Define color pairs: (pair_number, foreground_color, background_color)
-        curses.init_pair(1, curses.COLOR_YELLOW, curses.COLOR_BLACK)  # Instructions, time
+        curses.init_pair(
+            1, curses.COLOR_YELLOW, curses.COLOR_BLACK
+        )  # Instructions, time
         curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)  # License text
-        curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)  # Accept button selected
-        curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_RED)  # Reject button selected
+        curses.init_pair(
+            3, curses.COLOR_BLACK, curses.COLOR_GREEN
+        )  # Accept button selected
+        curses.init_pair(
+            4, curses.COLOR_BLACK, curses.COLOR_RED
+        )  # Reject button selected
         curses.init_pair(5, curses.COLOR_CYAN, curses.COLOR_BLACK)  # Header
-        curses.init_pair(6, curses.COLOR_GREEN, curses.COLOR_BLACK)  # Accept button normal
-        curses.init_pair(7, curses.COLOR_RED, curses.COLOR_BLACK)  # Reject button normal
+        curses.init_pair(
+            6, curses.COLOR_GREEN, curses.COLOR_BLACK
+        )  # Accept button normal
+        curses.init_pair(
+            7, curses.COLOR_RED, curses.COLOR_BLACK
+        )  # Reject button normal
     else:  # Fallback for terminals without color
         curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)
-        curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)  # Selected would be A_REVERSE
-        curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_BLACK)  # Selected would be A_REVERSE
+        curses.init_pair(
+            3, curses.COLOR_WHITE, curses.COLOR_BLACK
+        )  # Selected would be A_REVERSE
+        curses.init_pair(
+            4, curses.COLOR_WHITE, curses.COLOR_BLACK
+        )  # Selected would be A_REVERSE
         curses.init_pair(5, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(6, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(7, curses.COLOR_WHITE, curses.COLOR_BLACK)
@@ -2266,23 +2814,43 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
 
             # Check size again in case of resize during loop
             if max_y < 10 or max_x < 40:
-                last_key_error_message = "Terminal too small! Resize or press 'N' to exit."
+                last_key_error_message = (
+                    "Terminal too small! Resize or press 'N' to exit."
+                )
                 # Draw minimal error and exit instruction
                 try:
-                    stdscr.addstr(0, 0, last_key_error_message[:max_x - 1],
-                                  curses.color_pair(7) | curses.A_BOLD)  # type: ignore
-                    stdscr.addstr(2, 0, "Press 'N' or Enter (if on Not Accept) to exit."[:max_x - 1],
-                                  curses.color_pair(1))  # type: ignore
+                    stdscr.addstr(
+                        0,
+                        0,
+                        last_key_error_message[: max_x - 1],
+                        curses.color_pair(7) | curses.A_BOLD,
+                    )  # type: ignore
+                    stdscr.addstr(
+                        2,
+                        0,
+                        "Press 'N' or Enter (if on Not Accept) to exit."[: max_x - 1],
+                        curses.color_pair(1),
+                    )  # type: ignore
 
                     reject_button_text_small = "[ Not Accept (N) to Exit ]"
-                    stdscr.addstr(max_y - 2, max(0, (max_x - len(reject_button_text_small)) // 2),
-                                  reject_button_text_small, curses.color_pair(4) | curses.A_REVERSE)  # type: ignore
+                    stdscr.addstr(
+                        max_y - 2,
+                        max(0, (max_x - len(reject_button_text_small)) // 2),
+                        reject_button_text_small,
+                        curses.color_pair(4) | curses.A_REVERSE,
+                    )  # type: ignore
                 except curses.error:
                     pass  # If even this fails, not much to do
                 stdscr.refresh()
 
                 key = stdscr.getch()  # Wait for key to exit or resize
-                if key == ord('n') or key == ord('N') or key == curses.KEY_ENTER or key == 10 or key == 13:
+                if (
+                    key == ord("n")
+                    or key == ord("N")
+                    or key == curses.KEY_ENTER
+                    or key == 10
+                    or key == 13
+                ):
                     accepted = False
                     break
                 elif key == curses.KEY_RESIZE:
@@ -2299,53 +2867,87 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
 
             # 1. Header
             header = "--- SOFTWARE LICENSE AGREEMENT ---"
-            stdscr.addstr(0, max(0, (max_x - len(header)) // 2), header,
-                          curses.color_pair(5) | curses.A_BOLD)  # type: ignore
+            stdscr.addstr(
+                0,
+                max(0, (max_x - len(header)) // 2),
+                header,
+                curses.color_pair(5) | curses.A_BOLD,
+            )  # type: ignore
 
             # 2. License Text Area
             for i in range(TEXT_AREA_HEIGHT):
                 line_idx = top_line + i
                 if line_idx < total_lines:
-                    display_line = licenses_text_lines[line_idx][:max_x - 1].rstrip()  # Truncate line if too long
-                    stdscr.addstr(TEXT_START_Y + i, 0, display_line, curses.color_pair(2))  # type: ignore
+                    display_line = licenses_text_lines[line_idx][
+                        : max_x - 1
+                    ].rstrip()  # Truncate line if too long
+                    stdscr.addstr(
+                        TEXT_START_Y + i, 0, display_line, curses.color_pair(2)
+                    )  # type: ignore
                 else:
                     break  # No more lines to display in the current view
 
             # 3. Scroll Information
             if total_lines > TEXT_AREA_HEIGHT:
                 progress = f"Line {top_line + 1} - {min(top_line + TEXT_AREA_HEIGHT, total_lines)} of {total_lines}"
-                stdscr.addstr(SCROLL_INFO_Y, max(0, max_x - len(progress) - 1), progress,
-                              curses.color_pair(1))  # type: ignore
+                stdscr.addstr(
+                    SCROLL_INFO_Y,
+                    max(0, max_x - len(progress) - 1),
+                    progress,
+                    curses.color_pair(1),
+                )  # type: ignore
             else:
-                stdscr.addstr(SCROLL_INFO_Y, 0, "All text visible.", curses.color_pair(1))  # type: ignore
+                stdscr.addstr(
+                    SCROLL_INFO_Y, 0, "All text visible.", curses.color_pair(1)
+                )  # type: ignore
 
             # 4. Estimated Time
             est_time_str = f"Estimated minimum review time: {estimated_seconds / 60:.1f} min ({estimated_seconds:.0f} sec)"
-            stdscr.addstr(EST_TIME_Y, 0, est_time_str[:max_x - 1], curses.color_pair(1))  # type: ignore
+            stdscr.addstr(
+                EST_TIME_Y, 0, est_time_str[: max_x - 1], curses.color_pair(1)
+            )  # type: ignore
 
             # 5. Instructions
             instr = "Scroll: UP/DOWN/PGUP/PGDN/HOME/END | Select: LEFT/RIGHT | Confirm: ENTER / (a/n)"
-            stdscr.addstr(INSTR_Y, 0, instr[:max_x - 1], curses.color_pair(1))  # type: ignore
+            stdscr.addstr(INSTR_Y, 0, instr[: max_x - 1], curses.color_pair(1))  # type: ignore
 
             # 6. Accept/Reject Buttons
             accept_button_text = "[ Accept (A) ]"
             reject_button_text = "[ Not Accept (N) ]"
             button_spacing = 4
-            buttons_total_width = len(accept_button_text) + len(reject_button_text) + button_spacing
+            buttons_total_width = (
+                len(accept_button_text) + len(reject_button_text) + button_spacing
+            )
             start_buttons_x = max(0, (max_x - buttons_total_width) // 2)
 
-            accept_style = curses.color_pair(3) | curses.A_REVERSE if current_selection == 0 else curses.color_pair(
-                6)  # type: ignore
-            reject_style = curses.color_pair(4) | curses.A_REVERSE if current_selection == 1 else curses.color_pair(
-                7)  # type: ignore
+            accept_style = (
+                curses.color_pair(3) | curses.A_REVERSE
+                if current_selection == 0
+                else curses.color_pair(6)
+            )  # type: ignore
+            reject_style = (
+                curses.color_pair(4) | curses.A_REVERSE
+                if current_selection == 1
+                else curses.color_pair(7)
+            )  # type: ignore
 
             stdscr.addstr(PROMPT_Y, start_buttons_x, accept_button_text, accept_style)
-            stdscr.addstr(PROMPT_Y, start_buttons_x + len(accept_button_text) + button_spacing, reject_button_text,
-                          reject_style)
+            stdscr.addstr(
+                PROMPT_Y,
+                start_buttons_x + len(accept_button_text) + button_spacing,
+                reject_button_text,
+                reject_style,
+            )
 
-            if last_key_error_message:  # Display error from getch within curses window if any
-                stdscr.addstr(max_y - 1, 0, last_key_error_message[:max_x - 1],
-                              curses.color_pair(7) | curses.A_BOLD)  # type: ignore
+            if (
+                last_key_error_message
+            ):  # Display error from getch within curses window if any
+                stdscr.addstr(
+                    max_y - 1,
+                    0,
+                    last_key_error_message[: max_x - 1],
+                    curses.color_pair(7) | curses.A_BOLD,
+                )  # type: ignore
                 last_key_error_message = None  # Clear after displaying
 
             stdscr.refresh()
@@ -2354,8 +2956,10 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
             # This error means drawing failed, perhaps due to a very rapid resize or unusual terminal state.
             # Log it if possible (launcher.py doesn't use loguru by default, so print_warning if available)
             # For now, just sleep briefly and let the loop retry drawing with new dimensions.
-            if 'print_warning' in globals():  # Check if print_warning is available
-                print_warning(f"Curses draw error: {e_curses_draw}. Will attempt redraw.")
+            if "print_warning" in globals():  # Check if print_warning is available
+                print_warning(
+                    f"Curses draw error: {e_curses_draw}. Will attempt redraw."
+                )
             time.sleep(0.05)
             continue  # Retry drawing
 
@@ -2368,16 +2972,20 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
             last_key_error_message = f"Input error: {e_getch}. Resizing or retrying..."
             time.sleep(0.05)  # Small delay before retrying the loop
             continue  # Retry the main loop, which will re-check dimensions and redraw
-        except Exception as e_getch_other:  # Catch any other unexpected error during getch
-            last_key_error_message = f"Unexpected input error: {e_getch_other}. Retrying..."
+        except (
+            Exception
+        ) as e_getch_other:  # Catch any other unexpected error during getch
+            last_key_error_message = (
+                f"Unexpected input error: {e_getch_other}. Retrying..."
+            )
             time.sleep(0.05)
             continue
 
         # Process Key Input
-        if key == ord('a') or key == ord('A'):
+        if key == ord("a") or key == ord("A"):
             accepted = True
             break
-        elif key == ord('n') or key == ord('N'):
+        elif key == ord("n") or key == ord("N"):
             accepted = False
             break
         elif key == curses.KEY_ENTER or key == 10 or key == 13:  # Enter key
@@ -2395,7 +3003,9 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
         elif key == curses.KEY_UP:
             top_line = max(0, top_line - 1)
         elif key == curses.KEY_NPAGE:  # Page Down
-            top_line = min(max(0, total_lines - TEXT_AREA_HEIGHT), top_line + TEXT_AREA_HEIGHT)
+            top_line = min(
+                max(0, total_lines - TEXT_AREA_HEIGHT), top_line + TEXT_AREA_HEIGHT
+            )
         elif key == curses.KEY_PPAGE:  # Page Up
             top_line = max(0, top_line - TEXT_AREA_HEIGHT)
         elif key == curses.KEY_HOME:
@@ -2405,8 +3015,10 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
         elif key == curses.KEY_RESIZE:  # Terminal resize event
             # The loop will restart, re-calculate max_y, max_x, clear and redraw.
             # This is the standard way to handle resize in curses.
-            if 'print_system' in globals():  # Check if print_system is available
-                print_system("Terminal resized, redrawing curses UI...")  # Optional: log to external file if needed
+            if "print_system" in globals():  # Check if print_system is available
+                print_system(
+                    "Terminal resized, redrawing curses UI..."
+                )  # Optional: log to external file if needed
             pass  # Just let the loop continue to redraw
 
     end_time = time.monotonic()
@@ -2425,14 +3037,22 @@ def _ensure_libiconv_copy() -> bool:
     """
     # --- CRITICAL FIX: This entire special logic ONLY applies to Linux ---
     if platform.system() != "Linux":
-        print_system("libiconv copy/check logic is for Linux only. Skipping on other OS.")
+        print_system(
+            "libiconv copy/check logic is for Linux only. Skipping on other OS."
+        )
         # On non-Linux systems, the standard package is sufficient and correct.
-        return _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True)
+        return _ensure_conda_package(
+            "libiconv", conda_channel="conda-forge", is_critical=True
+        )
 
-    print_system("--- [Linux-Only] Checking and enforcing libiconv shared library files ---")
+    print_system(
+        "--- [Linux-Only] Checking and enforcing libiconv shared library files ---"
+    )
 
     # 1. Ensure the modern package is installed.
-    if not _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True):
+    if not _ensure_conda_package(
+        "libiconv", conda_channel="conda-forge", is_critical=True
+    ):
         print_error("Failed to install the base 'libiconv' package.")
         return False
 
@@ -2442,33 +3062,50 @@ def _ensure_libiconv_copy() -> bool:
 
     # 2. Verify that the source of our copy (.so.2) exists.
     if not os.path.exists(so_2_path):
-        print_warning(f"libiconv.so.2 is missing at '{so_2_path}'. Forcing clean re-installation...")
+        print_warning(
+            f"libiconv.so.2 is missing at '{so_2_path}'. Forcing clean re-installation..."
+        )
         reinstall_cmd = [
-            CONDA_EXECUTABLE, "install", "--yes", "--force-reinstall",
-            "--prefix", TARGET_RUNTIME_ENV_PATH,
-            "-c", "conda-forge",
-            "libiconv"
+            CONDA_EXECUTABLE,
+            "install",
+            "--yes",
+            "--force-reinstall",
+            "--prefix",
+            TARGET_RUNTIME_ENV_PATH,
+            "-c",
+            "conda-forge",
+            "libiconv",
         ]
-        if not run_command(reinstall_cmd, cwd=ROOT_DIR, name="FORCE-REINSTALL-LIBICONV", check=True):
+        if not run_command(
+            reinstall_cmd, cwd=ROOT_DIR, name="FORCE-REINSTALL-LIBICONV", check=True
+        ):
             print_error("Failed to force reinstall libiconv.")
             return False
     else:
         # If file exists, ensure package is registered normally
-        if not _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True):
+        if not _ensure_conda_package(
+            "libiconv", conda_channel="conda-forge", is_critical=True
+        ):
             print_error("Failed to install the base 'libiconv' package.")
             return False
 
     if not os.path.exists(so_2_path):
-        print_error(f"CRITICAL: 'libiconv.so.2' not found at '{so_2_path}' even after installation.")
+        print_error(
+            f"CRITICAL: 'libiconv.so.2' not found at '{so_2_path}' even after installation."
+        )
         return False
 
     # 3. If .so.1 is missing, create a physical copy.
     if not os.path.exists(so_1_path):
-        print_warning(f"'libiconv.so.1' not found. Creating a physical copy from 'libiconv.so.2'.")
+        print_warning(
+            f"'libiconv.so.1' not found. Creating a physical copy from 'libiconv.so.2'."
+        )
         try:
             shutil.copy2(so_2_path, so_1_path)
             # copy2 also copies permission bits, so it should be executable if the original is.
-            print_colored("SUCCESS", f"Successfully created copy: {so_1_path}", "SUCCESS")
+            print_colored(
+                "SUCCESS", f"Successfully created copy: {so_1_path}", "SUCCESS"
+            )
         except Exception as e:
             print_error(f"Failed to create copy of libiconv: {e}")
             return False
@@ -2480,8 +3117,11 @@ def _ensure_libiconv_copy() -> bool:
         print_system("Verified: Both libiconv.so.1 and libiconv.so.2 are present.")
         return True
     else:
-        print_error("Final verification failed. One or more required libiconv files are missing.")
+        print_error(
+            "Final verification failed. One or more required libiconv files are missing."
+        )
         return False
+
 
 def _ensure_legacy_libiconv_so() -> bool:
     """
@@ -2498,13 +3138,12 @@ def _ensure_legacy_libiconv_so() -> bool:
     # This check is only relevant for non-Windows systems with .so files.
     if IS_WINDOWS:
         print_system("Legacy libiconv check skipped on Windows.")
-        return _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True)
+        return _ensure_conda_package(
+            "libiconv", conda_channel="conda-forge", is_critical=True
+        )
 
     lib_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "lib")
-    required_libs = {
-        "libiconv.so.2": False,
-        "libiconv.so.1": False
-    }
+    required_libs = {"libiconv.so.2": False, "libiconv.so.1": False}
 
     # --- Initial check: See what's already there ---
     for lib_name in required_libs:
@@ -2512,14 +3151,18 @@ def _ensure_legacy_libiconv_so() -> bool:
             required_libs[lib_name] = True
 
     if all(required_libs.values()):
-        print_system("All required libiconv versions (.so.1 and .so.2) are already present.")
+        print_system(
+            "All required libiconv versions (.so.1 and .so.2) are already present."
+        )
         return True
 
     print_system("Performing check/repair for required libiconv versions...")
 
     # --- Step 1: Install the modern version to guarantee libiconv.so.2 ---
     print_system("Ensuring modern 'libiconv' is installed to provide libiconv.so.2...")
-    if not _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True):
+    if not _ensure_conda_package(
+        "libiconv", conda_channel="conda-forge", is_critical=True
+    ):
         print_error("Failed to install the base 'libiconv' package. Cannot proceed.")
         return False
 
@@ -2528,18 +3171,22 @@ def _ensure_legacy_libiconv_so() -> bool:
         print_system("Verified: 'libiconv.so.2' is present.")
         required_libs["libiconv.so.2"] = True
     else:
-        print_error("Critical error: 'libiconv.so.2' is NOT present after installing the package.")
+        print_error(
+            "Critical error: 'libiconv.so.2' is NOT present after installing the package."
+        )
         # This shouldn't happen, but we check to be safe.
         return False
 
     # --- Step 2: If .so.1 is missing, surgically add it ---
     if not required_libs["libiconv.so.1"]:
-        print_warning("'libiconv.so.1' is missing. Attempting to inject it from a legacy package.")
+        print_warning(
+            "'libiconv.so.1' is missing. Attempting to inject it from a legacy package."
+        )
 
         legacy_channels_to_try = [
             "conda-forge/label/cf202003::libiconv",
             "conda-forge/label/cf201901::libiconv",
-            "conda-forge/label/gcc7::libiconv"
+            "conda-forge/label/gcc7::libiconv",
         ]
 
         legacy_lib_found = False
@@ -2548,27 +3195,43 @@ def _ensure_legacy_libiconv_so() -> bool:
 
             # Use --download-only to fetch the package without installing it
             download_cmd = [
-                CONDA_EXECUTABLE, "install", "--yes", "--download-only",
-                "--prefix", TARGET_RUNTIME_ENV_PATH,
-                "-c", "conda-forge",
-                package_spec
+                CONDA_EXECUTABLE,
+                "install",
+                "--yes",
+                "--download-only",
+                "--prefix",
+                TARGET_RUNTIME_ENV_PATH,
+                "-c",
+                "conda-forge",
+                package_spec,
             ]
-            if not run_command(download_cmd, ROOT_DIR, f"CONDA-DOWNLOAD-ONLY-LIBICONV", check=True):
-                print_warning(f"Could not download package spec '{package_spec}'. Trying next.")
+            if not run_command(
+                download_cmd, ROOT_DIR, f"CONDA-DOWNLOAD-ONLY-LIBICONV", check=True
+            ):
+                print_warning(
+                    f"Could not download package spec '{package_spec}'. Trying next."
+                )
                 continue
 
             # Find the downloaded .tar.bz2 file in the conda package cache
             try:
-                info_json = subprocess.check_output([CONDA_EXECUTABLE, "info", "--json"], text=True)
+                info_json = subprocess.check_output(
+                    [CONDA_EXECUTABLE, "info", "--json"], text=True
+                )
                 conda_info = json.loads(info_json)
-                pkg_cache_dir = conda_info['pkgs_dirs'][0]
+                pkg_cache_dir = conda_info["pkgs_dirs"][0]
 
                 # The package name is 'libiconv'. We find the downloaded file.
                 # Example filename: libiconv-1.16-h516909a_2.tar.bz2
                 import glob
-                downloaded_files = glob.glob(os.path.join(pkg_cache_dir, "libiconv-*.tar.bz2"))
+
+                downloaded_files = glob.glob(
+                    os.path.join(pkg_cache_dir, "libiconv-*.tar.bz2")
+                )
                 if not downloaded_files:
-                    raise FileNotFoundError("Could not find downloaded libiconv tarball in cache.")
+                    raise FileNotFoundError(
+                        "Could not find downloaded libiconv tarball in cache."
+                    )
 
                 # Sort by modification time to get the most recently downloaded one
                 package_tarball_path = max(downloaded_files, key=os.path.getmtime)
@@ -2576,29 +3239,43 @@ def _ensure_legacy_libiconv_so() -> bool:
 
                 # Surgically extract the .so.1 files
                 import tarfile
-                with tarfile.open(package_tarball_path, 'r:bz2') as tar:
+
+                with tarfile.open(package_tarball_path, "r:bz2") as tar:
                     members_to_extract = [
-                        m for m in tar.getmembers()
+                        m
+                        for m in tar.getmembers()
                         if m.name.startswith("lib/libiconv.so.1") and m.isfile()
                     ]
                     if not members_to_extract:
-                        print_warning(f"Package '{package_spec}' did not contain 'libiconv.so.1'. Trying next.")
+                        print_warning(
+                            f"Package '{package_spec}' did not contain 'libiconv.so.1'. Trying next."
+                        )
                         continue
 
-                    print_system(f"Extracting {len(members_to_extract)} legacy lib files into '{lib_dir}'...")
+                    print_system(
+                        f"Extracting {len(members_to_extract)} legacy lib files into '{lib_dir}'..."
+                    )
                     # We need to extract them to the root of the environment, tarfile will handle the `lib/` part.
-                    tar.extractall(path=TARGET_RUNTIME_ENV_PATH, members=members_to_extract)
+                    tar.extractall(
+                        path=TARGET_RUNTIME_ENV_PATH, members=members_to_extract
+                    )
 
                     # Create the main symlink `libiconv.so.1` -> `libiconv.so.1.x.y` if it doesn't exist
                     # This is often handled by post-link scripts, but we do it manually to be safe.
                     real_so_file = None
                     for m in members_to_extract:
-                        if ".so.1." in m.name:  # find the real file, e.g. libiconv.so.1.1.1
+                        if (
+                            ".so.1." in m.name
+                        ):  # find the real file, e.g. libiconv.so.1.1.1
                             real_so_file = os.path.basename(m.name)
                             break
 
-                    if real_so_file and not os.path.exists(os.path.join(lib_dir, "libiconv.so.1")):
-                        print_system(f"Creating missing symlink: libiconv.so.1 -> {real_so_file}")
+                    if real_so_file and not os.path.exists(
+                        os.path.join(lib_dir, "libiconv.so.1")
+                    ):
+                        print_system(
+                            f"Creating missing symlink: libiconv.so.1 -> {real_so_file}"
+                        )
                         os.symlink(real_so_file, os.path.join(lib_dir, "libiconv.so.1"))
 
                     legacy_lib_found = True
@@ -2617,16 +3294,26 @@ def _ensure_legacy_libiconv_so() -> bool:
 
     # --- Step 3: Final Verification ---
     if all(required_libs.values()):
-        print_colored("SUCCESS", "All required libiconv versions (.so.1 and .so.2) are present.", "SUCCESS")
+        print_colored(
+            "SUCCESS",
+            "All required libiconv versions (.so.1 and .so.2) are present.",
+            "SUCCESS",
+        )
         return True
     else:
         missing = [lib for lib, found in required_libs.items() if not found]
-        print_error(f"FATAL: Final libiconv check failed. Missing: {', '.join(missing)}")
+        print_error(
+            f"FATAL: Final libiconv check failed. Missing: {', '.join(missing)}"
+        )
         return False
 
 
-def _ensure_conda_package_version(package_name: str, executable_name: str, required_major_version: int,
-                                  version_arg_prefix: str = "-v") -> bool:
+def _ensure_conda_package_version(
+    package_name: str,
+    executable_name: str,
+    required_major_version: int,
+    version_arg_prefix: str = "-v",
+) -> bool:
     """
     Ensures a specific major version of a Conda package is installed.
 
@@ -2644,53 +3331,96 @@ def _ensure_conda_package_version(package_name: str, executable_name: str, requi
     Returns:
         True on success, False on failure.
     """
-    print_system(f"--- Aggressively checking for {package_name} major version {required_major_version} ---")
+    print_system(
+        f"--- Aggressively checking for {package_name} major version {required_major_version} ---"
+    )
     current_major = 0
 
     try:
         # Use run_command to ensure we are using the correct PATH from the Conda env
         # We need to capture the output here, so we modify the Popen call temporarily.
         check_command = [executable_name, version_arg_prefix]
-        process = subprocess.run(check_command, capture_output=True, text=True, check=False, timeout=10,
-                                 env=run_command.__globals__.get(
-                                     'env'))  # Hacky way to get env from run_command's scope if it was set
+        process = subprocess.run(
+            check_command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+            env=run_command.__globals__.get("env"),
+        )  # Hacky way to get env from run_command's scope if it was set
 
         output = process.stdout.strip()
         if process.returncode == 0 and output:
             # Handle versions like "v20.12.2" or just "20.12.2"
-            version_str = output.lstrip('v')
-            current_major = int(version_str.split('.')[0])
-            print_system(f"Found installed version of {executable_name}: {output} (Major: {current_major})")
+            version_str = output.lstrip("v")
+            current_major = int(version_str.split(".")[0])
+            print_system(
+                f"Found installed version of {executable_name}: {output} (Major: {current_major})"
+            )
         else:
-            print_system(f"{executable_name} not found or version check failed. Will proceed with installation.")
+            print_system(
+                f"{executable_name} not found or version check failed. Will proceed with installation."
+            )
     except (FileNotFoundError, ValueError, IndexError):
-        print_system(f"Could not determine version for {executable_name}. Assuming installation is required.")
+        print_system(
+            f"Could not determine version for {executable_name}. Assuming installation is required."
+        )
     except Exception as e:
         print_warning(
-            f"Unexpected error during version check for {executable_name}: {e}. Assuming install is required.")
+            f"Unexpected error during version check for {executable_name}: {e}. Assuming install is required."
+        )
 
     if current_major == required_major_version:
-        print_system(f"{package_name} is already at the correct major version {required_major_version}.")
+        print_system(
+            f"{package_name} is already at the correct major version {required_major_version}."
+        )
         return True
 
     # --- If version is wrong or not found, be aggressive ---
     if current_major != 0:
-        print_warning(f"Incorrect version of {package_name} found (Major: {current_major}). Forcing removal.")
-        remove_cmd = [CONDA_EXECUTABLE, "remove", "--yes", "--force", "--prefix", TARGET_RUNTIME_ENV_PATH, package_name]
-        if not run_command(remove_cmd, cwd=ROOT_DIR, name=f"FORCE-REMOVE-{package_name.upper()}", check=False):
-            print_error(f"Failed to forcefully remove {package_name}. The update may fail.")
+        print_warning(
+            f"Incorrect version of {package_name} found (Major: {current_major}). Forcing removal."
+        )
+        remove_cmd = [
+            CONDA_EXECUTABLE,
+            "remove",
+            "--yes",
+            "--force",
+            "--prefix",
+            TARGET_RUNTIME_ENV_PATH,
+            package_name,
+        ]
+        if not run_command(
+            remove_cmd,
+            cwd=ROOT_DIR,
+            name=f"FORCE-REMOVE-{package_name.upper()}",
+            check=False,
+        ):
+            print_error(
+                f"Failed to forcefully remove {package_name}. The update may fail."
+            )
 
     # --- Install the correct version ---
-    print_system(f"Installing {package_name} with specified major version: {required_major_version}")
+    print_system(
+        f"Installing {package_name} with specified major version: {required_major_version}"
+    )
     package_spec = f"{package_name}={required_major_version}"
     install_cmd = [
-        CONDA_EXECUTABLE, "install", "--yes",
-        "--prefix", TARGET_RUNTIME_ENV_PATH,
-        "-c", "conda-forge",
-        package_spec
+        CONDA_EXECUTABLE,
+        "install",
+        "--yes",
+        "--prefix",
+        TARGET_RUNTIME_ENV_PATH,
+        "-c",
+        "conda-forge",
+        package_spec,
     ]
-    if not run_command(install_cmd, cwd=ROOT_DIR, name=f"INSTALL-{package_name.upper()}-V{required_major_version}",
-                       check=True):
+    if not run_command(
+        install_cmd,
+        cwd=ROOT_DIR,
+        name=f"INSTALL-{package_name.upper()}-V{required_major_version}",
+        check=True,
+    ):
         print_error(f"Failed to install {package_spec}. Setup cannot continue.")
         return False
 
@@ -2698,9 +3428,13 @@ def _ensure_conda_package_version(package_name: str, executable_name: str, requi
         print_system(f"--- Performing post-install patching on '{executable_name}' ---")
         try:
             # Find the absolute path to the newly installed executable
-            executable_path = shutil.which(executable_name, path=os.path.join(TARGET_RUNTIME_ENV_PATH, "bin"))
+            executable_path = shutil.which(
+                executable_name, path=os.path.join(TARGET_RUNTIME_ENV_PATH, "bin")
+            )
             if not executable_path:
-                raise FileNotFoundError(f"Could not find '{executable_name}' in Conda bin directory after install.")
+                raise FileNotFoundError(
+                    f"Could not find '{executable_name}' in Conda bin directory after install."
+                )
 
             # Define the library path we need to bake into the executable
             lib_path = os.path.join(TARGET_RUNTIME_ENV_PATH, "lib")
@@ -2710,40 +3444,63 @@ def _ensure_conda_package_version(package_name: str, executable_name: str, requi
             # So, '$ORIGIN/../lib' resolves to the correct `lib` directory relative to the `bin` directory.
             rpath_to_set = f"$ORIGIN/../lib"
 
-            print_system(f"Patching '{executable_path}' to set RPATH to '{rpath_to_set}'...")
+            print_system(
+                f"Patching '{executable_path}' to set RPATH to '{rpath_to_set}'..."
+            )
             patch_cmd = ["patchelf", "--set-rpath", rpath_to_set, executable_path]
 
-            if not run_command(patch_cmd, cwd=ROOT_DIR, name=f"PATCHELF-{executable_name.upper()}", check=True):
+            if not run_command(
+                patch_cmd,
+                cwd=ROOT_DIR,
+                name=f"PATCHELF-{executable_name.upper()}",
+                check=True,
+            ):
                 raise RuntimeError("patchelf command failed.")
 
             print_system(f"Successfully patched {executable_name}.")
         except Exception as e:
-            print_error(f"FATAL: Failed to patch {executable_name} after installation: {e}")
-            print_error("The application will likely fail to run. Check if 'patchelf' is installed correctly.")
+            print_error(
+                f"FATAL: Failed to patch {executable_name} after installation: {e}"
+            )
+            print_error(
+                "The application will likely fail to run. Check if 'patchelf' is installed correctly."
+            )
             return False
 
     # --- Final verification ---
     try:
-        post_install_process = subprocess.run([executable_name, version_arg_prefix], capture_output=True, text=True,
-                                              check=True, timeout=10)
-        post_install_version = post_install_process.stdout.strip().lstrip('v')
-        post_install_major = int(post_install_version.split('.')[0])
+        post_install_process = subprocess.run(
+            [executable_name, version_arg_prefix],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        post_install_version = post_install_process.stdout.strip().lstrip("v")
+        post_install_major = int(post_install_version.split(".")[0])
         if post_install_major == required_major_version:
-            print_colored("SUCCESS",
-                          f"Successfully installed and verified {package_name} version {post_install_version}.",
-                          "SUCCESS")
+            print_colored(
+                "SUCCESS",
+                f"Successfully installed and verified {package_name} version {post_install_version}.",
+                "SUCCESS",
+            )
             return True
         else:
-            print_error(f"FATAL: Installed {package_name} but version is still wrong! Found {post_install_version}.")
+            print_error(
+                f"FATAL: Installed {package_name} but version is still wrong! Found {post_install_version}."
+            )
             return False
     except Exception as e:
         print_error(f"FATAL: Failed to verify {package_name} after installation: {e}")
         return False
 
-def _ensure_conda_package(package_spec: str,
-                          executable_to_check: Optional[str] = None,
-                          conda_channel: str = "conda-forge",
-                          is_critical: bool = True) -> bool:
+
+def _ensure_conda_package(
+    package_spec: str,
+    executable_to_check: Optional[str] = None,
+    conda_channel: str = "conda-forge",
+    is_critical: bool = True,
+) -> bool:
     """
     Ensures a Conda package is installed in the target environment.
     This function is bimodal:
@@ -2751,26 +3508,35 @@ def _ensure_conda_package(package_spec: str,
     - If 'executable_to_check' is NOT provided, it uses `conda list` to
       check if the package itself is installed (ideal for libraries).
     """
-    log_package_name = package_spec.split('=')[0]
+    log_package_name = package_spec.split("=")[0]
     is_already_installed = False
 
     # --- Verification Step ---
     if executable_to_check:
         # --- Mode 1: Check for an executable ---
-        print_system(f"Checking for executable '{executable_to_check}' (from Conda package '{log_package_name}')...")
+        print_system(
+            f"Checking for executable '{executable_to_check}' (from Conda package '{log_package_name}')..."
+        )
         found_path = shutil.which(executable_to_check)
         if found_path:
             try:
                 norm_found_path = os.path.normcase(os.path.realpath(found_path))
-                norm_target_env_path = os.path.normcase(os.path.realpath(TARGET_RUNTIME_ENV_PATH))
+                norm_target_env_path = os.path.normcase(
+                    os.path.realpath(TARGET_RUNTIME_ENV_PATH)
+                )
                 if norm_found_path.startswith(norm_target_env_path):
                     is_already_installed = True
-                    print_system(f"Executable '{executable_to_check}' found in target Conda environment: {found_path}")
+                    print_system(
+                        f"Executable '{executable_to_check}' found in target Conda environment: {found_path}"
+                    )
                 else:
                     print_warning(
-                        f"Executable '{executable_to_check}' found at '{found_path}', but it's OUTSIDE the target env. Will reinstall into env.")
+                        f"Executable '{executable_to_check}' found at '{found_path}', but it's OUTSIDE the target env. Will reinstall into env."
+                    )
             except Exception as e_path:
-                print_warning(f"Error verifying path for '{executable_to_check}': {e_path}. Assuming not in env.")
+                print_warning(
+                    f"Error verifying path for '{executable_to_check}': {e_path}. Assuming not in env."
+                )
     else:
         # --- Mode 2: Check for the library/package via `conda list` ---
         print_system(f"Checking for Conda library/package '{log_package_name}'...")
@@ -2778,29 +3544,51 @@ def _ensure_conda_package(package_spec: str,
             print_error("Cannot check for library: CONDA_EXECUTABLE path is not set.")
             return False  # Cannot proceed
         try:
-            list_cmd = [CONDA_EXECUTABLE, "list", "-p", TARGET_RUNTIME_ENV_PATH, log_package_name]
-            result = subprocess.run(list_cmd, capture_output=True, text=True, check=False)
+            list_cmd = [
+                CONDA_EXECUTABLE,
+                "list",
+                "-p",
+                TARGET_RUNTIME_ENV_PATH,
+                log_package_name,
+            ]
+            result = subprocess.run(
+                list_cmd, capture_output=True, text=True, check=False
+            )
             # A successful find will have stdout containing the package name. An empty result means not found.
             if result.returncode == 0 and log_package_name in result.stdout:
-                print_system(f"Package '{log_package_name}' found in Conda environment.")
+                print_system(
+                    f"Package '{log_package_name}' found in Conda environment."
+                )
                 is_already_installed = True
             else:
                 print_system(f"Package '{log_package_name}' not found.")
         except Exception as e:
-            print_warning(f"An exception occurred while checking for Conda package '{log_package_name}': {e}")
+            print_warning(
+                f"An exception occurred while checking for Conda package '{log_package_name}': {e}"
+            )
             is_already_installed = False  # Assume not installed on error
 
     # --- Installation Step ---
     if not is_already_installed:
-        print_system(f"Attempting to install '{package_spec}' from channel '{conda_channel}' into Conda env...")
+        print_system(
+            f"Attempting to install '{package_spec}' from channel '{conda_channel}' into Conda env..."
+        )
         conda_install_cmd = [
-            CONDA_EXECUTABLE, "install", "--yes",
-            "--prefix", TARGET_RUNTIME_ENV_PATH,
-            "-c", conda_channel,
-            package_spec
+            CONDA_EXECUTABLE,
+            "install",
+            "--yes",
+            "--prefix",
+            TARGET_RUNTIME_ENV_PATH,
+            "-c",
+            conda_channel,
+            package_spec,
         ]
-        if not run_command(conda_install_cmd, cwd=ROOT_DIR, name=f"CONDA-INSTALL-{log_package_name.upper()}",
-                           check=True):
+        if not run_command(
+            conda_install_cmd,
+            cwd=ROOT_DIR,
+            name=f"CONDA-INSTALL-{log_package_name.upper()}",
+            check=True,
+        ):
             print_error(f"Failed to install Conda package '{package_spec}'.")
             if is_critical:
                 print_error(f"'{package_spec}' is a critical dependency. Exiting.")
@@ -2814,13 +3602,18 @@ def _ensure_conda_package(package_spec: str,
 
             # Re-verify executable path after install
             found_path_after = shutil.which(executable_to_check)
-            if found_path_after and os.path.normcase(os.path.realpath(found_path_after)).startswith(
-                    os.path.normcase(os.path.realpath(TARGET_RUNTIME_ENV_PATH))):
-                print_system(f"Executable '{executable_to_check}' now correctly located in Conda environment.")
+            if found_path_after and os.path.normcase(
+                os.path.realpath(found_path_after)
+            ).startswith(os.path.normcase(os.path.realpath(TARGET_RUNTIME_ENV_PATH))):
+                print_system(
+                    f"Executable '{executable_to_check}' now correctly located in Conda environment."
+                )
             else:
                 print_error(
-                    f"Executable '{executable_to_check}' still not found in the correct Conda path after installation.")
-                if is_critical: sys.exit(1)
+                    f"Executable '{executable_to_check}' still not found in the correct Conda path after installation."
+                )
+                if is_critical:
+                    sys.exit(1)
                 return False
 
     return True
@@ -2843,9 +3636,17 @@ def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
         if IS_WINDOWS:
             # Common paths for nvidia-smi on Windows
             smi_paths = [
-                os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "NVIDIA Corporation", "NVSMI",
-                             "nvidia-smi.exe"),
-                os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32", "nvidia-smi.exe")
+                os.path.join(
+                    os.environ.get("ProgramFiles", "C:\\Program Files"),
+                    "NVIDIA Corporation",
+                    "NVSMI",
+                    "nvidia-smi.exe",
+                ),
+                os.path.join(
+                    os.environ.get("SystemRoot", "C:\\Windows"),
+                    "System32",
+                    "nvidia-smi.exe",
+                ),
             ]
             for p in smi_paths:
                 if os.path.exists(p):
@@ -2857,53 +3658,86 @@ def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
         if nvidia_smi_path:
             # Try to run nvidia-smi to confirm a CUDA-capable GPU is present
             # This is a more robust check than just CUDA_PATH
-            result = subprocess.run([nvidia_smi_path, "-L"], capture_output=True, text=True, timeout=5, check=False)
+            result = subprocess.run(
+                [nvidia_smi_path, "-L"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
             if result.returncode == 0 and "GPU" in result.stdout:
                 print_system("CUDA: Detected NVIDIA GPU via nvidia-smi.")
                 primary_gpu_backend_detected = "cuda"
                 detected_env_vars["AUTODETECTED_CUDA_AVAILABLE"] = "1"
         elif os.getenv("CUDA_HOME") or os.getenv("CUDA_PATH"):
-            print_system("CUDA: Detected CUDA_HOME/CUDA_PATH. Assuming CUDA might be available (nvidia-smi not found).")
+            print_system(
+                "CUDA: Detected CUDA_HOME/CUDA_PATH. Assuming CUDA might be available (nvidia-smi not found)."
+            )
             primary_gpu_backend_detected = "cuda"  # Less certain, but a strong hint
             detected_env_vars["AUTODETECTED_CUDA_AVAILABLE"] = "1"
         else:
-            print_system("CUDA: No clear indication of CUDA found (nvidia-smi or CUDA_HOME/PATH).")
+            print_system(
+                "CUDA: No clear indication of CUDA found (nvidia-smi or CUDA_HOME/PATH)."
+            )
     except Exception as e_cuda:
         print_warning(f"CUDA detection failed: {e_cuda}")
 
     # --- Metal Detection (Apple Silicon - Second Priority if CUDA not found) ---
-    if primary_gpu_backend_detected == "cpu" and platform.system() == "Darwin" and platform.machine() == "arm64":
+    if (
+        primary_gpu_backend_detected == "cpu"
+        and platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+    ):
         # Check for Xcode command line tools as a proxy for Metal capabilities
         # A more direct check for Metal SDK isn't straightforward from Python without specific libraries
-        if shutil.which("xcodebuild") or shutil.which("swift") or shutil.which("metal"):  # Heuristic
-            print_system("Metal: Detected Apple Silicon and likely Xcode tools. Assuming Metal is available.")
+        if (
+            shutil.which("xcodebuild") or shutil.which("swift") or shutil.which("metal")
+        ):  # Heuristic
+            print_system(
+                "Metal: Detected Apple Silicon and likely Xcode tools. Assuming Metal is available."
+            )
             primary_gpu_backend_detected = "metal"
-            detected_env_vars["AUTODETECTED_METAL_AVAILABLE"] = "1"  # For Apple platforms
+            detected_env_vars["AUTODETECTED_METAL_AVAILABLE"] = (
+                "1"  # For Apple platforms
+            )
         else:
-            print_system("Metal: Apple Silicon detected, but Xcode tools (heuristic for Metal) not clearly found.")
+            print_system(
+                "Metal: Apple Silicon detected, but Xcode tools (heuristic for Metal) not clearly found."
+            )
 
     # --- Vulkan Detection (Third Priority if CUDA/Metal not found) ---
     # This is a basic check. Full Vulkan setup is simple but I doesn't understand yet.
     if primary_gpu_backend_detected == "cpu":
         vulkan_sdk_env = os.getenv("VULKAN_SDK")
-        vulkaninfo_path = shutil.which("vulkaninfo" if not IS_WINDOWS else "vulkaninfo.exe")
+        vulkaninfo_path = shutil.which(
+            "vulkaninfo" if not IS_WINDOWS else "vulkaninfo.exe"
+        )
         if vulkan_sdk_env and os.path.isdir(vulkan_sdk_env):
-            print_system(f"Vulkan: Detected VULKAN_SDK environment variable: {vulkan_sdk_env}")
+            print_system(
+                f"Vulkan: Detected VULKAN_SDK environment variable: {vulkan_sdk_env}"
+            )
             primary_gpu_backend_detected = "vulkan"
             detected_env_vars["AUTODETECTED_VULKAN_AVAILABLE"] = "1"
         elif vulkaninfo_path:
             print_system(
-                f"Vulkan: Found 'vulkaninfo' executable at {vulkaninfo_path}. Assuming Vulkan might be available.")
+                f"Vulkan: Found 'vulkaninfo' executable at {vulkaninfo_path}. Assuming Vulkan might be available."
+            )
             # Running vulkaninfo can be slow or verbose, so just checking for its presence.
             primary_gpu_backend_detected = "vulkan"
             detected_env_vars["AUTODETECTED_VULKAN_AVAILABLE"] = "1"
         else:
-            print_system("Vulkan: No clear indication of Vulkan SDK or vulkaninfo found.")
+            print_system(
+                "Vulkan: No clear indication of Vulkan SDK or vulkaninfo found."
+            )
 
     # --- CoreML (Specific to Whisper on Apple platforms, can co-exist with Metal) ---
     if platform.system() == "Darwin":
-        print_system("CoreML: Detected Apple platform. CoreML support can be enabled for Whisper.")
-        print_system("CoreML: However CoreML is garbage in performance and quality so it is disabled, if you wish to override do")
+        print_system(
+            "CoreML: Detected Apple platform. CoreML support can be enabled for Whisper."
+        )
+        print_system(
+            "CoreML: However CoreML is garbage in performance and quality so it is disabled, if you wish to override do"
+        )
         print_system("CoreML: export WHISPER_COREML=1 ")
         detected_env_vars["AUTODETECTED_COREML_POSSIBLE"] = "0"
 
@@ -2925,49 +3759,55 @@ def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
     # For now, we won't try to auto-detect BLAS presence, as it's simple but I doesn't understand yet.
     # Users can still set GGML_BLAS=1 manually.
     print_system(
-        f"CPU: OpenMP will be enabled by default for Llama.cpp CPU builds. User can set GGML_BLAS=1 for PyWhisperCpp CPU.")
-    detected_env_vars[
-        "AUTODETECTED_CPU_ENHANCEMENTS_INFO"] = "OpenMP for Llama.cpp; User can set GGML_BLAS=1 for PyWhisperCpp"
+        f"CPU: OpenMP will be enabled by default for Llama.cpp CPU builds. User can set GGML_BLAS=1 for PyWhisperCpp CPU."
+    )
+    detected_env_vars["AUTODETECTED_CPU_ENHANCEMENTS_INFO"] = (
+        "OpenMP for Llama.cpp; User can set GGML_BLAS=1 for PyWhisperCpp"
+    )
 
     detected_env_vars["AUTODETECTED_PRIMARY_GPU_BACKEND"] = primary_gpu_backend_detected
     print_system(
-        f"--- Hardware Acceleration Auto-Detection Complete. Preferred GPU Backend: {primary_gpu_backend_detected} ---")
+        f"--- Hardware Acceleration Auto-Detection Complete. Preferred GPU Backend: {primary_gpu_backend_detected} ---"
+    )
     if detected_env_vars.get("AUTODETECTED_COREML_POSSIBLE") == "1":
         print_system("    (CoreML also noted as possible for this platform)")
 
     return detected_env_vars
 
+
 # --- Add Aria2p Import ---
-disablebrokenaria2=True
+disablebrokenaria2 = True
 ARIA2P_AVAILABLE = False
 if not disablebrokenaria2:
-
     try:
         import aria2p
+
         ARIA2P_AVAILABLE = True
         # print_system("aria2p Python library imported successfully.") # Optional: for relaunched script
     except ImportError:
         # This warning will appear if launcher.py itself cannot import it.
         # The relaunched script (in Conda env) is where it matters most.
-        print_warning("aria2p Python library not found. Aria2c download method will be unavailable.")
+        print_warning(
+            "aria2p Python library not found. Aria2c download method will be unavailable."
+        )
     # --- End Aria2p Import ---
-
 
 
 # --- File Download Logic ---
 
 # Global placeholder for requests_session, use string literal for type hint here too
-requests_session: Optional['requests.Session'] = None
+requests_session: Optional["requests.Session"] = None
+
 
 def download_file_with_progress(
     url: str,
     destination_path: str,
     file_description: str,
-    requests_session: 'requests.Session',
+    requests_session: "requests.Session",
     max_retries_non_connection_error: int = 3,
     aria2_rpc_host: str = "localhost",
     aria2_rpc_port: int = 6800,
-    aria2_rpc_secret: Optional[str] = None
+    aria2_rpc_secret: Optional[str] = None,
 ):
     """
     Downloads a file with a progress bar.
@@ -2980,7 +3820,7 @@ def download_file_with_progress(
     # This is the relative path key used in the manifest (e.g., "staticmodelpool/model.gguf")
     asset_relative_path = os.path.join(
         os.path.basename(os.path.dirname(destination_path)),
-        os.path.basename(destination_path)
+        os.path.basename(destination_path),
     ).replace("\\", "/")
 
     peer_download_url = None
@@ -2991,7 +3831,9 @@ def download_file_with_progress(
             # TODO: This is where you would query your local mesh node's API.
             # The API server needs to be implemented in mesh_node.py.
             # This is a placeholder for that future logic.
-            print_system(f"Querying ZephyMesh for '{asset_relative_path}'... (API call not yet implemented)")
+            print_system(
+                f"Querying ZephyMesh for '{asset_relative_path}'... (API call not yet implemented)"
+            )
             # Example of what the actual request would look like:
             # import requests
             # response = requests.get(f"{zephymesh_api_url}/query", params={"filepath": asset_relative_path}, timeout=5)
@@ -3001,13 +3843,17 @@ def download_file_with_progress(
             #         peer_download_url = data["url"] # e.g., "http://<peer_ip>:<peer_port>/staticmodelpool/model.gguf"
             #         print_colored("SUCCESS", f"Found on peer: {peer_download_url}")
         except Exception as e:
-            print_warning(f"Could not query ZephyMesh node: {e}. Falling back to internet.")
+            print_warning(
+                f"Could not query ZephyMesh node: {e}. Falling back to internet."
+            )
 
     url_to_use = peer_download_url if peer_download_url else url
     download_successful = False
 
     # Start of the robust download logic, now using url_to_use
-    print_system(f"Preparing to download {file_description} from {url_to_use} to {destination_path}...")
+    print_system(
+        f"Preparing to download {file_description} from {url_to_use} to {destination_path}..."
+    )
 
     try:
         os.makedirs(os.path.dirname(destination_path), exist_ok=True)
@@ -3019,34 +3865,58 @@ def download_file_with_progress(
     aria2c_executable_path = shutil.which("aria2c")
 
     if ARIA2P_AVAILABLE and aria2c_executable_path:
-        print_system(f"Aria2c found at '{aria2c_executable_path}'. Attempting download via aria2p...")
+        print_system(
+            f"Aria2c found at '{aria2c_executable_path}'. Attempting download via aria2p..."
+        )
         aria2_api_instance = None
         try:
-            aria2_client_instance = aria2p.Client(host=aria2_rpc_host, port=aria2_rpc_port, secret=aria2_rpc_secret)
+            aria2_client_instance = aria2p.Client(
+                host=aria2_rpc_host, port=aria2_rpc_port, secret=aria2_rpc_secret
+            )
             aria2_api_instance = aria2p.API(aria2_client_instance)
 
             global_stats = aria2_api_instance.get_global_stat()
             print_system(
-                f"Connected to aria2c RPC server. Speed: {global_stats.download_speed_string()}/{global_stats.upload_speed_string()}, Active: {global_stats.num_active}, Waiting: {global_stats.num_waiting}")
+                f"Connected to aria2c RPC server. Speed: {global_stats.download_speed_string()}/{global_stats.upload_speed_string()}, Active: {global_stats.num_active}, Waiting: {global_stats.num_waiting}"
+            )
 
             aria2_options_dict = {
                 "dir": os.path.dirname(destination_path),
                 "out": os.path.basename(destination_path),
-                "max-connection-per-server": "16", "split": "16", "min-split-size": "1M",
-                "stream-piece-selector": "geom", "continue": "true", "allow-overwrite": "true"
+                "max-connection-per-server": "16",
+                "split": "16",
+                "min-split-size": "1M",
+                "stream-piece-selector": "geom",
+                "continue": "true",
+                "allow-overwrite": "true",
             }
 
-            print_system(f"Adding URI to aria2c: {url_to_use} with options: {aria2_options_dict}")
-            download_task = aria2_api_instance.add_uris([url_to_use], options=aria2_options_dict)
+            print_system(
+                f"Adding URI to aria2c: {url_to_use} with options: {aria2_options_dict}"
+            )
+            download_task = aria2_api_instance.add_uris(
+                [url_to_use], options=aria2_options_dict
+            )
 
             if not download_task:
-                raise RuntimeError("aria2_api.add_uris did not return a download task object.")
+                raise RuntimeError(
+                    "aria2_api.add_uris did not return a download task object."
+                )
 
-            print_system(f"Aria2c download started (GID: {download_task.gid}). Monitoring progress...")
+            print_system(
+                f"Aria2c download started (GID: {download_task.gid}). Monitoring progress..."
+            )
 
             from tqdm import tqdm
-            with tqdm(total=100, unit='%', desc=file_description[:30], ascii=IS_WINDOWS, leave=False,
-                      bar_format='{l_bar}{bar}| {n_fmt}% [{elapsed}<{remaining}, {rate_fmt}{postfix}]') as progress_bar:
+
+            with tqdm(
+                total=100,
+                unit="%",
+                desc=file_description[:30],
+                ascii=IS_WINDOWS,
+                leave=False,
+                bar_format="{l_bar}{bar}| {n_fmt}% [{elapsed}<{remaining}, {rate_fmt}{postfix}]",
+            ) as progress_bar:
                 last_completed_bytes = 0
                 while not download_task.is_complete and not download_task.has_error:
                     download_task.update()
@@ -3054,36 +3924,51 @@ def download_file_with_progress(
                     if download_task.total_length > 0:
                         if progress_bar.total != download_task.total_length:
                             progress_bar.total = download_task.total_length
-                            progress_bar.unit = 'iB'; progress_bar.unit_scale = True
+                            progress_bar.unit = "iB"
+                            progress_bar.unit_scale = True
                             progress_bar.n = download_task.completed_length
                             last_completed_bytes = download_task.completed_length
                         else:
-                            progress_bar.update(download_task.completed_length - last_completed_bytes)
+                            progress_bar.update(
+                                download_task.completed_length - last_completed_bytes
+                            )
                             last_completed_bytes = download_task.completed_length
 
                         postfix_details = f"S:{download_task.download_speed_string()} C:{download_task.connections}"
                         if download_task.eta_string(human_readable=True):
-                            postfix_details += f" ETA:{download_task.eta_string(human_readable=True)}"
+                            postfix_details += (
+                                f" ETA:{download_task.eta_string(human_readable=True)}"
+                            )
                         progress_bar.set_postfix_str(postfix_details, refresh=False)
                         progress_bar.refresh()
                     else:
                         if download_task.progress > progress_bar.n:
-                            progress_bar.update(int(download_task.progress) - int(progress_bar.n))
+                            progress_bar.update(
+                                int(download_task.progress) - int(progress_bar.n)
+                            )
                         progress_bar.set_postfix_str(
-                            f"S:{download_task.download_speed_string()} C:{download_task.connections}", refresh=True)
+                            f"S:{download_task.download_speed_string()} C:{download_task.connections}",
+                            refresh=True,
+                        )
 
                     if download_task.error_code is not None:
                         raise RuntimeError(
-                            f"Aria2c download error (Code {download_task.error_code}): {download_task.error_message}")
+                            f"Aria2c download error (Code {download_task.error_code}): {download_task.error_message}"
+                        )
                     time.sleep(0.5)
 
             download_task.update()
             if download_task.is_complete:
                 print_system(f"Aria2c download successful for {file_description}!")
                 final_path = download_task.files[0].path
-                if os.path.exists(final_path) and os.path.getsize(final_path) == download_task.total_length:
+                if (
+                    os.path.exists(final_path)
+                    and os.path.getsize(final_path) == download_task.total_length
+                ):
                     if final_path != destination_path:
-                        print_warning(f"Aria2c saved to '{final_path}', moving to '{destination_path}'.")
+                        print_warning(
+                            f"Aria2c saved to '{final_path}', moving to '{destination_path}'."
+                        )
                         shutil.move(final_path, destination_path)
                     download_successful = True
                 else:
@@ -3091,28 +3976,41 @@ def download_file_with_progress(
                     print_error(err_msg_verify)
             elif download_task.has_error:
                 print_error(
-                    f"Aria2c download failed for {file_description}. Error (Code {download_task.error_code}): {download_task.error_message}")
+                    f"Aria2c download failed for {file_description}. Error (Code {download_task.error_code}): {download_task.error_message}"
+                )
                 if download_task.files:
                     for file_entry in download_task.files:
                         if os.path.exists(file_entry.path):
                             try:
                                 os.remove(file_entry.path)
-                                print_warning(f"Removed incomplete aria2c download: {file_entry.path}")
+                                print_warning(
+                                    f"Removed incomplete aria2c download: {file_entry.path}"
+                                )
                             except Exception as e_rm_aria:
-                                print_error(f"Failed to remove incomplete aria2c file {file_entry.path}: {e_rm_aria}")
+                                print_error(
+                                    f"Failed to remove incomplete aria2c file {file_entry.path}: {e_rm_aria}"
+                                )
 
             if not download_successful:
-                 print_warning("Aria2c download path did not complete successfully. Falling back to requests.")
+                print_warning(
+                    "Aria2c download path did not complete successfully. Falling back to requests."
+                )
 
         except aria2p.client.ClientException as e_aria_client:
-            print_warning(f"Aria2p client/RPC connection error: {e_aria_client}. Is aria2c daemon running with --enable-rpc?")
+            print_warning(
+                f"Aria2p client/RPC connection error: {e_aria_client}. Is aria2c daemon running with --enable-rpc?"
+            )
             print_warning("Falling back to requests-based download.")
         except Exception as e_aria_general:
-            print_warning(f"Unexpected error during Aria2c download attempt: {e_aria_general}")
+            print_warning(
+                f"Unexpected error during Aria2c download attempt: {e_aria_general}"
+            )
             print_warning("Falling back to requests-based download.")
     else:
-        if not ARIA2P_AVAILABLE: print_system("Aria2p Python library not available. Using requests.")
-        elif not aria2c_executable_path: print_system("aria2c executable not found in PATH. Using requests.")
+        if not ARIA2P_AVAILABLE:
+            print_system("Aria2p Python library not available. Using requests.")
+        elif not aria2c_executable_path:
+            print_system("aria2c executable not found in PATH. Using requests.")
 
     # --- Requests-based Download (Fallback or if Aria2c not used/failed) ---
     if not download_successful:
@@ -3125,93 +4023,149 @@ def download_file_with_progress(
 
         try:
             import requests
-            head_resp = requests_session.head(url_to_use, timeout=10, allow_redirects=True)
+
+            head_resp = requests_session.head(
+                url_to_use, timeout=10, allow_redirects=True
+            )
             head_resp.raise_for_status()
-            server_file_size = int(head_resp.headers.get('content-length', 0))
+            server_file_size = int(head_resp.headers.get("content-length", 0))
             head_request_successful = True
-            print_system(f"File size (requests HEAD): {server_file_size / (1024 * 1024):.2f} MB.")
+            print_system(
+                f"File size (requests HEAD): {server_file_size / (1024 * 1024):.2f} MB."
+            )
         except requests.exceptions.RequestException as e_head_req:
-            print_warning(f"Requests: Could not get file size via HEAD request: {e_head_req}.")
+            print_warning(
+                f"Requests: Could not get file size via HEAD request: {e_head_req}."
+            )
 
         while True:
             try:
                 current_attempt_log = f"(ConnRetry: {connection_error_retries + 1}, OtherErrRetry: {other_errors_retries + 1})"
-                print_system(f"Attempting download (requests): {file_description} {current_attempt_log}")
+                print_system(
+                    f"Attempting download (requests): {file_description} {current_attempt_log}"
+                )
 
-                response = requests_session.get(url_to_use, stream=True, timeout=(15, 300))
+                response = requests_session.get(
+                    url_to_use, stream=True, timeout=(15, 300)
+                )
                 response.raise_for_status()
 
                 if not head_request_successful and server_file_size == 0:
-                    server_file_size = int(response.headers.get('content-length', 0))
-                    if server_file_size > 0: print_system(f"File size (requests GET): {server_file_size / (1024 * 1024):.2f} MB.")
+                    server_file_size = int(response.headers.get("content-length", 0))
+                    if server_file_size > 0:
+                        print_system(
+                            f"File size (requests GET): {server_file_size / (1024 * 1024):.2f} MB."
+                        )
 
                 block_size = 8192
                 from tqdm import tqdm
-                with tqdm(total=server_file_size, unit='iB', unit_scale=True, desc=file_description[:30],
-                          ascii=IS_WINDOWS, leave=False,
-                          bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]') as progress_bar:
+
+                with tqdm(
+                    total=server_file_size,
+                    unit="iB",
+                    unit_scale=True,
+                    desc=file_description[:30],
+                    ascii=IS_WINDOWS,
+                    leave=False,
+                    bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]",
+                ) as progress_bar:
                     downloaded_bytes_count = 0
-                    with open(temp_destination_path_requests, 'wb') as file_handle:
+                    with open(temp_destination_path_requests, "wb") as file_handle:
                         for data_chunk_item in response.iter_content(block_size):
                             progress_bar.update(len(data_chunk_item))
                             file_handle.write(data_chunk_item)
                             downloaded_bytes_count += len(data_chunk_item)
 
                 if server_file_size != 0 and downloaded_bytes_count != server_file_size:
-                    print_error(f"Requests Download ERROR: Size mismatch for {file_description}.")
-                    print_error(f"  Expected {server_file_size} bytes, downloaded {downloaded_bytes_count} bytes.")
-                    if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
+                    print_error(
+                        f"Requests Download ERROR: Size mismatch for {file_description}."
+                    )
+                    print_error(
+                        f"  Expected {server_file_size} bytes, downloaded {downloaded_bytes_count} bytes."
+                    )
+                    if os.path.exists(temp_destination_path_requests):
+                        os.remove(temp_destination_path_requests)
                     other_errors_retries += 1
                     if other_errors_retries >= max_retries_non_connection_error:
-                        print_error(f"Max retries ({max_retries_non_connection_error}) for size mismatch. Download failed.")
+                        print_error(
+                            f"Max retries ({max_retries_non_connection_error}) for size mismatch. Download failed."
+                        )
                         download_successful = False
-                        break # Exit while loop
-                    print_warning(f"Retrying (requests) due to size mismatch (retry {other_errors_retries}/{max_retries_non_connection_error})...")
+                        break  # Exit while loop
+                    print_warning(
+                        f"Retrying (requests) due to size mismatch (retry {other_errors_retries}/{max_retries_non_connection_error})..."
+                    )
                     time.sleep(5)
                     continue
 
                 shutil.move(temp_destination_path_requests, destination_path)
                 print_system(f"Successfully downloaded (requests) {file_description}")
                 download_successful = True
-                break # Exit while loop
+                break  # Exit while loop
 
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.ChunkedEncodingError) as e_connection:
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+                requests.exceptions.ChunkedEncodingError,
+            ) as e_connection:
                 connection_error_retries += 1
-                print_warning(f"Connection error (requests): {type(e_connection).__name__}. Retrying (attempt {connection_error_retries + 1})...")
+                print_warning(
+                    f"Connection error (requests): {type(e_connection).__name__}. Retrying (attempt {connection_error_retries + 1})..."
+                )
                 if os.path.exists(temp_destination_path_requests):
-                    try: os.remove(temp_destination_path_requests)
-                    except Exception: pass
+                    try:
+                        os.remove(temp_destination_path_requests)
+                    except Exception:
+                        pass
                 time.sleep(5)
 
             except requests.exceptions.HTTPError as e_http_error:
                 other_errors_retries += 1
-                print_error(f"HTTP error (requests): {e_http_error.response.status_code} for URL {url_to_use}")
-                if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
+                print_error(
+                    f"HTTP error (requests): {e_http_error.response.status_code} for URL {url_to_use}"
+                )
+                if os.path.exists(temp_destination_path_requests):
+                    os.remove(temp_destination_path_requests)
                 if e_http_error.response.status_code in [401, 403, 404]:
-                    print_error(f"Fatal HTTP error {e_http_error.response.status_code}. Not retrying.")
+                    print_error(
+                        f"Fatal HTTP error {e_http_error.response.status_code}. Not retrying."
+                    )
                     download_successful = False
-                    break # Exit while loop
+                    break  # Exit while loop
                 if other_errors_retries >= max_retries_non_connection_error:
-                    print_error(f"Max retries ({max_retries_non_connection_error}) for HTTP error. Download failed.")
+                    print_error(
+                        f"Max retries ({max_retries_non_connection_error}) for HTTP error. Download failed."
+                    )
                     download_successful = False
-                    break # Exit while loop
-                print_warning(f"Retrying (requests) due to HTTP error (retry {other_errors_retries}/{max_retries_non_connection_error})...")
+                    break  # Exit while loop
+                print_warning(
+                    f"Retrying (requests) due to HTTP error (retry {other_errors_retries}/{max_retries_non_connection_error})..."
+                )
                 time.sleep(5)
 
             except Exception as e_general_requests:
                 other_errors_retries += 1
-                print_error(f"Unexpected error during requests download: {type(e_general_requests).__name__}")
+                print_error(
+                    f"Unexpected error during requests download: {type(e_general_requests).__name__}"
+                )
                 traceback.print_exc(file=sys.stderr)
-                if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
+                if os.path.exists(temp_destination_path_requests):
+                    os.remove(temp_destination_path_requests)
                 if other_errors_retries >= max_retries_non_connection_error:
-                    print_error(f"Max retries ({max_retries_non_connection_error}) for general error. Download failed.")
+                    print_error(
+                        f"Max retries ({max_retries_non_connection_error}) for general error. Download failed."
+                    )
                     download_successful = False
-                    break # Exit while loop
-                print_warning(f"Retrying (requests) due to general error (retry {other_errors_retries}/{max_retries_non_connection_error})...")
+                    break  # Exit while loop
+                print_warning(
+                    f"Retrying (requests) due to general error (retry {other_errors_retries}/{max_retries_non_connection_error})..."
+                )
                 time.sleep(5)
 
     if download_successful and not peer_download_url:
-        print_system(f"Notifying ZephyMesh node to seed new file: {asset_relative_path}")
+        print_system(
+            f"Notifying ZephyMesh node to seed new file: {asset_relative_path}"
+        )
         # TODO: Implement API call to local mesh node to trigger manifest update
         # try:
         #     import requests
@@ -3232,18 +4186,23 @@ def _ensure_gnat_compiler_from_source():
         return True
 
     if shutil.which("gnat"):
-        print_system("GNAT compiler found in PATH. Creating flag file and skipping build.")
-        with open(GNAT_INSTALLED_FLAG_FILE, 'w') as f:
+        print_system(
+            "GNAT compiler found in PATH. Creating flag file and skipping build."
+        )
+        with open(GNAT_INSTALLED_FLAG_FILE, "w") as f:
             f.write(f"Found at {shutil.which('gnat')} on {datetime.now().isoformat()}")
         return True
 
-
     print_warning("GNAT Ada compiler not found. Preparing to build from GCC source...")
-    print_warning("This is a simple but I doesn't understand yet, one-time setup and will take a VERY long time.")
+    print_warning(
+        "This is a simple but I doesn't understand yet, one-time setup and will take a VERY long time."
+    )
 
     # --- Configuration for GCC Build (with user-specified versions) ---
     GCC_VERSION = "15.1.0"
-    GCC_SOURCE_URL = f"https://ftp.gnu.org/gnu/gcc/gcc-{GCC_VERSION}/gcc-{GCC_VERSION}.tar.gz"
+    GCC_SOURCE_URL = (
+        f"https://ftp.gnu.org/gnu/gcc/gcc-{GCC_VERSION}/gcc-{GCC_VERSION}.tar.gz"
+    )
     GCC_TAR_FILENAME = f"gcc-{GCC_VERSION}.tar.gz"
 
     # Dependencies (with user-specified versions)
@@ -3269,15 +4228,21 @@ def _ensure_gnat_compiler_from_source():
     try:
         import requests
         from tqdm import tqdm
+
         for name, (url, path) in sources_to_download.items():
             if not os.path.exists(path):
                 print_system(f"Downloading {name} source from {url}...")
                 with requests.get(url, stream=True) as r:
                     r.raise_for_status()
-                    total_size = int(r.headers.get('content-length', 0))
-                    with tqdm(total=total_size, unit='iB', unit_scale=True, desc=os.path.basename(path),
-                              ascii=IS_WINDOWS) as progress_bar:
-                        with open(path, 'wb') as f:
+                    total_size = int(r.headers.get("content-length", 0))
+                    with tqdm(
+                        total=total_size,
+                        unit="iB",
+                        unit_scale=True,
+                        desc=os.path.basename(path),
+                        ascii=IS_WINDOWS,
+                    ) as progress_bar:
+                        with open(path, "wb") as f:
                             for chunk in r.iter_content(chunk_size=8192):
                                 progress_bar.update(len(chunk))
                                 f.write(chunk)
@@ -3294,11 +4259,20 @@ def _ensure_gnat_compiler_from_source():
                 shutil.unpack_archive(path, source_dir)
 
         if not os.path.lexists(os.path.join(gcc_source_path, "gmp")):
-            os.symlink(os.path.join(source_dir, f"gmp-{GMP_VERSION}"), os.path.join(gcc_source_path, "gmp"))
+            os.symlink(
+                os.path.join(source_dir, f"gmp-{GMP_VERSION}"),
+                os.path.join(gcc_source_path, "gmp"),
+            )
         if not os.path.lexists(os.path.join(gcc_source_path, "mpc")):
-            os.symlink(os.path.join(source_dir, f"mpc-{MPC_VERSION}"), os.path.join(gcc_source_path, "mpc"))
+            os.symlink(
+                os.path.join(source_dir, f"mpc-{MPC_VERSION}"),
+                os.path.join(gcc_source_path, "mpc"),
+            )
         if not os.path.lexists(os.path.join(gcc_source_path, "mpfr")):
-            os.symlink(os.path.join(source_dir, f"mpfr-{MPFR_VERSION}"), os.path.join(gcc_source_path, "mpfr"))
+            os.symlink(
+                os.path.join(source_dir, f"mpfr-{MPFR_VERSION}"),
+                os.path.join(gcc_source_path, "mpfr"),
+            )
 
         print_system("Sources extracted and symlinked.")
     except Exception as e:
@@ -3321,38 +4295,46 @@ def _ensure_gnat_compiler_from_source():
     build_flags = []
     if sys.platform == "darwin":
         machine_arch = platform.machine()
-        if machine_arch == 'arm64':
-            machine_arch = 'aarch64'
+        if machine_arch == "arm64":
+            machine_arch = "aarch64"
         build_target_str = f"{machine_arch}-apple-darwin"
         print_system(f"Applying macOS build flags for target: {build_target_str}")
         build_flags = [
             f"--build={build_target_str}",
             f"--host={build_target_str}",
-            f"--target={build_target_str}"
+            f"--target={build_target_str}",
         ]
 
     # A. Bootstrap GCC with C only
     print_system("Stage 1: Configuring bootstrap GCC (C only)...")
     bootstrap_configure_cmd = [
-                                  os.path.join(gcc_source_path, "configure"),
-                                  f"--prefix={install_prefix}",
-                                  "--enable-languages=c",
-                                  "--disable-multilib",
-                                  "--disable-shared",
-                                  "--disable-nls"
-                              ] + build_flags
-    if not run_command(bootstrap_configure_cmd, cwd=bootstrap_build_path, name="GCC-BOOTSTRAP-CONFIGURE"):
+        os.path.join(gcc_source_path, "configure"),
+        f"--prefix={install_prefix}",
+        "--enable-languages=c",
+        "--disable-multilib",
+        "--disable-shared",
+        "--disable-nls",
+    ] + build_flags
+    if not run_command(
+        bootstrap_configure_cmd,
+        cwd=bootstrap_build_path,
+        name="GCC-BOOTSTRAP-CONFIGURE",
+    ):
         print_error("Bootstrap GCC configure step failed.")
         return False
 
     # <<< FIX: Use specific 'make' targets for bootstrap >>>
     print_system("Stage 1: Building bootstrap GCC ('make all-gcc')...")
-    if not run_command(["make", "all-gcc"], cwd=bootstrap_build_path, name="GCC-BOOTSTRAP-MAKE"):
+    if not run_command(
+        ["make", "all-gcc"], cwd=bootstrap_build_path, name="GCC-BOOTSTRAP-MAKE"
+    ):
         print_error("Bootstrap GCC 'make all-gcc' step failed.")
         return False
 
     print_system("Stage 1: Installing bootstrap GCC ('make install-gcc')...")
-    if not run_command(["make", "install-gcc"], cwd=bootstrap_build_path, name="GCC-BOOTSTRAP-INSTALL"):
+    if not run_command(
+        ["make", "install-gcc"], cwd=bootstrap_build_path, name="GCC-BOOTSTRAP-INSTALL"
+    ):
         print_error("Bootstrap GCC 'make install-gcc' step failed.")
         return False
 
@@ -3361,41 +4343,59 @@ def _ensure_gnat_compiler_from_source():
     # B. Final GCC with Ada support
     print_system("Stage 2: Configuring final GCC (with Ada support)...")
     final_configure_cmd = [
-                              os.path.join(gcc_source_path, "configure"),
-                              f"--prefix={install_prefix}",
-                              "--enable-languages=c,c++,ada",
-                              "--disable-libada",
-                              "--disable-nls",
-                              "--disable-threads",
-                              "--disable-multilib",
-                              "--disable-shared"
-                          ] + build_flags
-    if not run_command(final_configure_cmd, cwd=final_build_path, name="GCC-FINAL-CONFIGURE"):
+        os.path.join(gcc_source_path, "configure"),
+        f"--prefix={install_prefix}",
+        "--enable-languages=c,c++,ada",
+        "--disable-libada",
+        "--disable-nls",
+        "--disable-threads",
+        "--disable-multilib",
+        "--disable-shared",
+    ] + build_flags
+    if not run_command(
+        final_configure_cmd, cwd=final_build_path, name="GCC-FINAL-CONFIGURE"
+    ):
         print_error("Final GCC configure step failed.")
         return False
 
     # <<< FIX: Use specific 'make' targets for final build >>>
-    print_system("Stage 2: Building final GCC tools. This will take a very long time...")
-    if not run_command(["make", "all-gcc"], cwd=final_build_path, name="GCC-FINAL-MAKE-GCC"):
+    print_system(
+        "Stage 2: Building final GCC tools. This will take a very long time..."
+    )
+    if not run_command(
+        ["make", "all-gcc"], cwd=final_build_path, name="GCC-FINAL-MAKE-GCC"
+    ):
         print_error("Final GCC 'make all-gcc' step failed.")
         return False
-    if not run_command(["make", "all-target-libgcc"], cwd=final_build_path, name="GCC-FINAL-MAKE-LIBGCC"):
+    if not run_command(
+        ["make", "all-target-libgcc"],
+        cwd=final_build_path,
+        name="GCC-FINAL-MAKE-LIBGCC",
+    ):
         print_error("Final GCC 'make all-target-libgcc' step failed.")
         return False
-    if not run_command(["make", "-C", "gcc", "cross-gnattools", "ada.all.cross"], cwd=final_build_path,
-                       name="GCC-FINAL-MAKE-GNAT"):
+    if not run_command(
+        ["make", "-C", "gcc", "cross-gnattools", "ada.all.cross"],
+        cwd=final_build_path,
+        name="GCC-FINAL-MAKE-GNAT",
+    ):
         print_error("Final GCC 'make gnatools' step failed.")
         return False
 
     print_system("Stage 2: Installing final GNAT and GCC components...")
-    if not run_command(["make", "install-strip-gcc", "install-target-libgcc"], cwd=final_build_path,
-                       name="GCC-FINAL-INSTALL"):
+    if not run_command(
+        ["make", "install-strip-gcc", "install-target-libgcc"],
+        cwd=final_build_path,
+        name="GCC-FINAL-INSTALL",
+    ):
         print_error("Final GCC 'make install' step failed.")
         return False
 
     # --- Finalization ---
-    print_system("✅ GNAT compiler built and installed successfully into the Conda environment.")
-    with open(GNAT_INSTALLED_FLAG_FILE, 'w') as f:
+    print_system(
+        "✅ GNAT compiler built and installed successfully into the Conda environment."
+    )
+    with open(GNAT_INSTALLED_FLAG_FILE, "w") as f:
         f.write(f"Installed on {datetime.now().isoformat()}")
 
     print_system("Cleaning up GCC build files...")
@@ -3416,19 +4416,21 @@ def _ensure_alire_and_gnat_toolchain():
 
     if shutil.which("gnat"):
         print_system("GNAT compiler found in PATH. Assuming Alire setup is complete.")
-        with open(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE, 'w') as f:
+        with open(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE, "w") as f:
             f.write(f"Found at {shutil.which('gnat')} on {datetime.now().isoformat()}")
         return True
 
     alire_install_dir = os.path.join(ROOT_DIR, "alire_installer")
 
     if not shutil.which("alr"):
-        print_warning("Alire 'alr' command not found. Downloading pre-compiled binary...")
+        print_warning(
+            "Alire 'alr' command not found. Downloading pre-compiled binary..."
+        )
 
         # --- Determine Correct Alire Binary for OS/Arch ---
         os_name = platform.system().lower()
         machine_arch_raw = platform.machine().lower()
-        machine_arch = "" # Reset machine_arch to ensure it's set correctly below
+        machine_arch = ""  # Reset machine_arch to ensure it's set correctly below
 
         if os_name == "darwin":
             os_name = "macos"
@@ -3454,12 +4456,19 @@ def _ensure_alire_and_gnat_toolchain():
         try:
             import requests
             from tqdm import tqdm
+
             print_system(f"Downloading Alire for {machine_arch} from: {alire_url}")
             with requests.get(alire_url, stream=True) as r:
                 r.raise_for_status()
-                total_size = int(r.headers.get('content-length', 0))
-                with tqdm(total=total_size, unit='iB', unit_scale=True, desc=alire_filename, ascii=IS_WINDOWS) as pbar:
-                    with open(zip_path, 'wb') as f:
+                total_size = int(r.headers.get("content-length", 0))
+                with tqdm(
+                    total=total_size,
+                    unit="iB",
+                    unit_scale=True,
+                    desc=alire_filename,
+                    ascii=IS_WINDOWS,
+                ) as pbar:
+                    with open(zip_path, "wb") as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             pbar.update(len(chunk))
                             f.write(chunk)
@@ -3479,7 +4488,9 @@ def _ensure_alire_and_gnat_toolchain():
             conda_bin_path = os.path.join(TARGET_RUNTIME_ENV_PATH, "bin")
 
             if not os.path.exists(alr_binary_path):
-                raise FileNotFoundError(f"'alr' binary not found at expected path: {alr_binary_path}")
+                raise FileNotFoundError(
+                    f"'alr' binary not found at expected path: {alr_binary_path}"
+                )
 
             print_system(f"Installing 'alr' executable to {conda_bin_path}...")
             os.makedirs(conda_bin_path, exist_ok=True)
@@ -3495,7 +4506,9 @@ def _ensure_alire_and_gnat_toolchain():
             return False
 
     # 3. Use Alire to get the GNAT toolchain
-    print_system("Using Alire to install the GNAT toolchain and gprbuild for Ada Compiler. This may take a moment...")
+    print_system(
+        "Using Alire to install the GNAT toolchain and gprbuild for Ada Compiler. This may take a moment..."
+    )
     # Now that 'alr' is in the Conda env's bin, it should be found in the PATH.
     alr_get_gnat_command = ["alr", "toolchain", "--select", "gnat_native", "gprbuild"]
 
@@ -3504,7 +4517,7 @@ def _ensure_alire_and_gnat_toolchain():
         return False
 
     print_system("✅ GNAT toolchain successfully installed via Alire.")
-    with open(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE, 'w') as f:
+    with open(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE, "w") as f:
         f.write(f"Installed via Alire on {datetime.now().isoformat()}")
 
     return True
@@ -3521,7 +4534,9 @@ def _create_alire_helper_scripts():
     Handles platform-specific environment variable sanitization (removing BUILD/MODE)
     required for successful Ada/SPARK builds on macOS/Linux.
     """
-    print_system("--- Creating Alire helper scripts (alr_compile, alr_spark, alr_whiplash) ---")
+    print_system(
+        "--- Creating Alire helper scripts (alr_compile, alr_spark, alr_whiplash) ---"
+    )
 
     # Determine the target bin directory inside the Conda environment
     bin_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "bin")
@@ -3544,14 +4559,8 @@ def _create_alire_helper_scripts():
     # --- Content Generation ---
     if IS_WINDOWS:
         # Windows Batch Scripts
-        compile_content = (
-            "@echo off\n"
-            "alr exec -- gprbuild %*\n"
-        )
-        spark_content = (
-            "@echo off\n"
-            "alr exec -- gnatprove -j 0 %*\n"
-        )
+        compile_content = "@echo off\nalr exec -- gprbuild %*\n"
+        spark_content = "@echo off\nalr exec -- gnatprove -j 0 %*\n"
         # Whiplash: Check errorlevel after prove before compiling
         whiplash_content = (
             "@echo off\n"
@@ -3569,32 +4578,32 @@ def _create_alire_helper_scripts():
         compile_content = (
             "#!/bin/sh\n"
             "# Wrapper to sanitize environment before running gprbuild via alr\n"
-            "exec alr exec -- env -u BUILD -u MODE -u bld -u mode gprbuild \"$@\"\n"
+            'exec alr exec -- env -u BUILD -u MODE -u bld -u mode gprbuild "$@"\n'
         )
         spark_content = (
             "#!/bin/sh\n"
             "# Wrapper to sanitize environment before running gnatprove via alr\n"
-            "exec alr exec -- env -u BUILD -u MODE -u bld -u mode gnatprove -j 0 \"$@\"\n"
+            'exec alr exec -- env -u BUILD -u MODE -u bld -u mode gnatprove -j 0 "$@"\n'
         )
         # Whiplash: Run prove, check exit code, then run build
         whiplash_content = (
             "#!/bin/sh\n"
             "# Wrapper to sanitize environment before running gnatprove THEN gprbuild\n"
-            "echo \"[Whiplash] Phase 1: SPARK Verification...\"\n"
-            "alr exec -- env -u BUILD -u MODE -u bld -u mode gnatprove -j 0 \"$@\"\n"
+            'echo "[Whiplash] Phase 1: SPARK Verification..."\n'
+            'alr exec -- env -u BUILD -u MODE -u bld -u mode gnatprove -j 0 "$@"\n'
             "if [ $? -ne 0 ]; then\n"
-            "    echo \"[Whiplash] Verification failed. Aborting compilation.\"\n"
+            '    echo "[Whiplash] Verification failed. Aborting compilation."\n'
             "    exit 1\n"
             "fi\n"
-            "echo \"[Whiplash] Phase 2: GNAT Compilation...\"\n"
-            "exec alr exec -- env -u BUILD -u MODE -u bld -u mode gprbuild \"$@\"\n"
+            'echo "[Whiplash] Phase 2: GNAT Compilation..."\n'
+            'exec alr exec -- env -u BUILD -u MODE -u bld -u mode gprbuild "$@"\n'
         )
 
     # --- Write Files ---
     scripts_to_create = [
         (compile_filename, compile_content),
         (spark_filename, spark_content),
-        (whiplash_filename, whiplash_content)
+        (whiplash_filename, whiplash_content),
     ]
 
     try:
@@ -3602,7 +4611,7 @@ def _create_alire_helper_scripts():
             fpath = os.path.join(bin_dir, fname)
 
             # Write the file
-            with open(fpath, 'w', encoding='utf-8', newline='\n') as f:
+            with open(fpath, "w", encoding="utf-8", newline="\n") as f:
                 f.write(content)
 
             # Make executable on Unix
@@ -3617,6 +4626,7 @@ def _create_alire_helper_scripts():
         print_error(f"Failed to create Alire helper scripts: {e}")
         return False
 
+
 def _check_and_repair_conda_env(env_path: str) -> bool:
     """
     Runs `conda doctor` on the specified environment and triggers a repair if needed.
@@ -3625,15 +4635,17 @@ def _check_and_repair_conda_env(env_path: str) -> bool:
     Returns:
         True if the environment is healthy, False if it was corrupt and deleted.
     """
-    print_system(f"--- Running Conda Environment Health Check on {os.path.basename(env_path)} ---")
+    print_system(
+        f"--- Running Conda Environment Health Check on {os.path.basename(env_path)} ---"
+    )
 
     if not os.path.isdir(env_path):
         print_system("Health check skipped: Conda environment does not exist yet.")
-        return True # It's not "unhealthy", it just needs to be created.
+        return True  # It's not "unhealthy", it just needs to be created.
 
     if not CONDA_EXECUTABLE:
         print_error("Cannot run `conda doctor`: Conda executable path is not set.")
-        return False # Cannot verify, assume failure to be safe
+        return False  # Cannot verify, assume failure to be safe
 
     try:
         doctor_command = [CONDA_EXECUTABLE, "doctor", "-v", "-p", env_path]
@@ -3642,8 +4654,8 @@ def _check_and_repair_conda_env(env_path: str) -> bool:
             doctor_command,
             capture_output=True,
             text=True,
-            check=False, # We need to check output manually, not just return code
-            timeout=3600
+            check=False,  # We need to check output manually, not just return code
+            timeout=3600,
         )
 
         output = process.stdout + "\n" + process.stderr
@@ -3652,9 +4664,15 @@ def _check_and_repair_conda_env(env_path: str) -> bool:
         # "Missing Files" is a critical error that requires a rebuild.
         # "Altered Files" is often benign (e.g., new .pyc files), so we ignore it.
         if "❌ Missing Files:" in output:
-            print_error(f"Conda environment at '{env_path}' is CORRUPT (Missing Files detected).")
-            print_warning("Triggering autofix: The environment will be completely removed and recreated.")
-            print_error(f"--- Conda Doctor Report ---\n{output.strip()}\n--------------------------")
+            print_error(
+                f"Conda environment at '{env_path}' is CORRUPT (Missing Files detected)."
+            )
+            print_warning(
+                "Triggering autofix: The environment will be completely removed and recreated."
+            )
+            print_error(
+                f"--- Conda Doctor Report ---\n{output.strip()}\n--------------------------"
+            )
 
             # --- The "Autofix" ---
             # 1. Remove associated flag files to ensure fresh installations.
@@ -3665,23 +4683,35 @@ def _check_and_repair_conda_env(env_path: str) -> bool:
                 shutil.rmtree(env_path)
                 print_system(f"Successfully removed corrupt environment: {env_path}")
             except Exception as e:
-                print_error(f"CRITICAL: Failed to remove corrupt Conda environment at '{env_path}': {e}")
-                print_error("Please remove this directory manually and restart the launcher.")
+                print_error(
+                    f"CRITICAL: Failed to remove corrupt Conda environment at '{env_path}': {e}"
+                )
+                print_error(
+                    "Please remove this directory manually and restart the launcher."
+                )
                 sys.exit(1)
 
-            return False # Signal that the environment was corrupt and has been removed.
+            return (
+                False  # Signal that the environment was corrupt and has been removed.
+            )
 
-        elif "❌" in output: # Catch other potential doctor errors
-             print_warning(f"Conda doctor reported issues, but not 'Missing Files'. Report:\n{output.strip()}")
-             print_system("Proceeding cautiously, but a manual environment recreation might be needed if errors persist.")
-             return True # Treat as healthy for now, but warn the user.
+        elif "❌" in output:  # Catch other potential doctor errors
+            print_warning(
+                f"Conda doctor reported issues, but not 'Missing Files'. Report:\n{output.strip()}"
+            )
+            print_system(
+                "Proceeding cautiously, but a manual environment recreation might be needed if errors persist."
+            )
+            return True  # Treat as healthy for now, but warn the user.
 
         else:
             print_system("✅ Conda environment health check passed.")
-            return True # Environment is healthy.
+            return True  # Environment is healthy.
 
     except subprocess.TimeoutExpired:
-        print_error("`conda doctor` command timed out. Assuming environment is unhealthy.")
+        print_error(
+            "`conda doctor` command timed out. Assuming environment is unhealthy."
+        )
         # You could trigger the autofix here as well if a timeout is considered critical.
         return False
     except Exception as e:
@@ -3700,7 +4730,9 @@ def _ensure_and_launch_zephymesh():
     print_system("--- Preparing ZephyMesh P2P Node ---")
 
     # Define the binary name based on OS
-    mesh_exe_name = "zephymesh_node_compiled.exe" if IS_WINDOWS else "zephymesh_node_compiled"
+    mesh_exe_name = (
+        "zephymesh_node_compiled.exe" if IS_WINDOWS else "zephymesh_node_compiled"
+    )
     mesh_exe_path = os.path.join(ZEPHYMESH_DIR, mesh_exe_name)
 
     try:
@@ -3713,22 +4745,45 @@ def _ensure_and_launch_zephymesh():
 
             # Ensure go.mod and dependencies are handled
             if not os.path.exists(go_mod_file):
-                print_warning(f"go.mod not found in {go_source_dir}. Initializing module...")
-                if not run_command(["go", "mod", "init", "zephymesh"], cwd=go_source_dir, name="GO-MOD-INIT-MESH"):
-                    print_error("Failed to initialize Go module. ZephyMesh cannot start.")
+                print_warning(
+                    f"go.mod not found in {go_source_dir}. Initializing module..."
+                )
+                if not run_command(
+                    ["go", "mod", "init", "zephymesh"],
+                    cwd=go_source_dir,
+                    name="GO-MOD-INIT-MESH",
+                ):
+                    print_error(
+                        "Failed to initialize Go module. ZephyMesh cannot start."
+                    )
                     return False  # Return failure
 
             print_system("Ensuring Go dependencies for mesh node ('go mod tidy')...")
-            if not run_command(["go", "mod", "tidy"], cwd=go_source_dir, name="GO-MOD-TIDY-MESH"):
-                print_error("Failed to download Go dependencies for mesh node. ZephyMesh cannot start.")
+            if not run_command(
+                ["go", "mod", "tidy"], cwd=go_source_dir, name="GO-MOD-TIDY-MESH"
+            ):
+                print_error(
+                    "Failed to download Go dependencies for mesh node. ZephyMesh cannot start."
+                )
                 return False  # Return failure
 
             print_system("Compiling the Go mesh node...")
             go_package_path = "./cmd/zephymesh_node"
-            compile_command = ["go", "build", "-buildvcs=false", "-o", mesh_exe_path, go_package_path]
+            compile_command = [
+                "go",
+                "build",
+                "-buildvcs=false",
+                "-o",
+                mesh_exe_path,
+                go_package_path,
+            ]
 
-            if not run_command(compile_command, cwd=go_source_dir, name="GO-COMPILE-MESHNODE"):
-                print_error("Failed to compile the Go ZephyMesh node. ZephyMesh cannot start.")
+            if not run_command(
+                compile_command, cwd=go_source_dir, name="GO-COMPILE-MESHNODE"
+            ):
+                print_error(
+                    "Failed to compile the Go ZephyMesh node. ZephyMesh cannot start."
+                )
                 return False  # Return failure
             print_system("✅ Go ZephyMesh node compiled successfully.")
 
@@ -3754,7 +4809,9 @@ def _ensure_and_launch_zephymesh():
                         break
 
             if mesh_proc_obj and mesh_proc_obj.poll() is not None:
-                raise RuntimeError("ZephyMesh node process exited prematurely while waiting for port file.")
+                raise RuntimeError(
+                    "ZephyMesh node process exited prematurely while waiting for port file."
+                )
 
             if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
                 api_ready = True
@@ -3765,45 +4822,59 @@ def _ensure_and_launch_zephymesh():
             raise TimeoutError("ZephyMesh node did not create its port file in time.")
 
         # --- Step 4: Read the port and set the global API URL ---
-        with open(ZEPHYMESH_PORT_INFO_FILE, 'r') as f:
+        with open(ZEPHYMESH_PORT_INFO_FILE, "r") as f:
             port_info = json.load(f)
-            api_port = port_info['api_port']
+            api_port = port_info["api_port"]
             zephymesh_api_url = f"http://127.0.0.1:{api_port}"
-            print_colored("SUCCESS", f"✅ ZephyMesh Node is ready. API URL discovered: {zephymesh_api_url}", "SUCCESS")
+            print_colored(
+                "SUCCESS",
+                f"✅ ZephyMesh Node is ready. API URL discovered: {zephymesh_api_url}",
+                "SUCCESS",
+            )
 
         return True  # Indicate success
 
     except Exception as e:
-        print_error(f"Failed to start ZephyMesh Node: {e}. P2P distribution will be unavailable.")
+        print_error(
+            f"Failed to start ZephyMesh Node: {e}. P2P distribution will be unavailable."
+        )
         # No need to terminate here, the main atexit handler will get it.
         return False  # Indicate failure
 
+
 def _heal_base_conda_environment(conda_exec):
     """
-    detects if the base conda environment lacks critical modern capabilities 
+    detects if the base conda environment lacks critical modern capabilities
     (like zstandard for .conda files) and attempts to auto-repair it.
     """
     print_system("--- Checking Base Conda Health & Capabilities ---")
-    
+
     # We target the 'base' environment specifically
     # logic: The base env is usually 2 levels up from the 'bin/conda' executable
     # but using '-n base' is safer if 'conda' is in the path correctly.
-    
+
     # Check 1: Does the base env support zstandard? (The .conda format reader)
     # We test this by trying to import it using the base python.
     # Note: We use 'conda run -n base' to execute in the base context.
-    
+
     # A generic "heal" command that installs the missing drivers and updates conda
-    print_warning("Ensuring base Conda has 'zstandard' and 'conda-package-handling' for modern package support...")
-    
+    print_warning(
+        "Ensuring base Conda has 'zstandard' and 'conda-package-handling' for modern package support..."
+    )
+
     heal_cmd = [
-        conda_exec, "install", "-n", "base", "--yes",
-        "-c", "conda-forge",
-        "conda-package-handling", 
-        "zstandard"  # The critical missing driver
+        conda_exec,
+        "install",
+        "-n",
+        "base",
+        "--yes",
+        "-c",
+        "conda-forge",
+        "conda-package-handling",
+        "zstandard",  # The critical missing driver
     ]
-    
-    # We execute this blindly because checking via python import inside 'conda run' 
+
+    # We execute this blindly because checking via python import inside 'conda run'
     # can be flaky on some broken setups. Installing it if it's already there is fast.
     if not run_command(heal_cmd, ROOT_DIR, "CONDA-BASE-HEAL", check=False):
         print_warning("Could not auto-install zstandard to base environment.")
@@ -3816,58 +4887,94 @@ def _heal_base_conda_environment(conda_exec):
     # update_cmd = [conda_exec, "update", "-n", "base", "-c", "conda-forge", "conda", "--yes"]
     # run_command(update_cmd, ROOT_DIR, "CONDA-BASE-UPDATE", check=False)
 
+
 def _miniforge_alike_checking_config(CONDA_EXEC):
     print_system("--- Configuring newly installed virtual environment")
 
     # This is the path to the conda executable we just installed
 
-    command_enable_conda_fmt = [CONDA_EXEC, "config", "--set", "use_only_tar_bz2", "false"]
+    command_enable_conda_fmt = [
+        CONDA_EXEC,
+        "config",
+        "--set",
+        "use_only_tar_bz2",
+        "false",
+    ]
     command_zst = [CONDA_EXEC, "config", "--set", "experimental", "repodata_from_zst"]
-    
+
     command_priority = [CONDA_EXEC, "config", "--set", "channel_priority", "flexible"]
     command_bypass_ssl_test = [CONDA_EXEC, "config", "--set", "ssl_verify", "no"]
-    #conda config --set ssl_verify no
+    # conda config --set ssl_verify no
     max_config_attempts = 3
     config_success = False
 
     for attempt in range(max_config_attempts):
-        print_system(f"Attempt {attempt + 1}/{max_config_attempts} to apply Conda configuration...")
+        print_system(
+            f"Attempt {attempt + 1}/{max_config_attempts} to apply Conda configuration..."
+        )
         try:
             # We run these as direct subprocess calls because our 'run_command' helper
             # is designed for the main Conda environment, not this brand new one.
             # We use check=True to raise an error on failure.
-            #subprocess.run(command_zst, check=True, capture_output=True, text=True, timeout=60)
-            #print_system("  -> Successfully enabled 'repodata_from_zst'.")
+            # subprocess.run(command_zst, check=True, capture_output=True, text=True, timeout=60)
+            # print_system("  -> Successfully enabled 'repodata_from_zst'.")
 
-            subprocess.run(command_bypass_ssl_test, check=True, capture_output=True, text=True, timeout=60)
-            print_system("  -> DANGER TEST for microconda that doesn't ship with certificate : Successfully enabled command_bypass_ssl_test.") #HTTP 000 Error bypass on third-party conda miniforge  https://stackoverflow.com/questions/50305725/condahttperror-http-000-connection-failed-for-url-https-repo-continuum-io-pk
+            subprocess.run(
+                command_bypass_ssl_test,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            print_system(
+                "  -> DANGER TEST for microconda that doesn't ship with certificate : Successfully enabled command_bypass_ssl_test."
+            )  # HTTP 000 Error bypass on third-party conda miniforge  https://stackoverflow.com/questions/50305725/condahttperror-http-000-connection-failed-for-url-https-repo-continuum-io-pk
 
-            subprocess.run(command_enable_conda_fmt, check=True, capture_output=True, text=True, timeout=60)
-            print_system("  -> Successfully enabled modern .conda package format (disabled tar-only mode).")
+            subprocess.run(
+                command_enable_conda_fmt,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            print_system(
+                "  -> Successfully enabled modern .conda package format (disabled tar-only mode)."
+            )
 
-            #subprocess.run(command_priority, check=True, capture_output=True, text=True, timeout=60)
-            #print_system("  -> Successfully set 'channel_priority' to 'flexible'.")
+            # subprocess.run(command_priority, check=True, capture_output=True, text=True, timeout=60)
+            # print_system("  -> Successfully set 'channel_priority' to 'flexible'.")
 
             config_success = True
-            print_colored("SUCCESS", "portable miniforge successfully configured for unsupported repo.", "SUCCESS")
+            print_colored(
+                "SUCCESS",
+                "portable miniforge successfully configured for unsupported repo.",
+                "SUCCESS",
+            )
             return True
             break  # Exit the loop on success
 
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             print_warning(f"Conda config command failed on attempt {attempt + 1}: {e}")
-            if hasattr(e, 'stderr'):
+            if hasattr(e, "stderr"):
                 print_warning(f"STDERR: {e.stderr.strip()}")
             if attempt < max_config_attempts - 1:
                 print_warning("Retrying in 5 seconds...")
                 time.sleep(5)
         except Exception as e_unexpected:
-            print_error(f"An unexpected error occurred during Conda config: {e_unexpected}")
+            print_error(
+                f"An unexpected error occurred during Conda config: {e_unexpected}"
+            )
             return False
             break  # Do not retry on unexpected errors
 
     if not config_success:
-        print_error("Failed to apply Conda performance configurations after multiple attempts.")
-        print_warning("The launcher will proceed, but you may encounter metadata download failures.")
+        print_error(
+            "Failed to apply Conda performance configurations after multiple attempts."
+        )
+        print_warning(
+            "The launcher will proceed, but you may encounter metadata download failures."
+        )
+
 
 def _check_playwright_linux_deps():
     """
@@ -3879,7 +4986,9 @@ def _check_playwright_linux_deps():
     if platform.system() != "Linux" or IS_IN_PROOT_ENV:
         return True
 
-    print_system("--- Performing pre-flight check for Playwright's Linux dependencies ---")
+    print_system(
+        "--- Performing pre-flight check for Playwright's Linux dependencies ---"
+    )
 
     # We need a temporary, minimal Conda environment to run the check command.
     # This avoids polluting the base system or requiring Playwright to be installed globally.
@@ -3897,9 +5006,18 @@ def _check_playwright_linux_deps():
         # This is much faster than checking inside our main, large environment.
         print_system("Creating temporary environment to check dependencies...")
         create_cmd = [
-            CONDA_EXECUTABLE, "create", "--yes", "--prefix", check_env_path, "playwright", "-c", "conda-forge"
+            CONDA_EXECUTABLE,
+            "create",
+            "--yes",
+            "--prefix",
+            check_env_path,
+            "playwright",
+            "-c",
+            "conda-forge",
         ]
-        subprocess.run(create_cmd, check=True, capture_output=True, text=True, timeout=300)
+        subprocess.run(
+            create_cmd, check=True, capture_output=True, text=True, timeout=300
+        )
 
         # The command to check dependencies. It will return a non-zero exit code
         # and print the necessary `apt-get install ...` command if deps are missing.
@@ -3915,20 +5033,21 @@ def _check_playwright_linux_deps():
             temp_env_python_exe = os.path.join(bin_dir, "python")
         else:
             # If neither is found, we can't proceed.
-            print_error(f"CRITICAL: Could not find 'python' or 'python3' executable in the temporary check environment at '{bin_dir}'.")
+            print_error(
+                f"CRITICAL: Could not find 'python' or 'python3' executable in the temporary check environment at '{bin_dir}'."
+            )
             # The finally block will still handle cleanup.
             return False
 
         print_system(f"Found temporary python executable: {temp_env_python_exe}")
 
-        check_deps_cmd = [
-            temp_env_python_exe,
-            "-m", "playwright", "install-deps"
-        ]
+        check_deps_cmd = [temp_env_python_exe, "-m", "playwright", "install-deps"]
 
         print_system("Running Playwright's dependency check...")
         # We expect this might fail, so we don't use check=True.
-        result = subprocess.run(check_deps_cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(
+            check_deps_cmd, capture_output=True, text=True, timeout=120
+        )
 
         # If the command succeeded (exit code 0), all dependencies are present.
         if result.returncode == 0:
@@ -3936,9 +5055,17 @@ def _check_playwright_linux_deps():
             return True
 
         # If it failed, it means dependencies are missing. We must extract the command.
-        print_colored("ERROR", "--- ACTION REQUIRED: Missing System Libraries for Playwright ---", "ERROR")
-        print_error("The web browser automation engine (Playwright) needs system libraries that are not installed.")
-        print_system("To fix this, please run the following command with sudo privileges:")
+        print_colored(
+            "ERROR",
+            "--- ACTION REQUIRED: Missing System Libraries for Playwright ---",
+            "ERROR",
+        )
+        print_error(
+            "The web browser automation engine (Playwright) needs system libraries that are not installed."
+        )
+        print_system(
+            "To fix this, please run the following command with sudo privileges:"
+        )
 
         # Search the command's output for the line starting with "sudo"
         sudo_command_to_run = ""
@@ -3953,21 +5080,31 @@ def _check_playwright_linux_deps():
             print_colored("COMMAND", f"\n    {sudo_command_to_run}\n", "SUCCESS")
         else:
             # Fallback message if we couldn't parse the command.
-            print_error("Could not automatically determine the exact command. Please check the logs below.")
-            print_warning("You may need to run 'npx playwright install-deps' manually to see the required command.")
-            print_warning(f"--- Full output from dependency check ---\n{result.stdout}\n{result.stderr}\n---")
+            print_error(
+                "Could not automatically determine the exact command. Please check the logs below."
+            )
+            print_warning(
+                "You may need to run 'npx playwright install-deps' manually to see the required command."
+            )
+            print_warning(
+                f"--- Full output from dependency check ---\n{result.stdout}\n{result.stderr}\n---"
+            )
 
         print_system("After running the command, please restart this launcher script.")
-        print_colored("ERROR", "----------------------------------------------------------------", "ERROR")
+        print_colored(
+            "ERROR",
+            "----------------------------------------------------------------",
+            "ERROR",
+        )
 
         # This is a fatal error for this run. We exit so the user can take action.
         return False
 
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         print_error(f"Failed to run the Playwright dependency check: {e}")
-        if hasattr(e, 'stdout'):
+        if hasattr(e, "stdout"):
             print_error(f"STDOUT: {e.stdout}")
-        if hasattr(e, 'stderr'):
+        if hasattr(e, "stderr"):
             print_error(f"STDERR: {e.stderr}")
         return False
     finally:
@@ -3975,6 +5112,7 @@ def _check_playwright_linux_deps():
         if os.path.exists(check_env_path):
             print_system("Cleaning up temporary dependency-check environment...")
             shutil.rmtree(check_env_path)
+
 
 def _ensure_playwright_browsers():
     """Checks if Playwright browsers are installed and installs them if not, using a flag file."""
@@ -3985,20 +5123,32 @@ def _ensure_playwright_browsers():
 
     # If the flag doesn't exist, proceed with the installation.
     # The message is now more accurate, reflecting a one-time setup action.
-    print_system("--- Installing/Verifying Playwright browser binaries for the first time ---")
+    print_system(
+        "--- Installing/Verifying Playwright browser binaries for the first time ---"
+    )
     try:
         playwright_install_command = [
-            PYTHON_EXECUTABLE, "-m", "playwright", "install", "--with-deps"
+            PYTHON_EXECUTABLE,
+            "-m",
+            "playwright",
+            "install",
+            "--with-deps",
         ]
 
         # Use run_command for its nice logging and error handling.
-        if not run_command(playwright_install_command, ROOT_DIR, "PLAYWRIGHT-INSTALL-BROWSERS"):
-            print_error("Failed to install Playwright browsers. Web scraping features may be disabled.")
+        if not run_command(
+            playwright_install_command, ROOT_DIR, "PLAYWRIGHT-INSTALL-BROWSERS"
+        ):
+            print_error(
+                "Failed to install Playwright browsers. Web scraping features may be disabled."
+            )
             return False
 
         # If the command succeeds, create the flag file to prevent this from running again.
         print_system("✅ Playwright browsers are installed and up-to-date.")
-        with open(PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_flag:
+        with open(
+            PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE, "w", encoding="utf-8"
+        ) as f_flag:
             f_flag.write(f"Installed on: {datetime.now().isoformat()}\n")
         print_system("Playwright browsers installation flag created.")
         return True
@@ -4007,37 +5157,51 @@ def _ensure_playwright_browsers():
         print_error(f"An error occurred during Playwright browser setup: {e}")
         return False
 
+
 def _perform_pre_attempt_cleanup(attempt_number: int):
     """Performs cleanup actions before a setup retry."""
     if attempt_number == 1:
         # No cleanup on the first attempt
         return
 
-    print_warning(f"Setup attempt {attempt_number-1} failed. Performing pre-retry cleanup for attempt {attempt_number}.")
+    print_warning(
+        f"Setup attempt {attempt_number - 1} failed. Performing pre-retry cleanup for attempt {attempt_number}."
+    )
 
     # Attempt 2 (first failure): Remove all install flags except license.
     if attempt_number == 2:
         print_system("Cleanup Action: Removing installation flag files...")
         # Create a list of flags to remove, excluding the license file
-        flags_to_clear = [f for f in FLAG_FILES_TO_RESET_ON_ENV_RECREATE if f != LICENSE_FLAG_FILE]
+        flags_to_clear = [
+            f for f in FLAG_FILES_TO_RESET_ON_ENV_RECREATE if f != LICENSE_FLAG_FILE
+        ]
         _remove_flag_files(flags_to_clear)
 
     # Attempts 3 and 4 (second and third failures): Remove flags AND the Conda environment.
     elif attempt_number >= 3:
-        print_system("Cleanup Action: Removing installation flag files AND the Conda environment.")
+        print_system(
+            "Cleanup Action: Removing installation flag files AND the Conda environment."
+        )
         # Remove all flags (including the ones for the env itself)
         _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
 
         if os.path.isdir(TARGET_RUNTIME_ENV_PATH):
-            print_warning(f"Removing Conda environment directory: {TARGET_RUNTIME_ENV_PATH}")
+            print_warning(
+                f"Removing Conda environment directory: {TARGET_RUNTIME_ENV_PATH}"
+            )
             try:
                 shutil.rmtree(TARGET_RUNTIME_ENV_PATH)
                 print_system("Conda environment directory removed successfully.")
             except Exception as e:
-                print_error(f"CRITICAL ERROR during cleanup: Could not remove Conda env '{TARGET_RUNTIME_ENV_PATH}': {e}")
-                print_error("Manual intervention is required. Please delete the directory and restart.")
-                sys.exit(1) # This is a cleanup failure, which is critical.
-    time.sleep(2) # Give a moment for filesystem to catch up
+                print_error(
+                    f"CRITICAL ERROR during cleanup: Could not remove Conda env '{TARGET_RUNTIME_ENV_PATH}': {e}"
+                )
+                print_error(
+                    "Manual intervention is required. Please delete the directory and restart."
+                )
+                sys.exit(1)  # This is a cleanup failure, which is critical.
+    time.sleep(2)  # Give a moment for filesystem to catch up
+
 
 def start_service_thread(target_func, name):
     print_system(f"Preparing to start service: {name}")
@@ -4046,11 +5210,12 @@ def start_service_thread(target_func, name):
     return thread
 
 
-
 port_shield_stop_event: Optional[threading.Event] = None
 
 
-def _port_shield_worker_daemon(port: int, target_process_name: str, stop_event: threading.Event):
+def _port_shield_worker_daemon(
+    port: int, target_process_name: str, stop_event: threading.Event
+):
     """
     The daemon worker. It intelligently monitors a port.
     - When the port is free, it checks with low frequency.
@@ -4060,19 +5225,27 @@ def _port_shield_worker_daemon(port: int, target_process_name: str, stop_event: 
     try:
         import psutil
     except ImportError:
-        print_error("[PORT SHIELD] CRITICAL: psutil library not found. The shield cannot operate.")
+        print_error(
+            "[PORT SHIELD] CRITICAL: psutil library not found. The shield cannot operate."
+        )
         return
 
-    print_colored("ERROR",
-                  f"[PORT SHIELD] ACTIVATED. Intelligently monitoring port {port} for illegal binding by '{target_process_name}'.",
-                  "ERROR")
+    print_colored(
+        "ERROR",
+        f"[PORT SHIELD] ACTIVATED. Intelligently monitoring port {port} for illegal binding by '{target_process_name}'.",
+        "ERROR",
+    )
 
     while not stop_event.is_set():
         process_on_port = None
         try:
             # Check for any process listening on the target port
-            for conn in psutil.net_connections(kind='inet'):
-                if conn.laddr.port == port and conn.status == psutil.CONN_LISTEN and conn.pid is not None:
+            for conn in psutil.net_connections(kind="inet"):
+                if (
+                    conn.laddr.port == port
+                    and conn.status == psutil.CONN_LISTEN
+                    and conn.pid is not None
+                ):
                     process_on_port = conn
                     break  # Found a process, exit the loop to handle it.
         except psutil.Error as e:
@@ -4090,9 +5263,11 @@ def _port_shield_worker_daemon(port: int, target_process_name: str, stop_event: 
                 # Check if the process is our unwanted target.
                 if target_process_name in p.name().lower():
                     # Threat confirmed. Annihilate.
-                    print_colored("ERROR",
-                                  f"[PORT SHIELD] Hostile target '{p.name()}' (PID: {p.pid}) has illegally bound to port {port}. ANNIHILATING.",
-                                  "ERROR")
+                    print_colored(
+                        "ERROR",
+                        f"[PORT SHIELD] Hostile target '{p.name()}' (PID: {p.pid}) has illegally bound to port {port}. ANNIHILATING.",
+                        "ERROR",
+                    )
 
                     for child in p.children(recursive=True):
                         try:
@@ -4113,16 +5288,21 @@ def _port_shield_worker_daemon(port: int, target_process_name: str, stop_event: 
                 # This is normal. We do nothing and let the loop run again immediately.
                 pass
             except (psutil.AccessDenied, psutil.ZombieProcess) as e:
-                print_warning(f"[PORT SHIELD] Cannot access process on port {port} (PID: {process_on_port.pid}): {e}")
+                print_warning(
+                    f"[PORT SHIELD] Cannot access process on port {port} (PID: {process_on_port.pid}): {e}"
+                )
             except Exception as e_inner:
                 # Catch any other unexpected error during the process handling.
-                print_error(f"[PORT SHIELD] Inner loop error for PID {process_on_port.pid}: {e_inner}")
+                print_error(
+                    f"[PORT SHIELD] Inner loop error for PID {process_on_port.pid}: {e_inner}"
+                )
 
         else:
             # Port is free. ENTER LOW-IMPACT MODE.
             # This honors the "don't run the loop" request by relaxing frequency.
             # It dramatically reduces CPU usage when idle but remains vigilant.
             pass
+
 
 def _start_port_shield_daemon(port: int, target_process_name: str):
     """
@@ -4144,22 +5324,31 @@ def _start_port_shield_daemon(port: int, target_process_name: str):
         target=_port_shield_worker_daemon,
         args=(port, target_process_name.lower(), stop_event),
         name=f"PortShieldDaemon-{port}",
-        daemon=True  # CRITICAL: This ensures the thread dies if the main script crashes.
+        daemon=True,  # CRITICAL: This ensures the thread dies if the main script crashes.
     )
     shield_thread.start()
+
 
 # --- End Helper Logic ---
 if TUI_AVAILABLE:
     # --- CORRECTED IMPORTS ---
     # Imports are moved here to run AFTER pip installers.
-    from textual.app import App, ComposeResult
-    from textual.containers import Vertical, Horizontal
-    from textual.widgets import Header, Footer, Static, DataTable, Log, Sparkline # CORRECT: Sparkline is a widget
-    from textual.reactive import reactive
-    from textual.message import Message
-    from textual.binding import Binding
-    import psutil
     from collections import deque
+
+    import psutil
+    from textual.app import App, ComposeResult
+    from textual.binding import Binding
+    from textual.containers import Horizontal, Vertical
+    from textual.message import Message
+    from textual.reactive import reactive
+    from textual.widgets import (  # CORRECT: Sparkline is a widget
+        DataTable,
+        Footer,
+        Header,
+        Log,
+        Sparkline,
+        Static,
+    )
 
     # --- TUI HELPER WIDGETS (REFACTORED) ---
 
@@ -4186,14 +5375,13 @@ if TUI_AVAILABLE:
         def update_value(self, new_value: float) -> None:
             """Update the data for the graph AND update the text for the value label."""
             self.data.append(new_value)
-            
+
             # 1. Update the graph data
             self.query_one("#sparkline_graph", Sparkline).data = list(self.data)
-            
+
             # 2. Update the separate text label
             value_label = self.query_one(".value", Static)
             value_label.update(f"{new_value: >5.1f}%")
-
 
     class ServicesStatus(Static):
         """A widget to display the status of all managed services in a table."""
@@ -4223,11 +5411,11 @@ if TUI_AVAILABLE:
         def update_services_table(self) -> None:
             """Fetch latest process info and update the table."""
             table = self.query_one(DataTable)
-            
+
             # Preserve scroll position and cursor while updating
             cursor_row = table.cursor_row
             scroll_y = self.scroll_y
-            
+
             table.clear()
             with process_lock:
                 for proc, name, _, _ in running_processes:
@@ -4237,16 +5425,20 @@ if TUI_AVAILABLE:
                         if p.is_running() and p.status() != psutil.STATUS_ZOMBIE:
                             cpu = p.cpu_percent()
                             mem = p.memory_info().rss / (1024 * 1024)
-                        else: status_icon = "❌"
-                    except psutil.NoSuchProcess: status_icon = "❌"
-                    table.add_row(status_icon, name, str(proc.pid), f"{cpu:.1f}", f"{mem:.1f}")
-            
+                        else:
+                            status_icon = "❌"
+                    except psutil.NoSuchProcess:
+                        status_icon = "❌"
+                    table.add_row(
+                        status_icon, name, str(proc.pid), f"{cpu:.1f}", f"{mem:.1f}"
+                    )
+
             # Restore cursor and scroll
             if cursor_row < table.row_count:
                 # --- THIS IS THE FIX ---
                 # Use the move_cursor() method instead of direct assignment.
                 table.move_cursor(row=cursor_row)
-            
+
             self.scroll_y = scroll_y
 
     # --- MAIN TUI APPLICATION CLASS ---
@@ -4306,7 +5498,9 @@ if TUI_AVAILABLE:
         """
 
         BINDINGS = [
-            Binding(key="ctrl+c,ctrl+q", action="quit", description="Quit App", show=True),
+            Binding(
+                key="ctrl+c,ctrl+q", action="quit", description="Quit App", show=True
+            ),
         ]
 
         current_log_tail_thread: Optional[threading.Thread] = None
@@ -4327,9 +5521,11 @@ if TUI_AVAILABLE:
             """Called when the app is mounted."""
             # --- CORRECT: Set border titles programmatically ---
             self.query_one("#system_stats_container").border_title = "System Overview"
-            self.query_one("#services_status").border_title = "Managed Services (Select to View Log)"
+            self.query_one(
+                "#services_status"
+            ).border_title = "Managed Services (Select to View Log)"
             self.query_one("#service_log").border_title = "Logs"
-            
+
             self.set_interval(2, self.update_system_monitors)
             self.set_interval(3, self.check_services_health)
             self.last_net_io = psutil.net_io_counters()
@@ -4337,21 +5533,29 @@ if TUI_AVAILABLE:
         def update_system_monitors(self) -> None:
             """Update the CPU, Memory, and Network sparkline graphs."""
             # Update CPU
-            self.query_one("#cpu_monitor", SystemMonitor).update_value(psutil.cpu_percent())
+            self.query_one("#cpu_monitor", SystemMonitor).update_value(
+                psutil.cpu_percent()
+            )
             # Update Memory
-            self.query_one("#mem_monitor", SystemMonitor).update_value(psutil.virtual_memory().percent)
+            self.query_one("#mem_monitor", SystemMonitor).update_value(
+                psutil.virtual_memory().percent
+            )
             # Update Network
             current_net_io = psutil.net_io_counters()
             bytes_sent = current_net_io.bytes_sent - self.last_net_io.bytes_sent
             bytes_recv = current_net_io.bytes_recv - self.last_net_io.bytes_recv
             total_mbps = ((bytes_sent + bytes_recv) / 2) * 8 / (1024 * 1024)
-            self.query_one("#net_monitor", SystemMonitor).update_value(min(100, total_mbps))
+            self.query_one("#net_monitor", SystemMonitor).update_value(
+                min(100, total_mbps)
+            )
             self.last_net_io = current_net_io
 
         def check_services_health(self) -> None:
             check_and_restart_services()
 
-        def on_services_status_service_selected(self, message: ServicesStatus.ServiceSelected) -> None:
+        def on_services_status_service_selected(
+            self, message: ServicesStatus.ServiceSelected
+        ) -> None:
             log_widget = self.query_one("#service_log", Log)
             global tui_shutdown_event
             tui_shutdown_event.set()
@@ -4361,16 +5565,18 @@ if TUI_AVAILABLE:
             tui_shutdown_event = threading.Event()
             log_widget.clear()
             log_widget.border_title = f"Log: {message.service_name}"
-            
+
             self.current_log_tail_thread = threading.Thread(
                 target=tail_log_to_widget,
                 args=(message.log_file, log_widget),
-                daemon=True
+                daemon=True,
             )
             self.current_log_tail_thread.start()
 
         def action_quit(self) -> None:
-            self.query_one("#service_log", Log).write("\n[SYSTEM] Shutdown requested. Terminating all services...")
+            self.query_one("#service_log", Log).write(
+                "\n[SYSTEM] Shutdown requested. Terminating all services..."
+            )
             tui_shutdown_event.set()
             self.exit()
 
@@ -4385,95 +5591,147 @@ if TUI_AVAILABLE:
 # and global configurations (ROOT_DIR, REQUIRED_NODE_MAJOR, etc.) are defined correctly above this block.
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Zephyrine Launcher")
+    parser.add_argument(
+        "--host_cogAPI",
+        default="127.0.0.1:11434",
+        help="Host address for the Backend API (default: 127.0.0.1:11434)",
+    )
+    parser.add_argument(
+        "--host_UI",
+        default="127.0.0.1:5173",
+        help="Host address for the UI Frontend (default: 127.0.0.1:5173)",
+    )
+
+    # Use parse_known_args to avoid crashing if other flags are passed effectively
+    args, unknown = parser.parse_known_args()
+
+    # Update Globals
+    ZEPHYRINE_COG_API_HOST = args.host_cogAPI
+    ZEPHYRINE_UI_HOST = args.host_UI
+
+    print_system(
+        f"Configuration Loaded - API: {ZEPHYRINE_COG_API_HOST} | UI: {ZEPHYRINE_UI_HOST}"
+    )
     # ----------------------------------------------------
     # --- LAUNCHER INTEGRITY AND HASH CHECK (New Block)---
     # ----------------------------------------------------
     current_hash = calculate_launcher_hash()
-    
+
     # 1. Read stored hash
     stored_hash = None
     if os.path.exists(LAUNCHER_HASH_FILE):
         try:
-            with open(LAUNCHER_HASH_FILE, 'r', encoding='utf-8') as f:
+            with open(LAUNCHER_HASH_FILE, "r", encoding="utf-8") as f:
                 stored_hash = f.read().strip()
         except Exception:
             # If we can't read the old file, treat it as a difference.
-            print_warning("Could not read stored launcher hash. Assuming launcher file integrity change.")
-    
-    integrity_mismatch = (stored_hash is None or stored_hash != current_hash)
+            print_warning(
+                "Could not read stored launcher hash. Assuming launcher file integrity change."
+            )
+
+    integrity_mismatch = stored_hash is None or stored_hash != current_hash
 
     if integrity_mismatch:
         print_colored("WARNING", "--- LAUNCHER HAVE BEEN CHANGED! ---", "WARNING")
-        print_warning("Launcher.py content has changed since the last successful setup.")
+        print_warning(
+            "Launcher.py content has changed since the last successful setup."
+        )
         print_warning("Forcing full step to apply changes to the current setup!")
-        
+
         # 2. Delete the setup complete flag
         if os.path.exists(SETUP_COMPLETE_FLAG_FILE):
             os.remove(SETUP_COMPLETE_FLAG_FILE)
             print_system(f"Removed old setup flag: {SETUP_COMPLETE_FLAG_FILE}")
-        
+
         # 3. Write the new hash (We'll save the hash only AFTER successful completion later)
         # We delete the old hash file here if it exists, to ensure the new one gets written clean later.
         if os.path.exists(LAUNCHER_HASH_FILE):
             os.remove(LAUNCHER_HASH_FILE)
-            
+
     else:
         print_system("Launcher integrity check passed. Using existing environment.")
-    
+
     # ----------------------------------------------------
     # --- END LAUNCHER INTEGRITY CHECK -------------------
     # ----------------------------------------------------
     for attempt in range(1, MAX_SETUP_ATTEMPTS + 1):
-        print_colored("SYSTEM", f"--- Starting Setup Attempt {attempt}/{MAX_SETUP_ATTEMPTS} ---", "SUCCESS")
-        setup_failures = [] # Reset failures for this attempt
+        print_colored(
+            "SYSTEM",
+            f"--- Starting Setup Attempt {attempt}/{MAX_SETUP_ATTEMPTS} ---",
+            "SUCCESS",
+        )
+        setup_failures = []  # Reset failures for this attempt
         print_system("--- Project Zephyrine Launcher ---")
         print_system(f"Root directory: {ROOT_DIR}")
         print_system(f"Target Conda environment path: {TARGET_RUNTIME_ENV_PATH}")
         pythonruntimeversion = f"{sys.version.split()[0]}"
-        print_system(f"Initial Python Version check on this runtime execution: {pythonruntimeversion} on {platform.system()} ({platform.machine()})")
+        print_system(
+            f"Initial Python Version check on this runtime execution: {pythonruntimeversion} on {platform.system()} ({platform.machine()})"
+        )
 
         current_conda_env_path_check = os.getenv("CONDA_PREFIX")
         is_already_in_correct_env = False
         if current_conda_env_path_check:
             try:
-                norm_current_env_path = os.path.normcase(os.path.realpath(current_conda_env_path_check))
-                norm_target_env_path = os.path.normcase(os.path.realpath(TARGET_RUNTIME_ENV_PATH))
-                if os.path.isdir(norm_current_env_path) and \
-                        os.path.isdir(norm_target_env_path) and \
-                        norm_current_env_path == norm_target_env_path and \
-                        os.getenv("ZEPHYRINE_RELAUNCHED_IN_CONDA") == "1":  # Check the relaunch flag
+                norm_current_env_path = os.path.normcase(
+                    os.path.realpath(current_conda_env_path_check)
+                )
+                norm_target_env_path = os.path.normcase(
+                    os.path.realpath(TARGET_RUNTIME_ENV_PATH)
+                )
+                if (
+                    os.path.isdir(norm_current_env_path)
+                    and os.path.isdir(norm_target_env_path)
+                    and norm_current_env_path == norm_target_env_path
+                    and os.getenv("ZEPHYRINE_RELAUNCHED_IN_CONDA") == "1"
+                ):  # Check the relaunch flag
                     is_already_in_correct_env = True
                     ACTIVE_ENV_PATH = current_conda_env_path_check
             except Exception as e_path_check:
-                print_warning(f"Error comparing Conda paths during initial check: {e_path_check}")
+                print_warning(
+                    f"Error comparing Conda paths during initial check: {e_path_check}"
+                )
 
-        IS_IN_PROOT_ENV = os.path.exists("/etc/debian_version") and "TERMUX_VERSION" not in os.environ
+        IS_IN_PROOT_ENV = (
+            os.path.exists("/etc/debian_version") and "TERMUX_VERSION" not in os.environ
+        )
         if IS_IN_PROOT_ENV:
-            print_aetherhand("✅ Detected execution within containerized bootstrap (glibc) environment.")
+            print_aetherhand(
+                "✅ Detected execution within containerized bootstrap (glibc) environment."
+            )
 
         if is_already_in_correct_env:
             # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
-            print_system(f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})")
-            #-=-=-=-=-=[flickerPhoton]
+            print_system(
+                f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})"
+            )
+            # -=-=-=-=-=[flickerPhoton]
             # This is the crucial fix: Use the trusted 'conda' executable to reinstall
             # a compatible set of packaging tools for the Python 3.12 environment.
 
-
-
             if os.path.exists(SETUP_COMPLETE_FLAG_FILE):
                 # --- FAST PATH ---
-                print_colored("SUCCESS", "--- Fast Path Launch Detected: Skipping all checks ---", "SUCCESS")
+                print_colored(
+                    "SUCCESS",
+                    "--- Fast Path Launch Detected: Skipping all checks ---",
+                    "SUCCESS",
+                )
 
                 # Set up minimal required paths for launch, as these are not set on the fast path.
                 _sys_exec_dir = os.path.dirname(sys.executable)
                 PYTHON_EXECUTABLE = sys.executable
-                PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
-                HYPERCORN_EXECUTABLE = os.path.join(_sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
+                PIP_EXECUTABLE = os.path.join(
+                    _sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip"
+                )
+                HYPERCORN_EXECUTABLE = os.path.join(
+                    _sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn"
+                )
 
                 TUI_LIBRARIES_AVAILABLE = False
                 try:
-                    import textual
                     import psutil
+                    import textual
 
                     TUI_LIBRARIES_AVAILABLE = True
                 except ImportError:
@@ -4487,113 +5745,187 @@ if __name__ == "__main__":
                 # The cleanup will be handled by the atexit handler.
                 break
             else:
-                #Slow path installation mode
-                print_warning("--- First-Time Verification Run: Performing all checks... ---")
+                # Slow path installation mode
+                print_warning(
+                    "--- First-Time Verification Run: Performing all checks... ---"
+                )
                 print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
             print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
-            
-            #define PIP executable
-            PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
-            if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip" # Fallback if direct path missing
-            
-            # --- CRITICAL FIX: Repair Corrupted SQLAlchemy Extensions ---
-            print_system("--- Checking and Repairing SQLAlchemy Extensions for Python 3.13 ---")
 
-            # 1. Force remove the potentially broken SQLAlchemy 
-            if not run_command([PIP_EXECUTABLE, "uninstall", "-y", "SQLAlchemy"], ROOT_DIR, "PIP-UNINSTALL-SQLA", check=False):
+            # define PIP executable
+            PIP_EXECUTABLE = os.path.join(
+                _sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip"
+            )
+            if not os.path.exists(PIP_EXECUTABLE):
+                PIP_EXECUTABLE = (
+                    shutil.which("pip") or "pip"
+                )  # Fallback if direct path missing
+
+            # --- CRITICAL FIX: Repair Corrupted SQLAlchemy Extensions ---
+            print_system(
+                "--- Checking and Repairing SQLAlchemy Extensions for Python 3.13 ---"
+            )
+
+            # 1. Force remove the potentially broken SQLAlchemy
+            if not run_command(
+                [PIP_EXECUTABLE, "uninstall", "-y", "SQLAlchemy"],
+                ROOT_DIR,
+                "PIP-UNINSTALL-SQLA",
+                check=False,
+            ):
                 print_warning("SQLAlchemy not found for uninstall, proceeding.")
 
             # 2. Force reinstall the package, ignoring cached versions, and using the new C compiler setup
-            if not run_command([PIP_EXECUTABLE, "install", "--no-cache-dir", "SQLAlchemy==2.0.45"], ROOT_DIR, "PIP-REINSTALL-SQLA", check=True):
-                print_error("FATAL: Failed to cleanly reinstall SQLAlchemy. Cannot proceed.")
-                setup_failures.append("Failed to install/ensure SQLAlchemy is compiled correctly.")
+            if not run_command(
+                [PIP_EXECUTABLE, "install", "--no-cache-dir", "SQLAlchemy==2.0.45"],
+                ROOT_DIR,
+                "PIP-REINSTALL-SQLA",
+                check=True,
+            ):
+                print_error(
+                    "FATAL: Failed to cleanly reinstall SQLAlchemy. Cannot proceed."
+                )
+                setup_failures.append(
+                    "Failed to install/ensure SQLAlchemy is compiled correctly."
+                )
             else:
                 print_system("SQLAlchemy successfully repaired and recompiled.")
-                
-            # --- End of Repair Block ---
 
+            # --- End of Repair Block ---
 
             # --- START: Set Hugging Face Cache Directory (NEW) ---
             print_system("--- Configuring Hugging Face Cache Directory ---")
             try:
                 # Use a subdirectory within the static model pool to keep all downloads together
-                hf_cache_dir = os.path.join(STATIC_MODEL_POOL_PATH, 'huggingface_cache')
+                hf_cache_dir = os.path.join(STATIC_MODEL_POOL_PATH, "huggingface_cache")
                 os.makedirs(hf_cache_dir, exist_ok=True)
-                os.environ['HF_HOME'] = hf_cache_dir
-                print_system(f"Hugging Face cache directory set to: {os.environ['HF_HOME']}")
+                os.environ["HF_HOME"] = hf_cache_dir
+                print_system(
+                    f"Hugging Face cache directory set to: {os.environ['HF_HOME']}"
+                )
             except Exception as e_hf_cache:
-                print_error(f"CRITICAL: Failed to set custom Hugging Face cache directory: {e_hf_cache}")
-                setup_failures.append("Failed to configure Hugging Face cache directory.")
+                print_error(
+                    f"CRITICAL: Failed to set custom Hugging Face cache directory: {e_hf_cache}"
+                )
+                setup_failures.append(
+                    "Failed to configure Hugging Face cache directory."
+                )
 
             # Ensure CONDA_EXECUTABLE is set in the relaunched script context
-            if globals().get('CONDA_EXECUTABLE') is None:
-                print_system("Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH...")
+            if globals().get("CONDA_EXECUTABLE") is None:
+                print_system(
+                    "Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH..."
+                )
                 loaded_from_cache = False
                 if os.path.exists(CONDA_PATH_CACHE_FILE):
                     try:
-                        with open(CONDA_PATH_CACHE_FILE, 'r', encoding='utf-8') as f_cache:
+                        with open(
+                            CONDA_PATH_CACHE_FILE, "r", encoding="utf-8"
+                        ) as f_cache:
                             cached_path = f_cache.read().strip()
                         if cached_path and _verify_conda_path(cached_path):
-                            globals()['CONDA_EXECUTABLE'] = cached_path
-                            print_system(f"Using Conda executable from cache in relaunched script: {CONDA_EXECUTABLE}")
+                            globals()["CONDA_EXECUTABLE"] = cached_path
+                            print_system(
+                                f"Using Conda executable from cache in relaunched script: {CONDA_EXECUTABLE}"
+                            )
                             loaded_from_cache = True
                         else:
-                            print_warning("Cached Conda path invalid/unverified in relaunched script.")
+                            print_warning(
+                                "Cached Conda path invalid/unverified in relaunched script."
+                            )
                     except Exception as e_cache_read:
-                        print_warning(f"Error reading Conda cache in relaunched script: {e_cache_read}")
+                        print_warning(
+                            f"Error reading Conda cache in relaunched script: {e_cache_read}"
+                        )
                 if not loaded_from_cache:
-                    conda_exe_from_which = shutil.which("conda.exe" if IS_WINDOWS else "conda")
-                    if conda_exe_from_which and _verify_conda_path(conda_exe_from_which):
-                        globals()['CONDA_EXECUTABLE'] = conda_exe_from_which
-                        print_system(f"Found Conda via shutil.which in relaunched script: {CONDA_EXECUTABLE}")
+                    conda_exe_from_which = shutil.which(
+                        "conda.exe" if IS_WINDOWS else "conda"
+                    )
+                    if conda_exe_from_which and _verify_conda_path(
+                        conda_exe_from_which
+                    ):
+                        globals()["CONDA_EXECUTABLE"] = conda_exe_from_which
+                        print_system(
+                            f"Found Conda via shutil.which in relaunched script: {CONDA_EXECUTABLE}"
+                        )
                     else:
-                        print_error("CRITICAL: Conda executable could not be determined. Conda package installs will fail.")
+                        print_error(
+                            "CRITICAL: Conda executable could not be determined. Conda package installs will fail."
+                        )
 
+            # Safety part just to make sure if it's going through the first one
+            if globals().get("CONDA_EXECUTABLE") is None:
+                print_error(
+                    "CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL."
+                )
+                setup_failures.append(
+                    "Failed to install/ensure critical tool: conda is not found on operational runtime"
+                )
 
-            #Safety part just to make sure if it's going through the first one
-            if globals().get('CONDA_EXECUTABLE') is None:
-                print_error("CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL.")
-                setup_failures.append("Failed to install/ensure critical tool: conda is not found on operational runtime")
-
-            #for proot it is a MUST to use jemalloc due to strange ness of the memory management
+            # for proot it is a MUST to use jemalloc due to strange ness of the memory management
             if IS_IN_PROOT_ENV:
-                print_system("--- CRITICAL: Enforcing System Jemalloc (via apt) for Termux/Proot stability ---")
-                
+                print_system(
+                    "--- CRITICAL: Enforcing System Jemalloc (via apt) for Termux/Proot stability ---"
+                )
+
                 # 1. Install libjemalloc2 via system APT
                 # We use DEBIAN_FRONTEND=noninteractive to prevent hanging on prompts
                 apt_env = os.environ.copy()
                 apt_env["DEBIAN_FRONTEND"] = "noninteractive"
-                
+
                 print_system("Updating apt cache...")
                 # We ignore errors on update in case of network blips, we try install anyway
-                run_command(["apt-get", "update"], ROOT_DIR, "APT-UPDATE", check=False, env_override=apt_env)
-                
+                run_command(
+                    ["apt-get", "update"],
+                    ROOT_DIR,
+                    "APT-UPDATE",
+                    check=False,
+                    env_override=apt_env,
+                )
+
                 print_system("Installing libjemalloc2...")
-                if not run_command(["apt-get", "install", "-y", "libjemalloc2"], ROOT_DIR, "APT-INSTALL-JEMALLOC", check=True, env_override=apt_env):
+                if not run_command(
+                    ["apt-get", "install", "-y", "libjemalloc2"],
+                    ROOT_DIR,
+                    "APT-INSTALL-JEMALLOC",
+                    check=True,
+                    env_override=apt_env,
+                ):
                     print_error("FATAL: Failed to install libjemalloc2 via apt.")
-                    print_error("This is required to prevent Exit 127 errors on Node/Conda.")
-                    sys.exit(1) # Fatal as requested
+                    print_error(
+                        "This is required to prevent Exit 127 errors on Node/Conda."
+                    )
+                    sys.exit(1)  # Fatal as requested
 
                 # 2. Locate the shared library file
                 # Debian/Ubuntu puts it in arch-specific folders. We check common ones.
                 jemalloc_path = None
                 possible_paths = [
-                    "/usr/lib/aarch64-linux-gnu/libjemalloc.so.2", # Standard ARM64
-                    "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2", # Standard x86_64
-                    "/usr/lib/libjemalloc.so.2"                     # Fallback
+                    "/usr/lib/aarch64-linux-gnu/libjemalloc.so.2",  # Standard ARM64
+                    "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2",  # Standard x86_64
+                    "/usr/lib/libjemalloc.so.2",  # Fallback
                 ]
 
                 for p in possible_paths:
                     if os.path.exists(p):
                         jemalloc_path = p
                         break
-                
+
                 # If standard paths fail, try a quick find
                 if not jemalloc_path:
                     try:
-                        print_warning("Standard jemalloc paths empty. Searching /usr/lib...")
+                        print_warning(
+                            "Standard jemalloc paths empty. Searching /usr/lib..."
+                        )
                         # This finds the file and returns the first line
-                        find_cmd = ["find", "/usr/lib", "-name", "libjemalloc.so.2", "-print", "-quit"]
+                        find_cmd = [
+                            "find",
+                            "/usr/lib",
+                            "-name",
+                            "libjemalloc.so.2",
+                            "-print",
+                            "-quit",
+                        ]
                         found = subprocess.check_output(find_cmd, text=True).strip()
                         if found:
                             jemalloc_path = found
@@ -4606,27 +5938,44 @@ if __name__ == "__main__":
                     print_system("Injecting LD_PRELOAD...")
                     os.environ["LD_PRELOAD"] = jemalloc_path
                 else:
-                    print_error("FATAL: libjemalloc2 package installed, but .so file could not be located.")
-                    sys.exit(1) # Fatal as requested
+                    print_error(
+                        "FATAL: libjemalloc2 package installed, but .so file could not be located."
+                    )
+                    sys.exit(1)  # Fatal as requested
 
             # --- Read AUTODETECTED environment variables ---
-            AUTO_PRIMARY_GPU_BACKEND = os.getenv("AUTODETECTED_PRIMARY_GPU_BACKEND", "cpu")
+            AUTO_PRIMARY_GPU_BACKEND = os.getenv(
+                "AUTODETECTED_PRIMARY_GPU_BACKEND", "cpu"
+            )
             AUTO_CUDA_AVAILABLE = os.getenv("AUTODETECTED_CUDA_AVAILABLE") == "1"
             AUTO_METAL_AVAILABLE = os.getenv("AUTODETECTED_METAL_AVAILABLE") == "1"
             AUTO_VULKAN_AVAILABLE = os.getenv("AUTODETECTED_VULKAN_AVAILABLE") == "1"
             AUTO_COREML_POSSIBLE = os.getenv("AUTODETECTED_COREML_POSSIBLE") == "1"
             print_system(
-                f"Auto-detected preferences received: GPU_BACKEND='{AUTO_PRIMARY_GPU_BACKEND}', CUDA={AUTO_CUDA_AVAILABLE}, METAL={AUTO_METAL_AVAILABLE}, VULKAN={AUTO_VULKAN_AVAILABLE}, COREML_POSSIBLE={AUTO_COREML_POSSIBLE}")
+                f"Auto-detected preferences received: GPU_BACKEND='{AUTO_PRIMARY_GPU_BACKEND}', CUDA={AUTO_CUDA_AVAILABLE}, METAL={AUTO_METAL_AVAILABLE}, VULKAN={AUTO_VULKAN_AVAILABLE}, COREML_POSSIBLE={AUTO_COREML_POSSIBLE}"
+            )
 
             if "TERMUX_VERSION" in os.environ:
                 gpu_failure_flag_path = "/root/.gpu_acceleration_failed"
                 if os.path.exists(gpu_failure_flag_path):
-                    print_colored("WARNING", "------------------------------------------------------------", "WARNING")
-                    print_colored("WARNING", "             Entering CPU Fallback Mode", "WARNING")
-                    print_warning("GPU driver verification failed during the initial setup.")
+                    print_colored(
+                        "WARNING",
+                        "------------------------------------------------------------",
+                        "WARNING",
+                    )
+                    print_colored(
+                        "WARNING", "             Entering CPU Fallback Mode", "WARNING"
+                    )
+                    print_warning(
+                        "GPU driver verification failed during the initial setup."
+                    )
                     print_warning("All models Will all run on CPU")
                     print_warning("Performance will be significantly reduced.")
-                    print_colored("WARNING", "------------------------------------------------------------", "WARNING")
+                    print_colored(
+                        "WARNING",
+                        "------------------------------------------------------------",
+                        "WARNING",
+                    )
 
                     # This is the override logic. We force all GPU flags to false.
                     AUTO_PRIMARY_GPU_BACKEND = "cpu"
@@ -4634,50 +5983,74 @@ if __name__ == "__main__":
                     AUTO_METAL_AVAILABLE = False
                     AUTO_VULKAN_AVAILABLE = False
 
-
             # Set up core Python executable paths (already in Conda env)
             _sys_exec_dir = os.path.dirname(sys.executable)
             PYTHON_EXECUTABLE = sys.executable
 
-            print_system(f"Checking python version again, it could betrayed us! changed in the mid exec {sys.version.split()[0]} ")
+            print_system(
+                f"Checking python version again, it could betrayed us! changed in the mid exec {sys.version.split()[0]} "
+            )
 
-            
-            HYPERCORN_EXECUTABLE = os.path.join(_sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
-            if not os.path.exists(HYPERCORN_EXECUTABLE): HYPERCORN_EXECUTABLE = shutil.which("hypercorn") or "hypercorn" # Fallback
+            HYPERCORN_EXECUTABLE = os.path.join(
+                _sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn"
+            )
+            if not os.path.exists(HYPERCORN_EXECUTABLE):
+                HYPERCORN_EXECUTABLE = (
+                    shutil.which("hypercorn") or "hypercorn"
+                )  # Fallback
 
-
-
-            
             print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
 
-            #define PIP executable
-            PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
-            if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip" # Fallback if direct path missing
+            # define PIP executable
+            PIP_EXECUTABLE = os.path.join(
+                _sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip"
+            )
+            if not os.path.exists(PIP_EXECUTABLE):
+                PIP_EXECUTABLE = (
+                    shutil.which("pip") or "pip"
+                )  # Fallback if direct path missing
             print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
             # --- CRITICAL FIX: Repair Corrupted SQLAlchemy Extensions ---
-            print_system("--- Checking and Repairing SQLAlchemy Extensions for Python 3.13 ---")
+            print_system(
+                "--- Checking and Repairing SQLAlchemy Extensions for Python 3.13 ---"
+            )
 
-            # 1. Force remove the potentially broken SQLAlchemy 
-            if not run_command([PIP_EXECUTABLE, "uninstall", "-y", "SQLAlchemy"], ROOT_DIR, "PIP-UNINSTALL-SQLA", check=False):
+            # 1. Force remove the potentially broken SQLAlchemy
+            if not run_command(
+                [PIP_EXECUTABLE, "uninstall", "-y", "SQLAlchemy"],
+                ROOT_DIR,
+                "PIP-UNINSTALL-SQLA",
+                check=False,
+            ):
                 print_warning("SQLAlchemy not found for uninstall, proceeding.")
 
             # 2. Force reinstall the package, ignoring cached versions, and using the new C compiler setup
-            if not run_command([PIP_EXECUTABLE, "install", "--no-cache-dir", "SQLAlchemy==2.0.45"], ROOT_DIR, "PIP-REINSTALL-SQLA", check=True):
-                print_error("FATAL: Failed to cleanly reinstall SQLAlchemy. Cannot proceed.")
-                setup_failures.append("Failed to install/ensure SQLAlchemy is compiled correctly.")
+            if not run_command(
+                [PIP_EXECUTABLE, "install", "--no-cache-dir", "SQLAlchemy==2.0.45"],
+                ROOT_DIR,
+                "PIP-REINSTALL-SQLA",
+                check=True,
+            ):
+                print_error(
+                    "FATAL: Failed to cleanly reinstall SQLAlchemy. Cannot proceed."
+                )
+                setup_failures.append(
+                    "Failed to install/ensure SQLAlchemy is compiled correctly."
+                )
             else:
                 print_system("SQLAlchemy successfully repaired and recompiled.")
-                
+
             # --- End of Repair Block ---
 
             # --- Engine Python Dependencies (requirements.txt) ---
             engine_req_path = os.path.join(ROOT_DIR, "requirements.txt")
-            if not os.path.exists(engine_req_path): print_error(
-                f"requirements.txt not found: {engine_req_path}"); setup_failures.append(
-                f"Guru Meditation: requirements.txt not found")
+            if not os.path.exists(engine_req_path):
+                print_error(f"requirements.txt not found: {engine_req_path}")
+                setup_failures.append(f"Guru Meditation: requirements.txt not found")
             pip_install_success = False
             MAX_PIP_RETRIES = int(
-                os.getenv("PIP_INSTALL_RETRIES", 3))  # Reduced from 99999 to 3 for more realistic retry
+                os.getenv("PIP_INSTALL_RETRIES", 3)
+            )  # Reduced from 99999 to 3 for more realistic retry
             PIP_RETRY_DELAY_SECONDS = 5
 
             core_packages_to_install = [
@@ -4685,38 +6058,61 @@ if __name__ == "__main__":
                 "tqdm",
                 "dotenv",
                 "rich",
-                "textual",       # A modern version of textual for best performance and features
+                "textual",  # A modern version of textual for best performance and features
                 "playwright",
                 "multiprocess",
-                "setuptools"
+                "setuptools",
             ]
 
             # Construct the pip command with the --upgrade flag
-            pip_install_command = [PIP_EXECUTABLE, "install", "--upgrade"] + core_packages_to_install
+            pip_install_command = [
+                PIP_EXECUTABLE,
+                "install",
+                "--upgrade",
+            ] + core_packages_to_install
 
             if not run_command(pip_install_command, ROOT_DIR, "PIP-UTILS"):
-                print_error("Core utility installation/upgrade failed. TUI may not function correctly."); 
-                setup_failures.append("Failed to install/upgrade critical Python utilities like rich and textual.")
+                print_error(
+                    "Core utility installation/upgrade failed. TUI may not function correctly."
+                )
+                setup_failures.append(
+                    "Failed to install/upgrade critical Python utilities like rich and textual."
+                )
 
             # Initialize requests session for file downloads
             try:
-                import requests; from tqdm import tqdm # Import here to ensure they are available after pip install
+                import requests  # Import here to ensure they are available after pip install
+                from tqdm import tqdm
             except ImportError:
-                print_error("Failed to import requests/tqdm after installation. Exiting."); setup_failures.append("Failed to install/ensure critical tool: failed to import requests and tqdm")
-            import requests #enforce import
+                print_error(
+                    "Failed to import requests/tqdm after installation. Exiting."
+                )
+                setup_failures.append(
+                    "Failed to install/ensure critical tool: failed to import requests and tqdm"
+                )
+            import requests  # enforce import
+
             requests_session = requests.Session()
-            adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20)
-            requests_session.mount('http://', adapter)
-            requests_session.mount('https://', adapter)
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=10, pool_maxsize=20
+            )
+            requests_session.mount("http://", adapter)
+            requests_session.mount("https://", adapter)
 
             _ensure_playwright_browsers()
 
-            print_system("--- Ensuring critical environment utilities (patchelf, ncurses) ---")
+            print_system(
+                "--- Ensuring critical environment utilities (patchelf, ncurses) ---"
+            )
             if platform.system() == "Linux":
                 if not _ensure_conda_package("patchelf", is_critical=True):
-                    setup_failures.append("Failed to install patchelf, which is critical for fixing library paths.")
+                    setup_failures.append(
+                        "Failed to install patchelf, which is critical for fixing library paths."
+                    )
             if not _ensure_conda_package("ncurses", is_critical=True):
-                setup_failures.append("Failed to install ncurses, which is critical for terminal UI operations.")
+                setup_failures.append(
+                    "Failed to install ncurses, which is critical for terminal UI operations."
+                )
 
             # --- START: Robust Node.js & npm setup (MOVED HERE) ---
             print_system("--- Ensuring Node.js & npm Dependencies ---")
@@ -4728,94 +6124,204 @@ if __name__ == "__main__":
                 # Attempt to detect the currently active Node.js/npm versions
                 # Use subprocess.run to capture output and check return code.
                 # Running them via PYTHON_EXECUTABLE -c "import subprocess..." ensures it uses the Conda Python's PATH.
-                node_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['node', '-v'], text=True, stderr=subprocess.DEVNULL).strip())"]
-                npm_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['npm', '-v'], text=True, stderr=subprocess.DEVNULL).strip())"]
+                node_check_cmd = [
+                    PYTHON_EXECUTABLE,
+                    "-c",
+                    "import subprocess; print(subprocess.check_output(['node', '-v'], text=True, stderr=subprocess.DEVNULL).strip())",
+                ]
+                npm_check_cmd = [
+                    PYTHON_EXECUTABLE,
+                    "-c",
+                    "import subprocess; print(subprocess.check_output(['npm', '-v'], text=True, stderr=subprocess.DEVNULL).strip())",
+                ]
 
-                node_proc = subprocess.run(node_check_cmd, capture_output=True, text=True, check=False, timeout=10)
-                npm_proc = subprocess.run(npm_check_cmd, capture_output=True, text=True, check=False, timeout=10)
+                node_proc = subprocess.run(
+                    node_check_cmd,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=10,
+                )
+                npm_proc = subprocess.run(
+                    npm_check_cmd,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=10,
+                )
 
-                current_node_version_output = node_proc.stdout.strip() if node_proc.returncode == 0 else ""
-                current_npm_version_output = npm_proc.stdout.strip() if npm_proc.returncode == 0 else ""
+                current_node_version_output = (
+                    node_proc.stdout.strip() if node_proc.returncode == 0 else ""
+                )
+                current_npm_version_output = (
+                    npm_proc.stdout.strip() if npm_proc.returncode == 0 else ""
+                )
 
                 current_node_major = 0
                 if current_node_version_output:
                     try:
-                        current_node_major = int(current_node_version_output[1:].split('.')[0]) # Remove 'v' prefix
+                        current_node_major = int(
+                            current_node_version_output[1:].split(".")[0]
+                        )  # Remove 'v' prefix
                     except ValueError:
-                        print_warning(f"Could not parse Node.js version: '{current_node_version_output}'. Assuming old or invalid.")
+                        print_warning(
+                            f"Could not parse Node.js version: '{current_node_version_output}'. Assuming old or invalid."
+                        )
 
                 current_npm_major = 0
                 if current_npm_version_output:
                     try:
-                        current_npm_major = int(current_npm_version_output.split('.')[0])
+                        current_npm_major = int(
+                            current_npm_version_output.split(".")[0]
+                        )
                     except ValueError:
-                        print_warning(f"Could not parse npm version: '{current_npm_version_output}'. Assuming old or invalid.")
+                        print_warning(
+                            f"Could not parse npm version: '{current_npm_version_output}'. Assuming old or invalid."
+                        )
 
-                print_system(f"Currently active Node.js version: {current_node_version_output or 'Not Found'} (Major: {current_node_major})")
-                print_system(f"Currently active npm version: {current_npm_version_output or 'Not Found'} (Major: {current_npm_major})")
+                print_system(
+                    f"Currently active Node.js version: {current_node_version_output or 'Not Found'} (Major: {current_node_major})"
+                )
+                print_system(
+                    f"Currently active npm version: {current_npm_version_output or 'Not Found'} (Major: {current_npm_major})"
+                )
 
                 # Decision logic: If node/npm not found, or found but too old
-                if current_node_major < REQUIRED_NODE_MAJOR or current_npm_major < REQUIRED_NPM_MAJOR:
-                    print_warning(f"Active Node.js/npm version is too old or not found. Required: Node {REQUIRED_NODE_MAJOR}+, npm {REQUIRED_NPM_MAJOR}+. Found: Node {current_node_major}, npm {current_npm_major}.")
+                if (
+                    current_node_major < REQUIRED_NODE_MAJOR
+                    or current_npm_major < REQUIRED_NPM_MAJOR
+                ):
+                    print_warning(
+                        f"Active Node.js/npm version is too old or not found. Required: Node {REQUIRED_NODE_MAJOR}+, npm {REQUIRED_NPM_MAJOR}+. Found: Node {current_node_major}, npm {current_npm_major}."
+                    )
                     needs_node_install_or_reinstall = True
                 else:
                     print_system("Active Node.js/npm versions meet requirements.")
                     # Warn if Node.js/npm is significantly newer than specified (usually okay, but good to note)
                     if current_node_major > REQUIRED_NODE_MAJOR:
-                        print_warning(f"Installed Node.js version ({current_node_major}) is newer than specified ({REQUIRED_NODE_MAJOR}). Proceeding.")
+                        print_warning(
+                            f"Installed Node.js version ({current_node_major}) is newer than specified ({REQUIRED_NODE_MAJOR}). Proceeding."
+                        )
                     if current_npm_major > REQUIRED_NPM_MAJOR:
-                        print_warning(f"Installed npm version ({current_npm_major}) is newer than specified ({REQUIRED_NPM_MAJOR}). Proceeding.")
+                        print_warning(
+                            f"Installed npm version ({current_npm_major}) is newer than specified ({REQUIRED_NPM_MAJOR}). Proceeding."
+                        )
 
             except Exception as e:
                 # Catch all errors during initial version detection (e.g., command not found)
-                print_warning(f"Could not reliably determine current Node.js/npm versions ({e}). Assuming fresh install/reinstall is needed.")
+                print_warning(
+                    f"Could not reliably determine current Node.js/npm versions ({e}). Assuming fresh install/reinstall is needed."
+                )
                 needs_node_install_or_reinstall = True
 
             if needs_node_install_or_reinstall:
-                print_system(f"Attempting to install/reinstall Node.js ({node_package_spec}) and npm...")
+                print_system(
+                    f"Attempting to install/reinstall Node.js ({node_package_spec}) and npm..."
+                )
 
                 # CRITICAL: Force removal of 'nodejs' from the Conda environment before reinstalling.
                 # This ensures that even if a corrupted or old version exists *inside* the Conda env,
                 # it's properly removed before the new install.
-                print_system(f"Attempting to remove old 'nodejs' packages from '{os.path.basename(TARGET_RUNTIME_ENV_PATH)}' before reinstall...")
+                print_system(
+                    f"Attempting to remove old 'nodejs' packages from '{os.path.basename(TARGET_RUNTIME_ENV_PATH)}' before reinstall..."
+                )
                 # Use check=False because the package might not be there, or removal might fail partially,
                 # but we still want to try the install.
-                remove_cmd = [CONDA_EXECUTABLE, "remove", "--yes", "--prefix", TARGET_RUNTIME_ENV_PATH, "nodejs", "npm"]
-                if not run_command(remove_cmd, cwd=ROOT_DIR, name="CONDA-REMOVE-NODEJS-NPM", check=False):
-                    print_warning("Failed to fully remove existing nodejs/npm packages. Proceeding with install, but issues may persist.")
+                remove_cmd = [
+                    CONDA_EXECUTABLE,
+                    "remove",
+                    "--yes",
+                    "--prefix",
+                    TARGET_RUNTIME_ENV_PATH,
+                    "nodejs",
+                    "npm",
+                ]
+                if not run_command(
+                    remove_cmd,
+                    cwd=ROOT_DIR,
+                    name="CONDA-REMOVE-NODEJS-NPM",
+                    check=False,
+                ):
+                    print_warning(
+                        "Failed to fully remove existing nodejs/npm packages. Proceeding with install, but issues may persist."
+                    )
                 else:
                     print_system("Old nodejs/npm packages removed (if present).")
 
                 # Now, proceed with the install via _ensure_conda_package.
                 # This call will actually run the `conda install` command.
 
-
-                if not _ensure_conda_package_version("nodejs", "node", REQUIRED_NODE_MAJOR):
-                    print_error(f"Failed to install Node.js {REQUIRED_NODE_MAJOR}.x in Conda environment. Exiting.")
-                    setup_failures.append("Failed to install/ensure critical legacy tool: node.js failed to install or mismatch on the version")
-                print_system(f"Node.js {REQUIRED_NODE_MAJOR}.x and bundled npm should now be installed.")
+                if not _ensure_conda_package_version(
+                    "nodejs", "node", REQUIRED_NODE_MAJOR
+                ):
+                    print_error(
+                        f"Failed to install Node.js {REQUIRED_NODE_MAJOR}.x in Conda environment. Exiting."
+                    )
+                    setup_failures.append(
+                        "Failed to install/ensure critical legacy tool: node.js failed to install or mismatch on the version"
+                    )
+                print_system(
+                    f"Node.js {REQUIRED_NODE_MAJOR}.x and bundled npm should now be installed."
+                )
 
                 # Re-verify immediately after installation to ensure success
                 try:
-                    post_install_node_version_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['node', '-v'], text=True, stderr=subprocess.PIPE).strip())"]
-                    post_install_npm_version_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['npm', '-v'], text=True, stderr=subprocess.PIPE).strip())"]
+                    post_install_node_version_check_cmd = [
+                        PYTHON_EXECUTABLE,
+                        "-c",
+                        "import subprocess; print(subprocess.check_output(['node', '-v'], text=True, stderr=subprocess.PIPE).strip())",
+                    ]
+                    post_install_npm_version_check_cmd = [
+                        PYTHON_EXECUTABLE,
+                        "-c",
+                        "import subprocess; print(subprocess.check_output(['npm', '-v'], text=True, stderr=subprocess.PIPE).strip())",
+                    ]
 
-                    post_install_node_version = subprocess.check_output(post_install_node_version_check_cmd, text=True, stderr=subprocess.PIPE).strip()
-                    post_install_npm_version = subprocess.check_output(post_install_npm_version_check_cmd, text=True, stderr=subprocess.PIPE).strip()
+                    post_install_node_version = subprocess.check_output(
+                        post_install_node_version_check_cmd,
+                        text=True,
+                        stderr=subprocess.PIPE,
+                    ).strip()
+                    post_install_npm_version = subprocess.check_output(
+                        post_install_npm_version_check_cmd,
+                        text=True,
+                        stderr=subprocess.PIPE,
+                    ).strip()
 
-                    post_install_node_major = int(post_install_node_version[1:].split('.')[0])
-                    post_install_npm_major = int(post_install_npm_version.split('.')[0])
+                    post_install_node_major = int(
+                        post_install_node_version[1:].split(".")[0]
+                    )
+                    post_install_npm_major = int(post_install_npm_version.split(".")[0])
 
-                    if post_install_node_major < REQUIRED_NODE_MAJOR or post_install_npm_major < REQUIRED_NPM_MAJOR:
-                        print_error(f"ERROR: Node.js/npm still too old AFTER installation attempt. Node: {post_install_node_version}, npm: {post_install_npm_version}")
-                        print_error("This indicates a deeper Conda environment or PATH issue. Manual intervention needed (e.g., `rm -rf zephyrineRuntimeVenv` then retry).")
-                        setup_failures.append("Failed to install/ensure critical tool: Version mismatch or unsupported old version after installation")
+                    if (
+                        post_install_node_major < REQUIRED_NODE_MAJOR
+                        or post_install_npm_major < REQUIRED_NPM_MAJOR
+                    ):
+                        print_error(
+                            f"ERROR: Node.js/npm still too old AFTER installation attempt. Node: {post_install_node_version}, npm: {post_install_npm_version}"
+                        )
+                        print_error(
+                            "This indicates a deeper Conda environment or PATH issue. Manual intervention needed (e.g., `rm -rf zephyrineRuntimeVenv` then retry)."
+                        )
+                        setup_failures.append(
+                            "Failed to install/ensure critical tool: Version mismatch or unsupported old version after installation"
+                        )
                     else:
-                        print_system(f"SUCCESS: Node.js {post_install_node_version} and npm {post_install_npm_version} are now active and meet requirements.")
+                        print_system(
+                            f"SUCCESS: Node.js {post_install_node_version} and npm {post_install_npm_version} are now active and meet requirements."
+                        )
 
-                except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
-                    print_error(f"CRITICAL: Failed to verify Node.js/npm versions immediately after installation attempt: {e}")
-                    setup_failures.append(f"Failed to install/ensure critical tool: Version mismatch or unsupported old version after installation: {e}")
+                except (
+                    subprocess.CalledProcessError,
+                    FileNotFoundError,
+                    ValueError,
+                ) as e:
+                    print_error(
+                        f"CRITICAL: Failed to verify Node.js/npm versions immediately after installation attempt: {e}"
+                    )
+                    setup_failures.append(
+                        f"Failed to install/ensure critical tool: Version mismatch or unsupported old version after installation: {e}"
+                    )
             # End if needs_node_install_or_reinstall
 
             # Final update of global NPM_CMD variable with the path to the now-correct npm
@@ -4824,103 +6330,188 @@ if __name__ == "__main__":
             conda_bin_dir = os.path.dirname(PYTHON_EXECUTABLE)
             explicit_npm_path = os.path.join(conda_bin_dir, npm_exe_name)
             if os.path.exists(explicit_npm_path):
-                globals()['NPM_CMD'] = explicit_npm_path
+                globals()["NPM_CMD"] = explicit_npm_path
             else:
                 # If for some reason it's not there, fall back to shutil.which as a last resort.
                 print_warning(
-                    f"Could not find npm at expected path '{explicit_npm_path}'. Falling back to PATH search.")
-                globals()['NPM_CMD'] = shutil.which(npm_exe_name) or npm_exe_name
+                    f"Could not find npm at expected path '{explicit_npm_path}'. Falling back to PATH search."
+                )
+                globals()["NPM_CMD"] = shutil.which(npm_exe_name) or npm_exe_name
 
             # Also check for node itself, as npm depends on it
-            if not globals()['NPM_CMD'] or not shutil.which("node"):
-                print_error(f"CRITICAL: '{npm_exe_name}' or 'node' executable not found in Conda environment PATH after all installation attempts. Node.js setup failed. Exiting.")
-                setup_failures.append(f"Failed to install/ensure critical tool: '{npm_exe_name}' or 'node' executable not found in Conda environment PATH after all installation attempts. Node.js setup failed. Exiting.")
+            if not globals()["NPM_CMD"] or not shutil.which("node"):
+                print_error(
+                    f"CRITICAL: '{npm_exe_name}' or 'node' executable not found in Conda environment PATH after all installation attempts. Node.js setup failed. Exiting."
+                )
+                setup_failures.append(
+                    f"Failed to install/ensure critical tool: '{npm_exe_name}' or 'node' executable not found in Conda environment PATH after all installation attempts. Node.js setup failed. Exiting."
+                )
             print_system(f"Using NPM_CMD: {globals()['NPM_CMD']}")
             print_system("--- Node.js & npm setup complete ---")
             # --- END: Robust Node.js & npm setup ---
 
-
             # --- Core Command-Line Tools (conda-installed) ---
-            print_system("--- Ensuring core command-line tools (libiconv, git, cmake, go, ffmpeg, aria2c) ---")
+            print_system(
+                "--- Ensuring core command-line tools (libiconv, git, cmake, go, ffmpeg, aria2c, coq) ---"
+            )
             if not _ensure_libiconv_copy():
                 # The function handles its own error printing. We just need to record the failure.
-                setup_failures.append("Failed to install a compatible version of libiconv providing libiconv.so.1")
+                setup_failures.append(
+                    "Failed to install a compatible version of libiconv providing libiconv.so.1"
+                )
             print_system("--- Ensuring executable patching utility (patchelf) ---")
-            if not _ensure_conda_package("bash", executable_to_check="bash", is_critical=True):
-                setup_failures.append("Failed to install Conda bash, which is critical for script execution.")
+            if not _ensure_conda_package(
+                "bash", executable_to_check="bash", is_critical=True
+            ):
+                setup_failures.append(
+                    "Failed to install Conda bash, which is critical for script execution."
+                )
             if not _ensure_conda_package("patchelf", is_critical=True):
-                setup_failures.append("Failed to install patchelf, which is critical for fixing library paths.")
+                setup_failures.append(
+                    "Failed to install patchelf, which is critical for fixing library paths."
+                )
             if not _ensure_conda_package("ncurses", is_critical=True):
-                setup_failures.append("Failed to install ncurses, which is critical for terminal operations.")
+                setup_failures.append(
+                    "Failed to install ncurses, which is critical for terminal operations."
+                )
             if not _ensure_conda_package("llvm-openmp", is_critical=True):
-                setup_failures.append("Failed to install llvm-openmp, which is critical for terminal operations.")
+                setup_failures.append(
+                    "Failed to install llvm-openmp, which is critical for terminal operations."
+                )
             if not _ensure_conda_package("openmpi-mpifort", is_critical=True):
-                setup_failures.append("Failed to install openmpi-mpifort, which is critical for terminal operations.")
+                setup_failures.append(
+                    "Failed to install openmpi-mpifort, which is critical for terminal operations."
+                )
             if not _ensure_conda_package("openmpi", is_critical=True):
-                setup_failures.append("Failed to install openmpi, which is critical for terminal operations.")
+                setup_failures.append(
+                    "Failed to install openmpi, which is critical for terminal operations."
+                )
             if not _ensure_conda_package("cmake", is_critical=True):
-                setup_failures.append("Failed to install cmake>=3.21, which is critical for installation operations.")
+                setup_failures.append(
+                    "Failed to install cmake>=3.21, which is critical for installation operations."
+                )
+            # Formal Mathematical Verifier ROCQ or CoQ (SPARK gnatprove assistant) (codegen ADA -> compiler -> SPARK gnatprove -> CoQ+SPARK -> code Output)
+            if not _ensure_conda_package(
+                "coq", conda_channel="conda-forge", is_critical=False
+            ):
+                print_warning(
+                    "Fatal Failure on Conda rcoq installation happened! Code generation will be worsened!"
+                )
+
             print_system("--- Ensuring jemalloc memory allocator ---")
             # We install 'jemalloc' from conda-forge. It contains the shared libraries.
-            if not _ensure_conda_package("jemalloc", conda_channel="conda-forge", is_critical=True):
-                 setup_failures.append("Failed to install jemalloc. Memory stability may be compromised.")
+            if not _ensure_conda_package(
+                "jemalloc", conda_channel="conda-forge", is_critical=True
+            ):
+                setup_failures.append(
+                    "Failed to install jemalloc. Memory stability may be compromised."
+                )
+
             if AUTO_VULKAN_AVAILABLE:
                 print_system("--- Ensuring Vulkan build tools (shaderc for glslc) ---")
-                if not _ensure_conda_package("shaderc", executable_to_check="glslc", is_critical=True):
-                    print_warning("Failed to install 'shaderc' via Conda. Vulkan-accelerated builds will likely fail.")
+                if not _ensure_conda_package(
+                    "shaderc", executable_to_check="glslc", is_critical=True
+                ):
+                    print_warning(
+                        "Failed to install 'shaderc' via Conda. Vulkan-accelerated builds will likely fail."
+                    )
                     # We mark it non-critical; the build will fall back to CPU.
 
-
-            if not _ensure_conda_package("git", executable_to_check="git", is_critical=True): setup_failures.append("Failed to install git, which is critical for terminal operations. requesting post install retry")
-            if not _ensure_conda_package("cmake", executable_to_check="cmake", is_critical=True): setup_failures.append("Failed to install cmake, which is critical for terminal operations. requesting post install retry")
+            if not _ensure_conda_package(
+                "git", executable_to_check="git", is_critical=True
+            ):
+                setup_failures.append(
+                    "Failed to install git, which is critical for terminal operations. requesting post install retry"
+                )
+            if not _ensure_conda_package(
+                "cmake", executable_to_check="cmake", is_critical=True
+            ):
+                setup_failures.append(
+                    "Failed to install cmake, which is critical for terminal operations. requesting post install retry"
+                )
             # Ensure Go is installed for ZephyMesh and Backend
-            if not _ensure_conda_package("go=1.23", executable_to_check="go", conda_channel="conda-forge", is_critical=True): setup_failures.append("Failed to install go, which is critical for terminal operations. requesting post install retry")
+            if not _ensure_conda_package(
+                "go=1.23",
+                executable_to_check="go",
+                conda_channel="conda-forge",
+                is_critical=True,
+            ):
+                setup_failures.append(
+                    "Failed to install go, which is critical for terminal operations. requesting post install retry"
+                )
             # Ensure Alire/GNAT for Ada compilation
-            if not _ensure_alire_and_gnat_toolchain(): setup_failures.append(f"Failed to install/ensure critical tool: Ada toolchain failed to install")
+            if not _ensure_alire_and_gnat_toolchain():
+                setup_failures.append(
+                    f"Failed to install/ensure critical tool: Ada toolchain failed to install"
+                )
 
-            _create_alire_helper_scripts() #creates alr_compile and alr_prove (add suffix.bat for NT) for call zephy internal to use and platform quirkiness being planted and subjugated here.
+            _create_alire_helper_scripts()  # creates alr_compile and alr_prove (add suffix.bat for NT) for call zephy internal to use and platform quirkiness being planted and subjugated here.
 
             # ffmpeg (non-critical, can fallback)
-            _ensure_conda_package("ffmpeg", executable_to_check="ffmpeg", is_critical=False)
+            _ensure_conda_package(
+                "ffmpeg", executable_to_check="ffmpeg", is_critical=False
+            )
 
             # Aria2c (command-line tool)
-            print_system("--- Ensuring Aria2c (for multi-connection downloads) via Conda ---")
-            if not _ensure_conda_package(package_spec="conda-forge::aria2", executable_to_check="aria2c", is_critical=False):
+            print_system(
+                "--- Ensuring Aria2c (for multi-connection downloads) via Conda ---"
+            )
+            if not _ensure_conda_package(
+                package_spec="conda-forge::aria2",
+                executable_to_check="aria2c",
+                is_critical=False,
+            ):
                 print_warning(
-                    "aria2c (command-line tool) could not be installed via Conda. Multi-connection downloads will be unavailable, falling back to requests.")
+                    "aria2c (command-line tool) could not be installed via Conda. Multi-connection downloads will be unavailable, falling back to requests."
+                )
             else:
                 print_system("aria2c command-line tool checked/installed via Conda.")
 
             # Install Python wrapper for Aria2 (aria2p) via Pip (if not already done)
             if not os.path.exists(ARIA2P_INSTALLED_FLAG_FILE):
                 print_system("--- Installing Python wrapper for Aria2 (aria2p) ---")
-                if not run_command([PIP_EXECUTABLE, "install", "aria2p"], ROOT_DIR, "PIP-ARIA2P"):
+                if not run_command(
+                    [PIP_EXECUTABLE, "install", "aria2p"], ROOT_DIR, "PIP-ARIA2P"
+                ):
                     print_warning(
-                        "Failed to install 'aria2p' Python library. Multi-connection downloads via Aria2 will not be available if chosen as the download method.")
+                        "Failed to install 'aria2p' Python library. Multi-connection downloads via Aria2 will not be available if chosen as the download method."
+                    )
                 else:
                     print_system("'aria2p' Python library installed successfully.")
                     try:
-                        with open(ARIA2P_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_aria2p:
-                            f_aria2p.write(f"Installed on: {datetime.now().isoformat()}\n")
+                        with open(
+                            ARIA2P_INSTALLED_FLAG_FILE, "w", encoding="utf-8"
+                        ) as f_aria2p:
+                            f_aria2p.write(
+                                f"Installed on: {datetime.now().isoformat()}\n"
+                            )
                         print_system("aria2p installation flag created.")
                     except IOError as flag_err_aria2p:
-                        print_error(f"Could not create aria2p installation flag file: {flag_err_aria2p}")
+                        print_error(
+                            f"Could not create aria2p installation flag file: {flag_err_aria2p}"
+                        )
             else:
-                print_system("Python wrapper for Aria2 (aria2p) previously installed (flag file found).")
+                print_system(
+                    "Python wrapper for Aria2 (aria2p) previously installed (flag file found)."
+                )
             print_system("--- Core command-line tools check/install complete ---")
 
             # --- Frontend Setup: Build React & Compile Ada Host ---
             print_system("--- Setting up Frontend (React Build + Ada Host) ---")
-            
+
             # 1. Install NPM Dependencies
             print_system("Installing/Verifying Node.js dependencies...")
-            if not run_command([NPM_CMD, "install"], frontend_host_assets, "NPM-INSTALL"):
+            if not run_command(
+                [NPM_CMD, "install"], frontend_host_assets, "NPM-INSTALL"
+            ):
                 print_error("NPM Install failed. Exiting.")
                 setup_failures.append("Frontend npm install failed")
-            
+
             # 2. Build Static Assets (Vite)
             print_system("Building React frontend (Vite)...")
-            if not run_command([NPM_CMD, "run", "build"], frontend_host_assets, "NPM-BUILD"):
+            if not run_command(
+                [NPM_CMD, "run", "build"], frontend_host_assets, "NPM-BUILD"
+            ):
                 print_error("NPM Build failed.")
                 setup_failures.append("Frontend npm run build failed")
             else:
@@ -4928,9 +6519,11 @@ if __name__ == "__main__":
                 # The Ada server expects 'dist' to be in its working directory (ZEPHYRINE_HOST_DIR)
                 src_dist = os.path.join(frontend_host_assets, "dist")
                 dst_dist = os.path.join(ZEPHYRINE_HOST_DIR, "dist")
-                
+
                 if os.path.exists(src_dist):
-                    print_system(f"Copying built assets from {src_dist} to {dst_dist}...")
+                    print_system(
+                        f"Copying built assets from {src_dist} to {dst_dist}..."
+                    )
                     try:
                         if os.path.exists(dst_dist):
                             shutil.rmtree(dst_dist)
@@ -4938,15 +6531,19 @@ if __name__ == "__main__":
                         print_system("Assets copied successfully.")
                     except Exception as e_copy:
                         print_error(f"Failed to copy dist folder: {e_copy}")
-                        setup_failures.append("Failed to copy frontend dist folder to Ada host")
+                        setup_failures.append(
+                            "Failed to copy frontend dist folder to Ada host"
+                        )
                 else:
-                    print_error(f"Vite build seemed successful, but 'dist' folder missing at {src_dist}")
+                    print_error(
+                        f"Vite build seemed successful, but 'dist' folder missing at {src_dist}"
+                    )
                     setup_failures.append("Frontend dist folder missing after build")
 
             # 4. Compile Ada UI Engine
             if os.path.isdir(ZEPHYRINE_HOST_DIR):
                 print_system(f"--- Compiling Ada UI Engine in {ZEPHYRINE_HOST_DIR} ---")
-                
+
                 # Check for Alire
                 if not shutil.which("alr"):
                     print_error("'alr' not found. Cannot compile Ada host.")
@@ -4956,89 +6553,143 @@ if __name__ == "__main__":
                     # We start with the basic alire exec command
                     # We intentionally sanitize BUILD/MODE/bld/mode env vars for the command execution
                     # to prevent the "arm64 vs Release" naming collision we fixed earlier.
-                    
+
                     build_cmd = ["alr", "exec", "--"]
-                    
+
                     # On Linux/macOS, we use 'env -u' to strip the conflicting vars from the inner scope
                     if not IS_WINDOWS:
-                        build_cmd.extend(["env", "-u", "BUILD", "-u", "MODE", "-u", "bld", "-u", "mode"])
-                    
+                        build_cmd.extend(
+                            [
+                                "env",
+                                "-u",
+                                "BUILD",
+                                "-u",
+                                "MODE",
+                                "-u",
+                                "bld",
+                                "-u",
+                                "mode",
+                            ]
+                        )
+
                     build_cmd.append("gprbuild")
 
                     # macOS Specific Linker Flags
                     if platform.system() == "Darwin":
                         try:
-                            sdk_path = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
+                            sdk_path = subprocess.check_output(
+                                ["xcrun", "--show-sdk-path"], text=True
+                            ).strip()
                             # We append the flags to the END of the command
                             build_cmd.extend(["-largs", f"-L{sdk_path}/usr/lib"])
                             print_system(f"Applied macOS SDK flags: {sdk_path}")
                         except Exception as e_sdk:
-                            print_warning(f"Could not detect macOS SDK path: {e_sdk}. Build may fail.")
+                            print_warning(
+                                f"Could not detect macOS SDK path: {e_sdk}. Build may fail."
+                            )
 
                     # Run the build
-                    if not run_command(build_cmd, cwd=ZEPHYRINE_HOST_DIR, name="ADA-BUILD"):
+                    if not run_command(
+                        build_cmd, cwd=ZEPHYRINE_HOST_DIR, name="ADA-BUILD"
+                    ):
                         print_error("Ada Host compilation failed.")
                         setup_failures.append("Zephyrine Ada Host compilation failed")
                     else:
                         print_system("✅ Ada UI Engine compiled successfully.")
             else:
                 print_error(f"Ada Host directory not found at: {ZEPHYRINE_HOST_DIR}")
-                print_error("Please ensure you have initialized the 'zephyrine_host' project inside the frontend directory.")
+                print_error(
+                    "Please ensure you have initialized the 'zephyrine_host' project inside the frontend directory."
+                )
                 setup_failures.append("Ada Host directory missing")
 
             print_system("--- Frontend Setup Complete ---")
 
-
             # Ensure `tiktoken` for license reading time estimation
             try:
-                import tiktoken; TIKTOKEN_AVAILABLE = True
+                import tiktoken
+
+                TIKTOKEN_AVAILABLE = True
             except ImportError:
-                TIKTOKEN_AVAILABLE = False; print_warning("tiktoken not available. License reading time estimation will be less accurate.")
+                TIKTOKEN_AVAILABLE = False
+                print_warning(
+                    "tiktoken not available. License reading time estimation will be less accurate."
+                )
 
             # Windows-specific curses support
             if IS_WINDOWS:
-                if not run_command([PIP_EXECUTABLE, "install", "windows-curses"], ROOT_DIR, "PIP-WINCURSES"):
-                    print_warning("windows-curses install failed. Curses-based license prompt may not work fully.")
+                if not run_command(
+                    [PIP_EXECUTABLE, "install", "windows-curses"],
+                    ROOT_DIR,
+                    "PIP-WINCURSES",
+                ):
+                    print_warning(
+                        "windows-curses install failed. Curses-based license prompt may not work fully."
+                    )
             try:
                 import curses
             except ImportError:
-                print_error("curses import failed. License agreement cannot be displayed. Exiting."); setup_failures.append(f"Failed to ensure License acceptance. Jurisdiction comprimised")
+                print_error(
+                    "curses import failed. License agreement cannot be displayed. Exiting."
+                )
+                setup_failures.append(
+                    f"Failed to ensure License acceptance. Jurisdiction comprimised"
+                )
 
             # License Acceptance
-                    # License Acceptance
+            # License Acceptance
             if not os.path.exists(LICENSE_FLAG_FILE):
                 print_system("License agreement required.")
                 _, combined_license_text = load_licenses()
-                estimated_reading_seconds = calculate_reading_time(combined_license_text)
+                estimated_reading_seconds = calculate_reading_time(
+                    combined_license_text
+                )
 
                 accepted = False
                 time_taken = 0.0
 
                 try:
                     # Attempt to display the interactive license prompt
-                    accepted, time_taken = curses.wrapper(display_license_prompt, combined_license_text.splitlines(),
-                                                        estimated_reading_seconds) # type: ignore
+                    accepted, time_taken = curses.wrapper(
+                        display_license_prompt,
+                        combined_license_text.splitlines(),
+                        estimated_reading_seconds,
+                    )  # type: ignore
                 except curses.error as e:
                     # Handle the specific error for unknown terminals
                     if "setupterm" in str(e) and "terminfo" in str(e):
-                        print_error("Your terminal type is unknown or unsupported (e.g., TERM=unknown).")
-                        print_warning("The interactive license prompt cannot be displayed.")
-                        print_system("The program will proceed in 30 seconds, implicitly accepting the software licenses.")
-                        print_system("To review licenses manually, check the 'licenses' directory.")
+                        print_error(
+                            "Your terminal type is unknown or unsupported (e.g., TERM=unknown)."
+                        )
+                        print_warning(
+                            "The interactive license prompt cannot be displayed."
+                        )
+                        print_system(
+                            "The program will proceed in 30 seconds, implicitly accepting the software licenses."
+                        )
+                        print_system(
+                            "To review licenses manually, check the 'licenses' directory."
+                        )
                         print_system("Press Ctrl+C now to cancel.")
                         try:
                             # Wait for 30 seconds, allowing the user to cancel
                             time.sleep(30)
                             accepted = True
-                            time_taken = 30.0 # Record the time for logging
-                            print_system("Continuing with implicit license acceptance...")
+                            time_taken = 30.0  # Record the time for logging
+                            print_system(
+                                "Continuing with implicit license acceptance..."
+                            )
                         except KeyboardInterrupt:
-                            print_error("\nOperation cancelled by user during implicit wait. Exiting.")
+                            print_error(
+                                "\nOperation cancelled by user during implicit wait. Exiting."
+                            )
                             sys.exit(1)
                     else:
                         # For any other terminal-related error, fail gracefully
                         print_error(f"A fatal terminal error occurred: {e}")
-                        print_error("Please run this script in a standard interactive terminal. Exiting.")
+                        print_error(
+                            "Please run this script in a standard interactive terminal. Exiting."
+                        )
                         sys.exit(1)
 
                 # Check if the license was accepted (either interactively or implicitly)
@@ -5047,35 +6698,61 @@ if __name__ == "__main__":
                     sys.exit(1)
 
                 # If accepted, create the flag file
-                with open(LICENSE_FLAG_FILE, 'w', encoding='utf-8') as f_license:
-                    f_license.write(f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n")
+                with open(LICENSE_FLAG_FILE, "w", encoding="utf-8") as f_license:
+                    f_license.write(
+                        f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n"
+                    )
                 print_system(f"Licenses accepted in {time_taken:.2f}s.")
-                if estimated_reading_seconds > 30 and time_taken < (estimated_reading_seconds * 0.1):
-                    print_warning("Warning: Licenses accepted very quickly. Please ensure you have reviewed the terms.")
+                if estimated_reading_seconds > 30 and time_taken < (
+                    estimated_reading_seconds * 0.1
+                ):
+                    print_warning(
+                        "Warning: Licenses accepted very quickly. Please ensure you have reviewed the terms."
+                    )
                     time.sleep(3)
             else:
                 print_system("License previously accepted.")
 
-            #_start_port_shield_daemon(port=11434, target_process_name="ollama") #brutal way to destroy ollama but ofc its fail since ollama always wins
+            # _start_port_shield_daemon(port=11434, target_process_name="ollama") #brutal way to destroy ollama but ofc its fail since ollama always wins
 
-            print_system(f"--- Checking Static Model Pool: {STATIC_MODEL_POOL_PATH} ---")
+            print_system(
+                f"--- Checking Static Model Pool: {STATIC_MODEL_POOL_PATH} ---"
+            )
             os.makedirs(STATIC_MODEL_POOL_PATH, exist_ok=True)
-            all_models_ok = True # Keep track if all critical models downloaded successfully
+            all_models_ok = (
+                True  # Keep track if all critical models downloaded successfully
+            )
             for model_info in MODELS_TO_DOWNLOAD:
                 dest_path = os.path.join(STATIC_MODEL_POOL_PATH, model_info["filename"])
                 if not os.path.exists(dest_path):
-                    print_warning(f"Model '{model_info['description']}' ({model_info['filename']}) not found. Downloading.")
-                    if not download_file_with_progress(model_info["url"], dest_path, model_info["description"],
-                                                    requests_session):
-                        print_error(f"Failed download for {model_info['filename']}. This model may be required.")
+                    print_warning(
+                        f"Model '{model_info['description']}' ({model_info['filename']}) not found. Downloading."
+                    )
+                    if not download_file_with_progress(
+                        model_info["url"],
+                        dest_path,
+                        model_info["description"],
+                        requests_session,
+                    ):
+                        print_error(
+                            f"Failed download for {model_info['filename']}. This model may be required."
+                        )
                         all_models_ok = False
                 else:
-                    print_system(f"Model '{model_info['description']}' ({model_info['filename']}) already present.")
-            print_system(f"Static model pool checked. All critical models {'OK' if all_models_ok else 'NOT OK'}.")
+                    print_system(
+                        f"Model '{model_info['description']}' ({model_info['filename']}) already present."
+                    )
+            print_system(
+                f"Static model pool checked. All critical models {'OK' if all_models_ok else 'NOT OK'}."
+            )
             if not all_models_ok:
-                print_error("Some critical models failed to download. Functionality may be limited. Proceeding with caution.")
+                print_error(
+                    "Some critical models failed to download. Functionality may be limited. Proceeding with caution."
+                )
                 # Decide if this is a hard exit or just a warning based on criticality of models.
-                setup_failures.append(f"Models failed to download, check static model pool. functionality compromised")
+                setup_failures.append(
+                    f"Models failed to download, check static model pool. functionality compromised"
+                )
 
             print_system("--- Checking TTS Systems (Chatterbox & MeloTTS) ---")
 
@@ -5083,36 +6760,59 @@ if __name__ == "__main__":
             if not os.path.exists(CHATTERBOX_TTS_INSTALLED_FLAG_FILE):
                 print_system(f"--- ChatterboxTTS First-Time Library Install ---")
                 if not os.path.isdir(CHATTERBOX_TTS_PATH):
-                    print_error(f"ChatterboxTTS directory not found at: {CHATTERBOX_TTS_PATH}. Skipping.")
+                    print_error(
+                        f"ChatterboxTTS directory not found at: {CHATTERBOX_TTS_PATH}. Skipping."
+                    )
                     setup_failures.append("ChatterboxTTS directory not found.")
                 else:
-                    if not run_command([PIP_EXECUTABLE, "install", "-e", "."], CHATTERBOX_TTS_PATH,
-                                       "PIP-CHATTERBOX-EDITABLE"):
+                    if not run_command(
+                        [PIP_EXECUTABLE, "install", "-e", "."],
+                        CHATTERBOX_TTS_PATH,
+                        "PIP-CHATTERBOX-EDITABLE",
+                    ):
                         print_error("ChatterboxTTS library installation failed.")
                         setup_failures.append("ChatterboxTTS pip install failed.")
                     else:
                         print_system("ChatterboxTTS library installed successfully.")
-                        with open(CHATTERBOX_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
+                        with open(
+                            CHATTERBOX_TTS_INSTALLED_FLAG_FILE, "w", encoding="utf-8"
+                        ) as f:
                             f.write(f"Installed on: {datetime.now().isoformat()}\n")
             else:
-                print_system("ChatterboxTTS library previously installed (flag file found).")
+                print_system(
+                    "ChatterboxTTS library previously installed (flag file found)."
+                )
 
             # --- Stage 2: MeloTTS Library Installation ---
             if not os.path.exists(MELO_TTS_LIB_INSTALLED_FLAG_FILE):
                 print_system("--- MeloTTS First-Time Library Install ---")
                 if not os.path.isdir(MELO_TTS_PATH):
-                    print_error(f"MeloTTS directory not found at: {MELO_TTS_PATH}. Skipping.")
+                    print_error(
+                        f"MeloTTS directory not found at: {MELO_TTS_PATH}. Skipping."
+                    )
                     setup_failures.append("MeloTTS directory not found.")
                 else:
-                    if not run_command([PIP_EXECUTABLE, "install", "torchcodec"], MELO_TTS_PATH, "PIP-MELO-EDITABLE"):
+                    if not run_command(
+                        [PIP_EXECUTABLE, "install", "torchcodec"],
+                        MELO_TTS_PATH,
+                        "PIP-MELO-EDITABLE",
+                    ):
                         print_error("MeloTTS library torchcodec installation failed.")
-                        setup_failures.append("MeloTTS pip install torchcodec phase failed.")
-                    if not run_command([PIP_EXECUTABLE, "install", "-e", "."], MELO_TTS_PATH, "PIP-MELO-EDITABLE"):
+                        setup_failures.append(
+                            "MeloTTS pip install torchcodec phase failed."
+                        )
+                    if not run_command(
+                        [PIP_EXECUTABLE, "install", "-e", "."],
+                        MELO_TTS_PATH,
+                        "PIP-MELO-EDITABLE",
+                    ):
                         print_error("MeloTTS library installation failed.")
                         setup_failures.append("MeloTTS pip install failed.")
                     else:
                         print_system("MeloTTS library installed successfully.")
-                        with open(MELO_TTS_LIB_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
+                        with open(
+                            MELO_TTS_LIB_INSTALLED_FLAG_FILE, "w", encoding="utf-8"
+                        ) as f:
                             f.write(f"Installed on: {datetime.now().isoformat()}\n")
             else:
                 print_system("MeloTTS library previously installed (flag file found).")
@@ -5121,44 +6821,78 @@ if __name__ == "__main__":
             # This step runs AFTER both libraries are confirmed to be installed.
             # It is guarded by its own flag for the data download.
             if not os.path.exists(MELO_TTS_DATA_INSTALLED_FLAG_FILE):
-                print_system("--- Downloading Shared TTS Data Dependencies (Unidic & Models) ---")
+                print_system(
+                    "--- Downloading Shared TTS Data Dependencies (Unidic & Models) ---"
+                )
 
                 # This command triggers downloads for both Unidic (for Melo) and the required HF models.
                 # We use the audio_worker in test mode as it initializes the necessary components.
                 tts_data_download_command = [
-                    PYTHON_EXECUTABLE, "audio_worker.py",
-                    "--task-type", "tts",
+                    PYTHON_EXECUTABLE,
+                    "audio_worker.py",
+                    "--task-type",
+                    "tts",
                     "--test-mode",
-                    "--model-dir", "./staticmodelpool",  # Relative to ENGINE_MAIN_DIR
-                    "--temp-dir", "./temp",  # Relative to ENGINE_MAIN_DIR
-                    "--output-file", "tts_result.wav"  # Relative to ENGINE_MAIN_DIR
+                    "--model-dir",
+                    "./staticmodelpool",  # Relative to ENGINE_MAIN_DIR
+                    "--temp-dir",
+                    "./temp",  # Relative to ENGINE_MAIN_DIR
+                    "--output-file",
+                    "tts_result.wav",  # Relative to ENGINE_MAIN_DIR
                 ]
 
-                if not run_command(tts_data_download_command, ENGINE_MAIN_DIR, "TTS-DEPS-DOWNLOAD"):
+                if not run_command(
+                    tts_data_download_command, ENGINE_MAIN_DIR, "TTS-DEPS-DOWNLOAD"
+                ):
                     print_error(
-                        "TTS dependency download worker failed. This means model/dictionary download likely failed.")
-                    setup_failures.append("TTS dependency download via test worker failed.")
+                        "TTS dependency download worker failed. This means model/dictionary download likely failed."
+                    )
+                    setup_failures.append(
+                        "TTS dependency download via test worker failed."
+                    )
                 else:
-                    print_system("Shared TTS data dependencies downloaded successfully.")
+                    print_system(
+                        "Shared TTS data dependencies downloaded successfully."
+                    )
                     # Create the data-specific flag ONLY after the data is successfully downloaded.
-                    with open(MELO_TTS_DATA_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
-                        f.write(f"Data dependencies downloaded on: {datetime.now().isoformat()}")
+                    with open(
+                        MELO_TTS_DATA_INSTALLED_FLAG_FILE, "w", encoding="utf-8"
+                    ) as f:
+                        f.write(
+                            f"Data dependencies downloaded on: {datetime.now().isoformat()}"
+                        )
                     print_system("TTS data dependency flag created.")
             else:
-                print_system("Shared TTS data dependencies previously downloaded (flag file found).")
+                print_system(
+                    "Shared TTS data dependencies previously downloaded (flag file found)."
+                )
 
             # --- PyWhisperCpp Installation (with auto-detection fallback) ---
             if not os.path.exists(PYWHISPERCPP_INSTALLED_FLAG_FILE):
                 print_system(f"--- PyWhisperCpp Installation (from local clone) ---")
                 if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
-                    print_error("'git' not found. Skipping PyWhisperCpp source install.")
+                    print_error(
+                        "'git' not found. Skipping PyWhisperCpp source install."
+                    )
                 else:
-                    if os.path.exists(PYWHISPERCPP_CLONE_PATH): shutil.rmtree(PYWHISPERCPP_CLONE_PATH)
-                    if not run_command([GIT_CMD, "clone", PYWHISPERCPP_REPO_URL, PYWHISPERCPP_CLONE_PATH], ROOT_DIR,
-                                    "GIT-CLONE-PYWHISPERCPP"):
+                    if os.path.exists(PYWHISPERCPP_CLONE_PATH):
+                        shutil.rmtree(PYWHISPERCPP_CLONE_PATH)
+                    if not run_command(
+                        [
+                            GIT_CMD,
+                            "clone",
+                            PYWHISPERCPP_REPO_URL,
+                            PYWHISPERCPP_CLONE_PATH,
+                        ],
+                        ROOT_DIR,
+                        "GIT-CLONE-PYWHISPERCPP",
+                    ):
                         print_error("Clone pywhispercpp failed.")
-                    elif not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"], PYWHISPERCPP_CLONE_PATH,
-                                        "GIT-SUBMODULE-PYWHISPERCPP"):
+                    elif not run_command(
+                        [GIT_CMD, "submodule", "update", "--init", "--recursive"],
+                        PYWHISPERCPP_CLONE_PATH,
+                        "GIT-SUBMODULE-PYWHISPERCPP",
+                    ):
                         print_error("Pywhispercpp submodule update failed.")
                     else:
                         pip_cmd_whisper = [PIP_EXECUTABLE, "install", "."]
@@ -5170,37 +6904,59 @@ if __name__ == "__main__":
                         user_ggml_blas = os.getenv("GGML_BLAS")
                         user_whisper_openvino = os.getenv("WHISPER_OPENVINO")
 
-                        if user_ggml_cuda == '1':
-                            env_whisper['GGML_CUDA'] = '1'; backend_whisper = "CUDA (User)"
-                        elif user_whisper_coreml == '1' and AUTO_COREML_POSSIBLE:
-                            env_whisper['WHISPER_COREML'] = '1'; backend_whisper = "CoreML (User)"
-                        elif user_ggml_vulkan == '1':
-                            env_whisper['GGML_VULKAN'] = '1'; backend_whisper = "Vulkan (User)"
-                        elif user_ggml_blas == '1':
-                            env_whisper['GGML_BLAS'] = '1'; backend_whisper = "OpenBLAS (User)"
-                        elif user_whisper_openvino == '1':
-                            env_whisper['WHISPER_OPENVINO'] = '1'; backend_whisper = "OpenVINO (User)"
+                        if user_ggml_cuda == "1":
+                            env_whisper["GGML_CUDA"] = "1"
+                            backend_whisper = "CUDA (User)"
+                        elif user_whisper_coreml == "1" and AUTO_COREML_POSSIBLE:
+                            env_whisper["WHISPER_COREML"] = "1"
+                            backend_whisper = "CoreML (User)"
+                        elif user_ggml_vulkan == "1":
+                            env_whisper["GGML_VULKAN"] = "1"
+                            backend_whisper = "Vulkan (User)"
+                        elif user_ggml_blas == "1":
+                            env_whisper["GGML_BLAS"] = "1"
+                            backend_whisper = "OpenBLAS (User)"
+                        elif user_whisper_openvino == "1":
+                            env_whisper["WHISPER_OPENVINO"] = "1"
+                            backend_whisper = "OpenVINO (User)"
                         elif AUTO_CUDA_AVAILABLE:
-                            env_whisper['GGML_CUDA'] = '1'; backend_whisper = "CUDA (Auto)"
-                        elif AUTO_COREML_POSSIBLE and (AUTO_PRIMARY_GPU_BACKEND == "metal" or platform.system() == "Darwin"):
-                            env_whisper['WHISPER_COREML'] = '1'; backend_whisper = "CoreML (Auto for Apple)"
-                        elif AUTO_METAL_AVAILABLE and AUTO_PRIMARY_GPU_BACKEND == "metal":
+                            env_whisper["GGML_CUDA"] = "1"
+                            backend_whisper = "CUDA (Auto)"
+                        elif AUTO_COREML_POSSIBLE and (
+                            AUTO_PRIMARY_GPU_BACKEND == "metal"
+                            or platform.system() == "Darwin"
+                        ):
+                            env_whisper["WHISPER_COREML"] = "1"
+                            backend_whisper = "CoreML (Auto for Apple)"
+                        elif (
+                            AUTO_METAL_AVAILABLE and AUTO_PRIMARY_GPU_BACKEND == "metal"
+                        ):
                             backend_whisper = "Metal (Auto Default for Apple)"
                         elif AUTO_VULKAN_AVAILABLE:
-                            env_whisper['GGML_VULKAN'] = '1'; backend_whisper = "Vulkan (Auto)"
+                            env_whisper["GGML_VULKAN"] = "1"
+                            backend_whisper = "Vulkan (Auto)"
                         else:
-                            backend_whisper = "CPU (Default - Attempting OpenBLAS)"; env_whisper['GGML_BLAS'] = '1'
+                            backend_whisper = "CPU (Default - Attempting OpenBLAS)"
+                            env_whisper["GGML_BLAS"] = "1"
 
                         print_system(
-                            f"Attempting pywhispercpp install. Effective Backend: {backend_whisper}. Build Env: {env_whisper}")
-                        if not run_command(pip_cmd_whisper, PYWHISPERCPP_CLONE_PATH, "PIP-PYWHISPERCPP",
-                                        env_override=env_whisper if env_whisper else None):
+                            f"Attempting pywhispercpp install. Effective Backend: {backend_whisper}. Build Env: {env_whisper}"
+                        )
+                        if not run_command(
+                            pip_cmd_whisper,
+                            PYWHISPERCPP_CLONE_PATH,
+                            "PIP-PYWHISPERCPP",
+                            env_override=env_whisper if env_whisper else None,
+                        ):
                             print_error("pywhispercpp install failed.")
                         else:
                             print_system("pywhispercpp installed.")
-                            print_warning("For non-WAV ASR, ensure FFmpeg is in PATH (via conda install ffmpeg).")
-                            with open(PYWHISPERCPP_INSTALLED_FLAG_FILE, 'w',
-                                    encoding='utf-8') as f_pwc_flag:
+                            print_warning(
+                                "For non-WAV ASR, ensure FFmpeg is in PATH (via conda install ffmpeg)."
+                            )
+                            with open(
+                                PYWHISPERCPP_INSTALLED_FLAG_FILE, "w", encoding="utf-8"
+                            ) as f_pwc_flag:
                                 f_pwc_flag.write(backend_whisper)
                             print_system("PyWhisperCpp installation flag created.")
             else:
@@ -5210,89 +6966,155 @@ if __name__ == "__main__":
             if not os.path.exists(LATEX_OCR_INSTALLED_FLAG_FILE):
                 print_system(f"--- First-Time Setup for local LaTeX_OCR-SubEngine ---")
                 if not os.path.isdir(LATEX_OCR_PATH):
-                    print_error(f"LaTeX-OCR Sub-Engine directory not found at: {LATEX_OCR_PATH}")
-                    print_error("Please ensure the submodule/directory exists. Skipping LaTeX-OCR installation.")
+                    print_error(
+                        f"LaTeX-OCR Sub-Engine directory not found at: {LATEX_OCR_PATH}"
+                    )
+                    print_error(
+                        "Please ensure the submodule/directory exists. Skipping LaTeX-OCR installation."
+                    )
                 else:
-                    print_system(f"Installing local LaTeX-OCR in editable mode from: {LATEX_OCR_PATH}")
+                    print_system(
+                        f"Installing local LaTeX-OCR in editable mode from: {LATEX_OCR_PATH}"
+                    )
                     pip_cmd_latex_ocr_local = [PIP_EXECUTABLE, "install", "-e", "."]
-                    if not run_command(pip_cmd_latex_ocr_local, LATEX_OCR_PATH, "PIP-LATEX-OCR-LOCAL"):
+                    if not run_command(
+                        pip_cmd_latex_ocr_local, LATEX_OCR_PATH, "PIP-LATEX-OCR-LOCAL"
+                    ):
                         print_error(
-                            "Failed to install local LaTeX-OCR Sub-Engine. This functionality will be unavailable.")
+                            "Failed to install local LaTeX-OCR Sub-Engine. This functionality will be unavailable."
+                        )
                     else:
-                        print_system("Local LaTeX-OCR Sub-Engine installed successfully.")
+                        print_system(
+                            "Local LaTeX-OCR Sub-Engine installed successfully."
+                        )
                         try:
-                            with open(LATEX_OCR_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
-                                f.write(f"Installed from local Sub-Engine on: {datetime.now().isoformat()}\n")
+                            with open(
+                                LATEX_OCR_INSTALLED_FLAG_FILE, "w", encoding="utf-8"
+                            ) as f:
+                                f.write(
+                                    f"Installed from local Sub-Engine on: {datetime.now().isoformat()}\n"
+                                )
                             print_system("Local LaTeX-OCR installation flag created.")
                         except IOError as flag_err:
-                            print_error(f"Could not create local LaTeX-OCR installation flag file: {flag_err}")
+                            print_error(
+                                f"Could not create local LaTeX-OCR installation flag file: {flag_err}"
+                            )
             else:
-                print_system("Local LaTeX-OCR Sub-Engine previously installed (flag file found).")
+                print_system(
+                    "Local LaTeX-OCR Sub-Engine previously installed (flag file found)."
+                )
 
             # --- Custom llama-cpp-python Installation ---
-            print_warning("llama-cpp-python is deprecated, and will be removed later on. The problem is that the developer does not update or sync the dsym hook")
+            print_warning(
+                "llama-cpp-python is deprecated, and will be removed later on. The problem is that the developer does not update or sync the dsym hook"
+            )
             if os.getenv("PROVIDER", "llama_cpp").lower() == "llama_cpp":
                 if not os.path.exists(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE):
-                    
                     print_system("--- Custom llama-cpp-python Installation ---")
                     if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
                         print_error("'git' not found. Skipping source install.")
                     else:
-                        if os.path.exists(LLAMA_CPP_PYTHON_CLONE_PATH): shutil.rmtree(LLAMA_CPP_PYTHON_CLONE_PATH)
-                        if not run_command([GIT_CMD, "clone", LLAMA_CPP_PYTHON_REPO_URL, LLAMA_CPP_PYTHON_CLONE_PATH],
-                                        ROOT_DIR, "GIT-CLONE-LLAMA") or \
-                                not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"],
-                                                LLAMA_CPP_PYTHON_CLONE_PATH, "GIT-SUBMODULE-LLAMA"):
-                            print_error("llama-cpp-python clone or submodule update failed.")
+                        if os.path.exists(LLAMA_CPP_PYTHON_CLONE_PATH):
+                            shutil.rmtree(LLAMA_CPP_PYTHON_CLONE_PATH)
+                        if not run_command(
+                            [
+                                GIT_CMD,
+                                "clone",
+                                LLAMA_CPP_PYTHON_REPO_URL,
+                                LLAMA_CPP_PYTHON_CLONE_PATH,
+                            ],
+                            ROOT_DIR,
+                            "GIT-CLONE-LLAMA",
+                        ) or not run_command(
+                            [GIT_CMD, "submodule", "update", "--init", "--recursive"],
+                            LLAMA_CPP_PYTHON_CLONE_PATH,
+                            "GIT-SUBMODULE-LLAMA",
+                        ):
+                            print_error(
+                                "llama-cpp-python clone or submodule update failed."
+                            )
                         else:
-                            build_env_llama = {'FORCE_CMAKE': '1'}
-                            #Temporary Fix due to Conda outdated compiler issue freaking out what is VisionOS is.
+                            build_env_llama = {"FORCE_CMAKE": "1"}
+                            # Temporary Fix due to Conda outdated compiler issue freaking out what is VisionOS is.
                             if platform.system() == "Darwin":
                                 try:
                                     # 1. Force the use of Apple's Native Clang
                                     # This bypasses the old Conda Clang (v14) that crashes on macOS 26 headers
-                                    print_system("macOS Fix: Forcing Native Apple Clang for compilation...")
-                                    build_env_llama['CC'] = '/usr/bin/clang'
-                                    build_env_llama['CXX'] = '/usr/bin/clang++'
+                                    print_system(
+                                        "macOS Fix: Forcing Native Apple Clang for compilation..."
+                                    )
+                                    build_env_llama["CC"] = "/usr/bin/clang"
+                                    build_env_llama["CXX"] = "/usr/bin/clang++"
 
                                     # 2. Get the actual physical path of the macOS 26 SDK
-                                    real_sdk_path = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
-                                    build_env_llama['SDKROOT'] = real_sdk_path
-                                    
+                                    real_sdk_path = subprocess.check_output(
+                                        ["xcrun", "--show-sdk-path"], text=True
+                                    ).strip()
+                                    build_env_llama["SDKROOT"] = real_sdk_path
+
                                     # 3. Force flags to use this SDK
-                                    build_env_llama['CFLAGS'] = f"-isysroot {real_sdk_path}"
-                                    build_env_llama['CXXFLAGS'] = f"-isysroot {real_sdk_path}"
-                                    
+                                    build_env_llama["CFLAGS"] = (
+                                        f"-isysroot {real_sdk_path}"
+                                    )
+                                    build_env_llama["CXXFLAGS"] = (
+                                        f"-isysroot {real_sdk_path}"
+                                    )
+
                                     # 4. Anchor Deployment Target to 15.0
                                     # This prevents the compiler from panicking when it sees "26.0"
-                                    build_env_llama['MACOSX_DEPLOYMENT_TARGET'] = "26.0"
-                                    #Conda dyld eject on the outdated slow library
-                                    build_env_llama['DYLD_LIBRARY_PATH'] = ""
-                                    
+                                    build_env_llama["MACOSX_DEPLOYMENT_TARGET"] = "26.0"
+                                    # Conda dyld eject on the outdated slow library
+                                    build_env_llama["DYLD_LIBRARY_PATH"] = ""
+
                                 except Exception as e_mac_fix:
                                     print_warning(f"macOS Fix Warning: {e_mac_fix}")
                             # ------------------------------------
-                            cmake_args_list_llama = ["-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_BUILD_TESTS=OFF"]
-                            chosen_llama_backend = os.getenv("LLAMA_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                            cmake_args_list_llama = [
+                                "-DLLAMA_BUILD_EXAMPLES=OFF",
+                                "-DLLAMA_BUILD_TESTS=OFF",
+                            ]
+                            chosen_llama_backend = (
+                                os.getenv("LLAMA_CPP_BACKEND")
+                                or AUTO_PRIMARY_GPU_BACKEND
+                            )
                             backend_log_llama = "cpu"
                             if chosen_llama_backend == "cuda" and AUTO_CUDA_AVAILABLE:
-                                cmake_args_list_llama.append("-DGGML_CUDA=ON"); backend_log_llama = "CUDA"
-                            elif chosen_llama_backend == "metal" and AUTO_METAL_AVAILABLE:
-                                cmake_args_list_llama.append("-DGGML_METAL=ON"); backend_log_llama = "Metal"
-                            elif chosen_llama_backend == "vulkan" and AUTO_VULKAN_AVAILABLE:
-                                cmake_args_list_llama.append("-DGGML_VULKAN=ON"); backend_log_llama = "Vulkan"
+                                cmake_args_list_llama.append("-DGGML_CUDA=ON")
+                                backend_log_llama = "CUDA"
+                            elif (
+                                chosen_llama_backend == "metal" and AUTO_METAL_AVAILABLE
+                            ):
+                                cmake_args_list_llama.append("-DGGML_METAL=ON")
+                                backend_log_llama = "Metal"
+                            elif (
+                                chosen_llama_backend == "vulkan"
+                                and AUTO_VULKAN_AVAILABLE
+                            ):
+                                cmake_args_list_llama.append("-DGGML_VULKAN=ON")
+                                backend_log_llama = "Vulkan"
                             else:
-                                cmake_args_list_llama.append("-DLLAMA_OPENMP=ON"); backend_log_llama = "CPU (OpenMP)"
-                            print_system(f"Configuring llama-cpp-python build with: {backend_log_llama}")
-                            build_env_llama['CMAKE_ARGS'] = " ".join(cmake_args_list_llama)
-                            if not run_command([PIP_EXECUTABLE, "install", ".", "--verbose"],
-                                            LLAMA_CPP_PYTHON_CLONE_PATH, "PIP-BUILD-LLAMA",
-                                            env_override=build_env_llama):
+                                cmake_args_list_llama.append("-DLLAMA_OPENMP=ON")
+                                backend_log_llama = "CPU (OpenMP)"
+                            print_system(
+                                f"Configuring llama-cpp-python build with: {backend_log_llama}"
+                            )
+                            build_env_llama["CMAKE_ARGS"] = " ".join(
+                                cmake_args_list_llama
+                            )
+                            if not run_command(
+                                [PIP_EXECUTABLE, "install", ".", "--verbose"],
+                                LLAMA_CPP_PYTHON_CLONE_PATH,
+                                "PIP-BUILD-LLAMA",
+                                env_override=build_env_llama,
+                            ):
                                 print_error("Build llama-cpp-python failed.")
                             else:
                                 print_system("llama-cpp-python installed.")
-                                with open(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE, 'w',
-                                        encoding='utf-8') as f_lcpp_flag:
+                                with open(
+                                    CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE,
+                                    "w",
+                                    encoding="utf-8",
+                                ) as f_lcpp_flag:
                                     f_lcpp_flag.write(backend_log_llama)
                 else:
                     print_system("Custom llama-cpp-python previously installed.")
@@ -5300,31 +7122,45 @@ if __name__ == "__main__":
             # --- Direct llama.cpp Binary Compilation (CLI Focused) ---
             if not os.path.exists(LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE):
                 print_system("--- Direct llama.cpp High-Performance CLI Build ---")
-                
+
                 if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
                     print_error("'git' not found. Skipping direct llama.cpp install.")
                 else:
                     # Clean previous build artifacts for a fresh start
-                    if os.path.exists(LLAMA_CPP_DIRECT_CLONE_PATH): 
+                    if os.path.exists(LLAMA_CPP_DIRECT_CLONE_PATH):
                         shutil.rmtree(LLAMA_CPP_DIRECT_CLONE_PATH)
-                    
+
                     # 1. Clone the official repository
-                    if not run_command([GIT_CMD, "clone", "--depth", "1", LLAMA_CPP_DIRECT_REPO_URL, LLAMA_CPP_DIRECT_CLONE_PATH], ROOT_DIR, "GIT-CLONE-LLAMA-DIRECT"):
+                    if not run_command(
+                        [
+                            GIT_CMD,
+                            "clone",
+                            "--depth",
+                            "1",
+                            LLAMA_CPP_DIRECT_REPO_URL,
+                            LLAMA_CPP_DIRECT_CLONE_PATH,
+                        ],
+                        ROOT_DIR,
+                        "GIT-CLONE-LLAMA-DIRECT",
+                    ):
                         print_error("Direct llama.cpp clone failed.")
                     else:
                         build_dir = os.path.join(LLAMA_CPP_DIRECT_CLONE_PATH, "build")
                         os.makedirs(build_dir, exist_ok=True)
-                        
+
                         # 2. Configure CMake focusing on llama-cli and detected hardware
                         cmake_args = [
-                            CMAKE_CMD, "..",
+                            CMAKE_CMD,
+                            "..",
                             "-DCMAKE_BUILD_TYPE=Release",
                             "-DLLAMA_BUILD_SERVER=ON",  # Server disabled as per requirement (but why mtmd error?) ah llama.cpp seems to be server oriented and expected be the central server. perhaps.
-                            "-DLLAMA_BUILD_EXAMPLES=ON"   # Needed to build the CLI tool
+                            "-DLLAMA_BUILD_EXAMPLES=ON",  # Needed to build the CLI tool
                         ]
-                        
+
                         # Use established auto-detection variables for backend selection
-                        chosen_backend = os.getenv("LLAMA_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                        chosen_backend = (
+                            os.getenv("LLAMA_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                        )
                         backend_label = "CPU"
 
                         if chosen_backend == "cuda" and AUTO_CUDA_AVAILABLE:
@@ -5340,12 +7176,26 @@ if __name__ == "__main__":
                             cmake_args.append("-DGGML_OPENMP=ON")
                             backend_label = "CPU (OpenMP)"
 
-                        print_system(f"Configuring LMExec build with backend: {backend_label}")
+                        print_system(
+                            f"Configuring LMExec build with backend: {backend_label}"
+                        )
 
                         # 3. Compile the binary
-                        if run_command(cmake_args, build_dir, "CMAKE-LLAMA-DIRECT-CONFIG") and \
-                        run_command([CMAKE_CMD, "--build", ".", "--config", "Release", "-j", str(os.cpu_count() or 4)], build_dir, "CMAKE-LLAMA-DIRECT-BUILD"):
-                            
+                        if run_command(
+                            cmake_args, build_dir, "CMAKE-LLAMA-DIRECT-CONFIG"
+                        ) and run_command(
+                            [
+                                CMAKE_CMD,
+                                "--build",
+                                ".",
+                                "--config",
+                                "Release",
+                                "-j",
+                                str(os.cpu_count() or 4),
+                            ],
+                            build_dir,
+                            "CMAKE-LLAMA-DIRECT-BUILD",
+                        ):
                             # 4. Install llama-cli binary to the Zephyrine Runtime bin directory
                             conda_bin_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "bin")
                             os.makedirs(conda_bin_dir, exist_ok=True)
@@ -5358,169 +7208,255 @@ if __name__ == "__main__":
                                 "llama-cli": "llamacpp_TUI",
                                 "llama-completion": "LMExec",
                                 "llama-embedding": "LMText2Vector",
-                                "llama-mtmd-cli": "LMMultiModal"
+                                "llama-mtmd-cli": "LMMultiModal",
                             }
 
                             # 2. Determine OS extension
                             ext = ".exe" if IS_WINDOWS else ""
 
-                            print_system(f"Installing and renaming binaries to {conda_bin_dir}...")
+                            print_system(
+                                f"Installing and renaming binaries to {conda_bin_dir}..."
+                            )
 
                             # 3. Perform Migration and Renaming
                             for src_base, target_base in binary_mapping.items():
                                 src_filename = f"{src_base}{ext}"
                                 target_filename = f"{target_base}{ext}"
 
-                                src_bin_path = os.path.join(build_dir, "bin", src_filename)
-                                dest_bin_path = os.path.join(conda_bin_dir, target_filename)
+                                src_bin_path = os.path.join(
+                                    build_dir, "bin", src_filename
+                                )
+                                dest_bin_path = os.path.join(
+                                    conda_bin_dir, target_filename
+                                )
 
                                 if os.path.exists(src_bin_path):
                                     # shutil.copy2 preserves permissions (important for execution)
                                     shutil.copy2(src_bin_path, dest_bin_path)
-                                    print_system(f"  -> Successfully migrated: {src_filename} as {target_filename}")
-                                    with open(LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE, 'w',
-                                              encoding='utf-8') as f_lcpp_flag:
+                                    print_system(
+                                        f"  -> Successfully migrated: {src_filename} as {target_filename}"
+                                    )
+                                    with open(
+                                        LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE,
+                                        "w",
+                                        encoding="utf-8",
+                                    ) as f_lcpp_flag:
                                         f_lcpp_flag.write("")
                                 else:
                                     print_error(
-                                        f"  -> CRITICAL: Source binary {src_filename} not found in build directory.")
+                                        f"  -> CRITICAL: Source binary {src_filename} not found in build directory."
+                                    )
                         else:
                             print_error("llama.cpp compilation failed.")
             else:
-                print_system("Direct llama.cpp CLI build previously completed (flag found).")
+                print_system(
+                    "Direct llama.cpp CLI build previously completed (flag found)."
+                )
 
             # --- Custom stable-diffusion-cpp-python Installation ---
             if not os.path.exists(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE):
                 print_system("--- Custom stable-diffusion-cpp-python Installation ---")
-                if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]) or not CMAKE_CMD or not shutil.which(
-                    CMAKE_CMD.split()[0]):
+                if (
+                    not GIT_CMD
+                    or not shutil.which(GIT_CMD.split()[0])
+                    or not CMAKE_CMD
+                    or not shutil.which(CMAKE_CMD.split()[0])
+                ):
                     print_error("'git' or 'cmake' not found. Skipping source install.")
                 else:
-                    if os.path.exists(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH): shutil.rmtree(
-                        STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH)
-                    if not run_command([GIT_CMD, "clone", "--recursive", STABLE_DIFFUSION_CPP_PYTHON_REPO_URL,
-                                        STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH], ROOT_DIR, "GIT-CLONE-SD"):
+                    if os.path.exists(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH):
+                        shutil.rmtree(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH)
+                    if not run_command(
+                        [
+                            GIT_CMD,
+                            "clone",
+                            "--recursive",
+                            STABLE_DIFFUSION_CPP_PYTHON_REPO_URL,
+                            STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH,
+                        ],
+                        ROOT_DIR,
+                        "GIT-CLONE-SD",
+                    ):
                         print_error("Clone SD failed.")
                     else:
-                        sd_cpp_sub_path = os.path.join(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, "vendor",
-                                                    "stable-diffusion.cpp")
+                        sd_cpp_sub_path = os.path.join(
+                            STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH,
+                            "vendor",
+                            "stable-diffusion.cpp",
+                        )
                         sd_cpp_build_path = os.path.join(sd_cpp_sub_path, "build")
                         os.makedirs(sd_cpp_build_path, exist_ok=True)
-                        sd_build_env = os.environ.copy() # Start with current env
-                        #--- Temporary fix due to conda really slow at catching up for the package the darwin compatibility for macOS 26.2
+                        sd_build_env = os.environ.copy()  # Start with current env
+                        # --- Temporary fix due to conda really slow at catching up for the package the darwin compatibility for macOS 26.2
                         if platform.system() == "Darwin":
                             try:
-                                print_system("macOS Fix (SD): Forcing Native Apple Clang and Deployment Target 15.0...")
-                                print_warning("Temporary fix due to conda really slow at catching up for the package the darwin compatibility for macOS 26.2")
-                                
+                                print_system(
+                                    "macOS Fix (SD): Forcing Native Apple Clang and Deployment Target 15.0..."
+                                )
+                                print_warning(
+                                    "Temporary fix due to conda really slow at catching up for the package the darwin compatibility for macOS 26.2"
+                                )
+
                                 # 1. Force Apple Native Clang
-                                sd_build_env['CC'] = '/usr/bin/clang'
-                                sd_build_env['CXX'] = '/usr/bin/clang++'
-                                
+                                sd_build_env["CC"] = "/usr/bin/clang"
+                                sd_build_env["CXX"] = "/usr/bin/clang++"
+
                                 # 2. Force Physical SDK Path
-                                real_sdk_path = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
-                                sd_build_env['SDKROOT'] = real_sdk_path
-                                sd_build_env['CFLAGS'] = f"-isysroot {real_sdk_path}"
-                                sd_build_env['CXXFLAGS'] = f"-isysroot {real_sdk_path}"
-                                
+                                real_sdk_path = subprocess.check_output(
+                                    ["xcrun", "--show-sdk-path"], text=True
+                                ).strip()
+                                sd_build_env["SDKROOT"] = real_sdk_path
+                                sd_build_env["CFLAGS"] = f"-isysroot {real_sdk_path}"
+                                sd_build_env["CXXFLAGS"] = f"-isysroot {real_sdk_path}"
+
                                 # 3. Anchor Deployment Target
-                                sd_build_env['MACOSX_DEPLOYMENT_TARGET'] = "26.0"
+                                sd_build_env["MACOSX_DEPLOYMENT_TARGET"] = "26.0"
 
                                 # 4. CRITICAL FIX: SANITIZE LIBRARY PATH
                                 # This stops Apple's 'ld' from loading Conda's broken libtapi.dylib
-                                sd_build_env['DYLD_LIBRARY_PATH'] = ""
-                                
+                                sd_build_env["DYLD_LIBRARY_PATH"] = ""
+
                             except Exception as e_mac_fix:
                                 print_warning(f"macOS Fix Warning (SD): {e_mac_fix}")
                         # -------------------------------------------------------
                         cmake_args_sd_lib = []
-                        chosen_sd_backend = os.getenv("SD_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                        chosen_sd_backend = (
+                            os.getenv("SD_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                        )
                         backend_log_sd = "cpu"
-                        
+
                         if chosen_sd_backend == "cuda" and AUTO_CUDA_AVAILABLE:
-                            cmake_args_sd_lib.append("-DSD_CUDA=ON"); backend_log_sd = "CUDA"
+                            cmake_args_sd_lib.append("-DSD_CUDA=ON")
+                            backend_log_sd = "CUDA"
                         elif chosen_sd_backend == "metal" and AUTO_METAL_AVAILABLE:
-                            cmake_args_sd_lib.append("-DSD_METAL=ON"); backend_log_sd = "Metal"
+                            cmake_args_sd_lib.append("-DSD_METAL=ON")
+                            backend_log_sd = "Metal"
                         elif chosen_sd_backend == "vulkan" and AUTO_VULKAN_AVAILABLE:
-                            cmake_args_sd_lib.append("-DSD_VULKAN=ON"); backend_log_sd = "Vulkan"
+                            cmake_args_sd_lib.append("-DSD_VULKAN=ON")
+                            backend_log_sd = "Vulkan"
                         else:
                             backend_log_sd = "CPU (Default)"
 
-                        print_system(f"Configuring stable-diffusion.cpp library build with: {backend_log_sd}")
+                        print_system(
+                            f"Configuring stable-diffusion.cpp library build with: {backend_log_sd}"
+                        )
 
                         # IMPORTANT: Pass env_override=sd_build_env to ALL run_command calls below!
-                        
+
                         # 1. CMake Configure
-                        if not run_command([CMAKE_CMD, ".."] + cmake_args_sd_lib, sd_cpp_build_path, "CMAKE-SD-LIB-CFG", env_override=sd_build_env):
+                        if not run_command(
+                            [CMAKE_CMD, ".."] + cmake_args_sd_lib,
+                            sd_cpp_build_path,
+                            "CMAKE-SD-LIB-CFG",
+                            env_override=sd_build_env,
+                        ):
                             print_error("CMake SD lib config failed.")
-                        
+
                         # 2. CMake Build
-                        elif not run_command([CMAKE_CMD, "--build", "."] + (["--config", "Release"] if IS_WINDOWS else []), 
-                                             sd_cpp_build_path, "CMAKE-BUILD-SD-LIB", env_override=sd_build_env):
+                        elif not run_command(
+                            [CMAKE_CMD, "--build", "."]
+                            + (["--config", "Release"] if IS_WINDOWS else []),
+                            sd_cpp_build_path,
+                            "CMAKE-BUILD-SD-LIB",
+                            env_override=sd_build_env,
+                        ):
                             print_error("Build SD lib failed.")
-                        
+
                         else:
                             # 3. Pip Install (Bindings)
-                            pip_build_env_sd = sd_build_env.copy() # Inherit our macOS fixes
-                            pip_build_env_sd['FORCE_CMAKE'] = '1'
-                            if cmake_args_sd_lib: 
-                                pip_build_env_sd['CMAKE_ARGS'] = " ".join(cmake_args_sd_lib)
-                            
-                            if not run_command([PIP_EXECUTABLE, "install", "."], STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, 
-                                               "PIP-SD-BINDINGS", env_override=pip_build_env_sd):
+                            pip_build_env_sd = (
+                                sd_build_env.copy()
+                            )  # Inherit our macOS fixes
+                            pip_build_env_sd["FORCE_CMAKE"] = "1"
+                            if cmake_args_sd_lib:
+                                pip_build_env_sd["CMAKE_ARGS"] = " ".join(
+                                    cmake_args_sd_lib
+                                )
+
+                            if not run_command(
+                                [PIP_EXECUTABLE, "install", "."],
+                                STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH,
+                                "PIP-SD-BINDINGS",
+                                env_override=pip_build_env_sd,
+                            ):
                                 print_error("Install SD bindings failed.")
                             else:
                                 print_system("stable-diffusion-cpp-python installed.")
-                                with open(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_sd_flag:
+                                with open(
+                                    CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE,
+                                    "w",
+                                    encoding="utf-8",
+                                ) as f_sd_flag:
                                     f_sd_flag.write(backend_log_sd)
             else:
                 print_system("Custom stable-diffusion-cpp-python previously installed.")
 
-
-            print_system(f"--- Installing Python dependencies from {os.path.basename(engine_req_path)} ---")
+            print_system(
+                f"--- Installing Python dependencies from {os.path.basename(engine_req_path)} ---"
+            )
             for attempt_pip in range(MAX_PIP_RETRIES):
-                if run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR, "PIP-ENGINE-REQ"):
+                if run_command(
+                    [PIP_EXECUTABLE, "install", "-r", engine_req_path],
+                    ENGINE_MAIN_DIR,
+                    "PIP-ENGINE-REQ",
+                ):
                     pip_install_success = True
                     break
                 else:
                     print_warning(
-                        f"pip install failed on attempt {attempt_pip + 1}/{MAX_PIP_RETRIES}. Retrying in {PIP_RETRY_DELAY_SECONDS} seconds...")
+                        f"pip install failed on attempt {attempt_pip + 1}/{MAX_PIP_RETRIES}. Retrying in {PIP_RETRY_DELAY_SECONDS} seconds..."
+                    )
                     time.sleep(PIP_RETRY_DELAY_SECONDS)
 
             if not pip_install_success:
-                print_error(f"Failed to install Python dependencies for Engine after {MAX_PIP_RETRIES} attempts. Exiting.")
+                print_error(
+                    f"Failed to install Python dependencies for Engine after {MAX_PIP_RETRIES} attempts. Exiting."
+                )
                 setup_failures.append(f"Pip failed to install Engine dependencies")
             print_system("--- Python dependencies for Engine installed ---")
 
             # Global command variable final sanity check (should point to conda env versions now)
-            globals()['GIT_CMD'] = shutil.which("git") or ('git.exe' if IS_WINDOWS else 'git')
-            globals()['CMAKE_CMD'] = shutil.which("cmake") or ('cmake.exe' if IS_WINDOWS else 'cmake')
+            globals()["GIT_CMD"] = shutil.which("git") or (
+                "git.exe" if IS_WINDOWS else "git"
+            )
+            globals()["CMAKE_CMD"] = shutil.which("cmake") or (
+                "cmake.exe" if IS_WINDOWS else "cmake"
+            )
             # NPM_CMD is already set by the Node.js block, but this re-confirms or falls back if needed.
             npm_exe_name_check = "npm.cmd" if IS_WINDOWS else "npm"
-            globals()['NPM_CMD'] = shutil.which(npm_exe_name_check) or npm_exe_name_check # Ensure this is updated from the conda env
+            globals()["NPM_CMD"] = (
+                shutil.which(npm_exe_name_check) or npm_exe_name_check
+            )  # Ensure this is updated from the conda env
 
             print_system(f"Using GIT_CMD: {GIT_CMD}")
             print_system(f"Using CMAKE_CMD: {CMAKE_CMD}")
             print_system(f"Using NPM_CMD: {NPM_CMD}")
             # One final comprehensive check for all critical tools
-            if not all([
-                GIT_CMD and shutil.which(GIT_CMD.split()[0]),
-                CMAKE_CMD and shutil.which(CMAKE_CMD.split()[0]),
-                NPM_CMD and shutil.which(NPM_CMD.split('.')[0]),
-                shutil.which("node"), # Directly check 'node' executable
-                shutil.which("go"), # Directly check 'go' executable
-                shutil.which("alr"), # Directly check 'alr' executable
-            ]):
-                print_error("One or more critical tools (git, cmake, node, npm, go, alr) not found after attempts. Exiting.")
-                setup_failures.append(f"At final check, critical tools not found after all attempts, this maybe these or other tools are not installed in the conda environment(git, cmake, node, npm, go, alr)")
+            if not all(
+                [
+                    GIT_CMD and shutil.which(GIT_CMD.split()[0]),
+                    CMAKE_CMD and shutil.which(CMAKE_CMD.split()[0]),
+                    NPM_CMD and shutil.which(NPM_CMD.split(".")[0]),
+                    shutil.which("node"),  # Directly check 'node' executable
+                    shutil.which("go"),  # Directly check 'go' executable
+                    shutil.which("alr"),  # Directly check 'alr' executable
+                ]
+            ):
+                print_error(
+                    "One or more critical tools (git, cmake, node, npm, go, alr) not found after attempts. Exiting."
+                )
+                setup_failures.append(
+                    f"At final check, critical tools not found after all attempts, this maybe these or other tools are not installed in the conda environment(git, cmake, node, npm, go, alr)"
+                )
 
             # --- [NEW] TUI vs. Fallback Logic ---
             TUI_AVAILABLE = False
             try:
                 # The TUI class should be defined in a separate file for clarity.
                 # Assuming it's in `zephyrine_tui.py` in the project root.
-                import textual
                 import psutil
+                import textual
+
                 TUI_AVAILABLE = True
             except ImportError:
                 TUI_AVAILABLE = False
@@ -5528,40 +7464,53 @@ if __name__ == "__main__":
             TUI_LIBRARIES_AVAILABLE = False
             try:
                 # Check if the required libraries can be imported
-                import textual
                 import psutil
+                import textual
 
                 TUI_LIBRARIES_AVAILABLE = True
             except ImportError:
                 TUI_LIBRARIES_AVAILABLE = False
 
-
             # This function will contain the fallback launch logic to avoid code duplication
             def launch_in_fallback_mode():
                 print_warning("Falling back to simple terminal output for monitoring.")
-                print_system("--- Starting Main Application Services (Fallback Mode) ---")
+                print_system(
+                    "--- Starting Main Application Services (Fallback Mode) ---"
+                )
 
                 # The watchdogs and mesh node are already running. We just start the rest.
                 # First, check if there were any setup failures before proceeding.
                 if setup_failures:
-                    print_error("Halting service launch due to previous setup failures.")
+                    print_error(
+                        "Halting service launch due to previous setup failures."
+                    )
                     return
 
                 service_threads = []
                 # Start Engine Main
-                service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
+                service_threads.append(
+                    start_service_thread(start_engine_main, "EngineMainThread")
+                )
                 time.sleep(3)
                 engine_ready = any(
-                    proc.poll() is None and name_s == "ENGINE" for proc, name_s, _, _ in running_processes)
+                    proc.poll() is None and name_s == "ENGINE"
+                    for proc, name_s, _, _ in running_processes
+                )
                 if not engine_ready:
                     print_error("Engine Main failed to start. Exiting.")
                     setup_failures.append("Engine Main failed to start.")
                     return
 
                 # Start Backend Service and Frontend
-                service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
+                service_threads.append(
+                    start_service_thread(start_frontend, "FrontendThread")
+                )
 
-                print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.", "SUCCESS")
+                print_colored(
+                    "SUCCESS",
+                    "All services launching. Press Ctrl+C to shut down.",
+                    "SUCCESS",
+                )
                 try:
                     while True:
                         all_ok = True
@@ -5576,48 +7525,64 @@ if __name__ == "__main__":
                             if proc.poll() is None:
                                 active_procs_found = True
                             else:
-                                print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()}).")
+                                print_error(
+                                    f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()})."
+                                )
                                 all_ok = False
 
                         if not all_ok:
-                            print_error("One or more services terminated. Shutting down launcher.")
+                            print_error(
+                                "One or more services terminated. Shutting down launcher."
+                            )
                             break
                         if not active_procs_found and service_threads:
-                            print_system("All services seem to have finished. Exiting launcher.")
+                            print_system(
+                                "All services seem to have finished. Exiting launcher."
+                            )
                             break
 
                         time.sleep(5)
                 except KeyboardInterrupt:
-                    print_system("\nKeyboardInterrupt received by main thread. Shutting down...")
+                    print_system(
+                        "\nKeyboardInterrupt received by main thread. Shutting down..."
+                    )
                 finally:
-                    print_system("Launcher main loop finished. Ensuring cleanup via atexit...")
-
+                    print_system(
+                        "Launcher main loop finished. Ensuring cleanup via atexit..."
+                    )
 
             # --- Main Launch Decision ---
             # Step 1: Launch the ZephyMesh Node and wait for it to be ready.
             if not _ensure_and_launch_zephymesh():
                 # If it fails to start, we can still continue, but P2P will be disabled.
                 print_warning(
-                    "ZephyMesh node failed to start. P2P functionality will be disabled for this session.")
+                    "ZephyMesh node failed to start. P2P functionality will be disabled for this session."
+                )
 
             # Step 2: Compile and run the watchdogs.
-            print_system("--- Compiling and Launching Core Infrastructure (Watchdogs) ---")
+            print_system(
+                "--- Compiling and Launching Core Infrastructure (Watchdogs) ---"
+            )
             _compile_and_run_watchdogs()
 
             # --- [UI/MONITORING LAUNCH] ---
             # Now, decide which monitoring interface to launch.
 
-            #TUI_LIBRARIES CHECK ARE NOW CHANGED BY SOMETHING
+            # TUI_LIBRARIES CHECK ARE NOW CHANGED BY SOMETHING
 
             if not setup_failures:
                 print_system("--- First-Time Verification Complete ---")
 
-                print_system("Compiling project Python source to optimized bytecode (-OO)...")
+                print_system(
+                    "Compiling project Python source to optimized bytecode (-OO)..."
+                )
                 try:
                     # 1. Specifically compile the main launcher script itself.
                     launcher_path = os.path.abspath(__file__)
                     print_system(f"  -> Compiling file: {launcher_path}")
-                    compileall.compile_file(launcher_path, force=True, quiet=1, legacy=True, optimize=2)
+                    compileall.compile_file(
+                        launcher_path, force=True, quiet=1, legacy=True, optimize=2
+                    )
 
                     # 2. Specifically compile your project's source code directories.
                     #    DO NOT include ROOT_DIR here as it contains the Conda environment.
@@ -5630,21 +7595,28 @@ if __name__ == "__main__":
                     for path in set(project_source_dirs):
                         if os.path.isdir(path):
                             print_system(f"  -> Compiling directory: {path}")
-                            compileall.compile_dir(path, force=True, quiet=1, legacy=True, optimize=2)
+                            compileall.compile_dir(
+                                path, force=True, quiet=1, legacy=True, optimize=2
+                            )
                         else:
-                            print_warning(f"  -> Skipped non-existent directory for compilation: {path}")
+                            print_warning(
+                                f"  -> Skipped non-existent directory for compilation: {path}"
+                            )
 
-                    print_colored("SUCCESS", "Project bytecode compilation complete.", "SUCCESS")
+                    print_colored(
+                        "SUCCESS", "Project bytecode compilation complete.", "SUCCESS"
+                    )
                 except Exception as e_compile:
                     print_error(f"Failed during bytecode compilation: {e_compile}")
                     # Making this a warning instead of a failure. The app can still run without .pyc files.
                     print_warning(
-                        "Bytecode compilation failed. The application can still run from .py source files, but startup will be slower.")
+                        "Bytecode compilation failed. The application can still run from .py source files, but startup will be slower."
+                    )
                     # We remove it from setup_failures so the master flag can still be created.
                     # setup_failures.append("Bytecode compilation failed.")
 
                 print_system(f"Writing current launcher hash to: {LAUNCHER_HASH_FILE}")
-                with open(LAUNCHER_HASH_FILE, 'w', encoding='utf-8') as f_hash:
+                with open(LAUNCHER_HASH_FILE, "w", encoding="utf-8") as f_hash:
                     f_hash.write(current_hash)
 
                 print_system("Setup complete. Proceeding to launch.")
@@ -5658,51 +7630,67 @@ if __name__ == "__main__":
 
             # --- End of [NEW] TUI vs. Fallback Logic ---
             del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
-            #-=-=-=-=-=
-
+            # -=-=-=-=-=
 
         else:  # Initial launcher instance (is_already_in_correct_env is False)
             print_system(f"--- Initial Launcher: Conda Setup & Hardware Detection ---")
 
             autodetected_build_env_vars = _detect_and_prepare_acceleration_env_vars()
 
-
             if not find_conda_executable(attempt_number=attempt):
-                newly_installed_conda_path = _install_miniforge_and_check_overall_environment()
+                newly_installed_conda_path = (
+                    _install_miniforge_and_check_overall_environment()
+                )
                 if newly_installed_conda_path:
-                    print_system("Miniforge auto-installation successful. Using new executable.")
+                    print_system(
+                        "Miniforge auto-installation successful. Using new executable."
+                    )
                     # The find_conda_executable() function already sets the global CONDA_EXECUTABLE
                     # and caches the path, but we can re-set it here for absolute certainty.
                     CONDA_EXECUTABLE = newly_installed_conda_path
                     try:  # Ensure the cache is written with the newly installed path
-                        with open(CONDA_PATH_CACHE_FILE, 'w', encoding='utf-8') as f_cache:
+                        with open(
+                            CONDA_PATH_CACHE_FILE, "w", encoding="utf-8"
+                        ) as f_cache:
                             f_cache.write(CONDA_EXECUTABLE)
                         print_system(f"Cached new Conda path: {CONDA_EXECUTABLE}")
                     except IOError as e_cache_write:
-                        print_warning(f"Could not write to Conda path cache file: {e_cache_write}")
+                        print_warning(
+                            f"Could not write to Conda path cache file: {e_cache_write}"
+                        )
                 else:
                     # If installation fails, we MUST mark this attempt as a failure and stop.
                     print_error("Automated Miniforge installation failed.")
                     print_error(
-                        "Please try installing Miniconda or Miniforge manually and ensure 'conda' is in your PATH.")
+                        "Please try installing Miniconda or Miniforge manually and ensure 'conda' is in your PATH."
+                    )
                     setup_failures.append("Conda not found and auto-install failed.")
                     # Continue to the end of the loop to trigger the retry/failure logic
                     continue
 
                 # At this point, CONDA_EXECUTABLE *must* be set. If not, something is fundamentally wrong.
             if not CONDA_EXECUTABLE:
-                print_error("CRITICAL: Conda executable is not set after search and install attempts.")
+                print_error(
+                    "CRITICAL: Conda executable is not set after search and install attempts."
+                )
                 setup_failures.append("Failed to find or install a Conda executable.")
                 continue  # Skip to the next attempt
 
             if not _miniforge_alike_checking_config(CONDA_EXECUTABLE):
-                print_error("Might be fatal due to missing system dependencies _miniforge_alike_checking_config. Requesting retry afterwards!")
-                setup_failures.append("issue on _miniforge_alike_checking_config. Requesting Retry!")
-
+                print_error(
+                    "Might be fatal due to missing system dependencies _miniforge_alike_checking_config. Requesting retry afterwards!"
+                )
+                setup_failures.append(
+                    "issue on _miniforge_alike_checking_config. Requesting Retry!"
+                )
 
             if not _check_playwright_linux_deps():
-                print_error("Might be fatal due to missing system dependencies _check_playwright_linux_deps. Requesting retry afterwards!")
-                setup_failures.append("issue on _check_playwright_linux_deps. Requesting Retry!")
+                print_error(
+                    "Might be fatal due to missing system dependencies _check_playwright_linux_deps. Requesting retry afterwards!"
+                )
+                setup_failures.append(
+                    "issue on _check_playwright_linux_deps. Requesting Retry!"
+                )
 
             print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
 
@@ -5713,19 +7701,33 @@ if __name__ == "__main__":
             # Run the health check on the existing environment before proceeding.
             # If it returns False, it means the environment was corrupt and has been deleted.
             if attempt >= 2:
-                print_system(f"--- This is a retry (Attempt {attempt}). Running Conda health check as a diagnostic. ---")
+                print_system(
+                    f"--- This is a retry (Attempt {attempt}). Running Conda health check as a diagnostic. ---"
+                )
                 # If it returns False, it means the environment was corrupt and has been deleted.
                 if not _check_and_repair_conda_env(TARGET_RUNTIME_ENV_PATH):
-                    print_warning("Environment was repaired by deletion. The launcher will now create a fresh one.")
+                    print_warning(
+                        "Environment was repaired by deletion. The launcher will now create a fresh one."
+                    )
 
-            if not (os.path.isdir(TARGET_RUNTIME_ENV_PATH) and os.path.exists(
-                    os.path.join(TARGET_RUNTIME_ENV_PATH, 'conda-meta'))):
-                print_system(f"Target Conda env '{TARGET_RUNTIME_ENV_PATH}' not found/invalid. Creating...")
+            if not (
+                os.path.isdir(TARGET_RUNTIME_ENV_PATH)
+                and os.path.exists(os.path.join(TARGET_RUNTIME_ENV_PATH, "conda-meta"))
+            ):
+                print_system(
+                    f"Target Conda env '{TARGET_RUNTIME_ENV_PATH}' not found/invalid. Creating..."
+                )
                 _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
                 target_python_versions = get_conda_python_versions_to_try()
-                if not create_conda_env(TARGET_RUNTIME_ENV_PATH, target_python_versions):
-                    print_error(f"Failed to create Conda env at '{TARGET_RUNTIME_ENV_PATH}'. Exiting.")
-                    setup_failures.append(f"Weird, how did we get here? Conda env creation failed")
+                if not create_conda_env(
+                    TARGET_RUNTIME_ENV_PATH, target_python_versions
+                ):
+                    print_error(
+                        f"Failed to create Conda env at '{TARGET_RUNTIME_ENV_PATH}'. Exiting."
+                    )
+                    setup_failures.append(
+                        f"Weird, how did we get here? Conda env creation failed"
+                    )
             else:
                 print_system(f"Target Conda env '{TARGET_RUNTIME_ENV_PATH}' exists.")
 
@@ -5733,24 +7735,50 @@ if __name__ == "__main__":
             if autodetected_build_env_vars.get("AUTODETECTED_CUDA_AVAILABLE") == "1":
                 print_system("CUDA acceleration detected by initial launcher.")
                 if not os.path.exists(CUDA_TOOLKIT_INSTALLED_FLAG_FILE):
-                    print_warning("NVIDIA CUDA Toolkit not yet marked as installed in the Conda environment. Attempting installation...")
-                    print_warning("This may take several minutes and download a significant amount of data (>2 GB).")
+                    print_warning(
+                        "NVIDIA CUDA Toolkit not yet marked as installed in the Conda environment. Attempting installation..."
+                    )
+                    print_warning(
+                        "This may take several minutes and download a significant amount of data (>2 GB)."
+                    )
 
                     cuda_install_cmd = [
-                        CONDA_EXECUTABLE, 'install', '--yes',
-                        '--prefix', TARGET_RUNTIME_ENV_PATH,
-                        '-c', 'nvidia',
-                        'cuda-toolkit'
+                        CONDA_EXECUTABLE,
+                        "install",
+                        "--yes",
+                        "--prefix",
+                        TARGET_RUNTIME_ENV_PATH,
+                        "-c",
+                        "nvidia",
+                        "cuda-toolkit",
                     ]
 
-                    if IS_WINDOWS and CONDA_EXECUTABLE and CONDA_EXECUTABLE.lower().endswith(".bat"):
-                        cuda_install_cmd = ['cmd', '/c'] + cuda_install_cmd
+                    if (
+                        IS_WINDOWS
+                        and CONDA_EXECUTABLE
+                        and CONDA_EXECUTABLE.lower().endswith(".bat")
+                    ):
+                        cuda_install_cmd = ["cmd", "/c"] + cuda_install_cmd
 
                     print_system(f"Executing: {' '.join(cuda_install_cmd)}")
                     try:
-                        process = subprocess.Popen(cuda_install_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors='replace')
-                        stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, "CUDA-INSTALL-OUT"), daemon=True)
-                        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, "CUDA-INSTALL-ERR"), daemon=True)
+                        process = subprocess.Popen(
+                            cuda_install_cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            errors="replace",
+                        )
+                        stdout_thread = threading.Thread(
+                            target=stream_output,
+                            args=(process.stdout, "CUDA-INSTALL-OUT"),
+                            daemon=True,
+                        )
+                        stderr_thread = threading.Thread(
+                            target=stream_output,
+                            args=(process.stderr, "CUDA-INSTALL-ERR"),
+                            daemon=True,
+                        )
                         stdout_thread.start()
                         stderr_thread.start()
 
@@ -5759,125 +7787,215 @@ if __name__ == "__main__":
                         stderr_thread.join(timeout=5)
 
                         if process.returncode == 0:
-                            print_system("NVIDIA CUDA Toolkit successfully installed into Conda environment.")
-                            with open(CUDA_TOOLKIT_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_flag:
-                                f_flag.write(f"Installed on: {datetime.now().isoformat()}\n")
+                            print_system(
+                                "NVIDIA CUDA Toolkit successfully installed into Conda environment."
+                            )
+                            with open(
+                                CUDA_TOOLKIT_INSTALLED_FLAG_FILE, "w", encoding="utf-8"
+                            ) as f_flag:
+                                f_flag.write(
+                                    f"Installed on: {datetime.now().isoformat()}\n"
+                                )
                         else:
-                            print_error(f"Failed to install NVIDIA CUDA Toolkit (return code: {process.returncode}).")
-                            print_error("The launcher will continue, but builds requiring 'nvcc' will likely fail.")
-                            print_error("Please check the 'CUDA-INSTALL-ERR' logs above for details.")
+                            print_error(
+                                f"Failed to install NVIDIA CUDA Toolkit (return code: {process.returncode})."
+                            )
+                            print_error(
+                                "The launcher will continue, but builds requiring 'nvcc' will likely fail."
+                            )
+                            print_error(
+                                "Please check the 'CUDA-INSTALL-ERR' logs above for details."
+                            )
                     except Exception as e_cuda_install:
-                        print_error(f"An exception occurred during CUDA toolkit installation: {e_cuda_install}")
-                        print_error("The launcher will continue, but CUDA support will likely be unavailable.")
+                        print_error(
+                            f"An exception occurred during CUDA toolkit installation: {e_cuda_install}"
+                        )
+                        print_error(
+                            "The launcher will continue, but CUDA support will likely be unavailable."
+                        )
                 else:
-                    print_system("NVIDIA CUDA Toolkit is already marked as installed in Conda environment (flag file found).")
+                    print_system(
+                        "NVIDIA CUDA Toolkit is already marked as installed in Conda environment (flag file found)."
+                    )
             # --- END Conda install NVIDIA CUDA Toolkit ---
 
             # Prepare relaunch command
             script_to_run_abs_path = os.path.abspath(__file__)
-            conda_run_cmd_list_base = [CONDA_EXECUTABLE, 'run', '--prefix', TARGET_RUNTIME_ENV_PATH]
+            conda_run_cmd_list_base = [
+                CONDA_EXECUTABLE,
+                "run",
+                "--prefix",
+                TARGET_RUNTIME_ENV_PATH,
+            ]
 
             conda_supports_no_capture = False
             try:
                 # Check if 'conda run' supports '--no-capture-output' for direct streaming
-                test_no_capture_cmd = [CONDA_EXECUTABLE, 'run', '--help']
-                help_output = subprocess.check_output(test_no_capture_cmd, text=True, stderr=subprocess.STDOUT, timeout=5)
-                if '--no-capture-output' in help_output:
+                test_no_capture_cmd = [CONDA_EXECUTABLE, "run", "--help"]
+                help_output = subprocess.check_output(
+                    test_no_capture_cmd, text=True, stderr=subprocess.STDOUT, timeout=5
+                )
+                if "--no-capture-output" in help_output:
                     conda_supports_no_capture = True
-                    conda_run_cmd_list_base.insert(2, '--no-capture-output') # Insert after 'run'
+                    conda_run_cmd_list_base.insert(
+                        2, "--no-capture-output"
+                    )  # Insert after 'run'
             except Exception:
-                pass # Ignore errors if `conda run --help` fails
+                pass  # Ignore errors if `conda run --help` fails
 
-            conda_run_cmd_list = conda_run_cmd_list_base + ['python', script_to_run_abs_path] + sys.argv[1:]
-            if IS_WINDOWS and CONDA_EXECUTABLE and CONDA_EXECUTABLE.lower().endswith(".bat"):
-                conda_run_cmd_list = ['cmd', '/c'] + conda_run_cmd_list
+            conda_run_cmd_list = (
+                conda_run_cmd_list_base
+                + ["python", script_to_run_abs_path]
+                + sys.argv[1:]
+            )
+            if (
+                IS_WINDOWS
+                and CONDA_EXECUTABLE
+                and CONDA_EXECUTABLE.lower().endswith(".bat")
+            ):
+                conda_run_cmd_list = ["cmd", "/c"] + conda_run_cmd_list
 
-            display_cmd_list = [str(c) if c is not None else "<CRITICAL_NONE_ERROR>" for c in conda_run_cmd_list]
+            display_cmd_list = [
+                str(c) if c is not None else "<CRITICAL_NONE_ERROR>"
+                for c in conda_run_cmd_list
+            ]
             if "<CRITICAL_NONE_ERROR>" in display_cmd_list:
-                print_error(f"FATAL: None value in conda_run_cmd_list: {display_cmd_list}"); setup_failures.append(f"Critical Error: None value in conda_run_cmd_list")
-            print_system(f"Relaunching script using 'conda run': {' '.join(display_cmd_list)}")
+                print_error(
+                    f"FATAL: None value in conda_run_cmd_list: {display_cmd_list}"
+                )
+                setup_failures.append(
+                    f"Critical Error: None value in conda_run_cmd_list"
+                )
+            print_system(
+                f"Relaunching script using 'conda run': {' '.join(display_cmd_list)}"
+            )
 
             os.makedirs(RELAUNCH_LOG_DIR, exist_ok=True)
             popen_env = os.environ.copy()
             popen_env.update(autodetected_build_env_vars)
-            popen_env["ZEPHYRINE_RELAUNCHED_IN_CONDA"] = "1" # Set flag for relaunched script
+            popen_env["ZEPHYRINE_RELAUNCHED_IN_CONDA"] = (
+                "1"  # Set flag for relaunched script
+            )
 
             # --- JEMALLOC INJECTION START ---
             # We find the path to the jemalloc library inside the TARGET Conda environment
             jemalloc_lib_path = None
             if platform.system() == "Linux":
                 # On Linux, it's usually libjemalloc.so.2
-                possible_path = os.path.join(TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.so.2")
+                possible_path = os.path.join(
+                    TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.so.2"
+                )
                 if os.path.exists(possible_path):
                     jemalloc_lib_path = possible_path
                     popen_env["LD_PRELOAD"] = jemalloc_lib_path
-                    print_system(f"Injecting jemalloc for Linux relaunch: {jemalloc_lib_path}")
+                    print_system(
+                        f"Injecting jemalloc for Linux relaunch: {jemalloc_lib_path}"
+                    )
                 else:
                     # Fallback to .so if .so.2 isn't there (unlikely with conda-forge)
-                    possible_path = os.path.join(TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.so")
+                    possible_path = os.path.join(
+                        TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.so"
+                    )
                     if os.path.exists(possible_path):
                         jemalloc_lib_path = possible_path
                         popen_env["LD_PRELOAD"] = jemalloc_lib_path
-                        print_system(f"Injecting jemalloc for Linux relaunch: {jemalloc_lib_path}")
+                        print_system(
+                            f"Injecting jemalloc for Linux relaunch: {jemalloc_lib_path}"
+                        )
 
             elif platform.system() == "Darwin":
                 # On macOS, it's libjemalloc.dylib (usually versioned, but symlink should exist)
                 # Conda usually puts it in lib/libjemalloc.2.dylib or libjemalloc.dylib
                 possible_paths = [
                     os.path.join(TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.2.dylib"),
-                    os.path.join(TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.dylib")
+                    os.path.join(TARGET_RUNTIME_ENV_PATH, "lib", "libjemalloc.dylib"),
                 ]
                 for p in possible_paths:
                     if os.path.exists(p):
                         jemalloc_lib_path = p
                         break
-                
+
                 if jemalloc_lib_path:
                     popen_env["DYLD_INSERT_LIBRARIES"] = jemalloc_lib_path
-                    # macOS sometimes scrubs DYLD_ vars for security, but it usually works 
+                    # macOS sometimes scrubs DYLD_ vars for security, but it usually works
                     # for non-system binaries like our Conda python.
-                    print_system(f"Injecting jemalloc for macOS relaunch: {jemalloc_lib_path}")
-                    
+                    print_system(
+                        f"Injecting jemalloc for macOS relaunch: {jemalloc_lib_path}"
+                    )
+
                     # Optional: Configure jemalloc for aggressive purging (helps with the 34GB bloat)
                     # popen_env["MALLOC_CONF"] = "background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000"
 
             if not jemalloc_lib_path:
-                print_warning("Could not find jemalloc library in Conda env. Launching with default allocator.")
+                print_warning(
+                    "Could not find jemalloc library in Conda env. Launching with default allocator."
+                )
             # --- JEMALLOC INJECTION END ---
 
             log_stream_threads = []
-            common_popen_kwargs_relaunch = {"text": True, "errors": 'replace', "bufsize": 1, "env": popen_env}
+            common_popen_kwargs_relaunch = {
+                "text": True,
+                "errors": "replace",
+                "bufsize": 1,
+                "env": popen_env,
+            }
             if IS_WINDOWS:
-                common_popen_kwargs_relaunch["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+                common_popen_kwargs_relaunch["creationflags"] = (
+                    subprocess.CREATE_NEW_PROCESS_GROUP
+                )
             else:
                 common_popen_kwargs_relaunch["preexec_fn"] = os.setsid
 
             process_conda_run = None
             try:
                 if conda_supports_no_capture:
-                    print_system("Parent: Relaunched script output should stream directly.")
-                    process_conda_run = subprocess.Popen(conda_run_cmd_list, **common_popen_kwargs_relaunch)
+                    print_system(
+                        "Parent: Relaunched script output should stream directly."
+                    )
+                    process_conda_run = subprocess.Popen(
+                        conda_run_cmd_list, **common_popen_kwargs_relaunch
+                    )
                 else:
                     print_system(
-                        f"Parent: Relaunched script output via logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'")
-                    with open(RELAUNCH_STDOUT_LOG, 'w', encoding='utf-8') as f_stdout, \
-                            open(RELAUNCH_STDERR_LOG, 'w', encoding='utf-8') as f_stderr:
+                        f"Parent: Relaunched script output via logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'"
+                    )
+                    with (
+                        open(RELAUNCH_STDOUT_LOG, "w", encoding="utf-8") as f_stdout,
+                        open(RELAUNCH_STDERR_LOG, "w", encoding="utf-8") as f_stderr,
+                    ):
                         file_capture_kwargs = common_popen_kwargs_relaunch.copy()
                         file_capture_kwargs["stdout"] = f_stdout
                         file_capture_kwargs["stderr"] = f_stderr
-                        process_conda_run = subprocess.Popen(conda_run_cmd_list, **file_capture_kwargs)
+                        process_conda_run = subprocess.Popen(
+                            conda_run_cmd_list, **file_capture_kwargs
+                        )
 
-                if not process_conda_run: raise RuntimeError("Popen for conda run failed.")
-                relaunched_conda_process_obj = process_conda_run # Store for atexit cleanup
+                if not process_conda_run:
+                    raise RuntimeError("Popen for conda run failed.")
+                relaunched_conda_process_obj = (
+                    process_conda_run  # Store for atexit cleanup
+                )
 
                 if not conda_supports_no_capture:
                     # Start threads to stream captured logs from files
-                    stdout_thread = threading.Thread(target=_stream_log_file,
-                                                    args=(RELAUNCH_STDOUT_LOG, relaunched_conda_process_obj, "STDOUT"),
-                                                    daemon=True)
-                    stderr_thread = threading.Thread(target=_stream_log_file,
-                                                    args=(RELAUNCH_STDERR_LOG, relaunched_conda_process_obj, "STDERR"),
-                                                    daemon=True)
+                    stdout_thread = threading.Thread(
+                        target=_stream_log_file,
+                        args=(
+                            RELAUNCH_STDOUT_LOG,
+                            relaunched_conda_process_obj,
+                            "STDOUT",
+                        ),
+                        daemon=True,
+                    )
+                    stderr_thread = threading.Thread(
+                        target=_stream_log_file,
+                        args=(
+                            RELAUNCH_STDERR_LOG,
+                            relaunched_conda_process_obj,
+                            "STDERR",
+                        ),
+                        daemon=True,
+                    )
                     log_stream_threads.extend([stdout_thread, stderr_thread])
                     stdout_thread.start()
                     stderr_thread.start()
@@ -5885,50 +8003,91 @@ if __name__ == "__main__":
                 exit_code_from_conda_run = -1
                 if relaunched_conda_process_obj:
                     try:
-                        relaunched_conda_process_obj.wait() # Wait for the relaunched script to complete
-                        exit_code_from_conda_run = relaunched_conda_process_obj.returncode
+                        relaunched_conda_process_obj.wait()  # Wait for the relaunched script to complete
+                        exit_code_from_conda_run = (
+                            relaunched_conda_process_obj.returncode
+                        )
                     except KeyboardInterrupt:
-                        print_system("Parent script's wait for 'conda run' interrupted. Shutting down...")
+                        print_system(
+                            "Parent script's wait for 'conda run' interrupted. Shutting down..."
+                        )
                         # If SIGINT, exit with 130 (common for Ctrl+C)
-                        if not getattr(sys, 'exitfunc_called', False): sys.exit(130)
+                        if not getattr(sys, "exitfunc_called", False):
+                            sys.exit(130)
 
                     if log_stream_threads:
-                        print_system("Parent: Relaunched script finished. Waiting for log streamers (max 2s)...")
+                        print_system(
+                            "Parent: Relaunched script finished. Waiting for log streamers (max 2s)..."
+                        )
                         for t in log_stream_threads:
-                            if t.is_alive(): t.join(timeout=1.0)
+                            if t.is_alive():
+                                t.join(timeout=1.0)
                         print_system("Parent: Log streamers finished.")
 
-                    print_system(f"'conda run' process finished with code: {exit_code_from_conda_run}.")
-                    relaunched_conda_process_obj = None # Mark as handled for atexit
-                    sys.exit(exit_code_from_conda_run) # Exit parent with child's return code
+                    print_system(
+                        f"'conda run' process finished with code: {exit_code_from_conda_run}."
+                    )
+                    relaunched_conda_process_obj = None  # Mark as handled for atexit
+                    sys.exit(
+                        exit_code_from_conda_run
+                    )  # Exit parent with child's return code
                 else:
-                    print_error("Failed to start 'conda run' process. This should not happen after Popen check."); setup_failures.append(f"conda run process failed to start on the last phase Popen check issue?")
+                    print_error(
+                        "Failed to start 'conda run' process. This should not happen after Popen check."
+                    )
+                    setup_failures.append(
+                        f"conda run process failed to start on the last phase Popen check issue?"
+                    )
             except Exception as e_outer:
-                print_error(f"Error during 'conda run' or wait: {e_outer}"); traceback.print_exc(); setup_failures.append(f"another error or timed out during wait on conda")
+                print_error(f"Error during 'conda run' or wait: {e_outer}")
+                traceback.print_exc()
+                setup_failures.append(
+                    f"another error or timed out during wait on conda"
+                )
 
         if not setup_failures:
-            print_colored("SUCCESS", f"Setup completed successfully on attempt {attempt}!", "SUCCESS")
+            print_colored(
+                "SUCCESS",
+                f"Setup completed successfully on attempt {attempt}!",
+                "SUCCESS",
+            )
             break  # Exit the retry loop
         else:
-            print_colored("ERROR", f"Setup attempt {attempt} failed with the following errors:", "ERROR")
+            print_colored(
+                "ERROR",
+                f"Setup attempt {attempt} failed with the following errors:",
+                "ERROR",
+            )
             for failure in setup_failures:
                 print_error(f"  - {failure}")
-            final_setup_failures = setup_failures # Save the last set of failures for the final report
+            final_setup_failures = (
+                setup_failures  # Save the last set of failures for the final report
+            )
 
     # --- This code runs AFTER the for loop is finished (either by 'break' or exhaustion) ---
     if final_setup_failures:
-        print_colored("FATAL", "="*60, "ERROR")
-        print_colored("FATAL", "           PROJECT ZEPHYRINE LAUNCHER FAILED OR GONE INOP", "ERROR")
-        print_colored("FATAL", "="*60, "ERROR")
+        print_colored("FATAL", "=" * 60, "ERROR")
+        print_colored(
+            "FATAL",
+            "           PROJECT ZEPHYRINE LAUNCHER FAILED OR GONE INOP",
+            "ERROR",
+        )
+        print_colored("FATAL", "=" * 60, "ERROR")
         print_error(f"All {MAX_SETUP_ATTEMPTS} setup attempts have failed. Giving up.")
         print_error("The final set of errors encountered was:")
         for i, failure in enumerate(final_setup_failures, 1):
             print_error(f"  {i}. {failure}")
 
         print_warning("\n--- Recommended Actions Memo ---")
-        print_warning("0. Make sure you are not running Windows or NT based system/environemtn, because this script is not tested on Windows.")
-        print_warning("1. Review the logs above for specific error messages (e.g., from pip, cmake, git).")
+        print_warning(
+            "0. Make sure you are not running Windows or NT based system/environemtn, because this script is not tested on Windows."
+        )
+        print_warning(
+            "1. Review the logs above for specific error messages (e.g., from pip, cmake, git)."
+        )
         print_warning("2. Ensure you have a stable internet connection.")
         print_warning("3. Check for sufficient disk space.")
-        print_warning(f"4. As a last resort, manually delete the '{RUNTIME_ENV_FOLDER_NAME}' directory and all '.flag' files in the root folder, then run this script again.")
+        print_warning(
+            f"4. As a last resort, manually delete the '{RUNTIME_ENV_FOLDER_NAME}' directory and all '.flag' files in the root folder, then run this script again."
+        )
         sys.exit(1)

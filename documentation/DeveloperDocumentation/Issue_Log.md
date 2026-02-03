@@ -1,3 +1,8 @@
+-   **ID:** CORE-FEAT-019
+-   **Title:** Implement initial safety measures to processing pipeline
+-   **Status:** In-Progress
+-   **Description:** This feature introduces initial safety measures to the core processing pipeline. This is the first half of the planned safety enhancements to ensure robust and secure operation.
+
 -   **ID:** CORE-REFACTOR-005
 -   **Title:** Refactor Task Classification and Enhance Contextual Retrieval
 -   **Status:** In-Progress
@@ -6,12 +11,12 @@
 -   **ID:** CORE-REFACTOR-004
 -   **Title:** Implement Disciplined Ada/SPARK Build Process and Refactor Agent for Procedural Tasks
 -   **Status:** Resolved
--   **Description:** This change introduces a more rigorous and disciplined build workflow for Ada/SPARK components. New helper scripts (`alr_compile`, `alr_spark`, `alr_whiplash`) are added to the environment via the launcher to standardize compilation and verification, enforcing a 'whiplash' discipline of "verify then compile". The agent implementation has been significantly refactored, renaming `agent.py` to `procedural_adaptivesystem_agent.py` to better reflect its role. The agent's internal logic is now a two-phase process (plan then translate) to improve the reliability of tool use and includes a "snowball check" to filter out low-quality responses. The agent is now also capable of consulting reference manuals and documents via a new RAG implementation.
+-   **Description:** This change introduces a more rigorous and disciplined build workflow for Ada/SPARK components. New helper scripts (`alr_compile`, `alr_spark`, `alr_whiplash`) are added to the environment via the launcher to standardize compilation and verification, enforcing a 'whiplash' discipline of "verify then compile". The procedural system implementation has been significantly refactored, renaming `procedural system.py` to `procedural_adaptivesystem_procedural system.py` to better reflect its role. The procedural system's internal logic is now a two-phase process (plan then translate) to improve the reliability of tool use and includes a "snowball check" to filter out low-quality responses. The procedural system is now also capable of consulting reference manuals and documents via a new retrieval implementation.
 
 -   **ID:** CORTEX-FEAT-018
--   **Title:** Ground AdaptiveSystem in Time with Multi-Calendar Temporal Anchor
+-   **Title:** Ground System in Time with Multi-Calendar Temporal Anchor
 -   **Status:** Resolved
--   **Description:** This feature enhances the AdaptiveSystem's contextual awareness by injecting a temporal anchor into its prompts. At the start of a task, a string is generated containing the current date and time in multiple formats: Gregorian (Common Era), Holocene (Human Era), Hebrew, and Islamic (Hijri). This provides a rich, multi-faceted sense of the current time, intended to improve the AdaptiveSystem's ability to reason about and retrieve time-sensitive information. Requires the `convertdate` library.
+-   **Description:** This feature enhances the System's contextual awareness by injecting a temporal anchor into its prompts. At the start of a task, a string is generated containing the current date and time in multiple formats: Gregorian (Common Era), Holocene (Human Era), Hebrew, and Islamic (Hijri). This provides a rich, multi-faceted sense of the current time, intended to improve the System's ability to reason about and retrieve time-sensitive information. Requires the `convertdate` library.
 
 -   **ID:** UI-REFACTOR-006
 -   **Title:** Deprecate Ada Frontface and Integrate Native WebSocket UI
@@ -19,14 +24,14 @@
 -   **Description:** This major refactor removes the Ada-based `frontfacebackendservice` and replaces it with a direct, high-performance WebSocket connection to the main Python backend (`AdelaideAlbertCortex.py`). A new native ASGI WebSocket handler (`/zepzepadaui`) has been implemented. The frontend has been completely overhauled with a new "liquid glass" design, a floating chat input, improved animations, and a streamlined user experience. A new `ZepZepAdaUI` database table has been introduced to separate UI state from the core interaction log.
 
 -   **ID:** CORTEX-FEAT-006
--   **Title:** Implement Warden Memory Protection for AdaptiveSystem Calls
+-   **Title:** Implement Warden Memory Protection for System Calls
 -   **Status:** In-Progress
--   **Description:** This feature introduces the "Warden" system, a proactive memory management and resource negotiation layer for all AdaptiveSystem calls within the System Core. The Warden is designed to prevent context overflow and subsequent application crashes by dynamically assessing system memory, probing GGUF file metadata to predict RAM requirements, and selecting an appropriate context size ('bin') for the operation. If the required memory exceeds safe available limits, the Warden will negotiate a smaller context bin. If a prompt is too large for the selected bin, the Warden performs "sandwich truncation," preserving the head and tail of the prompt while flushing the full, original text to the vector database for RAG availability. This ensures both stability under memory pressure and full contextual awareness for the system.
+-   **Description:** This feature introduces the "Warden" system, a proactive memory management and resource negotiation layer for all System calls within the System Core. The Warden is designed to prevent context overflow and subsequent application crashes by dynamically assessing system memory, probing GGUF file metadata to predict RAM requirements, and selecting an appropriate context size ('bin') for the operation. If the required memory exceeds safe available limits, the Warden will negotiate a smaller context bin. If a prompt is too large for the selected bin, the Warden performs "sandwich truncation," preserving the head and tail of the prompt while flushing the full, original text to the vector database for retrieval availability. This ensures both stability under memory pressure and full contextual awareness for the system.
 
 -   **ID:** CORE-REFACTOR-003
 -   **Title:** Evolve Snowball architecture to Enaga diff/patch loop and enhance robustness
 -   **Status:** Resolved
--   **Description:** This major refactor evolves the 'Snowball' architecture into the 'Snowball-Enaga V10' loop. Instead of simple concatenation, this new architecture uses an AdaptiveSystem to adaptively generate and apply diff/patches for each generation step, improving contextual consistency. It also introduces a skeleton repair mechanism using an AdaptiveSystem to fix malformed JSON plans. Input handling is now more robust with automatic "sandwich" truncation for very long inputs, flushing the full content to the vector database to ensure complete context is available for RAG. The `llama_worker` embedding parser is now more resilient to varied JSON output from the embedding binary. The launcher now ensures `bash` is installed and has better error handling for `libiconv`.
+-   **Description:** This major refactor evolves the 'Snowball' architecture into the 'Snowball-Enaga V10' loop. Instead of simple concatenation, this new architecture uses an System to adaptively generate and apply diff/patches for each generation step, improving contextual consistency. It also introduces a skeleton repair mechanism using an System to fix malformed JSON plans. Input handling is now more robust with automatic "sandwich" truncation for very long inputs, flushing the full content to the vector database to ensure complete context is available for retrieval. The `llama_worker` embedding parser is now more resilient to varied JSON output from the embedding process. The launcher now ensures `bash` is installed and has better error handling for `libiconv`.
 
 -   **ID:** STELLA-REFACTOR-002
 -   **Title:** Remove CX3 Flight Calculator and Refactor Trickshot Benchmark
@@ -36,16 +41,16 @@
 -   **ID:** CORE-FEAT-016
 -   **Title:** Implement Dynamic Adaptive Relaxation, Enhanced Ollama Compatibility, and Vision System Improvements
 -   **Status:** In-Progress
--   **Description:** This feature introduces a comprehensive set of improvements. A new "Dynamic Adaptive Relaxation" system has been implemented in the `PriorityQuotaLock` to adaptively throttle background ELP0 tasks based on system state (CPU, power, user idle time), significantly improving responsiveness. Ollama compatibility has been greatly enhanced with new API endpoints (`/api/show`), and major refactoring of the streaming generators (`_ollama_pseudo_stream_sync_generator` and `_stream_openai_chat_response_generator_flask`) to provide live log streaming. The AdaptiveSystem Vision pipeline has been made more robust, with its priority elevated to ELP1 and its context handling improved. The default vision AdaptiveSystem has been updated to a higher quality quantization. Additionally, numerous performance and stability improvements have been made to the `llama_worker` and `AdelaideAlbertCortex`.
+-   **Description:** This feature introduces a comprehensive set of improvements. A new "Dynamic Adaptive Relaxation" system has been implemented in the `PriorityQuotaLock` to adaptively throttle background ELP0 tasks based on system state (CPU, power, user idle time), significantly improving responsiveness. Ollama compatibility has been greatly enhanced with new API endpoints (`/api/show`), and major refactoring of the streaming generators (`_ollama_pseudo_stream_sync_generator` and `_stream_openai_chat_response_generator_flask`) to provide live log streaming. The System Vision pipeline has been made more robust, with its priority elevated to ELP1 and its context handling improved. The default vision system has been updated to a higher quality quantization. Additionally, numerous performance and stability improvements have been made to the `llama_worker` and `AdelaideAlbertCortex`.
 
 -   **ID:** LLAMA-FIX-001
 -   **Title:** Disable memory mapping in llama_worker for stability
 -   **Status:** Resolved
 -   **Description:** Disabled memory mapping (`--mmap`) for the llama.cpp subprocess by replacing it with `--no-mmap`. This is to prevent potential memory-related issues and improve stability, especially on systems where mmap might be problematic.
 -   **ID:** CORTEX-FEAT-004
--   **Title:** Overhaul RAG by Re-adding Hybrid Search and Advanced Prompt Synthesis
+-   **Title:** Overhaul retrieval by Re-adding Hybrid Search and Advanced Prompt Synthesis
 -   **Status:** Resolved
--   **Description:** This feature restores and significantly enhances the System Core's RAG capabilities by re-introducing fuzzy search, which was previously erroneously removed by an AdaptiveSystem. The `direct_rag_retriever` now uses a robust hybrid approach, combining high-precision semantic vector search with a fuzzy search fallback to improve context retrieval. A new configuration, `FUZZY_SEARCH_THRESHOLD_CONTEXT`, was introduced for this. Furthermore, the core `PROMPT_DIRECT_GENERATE` was rewritten to give the AdaptiveSystem explicit, step-by-step instructions on how to comprehensively synthesize information from retrieved context, leading to more detailed and useful responses. A DeepWiki badge was also added to the `README.md`.
+-   **Description:** This feature restores and significantly enhances the System Core's retrieval capabilities by re-introducing fuzzy search, which was previously erroneously removed by an System. The `direct_rag_retriever` now uses a robust hybrid approach, combining high-precision semantic vector search with a fuzzy search fallback to improve context retrieval. A new configuration, `FUZZY_SEARCH_THRESHOLD_CONTEXT`, was introduced for this. Furthermore, the core `PROMPT_DIRECT_GENERATE` was rewritten to give the System explicit, step-by-step instructions on how to comprehensively synthesize information from retrieved context, leading to more detailed and useful responses. A DeepWiki badge was also added to the `README.md`.
 -   **ID:** STELLA-REFACTOR-001
 -   **Title:** Refactor Avionics Daemon from Simulator to Deterministic Kernel
 -   **Status:** In-Progress
@@ -57,7 +62,7 @@
 -   **ID:** SYS-PERF-008
 -   **Title:** Tune System Core performance, improve response normalization, and prevent file indexer stalls.
 -   **Status:** Resolved
--   **Description:** This change introduces several performance and reliability improvements. In `CortexConfiguration.py`, background task limits, log queue size, and flush intervals were significantly increased to handle larger workloads, while the fuzzy search threshold and reflector idle wait time were lowered to improve responsiveness. New regex-based normalization rules were added to `DIRECT_GENERATE_NORMALIZATION_RULES` to aggressively clean up verbose, conversational filler from AdaptiveSystem responses. In `file_indexer.py`, the automatic unloading of vision AdaptiveSystems was disabled to prevent a suspected race condition causing the indexer to hang overnight. A blank line was added to `.gitignore` for readability.
+-   **Description:** This change introduces several performance and reliability improvements. In `CortexConfiguration.py`, background task limits, log queue size, and flush intervals were significantly increased to handle larger workloads, while the fuzzy search threshold and reflector idle wait time were lowered to improve responsiveness. New regex-based normalization rules were added to `DIRECT_GENERATE_NORMALIZATION_RULES` to aggressively clean up verbose, conversational filler from System responses. In `file_indexer.py`, the automatic unloading of vision systems was disabled to prevent a suspected race condition causing the indexer to hang overnight. A blank line was added to `.gitignore` for readability.
 -   **ID:** VECTCOMP-PERF-007
 -   **Title:** Refactor QRNN simulation to use GPU-accelerated tensor engine
 -   **Status:** Resolved
@@ -71,9 +76,9 @@
 -   **Status:** In-Progress
 -   **Description:** This change involves several refactors and a new feature. The database initialization logic was simplified by removing the complex Alembic "stamp and upgrade" process in favor of a more direct `create_all` approach, and the background health check thread was removed. The DCTD scheduler is now more aggressive, attempting to connect to the database immediately upon startup without waiting for a health signal. A new `is_preempted` method was added to the `PriorityQuotaLock` to allow tasks to check if they have been preempted by a higher-priority task. Finally, `datetime` imports were standardized to `import datetime as dt` to prevent import shadowing.
 -   **ID:** CORTEX-FEAT-003
--   **Title:** Integrate STEM Compass specialized AdaptiveSystems
+-   **Title:** Integrate STEM Compass specialized systems
 -   **Status:** Resolved
--   **Description:** This feature integrates a suite of specialized AdaptiveSystems, collectively named "STEM Compass," into the System Core. The launcher (`launcher.py`) has been updated to download these new GGUF files, and the `CortexConfiguration.py` has been modified to map them for use by the AdaptiveSystem worker. The total model parameter count has been updated to 78.15B to reflect these additions. The `.gitignore` file was also updated to exclude temporary build artifacts.
+-   **Description:** This feature integrates a suite of specialized Systems, collectively named "STEM Compass," into the System Core. The launcher (`launcher.py`) has been updated to download these new GGUF files, and the `CortexConfiguration.py` has been modified to map them for use by the worker. The total model parameter count has been updated to 78.75B to reflect these additions. The `.gitignore` file was also updated to exclude temporary build artifacts.
 -   **ID:** SYS-PERF-004
 -   **Title:** Tune resource limits, improve logging, and relax dependency pinning
 -   **Status:** Resolved
@@ -90,19 +95,19 @@
 -   **Title:** Refactor Generation Logic to Peer Review Architecture and Improve Priority Lock
 -   **Status:** In-Progress
 -   **Description:**
-    *   Refactors the primary `chat_direct_generate` function to a "Peer Review Everphase Context" (V9) architecture. This involves a loop of generation, fact-checking against RAG, and routing to specialist AdaptiveSystems for complex or incomplete responses.
+    *   Refactors the primary `chat_direct_generate` function to a "Peer Review Everphase Context" (V9) architecture. This involves a loop of generation, fact-checking against retrieval, and routing to specialist systems for complex or incomplete responses.
     *   Implements a "politeness" policy in the `PriorityQuotaLock` to prevent ELP0 tasks from starving waiting ELP1 tasks, improving high-priority task responsiveness.
     *   Dele tes the legacy `trickshot_simple_flight_computer.py`.
-    *   Increases RAG context limits (`RAG_URL_COUNT`, fuzzy search interaction fetch).
+    *   Increases retrieval context limits (`retrieval_URL_COUNT`, fuzzy search interaction fetch).
     *   Adjusts logging and disables the "mistype" feature.
 -   **ID:** CORTEX-FEAT-005
--   **Title:** Integrate native Llama.cpp multimodal AdaptiveSystem for image processing
+-   **Title:** Integrate native Llama.cpp multimodal System for image processing
 -   **Status:** Resolved
--   **Description:** This feature integrates the new `llama-mtmd-cli` (renamed to `LMMultiModal`) from `llama.cpp` for native, high-performance vision AdaptiveSystem execution. This replaces the previous, less efficient vision AdaptiveSystem handling. A new `LlamaCppVisionWrapper` and a dedicated `vision` task type in the `llama_worker` have been implemented. The `launcher` and `CortexConfiguration` have been updated with the new Unsloth Qwen vision AdaptiveSystem files and their required `mmproj` files.
+-   **Description:** This feature integrates the new `llama-mtmd-cli` (renamed to `LMMultiModal`) from `llama.cpp` for native, high-performance vision system execution. This replaces the previous, less efficient vision system handling. A new `LlamaCppVisionWrapper` and a dedicated `vision` task type in the `llama_worker` have been implemented. The `launcher` and `CortexConfiguration` have been updated with the new Unsloth Qwen vision system files and their required `mmproj` files.
 -   **ID:** CORE-REFACTOR-001
--   **Title:** Refactor vision AdaptiveSystem image description pipeline
+-   **Title:** Refactor vision system image description pipeline
 -   **Status:** Resolved
--   **Description:** Centralized the vision AdaptiveSystem image description logic into the `llama_worker.py` script. This removes the `get_vlm_description` method from `cortex_backbone_provider.py` and introduces a dedicated "vision" task type in the worker. The changes also include improved error handling, input processing, and a longer timeout for Ollama streaming to enhance stability with slower AdaptiveSystems.
+-   **Description:** Centralized the vision system image description logic into the `llama_worker.py` script. This removes the `get_vlm_description` method from `cortex_backbone_provider.py` and introduces a dedicated "vision" task type in the worker. The changes also include improved error handling, input processing, and a longer timeout for Ollama streaming to enhance stability with slower Systems.
 -   **ID:** UI-FEAT-005
     -   **Title:** Add initial GTK C application for native UI experiments.
     -   **Status:** In-Progress

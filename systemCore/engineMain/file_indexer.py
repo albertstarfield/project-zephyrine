@@ -235,7 +235,7 @@ class FileIndexer:
             "⚠️ VLM->LaTeX processing disabled (one or both models missing).")
 
 
-    def _wait_if_server_busy(self, check_interval=0.5, log_wait=True):
+    def _wait_if_server_busy(self, check_interval=15, log_wait=True): #make the check interval longer so it's only indexing when it's truly idle
         """Checks the busy event and sleeps if set."""
         waited = False
         while self.server_busy_event.is_set():

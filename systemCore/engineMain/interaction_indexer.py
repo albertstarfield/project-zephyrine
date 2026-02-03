@@ -16,6 +16,28 @@ from cortex_backbone_provider import CortexEngine
 from CortexConfiguration import *
 import chromadb
 from chromadb.config import Settings
+import sys
+
+try:
+    from priority_lock import ELP0, ELP1, PriorityQuotaLock
+
+    logger.info("✅ Successfully imported PriorityQuotaLock, ELP0, ELP1.")
+except ImportError as e:
+    logger.error(f"❌ Failed to import from priority_lock.py: {e}")
+    logger.warning(
+        "    Falling back to standard threading.Lock for priority lock (NO PRIORITY/QUOTA)."
+    )
+    # Define fallbacks so the rest of the code doesn't crash immediately
+    import threading
+
+    PriorityQuotaLock = threading.Lock  # type: ignore
+    ELP0 = 0
+    ELP1 = 1
+    # You might want to sys.exit(1) here if priority locking is critical
+    sys.exit(1)
+interruption_error_marker = (
+    "Worker task interrupted by higher priority request"  # Define consistently
+)
 
 # --- Globals for this module ---
 global_interaction_vectorstore: Optional[Chroma] = None
@@ -136,6 +158,23 @@ class InteractionIndexer(threading.Thread):
             length_function=len,
         )
 
+    def trigger_immediate_priority_indexing(self, priority: int):
+        """
+        Manually triggers a one-off indexing pass at the specified priority.
+        Used by file ingestion to ensure data is available immediately.
+        """
+        logger.info(f"🚀 Manual trigger: Starting immediate indexing pass at priority {priority}...")
+        
+        # Create a transient session for this operation
+        manual_session = SessionLocal()
+        try:
+            # Call the indexing logic with the high priority
+            self._index_new_interactions(manual_session, priority=priority)
+        except Exception as e:
+            logger.error(f"Manual priority indexing failed: {e}")
+        finally:
+            manual_session.close()
+
     def run(self):
         logger.info("🚀 Starting Interaction Indexer thread...")
         while not self.stop_event.is_set():
@@ -155,19 +194,21 @@ class InteractionIndexer(threading.Thread):
             self.stop_event.wait(300)  # Wait 5 minutes
         logger.info("🛑 Interaction Indexer thread has been shut down.")
 
-    def _index_new_interactions(self, db_session: Session):
+    def _index_new_interactions(self, db_session: Session, priority: int = ELP0):
         if global_interaction_vectorstore is None or global_interaction_vectorstore._collection is None:
             logger.error("InteractionIndexer: Vector store or its collection is not available. Cannot index.")
             return
 
         unindexed_interactions = db_session.query(Interaction).filter(
             Interaction.is_indexed_for_rag == False
-        ).limit(100).all()
+        ).limit(131072).all()
 
         if not unindexed_interactions:
             return
 
         logger.info(f"InteractionIndexer: Found {len(unindexed_interactions)} new interactions to index.")
+
+        logger.info(f"Indexing {len(unindexed_interactions)} interactions with Priority: {'ELP1 (High)' if priority == 1 else 'ELP0 (Background)'}")
 
         for interaction in unindexed_interactions:
             try:
@@ -196,7 +237,7 @@ class InteractionIndexer(threading.Thread):
                     interaction.is_indexed_for_rag = True
                     continue
 
-                main_embedding = self.embedding_model.embed_query(content)
+                main_embedding = self.embedding_model.embed_query(content, priority=priority)
                 interaction.embedding_json = json.dumps(main_embedding)
 
                 chunks = self.text_splitter.split_text(content)
@@ -204,7 +245,7 @@ class InteractionIndexer(threading.Thread):
                     interaction.is_indexed_for_rag = True
                     continue
 
-                chunk_embeddings = self.embedding_model.embed_documents(chunks)
+                chunk_embeddings = self.embedding_model.embed_documents(chunks, priority=priority)
 
                 metadatas = [{
                     "interaction_id": interaction.id, "session_id": interaction.session_id,
