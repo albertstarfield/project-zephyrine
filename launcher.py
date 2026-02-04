@@ -252,7 +252,7 @@ MODELS_TO_DOWNLOAD = [
     },
     {
         "filename": "embedContextIntention.gguf",
-        "url": "https://huggingface.co/QuantFactory/Qwen3Guard-Gen-0.6B-GGUF/resolve/main/Qwen3Guard-Gen-0.6B.Q3_K_M.gguf?download=true",
+        "url": "https://huggingface.co/QuantFactory/Qwen3Guard-Gen-0.6B-GGUF/resolve/main/Qwen3Guard-Gen-0.6B.Q5_K_M.gguf?download=true",
         "description": "Embedding Model Intention Checker Context",
     },
     # Image Encoder to Decoder
