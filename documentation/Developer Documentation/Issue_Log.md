@@ -32,7 +32,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `GOVERNANCE-FEAT-003`
     -   **Title:** Introduce DAL and update license to Hippocratic 3.0.
     -   **Status:** `Resolved`
-    -   **Description:** Introduced a formal Design Assurance Level (DAL) system based on DO-178C to improve architectural safety and rigor. Changed the project license from MIT to the Hippocratic License 3.0 to align with "do no harm" principles. Also updated the model's public-facing name to "Snowball Enaga" and refined contribution guidelines.
+    -   **Description:** Introduced a formal Design Assurance Level (DAL) system based on DO-178C to improve architectural safety and rigor. Changed the project license from MIT to the Hippocratic License 3.0 to align with "do no harm" principles. Also updated the engine's public-facing name to "Snowball Enaga" and refined contribution guidelines.
 
 ---
 
@@ -133,14 +133,14 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Description:** Added `langchain` and `langchain-text-splitters` to the project's dependencies to enable new features related to language model chains and text processing.
 
 -   **ID:** `CORE-FEAT-001`
-    -   **Title:** Upgrade core embedding model from mixedbread to Qwen3.
+    -   **Title:** Upgrade core representation generation component from mixedbread to Qwen3.
     -   **Status:** `Resolved`
-    -   **Description:** To improve embedding quality and performance, the core embedding model was upgraded from `mxbai-embed-large-v1` to `Qwen/Qwen3-Embedding-0.6B-GGUF`. This required updating model download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded embedding context size in `llama_worker.py` to support the new model's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new embedding format, and `requirements.txt` was updated with new dependencies.
+    -   **Description:** To improve representation quality and performance, the core representation generation component was upgraded from `mxbai-embed-large-v1` to `Qwen/Qwen3-Embedding-0.6B-GGUF`. This required updating component download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded representation context size in `llama_worker.py` to support the new component's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new representation format, and `requirements.txt` was updated with new dependencies.
 
 -   **ID:** `CORE-FEAT-002`
     -   **Title:** Added content pass into the database for local document fetching.
     -   **Status:** `Resolved`
-    -   **Description:** Implemented functionality to store the full content of indexed documents directly into the database. This enables efficient local document fetching for RAG (Retrieval Augmented Generation) and other content-aware operations, reducing reliance on external file system access during runtime.
+    -   **Description:** Implemented functionality to store the full content of indexed documents directly into the database. This enables efficient local document fetching for enhanced content retrieval and other content-aware operations, reducing reliance on external file system access during runtime.
 
 -   **ID:** `CORE-FEAT-003`
     -   **Title:** Added MultiLanguage ZH and EN and native lang depends on query summarization for accommodating fallback of fuzzy matching on direct_generate and background_generate connection on the database.
@@ -160,7 +160,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-006`
     -   **Title:** Implement Recursive Socratic Inquiry for Self-Correction and Learning.
     -   **Status:** `Resolved`
-    -   **Description:** Introduced the A.R.I.S.E. (Adaptive Recursive Inquiry & Synthesis Engine) architecture. This system enables a recursive learning loop where the AI generates Socratic questions based on its own outputs (drafts, summaries, final answers). These questions are saved as new tasks, which the AI then attempts to answer, creating a continuous cycle of self-improvement and knowledge expansion. This includes per-step inquiry generation and a dedicated `socratic_thought` classification.
+    -   **Description:** Introduced the A.R.I.S.E. (Adaptive Recursive Inquiry & Synthesis Engine) architecture. This system enables a recursive learning loop where the engine generates Socratic questions based on its own outputs (drafts, summaries, final answers). These questions are saved as new tasks, which the engine then attempts to answer, creating a continuous cycle of self-improvement and knowledge expansion. This includes per-step inquiry generation and a dedicated `socratic_thought` classification.
 
 -   **ID:** `CORE-FEAT-007`
     -   **Title:** Implement Dynamic Agentic Relaxation for Resource Management.
@@ -175,31 +175,31 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-009`
     -   **Title:** Implement Casual Mistype Humanizer.
     -   **Status:** `Resolved`
-    -   **Description:** Adds a feature to programmatically introduce subtle, human-like errors into the AI's responses to make the persona more believable. This includes chances for lowercase starts, lowercase after periods, capitalization mishaps, and punctuation omissions.
+    -   **Description:** Adds a feature to programmatically introduce subtle, human-like errors into the system's responses to make the persona more believable. This includes chances for lowercase starts, lowercase after periods, capitalization mishaps, and punctuation omissions.
 
 -   **ID:** `CORE-FEAT-010`
     -   **Title:** Pre-buffer 'thinking' monologue on startup.
     -   **Status:** `Resolved`
-    -   **Description:** To improve UI responsiveness, the introspective monologue shown when the AI is "thinking" is now generated and cached in the database on startup. This avoids a real-time generation call and the associated delay when the user first interacts with the AI.
+    -   **Description:** To improve UI responsiveness, the introspective monologue shown when the system is "processing" is now generated and cached in the database on startup. This avoids a real-time generation call and the associated delay when the user first interacts with the system.
 -   **ID:** `CORE-FEAT-011`
     -   **Title:** Add ethical watermark for user-invoked image generation.
     -   **Status:** `In-Progress`
-    -   **Description:** Implemented an optional, repeating, diagonal, semi-transparent watermark on images generated by user request to discourage misuse and promote ethical AI art generation.
+    -   **Description:** Implemented an optional, repeating, diagonal, semi-transparent watermark on images generated by user request to discourage misuse and promote ethical digital art generation.
 
 -   **ID:** `CORE-FEAT-015`
     -   **Title:** Enhance file ingestion to support structured datasets (JSONL, CSV, Parquet).
     -   **Status:** `Resolved`
-    -   **Description:** The file ingestion service has been significantly enhanced to parse and process structured data files, including `.jsonl`, `.csv`, and `.parquet`. This allows the system to learn from various conversational AI dataset formats (Alpaca, DPO, etc.) by extracting user/assistant interactions and queuing them for background reflection.
+    -   **Description:** The file ingestion service has been significantly enhanced to parse and process structured data files, including `.jsonl`, `.csv`, and `.parquet`. This allows the system to learn from various conversational data formats (Alpaca, DPO, etc.) by extracting user/assistant interactions and queuing them for background reflection.
 
 -   **ID:** `CORE-FEAT-016`
     -   **Title:** Implement DCTD Temporal Scheduler for future task execution.
     -   **Status:** `Resolved`
-    -   **Description:** Introduced the DCTD (Dancing in the Celestial Timeline) Temporal Scheduler. This system allows the AI to schedule "thoughts" (background tasks) for execution at a specific time in the future. It includes a database table `scheduled_thought_tasks` to persist the schedule, logic for collision avoidance, and a daemon thread to execute due tasks. This enables more complex, long-term reasoning and self-reflection.
+    -   **Description:** Introduced the DCTD (Dancing in the Celestial Timeline) Temporal Scheduler. This system allows the system to schedule "thoughts" (background tasks) for execution at a specific time in the future. It includes a database table `scheduled_thought_tasks` to persist the schedule, logic for collision avoidance, and a daemon thread to execute due tasks. This enables more complex, long-term reasoning and self-reflection.
 
 -   **ID:** `CORE-FEAT-017`
-    -   **Title:** Add new models for OCR, UI interaction, and language-to-action.
+    -   **Title:** Add new components for optical character recognition, UI interaction, and language-to-action.
     -   **Status:** `Resolved`
-    -   **Description:** Expanded the model ecosystem by adding three new models: `Qwen2.5-OCR-Document-VL-ImageDescripter` for document OCR, `fara7b-compagent-Interact` for computer UI interaction, and `Octopus-v2-word-to-action` for translating language commands into actions. This increases the system's capabilities in document understanding and agentic control.
+    -   **Description:** Expanded the component ecosystem by adding three new specialized components: `Qwen2.5-OCR-Document-VL-ImageDescripter` for document optical character recognition, `fara7b-compagent-Interact` for computer UI interaction, and `Octopus-v2-word-to-action` for translating language commands into actions. This increases the system's capabilities in document understanding and automated control.
 
 -   **ID:** `CORE-FEAT-018`
     -   **Title:** Add semaphore for ELP1 direct generation queue concurrency control.
@@ -208,19 +208,19 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-019`
     -   **Title:** Implement Memory Pressure Warden to prevent UMA crashes.
     -   **Status:** `In-Progress`
-    -   **Description:** A "Warden" mechanism has been added to monitor VRAM pressure before model invocation. If the estimated required memory exceeds available memory, it dynamically forces the model to run on the CPU (`n_gpu_layers=0`) to prevent a catastrophic crash, especially in Unified Memory Architecture (UMA) environments.
+    -   **Description:** A "Warden" mechanism has been added to monitor VRAM pressure before component invocation. If the estimated required memory exceeds available memory, it dynamically forces the component to run on the CPU (`n_gpu_layers=0`) to prevent a catastrophic crash, especially in Unified Memory Architecture (UMA) environments.
 
 ### Defects (Bugs)
 
 -   **ID:** `CORE-BUG-001`
-    -   **Title:** Fix unlimited undefined entry of Assistant and User on the database at background_generate result raw ChatML generation.
+    -   **Title:** Fix unlimited undefined entry of Assistant and User on the database at background_generate result.
     -   **Status:** `Resolved`
-    -   **Description:** Addressed an issue where `background_generate` was creating an unlimited number of undefined Assistant and User entries in the database due to improper handling of raw ChatML generation results. This fix ensures that only valid and properly attributed entries are stored, preventing database bloat and maintaining data integrity.
+    -   **Description:** Addressed an issue where `background_generate` was creating an unlimited number of undefined Assistant and User entries in the database due to improper handling of generation results. This fix ensures that only valid and properly attributed entries are stored, preventing database bloat and maintaining data integrity.
 
 -   **ID:** `CORE-BUG-002`
-    -   **Title:** Prevent crashes from oversized embedding batches.
+    -   **Title:** Prevent crashes from oversized representation batches.
     -   **Status:** `Resolved`
-    -   **Description:** Added a safeguard in `cortex_backbone_provider.py` to handle cases where a single text item exceeds the maximum token limit for embedding. The code now truncates oversized items before adding them to a batch, preventing the embedding process from crashing and ensuring that large documents can be processed reliably.
+    -   **Description:** Added a safeguard in `cortex_backbone_provider.py` to handle cases where a single text item exceeds the maximum token limit for representation. The code now truncates oversized items before adding them to a batch, preventing the representation process from crashing and ensuring that large documents can be processed reliably.
 
 -   **ID:** `CORE-BUG-003`
     -   **Title:** GPU Driver Verification Fails on Some Android Devices.
@@ -250,6 +250,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `In-Progress`
     -   **Description:** The synchronous call to the `branch_predictor.predict_future_vector` was blocking the main asyncio event loop, causing the `/primedready` endpoint and other async operations to become unresponsive. The call has been wrapped in `asyncio.to_thread` to execute it in a separate thread, resolving the blocking behavior.
 
+-   **ID:** `CORE-BUG-009`
+    -   **Title:** Partially fix racing conditions on elp0 semaphore.
+    -   **Status:** `In-Progress`
+    -   **Description:** Addressed an issue where racing conditions on the elp0 semaphore could lead to unpredictable behavior and system instability. This fix partially mitigates these conditions to improve system reliability.
+
 ### Refactors
 
 -   **ID:** `CORE-REFACTOR-007`
@@ -263,14 +268,14 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Description:** Renamed the `AppleScriptAttempt` model to `SystemInteractionScriptAttempt` to better reflect its purpose of tracking various types of system interactions, not just AppleScript. This change was propagated throughout the codebase.
 
 -   **ID:** `CORE-REFACTOR-001`
-    -   **Title:** Refactor ToT payload and increase embedding context size.
+    -   **Title:** Refactor ToT payload and increase representation context size.
     -   **Status:** `Resolved`
-    -   **Description:** Refactored the Tree of Thought (ToT) payload in `AdelaideAlbertCortex.py` for clarity and simplicity. Increased the default embedding context size in `cortex_backbone_provider.py` to 4096 to improve embedding quality for longer documents. Simplified the frontend input area in `InputArea.jsx` by removing the stop generation button.
+    -   **Description:** Refactored the Tree of Thought (ToT) payload in `AdelaideAlbertCortex.py` for clarity and simplicity. Increased the default representation context size in `cortex_backbone_provider.py` to 4096 to improve representation quality for longer documents. Simplified the frontend input area in `InputArea.jsx` by removing the stop generation button.
 
 -   **ID:** `CORE-REFACTOR-002`
-    -   **Title:** Overhaul RAG and background processing for robustness and traceability.
+    -   **Title:** Overhaul retrieval and background processing for robustness and traceability.
     -   **Status:** `Resolved`
-    -   **Description:** Major refactor of the `background_generate` function in `AdelaideAlbertCortex.py`. The RAG pipeline was rebuilt to use a safe, robust helper (`_build_on_the_fly_retriever`) that combines vector and fuzzy search for recent history. The entire background task now logs every intermediate thought, draft, and correction as a distinct, traceable interaction in the database, providing a complete audit trail of the AI's reasoning process. The reflection process was also redesigned to be a "pure" operation that creates new records instead of updating old ones, ensuring data immutability.
+    -   **Description:** Major refactor of the `background_generate` function in `AdelaideAlbertCortex.py`. The retrieval pipeline was rebuilt to use a safe, robust helper (`_build_on_the_fly_retriever`) that combines vector and fuzzy search for recent history. The entire background task now logs every intermediate thought, draft, and correction as a distinct, traceable interaction in the database, providing a complete audit trail of the system's reasoning process. The reflection process was also redesigned to be a "pure" operation that creates new records instead of updating old ones, ensuring data immutability.
 
 -   **ID:** `CORE-REFACTOR-003`
     -   **Title:** Refactor database initialization for speed and robustness.
@@ -282,20 +287,20 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Description:** Refactored all Flask routes in `AdelaideAlbertCortex.py` to use the `@system.route` decorator instead of `@app.route` for better organization and consistency.
 
 -   **ID:** `CORE-REFACTOR-005`
-    -   **Title:** Update dependencies and refactor imports for langchain compatibility.
+    -   **Title:** Update dependencies and refactor imports for text processing library compatibility.
     -   **Status:** `Resolved`
-    -   **Description:** Updated project dependencies and code to align with recent changes in the langchain library. This includes adding `langchain-experimental` to `requirements.txt`, changing the import for `RecursiveCharacterTextSplitter` from `langchain.text_splitter` to `langchain_text_splitters` across multiple files, and updating the `aria2` conda package source in `launcher.py`.
+    -   **Description:** Updated project dependencies and code to align with recent changes in the text processing library. This includes adding `experimental-text-processing` to `requirements.txt`, changing the import for `RecursiveCharacterTextSplitter` from `text_splitter` to `text_splitters` across multiple files, and updating the `aria2` conda package source in `launcher.py`.
 
 -   **ID:** `CORE-REFACTOR-008`
     -   **Title:** Overhaul background processing, DB migrations, and branch prediction.
     -   **Status:** `In-Progress`
     -   **Description:** This commit introduces a major architectural overhaul of the core engine. Key changes include:
         - Refactoring the `background_generate` task in `AdelaideAlbertCortex.py` with improved error handling, more robust logging, and a clearer separation of concerns.
-        - Introducing a new "Tree of Thoughts" (ToT) background task for deeper analysis.
+        - Introducing a new "Hierarchical Thought Processing" background task for deeper analysis.
         - Adding a mechanism to generate "StellaIcarus hooks" for creating automations based on interactions.
         - Overhauling the database health check (`_run_background_db_health_check`) in `database.py` to use a robust "Stamp and Upgrade" Alembic migration strategy, resolving issues with existing databases.
-        - Refactoring the QRNN implementation in `VectorCompute_Provider.py` and the prediction logic in `dctd_branchpredictor.py` to use a trajectory-based approach.
-        - Adding support for AVIF/HEIC image formats to the file indexer's OCR capabilities.
+        - Refactoring the optimized recurrent processing in `VectorCompute_Provider.py` and the prediction logic in `dctd_branchpredictor.py` to use a trajectory-based approach.
+        - Adding support for AVIF/HEIC image formats to the file indexer's optical character recognition capabilities.
 
 -   **ID:** `CORE-REFACTOR-009`
     -   **Title:** Integrate Ada branch predictor code into main engine.
@@ -528,4 +533,4 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-020`
     -   **Title:** Implement External System Request Pipeline and Output Loop Detection
     -   **Status:** `In-Progress`
-    -   **Description:** Introduces a specialized request handling pipeline for external, programmatic systems, referred to as 'AgentPrecMode' or 'Bottom Gear'. This pipeline routes requests to specialist models and formats the output into a structured JSON response. Additionally, a mechanism to detect and trim semantic repetitions or loops in generated text has been implemented to improve output quality.
+    -   **Description:** Introduces a specialized request handling pipeline for external, programmatic systems, referred to as 'PrecMode' or 'Bottom Gear'. This pipeline routes requests to specialized processing units and formats the output into a structured JSON response. Additionally, a mechanism to detect and trim meaning-based repetitions or loops in generated text has been implemented to improve output quality.
