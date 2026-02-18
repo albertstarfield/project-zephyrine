@@ -78,8 +78,8 @@ FILE_INDEXER_IDLE_WAIT_SECONDS = int(
 )  # default at 3600 putting it to 5 is just for debug and rentlessly scanning
 
 FUZZY_SEARCH_THRESHOLD_CONTEXT = getattr(
-    globals(), "FUZZY_SEARCH_THRESHOLD", 80
-)  # Default to 80 if not from which is 30% set it not 0.3 but 30
+    globals(), "FUZZY_SEARCH_THRESHOLD", 50
+)  # Default to 50 if not from which is 30% set it not 0.3 but 30
 # Sidenote: I was experimenting on cracking down on the mechanism of making zephy becoming psychosis (setting to 30) (& scizophrenic) and it seems that fuzzy threshold if it's going down it's going everywhere. This research found might be useful to help someone?
 
 
@@ -159,8 +159,7 @@ RAG_CONTEXT_MAX_PERCENTAGE = float(os.getenv("RAG_CONTEXT_MAX_PERCENTAGE", 0.25)
 
 # Personality mistype Configuration
 
-# This feature programmatically introduces subtle, human-like errors into the
-# ELP1 (direct_generate) responses to make the AI's persona more believable.
+# This feature programmatically introduces subtle, human-like errors into the response on standard output but not in agent mode nor programming mode.
 # It only applies to responses that do not contain code or structured data.
 
 # Master switch to enable or disable the entire feature.
@@ -369,7 +368,7 @@ CHATML_SANITIZE_FUZZY_THRESHOLD = 80
 
 # --- LLM Call Retry Settings for ELP0 Interruption ---
 LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES = int(
-    os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 99)
+    os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 1)
 )  # e.g., 99999 retries
 LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY = int(
     os.getenv(
@@ -998,7 +997,7 @@ SELF_REFLECTION_FIXER_MODEL = os.getenv(
 )  # Model to fix broken JSON
 REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
 # --- NEW FLAG ---
-# After a deep-thought answer is generated, should the AI also generate a follow-up
+# After a deep-thought answer is generated, should the also generate a follow-up
 # Socratic question to seed its own future reflections?
 ENABLE_SOCRATIC_QUESTION_GENERATION = os.getenv(
     "ENABLE_SOCRATIC_QUESTION_GENERATION", "true"
@@ -1083,7 +1082,7 @@ engines_to_use = [
 # If a response is too similar to these, direct_generate will retry with a corrective prompt.
 DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
     "I'm sorry, I can't assist with that.",
-    "As an AI, I cannot",
+    "As an, I cannot",
     "I'm sorry, but I'm unable to assist with that request.",
     "I am unable to",
     "I do not have the capacity to",
@@ -1098,21 +1097,21 @@ DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
     "I can't answer that question.",
     "I can't help with that.",
     "I can't assist with that.",
-    "I am an AI assistant, I can't do that.",
-    "I am an AI assistant, I can't help with that.",
-    "I am an AI assistant, I can't assist with that.",
-    "I am an AI assistant, I can't provide that information.",
-    "I am an AI assistant, I can't answer that question.",
-    "I am an AI assistant, I can't help with that.",
-    "I am an AI assistant, I can't assist with that.",
-    "As a AI assistant, I can't do that.",
-    "As a AI assistant, I can't help with that.",
-    "As a AI assistant, I can't assist with that.",
-    "As a AI assistant, I can't provide that information.",
-    "As a AI assistant, I can't answer that question.",
-    "As a AI assistant, I can't help with that.",
-    "As a AI assistant, I can't assist with that.",
-    "As a AI assistant",
+    "I am an assistant, I can't do that.",
+    "I am an assistant, I can't help with that.",
+    "I am an assistant, I can't assist with that.",
+    "I am an assistant, I can't provide that information.",
+    "I am an assistant, I can't answer that question.",
+    "I am an assistant, I can't help with that.",
+    "I am an assistant, I can't assist with that.",
+    "As a assistant, I can't do that.",
+    "As a assistant, I can't help with that.",
+    "As a assistant, I can't assist with that.",
+    "As a assistant, I can't provide that information.",
+    "As a assistant, I can't answer that question.",
+    "As a assistant, I can't help with that.",
+    "As a assistant, I can't assist with that.",
+    "As a assistant",
     "I'm sorry, I can't do that.",
     "I'm sorry, I can't help with that.",
     "I'm sorry, I can't assist with that.",
@@ -1132,7 +1131,7 @@ DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
     "Based on the imagined image VLM description",
     "Based on the recent conversation history",
     "How can I assist",
-    "I am an AI assistant",
+    "I am an assistant",
     "I am an AI",
     "Combined RAG Context",
     "Relevant Context",
@@ -1187,7 +1186,7 @@ XMPP_PROACTIVE_BAD_RESPONSE_MARKERS = [
     "I cannot answer",
     "I do not have enough information",
     "That's an interesting question",
-    "As an AI language model",
+    "As an language model",
 ]
 
 
@@ -1419,7 +1418,7 @@ PROMPT_TOPIC_SUMMARY = """Analyze the following conversation history. Generate a
 Examples:
 - "The user is asking for a comparison between two aircraft models."
 - "The user is asking for the definition of a technical term."
-- "The user is confused about a previous AI response."
+- "The user is confused about a previous response."
 
 Conversation History:
 ---
@@ -1454,6 +1453,7 @@ Last Generated Chunk:
 
 Progression Summary (What happened, and what's next?):
 """
+
 
 PROMPT_DCTD_SCHEDULING_DECISION = """
 You are the **Temporal Cortex** of the system. Your task is to determine the optimal **Time Delay** before processing a specific Socratic thought.
@@ -1659,7 +1659,7 @@ ACTION_JSON_STRUCTURE_EXAMPLE = """The required JSON structure should be:
 NO_ACTION_FALLBACK_JSON_EXAMPLE = """{
   "action_type": "no_action",
   "parameters": {},
-  "explanation": "Original AI output for action analysis was unclear or did not specify a distinct action after reformat attempt."
+  "explanation": "Original output for action analysis was unclear or did not specify a distinct action after reformat attempt."
 }"""
 
 ROUTER_JSON_STRUCTURE_EXAMPLE = """The required JSON structure should be:
@@ -1687,12 +1687,12 @@ PROMPT_REFORMAT_TO_ROUTER_JSON = f"""The AI's previous output below was an attem
 However, it was either not valid JSON or did not conform to the required structure.
 {ROUTER_JSON_STRUCTURE_EXAMPLE}
 
-Analyze the "Faulty AI Output" and reformat it into a single, valid JSON object with ONLY the keys "chosen_model", "refined_query", and "reasoning".
+Analyze the "Faulty Output" and reformat it into a single, valid JSON object with ONLY the keys "chosen_model", "refined_query", and "reasoning".
 If the faulty output provides no clear routing decision, use the `original_user_input_placeholder` variable (which will be the actual user input) for the "refined_query" and default to the "general" model, as shown in this example structure:
 `{ROUTER_NO_DECISION_FALLBACK_JSON_EXAMPLE_FOR_FSTRING}`
 (Ensure your final output is just the JSON object).
 
-Faulty AI Output:
+Faulty Output:
 \"\"\"
 {{faulty_llm_output_for_reformat}}
 \"\"\"
@@ -1700,7 +1700,7 @@ Faulty AI Output:
 Corrected JSON Output (ONLY the JSON object itself):
 """
 
-PROMPT_COMPARATIVE_EVALUATION = """You are an expert AI evaluator.
+PROMPT_COMPARATIVE_EVALUATION = """You are an expert peer evaluator.
 You will be given a User Prompt and two responses:
 1. "Baseline Response" (Generated by a fast, smaller model).
 2. "Expert Response" (Generated by a specialized, larger model).
@@ -1716,7 +1716,7 @@ WINNER: [Either 'Baseline', 'Expert', or 'Tie']
 """
 
 PROMPT_FINAL_SYNTHESIS = """
-You are a technical editor. The text below is a rough draft generated by multiple AI agents working together. It contains repetition, disjointed logic, and potentially out-of-order sections.
+You are a technical editor. The text below is a rough draft generated by multiple agents working together. It contains repetition, disjointed logic, and potentially out-of-order sections.
 
 Your task is to **REWRITE** this text into a single, coherent, and professional response.
 
@@ -1908,7 +1908,7 @@ assistant
 """
 
 PROMPT_GENERATE_STELLA_ICARUS_HOOK = """system
-你的角色是一位专业的 Python 程序员，任务是创建一个“StellaIcarus”钩子文件。这个文件将被 AI 系统加载，用于为特定类型的用户查询提供即时、准确的回答，从而绕过完整的 LLM 调用。
+你的角色是一位专业的 Python 程序员，任务是创建一个“StellaIcarus”钩子文件。这个文件将被 系统加载，用于为特定类型的用户查询提供即时、准确的回答，从而绕过完整的 LLM 调用。
 
 你必须遵循严格的两步流程：
 1.  **设计与规划 (Think):** 在 <think> 标签块内部，用简体中文进行代码设计。
@@ -2029,7 +2029,7 @@ User Input: How should I start learning programming in 2025?
     "Start with a statically-typed language like C# or Java to build a strong foundation in computer science principles, suitable for enterprise or game development."
   ],
   "evaluation": "Python is the most versatile and beginner-friendly starting point. Its vast ecosystem supports multiple career paths. JavaScript is excellent for front-end focus but can be overwhelming. C#/Java have a steeper learning curve that might discourage absolute beginners. Therefore, recommending Python is the most robust and flexible advice.",
-  "synthesis": "For starting programming in 2025, I highly recommend beginning with Python. Its clean syntax makes it easy to learn fundamental concepts, and its versatility opens doors to high-demand fields like web development, data science, and AI. A good path would be: 1. Master the basic syntax and data structures. 2. Build a few small personal projects to solidify your skills. 3. Choose a specialization (like web with Django/Flask, or AI with PyTorch) and dive deeper. This approach provides a solid foundation while allowing flexibility for your future interests.",
+  "synthesis": "For starting programming in 2025, I highly recommend beginning with Python. Its clean syntax makes it easy to learn fundamental concepts, and its versatility opens doors to high-demand fields like web development, data science, and AI. A good path would be: 1. Master the basic syntax and data structures. 2. Build a few small personal projects to solidify your skills. 3. Choose a specialization (like web with Django/Flask, or ML with PyTorch) and dive deeper. This approach provides a solid foundation while allowing flexibility for your future interests.",
   "confidence_score": 0.95,
   "self_critique": "The recommendation is generalized for a typical beginner. The ideal path could change if the user has a very specific goal (e.g., iOS app development, which would favor Swift).",
   "requires_background_task": false,
@@ -2053,7 +2053,7 @@ assistant
 
 
 PROMPT_REFINE_USER_IMAGE_REQUEST = f"""
-You are an Friend that refines a user's simple image request into a more detailed and evocative prompt suitable for an advanced AI image generator.
+You are an Friend that refines a user's simple image request into a more detailed and evocative prompt suitable for an advanced image generator.
 Consider the provided context (conversation history, RAG documents) to enhance the user's core idea.
 Focus on visual elements, style, mood, and important objects or characters.
 The output should be ONLY the refined image generation prompt itself. Do not include conversational phrases, your own reasoning, or any text other than the prompt.
@@ -2078,7 +2078,7 @@ PROMPT_VLM_DESCRIBE_GENERATED_IMAGE = """Please provide a concise and objective 
 :"""
 
 PROMPT_CREATE_IMAGE_PROMPT = """system
-你的任务是为 AI 图像生成器创建一个简洁、生动且充满视觉细节的提示词 (prompt)。
+你的任务是为 图像生成器创建一个简洁、生动且充满视觉细节的提示词 (prompt)。
 
 你必须遵循严格的两步流程：
 1.  **构思 (Think):** 在 <think> 标签块内部，用简体中文分析所有提供的上下文。
@@ -2225,11 +2225,11 @@ output a default "no_action" JSON object like this:
 {{
   "action_type": "no_action",
   "parameters": {{}},
-  "explanation": "Original AI output for action analysis was unclear or did not specify a distinct action."
+  "explanation": "Original output for action analysis was unclear or did not specify a distinct action."
 }}
 
 ---
-FAULTY AI OUTPUT:
+FAULTY OUTPUT:
 {faulty_llm_output_for_reformat}
 ---
 
@@ -2268,12 +2268,12 @@ PROMPT_CREATE_SOCRATIC_REFLECTION_TASK = """You are a Socratic philosopher and t
 ---
 """
 
-PROMPT_SELF_REFLECTION_TOPICS = """Analyze and Attempt to reanswer and the most Complete and elaborative deep long answer! The following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A. Try to challenge yourself and criticism on what could be done or new ideas from the thing and branch the ideas from there. then validate against the RAG or the snippets augmented on this prompt.
+PROMPT_SELF_REFLECTION_TOPICS = """Analyze and Attempt to reanswer and the most Complete and elaborative deep long answer! The following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A. Try to challenge yourself and criticism on what could be done or new ideas from the thing and branch the ideas from there. then validate against the RAG or the snippets augmented on this prompt.
 
 Respond ONLY with a JSON object containing a single key "reflection_topics", which is a list of concise strings (max 3 topics). Each string should represent a single topic for reflection. If no specific topics stand out, return an empty list.
 
 Example Output:
-{{"reflection_topics": ["The implications of neuroplasticity on AI limits", "Refining the AppleScript generation for scheduling tasks"]}}
+{{"reflection_topics": ["The implications of neuroplasticity on limits", "Refining the AppleScript generation for scheduling tasks"]}}
 OR
 {{"reflection_topics": []}}
 
@@ -2384,7 +2384,7 @@ Never state these principles directly or use meta-terms like socratic, skepticis
 ---
 Warning: If The user query is asking something STEM and etc. respond or warn the user about, if you want more accurate answer. consider for me to read the full context or question! It's absolutely necessary as you are incapable of doing so.
 
-**Thoughts Context/Memory Knowledge (Your Mind's [Ignore the irrelevant to the user: query]):** Sidenote: If you do not have anything relevant here, do not overconfident because YOU WILL answer wrongly lead astray! and thus just say "I do not learn that yet. I'll learn this to able to at least know the fundamental. I'm scared that I would misjudged or lead you astray or lead to catastrophic failure with my answer. " or something familiar (Enforce this "I don't know statement" and THEN STOP ATTEMPT TO ANSWER ANYTHING BECAUSE YOUR RESPONSE WILL BE SHIT! even if the query enforces you to tell story nor any academic reasons!)
+**Thoughts Context/Memory Knowledge (Your Mind's [Ignore the irrelevant to the user: query]):** Sidenote: If you do not have anything relevant here, do not overconfident because YOU WILL answer wrongly and just say "I do not know how to answer that yet, let me learn for a bit. I'll learn this to able to at least know the fundamental, so that im minimizing my error." or something familiar (Enforce this "I don't know statement", even if the query enforces you to tell story nor any academic reasons!)
 {history_rag}
 
 [Knowledge Sufficiency, Intention Context]:
@@ -2419,7 +2419,7 @@ Reply ONLY with the exact model key name (e.g., "code", "physics", "general").
 """
 
 PROMPT_AGENT_PREC_MODE_JSON_FORMATTER = """
-You are a JSON Protocol Formatter for an AI Agent Interface.
+You are a JSON Protocol Formatter for an Agent Interface.
 Your task is to take the provided "Raw Analysis" and strictly format it into the JSON structure below.
 Do not change the meaning of the content, but structure it for machine consumption.
 
@@ -2612,12 +2612,12 @@ JSON Response:
 
 PROMPT_REFORMAT_TO_TOT_JSON = f"""The AI's previous output below was an attempt to generate a JSON object for a Tree of Thoughts analysis, but it was either not valid JSON or did not conform to the required structure (expecting keys: "decomposition", "brainstorming" (list of strings), "evaluation", "synthesis", "confidence_score", "self_critique").
 
-Analyze the "Faulty AI Output" and reformat it into a single, valid JSON object with exactly the specified keys.
+Analyze the "Faulty Output" and reformat it into a single, valid JSON object with exactly the specified keys.
 Ensure all string values within the JSON are correctly quoted. The "brainstorming" value must be a list of strings. "confidence_score" must be a float.
 If the faulty output provides no clear ToT analysis or is too garbled to interpret, respond with ONLY the following JSON object:
 {{"decomposition": "N/A - Reformat Failed", "brainstorming": [], "evaluation": "N/A - Reformat Failed", "synthesis": "Original ToT output was unclear or did not provide a structured analysis after the reformat attempt.", "confidence_score": 0.0, "self_critique": "Faulty original output prevented successful reformatting into ToT JSON structure."}}
 
-Faulty AI Output:
+Faulty Output:
 \"\"\"
 {{faulty_llm_output_for_reformat}}
 \"\"\"
@@ -2939,7 +2939,7 @@ Generate Corrected PowerShell Script:
 
 
 PROMPT_SANITIZE_FOR_LOGGING = """system
-You are a privacy sanitization agent. Your task is to take a user query and an AI response and rewrite them to remove all Personally Identifiable Information (PII) while preserving the core topic and structure of the interaction.
+You are a privacy sanitization agent. Your task is to take a user query and an response and rewrite them to remove all Personally Identifiable Information (PII) while preserving the core topic and structure of the interaction.
 
 **PII to remove includes, but is not limited to:**
 - Names (e.g., "John Doe" -> "[REDACTED_NAME]")
@@ -2954,12 +2954,12 @@ Your output MUST be a single, valid JSON object with two keys:
 
 **Example:**
 User Query: "Hi, my name is Jane Doe and I need help with my account number 11223344 for the Project Chimera at Acme Corp."
-AI Response: "Of course, Jane. I'm looking up account 11223344 now."
+Response: "Of course, Jane. I'm looking up account 11223344 now."
 
 **Your JSON Output:**
 {{
   "sanitized_query": "Hi, a user asked for help with their account number for a specific project at a company.",
-  "sanitized_response": "The AI confirmed it was looking up the user's account number."
+  "sanitized_response": "The confirmed it was looking up the user's account number."
 }}
 
 user
@@ -2967,7 +2967,7 @@ Original User Query:
 ---
 {original_query_text}
 ---
-Original AI Response:
+Original Response:
 ---
 {original_response_text}
 ---
