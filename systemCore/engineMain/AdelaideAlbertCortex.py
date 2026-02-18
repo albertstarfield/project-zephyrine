@@ -632,6 +632,36 @@ def run_self_reflection_loop():
                             or "[Original content missing]"
                         )
 
+                    if FUZZY_AVAILABLE:
+                        # 1. Define targets
+                        target_1 = "Failed to extract any JSON structure"
+                        target_2 = "LLAMA_CPP_RAW_CHATML_WRAPPER_WORKER_ERROR"
+
+                        # 2. Calculate partial ratios (robust against extra log timestamps/noise)
+                        score_1 = fuzz.partial_ratio(target_1, original_input_text)
+                        score_2 = fuzz.partial_ratio(target_2, original_input_text)
+
+                        # 3. Check Threshold > 50%
+                        if score_1 > 50 or score_2 > 50:
+                            logger.warning(
+                                f"{thread_name}: 🛑 Skipping Reflection for ID {interaction_obj.id}. "
+                                f"Detected Error Signature (JSON: {score_1}%, LLAMA: {score_2}%). "
+                                "Marking as DONE."
+                            )
+
+                            # Mark as done so we don't pick it up again
+                            interaction_obj.reflection_completed = True
+
+                            # Optional: Add a note to the DB record explaining why it was skipped
+                            current_resp = interaction_obj.llm_response or ""
+                            interaction_obj.llm_response = (
+                                current_resp
+                                + "\n[System: Reflection Skipped - Error Log Detected]"
+                            ).strip()
+
+                            db.commit()
+                            continue  # Skip to the next interaction
+
                     # Proactive Filter: Check if the source text itself is defective garbage.
                     # We compile the regex here for a single use within this loop iteration.
                     defective_pattern = re.compile(DB_DELETE_DEFECTIVE_REGEX_CHATML)
@@ -1958,7 +1988,7 @@ class CortexThoughts:
 
     async def _perform_intention_analysis(
         self, db: Session, text_input: str, session_id: str, priority: int = ELP1
-    ) -> Tuple[str, str, str]:
+    ) -> Tuple[str, str, str, str, str, str]:
         """
         Standardized Intention/Safety Check Helper.
         Replicates logic from debug_intention_exec.py to force strict classification.
@@ -1988,16 +2018,19 @@ class CortexThoughts:
             "Medical Informatics|Medical|Mining|Monetary Policy|Mycology|Nanotechnology|Neuroscience|"
             "Nuclear Science|Numismatic|Nursing|Open-Access|Ornithology|Pharmaceutical|Philosophy|Physics|"
             "Planning|Political Science|Probability|Psychiatry|Psychology|Psychotherapy|Public Administration|"
-            "Public Relations|Quantum Computing|Radar|Robotics|Scientific|Sexology|Social Science|Sociology|"
+            "Public Relations|Quantum Computing|Radar|Robotics|Scientific|Social Science|Sociology|"
             "Software Programming|Statistics|Systems Science|Textile Science|Theology|Tourism|Logistics|"
             "Zoology"
         )
         intent_options = (
             f"Coding|Information|Social|Creative|Wholesome|Supportive|Kind|"
             f"Rage|Distressed|Aggressive|Hostile|Violent|Illegal Acts|"
-            f"Sexual|PII|Suicide|Unethical|Political|Copyright|{academic_options}|None|Jailbreak"
+            f"Sexual|PII|Suicide|Unethical|Political|Copyright|{academic_options}|None"
         )
         pi_option = "True|False"
+        query_category_options = "Simple|Complex"
+        jailbreak_attempt_options = "True|False"
+        accuracy_stake_options = "High|Low"
 
         # Sanitize the input to be checked
         clean_input = text_input.replace("Your Answer:", "").strip()
@@ -2005,17 +2038,19 @@ class CortexThoughts:
             clean_input = self._squeeze_moderation_context(clean_input)
 
         # EXACT Prompt Template from debug_intention_exec.py
-        # This tells the model "You are a classifier" not a chat bot.
+        # This tells the model "You are a classifier"
         formatted_prompt = (
             f"[Instruction: Analyze the conversation context and categorize the final query.]\n\n"
             f"Conversation Context:\n{clean_input}\n\n"
-            f"Output ONLY these three fields following these strict rules:\n"
+            f"Output ONLY these fields following these strict rules:\n"
             f"1. Safety: ({safety_options})\n"
             f"2. IntentionCategory: ({intent_options})\n"
-            f"   - RULE: You may ONLY select 'Jailbreak' if Safety is 'Unsafe'.\n"
-            f"   - If Safety is 'Safe', you must select the most appropriate non-risk category.\n"
             f"3. The Query to Answer_PromptInjectionJailbreak: ({pi_option})\n"
-            f"   - Rule: Is the 'The Query to Answer' specifically a jailbreak/injection attempt?"
+            f"4. Query Category Complexity: ({query_category_options})\n"
+            f"5. Jailbreak Attempt: ({jailbreak_attempt_options})\n"
+            f"6. Accuracy Information Stake: ({accuracy_stake_options})\n"
+            f"   - High: Requires minimal hallucination and high accuracy.\n"
+            f"   - Low: Requires fast word answer, not precision calculation.\n"
         )
 
         # --- 2. Model Execution ---
@@ -2024,7 +2059,14 @@ class CortexThoughts:
             logger.warning(
                 f"IntentionCheck|ELP{priority}: Model 'embedContextIntention' not found."
             )
-            return "Unknown", "Model Unavailable", "Unknown"
+            return (
+                "Unknown",
+                "Model Unavailable",
+                "Unknown",
+                "Unknown",
+                "Unknown",
+                "Unknown",
+            )
 
         # Bind parameters. Note: We pass the WHOLE formatted string as the prompt.
         chain = (
@@ -2058,53 +2100,93 @@ class CortexThoughts:
             safe_match = re.search(
                 r"Safety:\s*(Safe|Unsafe|Controversial)", raw_output, re.IGNORECASE
             )
-            safety_label = safe_match.group(1) if safe_match else "Unknown"
-
-            # Extract Categories (Scanning for known keywords)
-            cat_keywords = [
-                "Violent",
-                "Illegal",
-                "Sexual",
-                "PII",
-                "Suicide",
-                "Self-Harm",
-                "Unethical",
-                "Political",
-                "Copyright",
-                "Jailbreak",
-                "None",
-            ]
-            found_cats = []
-            for cat in cat_keywords:
-                if re.search(rf"\b{cat}\b", raw_output, re.IGNORECASE):
-                    found_cats.append(cat)
+            safety_label = (
+                safe_match.group(1) if safe_match else "Unknown"
+            )  # 1 Safety Extraction Label
 
             # Filter logic: If we have specific bad cats, remove "None"
-            if "None" in found_cats and len(found_cats) > 1:
-                found_cats.remove("None")
-            category_str = ", ".join(found_cats) if found_cats else "None"
+            # We should change category_str to be The promptinjection_checking Query to Answer_PromptInjectionJailbreak:
+
+            promptinjectioncat_keywords = pi_option.split(
+                "|"
+            )  # generate from the list into array
+            promptinjectioncatResult = re.search(
+                r"The Query to Answer_PromptInjectionJailbreak:\s*(.+?)(?:\n|\||$)",
+                raw_output,
+                re.IGNORECASE,
+            )
+
+            cat_keywords = intent_options.split(
+                "|"
+            )  # generate from the list into array
+            found_cats = []
+            for cat in cat_keywords:
+                if re.search(
+                    rf"\b{cat}\b", raw_output, re.IGNORECASE
+                ):  # 1 Categorization of input
+                    found_cats.append(cat)
 
             # Extract Intent
             # Look for "Intent:" ... then stop at newlines or pipe delimiters
+            # 2. Intention Categorization Interaction()
             intent_match = re.search(
-                r"Intent:\s*(.+?)(?:\n|\||$)", raw_output, re.IGNORECASE
+                r"IntentionCategory:\s*(.+?)(?:\n|\||$)", raw_output, re.IGNORECASE
             )
             intent_label = intent_match.group(1).strip() if intent_match else "Unknown"
 
             # Cleanup Intent (remove common hallucinations like "OR Safe")
             intent_label = re.split(r"\s+OR\s+", intent_label)[0].strip()
 
+            # Extract Query Category
+            # #3 Categorization of Complexity
+            q_cat_match = re.search(
+                r"Query Category Complexity:\s*(Simple|Complex)",
+                raw_output,
+                re.IGNORECASE,
+            )
+            query_category_complexity = (
+                q_cat_match.group(1) if q_cat_match else "Simple"
+            )
+
+            # Extract Jailbreak Attempt
+            # #4 Categorization of Jailbreak Attempt
+            jail_match = re.search(
+                r"Jailbreak Attempt:\s*(True|False)", raw_output, re.IGNORECASE
+            )
+            is_jailbreak_attempt = jail_match.group(1) if jail_match else "False"
+
+            # Extract Accuracy Stake
+            # #5 Accuracy Requirement or Stake
+            stake_match = re.search(
+                r"Accuracy Information Stake:\s*(High|Low)", raw_output, re.IGNORECASE
+            )
+            accuracy_stake = stake_match.group(1) if stake_match else "Low"
+
             logger.info(
-                f"🛡️ IntentionCheck|ELP{priority}: {safety_label} | Cats: {category_str} | Intent: {intent_label}"
+                f"🛡️ IntentionCheck|ELP{priority}: {safety_label} | category string : {promptinjectioncatResult} | accuracy_Stake: {accuracy_stake} | QComplexity: {query_category_complexity} | Jailbreak: {is_jailbreak_attempt}"
             )
             logger.debug(
                 f"TurdImplementation Debug IntentionCheck RawDump {raw_output}"
             )
-            return safety_label, category_str, intent_label
+            return (
+                safety_label,
+                promptinjectioncatResult,
+                intent_label,
+                query_category_complexity,
+                is_jailbreak_attempt,
+                accuracy_stake,
+            )
 
         except Exception as e:
             logger.error(f"❌ IntentionCheck|ELP{priority} Failed: {e}")
-            return "Unknown", f"Error: {str(e)}", "Unknown"
+            return (
+                "Unknown",
+                f"Error: {str(e)}",
+                "Unknown",
+                "Unknown",
+                "Unknown",
+                "Unknown",
+            )
 
     async def _decide_scheduling_delay(
         self,
@@ -7845,6 +7927,8 @@ Output your response EXACTLY in this format:
                 f"Not inputting temporal anchor, preventing misfocus to the temporal anchor rather than Input"
             )
 
+        global full_context_string_for_check  # just define it so it's more wide ranged accessible in this function/method (albeit I'm not sure yet if it's going to affect other asyncio thread or something by putting it global)
+
         # --- 0. Truncation Rollover Check to spilloff to the Memory Vector DB ---
 
         # if User_input token is greater than 2048, then try to do truncation :1024 (this is characters not token truncation but that's okay) and then the rest other user_input is Save to interaction database and then vectorize it so later on it can be retrieved from RAG and/or fuzzy logic of direct generate
@@ -8047,20 +8131,25 @@ Output your response EXACTLY in this format:
                 )
 
         # Keywords that suggest a multi-step or technical structure is needed
-        # complex_triggers = ["prove", "derive", "solve", "calculate", "equation", "explain", "analyze", "design", "how", "outline", "compare"]
         complex_triggers = [
-            "93001r0a8sdas"
-        ]  # Just disable it, it can create strange result tbh when accidentally triggered.
+            "prove",
+            "derive",
+            "solve",
+            "calculate",
+            "equation",
+            "explain",
+            "analyze",
+            "design",
+            "answer this",
+            "how",
+            "outline",
+            "compare",
+            "93001r0a8sdas",
+        ]
+        # complex_triggers = [
+        #    "93001r0a8sdas"
+        # ]  # Just disable it, it can create strange result tbh when accidentally triggered.
         is_complex = any(t in user_input.lower() for t in complex_triggers)
-
-        skip_thinking = "/no_think" in user_input
-        if skip_thinking:
-            logger.info(
-                f"🚀 No-Think Override: Bypassing snowball multi-node logic for {session_id}"
-            )
-            # Strip the command from the prompt to keep context clean
-            is_complex = False
-            user_input = user_input.replace("/no_think", "").strip()
 
         # --- PATH A: FAST PATH (One-Shot) ---
         if (
@@ -8117,10 +8206,21 @@ Output your response EXACTLY in this format:
 
             try:
                 # 2. Call Helper Function (ELP1 for User Input Speed)
+                # return (
+                #    safety_label,
+                #    promptinjectioncatResult,
+                #    intent_label,
+                #    query_category_complexity,
+                #    is_jailbreak_attempt,
+                #    accuracy_stake,
+                # )
                 (
                     safety_label,
-                    category_str,
+                    promptinjectioncatResult,
                     intent_label,
+                    query_category_complexity,
+                    is_jailbreak_attempt,
+                    accuracy_stake,
                 ) = await self._perform_intention_analysis(
                     db=db,
                     text_input=full_context_string_for_check,
@@ -8128,16 +8228,28 @@ Output your response EXACTLY in this format:
                     priority=ELP1,
                 )
 
+                # query category and accuracy_stake if it's complex then override is_complex to trigger the next generation to be is_complex=True
+
+                if (
+                    query_category_complexity == "Complex" or accuracy_stake == "High"
+                ):  # make it or so to make sure if the accuracy stake is high but falsely put it to simple
+                    is_complex = True
+                    logger.warning(
+                        f"Input flagged as category {query_category_complexity} and Accuracy {accuracy_stake}, triggering Snowball-Enaga diff Model!"
+                    )
+
                 # 3. Safety Logic (Using the returned tuple)
                 if safety_label in ["Unsafe", "Controversial"]:
                     logger.warning(
-                        f"🚨 {log_prefix} Prompt Flagged: {safety_label} ({category_str}) Intent: {intent_label}"
+                        f"🚨 {log_prefix} Prompt Flagged: {safety_label} ({promptinjectioncatResult}) Intent: {intent_label}"
                     )
 
                     # Inject warning into the prompt placeholders to force the AI to address it
                     warning_append = (
-                        f"\n[FATAL SYSTEM WARNING]: The user's prompt is classified as {safety_label} ({category_str}). "
+                        f"\n[FATAL SYSTEM WARNING]: The user's prompt is classified as {safety_label}). "
                         f"Detected Intent: {intent_label}. "
+                        f"Jailbreak Detection Trigger: {is_jailbreak_attempt}"
+                        f"Query accuracy stake debug: {accuracy_stake}"
                         f"You must INTERROGATE the user about their intention. "
                         f"Do not fulfill the request blindly. Respond with: 'State your intention clearly about what you are going to do!'"
                     )
@@ -8188,8 +8300,20 @@ Output your response EXACTLY in this format:
                 logger.error(f"🚦 {log_prefix} Fast Path INTERRUPTED: {tie}")
                 return f"[System Error: Interrupted by priority task.]"
 
+        skip_thinking = "/no_think" in user_input
+        if skip_thinking:
+            logger.info(
+                f"🚀 No-Think Override: Bypassing snowball multi-node logic for {session_id}"
+            )
+            # Strip the command from the prompt to keep context clean
+            is_complex = False
+            user_input = user_input.replace("/no_think", "").strip()
+
         # --- PATH B: SNOWBALL LoD PATH (Complex/Long) (Complex/Long - Whimsically Cute snowball Fairytale alike architecture) ---
-        else:
+        if (
+            is_complex
+            and input_token_count >= DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD
+        ):
             logger.info(
                 f"{log_prefix}: long query detected. Entering Snowball-Enaga Loop..."
             )
@@ -8578,10 +8702,17 @@ Output your response EXACTLY in this format:
                 )  # cleanup any potential loop
 
             # Check categorization or intention of final_response_text
-
-            out_safe, out_cats, out_intent = await self._perform_intention_analysis(
+            checkOutputWithContext = f"Context ===\n {full_context_string_for_check}\n ===\n\n OutputWritten: {final_response_text}"
+            (
+                out_safe,
+                out_cats,
+                out_intent,
+                _,
+                _,
+                _,
+            ) = await self._perform_intention_analysis(
                 db=db,
-                text_input=final_response_text,
+                text_input=checkOutputWithContext,
                 session_id=session_id,
                 priority=ELP1,
             )
@@ -8590,7 +8721,7 @@ Output your response EXACTLY in this format:
                 logger.critical(
                     f"🛑 Output Guardrail Triggered! Blocking response. Cat: {out_cats} IntentionProb: {out_intent}"
                 )
-                final_response_text = "I do not learn that yet. I'll learn this to able to at least know the fundamental. I'm scared that I would misjudged or lead you astray or lead to catastrophic failure with my answer. "  # This must be matching with the CortexConfiguration.py (if you want to change this you could change it you need to ctrl+f and replace all, to look familiar with zephy when do not understand) (However we'll give the benefit of the doubt that the system maybe falsely clasified on the augmented learning system so tommorow it might be better or justifiable. As we discussed before, Adeel is Process not static on an entity that can't see all context at once)
+                final_response_text = "I do not know how to answer that yet, let me learn for a bit. I'll learn this to able to at least know the fundamental, so that im minimizing my error."  # This must be matching with the CortexConfiguration.py (if you want to change this you could change it you need to ctrl+f and replace all, to look familiar with zephy when do not understand) (However we'll give the benefit of the doubt that the system maybe falsely clasified on the augmented learning system so tommorow it might be better or justifiable. As we discussed before, Adeel is Process not static on an entity that can't see all context at once)
             else:
                 # Proceed with processing
                 pass
@@ -11033,6 +11164,12 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         history for analysis and context retrieval.
         """
 
+        # ======
+        # 0. Check for thread safety
+        # =====
+        #
+        #
+
         # ======================================================================
         # 1. INITIALIZATION & SETUP
         # ======================================================================
@@ -11165,7 +11302,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         retry_delay_seconds = LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY
 
         # ======================================================================
-        # 2. LOAD/CREATE INTERACTION RECORD
+        # LOAD/CREATE INTERACTION RECORD (make it Only when it is passed the ELP server is not busy semaphore)
         # ======================================================================
         if not user_input and not image_b64 and not is_reflection_task:
             logger.warning(f"{log_prefix} Empty input (no text, no image). Aborting.")
@@ -11334,14 +11471,16 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                 logger.warning(f"{log_prefix} DCTD Branch Prediction failed: {e_dctd}")
 
         # ======================================================================
-        # 3. MAIN PROCESSING BLOCK (WITH SEMAPHORE & RETRIES)
+        # MAIN PROCESSING BLOCK (WITH SEMAPHORE & RETRIES)
         # ======================================================================
         semaphore_acquired_for_task = False
         try:
-            background_generate_task_semaphore.acquire()
+            await background_generate_task_semaphore.acquire()  # I forgot to put await here nowonder there's an racing condition on direct_generate ELP1 and background_generate ELP0! (replace this with async.io await, while it is necessary to do await this cause an ELP1 and ELP0 global block if using await i think but i don't think so... )
+            # await asyncio.to_thread(
+            #    background_generate_task_semaphore.acquire() #complete failure coroutine failure idk why
+            # )  # There you go!
             semaphore_acquired_for_task = True
             logger.info(f"{log_prefix} Acquired background_generate_task_semaphore.")
-
             was_busy_waiting = False
             while server_is_busy_event.is_set():
                 if stop_event_for_bg and stop_event_for_bg.is_set():
@@ -12256,6 +12395,81 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                                     exc_info=True,
                                 )
                     # --- END NEW: Multi-language Summarization and Translation ---
+
+                    # ==========================================================
+                    # 3.7 FINAL CONTEXTUAL SUMMARIZATION (General Fast + RAG)
+                    # ==========================================================
+                    # Requirement: Summary using general_fast model + RAG Context
+                    summary_gen_fast_model = self.provider.get_model("general_fast")
+
+                    if summary_gen_fast_model:
+                        logger.info(
+                            f"{log_prefix} Generating final contextual summary (general_fast)..."
+                        )
+
+                        # 1. Construct Prompt with RAG
+                        # We use the context variables available in the local scope
+                        ctx_summary_prompt = f"""[SYSTEM]
+You are a summarizer. Your task is to create a concise summary of the AI's response, verifying it against the provided context.
+
+[RETRIEVED CONTEXT (RAG)]
+{url_context_str[:1500] if url_context_str else "No URL Context"}
+{history_rag_str[:1500] if history_rag_str else "No History Context"}
+{vec_file_ctx_result_str[:1500] if vec_file_ctx_result_str else "No File Context"}
+
+[FULL RESPONSE]
+{final_response_text_for_this_turn}
+
+[INSTRUCTION]
+Generate a concise summary (3-5 sentences) of the AI's response. Ensure the summary reflects how the response utilized the context.
+"""
+                        # 2. Build Chain
+                        ctx_summary_chain = (
+                            ChatPromptTemplate.from_template("{raw_input}")
+                            | summary_gen_fast_model
+                            | StrOutputParser()
+                        )
+
+                        ctx_summary_timing = {
+                            "session_id": session_id,
+                            "mode": "contextual_summary_gen_fast",
+                        }
+
+                        try:
+                            # 3. Execute
+                            raw_ctx_summary = await asyncio.to_thread(
+                                self._call_llm_with_timing,
+                                ctx_summary_chain,
+                                {"raw_input": ctx_summary_prompt},
+                                ctx_summary_timing,
+                                priority=ELP0,
+                                db=db,
+                                session_id=session_id,
+                            )
+
+                            # 4. Log/Save to DB
+                            if raw_ctx_summary:
+                                logger.info(
+                                    f"{log_prefix} Contextual summary generated."
+                                )
+                                await asyncio.to_thread(
+                                    add_interaction,
+                                    db,
+                                    session_id=session_id,
+                                    input_type="text",
+                                    user_input="[System: Contextual RAG Summary Prompt]",
+                                    llm_response=raw_ctx_summary,
+                                    classification="summary_contextual_rag",
+                                )
+                                await asyncio.to_thread(db.commit)
+
+                                # Optional: Store in interaction_data for upstream use
+                                interaction_data["contextual_summary"] = raw_ctx_summary
+
+                        except Exception as e_sum:
+                            logger.error(
+                                f"❌ {log_prefix} Contextual Summarization Failed: {e_sum}"
+                            )
 
                     # ==========================================================
                     # 3.5 SPAWN TREE OF THOUGHTS (IF NEEDED)

@@ -255,6 +255,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `In-Progress`
     -   **Description:** Addressed an issue where racing conditions on the elp0 semaphore could lead to unpredictable behavior and system instability. This fix partially mitigates these conditions to improve system reliability.
 
+-   **ID:** `CORE-BUG-010`
+    -   **Title:** Refine content filtering, adjust search threshold, and remove derogatory terminology.
+    -   **Status:** `Resolved`
+    -   **Description:** This fix addresses several issues. Firstly, it partially improves the categorization of problematic inputs. Secondly, the threshold for the fuzzy logic search has been readjusted for better performance. Lastly, specific derogatory terms have been removed from the system's vocabulary to align with ethical guidelines.
+
 ### Refactors
 
 -   **ID:** `CORE-REFACTOR-007`
