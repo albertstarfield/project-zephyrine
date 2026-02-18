@@ -216,6 +216,16 @@ With universe of appreciation presented to you all,
 16. RagVerus: Repository-Level Program Verification with LLMs using Retrieval Augmented Generation. (2024). Arxiv.org. https://arxiv.org/html/2502.05344v1
 17. Cognitive Atlas. (2026). Cognitiveatlas.org. https://www.cognitiveatlas.org/concept/id/trm_4a3fd79d0a275/
 18. Cognitive Atlas. (2026). Cognitiveatlas.org. https://www.cognitiveatlas.org/concept/id/trm_4a3fd79d0a7bb/
+19. Kievit, R. A., Davis, S. W., Griffiths, J., Correia, M. M., Cam-CAN, & Henson, R. N. (2016). A watershed model of individual differences in fluid intelligence. Neuropsychologia, 91, 186–198. https://doi.org/10.1016/j.neuropsychologia.2016.08.008
+20. ‌van Aken, L., Kessels, R. P. C., Wingbermühle, E., van der Veld, W. M., & Egger, J. I. M. (2015). Fluid intelligence and executive functioning more alike than different? Acta Neuropsychiatrica, 28(1), 31–37. https://doi.org/10.1017/neu.2015.46
+21. ‌Hirao, T., Miyamae, M., Matsuyoshi, D., Inoue, R., Takado, Y., Obata, T., Higuchi, M., Tsuchiya, N., & Yamada, M. (2025). A neuroimaging dataset during sequential color qualia similarity judgments with and without reports. Scientific Data, 12(1). https://doi.org/10.1038/s41597-025-04511-0
+22. ‌Cui, J., Wen, J., & Wang, D. (2023). Cognitive manipulation of emotional and non-emotional information in working memory of patients with depression: a rigid processing style. Frontiers in Psychology, 14. https://doi.org/10.3389/fpsyg.2023.1183893
+23. Bouten, S., Pantecouteau, H., & J. Bruno Debruille. (2018). Looking for effects of qualia on event-related brain potentials of close others in search for a cause of the similarity of qualia assumed across individuals. F1000Research, 3, 316–316. https://doi.org/10.12688/f1000research.5977.3
+24. ‌Skourti, E., Simos, P., Zampetakis, A., Koutentaki, E., Zaganas, I., Alexopoulou, C., Vgontzas, A., & Basta, M. (2023). Long-term associations between objective sleep quality and quantity and verbal memory performance in normal cognition and mild cognitive impairment. Frontiers in Neuroscience, 17. https://doi.org/10.3389/fnins.2023.1265016
+25. Mogi, K. (2013). Cognitive factors correlating with the metacognition of the phenomenal properties of experience. Scientific Reports, 3(1). https://doi.org/10.1038/srep03354
+26. Hashemi, A., Oroojan, A. A., Rassouli, M., & Hadis Ashrafizadeh. (2023). Explanation of near-death experiences: a systematic analysis of case reports and qualitative research. Frontiers in Psychology, 14, 1048929–1048929. https://doi.org/10.3389/fpsyg.2023.1048929
+27. ‌Biglan, A., Johansson, M., Ryzin, M. V., & Embry, D. (2020). Scaling up and scaling out: Consilience and the evolution of more nurturing societies. Clinical Psychology Review, 81, 101893–101893. https://doi.org/10.1016/j.cpr.2020.101893
+28. ‌Ho, Y.-R., Chen, B.-Y., & Li, C.-M. (2023). Thinking more wisely: using the Socratic method to develop critical thinking skills amongst healthcare students. BMC Medical Education, 23(1), 173–173. https://doi.org/10.1186/s12909-023-04134-2
 ---
 <h1 align="center">
 <sub>
