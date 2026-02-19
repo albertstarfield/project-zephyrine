@@ -116,3 +116,8 @@
 -   **Title:** Overhaul UI architecture, service naming, and system behavior.
 -   **Status:** `Resolved`
 -   **Description:** This commit introduces a major refactoring across the system. The frontend UI has been significantly reworked, replacing virtualized scrolling with a more direct rendering approach and implementing a more robust "fire-and-forget" WebSocket messaging architecture. The splash screen sequence was redesigned to include a warning. Service names within the launcher (`launcher.py`) have been standardized (e.g., `ZEPHYMESH-NODE` to `zephymeshHand`). The core system behavior and system prompts in `CortexConfiguration.py` have been updated to be less confident and more cautious.
+
+-   **ID:** CORE-BUG-011
+-   **Title:** Tune PWM for preempt halt hardblock.
+-   **Status:** Resolved
+-   **Description:** Adjusted the Pulse Width Modulation (PWM) parameters to optimize the timing and reliability of the preempt halt mechanism within the scheduler. This ensures that the system can effectively halt ELP0 background tasks to prioritize ELP1 high-priority requests, maintaining system responsiveness and operational priority.

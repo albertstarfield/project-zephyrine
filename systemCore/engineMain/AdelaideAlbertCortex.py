@@ -32,6 +32,7 @@ import easyocr
 import langcodes
 import numpy as np
 import pandas as pd
+import psutil
 
 # from quart import Quart, Response, request, g, jsonify, current_app # Use Quart imports
 # --- Third-Party Library Imports ---
@@ -418,6 +419,51 @@ PYTHON_EXECUTABLE = APP_PYTHON_EXECUTABLE
 
 _indexer_thread: Optional[threading.Thread] = None
 _indexer_stop_event = threading.Event()
+
+
+async def _binary_preemption_monitor():
+    """
+    Helper async daemon that monitors for duplicate restricted LLM binaries
+    every 100ms and logs a fatal preemption violation if detected.
+    """
+    restricted_binaries = ["LMExec", "LMText2Vector", "LMMultiModal"]
+
+    logger.info("🛡️ Starting Preemption Code Violation Monitor Daemon...")
+
+    while True:
+        # Check global conditions
+        if (
+            DisallowParallelBinaryExec == True
+            or MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS <= 1
+        ):
+            try:
+                # Track the counts for our restricted binaries
+                binary_counts = {binary: 0 for binary in restricted_binaries}
+
+                # Iterate through active processes
+                for proc in psutil.process_iter(["name", "status"]):
+                    # Ignore dead/zombie processes
+                    if proc.info["status"] != psutil.STATUS_ZOMBIE:
+                        proc_name = proc.info.get("name")
+                        if proc_name in restricted_binaries:
+                            binary_counts[proc_name] += 1
+
+                # Check for any duplicates
+                for binary, count in binary_counts.items():
+                    if count > 1:
+                        logger.error(
+                            f"FIXME: PREEMPTION VIOLATION ELP1/ELP0 {{Duplicated Process: {binary} count={count}}}, "
+                            f"THIS MUST BE GEMINI THAT SABOTAGED THE CODE! YOUR COMPUTER RESOURCES MAY BE GOING TO BE OVERLOADED"
+                        )
+
+            except Exception as e:
+                # Catch any psutil permission/access denied errors gracefully
+                logger.debug(
+                    f"Binary Preemption Monitor encountered an OS access issue: {e}"
+                )
+
+        # Sleep for 100ms before checking again
+        await asyncio.sleep(0.1)
 
 
 def start_file_indexer():
@@ -8310,10 +8356,7 @@ Output your response EXACTLY in this format:
             user_input = user_input.replace("/no_think", "").strip()
 
         # --- PATH B: SNOWBALL LoD PATH (Complex/Long) (Complex/Long - Whimsically Cute snowball Fairytale alike architecture) ---
-        if (
-            is_complex
-            and input_token_count >= DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD
-        ):
+        if is_complex or input_token_count >= DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD:
             logger.info(
                 f"{log_prefix}: long query detected. Entering Snowball-Enaga Loop..."
             )
@@ -8556,7 +8599,9 @@ Output your response EXACTLY in this format:
             req_id = f"dgen-watchdog-{uuid.uuid4()}"
             log_prefix = f"⏱️ {req_id}|ELP1"
             llm_was_called = False
-            final_response_text = ""  # Initialize a variable to hold the result
+            final_response_text = (
+                "[Unknown Error]"  # Initialize a variable to hold the result
+            )
             hook_response: Optional[str] = None
             logger.info(
                 f"{log_prefix} Orchestrator START -> Session: {session_id}, Input: '{user_input[:10]}...'"
@@ -20495,6 +20540,9 @@ SYSTEM_IS_PRIMING = False  # for GUI/client information using /primedready wheth
 async def startup_tasks():
     global SYSTEM_IS_PRIMING
     SYSTEM_IS_PRIMING = True  # Just changed or when the startup is executed then the system is priming thus it is set to True.
+
+    # [!] Hook the monitor of preemption violation that is not detected on the logic as safety warning of the code sabotage!:
+    asyncio.create_task(_binary_preemption_monitor())
 
     # -=-=-=-=-=-=-=-=- build ada daemons -=-=-=-=-=-=-=-=-=-=-
     await build_ada_daemons()
