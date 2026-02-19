@@ -78,8 +78,8 @@ FILE_INDEXER_IDLE_WAIT_SECONDS = int(
 )  # default at 3600 putting it to 5 is just for debug and rentlessly scanning
 
 FUZZY_SEARCH_THRESHOLD_CONTEXT = getattr(
-    globals(), "FUZZY_SEARCH_THRESHOLD", 50
-)  # Default to 50 if not from which is 30% set it not 0.3 but 30
+    globals(), "FUZZY_SEARCH_THRESHOLD", 70
+)  # Default to 70 if not from which is 30% set it not 0.3 but 30
 # Sidenote: I was experimenting on cracking down on the mechanism of making zephy becoming psychosis (setting to 30) (& scizophrenic) and it seems that fuzzy threshold if it's going down it's going everywhere. This research found might be useful to help someone?
 
 
@@ -755,7 +755,7 @@ ENABLE_DB_SNAPSHOTS = os.getenv("ENABLE_DB_SNAPSHOTS", "true").lower() in (
     "yes",
     "y",
 )
-DB_SNAPSHOT_INTERVAL_MINUTES = int(os.getenv("DB_SNAPSHOT_INTERVAL_MINUTES", 1))
+DB_SNAPSHOT_INTERVAL_MINUTES = int(os.getenv("DB_SNAPSHOT_INTERVAL_MINUTES", 10))
 DB_SNAPSHOT_DIR_NAME = "db_snapshots"
 # DB_SNAPSHOT_DIR is derived in database.py
 DB_SNAPSHOT_RETENTION_COUNT = int(

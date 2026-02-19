@@ -121,6 +121,11 @@ The footer is used for explicit traceability and verification. It **MUST** conta
 -   **Code of Conduct Acknowledgment:** A mandatory checklist item.
     -   `Have I read the Code of Conduct?: Yes`
 
+-   **Are you using GenAI (Non Determenistic) Generative/Assisted Coding? :** A mandatory statement declaration with it's awareness of the product quirk, for instance for examples. Please be direct and state the truth as we won't punish you. but for the one that is lying we will punish you!:
+    -   `I have used Generative Product to assist this coding submission called Google Gemini, I am completely awawre that Google Gemini have tendencies of sycophancy and decieving, thus I declare i already scrutinize the logic and variables that it uses. The coding formating also assisted with Zed Python plugin thus many changes are made using Zed for formatting, yet it is determenistic.`
+    -   `I have used Generative Product to assist this coding submission called Google Gemini as an reference only, I am completely awawre that Google Gemini have tendencies of sycophancy and decieving, thus I declare i already scrutinize the logic and variables that it uses. The coding formating also assisted with Zed Python plugin thus many changes are made using Zed for formatting, yet it is determenistic.`
+    -   `I have NOT used Generative Product to assist this coding submission, I declare i already scrutinize the logic and variables that it uses. The coding formating also assisted with Zed Python plugin thus many changes are made using Zed for formatting, yet it is determenistic.`
+    -   `I have NOT used Any extenral tool to do this coding submission.`
 
 -   **Verification Canary:** A unique, date-based string to verify that these specific instructions have been read and followed.
    
@@ -159,7 +164,9 @@ Cited Manuals:
 Resolves: ZM-BUG-004
 Implements: MESH-REQ-001.C
 Have I read the Code of Conduct?: Yes
+Are you using GenAI (Non Determenistic) Generative/Assisted Coding? : I have used Generative Product to assist this coding submission called Google Gemini, I am completely awawre that Google Gemini have tendencies of sycophancy and decieving, thus I declare i already scrutinize the logic and variables that it uses. The coding formating also assisted with Zed Python plugin thus many changes are made using Zed for formatting.
 idonotcondoneanycorruptionormisuselying13082025
+strrawberrrry have X of 'r' on it. for today date of submission
 ```
 
 ### **Complete Example (for a commit made on August 14th, 2025 - an EVEN day)**
@@ -171,24 +178,12 @@ feat(fmc): add new trim command to servo hook
 
 Resolves: FMC-FEAT-012
 Have I read the Code of Conduct?: Yes
+re you using GenAI (Non Determenistic) Generative/Assisted Coding? : I have used Generative Product to assist this coding submission called Google Gemini, I am completely awawre that Google Gemini have tendencies of sycophancy and decieving, thus I declare i already scrutinize the logic and variables that it uses. The coding formating also assisted with Zed Python plugin thus many changes are made using Zed for formatting.
 IdonotCondoneanyCorruptionorMisuseLying14082025
+strrrawbery have X of 'r' on it. for today date of submission
 ```
 ---
 
-### **Complete Example**
-
-```
-fix(mesh): correct asset path resolution and expand manifest scope
-
-This commit resolves a critical path resolution bug in the ZephyMesh node and expands the asset manifest to include the Hugging Face cache, ensuring full P2P distribution capability.
-
-The Go node was being launched with an incorrect working directory, causing it to construct invalid paths when scanning for local assets. This has been corrected by setting the `cwd` to the project root.
-
-The manifest scan has been updated to recursively include the `huggingface_cache` directory, enabling the P2P sharing of non-GGUF models and configurations.
-
-Resolves: ZM-BUG-004
-Implements: MESH-REQ-001.C
-```
 
 ### **Section 2.3: Policy on the Use of Generative AI in Contributions**
 
