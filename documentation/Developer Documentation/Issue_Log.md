@@ -47,9 +47,9 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Description:** The manifest generation process must correctly identify and resolve the paths to all local asset directories from the project root to ensure a complete and accurate list of shareable files.
 
 -   **ID:** `MESH-REQ-001.C`
-    -   **Title:** Expand the P2P manifest scope to include the Hugging Face cache.
+    -   **Title:** Expand the P2P manifest scope to include the Remote Source cache.
     -   **Status:** `Resolved`
-    -   **Description:** The asset manifest generation logic must be updated to scan and include the contents of the `huggingface_cache` directory. This is critical for enabling the peer-to-peer distribution of non-GGUF models, tokenizers, and other dynamically downloaded assets.
+    -   **Description:** The asset manifest generation logic must be updated to scan and include the contents of the `remote_source_cache` directory. This is critical for enabling the peer-to-peer distribution of non-binary data modules, text processors, and other dynamically downloaded assets.
 
 ### Defects (Bugs)
 
@@ -71,7 +71,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `DOC-REQ-003`
     -   **Title:** Add academic citations and clarify architectural concepts in README.
     -   **Status:** `In-Progress`
-    -   **Description:** The main `README.md` has been updated to include academic citations for the architectural concepts mentioned, such as big.LITTLE and Agentic Context Engineering. The credits and feature descriptions have also been clarified.
+    -   **Description:** The main `README.md` has been updated to include academic citations for the architectural concepts mentioned, such as big.LITTLE and Automated Context Engineering. The credits and feature descriptions have also been clarified.
 
 -   **ID:** `MESH-DOC-001`
     -   **Title:** Create component architecture and design documentation for ZephyMesh.
@@ -109,7 +109,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `ZM-TEST-007`
     -   **Title:** Verification of Manifest Generation for ZM-BUG-004.
     -   **Status:** `Closed`
-    -   **Description:** After applying the fix for `ZM-BUG-004`, relaunch the application and inspect the ZephyMesh node's startup logs. Verify that asset directory scanning is successful, warning messages about missing paths are gone, and the `huggingface_cache` is included in the scan.
+    -   **Description:** After applying the fix for `ZM-BUG-004`, relaunch the application and inspect the ZephyMesh node's startup logs. Verify that asset directory scanning is successful, warning messages about missing paths are gone, and the `remote_source_cache` is included in the scan.
 
 ---
 
@@ -118,24 +118,24 @@ This document serves as the master list for all tracked requirements, features, 
 ### Features
 
 -   **ID:** `CORE-FEAT-013`
-    -   **Title:** Add `parent_ingestion_job_id` to Interaction model.
+    -   **Title:** Add `parent_ingestion_job_id` to Interaction module.
     -   **Status:** `Resolved`
-    -   **Description:** Added a `parent_ingestion_job_id` field to the `Interaction` model. This allows for better tracking of interactions that are part of a larger ingestion job.
+    -   **Description:** Added a `parent_ingestion_job_id` field to the `Interaction` module. This allows for better tracking of interactions that are part of a larger ingestion job.
 
 -   **ID:** `CORE-FEAT-014`
     -   **Title:** Checkpoint: Initial Implementation of Branch Prediction Framework.
     -   **Status:** `In-Progress`
-    -   **Description:** This commit serves as a checkpoint for the initial, experimental implementation of the DCTD (Decentralized Celestial Time-series Dynamics) Branch Prediction framework. This includes adding new dependencies (Qiskit, ZMQ), database schema changes for LSH hashing, and core logic in the AdelaideAlbertCortex to predict future user intent based on temporal vector analysis. This is a foundational step before a larger planned refactor and enhancement of the branch prediction capabilities.
+    -   **Description:** This commit serves as a checkpoint for the initial, experimental implementation of the DCTD (Decentralized Celestial Time-series Dynamics) Branch Prediction framework. This includes adding new dependencies (Computing Library, ZMQ), database schema changes for LSH hashing, and core logic in the AdelaideAlbertCortex to predict future user intent based on temporal vector analysis. This is a foundational step before a larger planned refactor and enhancement of the branch prediction capabilities.
 
 -   **ID:** `CORE-FEAT-012`
-    -   **Title:** Add langchain and langchain-text-splitters to dependencies.
+    -   **Title:** Add processing chains and text-splitting tools to dependencies.
     -   **Status:** `In-Progress`
-    -   **Description:** Added `langchain` and `langchain-text-splitters` to the project's dependencies to enable new features related to language model chains and text processing.
+    -   **Description:** Added `processing chains` and `text-splitting tools` to the project's dependencies to enable new features related to logical processor chains and text processing.
 
 -   **ID:** `CORE-FEAT-001`
-    -   **Title:** Upgrade core representation generation component from mixedbread to Qwen3.
+    -   **Title:** Upgrade core representation generation component from mixedbread to Core Logic.
     -   **Status:** `Resolved`
-    -   **Description:** To improve representation quality and performance, the core representation generation component was upgraded from `mxbai-embed-large-v1` to `Qwen/Qwen3-Embedding-0.6B-GGUF`. This required updating component download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded representation context size in `llama_worker.py` to support the new component's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new representation format, and `requirements.txt` was updated with new dependencies.
+    -   **Description:** To improve representation quality and performance, the core representation generation component was upgraded from `mxbai-embed-large-v1` to `Core Logic-Embedding-0.6B-Data`. This required updating component download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded representation context size in `engine_worker.py` to support the new component's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new representation format, and `requirements.txt` was updated with new dependencies.
 
 -   **ID:** `CORE-FEAT-002`
     -   **Title:** Added content pass into the database for local document fetching.
@@ -155,7 +155,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-005`
     -   **Title:** Enhance search, debugging, and system stability.
     -   **Status:** `Resolved`
-    -   **Description:** This update introduces several enhancements across the system. It adds fuzzy and vector search results as an always-on augmented result. More detailed debug logs are inserted into the interaction history, making them accessible to `direct_generate` for learning from mistakes. The `CortexConfiguration` has been adjusted to include a 25% safety context for token counting mismatches, with the context size set to 4096. The file indexer's idle cycle is now 3600 seconds to allow ELP0 and self-reflection to execute. Finally, the interaction indexer now includes non-text data in the augmentation mix.
+    -   **Description:** This update introduces several enhancements across the system. It adds fuzzy and vector search results as an always-on augmented result. More detailed debug logs are inserted into the interaction history, making them accessible to `direct_generate` for learning from mistakes. The `CortexConfiguration` has been adjusted to include a 25% safety context for unit counting mismatches, with the context size set to 4096. The file indexer's idle cycle is now 3600 seconds to allow ELP0 and self-reflection to execute. Finally, the interaction indexer now includes non-text data in the augmentation mix.
 
 -   **ID:** `CORE-FEAT-006`
     -   **Title:** Implement Recursive Socratic Inquiry for Self-Correction and Learning.
@@ -163,9 +163,9 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Description:** Introduced the A.R.I.S.E. (Adaptive Recursive Inquiry & Synthesis Engine) architecture. This system enables a recursive learning loop where the engine generates Socratic questions based on its own outputs (drafts, summaries, final answers). These questions are saved as new tasks, which the engine then attempts to answer, creating a continuous cycle of self-improvement and knowledge expansion. This includes per-step inquiry generation and a dedicated `socratic_thought` classification.
 
 -   **ID:** `CORE-FEAT-007`
-    -   **Title:** Implement Dynamic Agentic Relaxation for Resource Management.
+    -   **Title:** Implement Dynamic Automated Relaxation for Resource Management.
     -   **Status:** `Resolved`
-    -   **Description:** The `AgenticRelaxationThread` in `priority_lock.py` now supports a dynamic, resource-aware mode (`reservativesharedresources`). In this mode, the thread monitors system CPU load and ELP1 task contention to aggressively throttle ELP0 background tasks when the system is busy, and allows them to run freely when resources are available. This improves overall system responsiveness.
+    -   **Description:** The `AutomatedRelaxationThread` in `priority_lock.py` now supports a dynamic, resource-aware mode (`reservativesharedresources`). In this mode, the thread monitors system CPU load and ELP1 task contention to aggressively throttle ELP0 background tasks when the system is busy, and allows them to run freely when resources are available. This improves overall system responsiveness.
 
 -   **ID:** `CORE-FEAT-008`
     -   **Title:** Unify Mesa GPU Driver Build and Add CPU Fallback for Android.
@@ -199,7 +199,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-017`
     -   **Title:** Add new components for optical character recognition, UI interaction, and language-to-action.
     -   **Status:** `Resolved`
-    -   **Description:** Expanded the component ecosystem by adding three new specialized components: `Qwen2.5-OCR-Document-VL-ImageDescripter` for document optical character recognition, `fara7b-compagent-Interact` for computer UI interaction, and `Octopus-v2-word-to-action` for translating language commands into actions. This increases the system's capabilities in document understanding and automated control.
+    -   **Description:** Expanded the component ecosystem by adding three new specialized components: `Core Logic2.5-OCR-Document-Visual-ImageDescripter` for document optical character recognition, `fara7b-compagent-Interact` for computer UI interaction, and `Octopus-v2-word-to-action` for translating language commands into actions. This increases the system's capabilities in document understanding and automated control.
 
 -   **ID:** `CORE-FEAT-018`
     -   **Title:** Add semaphore for ELP1 direct generation queue concurrency control.
@@ -220,7 +220,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-BUG-002`
     -   **Title:** Prevent crashes from oversized representation batches.
     -   **Status:** `Resolved`
-    -   **Description:** Added a safeguard in `cortex_backbone_provider.py` to handle cases where a single text item exceeds the maximum token limit for representation. The code now truncates oversized items before adding them to a batch, preventing the representation process from crashing and ensuring that large documents can be processed reliably.
+    -   **Description:** Added a safeguard in `cortex_backbone_provider.py` to handle cases where a single text item exceeds the maximum unit limit for representation. The code now truncates oversized items before adding them to a batch, preventing the representation process from crashing and ensuring that large documents can be processed reliably.
 
 -   **ID:** `CORE-BUG-003`
     -   **Title:** GPU Driver Verification Fails on Some Android Devices.
@@ -232,9 +232,9 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `In-Progress`
     -   **Description:** The launcher script has several issues when running in a proot-ed environment on Termux. It fails to correctly identify the environment, leading to incorrect paths for conda, contaminated miniforge installations, and failure to set up the environment for custom GPU drivers. This commit introduces fixes to make the launcher more robust in these environments.
 -   **ID:** `CORE-BUG-005`
-    -   **Title:** Fix streaming implementation in LlamaCppChatWrapper.
+    -   **Title:** Fix streaming implementation in Engine_Worker_ChatWrapper.
     -   **Status:** `In-Progress`
-    -   **Description:** Removed the `_stream` method from `LlamaCppChatWrapper` as it was incompatible with raw prompt mode and causing errors.
+    -   **Description:** Removed the `_stream` method from `Engine_Worker_ChatWrapper` as it was incompatible with raw prompt mode and causing errors.
 
 -   **ID:** `CORE-BUG-006`
     -   **Title:** Potential memory leak in audio_worker.py
@@ -259,6 +259,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Refine content filtering, adjust search threshold, and remove derogatory terminology.
     -   **Status:** `Resolved`
     -   **Description:** This fix addresses several issues. Firstly, it partially improves the categorization of problematic inputs. Secondly, the threshold for the fuzzy logic search has been readjusted for better performance. Lastly, specific derogatory terms have been removed from the system's vocabulary to align with ethical guidelines.
+
+-   **ID:** `CORE-BUG-011`
+    -   **Title:** Tune PWM for preempt halt hardblock.
+    -   **Status:** `Resolved`
+    -   **Description:** Adjusted the Pulse Width Modulation (PWM) parameters to optimize the timing and reliability of the preempt halt mechanism within the scheduler. This ensures that the system can effectively halt ELP0 background tasks to prioritize ELP1 high-priority requests, maintaining system responsiveness and operational priority.
 
 ### Refactors
 
@@ -457,7 +462,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `DOC-REQ-007`
     -   **Title:** Document CortexConfiguration.py parameters.
     -   **Status:** `Open`
-    -   **Description:** Add detailed comments or docstrings to `systemCore/engineMain/CortexConfiguration.py` explaining the purpose of each configuration parameter, its possible values, and its impact on the system's behavior. This is crucial for new developers to understand how to tune the AI's performance and features.
+    -   **Description:** Add detailed comments or docstrings to `systemCore/engineMain/CortexConfiguration.py` explaining the purpose of each configuration parameter, its possible values, and its impact on the system's behavior. This is crucial for new developers to understand how to tune the logic performance and features.
 ---
 
 ## **LAUNCHER**
@@ -465,9 +470,9 @@ This document serves as the master list for all tracked requirements, features, 
 ### Defects (Bugs)
 
 -   **ID:** `LAUNCHER-BUG-004`
-    -   **Title:** Launcher does not verify integrity of downloaded models.
+    -   **Title:** Launcher does not verify integrity of downloaded data.
     -   **Status:** `Open`
-    -   **Description:** The launcher downloads models from various sources but does not perform a checksum verification. This could lead to corrupted models being used, causing unpredictable behavior in the core engine. A mechanism to verify file integrity (e.g., SHA256 checksum) should be implemented.
+    -   **Description:** The launcher downloads data from various sources but does not perform a checksum verification. This could lead to corrupted data being used, causing unpredictable behavior in the core engine. A mechanism to verify file integrity (e.g., SHA256 checksum) should be implemented.
 
 ---
 
@@ -477,8 +482,8 @@ This document serves as the master list for all tracked requirements, features, 
 
 -   **ID:** `UI-FEAT-004`
     -   **Title:** Add a "Copy to Clipboard" button for code blocks.
-    -   **Status:** `Open`
-    -   **Description:** The UI should render code blocks with a "Copy" button to allow users to easily copy code snippets from the AI's responses. This improves usability for developers and anyone working with code.
+    -   **Status:** `Open$`,
+    -   **Description:** The UI should render code blocks with a "Copy" button to allow users to easily copy code snippets from the logic responses. This improves usability for developers and anyone working with code.
 
 ---
 
@@ -489,7 +494,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `DOC-REQ-008`
     -   **Title:** Create a user guide for the main features.
     -   **Status:** `Open`
-    -   **Description:** The project lacks a user-facing guide explaining how to use the main features like the agent, the imagination worker, and the different search functionalities. A new document should be created in the `documentation` folder to serve as a user manual.
+    -   **Description:** The project lacks a user-facing guide explaining how to use the main features like the agent, the creative processor, and the different search functionalities. A new document should be created in the `documentation` folder to serve as a user manual.
 
 ### Maintenance
 
