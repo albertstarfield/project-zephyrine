@@ -70,7 +70,7 @@
 -   **ID:** CORTEX-REFACTOR-001
 -   **Title:** Remove unused datetime import in AdelaideAlbertCortex.py
 -   **Status:** Resolved
--   **Description:** Removed an unnecessary `datetime` import from `systemCore/engineMain/AdelaideAlbertCortex.py` to clean up the code.
+-   **Description:** Removed an unnecessary `datetime` import from `systemCore/mainEngineFrame_MacroController_EngineSharedResources/AdelaideAlbertCortex.py` to clean up the code.
 -   **ID:** CORE-REFACTOR-002
 -   **Title:** Streamline DB Init, Improve Scheduler Resilience, and Add Preemption Check
 -   **Status:** In-Progress
@@ -111,7 +111,7 @@
 -   **ID:** UI-FEAT-005
     -   **Title:** Add initial GTK C application for native UI experiments.
     -   **Status:** In-Progress
-    -   **Description:** This adds the initial directory structure and boilerplate for a GTK-based desktop application written in C. This is an experimental feature to explore native UI options for the UIEngine.
+    -   **Description:** This adds the initial directory structure and boilerplate for a GTK-based desktop application written in C. This is an experimental feature to explore native UI options for the InterfaceEngine_MacroController_SharedResources.
 -   **ID:** `SYS-REFACTOR-011`
 -   **Title:** Overhaul UI architecture, service naming, and system behavior.
 -   **Status:** `Resolved`

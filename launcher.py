@@ -70,16 +70,29 @@ _sys_exec_dir = os.path.dirname(sys.executable)
 
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-ENGINE_MAIN_DIR = os.path.join(ROOT_DIR, "systemCore", "engineMain")
-# BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "backend-service") #Old Legacy Golang
+ENGINE_MAIN_DIR = os.path.join(
+    ROOT_DIR, "systemCore", "mainEngineFrame_MacroController_EngineSharedResources"
+)
+# BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "InterfaceEngine_MacroController_SharedResources", "backend-service") #Old Legacy Golang
 BACKEND_SERVICE_DIR = os.path.join(
-    ROOT_DIR, "systemCore", "UIEngine", "frontfacebackendservice"
+    ROOT_DIR,
+    "systemCore",
+    "InterfaceEngine_MacroController_SharedResources",
+    "frontfacebackendservice",
 )  # New Ada frontfacebackend service proxy for the UI
-# frontend_host_assets = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "frontend-face-zephyrine") #Legacy Frontend User
+# frontend_host_assets = os.path.join(ROOT_DIR, "systemCore", "InterfaceEngine_MacroController_SharedResources", "frontend-face-zephyrine") #Legacy Frontend User
 frontend_host_assets = os.path.join(
-    ROOT_DIR, "systemCore", "UIEngine", "zephyrine_frontend_host_assets"
+    ROOT_DIR,
+    "systemCore",
+    "InterfaceEngine_MacroController_SharedResources",
+    "zephyrine_frontend_host_assets",
 )  # Host Assets image and etc that going to be compiled
-ZEPHYRINE_HOST_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "zephyrine_host")
+ZEPHYRINE_HOST_DIR = os.path.join(
+    ROOT_DIR,
+    "systemCore",
+    "InterfaceEngine_MacroController_SharedResources",
+    "zephyrine_host",
+)
 
 # Rather than npm run dev using node.js as base-end we use Ada now.
 LICENSE_DIR = os.path.join(ROOT_DIR, "licenses")
@@ -7489,7 +7502,10 @@ if __name__ == "__main__":
                 service_threads = []
                 # Start Engine Main
                 service_threads.append(
-                    start_service_thread(start_engine_main, "EngineMainThread")
+                    start_service_thread(
+                        start_engine_main,
+                        "mainEngineFrame_MacroController_EngineSharedResourcesThread",
+                    )
                 )
                 time.sleep(3)
                 engine_ready = any(
