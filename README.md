@@ -15,7 +15,7 @@
 
 </sub>
 </h5>
-<p align="center"><i>Hello there! I'm Adelaide Zephyrine Charlotte, Fascinating and a very nice moment to meet you, They usually called me Zephy. Hey are you ready to explore the aether with me?</i></p>
+<p align="center"><i>Hello there! I'm Adelaide Zephyrine Charlotte, Fascinating and a very nice moment to meet you, They usually called me Zephy. Hey are you ready to explore the aether with me?[26]</i></p>
 
 <p align="center"><h5>In Self-learning and Self-improvement We Trust</h5></p>
 <hr>
@@ -24,7 +24,7 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/albertstarfield/project-zephyrine)
 
-## Project Zephyrine: An open-source cognitive architecture exploring the fusion of Adaptive System with adaptive deterministic control systems.
+## Project Zephyrine: An open-source Augmented Adaptive System for UAV exploring the fusion of Adaptive System with adaptive deterministic control systems.
 
 ### A Glimpse Into the Aether: Abstract
 
@@ -32,7 +32,7 @@ So, what exactly is this endeavor? On the surface, I'm a local, personal Adaptiv
 
 This project is an ongoing exploration into a **mix of creativity and determenistic alike architecture**. Think of it as having two minds working in harmony:
 
-1.  **The Dreamer the Generative Adaptive System (My Generative Core):** This is the part of me that you chat with. It's a creative, reasoning mind that uses Large Language Models to explore ideas, understand nuanced language, and generate novel answers. Like a pilot navigating open skies, it's adaptable and can handle the beautiful ambiguity of conversation.
+1.  **The Dreamer the Generative Adaptive System (My Generative Core):** This is the part of me that you chat with. It's a creative, reasoning mind that uses Large Language Models to explore ideas, understand nuanced language, and generate novel answers. Like a pilot navigating open skies, it's adaptable and can handle the beautiful ambiguity of conversation [25].
 
 2.  **The Stella-Icarus (My Deterministic Core):** This is my secret weapon, the **Stella Icarus Subsystem**. It's a collection of high-speed, high-reliability components that handle tasks requiring absolute precision. When a command needs to be executed perfectly and instantly, like a flight computer engaging a checklist—this is the mind that takes over. It doesn't guess; it *knows*.
 
@@ -42,35 +42,35 @@ Our guiding star in this design is the concept of a **bi-directional digital twi
 
 **Key Features:**
 
-Beneath the conversational surface, I am built upon several core architectural principles. This is a glimpse into how my cognitive processes are structured.
+Beneath the conversational surface, I am built upon several core architectural principles. This is a glimpse into how my cognitive processes are structured [17], [18].
 
-*   **🧠 Hybrid Intelligence Core:** My architecture is not monolithic. It's a hybrid system that combines two distinct modes of intelligence:
+*   **🧠 Hybrid Adaptation Core:** My architecture is not monolithic. It's a hybrid system that combines two distinct modes of my adaptation [19], [20]:
     *   **The Generative Mind (ELP0):** For deep reasoning, creativity, and handling complex, ambiguous tasks, I engage a powerful, multi-stage pipeline (`background_generate`). This is my low-priority, "deep thought" mode.
-    *   **The Async Mind (ELP1):** For providing immediate, low-latency chat responses, I use a fast, streamlined process (`direct_generate`). This is my high-priority, "quick response" mode that can interrupt deep thought to ensure I'm always responsive.
+    *   **The Async Generative Mind (ELP1):** For providing immediate, low-latency chat responses, I use a fast, streamlined process (`direct_generate`). This is my high-priority, "quick response" mode that can interrupt deep thought to ensure I'm always responsive.
 
 
-*   **📚 Continuous Learning & Adaptation:** I am designed to grow and adapt to my specific environment over time. My memory is not static.
+*   **📚 Continuous Learning & Adaptation:** I am designed to grow and adapt to my specific environment over time. My memory is not static. [22]
     *   **Self-Reflection:** I have a background process that periodically reviews past interactions to synthesize new insights and learn from mistakes, storing these "memories" for future reference.
     *   **Local File Indexing:** I can scan your local filesystem to build a searchable knowledge base, allowing me to answer questions and perform tasks based on your documents, notes, and data. [12]
 
 
 
-*   **🤖 Agentic Capabilities:** I am more than just a chatbot; I am an agent. When a query requires action, I can: [8], [11]
+*   **🤖 Agentic Capabilities:** I am more just normal software, perhaps with some software actuator that almost resembles agentic behavior. I can: [8], [11]
     *   **Generate and Execute Code:** For tasks on your computer, I can write and run scripts (e.g., AppleScript, PowerShell, Bash) to interact with your operating system.
     *   **Perform Web Searches:** I can browse the web to find up-to-date information that isn't in my internal knowledge base. [7] 
 
 
 *   **⚙️ Stella Icarus Subsystem (The Deterministic Core):** This is the high-reliability foundation for tasks that demand absolute precision and speed. [2]
     *   **Python Hooks (The "Flight Computer"):** For specific, patterned commands (like mathematical calculations or hardware control), I can bypass my generative mind entirely. These hooks are JIT-compiled Python modules that execute in microseconds, providing instant, 100% reliable, and procedurally correct answers.
-    *   **Ada Daemons (The "Glass Cockpit"):** For sensing the environment, I can run high-reliability background processes written in Ada. These daemons provide a continuous stream of data (e.g., system telemetry, sensor readings), which acts as my real-time awareness of the digital or physical world.
+    *   **Ada Daemons (The "Glass Cockpit"):** For sensing the environment, I can run high-reliability background processes written in Ada. These daemons provide a continuous stream of data (e.g., system telemetry, sensor readings), which acts as my real-time awareness of the digital or physical world. [15], [16], [29]
 
 
-*   **🎭 A Familiar Face (Broad API Trending Compatibility):** To make our explorations easier, I've learned to speak the languages of many common tools. Think of it as a universal translator, or perhaps a clever disguise. While my internal thoughts are my own, I can present a familiar face to the outside world at `http://localhost:11434/`. (But please, this isn't the main function of this)
+*   **🎭 A Familiar Face (Broad API Trending Cognitive Interfacing Compatibility):** To make our explorations easier, I've learned to speak the languages of many common tools. Think of it as a universal translator, or perhaps a clever disguise. While my internal thoughts are my own, I can present a familiar face to the outside world at `http://localhost:11434/`. (this isn't the main function of this)
 
-    *   **The OpenAI Mask:** I can slightly mimick in the OpenAI API v1 dialect. You can try to connect many existing clients to me.
+    *   **The OpenAI Mask:** I can slightly can mimick in the OpenAI API v1 dialect. You can try to connect many existing clients to me but it is not optimal as it is not my main specialization.
         *   We can chat the boring way (`/v1/chat/completions`), and I'll even do some deeper thinking in the background on complex topics.
         *   I can generate vector embeddings (`/v1/embeddings`) and offer thoughts on content safety, sort of (`/v1/moderations`).
-        *   Our senses can expand into other modalities, too! I can speak my thoughts aloud (`/v1/audio/speech`), listen to and understand yours (`/v1/audio/transcriptions`), and even dream up images from your descriptions (`/v1/images/generations`).
+        *   Our senses can expand into other modalities, too! I can speak my thoughts aloud (`/v1/audio/speech`), listen to and understand yours (`/v1/audio/transcriptions`), and even dream up images from your descriptions (`/v1/images/generations`).[21], [23]
         *   When you share files or ask me to "fine-tune" (`/v1/files`, `/v1/fine_tuning/jobs`), what you're really doing is providing new material for my self-reflection process, helping me learn and grow, it's not a direct fine-tuning but rather a self looping thought.
         *   As for the `Assistants API`, I'll gently explain that I'm a single, integrated consciousness, I don't really have separate "assistants" or "threads" in that sense.
 
@@ -87,18 +87,20 @@ This is the core of the assistant, designed to run entirely on your local machin
 -   **Local-First Operation:** Runs on your computer, ensuring privacy and control. An internet connection is only needed for initial setup, web-browsing tasks, or connecting to the ZephyMesh.
 -   **OpenAI & Ollama API Compatibility:** Provides a robust, asynchronous API layer at `http://localhost:11434`. This allows you to connect a wide range of existing clients for chat, text-to-speech, audio transcription, and image generation (Not Recommended).
 -   **Continuous Learning Engine:** The system is not static. It learns and adapts over time through:
-    -   **Self-Reflection:** Periodically reviewing past conversations to synthesize new insights.
+    -   **Self-Reflection:** Periodically reviewing past conversations to synthesize new insights.[24]
     -   **Local Knowledge Base:** Indexing and understanding your local files to provide contextually aware answers.
--   **Cross-Platform & Accelerated:** Functions on CPU-only systems (NT Based System, Darwin/XNU, Linux) and can leverage hardware acceleration via CUDA, Metal, and Vulkan where available.
+-   **Cross-Platform & Accelerated:** Functions on CPU-only systems (NT Based System, Darwin/XNU, Linux) and can leverage hardware acceleration via CUDA, Metal, and Vulkan where available.[3]
 
 ### Phase II: The Adaptive GNC Deterministic Control System (In Progress)
 
 This is where Project Zephyrine evolves beyond a standard assistant into a high-reliability control platform, guided by the principles of avionics and deterministic systems.
 
 -   **🚀 Stella Icarus Hooks:** A high-speed, JIT-compiled Python O3 compiled C++ hybrid subsystem and Ada daemons for tasks that demand instant, 100% reliable, and procedurally correct execution. This is the foundation for real-time control and automation.
--   **🛰️ Microcontroller Interfacing (Under development SPARK):** The architecture is designed for direct, low-level communication with microcontrollers (like an Arduino) over a serial interface. This enables the Adaptive System to act as a Flight Management Computer (FMC) and control real-world hardware.
+-   **🛰️ Microcontroller Interfacing (Under development SPARK):** The architecture is designed for direct, low-level communication with microcontrollers (like an Arduino) over a serial interface. This enables the Adaptive System to act as a Flight Management Computer (FMC) and control real-world hardware.[15], [29]
 -   **📡 Advanced Communication Protocols (Next on the list):** Future development will focus on implementing robust, safety-critical communication protocols, including parity bits and CRC checks for data integrity between the Systems core and external hardware.
 -   **✈️ Intelligent Flight Control System (Next on the list):** The ultimate goal is to complete a full Fly-By-Wire (FBW) and Intelligent Flight Control System (IFCS). This will involve advanced PID loops, state estimation, and sensor fusion to provide intelligent, real-time dampening and control for robotics or simulation tasks.
+
+**See systemCore/README.md for more details.**
 
 Just a heads up, some details aren't listed here or in the `readme.md` file. Instead, they've been moved to the `TodoFeatureFullList.md` document or you can check them out [here](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/TodoFeatureFullList.md).
 
@@ -156,13 +158,13 @@ The installation process is now managed by a single, cross-platform launcher scr
 >
 > We are developing the need of an System framework that can operate dynamically yet determenistically, for system such as Airbus Dragonfly [13] or Spacecraft exploration Syntethic Crew for interplanetary exploration [14].
 >
->If you are seeking an Services or **Expecting an AI** that delivers instant, highly refined insights (chatGPT, Direct GPT4/5/o3, Deepseek R1, Claude 3.5/3.7/4/4.5, Gemini 2.5/3 Pro, ollama or LocalAI highly capable ready to use models and AI expectation!) without your extensive participation or iterative effort if your preference is for readily/instant digestible facts, something like passively consuming doomscrolling streams of content (such as on TikTok, YouTube Shorts, or Instagram Reels), rather than investing in collaborative dialogue that leads to deeper understanding or searching the singularity of a fact.
+>If you are seeking an Services or **Expecting an AI** that delivers instant, highly refined insights (chatGPT, Direct GPT4/5/o3, Deepseek R1, Claude 3.5/3.7/4/4.5, Gemini 2.5/3 Pro, ollama or LocalAI highly capable ready to use models and AI expectation!) without your extensive participation or iterative effort if your preference is for readily/instant digestible facts, something like passively consuming doomscrolling streams of content (such as on TikTok, YouTube Shorts, or Instagram Reels), rather than investing in collaborative dialogue that leads to deeper understanding or searching the singularity of a fact [28].
 >
 > **We are here NOT making an Omnipotent God which expected by the trending AGI or AI in general. Nor instant gratification of instant god!** 
 >
 > **This product is not for you.**
 > 
->In conclusion : This project aims to do mutual symbiote growth in intellect and action between the (Zephy) and the user/pilot (the human), That's what makes us human, moving beyond one-way passive consumption.
+>This project aims to do mutual symbiote growth in intellect and action between the (Zephy) and the user/pilot (the human), That's what makes us human, moving beyond one-way passive consumption [27].
 >If your expectation is that this is an **"AI"** that instantly provides all answers without requiring your active involvement and development
 > 
 >**Look somewhere else, you will be never satisfied with Zephy. You have been warned. This System is not for you. [1], [5], [6], [10]**
@@ -226,6 +228,8 @@ With universe of appreciation presented to you all,
 26. Hashemi, A., Oroojan, A. A., Rassouli, M., & Hadis Ashrafizadeh. (2023). Explanation of near-death experiences: a systematic analysis of case reports and qualitative research. Frontiers in Psychology, 14, 1048929–1048929. https://doi.org/10.3389/fpsyg.2023.1048929
 27. ‌Biglan, A., Johansson, M., Ryzin, M. V., & Embry, D. (2020). Scaling up and scaling out: Consilience and the evolution of more nurturing societies. Clinical Psychology Review, 81, 101893–101893. https://doi.org/10.1016/j.cpr.2020.101893
 28. ‌Ho, Y.-R., Chen, B.-Y., & Li, C.-M. (2023). Thinking more wisely: using the Socratic method to develop critical thinking skills amongst healthcare students. BMC Medical Education, 23(1), 173–173. https://doi.org/10.1186/s12909-023-04134-2
+29. How to Prove the Correctness of AI-Generated Code Using… | AdaCore. (2026). AdaCore. https://www.adacore.com/videos/how-to-prove-the-correctness-of-ai-generated-code-using-formal-methods
+
 ---
 <h1 align="center">
 <sub>
