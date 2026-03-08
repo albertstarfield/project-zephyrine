@@ -315,7 +315,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-REFACTOR-009`
     -   **Title:** Integrate Ada branch predictor code into main engine.
     -   **Status:** `Resolved`
-    -   **Description:** Reversing of previously externalized Ada branch predictor code and integrating it directly into the Python engineMain. This refactoring aims to streamline the branch prediction mechanism by co-locating the Ada-based logic within the core engine, enhancing performance and simplifying maintenance by reducing inter-process communication overhead.
+    -   **Description:** Reversing of previously externalized Ada branch predictor code and integrating it directly into the Python mainEngineFrame_MacroController_EngineSharedResources. This refactoring aims to streamline the branch prediction mechanism by co-locating the Ada-based logic within the core engine, enhancing performance and simplifying maintenance by reducing inter-process communication overhead.
 
 ---
 
@@ -419,7 +419,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `DOC-REQ-006`
     -   **Title:** Document stella_icarus_utils functions
     -   **Status:** `Open`
-    -   **Description:** Add docstrings and comments to the functions in `systemCore/engineMain/stella_icarus_utils.py` to explain their purpose, parameters, and return values.
+    -   **Description:** Add docstrings and comments to the functions in `systemCore/mainEngineFrame_MacroController_EngineSharedResources/stella_icarus_utils.py` to explain their purpose, parameters, and return values.
 
 ---
 
@@ -462,7 +462,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `DOC-REQ-007`
     -   **Title:** Document CortexConfiguration.py parameters.
     -   **Status:** `Open`
-    -   **Description:** Add detailed comments or docstrings to `systemCore/engineMain/CortexConfiguration.py` explaining the purpose of each configuration parameter, its possible values, and its impact on the system's behavior. This is crucial for new developers to understand how to tune the logic performance and features.
+    -   **Description:** Add detailed comments or docstrings to `systemCore/mainEngineFrame_MacroController_EngineSharedResources/CortexConfiguration.py` explaining the purpose of each configuration parameter, its possible values, and its impact on the system's behavior. This is crucial for new developers to understand how to tune the logic performance and features.
 ---
 
 ## **LAUNCHER**

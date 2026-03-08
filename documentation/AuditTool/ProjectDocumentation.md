@@ -10,7 +10,7 @@ The project has evolved significantly from its initial JavaScript/Electron roots
 
 Project Zephyrine currently comprises several distinct components:
 
-*   **Core Engine (`systemCore/engineMain`):** A Python application responsible for local LLM inference, context management, hardware interaction, RAG, and providing an OpenAI-compatible API. Uses its own SQLite database for history, vectors, etc. Aims to eventually serve its API on port `11434`.
+*   **Core Engine (`systemCore/mainEngineFrame_MacroController_EngineSharedResources`):** A Python application responsible for local LLM inference, context management, hardware interaction, RAG, and providing an OpenAI-compatible API. Uses its own SQLite database for history, vectors, etc. Aims to eventually serve its API on port `11434`.
 *   **UI Backend Service (`systemCore/backend-service`):** A Node.js WebSocket server that acts as the **sole backend** for the Web Frontend. It handles:
     *   Connecting to LLM APIs (either cloud-based like Groq or a local OpenAI-compatible endpoint like the Core Engine or Ollama, configurable via `.env`).
     *   Managing chat sessions and message persistence using a local **SQLite** database (`database.db`).
@@ -93,7 +93,7 @@ sequenceDiagram
 
 ## 3. Core Components Detailed
 
-### 3.1. Core Engine (`systemCore/engineMain/engine.py`)
+### 3.1. Core Engine (`systemCore/mainEngineFrame_MacroController_EngineSharedResources/engine.py`)
 
 *(This section remains largely unchanged, describing the Python engine)*
 
@@ -178,7 +178,7 @@ This is the **primary method** for running the development environment, includin
     *   Git
     *   Node.js and npm
     *   `pip install colorama` (for colored console output)
-    *   **(Optional but Recommended for full functionality):** C/C++ Build Toolchain (needed if `launch.py` is configured to also start the `engineMain` component, which requires compiled C++ backends):
+    *   **(Optional but Recommended for full functionality):** C/C++ Build Toolchain (needed if `launch.py` is configured to also start the `mainEngineFrame_MacroController_EngineSharedResources` component, which requires compiled C++ backends):
         *   **Linux:** `build-essential` (Debian/Ubuntu), `gcc-c++` (Fedora/CentOS), `base-devel` (Arch), etc.
         *   **macOS:** Xcode Command Line Tools (`xcode-select --install`)
         *   **Windows:** Visual Studio Build Tools (Can be installed via Chocolatey)
@@ -194,10 +194,10 @@ This is the **primary method** for running the development environment, includin
         ```
     4.  **What `launch.py` Does:**
         *   Checks if running inside the project's Python virtual environment (`./venv`). If not, it creates `./venv` (if missing) using the system's Python 3 and re-launches itself using the venv's Python.
-        *   Once in the venv, it installs/updates Python dependencies from `systemCore/engineMain/requirements.txt`.
+        *   Once in the venv, it installs/updates Python dependencies from `systemCore/mainEngineFrame_MacroController_EngineSharedResources/requirements.txt`.
         *   Installs/updates Node.js dependencies for the UI Backend Service (`systemCore/backend-service/package.json`).
         *   Installs/updates Node.js dependencies for the Web Frontend (`systemCore/frontend-face-zephyrine/package.json`).
-        *   Starts the **Core Engine** (`systemCore/engineMain/app.py`) in a separate thread. *(Note: You might configure `launch.py` to make this optional if only developing the UI)*.
+        *   Starts the **Core Engine** (`systemCore/mainEngineFrame_MacroController_EngineSharedResources/app.py`) in a separate thread. *(Note: You might configure `launch.py` to make this optional if only developing the UI)*.
         *   Starts the **UI Backend Service** (`systemCore/backend-service/server.js`) in a separate thread.
         *   Starts the **Web Frontend** (`systemCore/frontend-face-zephyrine`) development server (Vite) in a separate thread.
         *   Displays interleaved, timestamped, and color-coded logs from all running services in the console.
@@ -206,7 +206,7 @@ This is the **primary method** for running the development environment, includin
 *   **Configuration (`.env` file in project root):**
     *   `GROQ_API_KEY`: Your API key if you want the UI Backend Service to use Groq.
     *   `LOCAL_LLM_API_ENDPOINT`: The URL for an OpenAI-compatible API that the **UI Backend Service** (`systemCore/backend-service`) should connect to when `GROQ_API_KEY` is **not** set.
-        *   **Long-Term Goal:** This should eventually point to Project Zephyrine's **Core Engine** (`systemCore/engineMain`), which aims to provide its own OpenAI-compatible API, potentially running on `http://localhost:11434/v1`.
+        *   **Long-Term Goal:** This should eventually point to Project Zephyrine's **Core Engine** (`systemCore/mainEngineFrame_MacroController_EngineSharedResources`), which aims to provide its own OpenAI-compatible API, potentially running on `http://localhost:11434/v1`.
         *   **Development/Fallback:** If the Core Engine's API is not yet running or fully functional on port `11434`, you can use this variable to point the UI Backend Service to a *separate* instance of a local LLM server like Ollama.
         *   **Port Conflict Note:** If you intend to run the Zephyrine Core Engine (targeting port `11434`) **and** a separate Ollama instance simultaneously during development, you **must configure Ollama to run on a different port** (e.g., by setting `OLLAMA_HOST=127.0.0.1:11435` before starting Ollama). In that case, you would set `LOCAL_LLM_API_ENDPOINT=http://localhost:11435/v1` in the `.env` file for `launch.py`.
         *   If this variable is not set in `.env`, the UI Backend Service defaults to `http://localhost:11434/v1`, assuming *something* (either the Core Engine or Ollama) is providing the API there.
@@ -222,7 +222,7 @@ This script handles the complex build process specifically for the Python **Core
 *   **Running the Build:**
     1.  Navigate to the project root directory.
     2.  Execute the script: `bash launchcontrol/run.sh`
-*   **What it Does:** (See previous documentation version for the detailed steps involving `coreRuntimeManagement.py`: system dependency installs, cloning submodules, CMake builds for `llama.cpp`, `gemma.cpp`, `gnat-llvm`, etc.) This prepares the necessary executables and libraries used by `systemCore/engineMain/engine.py`.
+*   **What it Does:** (See previous documentation version for the detailed steps involving `coreRuntimeManagement.py`: system dependency installs, cloning submodules, CMake builds for `llama.cpp`, `gemma.cpp`, `gnat-llvm`, etc.) This prepares the necessary executables and libraries used by `systemCore/mainEngineFrame_MacroController_EngineSharedResources/engine.py`.
 
 ### 6.3. Production Builds
 

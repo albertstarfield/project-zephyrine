@@ -10,7 +10,7 @@ dev-dist
 .DS_Store
 /release-builds/
 **.wav**
-systemCore/engineMain/reverseEngineeringAssets/models
+systemCore/mainEngineFrame_MacroController_EngineSharedResources/reverseEngineeringAssets/models
 *systemCore/src/release-builds*
 **_venv*
 **.venv**
@@ -39,7 +39,7 @@ systemCore/error.log
 systemCore/storage/presistentInteractionMem.json
 **conda_python_modules**
 **nodeLocalRuntime**
-**enginemain/build**
+**mainEngineFrame_MacroController_EngineSharedResources/build**
 **.gguf**
 **.gemini**
 **build**
@@ -81,13 +81,13 @@ systemCore/bin/llmchildDynamicPromptSpill.tmp
 systemCore/raw_smallLanguageModel.gguf.bin
 **MeloTTS**
 **.wav**
-systemCore/engineMain/build/CMakeFiles/CMakeConfigureLog.yaml
+systemCore/mainEngineFrame_MacroController_EngineSharedResources/build/CMakeFiles/CMakeConfigureLog.yaml
 systemCore/OpenZephyUI/zephyvenv/lib/python3.12/site-packages/alembic/templates/generic/README
-systemCore/engineMain/reverseEngineeringAssets/MeloTTS
-systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3
+systemCore/mainEngineFrame_MacroController_EngineSharedResources/reverseEngineeringAssets/MeloTTS
+systemCore/mainEngineFrame_MacroController_EngineSharedResources/reverseEngineeringAssets/en-test-zeph-profile.mp3
 sync.ffs_lock
 systemCore/OpenZephyUI/static/pyodide/pyodide-lock.json
-systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
+systemCore/mainEngineFrame_MacroController_EngineSharedResources/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
 **node_modules**
 **runtimecompiledmodel**
 **Model**
@@ -118,7 +118,7 @@ commands/
 helperCode/
 commandOutput.log
 LiteratureReviewPool/
-/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/QAlign
+/systemCore/mainEngineFrame_MacroController_EngineSharedResources/_excludefromRuntime_reverseEngineeringAssets/QAlign
 *.zst
 **__pycache__**
 **alembic**
@@ -146,13 +146,13 @@ temp_melo_audio_test_files
 **chroma_reflection_store**
 **chroma_vector_store**
 **chroma_interaction_store**
-/systemCore/engineMain/chroma_reflection_store
+/systemCore/mainEngineFrame_MacroController_EngineSharedResources/chroma_reflection_store
 .pywhispercpp_installed_v1
 .chatterbox_tts_installed_v1
 *.db
 systemCore/backend-service/project_zephyrine_chats.db
-systemCore/engineMain/chroma_interaction_store/chroma.sqlite3
-systemCore/engineMain/chroma_interaction_store/chroma.sqlite3
+systemCore/mainEngineFrame_MacroController_EngineSharedResources/chroma_interaction_store/chroma.sqlite3
+systemCore/mainEngineFrame_MacroController_EngineSharedResources/chroma_interaction_store/chroma.sqlite3
 systemCore/backend-service/project_zephyrine_chats.db
 *.sqlite3
 *.db
@@ -168,7 +168,7 @@ ZephyWatchtower/Watchdog_Thread1
 .playwright_browsers_installed_v1
 *.mjs
 AutomatedAuditNotes.txt
-systemCore/UIEngine/backend-service/zephyrine-backend
+systemCore/InterfaceEngine_MacroController_SharedResources/backend-service/zephyrine-backend
 **.pyc**
 **__personalstella__Hook_**
 **personalstella__Hook**
@@ -176,7 +176,7 @@ systemCore/UIEngine/backend-service/zephyrine-backend
 
 
 .conda_executable_path_cache_main_env.txt
-systemCore/engineMain/StellaIcarus/stella_math_core.so
+systemCore/mainEngineFrame_MacroController_EngineSharedResources/StellaIcarus/stella_math_core.so
 
 /llama_cpp_direct
 .llama_cpp_direct_installed_v1
