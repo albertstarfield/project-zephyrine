@@ -27,7 +27,7 @@ import (
 
 const (
 	ManifestProtocolID     = "/zephymesh/manifest/1.0.0" // Kept for reference, but handler is removed
-	ManifestExchangeProtocolID = "/zephymesh/manifest_exchange/1.0.0" 
+	ManifestExchangeProtocolID = "/zephymesh/manifest_exchange/1.0.0"
 	FileProtocolID             = "/zephymesh/file_transfer/1.0.0"
 	RelayDirCapBytes       = 1 * 1024 * 1024 * 1024 // 1 GB
 	RelayDirPruneTarget    = 0.9                    // Prune to 90% of capacity
@@ -44,7 +44,7 @@ type Libp2pNode struct {
 	host.Host
 	manifest       map[string]AssetInfo
 	manifestLock   sync.RWMutex
-	
+
 	// NEW: State to hold manifests from other peers
 	peerManifests  PeerManifests
 	peerManifestsLock sync.RWMutex
@@ -226,8 +226,8 @@ func NewNode(ctx context.Context, listenPort int, identityPath string) (*Libp2pN
 		// Initialize the map that will hold manifests from other peers.
 		peerManifests: make(PeerManifests),
 		projectRoot:   pRoot,
-		relayDir:      filepath.Join(pRoot, "..", "..", "..", "systemCore", "engineMain", "meshCommunicationRelay"),
-		staticModelPoolPath: filepath.Join(pRoot, "..", "..", "..", "systemCore", "engineMain", "staticmodelpool"),
+		relayDir:      filepath.Join(pRoot, "..", "..", "..", "systemCore", "mainEngineFrame_MacroController_EngineSharedResources", "meshCommunicationRelay"),
+		staticModelPoolPath: filepath.Join(pRoot, "..", "..", "..", "systemCore", "mainEngineFrame_MacroController_EngineSharedResources", "staticmodelpool"),
 	}
 
 	// Step 5: Register the handlers for our custom P2P protocols.
@@ -412,7 +412,7 @@ func StartAPIAndNotify(node *Libp2pNode, portInfoFilePath string) {
 	mux := http.NewServeMux()
 
 	// --- Register API v1 Endpoints ---
-	
+
 	// Endpoint to get the node's own P2P addresses
 	mux.HandleFunc("/api/v1/addrs", func(w http.ResponseWriter, r *http.Request) {
 		var addrs []string
@@ -425,7 +425,7 @@ func StartAPIAndNotify(node *Libp2pNode, portInfoFilePath string) {
 			"addrs":  addrs,
 		})
 	})
-	
+
 	// NEW: Endpoint for the Python launcher to query for assets
 	mux.HandleFunc("/api/v1/query/asset", node.handleQueryAsset)
 
@@ -460,7 +460,7 @@ func StartAPIAndNotify(node *Libp2pNode, portInfoFilePath string) {
 // broadcastManifest sends the node's current manifest to all connected peers.
 func (n *Libp2pNode) broadcastManifest(ctx context.Context) {
 	log.Println("[ManifestBroadcast] Broadcasting updated manifest to all connected peers...")
-	
+
 	n.manifestLock.RLock()
 	manifestBytes, err := json.Marshal(n.manifest)
 	n.manifestLock.RUnlock()
@@ -472,7 +472,7 @@ func (n *Libp2pNode) broadcastManifest(ctx context.Context) {
 
 	// Get a list of all currently connected peers
 	connectedPeers := n.Host.Network().Peers()
-	
+
 	if len(connectedPeers) == 0 {
 		log.Println("[ManifestBroadcast] No peers connected, skipping broadcast.")
 		return
@@ -516,7 +516,7 @@ func (n *Libp2pNode) handleRefreshManifest(w http.ResponseWriter, r *http.Reques
 		http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	log.Println("[API Refresh] Received request to refresh asset manifest.")
 
 	// Call the existing manifest generation function.
@@ -546,7 +546,7 @@ func (n *Libp2pNode) handleRefreshManifest(w http.ResponseWriter, r *http.Reques
 func (cn *connectionNotifee) Connected(net network.Network, conn network.Conn) {
 	remotePeerID := conn.RemotePeer()
 	log.Printf("[Connection] Established new connection with peer: %s", remotePeerID)
-	
+
 	// Launch a goroutine to request the manifest so we don't block the notifier.
 	go cn.node.requestManifestFromPeer(cn.ctx, remotePeerID)
 }
@@ -555,7 +555,7 @@ func (cn *connectionNotifee) Connected(net network.Network, conn network.Conn) {
 func (cn *connectionNotifee) Disconnected(net network.Network, conn network.Conn) {
 	remotePeerID := conn.RemotePeer()
 	log.Printf("[Connection] Disconnected from peer: %s", remotePeerID)
-	
+
 	// Remove the peer's manifest from our cache.
 	cn.node.peerManifestsLock.Lock()
 	delete(cn.node.peerManifests, remotePeerID)

@@ -172,7 +172,8 @@ procedure Watchdog_Thread2 is
         -- NEW: Define constants for both flag file locations.
         Flag_File_Name     : constant String :=
            "_potential_incapable_machine.flag";
-        Engine_Subdir_Path : constant String := "systemCore/engineMain/";
+        Engine_Subdir_Path : constant String :=
+           "systemCore/mainEngineFrame_MacroController_EngineSharedResources/";
         Root_Flag_Path     : constant String := "./" & Flag_File_Name;
         Engine_Flag_Path   : constant String :=
            Engine_Subdir_Path & Flag_File_Name;
