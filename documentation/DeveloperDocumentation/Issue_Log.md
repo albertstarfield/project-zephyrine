@@ -1,3 +1,8 @@
+-   **ID:** `CORE-FEAT-022`
+-   **Title:** `Implement Salience Warden for DB Memory Purging and Tracking.`
+-   **Status:** `Resolved`
+-   **Description:** `Introduced a salience-based memory management system. Added hit_count and last_accessed tracking to database records. Implemented the SalienceWardenThread, which monitors database latency and automatically purges low-salience interactions when latency exceeds critical thresholds, ensuring long-term system performance.`
+
 -   **ID:** `CORE-FEAT-021`
 -   **Title:** `Enhance PromptPruner with dynamic template-based regex generation.`
 -   **Status:** `Resolved`
