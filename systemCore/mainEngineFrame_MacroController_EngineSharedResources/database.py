@@ -183,6 +183,10 @@ class Interaction(Base):
     parent_ingestion_job_id = Column(Text, nullable=True)
     lsh_hash_10bit = Column(Integer, nullable=True, index=True) # NEW: For Branch Prediction DCTD
 
+    # --- Performance & Salience Tracking ---
+    hit_count = Column(Integer, nullable=False, server_default=text("1"))
+    last_accessed = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True)
+
 
     __table_args__ = (
         Index('ix_interactions_session_mode_timestamp', 'session_id', 'mode', 'timestamp'),
@@ -312,6 +316,11 @@ class FileIndex(Base):
     latex_representation = Column(Text, nullable=True)
     latex_explanation = Column(Text, nullable=True)
     vlm_processing_status = Column(String, nullable=True, index=True)
+
+    # --- Performance & Salience Tracking ---
+    hit_count = Column(Integer, nullable=False, server_default=text("1"))
+    last_accessed = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True)
+
     __table_args__ = (
         Index('ix_file_index_name_status', 'file_name', 'index_status'),
         Index('ix_file_index_status_modified', 'index_status', 'last_modified_os'),
@@ -2074,6 +2083,96 @@ def run_db_noise_cleaning(db: Session, limit: int = 1000):
         logger.error(f"Error during DB noise cleaning: {e}")
         db.rollback()
         return 0
+
+def increment_hit_count(db: Session, record: Union[Interaction, FileIndex]):
+    """Atomic increment for salience tracking."""
+    try:
+        record.hit_count = (record.hit_count or 0) + 1
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to increment hit count: {e}")
+        db.rollback()
+
+class SalienceWardenThread(threading.Thread):
+    """
+    Background ELP0 thread that monitors DB latency and purges low-salience memory.
+    Least Salience = (HitFrequency) / (Age + 1)
+    """
+    def __init__(self, stop_event: threading.Event):
+        super().__init__(name="SalienceWardenThread", daemon=True)
+        self.stop_event = stop_event
+
+    def run(self):
+        logger.info("🧠 Salience Warden started. Monitoring memory salience every 5 mins.")
+        while not self.stop_event.is_set():
+            try:
+                self._run_warden_cycle()
+            except Exception as e:
+                logger.error(f"Error in SalienceWarden cycle: {e}")
+            
+            # Sleep for 5 minutes
+            self.stop_event.wait(300)
+
+    def _measure_db_latency(self) -> float:
+        """Tests DB access latency using a typical heavy query."""
+        db = SessionLocal()
+        start = time.monotonic()
+        try:
+            # Perform a test query that touches multiple records (simulating real load)
+            # Count interactions from the last 24h
+            yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+            db.query(Interaction).filter(Interaction.timestamp > yesterday).count()
+            return time.monotonic() - start
+        finally:
+            db.close()
+
+    def _run_warden_cycle(self):
+        latency = self._measure_db_latency()
+        logger.debug(f"🧠 SalienceWarden: Current DB Latency: {latency:.2f}s")
+
+        while latency > 7.0 and not self.stop_event.is_set():
+            logger.warning(f"🚨 CRITICAL DB LATENCY: {latency:.2f}s > 7s. Purging 100 least salient memories.")
+            purged = self._purge_batch(100)
+            if purged == 0:
+                break
+            
+            # Re-test latency
+            latency = self._measure_db_latency()
+            logger.info(f"🧠 SalienceWarden: Latency after purge: {latency:.2f}s")
+
+    def _purge_batch(self, count: int) -> int:
+        db = SessionLocal()
+        try:
+            # Salience Ranking: We want to find items with LOW hit_count and HIGH age.
+            # Order by: (hit_count) / (current_time - timestamp + 1) ASC
+            # For simplicity in SQL, we can use a linear combination:
+            # (hit_count * 100000) - (age_in_seconds) -> Smaller means less salient.
+            
+            # We purge from Interactions first (usually the largest table)
+            # We calculate age using current unix time
+            now_ts = int(time.time())
+            
+            # Purge 100 Interaction entries
+            victims = db.query(Interaction).order_by(
+                # Logic: Low hits first, then oldest first
+                Interaction.hit_count.asc(),
+                Interaction.timestamp.asc()
+            ).limit(count).all()
+
+            if not victims:
+                return 0
+
+            victim_ids = [v.id for v in victims]
+            db.query(Interaction).filter(Interaction.id.in_(victim_ids)).delete(synchronize_session=False)
+            db.commit()
+            logger.success(f"🧠 SalienceWarden: Purged {len(victim_ids)} low-salience interaction entries.")
+            return len(victim_ids)
+        except Exception as e:
+            logger.error(f"SalienceWarden Purge Failed: {e}")
+            db.rollback()
+            return 0
+        finally:
+            db.close()
 
 def _core_add_interaction_to_session(db_session: Session, **kwargs) -> Interaction:
     valid_keys = {c.name for c in Interaction.__table__.columns}

@@ -1,4 +1,3 @@
-@ -1,21026 +0,0 @@
 # AdelaideAlbertCortex.py
 import asyncio
 import atexit  # To signal shutdown
@@ -1937,6 +1936,13 @@ class CortexThoughts:
                 "CortexThoughts Init: StellaIcarusHooks are disabled by configuration."
             )
 
+        # --- NEW: Initialize Salience Warden (Memory Purger) ---
+        self.salience_warden_stop_event = threading.Event()
+        from database import SalienceWardenThread
+        self.salience_warden_thread = SalienceWardenThread(self.salience_warden_stop_event)
+        self.salience_warden_thread.start()
+        logger.info("🧠 Salience Warden (Memory Purger) thread started.")
+
     def _get_temporal_context_string(self) -> str:
         """
         Generates a rich temporal context string containing Common Era,
@@ -3742,6 +3748,7 @@ class CortexThoughts:
         search_type: str = "similarity"
         search_kwargs: Dict[str, Any]
         vector_to_search: List[float]
+        db: Optional[Session] = None # NEW: To update hits
 
         def _get_relevant_documents(
             self, query: str, *, run_manager: Any
@@ -3749,9 +3756,13 @@ class CortexThoughts:
             if not self.vectorstore:
                 raise ValueError("Vectorstore not set on _CustomVectorSearchRetriever")
             k_val = self.search_kwargs.get("k", 4)
-            return self.vectorstore.similarity_search_by_vector(
+            docs = self.vectorstore.similarity_search_by_vector(
                 embedding=self.vector_to_search, k=k_val
             )
+            # Update Salience
+            if self.db and docs:
+                self._update_salience(docs)
+            return docs
 
         async def _aget_relevant_documents(
             self, query: str, *, run_manager: Any
@@ -3759,12 +3770,37 @@ class CortexThoughts:
             if not self.vectorstore:
                 raise ValueError("Vectorstore not set on _CustomVectorSearchRetriever")
             k_val = self.search_kwargs.get("k", 4)
-            # Assuming similarity_search_by_vector is synchronous for Chroma
-            return await asyncio.to_thread(
+            docs = await asyncio.to_thread(
                 self.vectorstore.similarity_search_by_vector,
                 embedding=self.vector_to_search,
                 k=k_val,
             )
+            # Update Salience
+            if self.db and docs:
+                await asyncio.to_thread(self._update_salience, docs)
+            return docs
+
+        def _update_salience(self, docs: List[Document]):
+            """Helper to increment hit count for retrieved documents."""
+            from database import Interaction, FileIndex, increment_hit_count
+            for doc in docs:
+                try:
+                    # Try to extract the ID from metadata
+                    item_id = doc.metadata.get("id") or doc.metadata.get("interaction_id")
+                    if not item_id or not self.db: continue
+                    
+                    # Determine if it's an interaction or a file
+                    is_file = "file_path" in doc.metadata or "source" in doc.metadata
+                    
+                    if is_file:
+                        record = self.db.query(FileIndex).filter(FileIndex.id == item_id).first()
+                    else:
+                        record = self.db.query(Interaction).filter(Interaction.id == item_id).first()
+                    
+                    if record:
+                        increment_hit_count(self.db, record)
+                except:
+                    pass
 
     def _build_on_the_fly_retriever(
         self,
@@ -4117,6 +4153,7 @@ class CortexThoughts:
                     vectorstore=self.vectorstore_url,
                     search_kwargs={"k": RAG_URL_COUNT},
                     vector_to_search=rag_query_vector,
+                    db=db,
                 )
 
             # --- Step 2: Hybrid Interaction History Retriever (Vector + Fuzzy) ---
@@ -4132,6 +4169,11 @@ class CortexThoughts:
             # Detects oversized entries during deep thought processing and repairs the DB
             if recent_unindexed_interactions:
                 for cand in recent_unindexed_interactions:
+                    # Update Salience: Mark as Hit
+                    try:
+                        increment_hit_count(db, cand)
+                    except:
+                        pass
                     # 1. Check User Input
                     u_text = str(cand.user_input or "")
                     if len(u_text) > 4096:
@@ -4225,6 +4267,7 @@ class CortexThoughts:
                     vectorstore=interaction_vs,
                     search_kwargs={"k": RAG_HISTORY_COUNT},
                     vector_to_search=rag_query_vector,
+                    db=db, # Pass DB for Salience Tracking
                 )
                 persistent_docs = persistent_retriever.invoke(user_input_for_rag_query)
                 logger.info(
