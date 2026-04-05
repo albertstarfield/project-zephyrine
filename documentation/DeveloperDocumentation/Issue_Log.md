@@ -1,3 +1,8 @@
+-   **ID:** `CORE-REFACTOR-013`
+-   **Title:** `Refactor background tasks to Snowball-Enaga and implement priority propagation.`
+-   **Status:** `Resolved`
+-   **Description:** `Replaced the legacy Tree of Thoughts (ToT) background task with a more robust Snowball-Enaga background pipeline. Implemented comprehensive priority (ELP0/ELP1) propagation across RAG retrieval, skeleton generation, and node building to ensure deterministic resource management during complex tasks. Standardized imports and formatting in AdelaideAlbertCortex.py.`
+
 -   **ID:** `CORE-FIX-023`
 -   **Title:** `Fix missing imports and typing for Salience Warden implementation.`
 -   **Status:** `Resolved`
