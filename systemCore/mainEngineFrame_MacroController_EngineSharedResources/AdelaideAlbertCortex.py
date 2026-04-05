@@ -1940,7 +1940,10 @@ class CortexThoughts:
         # --- NEW: Initialize Salience Warden (Memory Purger) ---
         self.salience_warden_stop_event = threading.Event()
         from database import SalienceWardenThread
-        self.salience_warden_thread = SalienceWardenThread(self.salience_warden_stop_event)
+
+        self.salience_warden_thread = SalienceWardenThread(
+            self.salience_warden_stop_event
+        )
         self.salience_warden_thread.start()
         logger.info("🧠 Salience Warden (Memory Purger) thread started.")
 
@@ -3749,7 +3752,7 @@ class CortexThoughts:
         search_type: str = "similarity"
         search_kwargs: Dict[str, Any]
         vector_to_search: List[float]
-        db: Optional[Session] = None # NEW: To update hits
+        db: Optional[Session] = None  # NEW: To update hits
 
         def _get_relevant_documents(
             self, query: str, *, run_manager: Any
@@ -3783,21 +3786,33 @@ class CortexThoughts:
 
         def _update_salience(self, docs: List[Document]):
             """Helper to increment hit count for retrieved documents."""
-            from database import Interaction, FileIndex, increment_hit_count
+            from database import FileIndex, Interaction, increment_hit_count
+
             for doc in docs:
                 try:
                     # Try to extract the ID from metadata
-                    item_id = doc.metadata.get("id") or doc.metadata.get("interaction_id")
-                    if not item_id or not self.db: continue
-                    
+                    item_id = doc.metadata.get("id") or doc.metadata.get(
+                        "interaction_id"
+                    )
+                    if not item_id or not self.db:
+                        continue
+
                     # Determine if it's an interaction or a file
                     is_file = "file_path" in doc.metadata or "source" in doc.metadata
-                    
+
                     if is_file:
-                        record = self.db.query(FileIndex).filter(FileIndex.id == item_id).first()
+                        record = (
+                            self.db.query(FileIndex)
+                            .filter(FileIndex.id == item_id)
+                            .first()
+                        )
                     else:
-                        record = self.db.query(Interaction).filter(Interaction.id == item_id).first()
-                    
+                        record = (
+                            self.db.query(Interaction)
+                            .filter(Interaction.id == item_id)
+                            .first()
+                        )
+
                     if record:
                         increment_hit_count(self.db, record)
                 except:
@@ -3919,13 +3934,14 @@ class CortexThoughts:
         return retrieved_docs
 
     async def _get_direct_rag_context_elp1(
-        self, db: Session, user_input: str, session_id: str
+        self, db: Session, user_input: str, session_id: str, priority: int = ELP1
     ) -> Tuple[str, int]:
         """
         A lightweight, fast RAG retriever specifically for the ELP1 direct_generate path.
         Returns: (combined_context_str, vector_token_count)
         """
-        log_prefix = f"⚡️ DirectRAG-Hybrid|ELP1|{session_id}"
+        prio_str = "ELP1" if priority == ELP1 else "ELP0"
+        log_prefix = f"⚡️ DirectRAG-Hybrid|{prio_str}|{session_id}"
         logger.info(
             f"{log_prefix} Performing hybrid RAG (Budget: 4096 chars per source)."
         )
@@ -3946,7 +3962,7 @@ class CortexThoughts:
                 query_vector = await asyncio.to_thread(
                     self.provider.embeddings.embed_query,
                     user_input,
-                    priority=ELP1,
+                    priority=priority,
                 )
 
                 if query_vector:
@@ -4268,7 +4284,7 @@ class CortexThoughts:
                     vectorstore=interaction_vs,
                     search_kwargs={"k": RAG_HISTORY_COUNT},
                     vector_to_search=rag_query_vector,
-                    db=db, # Pass DB for Salience Tracking
+                    db=db,  # Pass DB for Salience Tracking
                 )
                 persistent_docs = persistent_retriever.invoke(user_input_for_rag_query)
                 logger.info(
@@ -6326,115 +6342,6 @@ class CortexThoughts:
         await asyncio.to_thread(db.commit)
         return final_fallback_classification
 
-    def _run_tree_of_thought(
-        self,
-        db: Session,
-        input: str,
-        rag_context_docs: List[Any],
-        history_rag_interactions: List[Interaction],
-        log_context_str: str,
-        recent_direct_history_str: str,
-        file_index_context_str: str,
-        interaction_data: Dict[str, Any],
-        triggering_interaction_id: int,
-    ) -> str:
-        """Runs Tree of Thoughts simulation (synchronous), includes direct history and logs."""
-        user_input = input
-        logger.warning(
-            f"🌳 Running ToT for input: '{user_input[:50]}...' (Trigger ID: {triggering_interaction_id})"
-        )
-        interaction_data["tot_analysis_requested"] = True
-        rag_context_str = self._format_docs(rag_context_docs, source_type="URL")
-        history_rag_str = self._format_interaction_list_to_string(
-            history_rag_interactions
-        )  # Format Interaction list
-
-        tot_model = self.provider.get_model("router")
-        if not tot_model:
-            logger.error(
-                "ToT model ('router') not available. Cannot run Tree of Thoughts."
-            )
-            return "Error: Deep analysis model is not configured."
-
-        chain = self.tot_prompt | tot_model | StrOutputParser()
-        tot_result = "Error during ToT analysis."
-        try:
-            llm_result = self._call_llm_with_timing(
-                chain,
-                {
-                    "input": user_input,
-                    "context": rag_context_str,
-                    "history_rag": history_rag_str,
-                    "file_index_context": file_index_context_str,
-                    "log_context": log_context_str,
-                    "recent_direct_history": recent_direct_history_str,
-                },
-                interaction_data,
-                priority=ELP0,
-                db=db,
-                session_id=None,
-            )
-            tot_result = llm_result
-            logger.info(
-                f"🌳 ToT analysis LLM call complete for Trigger ID: {triggering_interaction_id}."
-            )
-
-            if triggering_interaction_id:
-                logger.debug(
-                    f"Attempting to save ToT result to original interaction ID: {triggering_interaction_id}"
-                )
-                trigger_interaction = (
-                    db.query(Interaction)
-                    .filter(Interaction.id == triggering_interaction_id)
-                    .first()
-                )
-                if trigger_interaction:
-                    trigger_interaction.tot_result = tot_result
-                    trigger_interaction.tot_analysis_requested = True
-                    trigger_interaction.tot_delivered = False
-                    db.commit()
-                    logger.success(
-                        f"✅ Saved ToT result to Interaction ID {triggering_interaction_id} (undelivered)."
-                    )
-                else:
-                    logger.error(
-                        f"❌ Could not find original interaction {triggering_interaction_id} to save ToT result."
-                    )
-                    add_interaction(
-                        db,
-                        session_id=interaction_data.get("session_id"),
-                        mode="chat",
-                        input_type="log_warning",
-                        llm_response=f"Orphaned ToT Result for input '{user_input[:50]}...': {tot_result[:200]}...",
-                    )
-            else:
-                logger.warning(
-                    "No triggering interaction ID provided to save ToT result."
-                )
-
-            return tot_result
-        except Exception as e:
-            err_msg = f"Error during ToT generation (Trigger ID: {triggering_interaction_id}): {e}"
-            logger.error(f"❌ {err_msg}")
-            add_interaction(
-                db,
-                session_id=interaction_data.get("session_id"),
-                mode="chat",
-                input_type="log_error",
-                llm_response=err_msg,
-            )
-            if triggering_interaction_id:
-                trigger_interaction = (
-                    db.query(Interaction)
-                    .filter(Interaction.id == triggering_interaction_id)
-                    .first()
-                )
-                if trigger_interaction:
-                    trigger_interaction.tot_result = err_msg
-                    trigger_interaction.tot_delivered = False
-                    db.commit()
-            return "Error during deep analysis."
-
     def _run_emotion_analysis(
         self, db: Session, user_input: str, interaction_data: dict
     ) -> str:
@@ -6630,153 +6537,77 @@ class CortexThoughts:
             # to avoid crashing the response pipeline.
             return text
 
-    async def _run_tot_in_background_wrapper_v2(
+    async def _run_snowball_enaga_in_background_wrapper(
         self,
         db_session_factory: Any,
-        original_input_for_tot: str,  # Renamed for clarity
-        rag_context_docs: List[Any],
-        history_rag_interactions: List[Any],
-        log_context_str: str,
-        recent_direct_history_str: str,
-        file_index_context_str: str,
+        user_input: str,
+        session_id: str,
         triggering_interaction_id: int,
-        # ID of interaction that triggered this ToT
-        imagined_image_context_str: str,
+        vlm_description: Optional[str] = None,
     ):
-        # This wrapper runs in a separate thread created by asyncio.create_task(self._run_tot_in_background_wrapper_v2(...))
-        # So, it needs its own DB session.
-        db_for_tot_thread: Optional[Session] = None
-        thread_log_prefix = f"BG_ToT_Wrap|TrigID:{triggering_interaction_id}"
-        logger.info(f"{thread_log_prefix}: Background ToT task thread started.")
+        """
+        Runs Snowball-Enaga (LoD Engine) in the background with ELP0 priority.
+        Acts as a high-fidelity replacement for the legacy Tree of Thoughts.
+        """
+        db_bg: Optional[Session] = None
+        thread_log_prefix = f"BG_Snowball_Wrap|TrigID:{triggering_interaction_id}"
+        logger.info(f"{thread_log_prefix}: Background Snowball-Enaga task started.")
 
         try:
-            db_for_tot_thread = (
-                db_session_factory()
-            )  # Create a new session for this thread
-            if not db_for_tot_thread:
+            db_bg = db_session_factory()
+            if not db_bg:
                 logger.error(
-                    f"{thread_log_prefix}: Failed to create DB session. Aborting ToT."
+                    f"{thread_log_prefix}: Failed to create DB session. Aborting."
                 )
                 return
 
-            # Prepare interaction_data for the _call_llm_with_timing within _run_tree_of_thought_v2
-            # This is for metrics of the ToT LLM call itself.
-            interaction_data_for_llm_call = {
-                "session_id": self.current_session_id,  # Use session_id from the CortexThoughts instance
-                "mode": "chat",  # Or 'internal_tot_llm_call'
-                "execution_time_ms": 0,
-            }
-
-            # Run the synchronous _run_tree_of_thought_v2 using asyncio.to_thread
-            # because _run_tree_of_thought_v2 itself makes blocking calls (_call_llm_with_timing)
-            await asyncio.to_thread(
-                self._run_tree_of_thought_v2,
-                db=db_for_tot_thread,
-                input=original_input_for_tot,  # This is passed to ToT prompt as {input}
-                rag_context_docs=rag_context_docs,
-                history_rag_interactions=history_rag_interactions,
-                log_context_str=log_context_str,
-                recent_direct_history_str=recent_direct_history_str,
-                file_index_context_str=file_index_context_str,
-                imagined_image_context_str=imagined_image_context_str,
-                interaction_data_for_tot_llm_call=interaction_data_for_llm_call,  # For the LLM call timing
-                original_user_input_for_log=original_input_for_tot,  # For logging within ToT result record
-                triggering_interaction_id_for_log=triggering_interaction_id,  # For logging
-            )
-            logger.info(
-                f"{thread_log_prefix}: _run_tree_of_thought_v2 completed execution."
+            # Call Snowball-Enaga logic with ELP0 priority and force_snowball=True
+            final_result = await self._direct_generate_logic(
+                db=db_bg,
+                user_input=user_input,
+                session_id=session_id,
+                vlm_description=vlm_description,
+                priority=ELP0,
+                force_snowball=True,
             )
 
-            # Mark the original interaction as "ToT analysis spawned"
-            # This is better than directly putting the ToT result on it.
+            # Save result to DB
+            add_interaction(
+                db_bg,
+                session_id=session_id,
+                mode="chat",
+                input_type="snowball_background_result",
+                user_input=f"[Background Snowball-Enaga Result for Interaction ID {triggering_interaction_id}]",
+                llm_response=final_result,
+                classification="deep_thought_result",
+            )
+            db_bg.commit()
+
+            # Mark trigger as spawned (consistent with ToT logic to satisfy state checks)
             trigger_interaction = (
-                db_for_tot_thread.query(Interaction)
+                db_bg.query(Interaction)
                 .filter(Interaction.id == triggering_interaction_id)
                 .first()
             )
             if trigger_interaction:
                 if hasattr(trigger_interaction, "tot_analysis_spawned"):
-                    trigger_interaction.tot_analysis_spawned = True  # type: ignore
-                    trigger_interaction.last_modified_db = time.strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )  # type: ignore
-                    db_for_tot_thread.commit()
-                    logger.info(
-                        f"{thread_log_prefix}: Marked original Interaction ID {triggering_interaction_id} as tot_analysis_spawned=True."
-                    )
-                else:
-                    logger.warning(
-                        f"{thread_log_prefix}: Original Interaction ID {triggering_interaction_id} missing 'tot_analysis_spawned' field."
-                    )
-            else:
-                logger.error(
-                    f"{thread_log_prefix}: Could not find original Interaction ID {triggering_interaction_id} to mark as ToT spawned."
-                )
+                    trigger_interaction.tot_analysis_spawned = True
+                    trigger_interaction.last_modified_db = datetime.now()
+                    db_bg.commit()
 
-        except TaskInterruptedException:
-            logger.warning(f"🚦 {thread_log_prefix}: ToT task was interrupted.")
-            # The interruption should have been logged by _run_tree_of_thought_v2 already.
-        except Exception as e:
-            logger.error(
-                f"{thread_log_prefix}: Error running ToT in background wrapper: {e}"
-            )
-            logger.exception(f"{thread_log_prefix} ToT Wrapper Traceback:")
-            # The error should have been logged by _run_tree_of_thought_v2 as a new interaction.
-        finally:
-            if db_for_tot_thread:
-                try:
-                    db_for_tot_thread.close()
-                except Exception as e_close:
-                    logger.error(
-                        f"{thread_log_prefix}: Error closing ToT DB session: {e_close}"
-                    )
-            logger.info(f"{thread_log_prefix}: Background ToT task thread finished.")
-
-    async def _run_tot_in_background_wrapper(
-        self,
-        db_session_factory: Any,
-        input: str,
-        rag_context_docs: List[Any],
-        history_rag_interactions: List[Interaction],
-        log_context_str: str,
-        recent_direct_history_str: str,
-        file_index_context_str: str,
-        triggering_interaction_id: int,
-    ):
-        """Async wrapper to run synchronous ToT logic with its own DB session."""
-        logger.info(
-            f"BG ToT Wrapper: Starting for trigger ID {triggering_interaction_id}"
-        )
-        db = db_session_factory()
-        bg_interaction_data = {
-            "id": triggering_interaction_id,
-            "execution_time_ms": 0,
-            "session_id": self.current_session_id,
-            "mode": "chat",
-        }
-        try:
-            await asyncio.to_thread(
-                self._run_tree_of_thought,
-                db=db,
-                input=input,
-                rag_context_docs=rag_context_docs,
-                history_rag_interactions=history_rag_interactions,
-                log_context_str=log_context_str,
-                recent_direct_history_str=recent_direct_history_str,
-                file_index_context_str=file_index_context_str,  # Passed here
-                interaction_data=bg_interaction_data,
-                triggering_interaction_id=triggering_interaction_id,
-            )
             logger.info(
-                f"BG ToT Wrapper: Finished successfully for trigger ID {triggering_interaction_id}"
+                f"{thread_log_prefix}: Background Snowball-Enaga logic completed successfully."
             )
+
         except Exception as e:
             logger.error(
-                f"BG ToT Wrapper: Error running ToT for trigger ID {triggering_interaction_id}: {e}"
+                f"{thread_log_prefix}: Snowball-Enaga background task failed: {e}"
             )
+            logger.exception(f"{thread_log_prefix} Background Error Traceback:")
         finally:
-            if db:
-                db.close()
+            if db_bg:
+                db_bg.close()
+                logger.info(f"{thread_log_prefix}: Background DB session closed.")
 
     async def _analyze_assistant_action(
         self, db: Session, user_input: str, session_id: str, context: Dict[str, str]
@@ -7811,6 +7642,7 @@ class CortexThoughts:
         current_buffer: str,
         new_content_request: str,
         section_title: str,
+        priority: int = ELP1,
     ) -> Tuple[str, bool]:
         """
         Diff text editing
@@ -7827,8 +7659,9 @@ class CortexThoughts:
         updated_buffer = current_buffer
         success = False
 
+        prio_str = "ELP1" if priority == ELP1 else "ELP0"
         for attempt in range(1, max_retries + 1):
-            log_prefix = f"🧩 DiffApply|Attempt_{attempt}"
+            log_prefix = f"🧩 DiffApply|{prio_str}|Attempt_{attempt}"
 
             # The simplified command using your documented /no_think prefix
             command = f"""/no_think
@@ -7844,15 +7677,15 @@ Output your response EXACTLY in this format:
 >>>>>
 """
             try:
-                # Execute with ELP1 Priority
-                chain = code_model.bind(priority=ELP1) | StrOutputParser()
+                # Execute with priority
+                chain = code_model.bind(priority=priority) | StrOutputParser()
                 # response = await asyncio.to_thread(chain.invoke, command)
                 response = await asyncio.to_thread(
                     self._call_llm_with_timing,
                     chain,  # The chain to run
                     command,  # The input
                     interaction_data={},  # interaction_data (can be empty for internal loops)
-                    priority=ELP1,  # Ensure high priority
+                    priority=priority,  # Ensure correct priority
                     db=db,
                     session_id=session_id,
                 )
@@ -8003,6 +7836,8 @@ Output your response EXACTLY in this format:
         vlm_description: Optional[str] = None,
         image_b64: Optional[str] = None,
         mode: str = "chat",
+        priority: int = ELP1,
+        force_snowball: bool = False,
     ) -> str:
         """
         CODENAME: Snowball-Enaga LoD Engine (V10)
@@ -8027,7 +7862,8 @@ Output your response EXACTLY in this format:
 
         """
         direct_req_id = f"dgen-snowball-v10-{uuid.uuid4()}"
-        log_prefix = f"❄️ {direct_req_id}|ELP1"
+        prio_str = "ELP1" if priority == ELP1 else "ELP0"
+        log_prefix = f"❄️ {direct_req_id}|{prio_str}"
         logger.info(f"{log_prefix} START -> Session: {session_id}")
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
@@ -8102,14 +7938,16 @@ Output your response EXACTLY in this format:
         # Vision Just in case
 
         if image_b64 and not vlm_description:
-            logger.info(f"{log_prefix}: Image detected. Running ELP1 VLM analysis...")
-            # We call the helper with ELP1 priority for speed
+            logger.info(
+                f"{log_prefix}: Image detected. Running {prio_str} VLM analysis..."
+            )
+            # We call the helper with priority for speed
             desc, err = await self._describe_image_async(
                 db,
                 session_id,
                 image_b64,
                 prompt_type="direct_generate_elp1",
-                priority=ELP1,
+                priority=priority,
             )
             if desc:
                 vlm_description = desc
@@ -8169,7 +8007,7 @@ Output your response EXACTLY in this format:
 
                 # 2. Execute Router
                 domain_decision_raw = await asyncio.to_thread(
-                    router_model.invoke, router_prompt
+                    router_model.invoke, router_prompt, config={"priority": priority}
                 )
 
                 # 3. Clean and Validate Decision
@@ -8194,14 +8032,15 @@ Output your response EXACTLY in this format:
                 ) or self.provider.get_model("default")
                 logger.info(f"⚙️ AgentPrecMode: Routed to '{target_role}' specialist.")
 
-                # 3. Specialist Generation (ELP1 Priority)
-                # We use the ELP1 lock (User Priority)
+                # 3. Specialist Generation (Priority)
+                # We use the correct priority lock
                 async with getattr(
                     self.provider, "_priority_quota_lock", asyncio.Lock()
                 ):  # Fallback lock if missing
                     raw_specialist_response = await asyncio.to_thread(
                         specialist_model.invoke,
                         f"Context: {rag_context_str}\n\nUser Query: {user_input}",
+                        config={"priority": priority},
                     )
                     # Handle LangChain output types
                     if hasattr(raw_specialist_response, "content"):
@@ -8216,7 +8055,7 @@ Output your response EXACTLY in this format:
                 )
 
                 final_json_response = await asyncio.to_thread(
-                    code_model.invoke, formatter_prompt
+                    code_model.invoke, formatter_prompt, config={"priority": priority}
                 )
                 if hasattr(final_json_response, "content"):
                     final_json_response = final_json_response.content
@@ -8277,7 +8116,9 @@ Output your response EXACTLY in this format:
             (
                 history_experience_learned_rag_str,
                 vector_rag_tokens,
-            ) = await self._get_direct_rag_context_elp1(db, user_input, session_id)
+            ) = await self._get_direct_rag_context_elp1(
+                db, user_input, session_id, priority=priority
+            )
 
             # --- Logic for Allowance based on Vector Tokens ---
             # "Only count the vector/embedding part not the fuzzy part"
@@ -8297,7 +8138,9 @@ Output your response EXACTLY in this format:
             fast_model = self.provider.get_model("general_fast")
 
             bound_model = fast_model.bind(
-                max_tokens=LLAMA_CPP_N_CTX // 2, stop=[CHATML_END_TOKEN], priority=ELP1
+                max_tokens=LLAMA_CPP_N_CTX // 2,
+                stop=[CHATML_END_TOKEN],
+                priority=priority,
             )
             chain = (
                 ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE)
@@ -8318,7 +8161,7 @@ Output your response EXACTLY in this format:
             )
 
             try:
-                # 2. Call Helper Function (ELP1 for User Input Speed)
+                # 2. Call Helper Function (User Input Speed)
                 # return (
                 #    safety_label,
                 #    promptinjectioncatResult,
@@ -8338,7 +8181,7 @@ Output your response EXACTLY in this format:
                     db=db,
                     text_input=full_context_string_for_check,
                     session_id=session_id,
-                    priority=ELP1,
+                    priority=priority,
                 )
 
                 # query category and accuracy_stake if it's complex then override is_complex to trigger the next generation to be is_complex=True
@@ -8385,7 +8228,9 @@ Output your response EXACTLY in this format:
             # Fast Model Generation
             fast_model = self.provider.get_model("general_fast")
             bound_model = fast_model.bind(
-                max_tokens=LLAMA_CPP_N_CTX // 2, stop=[CHATML_END_TOKEN], priority=ELP1
+                max_tokens=LLAMA_CPP_N_CTX // 2,
+                stop=[CHATML_END_TOKEN],
+                priority=priority,
             )
             chain = (
                 ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE)
@@ -8393,7 +8238,10 @@ Output your response EXACTLY in this format:
                 | StrOutputParser()
             )
 
-            timing_data = {"session_id": session_id, "mode": "chat_direct_elp1_fast"}
+            timing_data = {
+                "session_id": session_id,
+                "mode": f"chat_direct_{prio_str.lower()}_fast",
+            }
 
             try:
                 raw_output = await asyncio.to_thread(
@@ -8401,7 +8249,7 @@ Output your response EXACTLY in this format:
                     chain,
                     prompt_placeholders,
                     timing_data,
-                    priority=ELP1,
+                    priority=priority,
                     db=db,
                     session_id=session_id,
                 )
@@ -8423,7 +8271,11 @@ Output your response EXACTLY in this format:
             user_input = user_input.replace("/no_think", "").strip()
 
         # --- PATH B: SNOWBALL LoD PATH (Complex/Long) (Complex/Long - Whimsically Cute snowball Fairytale alike architecture) ---
-        if is_complex or input_token_count >= DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD:
+        if (
+            is_complex
+            or force_snowball
+            or input_token_count >= DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD
+        ):
             logger.info(
                 f"{log_prefix}: long query detected. Entering Snowball-Enaga Loop..."
             )
@@ -8434,7 +8286,9 @@ Output your response EXACTLY in this format:
             (
                 history_experience_learned_rag_str,
                 _,
-            ) = await self._get_direct_rag_context_elp1(db, user_input, session_id)
+            ) = await self._get_direct_rag_context_elp1(
+                db, user_input, session_id, priority=priority
+            )
             direct_hist = await asyncio.to_thread(
                 get_global_recent_interactions, db, limit=5
             )
@@ -8446,6 +8300,7 @@ Output your response EXACTLY in this format:
                 session_id,
                 history_experience_learned_rag_str,
                 recent_direct_history_str,
+                priority=priority,
             )
             logger.info(
                 f"[debugskeleton Snowball] Skeleton Text to be edited Buffer dumpraw:\n --- \n {skeleton} \n --- \n"
@@ -8500,7 +8355,7 @@ Output your response EXACTLY in this format:
                     history_experience_learned_rag_str,
                     _,
                 ) = await self._get_direct_rag_context_elp1(
-                    db, section_input_context, session_id
+                    db, section_input_context, session_id, priority=priority
                 )
                 recent_history_str = self._format_direct_history(direct_hist)
 
@@ -8514,6 +8369,7 @@ Output your response EXACTLY in this format:
                     existing_buffer_context=current_document_buffer,
                     recent_history_str=recent_history_str,
                     history_experience_learned_rag_str=history_experience_learned_rag_str,
+                    priority=priority,
                 )
 
                 # B. Code Model -> Diff/Patch Application (The "Enaga" Step)
@@ -8528,6 +8384,7 @@ Output your response EXACTLY in this format:
                     current_buffer=current_document_buffer,
                     new_content_request=raw_specialist_content,
                     section_title=section_title,
+                    priority=priority,
                 )
 
                 if success:
@@ -8720,7 +8577,12 @@ Output your response EXACTLY in this format:
                     f"{log_prefix}: BENCHMARK_ELP1_TIME_MS not set. Running direct_generate without timeout watchdog."
                 )
                 return await self._direct_generate_logic(
-                    db, user_input, session_id, vlm_description, image_b64
+                    db,
+                    user_input,
+                    session_id,
+                    vlm_description,
+                    image_b64,
+                    priority=ELP1,
                 )
 
             timeout_event = asyncio.Event()
@@ -8771,7 +8633,12 @@ Output your response EXACTLY in this format:
             try:
                 # The actual LLM call happens here.
                 final_response_text = await self._direct_generate_logic(
-                    db, user_input, session_id, vlm_description, image_b64
+                    db,
+                    user_input,
+                    session_id,
+                    vlm_description,
+                    image_b64,
+                    priority=ELP1,
                 )
 
                 if not timeout_event.is_set():
@@ -9418,313 +9285,6 @@ Output your response EXACTLY in this format:
             # For validation purposes, we'll allow it, but the spawning logic will skip it.
 
         return True
-
-    async def _run_tree_of_thought_v2(
-        self,
-        db: Session,
-        input_for_tot: str,
-        rag_context_docs: List[Any],
-        history_rag_interactions: List[Any],
-        log_context_str: str,
-        recent_direct_history_str: str,
-        file_index_context_str: str,
-        imagined_image_context_str: str,
-        interaction_data_for_tot_llm_call: Dict[str, Any],  # For _call_llm_with_timing
-        original_user_input_for_log: str,
-        triggering_interaction_id_for_log: int,
-    ) -> str:  # Returns the 'synthesis' string
-        log_prefix = f"🌳 ToT_v2|ELP0|TrigID:{triggering_interaction_id_for_log}"
-        current_session_id = interaction_data_for_tot_llm_call.get(
-            "session_id", f"tot_session_{triggering_interaction_id_for_log}"
-        )
-        logger.info(
-            f"{log_prefix} Starting ToT for original input: '{original_user_input_for_log[:50]}...'"
-        )
-
-        tot_model = self.provider.get_model("router")  # Use router model for ToT
-        if not tot_model:
-            error_msg = "ToT model ('router') not available for ToT V2 execution."
-            logger.error(f"{log_prefix} {error_msg}")
-            await asyncio.to_thread(
-                add_interaction,
-                db,
-                session_id=current_session_id,
-                mode="internal_error",
-                input_type="log_error",
-                user_input=f"[ToT V2 Failed - Model Unavailable for TrigID: {triggering_interaction_id_for_log}]",
-                llm_response=error_msg,
-            )
-            await asyncio.to_thread(db.commit)
-            return f"Error: ToT model unavailable for analysis."
-
-        url_rag_context_str = self._format_docs(rag_context_docs, "URL Context")
-        history_rag_context_str = self._format_docs(
-            history_rag_interactions, "History/Reflection RAG"
-        )
-
-        llm_input_for_tot = {
-            "input": original_user_input_for_log,
-            "context": url_rag_context_str,
-            "history_rag": history_rag_context_str,
-            "file_index_context": file_index_context_str,
-            "log_context": log_context_str,
-            "recent_direct_history": recent_direct_history_str,
-            "imagined_image_context": imagined_image_context_str,
-        }
-
-        prompt_reformed = [
-            (
-                "system",
-                PROMPT_TREE_OF_THOUGHTS_V2,
-            ),  # The PROMPT_ROUTER variable now only contains the system instructions.
-            (
-                "human",
-                f"Create Tree of Thoughts in ascii for this query: {input_for_tot}",
-            ),  # This is a placeholder for the user's actual query.
-        ]
-
-        chain = (
-            ChatPromptTemplate.from_messages(prompt_reformed)
-            | tot_model
-            | StrOutputParser()
-        )
-
-        raw_llm_output_from_initial_loop: str = (
-            "Initial ToT LLM call did not yield parsable JSON."
-        )
-        parsed_tot_json: Optional[Dict[str, Any]] = None
-        last_error_initial: Optional[Exception] = None
-
-        # --- Stage 1: Initial LLM Call & Parse/Fix ---
-        # For complex ToT JSON, let's keep 1 primary attempt before reformat.
-        initial_llm_attempts_tot = 1
-        for attempt in range(initial_llm_attempts_tot):
-            logger.debug(
-                f"{log_prefix} ToT LLM call attempt {attempt + 1}/{initial_llm_attempts_tot}"
-            )
-            try:
-                raw_llm_text_this_attempt = await asyncio.to_thread(
-                    self._call_llm_with_timing,
-                    chain,
-                    llm_input_for_tot,
-                    interaction_data_for_tot_llm_call,
-                    priority=ELP0,
-                    db=db,
-                    session_id=None,
-                )
-                raw_llm_output_from_initial_loop = raw_llm_text_this_attempt
-                logger.trace(
-                    f"{log_prefix} Raw LLM for ToT (Attempt {attempt + 1}): '{raw_llm_text_this_attempt[:200]}...'"
-                )
-
-                json_candidate_str = self._extract_json_candidate_string(
-                    raw_llm_text_this_attempt, log_prefix + "-ExtractInitial"
-                )
-                if json_candidate_str:
-                    parsed_tot_json = self._programmatic_json_parse_and_fix(
-                        json_candidate_str,
-                        1,
-                        log_prefix + f"-InitialFixAttempt{attempt + 1}",
-                    )
-                    if parsed_tot_json and self._is_valid_tot_json(parsed_tot_json):
-                        logger.info(
-                            f"✅ {log_prefix} Initial ToT analysis successful (Attempt {attempt + 1})."
-                        )
-                        break  # Success from initial attempt
-                else:
-                    last_error_initial = ValueError(
-                        f"No JSON candidate from ToT LLM: {raw_llm_text_this_attempt[:100]}"
-                    )
-
-                if not (
-                    parsed_tot_json and self._is_valid_tot_json(parsed_tot_json)
-                ):  # If not broken from success
-                    if parsed_tot_json:
-                        last_error_initial = ValueError(
-                            f"Invalid ToT JSON structure: {str(parsed_tot_json)[:100]}"
-                        )
-                    elif not json_candidate_str:
-                        pass  # Error already set if no candidate
-                    else:
-                        last_error_initial = ValueError(
-                            f"Failed to parse/fix ToT JSON candidate: {json_candidate_str[:100]}"
-                        )
-                    parsed_tot_json = None  # Ensure it's None for next stage
-
-            except TaskInterruptedException as tie:
-                logger.warning(f"🚦 {log_prefix} ToT task INTERRUPTED: {tie}")
-                raise tie  # Propagate to be handled by _run_tot_in_background_wrapper_v2
-            except Exception as e_initial_tot:
-                last_error_initial = e_initial_tot
-
-            if last_error_initial and not parsed_tot_json:
-                logger.warning(
-                    f"⚠️ {log_prefix} Initial ToT LLM/parse attempt failed. Error: {last_error_initial}"
-                )
-
-        # --- Stage 2: LLM Re-request for Formatting (if initial attempt failed) ---
-        if not (parsed_tot_json and self._is_valid_tot_json(parsed_tot_json)):
-            logger.warning(
-                f"{log_prefix} Initial ToT attempt failed. Trying LLM re-request to fix format. Last raw: '{raw_llm_output_from_initial_loop[:200]}...'"
-            )
-
-            reformat_prompt_input = {
-                "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
-                "original_user_input_placeholder": original_user_input_for_log,
-            }
-            reformat_chain = (
-                ChatPromptTemplate.from_template(PROMPT_REFORMAT_TO_TOT_JSON)
-                | tot_model
-                | StrOutputParser()
-            )
-
-            reformatted_llm_output_text = await asyncio.to_thread(
-                self._call_llm_with_timing,
-                reformat_chain,
-                reformat_prompt_input,
-                interaction_data_for_tot_llm_call,
-                priority=ELP0,
-                db=db,
-                session_id=None,
-            )
-
-            if reformatted_llm_output_text and not (
-                isinstance(reformatted_llm_output_text, str)
-                and "ERROR" in reformatted_llm_output_text.upper()
-            ):
-                logger.info(
-                    f"{log_prefix} Received reformatted output from LLM for ToT. Attempting to parse/fix..."
-                )
-                json_candidate_from_reformat = self._extract_json_candidate_string(
-                    reformatted_llm_output_text, log_prefix + "-ReformatExtract"
-                )
-                if json_candidate_from_reformat:
-                    parsed_tot_json = self._programmatic_json_parse_and_fix(
-                        json_candidate_from_reformat,
-                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,
-                        log_prefix + "-ReformatFix",
-                    )
-            else:
-                logger.error(
-                    f"{log_prefix} LLM re-request for ToT JSON formatting failed or returned error: {reformatted_llm_output_text}"
-                )
-
-        # --- Process Final Result (parsed_tot_json or fallback) ---
-        final_synthesis_for_caller = f"Error: ToT analysis for '{original_user_input_for_log[:30]}...' failed to produce valid structured output."
-        tot_json_to_save_str: Optional[str] = None
-
-        if parsed_tot_json and self._is_valid_tot_json(parsed_tot_json):
-            logger.success(
-                f"✅ {log_prefix} ToT analysis JSON successfully parsed. Synthesis snippet: '{str(parsed_tot_json.get('synthesis'))[:50]}...'"
-            )
-            final_synthesis_for_caller = str(
-                parsed_tot_json.get("synthesis", "ToT synthesis missing from JSON.")
-            )
-            try:
-                tot_json_to_save_str = json.dumps(parsed_tot_json, indent=2)
-            except Exception as e_dump:
-                logger.error(f"{log_prefix} Failed to dump parsed_tot_json: {e_dump}")
-                tot_json_to_save_str = str(parsed_tot_json)
-
-            # --- New: Check if ToT requires a new background task ---
-            if parsed_tot_json.get("requires_background_task") is True:
-                next_task_input_str = parsed_tot_json.get("next_task_input")
-                if (
-                    next_task_input_str
-                    and isinstance(next_task_input_str, str)
-                    and next_task_input_str.strip()
-                ):
-                    logger.info(
-                        f"{log_prefix} ToT synthesis requires further background task. Input: '{next_task_input_str[:70]}...'"
-                    )
-                    new_bg_task_session_id = f"sub_task_from_tot_{triggering_interaction_id_for_log}_{str(uuid.uuid4())[:4]}"
-                    # Spawn new background_generate task (don't await it here, let it run truly in background)
-                    asyncio.create_task(
-                        self.background_generate(
-                            db=db,  # Use current DB session for spawning, BG task will get its own
-                            user_input=next_task_input_str,
-                            session_id=new_bg_task_session_id,
-                            classification="chat_complex",  # Assume new task is complex
-                            image_b64=None,
-                            update_interaction_id=None,  # It's a new task
-                        )
-                    )
-                    logger.info(
-                        f"{log_prefix} Spawned new background_generate task for session {new_bg_task_session_id}"
-                    )
-                else:
-                    logger.warning(
-                        f"{log_prefix} ToT indicated 'requires_background_task' but 'next_task_input' was missing or empty."
-                    )
-        else:
-            logger.error(
-                f"{log_prefix} ❌ All ToT attempts failed to produce valid JSON. Last raw: '{raw_llm_output_from_initial_loop[:200]}...'"
-            )
-            fallback_json_content = {
-                "decomposition": "N/A",
-                "brainstorming": [],
-                "evaluation": "N/A",
-                "synthesis": final_synthesis_for_caller,
-                "confidence_score": 0.0,
-                "self_critique": f"Failed to parse LLM output for ToT. Last raw: {raw_llm_output_from_initial_loop[:200]}",
-                "requires_background_task": False,
-                "next_task_input": None,
-            }
-            try:
-                tot_json_to_save_str = json.dumps(fallback_json_content, indent=2)
-            except Exception as e_dump_fallback:
-                logger.error(
-                    f"{log_prefix} Failed to dump fallback ToT JSON: {e_dump_fallback}"
-                )
-                tot_json_to_save_str = str(fallback_json_content)
-
-        # --- Save ToT result (the JSON string) to a new Interaction record ---
-        try:
-            tot_result_interaction_data = {
-                "session_id": current_session_id,
-                "mode": "chat",
-                "input_type": "tot_result",
-                "user_input": f"[ToT Analysis Result for Original Query ID {triggering_interaction_id_for_log}: '{original_user_input_for_log[:100]}...']",
-                "llm_response": tot_json_to_save_str,
-                "classification": "tot_output_json",
-                "execution_time_ms": interaction_data_for_tot_llm_call.get(
-                    "execution_time_ms", 0
-                ),
-                "reflection_completed": True,
-                "tot_analysis_requested": False,
-                "tot_analysis_spawned": parsed_tot_json.get("requires_background_task")
-                if parsed_tot_json
-                else False,
-                # Log if it tried to spawn
-                "tot_delivered": False,
-            }
-            valid_keys = {c.name for c in Interaction.__table__.columns}
-            db_kwargs_tot_result = {
-                k: v
-                for k, v in tot_result_interaction_data.items()
-                if k in valid_keys and k != "id"
-            }
-
-            new_tot_interaction = await asyncio.to_thread(
-                add_interaction, db, **db_kwargs_tot_result
-            )
-            if new_tot_interaction and new_tot_interaction.id:
-                await asyncio.to_thread(db.commit)
-                logger.success(
-                    f"✅ {log_prefix} Saved ToT V2 result as Interaction ID {new_tot_interaction.id} for TrigID {triggering_interaction_id_for_log}."
-                )
-            else:
-                logger.error(
-                    f"❌ {log_prefix} Failed to save ToT V2 result for TrigID {triggering_interaction_id_for_log}."
-                )
-                await asyncio.to_thread(db.rollback)
-        except Exception as db_save_err:
-            logger.error(
-                f"❌ {log_prefix} Error saving ToT V2 result to DB for TrigID {triggering_interaction_id_for_log}: {db_save_err}"
-            )
-            await asyncio.to_thread(db.rollback)
-
-        return final_synthesis_for_caller
 
     # --- reset Method ---
     def reset(self, db: Session, session_id: str = None):
@@ -10692,12 +10252,14 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         # NEW ARGS
         history_rag_str: str,
         recent_history_str: str,
+        priority: int = ELP1,
     ) -> List[str]:
         """
         LoD 0: Creates a structural plan (Skeleton) for the response.
         Returns a list of section headers.
         """
-        log_prefix = f"🦴 Skeleton|{session_id}"
+        prio_str = "ELP1" if priority == ELP1 else "ELP0"
+        log_prefix = f"🦴 Skeleton|{prio_str}|{session_id}"
         model = self.provider.get_model("general")
         if not model:
             return ["Response"]
@@ -10727,7 +10289,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         # Try to generate the Skeleton first using the modelbing command
         raw_plan = ["Main_explanation"]
         try:
-            bound_model = model.bind(priority=ELP1, max_tokens=4096)
+            bound_model = model.bind(priority=priority, max_tokens=4096)
             chain = bound_model | StrOutputParser()
             # raw_plan = await asyncio.to_thread(chain.invoke, prompt)
             raw_plan = await asyncio.to_thread(
@@ -10735,7 +10297,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                 chain,  # The chain to run
                 prompt,  # The input
                 interaction_data={},  # interaction_data (can be empty for internal loops)
-                priority=ELP1,  # Ensure high priority
+                priority=priority,  # Ensure correct priority
                 db=db,
                 session_id=session_id,
             )
@@ -10772,17 +10334,19 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         existing_buffer_context: str,
         recent_history_str: str,
         history_experience_learned_rag_str: str,
+        priority: int = ELP1,
     ) -> str:
         """
         LoD 1: Generates content for a SINGLE node in the grid.
         Includes "Snowball Check": Retries if output is < 42 tokens.
         """
-        log_prefix = f"🧱 BuildNode|'{section_title}'"
+        prio_str = "ELP1" if priority == ELP1 else "ELP0"
+        log_prefix = f"🧱 BuildNode|{prio_str}|'{section_title}'"
 
         # 1. Focused RAG (Run once per section, reused for retries)
         search_query = f"{user_input} {section_title}"
         section_context, _ = await self._get_direct_rag_context_elp1(
-            db, search_query, session_id
+            db, search_query, session_id, priority=priority
         )
 
         blacklisted_models = [
@@ -10801,6 +10365,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                 user_input,
                 session_id,
                 excluded_models=blacklisted_models,  # <--- Pass the blacklist
+                priority=priority,
             )
 
             logger.info(
@@ -10831,7 +10396,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
 """
             try:
                 bound_model = model.bind(
-                    priority=ELP1,
+                    priority=priority,
                     max_tokens=DIRECT_GENERATE_RECURSION_CHUNK_TOKEN_LIMIT,
                 )
                 chain = bound_model | StrOutputParser()
@@ -10841,7 +10406,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                     chain,
                     prompt,
                     {},
-                    priority=ELP1,
+                    priority=priority,
                     db=db,
                     session_id=session_id,
                 )
@@ -11028,12 +10593,14 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         original_user_input: str,
         session_id: str,
         excluded_models: List[str] = None,
+        priority: int = ELP1,
     ) -> str:
         """
         Uses the Router model (ELP1) to pick the specialist. (For Snowball-Enaga) NOT for Background_generate
         V2 UPDATE: Now provides the router with explicit model descriptions.
         """
-        log_prefix = f"🔀 ContRouter|{session_id}"
+        prio_str = "ELP1" if priority == ELP1 else "ELP0"
+        log_prefix = f"🔀 ContRouter|{prio_str}|{session_id}"
         router_model = self.provider.get_model("router")
         if not router_model:
             return "general"
@@ -11082,7 +10649,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         Answer ONLY model name (e.g., 'physics').
         """
         try:
-            bound_router = router_model.bind(priority=ELP1)
+            bound_router = router_model.bind(priority=priority)
             chain = bound_router | StrOutputParser()
             # raw_selection = await asyncio.to_thread(chain.invoke, prompt)
 
@@ -11091,7 +10658,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                 chain,  # The chain to run
                 prompt,  # The input
                 interaction_data={},  # interaction_data (can be empty for internal loops)
-                priority=ELP1,  # Ensure high priority
+                priority=priority,  # Ensure high priority
                 db=None,
                 session_id=session_id,
             )
@@ -12584,51 +12151,46 @@ Generate a concise summary (3-5 sentences) of the AI's response. Ensure the summ
                             )
 
                     # ==========================================================
-                    # 3.5 SPAWN TREE OF THOUGHTS (IF NEEDED)
+                    # 3.5 SPAWN SNOWBALL-ENAGA (IF NEEDED)
                     # ==========================================================
                     if not is_reflection_task and interaction_data.get(
                         "requires_deep_thought"
                     ):
-                        trigger_id_for_tot = (
+                        trigger_id_for_snowball = (
                             existing_interaction_to_update.id
                             if existing_interaction_to_update
                             else None
                         )
-                        if trigger_id_for_tot:
+                        if trigger_id_for_snowball:
                             await asyncio.to_thread(
                                 add_interaction,
                                 db,
                                 session_id=session_id,
                                 mode="chat",
-                                input_type="log_info_spawn_tot",
-                                user_input=f"Spawning background Tree of Thoughts task for Interaction ID {trigger_id_for_tot}.",
-                                llm_response=f"ToT Input: {current_input_for_analysis}...",
+                                input_type="log_info_spawn_snowball",
+                                user_input=f"Spawning background Snowball-Enaga task for Interaction ID {trigger_id_for_snowball}.",
+                                llm_response=f"Snowball Input: {current_input_for_analysis}...",
                             )
                             await asyncio.to_thread(db.commit)
                             logger.info(
-                                f"{log_prefix} Spawning ToT for Interaction ID: {trigger_id_for_tot}."
+                                f"{log_prefix} Spawning Snowball-Enaga for Interaction ID: {trigger_id_for_snowball}."
                             )
-                            tot_payload = {
-                                "db_session_factory": SessionLocal,
-                                "original_input_for_tot": current_input_for_analysis,
-                                "rag_context_docs": url_docs,
-                                "history_rag_interactions": session_docs
-                                + reflection_docs,
-                                "log_context_str": log_ctx_prompt_final,
-                                "recent_direct_history_str": direct_hist_prompt_final,
-                                "file_index_context_str": vec_file_ctx_result_str,
-                                "triggering_interaction_id": trigger_id_for_tot,
-                                "imagined_image_context_str": interaction_data.get(
-                                    "imagined_image_vlm_description", "None."
-                                ),
-                            }
+
                             asyncio.create_task(
-                                self._run_tot_in_background_wrapper_v2(**tot_payload)
+                                self._run_snowball_enaga_in_background_wrapper(
+                                    db_session_factory=SessionLocal,
+                                    user_input=current_input_for_analysis,
+                                    session_id=session_id,
+                                    triggering_interaction_id=trigger_id_for_snowball,
+                                    vlm_description=interaction_data.get(
+                                        "imagined_image_vlm_description"
+                                    ),
+                                )
                             )
                             interaction_data["tot_analysis_spawned"] = True
                         else:
                             logger.warning(
-                                f"{log_prefix} Could not spawn ToT, no trigger ID."
+                                f"{log_prefix} Could not spawn Snowball-Enaga, no trigger ID."
                             )
 
                     # ==========================================================
