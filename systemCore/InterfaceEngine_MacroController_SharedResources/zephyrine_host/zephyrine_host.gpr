@@ -8,7 +8,11 @@ project Zephyrine_Host is
    for Main use ("zephyrine_host.adb");
 
    package Compiler is
-      for Default_Switches ("Ada") use Zephyrine_Host_Config.Ada_Compiler_Switches;
+      -- Using a robust set of switches for maximum compatibility
+      -- -gnatA: Ignores global configuration files (gnat.adc)
+      -- -gnatf: Provides full error messages
+      -- -gnatQ: Keeps going on errors to catch as many as possible
+      for Default_Switches ("Ada") use ("-O2", "-gnat2022", "-gnatW8", "-gnatf", "-gnatQ", "-gnatA");
    end Compiler;
 
    package Binder is

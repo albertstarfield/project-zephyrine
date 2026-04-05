@@ -101,6 +101,7 @@ class AgenticRelaxationThread(threading.Thread):
         self.stop_event = stop_event
         self.dynamic_mode_id = dynamic_mode_id
         self.duty_cycle_off = self.initial_duty_cycle_off
+        self.cycle_count = 0
         logger.info(
             f"AgenticRelaxationThread initialized. Dynamic Mode: {self.dynamic_mode_id}"
         )
@@ -205,9 +206,10 @@ class AgenticRelaxationThread(threading.Thread):
                     if not is_ram_safe:
                         reasons.append(f"RAM({ram:.1f}%)")
 
-                    logger.info(
-                        f"Dynamic(-5): HARD BLOCK | Blockers: {', '.join(reasons)}"
-                    )
+                    if self.cycle_count % 100 == 0:
+                        logger.info(
+                            f"Dynamic(-5): HARD BLOCK | Blockers: {', '.join(reasons)}"
+                        )
                     return 1.0
 
             # Default for unknown negative modes
@@ -228,6 +230,7 @@ class AgenticRelaxationThread(threading.Thread):
 
         while not self.stop_event.is_set():
             try:
+                self.cycle_count += 1
                 # 1. Update Duty Cycle
                 if self.dynamic_mode_id:
                     self.duty_cycle_off = self._calculate_dynamic_duty_cycle()
