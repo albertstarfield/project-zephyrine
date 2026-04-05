@@ -1956,8 +1956,95 @@ _log_writer_stop_event = threading.Event() # <<<< DEFINITION
 _log_writer_thread: Optional[threading.Thread] = None # This is the instance of DatabaseLogBatchWriter
 # LOG_QUEUE_MAX_SIZE is imported from CortexConfiguration
 
+class PromptPruner:
+    """
+    Utility to extract the core user input from a full prompt template.
+    Uses regex patterns derived from CortexConfiguration to 'de-noise' strings.
+    """
+    _patterns = []
+
+    @classmethod
+    def _initialize_patterns(cls):
+        if cls._patterns:
+            return
+        
+        # We target specific markers often found in templates
+        markers = [
+            r"\[用户当前请求 \(User's Current Request\)\]:\n?(.*?)\n---",
+            r"\[User's Current Request\]:\n?(.*?)\n---",
+            r"\[USER REQUEST\]:\n?(.*?)\n---",
+            r"User Request:\n?(.*?)\n---",
+            r"User Input:\n?(.*?)\n---",
+            r"<\|im_start\|>user\n?(.*?)(?=<\|im_end\|>|$)",
+            r"system:.*?user:\n?(.*?)$", # Simple fallback for some templates
+        ]
+        
+        for m in markers:
+            cls._patterns.append(re.compile(m, re.DOTALL | re.IGNORECASE))
+
+    @classmethod
+    def prune(cls, text: str) -> str:
+        if not text:
+            return text
+        
+        cls._initialize_patterns()
+        
+        for pattern in cls._patterns:
+            match = pattern.search(text)
+            if match:
+                # Extract the captured group (the actual user input)
+                pruned = match.group(1).strip()
+                if pruned:
+                    return pruned
+        
+        # If no template marker found, return original (might already be clean)
+        return text.strip()
+
+def run_db_noise_cleaning(db: Session, limit: int = 1000):
+    """
+    Scans the database for interactions where user_input contains template 'noise'
+    and prunes them to keep only the core request.
+    """
+    logger.info(f"🧹 Starting DB noise cleaning (limit: {limit})...")
+    try:
+        # Find entries that look like they contain template markers
+        # We look for the common '[用户当前请求' or 'User's Current Request'
+        interactions = db.query(Interaction).filter(
+            or_(
+                Interaction.user_input.like("%用户当前请求%"),
+                Interaction.user_input.like("%User's Current Request%"),
+                Interaction.user_input.like("%<|im_start|>system%"),
+                Interaction.user_input.like("%system:%")
+            )
+        ).limit(limit).all()
+
+        if not interactions:
+            logger.info("✨ No noisy templates found in database.")
+            return 0
+
+        cleaned_count = 0
+        for item in interactions:
+            original = item.user_input
+            pruned = PromptPruner.prune(original)
+            if pruned != original:
+                item.user_input = pruned
+                cleaned_count += 1
+        
+        db.commit()
+        logger.success(f"✅ Cleaned {cleaned_count} noisy entries from database.")
+        return cleaned_count
+    except Exception as e:
+        logger.error(f"Error during DB noise cleaning: {e}")
+        db.rollback()
+        return 0
+
 def _core_add_interaction_to_session(db_session: Session, **kwargs) -> Interaction:
     valid_keys = {c.name for c in Interaction.__table__.columns}
+    
+    # --- NOISE CLEANING: Prune user_input before storing ---
+    if 'user_input' in kwargs and kwargs['user_input']:
+        kwargs['user_input'] = PromptPruner.prune(kwargs['user_input'])
+
     filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}
     filtered_kwargs.setdefault('mode', 'chat')
     if 'input_type' not in filtered_kwargs:

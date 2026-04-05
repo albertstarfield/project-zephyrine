@@ -71,7 +71,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `DOC-REQ-003`
     -   **Title:** Add academic citations and clarify architectural concepts in README.
     -   **Status:** `In-Progress`
-    -   **Description:** The main `README.md` has been updated to include academic citations for the architectural concepts mentioned, such as big.LITTLE and Automated Context Engineering. The credits and feature descriptions have also been clarified.
+    -   **Description:** The main `README.md` has been updated to include academic citations for the architectural concepts mentioned, such as big.LITTLE and Context Engineering. The credits and feature descriptions have also been clarified.
 
 -   **ID:** `MESH-DOC-001`
     -   **Title:** Create component architecture and design documentation for ZephyMesh.
@@ -125,7 +125,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-014`
     -   **Title:** Checkpoint: Initial Implementation of Branch Prediction Framework.
     -   **Status:** `In-Progress`
-    -   **Description:** This commit serves as a checkpoint for the initial, experimental implementation of the DCTD (Decentralized Celestial Time-series Dynamics) Branch Prediction framework. This includes adding new dependencies (Computing Library, ZMQ), database schema changes for LSH hashing, and core logic in the AdelaideAlbertCortex to predict future user intent based on temporal vector analysis. This is a foundational step before a larger planned refactor and enhancement of the branch prediction capabilities.
+    -   **Description:** This commit serves as a checkpoint for the initial, experimental implementation of the DCTD (Decentralized Celestial Time-series Dynamics) Branch Prediction framework. This includes adding new dependencies (Computing Library, ZMQ), database schema changes for LSH hashing, and core logic in the engine to predict future user intent based on temporal vector analysis. This is a foundational step before a larger planned refactor and enhancement of the branch prediction capabilities.
 
 -   **ID:** `CORE-FEAT-012`
     -   **Title:** Add processing chains and text-splitting tools to dependencies.
@@ -189,7 +189,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-015`
     -   **Title:** Enhance file ingestion to support structured datasets (JSONL, CSV, Parquet).
     -   **Status:** `Resolved`
-    -   **Description:** The file ingestion service has been significantly enhanced to parse and process structured data files, including `.jsonl`, `.csv`, and `.parquet`. This allows the system to learn from various conversational data formats (Alpaca, DPO, etc.) by extracting user/assistant interactions and queuing them for background reflection.
+    -   **Description:** The file ingestion service has been significantly enhanced to parse and process structured data files, including `.jsonl`, `.csv`, and `.parquet`. This allows the system to learn from various conversational data formats (structured interaction data) by extracting user/assistant interactions and queuing them for background reflection.
 
 -   **ID:** `CORE-FEAT-016`
     -   **Title:** Implement DCTD Temporal Scheduler for future task execution.
@@ -199,7 +199,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-017`
     -   **Title:** Add new components for optical character recognition, UI interaction, and language-to-action.
     -   **Status:** `Resolved`
-    -   **Description:** Expanded the component ecosystem by adding three new specialized components: `Core Logic2.5-OCR-Document-Visual-ImageDescripter` for document optical character recognition, `fara7b-compagent-Interact` for computer UI interaction, and `Octopus-v2-word-to-action` for translating language commands into actions. This increases the system's capabilities in document understanding and automated control.
+    -   **Description:** Expanded the component ecosystem by adding three new specialized components for document optical character recognition, computer UI interaction, and translating language commands into actions. This increases the system's capabilities in document understanding and automated control.
 
 -   **ID:** `CORE-FEAT-018`
     -   **Title:** Add semaphore for ELP1 direct generation queue concurrency control.
@@ -280,12 +280,12 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-REFACTOR-001`
     -   **Title:** Refactor ToT payload and increase representation context size.
     -   **Status:** `Resolved`
-    -   **Description:** Refactored the Tree of Thought (ToT) payload in `AdelaideAlbertCortex.py` for clarity and simplicity. Increased the default representation context size in `cortex_backbone_provider.py` to 4096 to improve representation quality for longer documents. Simplified the frontend input area in `InputArea.jsx` by removing the stop generation button.
+    -   **Description:** Refactored the Tree of Thought (ToT) payload for clarity and simplicity. Increased the default representation context size in `cortex_backbone_provider.py` to 4096 to improve representation quality for longer documents. Simplified the frontend input area in `InputArea.jsx` by removing the stop generation button.
 
 -   **ID:** `CORE-REFACTOR-002`
     -   **Title:** Overhaul retrieval and background processing for robustness and traceability.
     -   **Status:** `Resolved`
-    -   **Description:** Major refactor of the `background_generate` function in `AdelaideAlbertCortex.py`. The retrieval pipeline was rebuilt to use a safe, robust helper (`_build_on_the_fly_retriever`) that combines vector and fuzzy search for recent history. The entire background task now logs every intermediate thought, draft, and correction as a distinct, traceable interaction in the database, providing a complete audit trail of the system's reasoning process. The reflection process was also redesigned to be a "pure" operation that creates new records instead of updating old ones, ensuring data immutability.
+    -   **Description:** Major refactor of the `background_generate` function. The retrieval pipeline was rebuilt to use a safe, robust helper (`_build_on_the_fly_retriever`) that combines vector and fuzzy search for recent history. The entire background task now logs every intermediate thought, draft, and correction as a distinct, traceable interaction in the database, providing a complete audit trail of the system's reasoning process. The reflection process was also redesigned to be a "pure" operation that creates new records instead of updating old ones, ensuring data immutability.
 
 -   **ID:** `CORE-REFACTOR-003`
     -   **Title:** Refactor database initialization for speed and robustness.
@@ -294,7 +294,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-REFACTOR-004`
     -   **Title:** Refactor Flask route registration from @app.route to @system.route.
     -   **Status:** `In-Progress`
-    -   **Description:** Refactored all Flask routes in `AdelaideAlbertCortex.py` to use the `@system.route` decorator instead of `@app.route` for better organization and consistency.
+    -   **Description:** Refactored all Flask routes to use the `@system.route` decorator instead of `@app.route` for better organization and consistency.
 
 -   **ID:** `CORE-REFACTOR-005`
     -   **Title:** Update dependencies and refactor imports for text processing library compatibility.
@@ -305,7 +305,7 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Overhaul background processing, DB migrations, and branch prediction.
     -   **Status:** `In-Progress`
     -   **Description:** This commit introduces a major architectural overhaul of the core engine. Key changes include:
-        - Refactoring the `background_generate` task in `AdelaideAlbertCortex.py` with improved error handling, more robust logging, and a clearer separation of concerns.
+        - Refactoring the `background_generate` task with improved error handling, more robust logging, and a clearer separation of concerns.
         - Introducing a new "Hierarchical Thought Processing" background task for deeper analysis.
         - Adding a mechanism to generate "StellaIcarus hooks" for creating automations based on interactions.
         - Overhauling the database health check (`_run_background_db_health_check`) in `database.py` to use a robust "Stamp and Upgrade" Alembic migration strategy, resolving issues with existing databases.
@@ -316,6 +316,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Integrate Ada branch predictor code into main engine.
     -   **Status:** `Resolved`
     -   **Description:** Reversing of previously externalized Ada branch predictor code and integrating it directly into the Python mainEngineFrame_MacroController_EngineSharedResources. This refactoring aims to streamline the branch prediction mechanism by co-locating the Ada-based logic within the core engine, enhancing performance and simplifying maintenance by reducing inter-process communication overhead.
+
+-   **ID:** `CORE-REFACTOR-012`
+    -   **Title:** Consolidate engine core and implement multi-slot priority concurrency.
+    -   **Status:** `Resolved`
+    -   **Description:** Deleted the legacy `AdelaideAlbertCortex.py` in favor of a consolidated architecture. Refactored `PriorityQuotaLock` into a multi-slot semaphore-like system, allowing concurrent ELP0 and ELP1 tasks. Enhanced `CortexEngine` with dual-phase preemption checks to ensure deterministic interruption and prevent resource leaks. Updated task orchestration to support configurable concurrency limits via environment variables.
 
 ---
 
@@ -501,7 +506,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `DOC-MAINT-001`
     -   **Title:** Checkpoint: AdelaideAlbertCortex refactor and documentation asset relocation.
     -   **Status:** `Resolved`
-    -   **Description:** This serves as a checkpoint before a major refactoring of the Branch Prediction system. It includes a significant logical overhaul of the `AdelaideAlbertCortex.py` main loop, restructuring the flow of context gathering, action analysis, and response synthesis. Additionally, the `_excludefromRuntime_reverseEngineeringAssets` directory has been relocated into the `documentation/Developer Documentation` folder to better organize non-runtime assets.
+    -   **Description:** This serves as a checkpoint before a major refactoring of the Branch Prediction system. It includes a significant logical overhaul of the main loop, restructuring the flow of context gathering, action analysis, and response synthesis. Additionally, the `_excludefromRuntime_reverseEngineeringAssets` directory has been relocated into the `documentation/Developer Documentation` folder to better organize non-runtime assets.
 ---
 
 ## **LAUNCHER**
@@ -548,7 +553,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-REFACTOR-011`
     -   **Title:** Refactor core engine for Raven-Revolution.
     -   **Status:** `Resolved`
-    -   **Description:** Implemented manual code refactoring for the Raven-Revolution initiative. This overhaul streamlines execution pipelines and enhances deterministic performance. Assisted coding was utilized via Google Gemini, with deterministic formatting applied by Zed.
+    -   **Description:** Implemented manual code refactoring for the Raven-Revolution initiative. This overhaul streamlines execution pipelines and enhances deterministic performance. Formatting was applied via Zed.
 
 -   **ID:** `GOVERNANCE-FEAT-004`
     -   **Title:** Complete license form and identify frontend warning issues.

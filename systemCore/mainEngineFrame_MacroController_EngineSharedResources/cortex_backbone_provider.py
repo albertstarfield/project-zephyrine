@@ -6,6 +6,15 @@ import threading
 import gc # For garbage collection
 from typing import Dict, Any, Optional, List, Iterator, Tuple, Union, cast
 from loguru import logger
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
+
+# Check for verbosity - if not set to 1, suppress logs from this module to avoid spam
+if os.getenv("CORTEXPROVIDERVERBOSE", "0") != "1":
+    logger.disable(__name__)
+
 import json        # Added for worker communication
 import subprocess  # Added for worker management
 import shlex       # <<< --- ADD THIS LINE --- >>>
@@ -17,7 +26,6 @@ import math
 import tempfile
 import base64
 import signal
-from loguru import logger # Logging library
 from langchain_core.runnables import RunnableConfig, RunnableLambda, Runnable
 
 try:
@@ -1219,11 +1227,28 @@ class CortexEngine:
 
                 provider_logger.debug(
                     f"{worker_log_prefix}: Worker command: {' '.join(shlex.quote(c) for c in command)}")
+                
+                # --- GAP FIX: Pre-check preemption before spawning ---
+                if priority == ELP0 and self._priority_quota_lock.is_preempted(priority):
+                    provider_logger.warning(f"{worker_log_prefix}: Interrupted by ELP1 BEFORE worker spawn. Aborting.")
+                    self._priority_quota_lock.release()
+                    return {"error": interruption_error_marker}
+
                 start_time = time.monotonic()
                 worker_process = subprocess.Popen(
                     command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     text=True, encoding='utf-8', errors='replace'
                 )
+
+                # --- GAP FIX: Post-check preemption after spawning ---
+                if priority == ELP0 and self._priority_quota_lock.is_preempted(priority):
+                    provider_logger.warning(f"{worker_log_prefix}: Interrupted by ELP1 IMMEDIATELY AFTER worker spawn. Killing.")
+                    self._kill_process_tree(worker_process.pid)
+                    try: worker_process.wait(timeout=1)
+                    except: pass
+                    self._priority_quota_lock.release()
+                    return {"error": interruption_error_marker}
+
                 if worker_process and worker_process.pid:
                     with self.active_workers_lock:
                         self.active_workers[worker_process.pid] = worker_process

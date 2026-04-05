@@ -6,7 +6,7 @@ import platform
 import subprocess  # To store the process handle
 import threading
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 
 import psutil
 from loguru import logger
@@ -19,6 +19,8 @@ except ImportError:
     AGENTIC_RELAXATION_MODE = "Default"
     AGENTIC_RELAXATION_PRESETS = {"default": 0}
     AGENTIC_RELAXATION_PERIOD_SECONDS = 2.0
+    MAX_CONCURRENT_ELP1_TASKS = 1
+    MAX_CONCURRENT_ELP0_TASKS = 1
 
 # Priority Levels
 ELP0 = 0  # Background Tasks (File Indexer, Reflection)
@@ -302,30 +304,36 @@ class AgenticRelaxationThread(threading.Thread):
 
 class PriorityQuotaLock:
     """
-    A lock supporting priority levels (ELP0, ELP1) and an interruption quota.
-    ELP1 requests can interrupt ELP0 requests holding the lock, up to a quota limit.
-    Manages killing the associated ELP0 worker process upon interruption.
+    A multi-slot priority lock (semaphore-like) supporting ELP0 and ELP1 levels.
+    ELP1 tasks take precedence and can preempt (kill) running ELP0 tasks if slots are needed.
     """
-
-    QUOTA_MAX = 18446744073709551616  # ELP1 Quota preemption (just set to 99999 since there would be idle and that idle would not decrease or reload the quota which cause an softlock thus it's better to set it 2^64)
 
     def __init__(self):
         self._condition = threading.Condition(threading.Lock())
-        self._is_locked = False
-        self._lock_holder_priority: Optional[int] = None
-        self._lock_holder_proc: Optional[subprocess.Popen] = None
-        self._lock_holder_thread_ident: Optional[int] = None
-        self._elp1_interrupt_quota: int = self.QUOTA_MAX
-        self._elp1_waiting_count = 0  # How many ELP1 threads are waiting
+        
+        # Configuration
+        self._max_elp1_slots = MAX_CONCURRENT_ELP1_TASKS
+        self._max_elp0_slots = MAX_CONCURRENT_ELP0_TASKS
+        # Total allowed concurrent binaries
+        self._total_slots = max(self._max_elp1_slots, self._max_elp0_slots)
+        
+        # State tracking
+        self._active_tasks: Dict[int, Dict] = {} # ident -> {priority, proc, start_time}
+        self._elp1_waiting_count = 0
+        self._elp0_waiting_count = 0
+        
+        # Interruption quota (legacy support)
+        self._elp1_interrupt_quota = 18446744073709551616
 
-        # --- NEW: Relaxation Thread ---
+        # --- Relaxation Thread ---
         self._relaxation_thread: Optional[AgenticRelaxationThread] = None
         self._relaxation_stop_event = threading.Event()
         self._relaxation_thread_ident: Optional[int] = None
         self._initialize_relaxation()
 
         logger.info(
-            "🚦 PriorityQuotaLock initialized. ELP1 Interrupt Quota: {}", self.QUOTA_MAX
+            "🚦 PriorityQuotaLock (Queued) initialized. Slots: ELP1={}, ELP0={}, Total={}", 
+            self._max_elp1_slots, self._max_elp0_slots, self._total_slots
         )
 
     def _initialize_relaxation(self):
@@ -335,96 +343,58 @@ class PriorityQuotaLock:
         presets = {k.lower(): v for k, v in AGENTIC_RELAXATION_PRESETS.items()}
 
         is_dynamic = False
-        mode_val = 0  # This will hold either the % (e.g. 50) or the ID (e.g. -5)
+        mode_val = 0
 
         if mode in presets:
             preset_value = presets[mode]
-            # FIX: Check if less than 0, not just equal to -1
             if preset_value < 0:
                 is_dynamic = True
-                mode_val = preset_value  # e.g., -5
+                mode_val = preset_value
                 logger.info(
                     f"Activating AgenticRelaxation in Dynamic Mode: {mode} ({mode_val})"
                 )
             else:
-                mode_val = preset_value  # e.g., 50
+                mode_val = preset_value
         else:
-            # Handle manual numeric input (e.g., "50")
             try:
                 val = float(mode)
                 if val < 0:
-                    logger.warning(
-                        f"Negative custom value '{val}' not supported unless defined in presets. Defaulting to 0."
-                    )
                     mode_val = 0
                 else:
                     mode_val = val
             except ValueError:
-                logger.warning(
-                    f"Invalid AGENTIC_RELAXATION_MODE '{AGENTIC_RELAXATION_MODE}'. Defaulting to 0%."
-                )
                 mode_val = 0
 
-        # Calculate duty cycle (0.0 to 1.0)
-        # If dynamic, we start at 0.0 (allow everything) until the thread calculates load
         if is_dynamic:
             duty_cycle_float = 0.0
         else:
-            # Clamp static percentages between 0 and 100
             clamped_val = max(0, min(100, mode_val))
             duty_cycle_float = clamped_val / 100.0
 
-        # Start thread if we have a duty cycle OR if it's dynamic
         if duty_cycle_float > 0 or is_dynamic:
-            if not is_dynamic:
-                logger.info(
-                    f"Activating AgenticRelaxation with fixed {mode_val}% off-cycle."
-                )
-
             self._relaxation_thread = AgenticRelaxationThread(
                 lock=self,
                 duty_cycle_off=duty_cycle_float,
                 period_sec=AGENTIC_RELAXATION_PERIOD_SECONDS,
                 stop_event=self._relaxation_stop_event,
-                dynamic_mode_id=int(mode_val)
-                if is_dynamic
-                else 0,  # Pass the ID (-5) here
+                dynamic_mode_id=int(mode_val) if is_dynamic else 0,
             )
             self._relaxation_thread.start()
-        else:
-            logger.info(f"AgenticRelaxation is disabled (Mode: {mode_val}).")
 
     def shutdown_relaxation_thread(self):
         if self._relaxation_thread and self._relaxation_thread.is_alive():
             logger.info("Signaling AgenticRelaxationThread to stop...")
             self._relaxation_stop_event.set()
             self._relaxation_thread.join(timeout=AGENTIC_RELAXATION_PERIOD_SECONDS + 1)
-            if self._relaxation_thread.is_alive():
-                logger.warning("AgenticRelaxationThread did not stop in time.")
 
     def set_relaxation_thread_ident(self, ident: int):
         self._relaxation_thread_ident = ident
 
     def is_preempted(self, priority: int) -> bool:
-        """
-        Checks if the current thread has lost the lock to a higher priority task.
-        Returns True if the lock is no longer held by this thread/priority.
-        """
+        """Checks if the current thread's task has been killed/removed from active tasks."""
         current_thread = threading.get_ident()
         with self._condition:
-            # If lock is free, we definitely don't hold it -> Preempted/Lost
-            if not self._is_locked:
-                return True
-
-            # If priority doesn't match current holder -> Preempted
-            if self._lock_holder_priority != priority:
-                return True
-
-            # If thread ID doesn't match current holder -> Preempted
-            if self._lock_holder_thread_ident != current_thread:
-                return True
-
-            return False
+            return current_thread not in self._active_tasks
 
     def acquire(self, priority: int, timeout: Optional[float] = None) -> bool:
         acquire_start_time = time.monotonic()
@@ -437,251 +407,119 @@ class PriorityQuotaLock:
         with self._condition:
             if priority == ELP1:
                 self._elp1_waiting_count += 1
+            else:
+                self._elp0_waiting_count += 1
 
             try:
                 while True:
-                    # -----------------------------------------------------------
-                    # 1. PRIORITY STEALING LOGIC (User ELP1 > Relaxation ELP1)
-                    # -----------------------------------------------------------
-                    # Check if the current holder is specifically the AgenticRelaxationThread
-                    holder_is_relaxation = (
-                        self._is_locked
-                        and self._relaxation_thread_ident is not None
-                        and self._lock_holder_thread_ident
-                        == self._relaxation_thread_ident
-                    )
+                    # Slot Availability Logic
+                    current_elp1_count = sum(1 for t in self._active_tasks.values() if t['priority'] == ELP1)
+                    current_elp0_count = sum(1 for t in self._active_tasks.values() if t['priority'] == ELP0)
+                    total_active = len(self._active_tasks)
 
-                    # If WE are ELP1 (User) and THEY are Relaxation (Daemon), we steal immediately.
-                    if priority == ELP1 and holder_is_relaxation:
-                        logger.info(
-                            f"{log_prefix}:: STEALING lock from Relaxation Thread to process User Request."
-                        )
+                    if priority == ELP1:
+                        if current_elp1_count < self._max_elp1_slots:
+                            if total_active >= self._total_slots:
+                                elp0_candidates = [tid for tid, t in self._active_tasks.items() if t['priority'] == ELP0]
+                                if elp0_candidates:
+                                    victim_tid = elp0_candidates[0]
+                                    victim = self._active_tasks.pop(victim_tid)
+                                    logger.warning(f"{log_prefix}:: PREEMPTING ELP0 task on thread {victim_tid} to free slot for ELP1.")
+                                    if victim['proc']:
+                                        self._kill_process_tree(victim['proc'].pid)
+                            
+                            if len(self._active_tasks) < self._total_slots:
+                                self._active_tasks[requesting_thread_ident] = {
+                                    'priority': ELP1,
+                                    'proc': None,
+                                    'start_time': time.monotonic()
+                                }
+                                logger.info(f"{log_prefix}:: Acquired ELP1 slot. Active: {len(self._active_tasks)}/{self._total_slots}")
+                                self._condition.notify_all()
+                                return True
 
-                        # Overwrite ownership immediately without waiting.
-                        self._lock_holder_priority = ELP1
-                        self._lock_holder_proc = (
-                            None  # Relaxation thread has no process to kill
-                        )
-                        self._lock_holder_thread_ident = requesting_thread_ident
+                    elif priority == ELP0:
+                        if self._elp1_waiting_count == 0:
+                            if current_elp0_count < self._max_elp0_slots and total_active < self._total_slots:
+                                self._active_tasks[requesting_thread_ident] = {
+                                    'priority': ELP0,
+                                    'proc': None,
+                                    'start_time': time.monotonic()
+                                }
+                                logger.info(f"{log_prefix}:: Acquired ELP0 slot. Active: {len(self._active_tasks)}/{self._total_slots}")
+                                return True
 
-                        # Note: We do not decrement quota because we are just swapping "Admin" users.
-                        # The Relaxation Thread will fail silently when it tries to release later.
-                        return True
-
-                    # -----------------------------------------------------------
-                    # 2. STANDARD INTERRUPT LOGIC (ELP1 > ELP0)
-                    # -----------------------------------------------------------
-                    can_interrupt_elp0 = (
-                        priority == ELP1
-                        and self._is_locked
-                        and self._lock_holder_priority == ELP0
-                        and self._elp1_interrupt_quota > 0
-                    )
-
-                    if not self._is_locked:
-                        # STANDARD ACQUIRE: Lock is Free
-                        self._is_locked = True
-                        self._lock_holder_priority = priority
-                        self._lock_holder_proc = None
-                        self._lock_holder_thread_ident = requesting_thread_ident
-
-                        if priority == ELP0:
-                            self._elp1_interrupt_quota = self.QUOTA_MAX
-                            logger.info(
-                                f"{log_prefix}:: Acquired lock (was Free). Reset ELP1 quota to {self.QUOTA_MAX}"
-                            )
-                        else:
-                            logger.info(
-                                f"{log_prefix}:: Acquired lock (was Free). Quota: {self._elp1_interrupt_quota}"
-                            )
-                        return True
-
-                    elif can_interrupt_elp0:
-                        # INTERRUPT PATH: Kill the ELP0 worker
-                        logger.warning(
-                            f"{log_prefix}:: INTERRUPT PATH: Holder ELP{self._lock_holder_priority} (PID: {self._lock_holder_proc.pid if self._lock_holder_proc else 'N/A'}). Quota: {self._elp1_interrupt_quota}->{self._elp1_interrupt_quota - 1}"
-                        )
-
-                        interrupted_proc = self._lock_holder_proc
-
-                        if interrupted_proc and interrupted_proc.poll() is None:
-                            pid_to_kill = interrupted_proc.pid
-                            logger.warning(
-                                f"{log_prefix}:: Forcefully terminating ELP0 process PID: {pid_to_kill}"
-                            )
-                            try:
-                                if platform.system() == "Windows":
-                                    subprocess.run(
-                                        [
-                                            "taskkill",
-                                            "/PID",
-                                            str(pid_to_kill),
-                                            "/F",
-                                            "/T",
-                                        ],
-                                        check=False,
-                                    )
-                                else:
-                                    import signal
-
-                                    os.kill(pid_to_kill, signal.SIGKILL)
-                                # Brief wait to ensure signal sends
-                                interrupted_proc.wait(timeout=0.01)
-                            except Exception as e:
-                                logger.error(
-                                    f"{log_prefix}:: Error killing PID {pid_to_kill}: {e}"
-                                )
-                        else:
-                            logger.warning(
-                                f"{log_prefix}:: ELP0 holder process not found or already exited. Taking over."
-                            )
-
-                        # Take ownership
-                        self._lock_holder_priority = ELP1
-                        self._lock_holder_proc = None
-                        self._lock_holder_thread_ident = requesting_thread_ident
-                        self._elp1_interrupt_quota -= 1
-
-                        logger.info(
-                            f"{log_prefix}:: INTERRUPTED ELP0. Acquired. Quota: {self._elp1_interrupt_quota}."
-                        )
-                        self._condition.notify_all()
-                        return True
-
-                    else:
-                        # -----------------------------------------------------------
-                        # 3. WAIT PATH
-                        # -----------------------------------------------------------
-
-                        # Calculate remaining timeout
-                        remaining_timeout = None
-                        if timeout is not None:
-                            elapsed = time.monotonic() - acquire_start_time
-                            remaining_timeout = timeout - elapsed
-                            if remaining_timeout <= 0:
-                                logger.warning(
-                                    f"{log_prefix}:: Acquire timed out before waiting."
-                                )
-                                return False
-
-                        # ELP0 Politeness: Yield briefly if ELP1 is waiting
-                        if priority == ELP0 and self._elp1_waiting_count > 0:
-                            logger.trace(
-                                f"{log_prefix}:: ELP0 waiting politely (ELP1 active/waiting)."
-                            )
-                            self._condition.wait(timeout=0.05)
-                        else:
-                            logger.trace(
-                                f"{log_prefix}:: Waiting... (timeout={remaining_timeout})"
-                            )
-                            self._condition.wait(timeout=remaining_timeout)
-
-                        # Re-check timeout after wake
-                        if (
-                            timeout is not None
-                            and (time.monotonic() - acquire_start_time) >= timeout
-                        ):
-                            logger.warning(
-                                f"{log_prefix}:: Acquire timed out after waiting."
-                            )
+                    # Wait Path
+                    remaining_timeout = None
+                    if timeout is not None:
+                        elapsed = time.monotonic() - acquire_start_time
+                        remaining_timeout = timeout - elapsed
+                        if remaining_timeout <= 0:
                             return False
+
+                    wait_time = 0.1 if (priority == ELP0 and self._elp1_waiting_count > 0) else remaining_timeout
+                    self._condition.wait(timeout=wait_time)
+
+                    if timeout is not None and (time.monotonic() - acquire_start_time) >= timeout:
+                        return False
 
             finally:
                 if priority == ELP1:
                     self._elp1_waiting_count -= 1
+                else:
+                    self._elp0_waiting_count -= 1
 
     def set_holder_process(self, proc: subprocess.Popen):
-        """Stores the Popen object associated with the ELP0 lock holder."""
         with self._condition:
-            log_prefix = f"PQLock|SetProc|Thr{threading.get_ident()}"
-            if (
-                self._is_locked
-                and self._lock_holder_priority == ELP0
-                and self._lock_holder_thread_ident == threading.get_ident()
-            ):
-                if (
-                    self._lock_holder_proc is not None
-                    and self._lock_holder_proc is not proc
-                ):
-                    logger.warning(
-                        "{}:: Overwriting existing process for ELP0 holder.", log_prefix
-                    )
-                self._lock_holder_proc = proc
-                logger.trace(
-                    "{}:: Associated process PID {} with ELP0 lock holder.",
-                    log_prefix,
-                    proc.pid if proc else "None",
-                )
-            elif self._is_locked and self._lock_holder_priority == ELP1:
-                logger.error(
-                    "{}:: Attempted to set process for ELP1 holder. Ignoring.",
-                    log_prefix,
-                )
-            elif not self._is_locked:
-                logger.error(
-                    "{}:: Attempted to set process when lock not held. Ignoring.",
-                    log_prefix,
-                )
-            else:  # Lock held by different ELP0 thread?
-                logger.error(
-                    "{}:: Attempted to set process, but lock held by different thread ({}). Ignoring.",
-                    log_prefix,
-                    self._lock_holder_thread_ident,
-                )
+            tid = threading.get_ident()
+            if tid in self._active_tasks:
+                self._active_tasks[tid]['proc'] = proc
+                logger.trace(f"PQLock|SetProc|Thr{tid}:: Associated PID {proc.pid}")
+
+    def _kill_process_tree(self, pid: int):
+        """Recursively kills a process and all its children using psutil."""
+        try:
+            parent = psutil.Process(pid)
+            children = parent.children(recursive=True)
+            for child in children:
+                try:
+                    logger.warning(f"🔪 Killing child process {child.pid} ({child.name()})")
+                    child.kill()
+                except psutil.NoSuchProcess:
+                    pass
+            logger.warning(f"🔪 Killing parent process {pid}")
+            parent.kill()
+            psutil.wait_procs([parent] + children, timeout=0.1)
+        except psutil.NoSuchProcess:
+            logger.warning(f"Process PID {pid} already dead or not found.")
+        except Exception as e:
+            logger.error(f"Error while killing process tree for PID {pid}: {e}")
 
     def release(self):
-        """Releases the lock and notifies waiting threads."""
         releasing_thread_ident = threading.get_ident()
-        log_prefix = f"PQLock|RLS|Thr{releasing_thread_ident}"
-        logger.trace("{}:: Attempting release...", log_prefix)
-
         with self._condition:
-            logger.trace("{}:: Acquired internal condition lock.", log_prefix)
-            if not self._is_locked:
-                logger.warning("{}:: Lock not held, cannot release.", log_prefix)
-                return
-
-            if self._lock_holder_thread_ident != releasing_thread_ident:
-                # This might happen if ELP0 was interrupted and killed by ELP1,
-                # but the original ELP0 thread eventually tries to release.
-                logger.warning(
-                    "{}:: Thread attempting release does not match current lock holder ({}). Possible interruption occurred.",
-                    log_prefix,
-                    self._lock_holder_thread_ident,
-                )
-                # Don't actually release if the holder is different, the interruptor already took over.
-                return
-
-            # Clear lock state
-            holder_prio = self._lock_holder_priority
-            self._is_locked = False
-            self._lock_holder_priority = None
-            self._lock_holder_proc = None
-            self._lock_holder_thread_ident = None
-
-            logger.info(
-                "{}:: Released lock (was held by ELP{}). Notifying waiting threads.",
-                log_prefix,
-                holder_prio,
-            )
-            # Notify potentially waiting threads
-            self._condition.notify_all()
+            if releasing_thread_ident in self._active_tasks:
+                task = self._active_tasks.pop(releasing_thread_ident)
+                logger.info(f"PQLock|RLS|Thr{releasing_thread_ident}:: Released ELP{task['priority']} slot.")
+                self._condition.notify_all()
+            else:
+                logger.warning(f"PQLock|RLS|Thr{releasing_thread_ident}:: Attempted release but no active task found (preempted?).")
 
     def get_status(self) -> Tuple[bool, Optional[int], int]:
-        """Returns (is_locked, holder_priority, elp1_quota)."""
         with self._condition:
-            return (
-                self._is_locked,
-                self._lock_holder_priority,
-                self._elp1_interrupt_quota,
-            )
+            is_locked = len(self._active_tasks) > 0
+            holder_prio = ELP1 if any(t['priority'] == ELP1 for t in self._active_tasks.values()) else (ELP0 if is_locked else None)
+            return (is_locked, holder_prio, self._elp1_interrupt_quota)
 
     def get_status_extended(self) -> Tuple[bool, Optional[int], int, int]:
         """Returns (is_locked, holder_priority, elp1_quota, elp1_waiting_count)."""
         with self._condition:
+            is_locked = len(self._active_tasks) > 0
+            holder_prio = ELP1 if any(t['priority'] == ELP1 for t in self._active_tasks.values()) else (ELP0 if is_locked else None)
             return (
-                self._is_locked,
-                self._lock_holder_priority,
+                is_locked,
+                holder_prio,
                 self._elp1_interrupt_quota,
                 self._elp1_waiting_count,
             )
+

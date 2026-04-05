@@ -408,12 +408,16 @@ def adaptive_middle_truncate(
 def wait_for_binary_clearance():
     """
     Blocks execution if DisallowParallelBinaryExec is True and
-    any competing LLM binaries are currently running.
+    the number of competing LLM binaries exceeds the allowed capacity.
     """
+    from CortexConfiguration import MAX_CONCURRENT_ELP1_TASKS, MAX_CONCURRENT_ELP0_TASKS
+    
+    # Allowed capacity is the maximum of the two priority limits
+    allowed_capacity = max(MAX_CONCURRENT_ELP1_TASKS, MAX_CONCURRENT_ELP0_TASKS)
+
     if (
         not DisallowParallelBinaryExec
         or DisallowParallelBinaryExec == False
-        and MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS > 1
     ):
         return
 
@@ -424,37 +428,38 @@ def wait_for_binary_clearance():
     logged_wait = False
 
     while True:
-        conflict_detected = False
+        active_binaries = []
 
         # Iterate over all running processes
         for proc in psutil.process_iter(["pid", "name", "status"]):
             try:
                 # Check if process name is in our restricted list
-                # AND ensure it's not a zombie process (already dead but not reaped)
+                # AND ensure it's not a zombie process
                 if (
                     proc.info["name"] in restricted_binaries
                     and proc.info["status"] != psutil.STATUS_ZOMBIE
                 ):
-                    conflict_detected = True
-                    if not logged_wait:
-                        log_worker(
-                            "INFO",
-                            f"Serialization Active: Waiting for {proc.info['name']} (PID {proc.info['pid']}) to finish...",
-                        )
-                        logged_wait = True
-                    break  # Stop checking, we found a blocker
+                    active_binaries.append(proc.info)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
 
-        if not conflict_detected:
+        # If we have free slots based on allowed_capacity, proceed
+        if len(active_binaries) < allowed_capacity:
             if logged_wait:
                 log_worker(
                     "INFO",
-                    "Serialization Clear: All competing binaries finished. Proceeding.",
+                    f"Slot Available: {len(active_binaries)}/{allowed_capacity} binaries running. Proceeding.",
                 )
             break
+        
+        if not logged_wait:
+            log_worker(
+                "INFO",
+                f"Serialization Active: {len(active_binaries)}/{allowed_capacity} binaries running. Waiting for a slot...",
+            )
+            logged_wait = True
 
-        # Wait before checking again to prevent CPU thrashing and to wait for memory or Kernel memory clearing/dealloc first
+        # Wait before checking again
         time.sleep(2)
 
 

@@ -7,6 +7,11 @@ from loguru import logger
 
 # Load environment variables from .env file if it exists
 load_dotenv()
+
+# Check for verbosity - if not set to 1, suppress logs from this module to avoid spam
+if os.getenv("CORTEXCONFIGVERBOSE", "0") != "1":
+    logger.disable(__name__)
+
 logger.info("Attempting to load environment variables from .env file...")
 
 # --- General Settings ---
@@ -100,12 +105,18 @@ TOKENTRUNCATEVECTORDIRECT_truncatechar = int(
 )  # Maximum characters allowed in the Direct Generate PROMPT before truncation
 DisallowParallelBinaryExec = True  # Parallel Binary Exec is essentially allowing to allocate more memory and GPU resources or multiple processor if it's detected, by disallowing it that means everything need to wait until one that is running finishes thus makes room for other allocatable (rather than making computer crashes and OOM) (This is essentially additional safetyguard to prevent if ELP0 and ELP1 isn't being followed correctly.)
 
-_default_max_bg_tasks = 1  # Put to 1 if you're computer only have 1 and low or small RAM but if you have data center you could just put it to 2^64
-MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = (
-    int(  # omg i'm idiot i forgot this is not a queue but concurrent meant parallel
-        os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks)
-    )
+_default_max_elp1_tasks = 1  # Standard priority (High)
+MAX_CONCURRENT_ELP1_TASKS = int(
+    os.getenv("MAX_CONCURRENT_ELP1_TASKS", _default_max_elp1_tasks)
 )
+
+_default_max_elp0_tasks = 1  # Background priority (Low)
+MAX_CONCURRENT_ELP0_TASKS = int(
+    os.getenv("MAX_CONCURRENT_ELP0_TASKS", _default_max_elp0_tasks)
+)
+
+# For backward compatibility or internal use
+MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = MAX_CONCURRENT_ELP0_TASKS
 TOKENTRUNCATEVECTORBACKGROUND_truncatechar = int(
     os.getenv("TOKENTRUNCATEVECTORDIRECT_truncatechar", 2048)
 )  # Maximum characters allowed in the background Generate PROMPT before truncation
