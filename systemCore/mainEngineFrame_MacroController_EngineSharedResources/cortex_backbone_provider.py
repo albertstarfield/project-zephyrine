@@ -1117,6 +1117,34 @@ class CortexEngine:
     # <<< --- NEW: Worker Execution Method --- >>>
     def _execute_in_worker(self, model_role: str, task_type: str, request_data: Dict[str, Any], priority: int = ELP0, n_gpu_layers_override: Optional[int] = None) -> \
     Optional[Dict[str, Any]]:
+        # --- NEW: STRICT WORKER COUNT CHECK ---
+        # Ensure no other workers are lingering in OS memory before starting a new one
+        with self.active_workers_lock:
+            # Clean up any dead processes from the dict first
+            self.active_workers = {
+                pid: proc for pid, proc in self.active_workers.items()
+                if proc.poll() is None
+            }
+
+            # If a worker is still alive (or zombie), WAIT for it to die
+            if len(self.active_workers) > 0:
+                logger.warning(f"⏳ Worker Slot Occupied ({len(self.active_workers)} active). Waiting for cleanup...")
+                # Release the Priority Lock temporarily to avoid deadlock while waiting?
+                # NO: We hold the Priority Lock to prevent others from entering.
+                # We just wait here.
+                for pid, proc in list(self.active_workers.items()):
+                    try:
+                        proc.wait(timeout=5.0)  # Wait up to 5s for it to die
+                    except subprocess.TimeoutExpired:
+                        logger.error(f"💀 Force killing lingering worker PID {pid}")
+                        proc.kill()
+                        proc.wait()
+                # Clear the dict
+                self.active_workers.clear()
+                # Give OS 1 second to reclaim RAM pages
+                time.sleep(1.0)
+                logger.info("✅ Worker Slot Cleared. RAM should be stabilizing.")
+
         provider_logger = getattr(self, 'logger', logger)
         worker_log_prefix = f"WORKER_MGR(ELP{priority}|{model_role}/{task_type})"
         provider_logger.debug(f"{worker_log_prefix}: Attempting to execute task in worker.")
@@ -1217,7 +1245,7 @@ class CortexEngine:
                     provider_logger.error(
                         f"{worker_log_prefix}: Worker process timed out after {LLAMA_WORKER_TIMEOUT}s.")
                     self._kill_process_tree(worker_process.pid)
-                    #worker_process.kill()
+                    worker_process.kill()
                     # Recursively kill the binary (Grandchild) FIRST
                     stdout_data, stderr_data = worker_process.communicate()
                     self._priority_quota_lock.release()
@@ -1284,9 +1312,11 @@ class CortexEngine:
             finally:
                 if worker_process and worker_process.pid:
                     with self.active_workers_lock:
-                        self.active_workers.pop(worker_process.pid, None)  # Remove on clean exit
-                    logger.debug(f"De-registered worker PID {worker_process.pid}")
-                provider_logger.info(f"{worker_log_prefix}: Releasing worker execution lock.")
+                        self.active_workers.pop(worker_process.pid, None)
+
+                    # Force Garbage Collection to help OS reclaim memory faster
+                import gc
+                gc.collect()
                 self._priority_quota_lock.release()
         else:
             provider_logger.error(f"{worker_log_prefix}: FAILED to acquire worker lock.")

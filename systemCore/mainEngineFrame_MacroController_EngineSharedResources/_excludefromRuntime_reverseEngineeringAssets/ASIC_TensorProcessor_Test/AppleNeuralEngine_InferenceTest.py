@@ -6,7 +6,7 @@ import numpy as np
 from llama_cpp import Llama  # pip install llama-cpp-python
 
 # 1. Configuration
-model_path = "/Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/systemCore/mainEngineFrame_MacroController_EngineSharedResources/staticmodelpool/Qwen3LowLatency.gguf"
+model_path = "/Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/systemCore/mainEngineFrame_MacroController_EngineSharedResources/staticmodelpool/LowLatencyTexGen.gguf"
 target_tensor_name = "blk.0.attn_q.weight"  # Example tensor to patch
 
 # 2. Safety Check: Load GGUF metadata to find offsets

@@ -28,7 +28,7 @@ INFERCOMPLETION_CTX_BINNING = [
 TOPCAP_TOKENS = int(
     os.getenv("TOPCAP_TOKENS", INFERCOMPLETION_CTX_BINNING[-1])
 )  # Default token limit for LLM calls
-SYSTEMBUFFER_SAFE_PERCENTAGE = 5  # Calculate from total memory then get the percentage and that's the buffer safe percentage so for instance 16GB * 5% = 800MB
+SYSTEMBUFFER_SAFE_PERCENTAGE = 10  # Calculate from total memory then get the percentage and that's the buffer safe percentage so for instance 16GB * 5% = 800MB
 BUFFER_TOKENS_FOR_RESPONSE = int(
     os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)
 )  # Default token limit for LLM calls
@@ -42,7 +42,7 @@ BACKGROUND_MAX_CHUNKS = 16  # Safety limit for the elaboration loop
 SOFT_LIMIT_DIVISOR = 4  # SOFT_LIMIT DIVISOR CHUNKS for ELP1 response when it is above MAX_TOKENS_PER_CHUNK
 SHORT_PROMPT_TOKEN_THRESHOLD = 256  # Prompts with fewer tokens than this trigger context pruning. so it can be more focused
 # --- NEW: Configurable Log Streaming ---
-STREAM_INTERNAL_LOGS = True  # Set to False to hide logs and show animation instead. Verbosity if needed for ELP1 calls
+STREAM_INTERNAL_LOGS = False  # Set to False to hide logs and show animation instead. Verbosity if needed for ELP1 calls
 STREAM_ANIMATION_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"  # Braille spinner characters
 STREAM_ANIMATION_DELAY_SECONDS = 0.1  # How fast the animation plays
 FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(
@@ -413,7 +413,7 @@ SYSTEMBUFFER_SAFE_PERCENTAGE = 5
 # NEW: The maximum percentage of *Available RAM* the Warden allows the LLM to target.
 # Also used to calculate the Critical Crashing Point (Total - Allowed - Buffer).
 WARDEN_RAM_ALLOCATION_PERCENTAGE = int(
-    os.getenv("WARDEN_RAM_ALLOCATION_PERCENTAGE", 85)
+    os.getenv("WARDEN_RAM_ALLOCATION_PERCENTAGE", 70)
 )
 
 # Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+ 4.7B (Flux T5XXL Encoder)+ CLiP FLUX 1 (0.12B) + VAE FLux 1 0.08B +~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 1.8B for Qwen3 Low latency + and 0.5B Translation + Fara 7B (Computer Agent) + token to Action tool call 2B + STEM Generalist RNJ-1 8B + Physics Specialist 8B + Chemistry Specialist 5B + Biology Specialist 1.5B + 0.6B Lightweight Lite Intention Categorization + (Outside GGUF, like TTS (Chatterbox 0.5B (LLaMa but not serialized to gguf) + MeloTTS 0.15 (Text Encoder (BERT) + Core TTS Generator (VITS-based):))) = 78.75B Async MoE
@@ -465,7 +465,9 @@ LLAMA_CPP_MODEL_MAP = {
     "rnj_1_general_STEM": os.getenv(
         "LLAMA_CPP_MODEL_MATH_FILE", "STEM-RNJ1-Compass.gguf"
     ),
-    "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "Qwen3DeepseekDecomposer.gguf"),
+    "math": os.getenv(
+        "LLAMA_CPP_MODEL_MATH_FILE", "GeneralMethodologicalDecomposer.gguf"
+    ),
     "physics": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen3-Physics.gguf"),
     "chemistry": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen3-Chemistry.gguf"),
     "biology": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen2-Biology.gguf"),
@@ -477,13 +479,13 @@ LLAMA_CPP_MODEL_MAP = {
         "LLAMA_CPP_MODEL_CODE_FILE", "Octopus-v2-word-to-action.gguf"
     ),
     "general": os.getenv(
-        "LLAMA_CPP_MODEL_GENERAL_FILE", "Qwen3DeepseekDecomposer.gguf"
+        "LLAMA_CPP_MODEL_GENERAL_FILE", "GeneralMethodologicalDecomposer.gguf"
     ),  # Use router as general
     "default": os.getenv(
-        "LLAMA_CPP_MODEL_GENERAL_FILE", "Qwen3DeepseekDecomposer.gguf"
+        "LLAMA_CPP_MODEL_GENERAL_FILE", "GeneralMethodologicalDecomposer.gguf"
     ),
     "general_fast": os.getenv(
-        "LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "Qwen3LowLatency.gguf"
+        "LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "LowLatencyTexGen.gguf"
     ),
     "translator": os.getenv(
         "LLAMA_CPP_MODEL_TRANSLATOR_FILE",

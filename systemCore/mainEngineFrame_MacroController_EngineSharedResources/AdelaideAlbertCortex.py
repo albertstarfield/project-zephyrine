@@ -1877,7 +1877,7 @@ class CortexThoughts:
         )
         self.current_session_id: Optional[str] = None
         self.setup_prompts()
-
+        self._memory_check_lock = threading.Lock()  # Serializes memory checks
         self.reflection_semaphore = asyncio.Semaphore(
             1
         )  # for ELP0 background_generate to respect the async procedure and not racing together and spawn LMExec or LMText2Vector together and crashes an system
@@ -5497,7 +5497,7 @@ class CortexThoughts:
         # Now we get the path for the ACTUAL model (e.g., DeepSeek Coder or VLM)
         model_path = self.provider.get_model_path(target_role)
         logger.info(
-            f"LLMCall|Warden: post-check model parser : req parsed model_path {model_path}"
+            f"LLMCall|Warden: post-check model parser : req parsed model_path {model_path} {target_role}"
         )
 
         req_gb = self.provider.calculate_required_memory_gb(model_path, ideal_bin)
@@ -5506,6 +5506,31 @@ class CortexThoughts:
         logger.info(
             f"LLMCall|Warden: post-check model parser : final_bin fallback set first {model_path}"
         )
+
+        # --- ATOMIC MEMORY CHECK ---
+        # We must lock the CHECK itself to prevent race conditions where
+        # multiple threads see "Green Light" simultaneously.
+        with self._memory_check_lock:
+            mem_status = self.provider.get_memory_status()
+            avail_gb = mem_status.get("safe_available_gb", 0)
+
+            # Calculate need
+            req_gb = self.provider.calculate_required_memory_gb(model_path, ideal_bin)
+
+            # SAFETY MARGIN: Require 1.5x the needed RAM to be free to account for OS overhead & fragmentation
+            safety_margin = 1.5
+            if avail_gb < (req_gb * safety_margin):
+                logger.critical(
+                    f"🛑 MEMORY GATE CLOSED: Need {req_gb * safety_margin:.2f}GB, Have {avail_gb:.2f}GB"
+                )
+                # Force CPU Offload immediately to save RAM
+                n_gpu_layers_override = 0
+                logger.warning("⚠️ Forcing CPU Mode due to memory pressure gate.")
+            else:
+                logger.info(
+                    f"✅ MEMORY GATE OPEN: {avail_gb:.2f}GB available for {req_gb:.2f}GB request."
+                )
+
         # If we are OOM, which we definitely going to espescially handling 78.75B + scarcity of RAM we're needing to do this negotiation. (thank you microsoft and openAI we are having difficulty to run this Adaptive System)
         logger.info(
             f"LLMCall|Warden: RAM Contention Monitoring Alloc debug: (Need {req_gb:.2f}GB, Have {avail_gb:.2f}GB)."
@@ -8177,31 +8202,28 @@ Output your response EXACTLY in this format:
                 )
 
         # Keywords that suggest a multi-step or technical structure is needed
-        complex_triggers = [
-            "prove",
-            "derive",
-            "solve",
-            "calculate",
-            "equation",
-            "explain",
-            "analyze",
-            "design",
-            "answer this",
-            "how",
-            "outline",
-            "compare",
-            "93001r0a8sdas",
-        ]
         # complex_triggers = [
-        #    "93001r0a8sdas"
-        # ]  # Just disable it, it can create strange result tbh when accidentally triggered.
+        #    "prove",
+        #    "derive",
+        #    "solve",
+        #    "calculate",
+        #    "equation",
+        #    "explain",
+        #    "analyze",
+        #    "design",
+        #    "answer this",
+        #    "how",
+        #    "outline",
+        #    "compare",
+        #    "93001r0a8sdas",
+        # ]
+        complex_triggers = [
+            "93001r0a8sdas"
+        ]  # Just disable it, it can create strange result tbh when accidentally triggered.
         is_complex = any(t in user_input.lower() for t in complex_triggers)
 
         # --- PATH A: FAST PATH (One-Shot) ---
-        if (
-            not is_complex
-            and input_token_count < DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD
-        ):
+        if not is_complex:
             logger.info(
                 f"{log_prefix}: Simple query detected (<{DIRECT_GENERATE_RECURSION_TOKEN_THRESHOLD} tokens). Using Fast Path."
             )
@@ -12921,7 +12943,7 @@ def sanitize_filename(
 
     # Replace multiple consecutive replacement characters or spaces with a single one
     sanitized = re.sub(
-        f"[{re.escape(replacement_char)}\s]+", replacement_char, sanitized
+        f"[{re.escape(replacement_char)}\\s]+", replacement_char, sanitized
     )
 
     # Remove leading/trailing replacement characters that might result from substitutions

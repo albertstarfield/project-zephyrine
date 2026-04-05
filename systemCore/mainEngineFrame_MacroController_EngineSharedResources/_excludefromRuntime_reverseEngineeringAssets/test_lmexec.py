@@ -5,7 +5,7 @@ import sys
 # ================= CONFIGURATION =================
 MODEL_DIR = "/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/mainEngineFrame_MacroController_EngineSharedResources/staticmodelpool"
 # Use a general-purpose model for this test
-MODEL_FILENAME = "Qwen3LowLatency.gguf"
+MODEL_FILENAME = "LowLatencyTexGen.gguf"
 # =================================================
 
 
