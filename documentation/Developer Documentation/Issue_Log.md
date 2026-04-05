@@ -135,7 +135,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-001`
     -   **Title:** Upgrade core representation generation component from mixedbread to Core Logic.
     -   **Status:** `Resolved`
-    -   **Description:** To improve representation quality and performance, the core representation generation component was upgraded from `mxbai-embed-large-v1` to `Core Logic-Embedding-0.6B-Data`. This required updating component download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded representation context size in `engine_worker.py` to support the new component's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new representation format, and `requirements.txt` was updated with new dependencies.
+    -   **Description:** To improve representation quality and performance, the core representation generation component was upgraded from `Representation Component V1` to `Core Logic-Representation-0.6B-Data`. This required updating component download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded representation context size in `engine_worker.py` to support the new component's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new representation format, and `requirements.txt` was updated with new dependencies.
 
 -   **ID:** `CORE-FEAT-002`
     -   **Title:** Added content pass into the database for local document fetching.
@@ -549,6 +549,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Implement External System Request Pipeline and Output Loop Detection
     -   **Status:** `In-Progress`
     -   **Description:** Introduces a specialized request handling pipeline for external, programmatic systems, referred to as 'PrecMode' or 'Bottom Gear'. This pipeline routes requests to specialized processing units and formats the output into a structured JSON response. Additionally, a mechanism to detect and trim meaning-based repetitions or loops in generated text has been implemented to improve output quality.
+
+-   **ID:** `CORE-FEAT-021`
+    -   **Title:** `Enhance PromptPruner with dynamic template-based regex generation.`
+    -   **Status:** `Resolved`
+    -   **Description:** `Refactored the PromptPruner class in database.py to dynamically generate de-noising regex patterns from CortexConfiguration templates. This improves the accuracy of user input extraction from complex prompts and reduces the need for manual pattern updates.`
 
 -   **ID:** `CORE-REFACTOR-011`
     -   **Title:** Refactor core engine for Raven-Revolution.

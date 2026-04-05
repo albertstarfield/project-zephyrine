@@ -1,3 +1,8 @@
+-   **ID:** `CORE-FEAT-021`
+-   **Title:** `Enhance PromptPruner with dynamic template-based regex generation.`
+-   **Status:** `Resolved`
+-   **Description:** `Refactored the PromptPruner class in database.py to dynamically generate de-noising regex patterns from CortexConfiguration templates. This improves the accuracy of user input extraction from complex prompts and reduces the need for manual pattern updates.`
+
 -   **ID:** CORE-FEAT-019
 -   **Title:** Implement initial safety measures to processing pipeline
 -   **Status:** In-Progress
@@ -26,12 +31,12 @@
 -   **ID:** CORTEX-FEAT-006
 -   **Title:** Implement Warden Memory Protection for System Calls
 -   **Status:** In-Progress
--   **Description:** This feature introduces the "Warden" system, a proactive memory management and resource negotiation layer for all System calls within the System Core. The Warden is designed to prevent context overflow and subsequent application crashes by dynamically assessing system memory, probing GGUF file metadata to predict RAM requirements, and selecting an appropriate context size ('bin') for the operation. If the required memory exceeds safe available limits, the Warden will negotiate a smaller context bin. If a prompt is too large for the selected bin, the Warden performs "sandwich truncation," preserving the head and tail of the prompt while flushing the full, original text to the vector database for retrieval availability. This ensures both stability under memory pressure and full contextual awareness for the system.
+-   **Description:** This feature introduces the "Warden" system, a proactive memory management and resource negotiation layer for all System calls within the System Core. The Warden is designed to prevent context overflow and subsequent application crashes by dynamically assessing system memory, probing Weight File file metadata to predict RAM requirements, and selecting an appropriate context size ('bin') for the operation. If the required memory exceeds safe available limits, the Warden will negotiate a smaller context bin. If a prompt is too large for the selected bin, the Warden performs "sandwich truncation," preserving the head and tail of the prompt while flushing the full, original text to the vector database for retrieval availability. This ensures both stability under memory pressure and full contextual awareness for the system.
 
 -   **ID:** CORE-REFACTOR-003
 -   **Title:** Evolve Snowball architecture to Enaga diff/patch loop and enhance robustness
 -   **Status:** Resolved
--   **Description:** This major refactor evolves the 'Snowball' architecture into the 'Snowball-Enaga V10' loop. Instead of simple concatenation, this new architecture uses an System to adaptively generate and apply diff/patches for each generation step, improving contextual consistency. It also introduces a skeleton repair mechanism using an System to fix malformed JSON plans. Input handling is now more robust with automatic "sandwich" truncation for very long inputs, flushing the full content to the vector database to ensure complete context is available for retrieval. The `llama_worker` embedding parser is now more resilient to varied JSON output from the embedding process. The launcher now ensures `bash` is installed and has better error handling for `libiconv`.
+-   **Description:** This major refactor evolves the 'Snowball' architecture into the 'Snowball-Enaga V10' loop. Instead of simple concatenation, this new architecture uses an System to adaptively generate and apply diff/patches for each generation step, improving contextual consistency. It also introduces a skeleton repair mechanism using an System to fix malformed JSON plans. Input handling is now more robust with automatic "sandwich" truncation for very long inputs, flushing the full content to the vector database to ensure complete context is available for retrieval. The `core_logic_worker` representation parser is now more resilient to varied JSON output from the representation process. The launcher now ensures `bash` is installed and has better error handling for `libiconv`.
 
 -   **ID:** STELLA-REFACTOR-002
 -   **Title:** Remove CX3 Flight Calculator and Refactor Trickshot Benchmark
@@ -39,14 +44,14 @@
 -   **Description:** This refactor removes the deprecated CX3 flight calculator (`flight_cx3_core.cpp`, `flight_core_ultimate.cpp`, and their associated compiled objects). The `trickshot_stellaicarus_benchmark_simplearitmatic.py` has been updated to use picoseconds for higher precision, and now dynamically recompiles its C++ core only when the source code changes. The benchmark's output has also been enhanced to include its own source code for better introspection. Jemalloc is now enforced in proot environments for stability, and the miniforge path has been added to the environment.
 
 -   **ID:** CORE-FEAT-016
--   **Title:** Implement Dynamic Adaptive Relaxation, Enhanced Ollama Compatibility, and Vision System Improvements
+-   **Title:** Implement Dynamic Adaptive Relaxation, Enhanced Streaming Backend Compatibility, and Optical Analysis System Improvements
 -   **Status:** In-Progress
--   **Description:** This feature introduces a comprehensive set of improvements. A new "Dynamic Adaptive Relaxation" system has been implemented in the `PriorityQuotaLock` to adaptively throttle background ELP0 tasks based on system state (CPU, power, user idle time), significantly improving responsiveness. Ollama compatibility has been greatly enhanced with new API endpoints (`/api/show`), and major refactoring of the streaming generators (`_ollama_pseudo_stream_sync_generator` and `_stream_openai_chat_response_generator_flask`) to provide live log streaming. The System Vision pipeline has been made more robust, with its priority elevated to ELP1 and its context handling improved. The default vision system has been updated to a higher quality quantization. Additionally, numerous performance and stability improvements have been made to the `llama_worker` and `AdelaideAlbertCortex`.
+-   **Description:** This feature introduces a comprehensive set of improvements. A new "Dynamic Adaptive Relaxation" system has been implemented in the `PriorityQuotaLock` to adaptively throttle background ELP0 tasks based on system state (CPU, power, user idle time), significantly improving responsiveness. Streaming Backend compatibility has been greatly enhanced with new API endpoints (`/api/show`), and major refactoring of the streaming generators (`_streaming_backend_pseudo_stream_sync_generator` and `_stream_core_logic_chat_response_generator_flask`) to provide live log streaming. The System Vision pipeline has been made more robust, with its priority elevated to ELP1 and its context handling improved. The default optical analysis system has been updated to a higher quality quantization. Additionally, numerous performance and stability improvements have been made to the `core_logic_worker` and `AdelaideAlbertCortex`.
 
--   **ID:** LLAMA-FIX-001
--   **Title:** Disable memory mapping in llama_worker for stability
+-   **ID:** CORE-LOGIC-FIX-001
+-   **Title:** Disable memory mapping in core_logic_worker for stability
 -   **Status:** Resolved
--   **Description:** Disabled memory mapping (`--mmap`) for the llama.cpp subprocess by replacing it with `--no-mmap`. This is to prevent potential memory-related issues and improve stability, especially on systems where mmap might be problematic.
+-   **Description:** Disabled memory mapping (`--mmap`) for the Core Logic Component subprocess by replacing it with `--no-mmap`. This is to prevent potential memory-related issues and improve stability, especially on systems where mmap might be problematic.
 -   **ID:** CORTEX-FEAT-004
 -   **Title:** Overhaul retrieval by Re-adding Hybrid Search and Advanced Prompt Synthesis
 -   **Status:** Resolved
@@ -62,7 +67,7 @@
 -   **ID:** SYS-PERF-008
 -   **Title:** Tune System Core performance, improve response normalization, and prevent file indexer stalls.
 -   **Status:** Resolved
--   **Description:** This change introduces several performance and reliability improvements. In `CortexConfiguration.py`, background task limits, log queue size, and flush intervals were significantly increased to handle larger workloads, while the fuzzy search threshold and reflector idle wait time were lowered to improve responsiveness. New regex-based normalization rules were added to `DIRECT_GENERATE_NORMALIZATION_RULES` to aggressively clean up verbose, conversational filler from System responses. In `file_indexer.py`, the automatic unloading of vision systems was disabled to prevent a suspected race condition causing the indexer to hang overnight. A blank line was added to `.gitignore` for readability.
+-   **Description:** This change introduces several performance and reliability improvements. In `CortexConfiguration.py`, background task limits, log queue size, and flush intervals were significantly increased to handle larger workloads, while the fuzzy search threshold and reflector idle wait time were lowered to improve responsiveness. New regex-based normalization rules were added to `DIRECT_GENERATE_NORMALIZATION_RULES` to aggressively clean up verbose, conversational filler from System responses. In `file_indexer.py`, the automatic unloading of optical analysis systems was disabled to prevent a suspected race condition causing the indexer to hang overnight. A blank line was added to `.gitignore` for readability.
 -   **ID:** VECTCOMP-PERF-007
 -   **Title:** Refactor QRNN simulation to use GPU-accelerated tensor engine
 -   **Status:** Resolved
@@ -78,7 +83,7 @@
 -   **ID:** CORTEX-FEAT-003
 -   **Title:** Integrate STEM Compass specialized systems
 -   **Status:** Resolved
--   **Description:** This feature integrates a suite of specialized Systems, collectively named "STEM Compass," into the System Core. The launcher (`launcher.py`) has been updated to download these new GGUF files, and the `CortexConfiguration.py` has been modified to map them for use by the worker. The total model parameter count has been updated to 78.75B to reflect these additions. The `.gitignore` file was also updated to exclude temporary build artifacts.
+-   **Description:** This feature integrates a suite of specialized Systems, collectively named "STEM Compass," into the System Core. The launcher (`launcher.py`) has been updated to download these new Weight File files, and the `CortexConfiguration.py` has been modified to map them for use by the worker. The total model parameter count has been updated to 78.75B to reflect these additions. The `.gitignore` file was also updated to exclude temporary build artifacts.
 -   **ID:** SYS-PERF-004
 -   **Title:** Tune resource limits, improve logging, and relax dependency pinning
 -   **Status:** Resolved
@@ -101,13 +106,13 @@
     *   Increases retrieval context limits (`retrieval_URL_COUNT`, fuzzy search interaction fetch).
     *   Adjusts logging and disables the "mistype" feature.
 -   **ID:** CORTEX-FEAT-005
--   **Title:** Integrate native Llama.cpp multimodal System for image processing
+-   **Title:** Integrate native Core Logic Component multimodal System for image processing
 -   **Status:** Resolved
--   **Description:** This feature integrates the new `llama-mtmd-cli` (renamed to `LMMultiModal`) from `llama.cpp` for native, high-performance vision system execution. This replaces the previous, less efficient vision system handling. A new `LlamaCppVisionWrapper` and a dedicated `vision` task type in the `llama_worker` have been implemented. The `launcher` and `CortexConfiguration` have been updated with the new Unsloth Qwen vision system files and their required `mmproj` files.
+-   **Description:** This feature integrates the new `core logic-mtmd-cli` (renamed to `Visual Logic Component`) from `Core Logic Component` for native, high-performance optical analysis system execution. This replaces the previous, less efficient optical analysis system handling. A new `Core LogicCppVisionWrapper` and a dedicated `optical analysis` task type in the `core_logic_worker` have been implemented. The `launcher` and `CortexConfiguration` have been updated with the new Unsloth Core Logic optical analysis system files and their required `mmproj` files.
 -   **ID:** CORE-REFACTOR-001
--   **Title:** Refactor vision system image description pipeline
+-   **Title:** Refactor optical analysis system image description pipeline
 -   **Status:** Resolved
--   **Description:** Centralized the vision system image description logic into the `llama_worker.py` script. This removes the `get_vlm_description` method from `cortex_backbone_provider.py` and introduces a dedicated "vision" task type in the worker. The changes also include improved error handling, input processing, and a longer timeout for Ollama streaming to enhance stability with slower Systems.
+-   **Description:** Centralized the optical analysis system image description logic into the `core_logic_worker.py` script. This removes the `get_vlm_description` method from `cortex_backbone_provider.py` and introduces a dedicated "optical analysis" task type in the worker. The changes also include improved error handling, input processing, and a longer timeout for Streaming Backend streaming to enhance stability with slower Systems.
 -   **ID:** UI-FEAT-005
     -   **Title:** Add initial GTK C application for native UI experiments.
     -   **Status:** In-Progress
