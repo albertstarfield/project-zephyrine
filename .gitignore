@@ -178,5 +178,18 @@ systemCore/InterfaceEngine_MacroController_SharedResources/backend-service/zephy
 .conda_executable_path_cache_main_env.txt
 systemCore/mainEngineFrame_MacroController_EngineSharedResources/StellaIcarus/stella_math_core.so
 
-/llama_cpp_direct
+**llama_cpp_direct**
+**rocq_source**
 .llama_cpp_direct_installed_v1
+systemCore/InstallationFlagPool/.rocq_source_installed_v1
+.gnat_compiler_installed_v1
+.conda_executable_path_cache*
+
+# External Cloned Projects
+**llama-cpp-python_build**
+**stable-diffusion-cpp-python_build**
+**pywhispercpp_build**
+**ChatterboxTTS_subengine**
+**LaTeX_OCR-SubEngine**
+**MeloAudioTTS_SubEngine**
+**mesa-build**

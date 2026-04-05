@@ -549,3 +549,8 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Refactor core engine for Raven-Revolution.
     -   **Status:** `Resolved`
     -   **Description:** Implemented manual code refactoring for the Raven-Revolution initiative. This overhaul streamlines execution pipelines and enhances deterministic performance. Assisted coding was utilized via Google Gemini, with deterministic formatting applied by Zed.
+
+-   **ID:** `LAUNCHER-FEAT-004`
+    -   **Title:** Refactoring the build to prepare for Raven-Revolution into Stellar.
+    -   **Status:** `Resolved`
+    -   **Description:** Launcher.py now completed rocq/coq auto installation for the venv changes (None coq installation is soon deprecated and rocq is mandatory), (fixes some additional loop retry break sys.exit() ).

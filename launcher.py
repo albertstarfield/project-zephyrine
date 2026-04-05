@@ -94,13 +94,29 @@ ZEPHYRINE_HOST_DIR = os.path.join(
     "zephyrine_host",
 )
 
+# --- Conda Configuration ---
+# CONDA_ENV_NAME is no longer used for creation if prefix is used, but can be a descriptive base for the folder
+RUNTIME_ENV_FOLDER_NAME = "zephyrineRuntimeVenv"
+CONDA_EXECUTABLE = None
+# TARGET_RUNTIME_ENV_PATH will now be ROOT_DIR + RUNTIME_ENV_FOLDER_NAME
+TARGET_RUNTIME_ENV_PATH = os.path.join(
+    ROOT_DIR, RUNTIME_ENV_FOLDER_NAME
+)  # DIRECTLY DEFINE THE TARGET PATH
+ACTIVE_ENV_PATH = None
+
+# FlagPool
+FLAG_POOL_DIR = os.path.join(ROOT_DIR, "systemCore", "InstallationFlagPool")
+
+
 # Rather than npm run dev using node.js as base-end we use Ada now.
 LICENSE_DIR = os.path.join(ROOT_DIR, "licenses")
-LICENSE_FLAG_FILE = os.path.join(ROOT_DIR, ".license_accepted_v1")
-CUDA_TOOLKIT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".CUDA_Toolkit_Installed")
+LICENSE_FLAG_FILE = os.path.join(FLAG_POOL_DIR, ".license_accepted_v1")
+CUDA_TOOLKIT_INSTALLED_FLAG_FILE = os.path.join(
+    FLAG_POOL_DIR, ".CUDA_Toolkit_Installed"
+)
 # Launcher Flag File
 
-LAUNCHER_HASH_FILE = os.path.join(ROOT_DIR, ".currentLauncherHash.flag")
+LAUNCHER_HASH_FILE = os.path.join(FLAG_POOL_DIR, ".currentLauncherHash.flag")
 
 # Near the top with other path configurations
 RELAUNCH_LOG_DIR = os.path.join(ROOT_DIR, "logs")  # Or any preferred log directory
@@ -111,23 +127,23 @@ ENGINE_PID_FILE = os.path.join(
     RELAUNCH_LOG_DIR, "engine.pid"
 )  # NEW: Path for the engine's PID file
 
-SETUP_COMPLETE_FLAG_FILE = os.path.join(ROOT_DIR, ".setup_complete_v2")
+SETUP_COMPLETE_FLAG_FILE = os.path.join(FLAG_POOL_DIR, ".setup_complete_v2")
 
 # --- MeloTTS Configuration ---
 MELO_TTS_SUBMODULE_DIR_NAME = "MeloAudioTTS_SubEngine"
 MELO_TTS_PATH = os.path.join(ENGINE_MAIN_DIR, MELO_TTS_SUBMODULE_DIR_NAME)
 MELO_TTS_LIB_INSTALLED_FLAG_FILE = os.path.join(
-    ROOT_DIR, ".melo_tts_lib_installed_v1"
+    FLAG_POOL_DIR, ".melo_tts_lib_installed_v1"
 )  # NEW: For the library itself
 MELO_TTS_DATA_INSTALLED_FLAG_FILE = os.path.join(
-    ROOT_DIR, ".melo_tts_data_installed_v1"
+    FLAG_POOL_DIR, ".melo_tts_data_installed_v1"
 )  # RENAMED: For data deps
 
 # --- ChatterboxTTS Configuration (NEW) ---
 CHATTERBOX_TTS_SUBMODULE_DIR_NAME = "ChatterboxTTS_subengine"
 CHATTERBOX_TTS_PATH = os.path.join(ENGINE_MAIN_DIR, CHATTERBOX_TTS_SUBMODULE_DIR_NAME)
 CHATTERBOX_TTS_INSTALLED_FLAG_FILE = os.path.join(
-    ROOT_DIR, ".chatterbox_tts_installed_v1"
+    FLAG_POOL_DIR, ".chatterbox_tts_installed_v1"
 )
 # --- END ChatterboxTTS Configuration ---
 
@@ -135,25 +151,33 @@ CHATTERBOX_TTS_INSTALLED_FLAG_FILE = os.path.join(
 LATEX_OCR_SUBMODULE_DIR_NAME = "LaTeX_OCR-SubEngine"
 LATEX_OCR_PATH = os.path.join(ENGINE_MAIN_DIR, LATEX_OCR_SUBMODULE_DIR_NAME)
 LATEX_OCR_INSTALLED_FLAG_FILE = os.path.join(
-    ROOT_DIR, ".latex_ocr_subengine_installed_v1"
+    FLAG_POOL_DIR, ".latex_ocr_subengine_installed_v1"
 )
 
 
 # --- Playwright Flag Configuration
 
 PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE = os.path.join(
-    ROOT_DIR, ".playwright_browsers_installed_v1"
+    FLAG_POOL_DIR, ".playwright_browsers_installed_v1"
 )
 
-# --- Conda Configuration ---
-# CONDA_ENV_NAME is no longer used for creation if prefix is used, but can be a descriptive base for the folder
-RUNTIME_ENV_FOLDER_NAME = "zephyrineRuntimeVenv"
-CONDA_EXECUTABLE = None
-# TARGET_RUNTIME_ENV_PATH will now be ROOT_DIR + RUNTIME_ENV_FOLDER_NAME
-TARGET_RUNTIME_ENV_PATH = os.path.join(
-    ROOT_DIR, RUNTIME_ENV_FOLDER_NAME
-)  # DIRECTLY DEFINE THE TARGET PATH
-ACTIVE_ENV_PATH = None
+
+# --- Alire (Ada package manager) Global Configuration ---
+# Force Alire to use directories inside the Conda environment
+# --- Alire (Ada package manager) Configuration ---
+ALIRE_HOME = os.path.join(TARGET_RUNTIME_ENV_PATH, "alire")
+
+# Create the directory
+os.makedirs(ALIRE_HOME, exist_ok=True)
+
+# Set the environment variables for all subprocesses
+os.environ["ALIRE_SETTINGS_DIR"] = os.path.join(ALIRE_HOME, "config")
+os.environ["ALIRE_CACHE"] = os.path.join(ALIRE_HOME, "cache")
+
+# --- Rocq Configuration ---
+ROCQ_SOURCE_INSTALLED_FLAG_FILE = os.path.join(
+    FLAG_POOL_DIR, ".rocq_source_installed_v1"
+)
 
 if os.path.exists("/etc/debian_version") and "TERMUX_VERSION" not in os.environ:
     # We are likely in the proot (glibc) environment
@@ -167,7 +191,7 @@ IS_IN_PROOT_ENV = (
 )
 
 CONDA_PATH_CACHE_FILE = os.path.join(
-    ROOT_DIR, f".conda_executable_path_cache{_cache_suffix}"
+    FLAG_POOL_DIR, f".conda_executable_path_cache{_cache_suffix}"
 )
 
 # --- Node.js Configuration (NEW) ---
@@ -187,12 +211,20 @@ FALLBACK_PYTHON_MINOR = 12
 # --- GNAT Ada Compiler Configuration ---
 GNAT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".gnat_compiler_installed_v1")
 GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE = os.path.join(
-    ROOT_DIR, ".gnat_toolchain_installed_v1"
+    FLAG_POOL_DIR, ".gnat_toolchain_installed_v1"
 )
 GNAT_BUILD_DIR = os.path.join(ROOT_DIR, "gnat_community_build")
 GNAT_SOURCE_URL = "https://github.com/AdaCore/gnat-community-sources/archive/refs/tags/gnat-community-2021.tar.gz"
 GNAT_TAR_FILENAME = "gnat-community-2021.tar.gz"
 # --- END GNAT Configuration ---
+#
+# --- OPAM configuration Ocaml Rocq req (as an aux of Ada/SPARK) ---
+opam_root = os.path.join(TARGET_RUNTIME_ENV_PATH, "opam_root")
+os.makedirs(opam_root, exist_ok=True)
+
+# NPM Node_Modules JS COnfiguration
+os.environ["NODE_PATH"] = os.path.join(TARGET_RUNTIME_ENV_PATH, "node_modules")
+os.makedirs(os.environ["NODE_PATH"], exist_ok=True)
 
 
 # --- START of new retry logic ---
@@ -249,14 +281,14 @@ MODELS_TO_DOWNLOAD = [
         "description": "NanoTranslator Model",
     },
     {
-        "filename": "Qwen3LowLatency.gguf",
-        "url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf?download=true",
-        "description": "Qwen3 4-bit Hybrid Direct Mode (Fast Augmented General)",
+        "filename": "LowLatencyTexGen.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q5_K_M.gguf?download=true",
+        "description": "Qwen3.5 4-bit Hybrid Direct Mode (Fast Augmented General)",
     },
     {
-        "filename": "Qwen3DeepseekDecomposer.gguf",
-        "url": "https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/resolve/main/DeepSeek-R1-0528-Qwen3-8B-Q4_K_S.gguf?download=true",
-        "description": "Qwen 3 Deepseek R1 Decomposer 8B model, suboptimal for toolcall but a really good thinker and decompose solve complex things",
+        "filename": "GeneralMethodologicalDecomposer.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_S.gguf?download=true",
+        "description": "Qwen 3.5 9B model, suboptimal for toolcall but a really good thinker and decompose solve complex things",
     },
     {
         "filename": "Qwen3ToolCall.gguf",
@@ -367,17 +399,21 @@ MODELS_TO_DOWNLOAD = [
 # Llama.cpp Fork Configuration
 LLAMA_CPP_PYTHON_REPO_URL = "https://github.com/abetlen/llama-cpp-python.git"
 LLAMA_CPP_PYTHON_CLONE_DIR_NAME = "llama-cpp-python_build"
-LLAMA_CPP_PYTHON_CLONE_PATH = os.path.join(ROOT_DIR, LLAMA_CPP_PYTHON_CLONE_DIR_NAME)
+LLAMA_CPP_PYTHON_CLONE_PATH = os.path.join(
+    ENGINE_MAIN_DIR, LLAMA_CPP_PYTHON_CLONE_DIR_NAME
+)
 CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE = os.path.join(
-    ROOT_DIR, ".custom_llama_cpp_installed_v1_conda"
+    FLAG_POOL_DIR, ".custom_llama_cpp_installed_v1_conda"
 )
 
 # --- Llama.cpp Direct Build Configuration ---
 LLAMA_CPP_DIRECT_REPO_URL = "https://github.com/ggerganov/llama.cpp.git"
 LLAMA_CPP_DIRECT_CLONE_DIR_NAME = "llama_cpp_direct"
-LLAMA_CPP_DIRECT_CLONE_PATH = os.path.join(ROOT_DIR, LLAMA_CPP_DIRECT_CLONE_DIR_NAME)
+LLAMA_CPP_DIRECT_CLONE_PATH = os.path.join(
+    ENGINE_MAIN_DIR, LLAMA_CPP_DIRECT_CLONE_DIR_NAME
+)
 LLAMA_CPP_DIRECT_INSTALLED_FLAG_FILE = os.path.join(
-    ROOT_DIR, ".llama_cpp_direct_installed_v1"
+    FLAG_POOL_DIR, ".llama_cpp_direct_installed_v1"
 )
 
 # Stable Diffusion cpp python Configuration
@@ -386,20 +422,22 @@ STABLE_DIFFUSION_CPP_PYTHON_REPO_URL = (
 )
 STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME = "stable-diffusion-cpp-python_build"
 STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH = os.path.join(
-    ROOT_DIR, STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME
+    ENGINE_MAIN_DIR, STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME
 )
 CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE = os.path.join(
-    ROOT_DIR, ".custom_sd_cpp_python_installed_v1_conda"
+    FLAG_POOL_DIR, ".custom_sd_cpp_python_installed_v1_conda"
 )
 
 # pywhispercpp python configuration
 PYWHISPERCPP_REPO_URL = "https://github.com/absadiki/pywhispercpp"
 PYWHISPERCPP_CLONE_DIR_NAME = "pywhispercpp_build"  # Name for the local clone directory
-PYWHISPERCPP_CLONE_PATH = os.path.join(ROOT_DIR, PYWHISPERCPP_CLONE_DIR_NAME)
-PYWHISPERCPP_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".pywhispercpp_installed_v1")
+PYWHISPERCPP_CLONE_PATH = os.path.join(ENGINE_MAIN_DIR, PYWHISPERCPP_CLONE_DIR_NAME)
+PYWHISPERCPP_INSTALLED_FLAG_FILE = os.path.join(
+    FLAG_POOL_DIR, ".pywhispercpp_installed_v1"
+)
 
 # pyaria2c python configuraiton
-ARIA2P_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".aria2p_installed_v1")
+ARIA2P_INSTALLED_FLAG_FILE = os.path.join(FLAG_POOL_DIR, ".aria2p_installed_v1")
 
 
 FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
@@ -417,6 +455,7 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     LATEX_OCR_INSTALLED_FLAG_FILE,
     PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE,
     CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE,
+    ROCQ_SOURCE_INSTALLED_FLAG_FILE,
 ]
 
 
@@ -457,6 +496,50 @@ def calculate_launcher_hash() -> str:
         print_error(f"Failed to calculate launcher hash: {e}")
         # Return a deterministic failure hash to force re-setup if the file can't be read.
         return "HASH_READ_FAILURE"
+
+
+def are_xcode_cli_tools_installed() -> bool:
+    # Method 1: check if the developer directory exists and is valid
+    try:
+        result = subprocess.run(
+            ["xcode-select", "-p"], capture_output=True, text=True, timeout=5
+        )
+        if (
+            result.returncode == 0
+            and "/Library/Developer/CommandLineTools" in result.stdout
+        ):
+            return True
+    except:
+        pass
+    # Method 2: check via pkgutil (more robust)
+    try:
+        result = subprocess.run(
+            ["pkgutil", "--pkg-info", "com.apple.pkg.CLTools_Executables"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+
+# Helper function to get macOS SDK environment variables (reuse for both builds)
+def get_macos_sdk_env() -> dict:
+    sdk_env = {}
+    if platform.system() == "Darwin":
+        try:
+            sdk_path = subprocess.check_output(
+                ["xcrun", "--show-sdk-path"], text=True
+            ).strip()
+            sdk_env["SDKROOT"] = sdk_path
+            sdk_env["CFLAGS"] = f"-isysroot {sdk_path}"
+            sdk_env["CXXFLAGS"] = f"-isysroot {sdk_path}"
+            sdk_env["LDFLAGS"] = f"-L{sdk_path}/usr/lib"
+            print_system(f"macOS SDK environment set: {sdk_path}")
+        except Exception as e:
+            print_warning(f"Could not get macOS SDK path: {e}")
+    return sdk_env
 
 
 def _compile_watchtowers() -> bool:
@@ -515,6 +598,10 @@ def _compile_watchtowers() -> bool:
                 f"Failed to build Go Watchdog. RC: {process_go.returncode}\nSTDERR: {process_go.stderr.strip()}"
             )
             return False
+
+        if not IS_WINDOWS and os.path.exists(go_exe_path):
+            os.chmod(go_exe_path, 0o755)
+            print_system(f"Set executable permission on {go_exe_path}")
         print_system("Go Watchdog (Thread 1) built successfully.")
     except Exception as e:
         print_error(f"An unexpected error occurred during Go watchdog build: {e}")
@@ -583,6 +670,144 @@ def _compile_watchtowers() -> bool:
 
     print_system("--- All ZephyWatchtower components compiled successfully. ---")
     return True
+
+
+def _install_rocq_from_source() -> bool:
+    """Install Rocq (Coq) using opam (local root, pre‑built binaries)."""
+    if os.path.exists(ROCQ_SOURCE_INSTALLED_FLAG_FILE):
+        print_system("Rocq already installed via opam (flag file found).")
+        return True
+
+    print_system("--- Installing Rocq (Coq) via opam ---")
+
+    # 1. Ensure opam is available
+    if not shutil.which("opam"):
+        print_system("opam not found. Installing via conda...")
+        if not _ensure_conda_package(
+            "opam", executable_to_check="opam", is_critical=True
+        ):
+            print_error("Failed to install opam.")
+            return False
+
+    # 2. Local opam root inside Conda env
+    opam_root = os.path.join(TARGET_RUNTIME_ENV_PATH, "opam_root")
+    os.makedirs(opam_root, exist_ok=True)
+
+    # 3. Initialize opam root if needed
+    if not os.path.exists(os.path.join(opam_root, "config")):
+        print_system(f"Initialising opam root at {opam_root}...")
+        init_cmd = [
+            "opam",
+            "init",
+            "--root",
+            opam_root,
+            "--disable-shell-hook",
+            "--yes",
+        ]
+        if not run_command(init_cmd, cwd=ROOT_DIR, name="OPAM-INIT"):
+            return False
+
+    # 4. Create a switch with a stable OCaml compiler (not ocaml-system)
+    switch_name = "rocq"
+    compiler_version = "ocaml-base-compiler.5.2.0"  # known compatible
+    switch_path = os.path.join(opam_root, switch_name)
+    if not os.path.isdir(switch_path):
+        print_system(f"Creating opam switch '{switch_name}' with {compiler_version}...")
+        switch_cmd = [
+            "opam",
+            "switch",
+            "create",
+            "--root",
+            opam_root,
+            "--yes",
+            switch_name,
+            compiler_version,
+        ]
+        if not run_command(switch_cmd, cwd=ROOT_DIR, name="OPAM-SWITCH-CREATE"):
+            # Fallback: let opam choose a default compiler (but with explicit packages later)
+            print_warning(
+                f"Switch creation with {compiler_version} failed. Trying with default compiler..."
+            )
+            switch_cmd_fallback = [
+                "opam",
+                "switch",
+                "create",
+                "--root",
+                opam_root,
+                "--yes",
+                switch_name,
+            ]
+            if not run_command(
+                switch_cmd_fallback, cwd=ROOT_DIR, name="OPAM-SWITCH-CREATE-FALLBACK"
+            ):
+                return False
+
+    # 5. Install Rocq (and its dependencies) via opam, excluding problematic packages
+    print_system(
+        "Installing Rocq and dependencies via opam (this may take a few minutes)..."
+    )
+    # Essential packages: coq, rocq-core, rocq-prover, rocq-runtime, rocq-stdlib
+    # Exclude rocq-native (incompatible) and rocq-devtools (not needed)
+    packages = [
+        "coq",
+        "coq-core",
+        "coq-stdlib",
+        "rocq-core",
+        "rocq-prover",
+        "rocq-runtime",
+        "rocq-stdlib",
+    ]
+    install_cmd = [
+        "opam",
+        "install",
+        "--root",
+        opam_root,
+        "--switch",
+        switch_name,
+        "--yes",
+        "--update-invariant",  # Allows relaxing constraints if needed
+    ] + packages
+    if not run_command(install_cmd, cwd=ROOT_DIR, name="OPAM-INSTALL-ROCQ"):
+        print_error("opam install rocq packages failed.")
+        return False
+
+    # 6. Symlink or copy binaries from opam switch to Conda environment's bin
+    opam_bin_dir = os.path.join(opam_root, switch_name, "bin")
+    conda_bin_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "bin")
+    os.makedirs(conda_bin_dir, exist_ok=True)
+
+    rocq_binaries = [
+        "coqc",
+        "coqtop",
+        "coqdep",
+        "coq_makefile",
+        "rocq",
+    ]  # rocqide not needed
+    symlinked_any = False
+    for bin_name in rocq_binaries:
+        src = os.path.join(opam_bin_dir, bin_name)
+        dst = os.path.join(conda_bin_dir, bin_name)
+        if os.path.exists(src):
+            if os.path.exists(dst):
+                os.remove(dst)
+            os.symlink(src, dst)
+            symlinked_any = True
+            print_system(f"  -> Linked {bin_name}")
+
+    if not symlinked_any:
+        print_error("No Rocq binaries found in opam switch.")
+        return False
+
+    # 7. Verify
+    rocq_bin = os.path.join(conda_bin_dir, "coqc")
+    if os.path.exists(rocq_bin):
+        print_system(f"✅ Rocq installed successfully (coqc available at {rocq_bin})")
+        with open(ROCQ_SOURCE_INSTALLED_FLAG_FILE, "w", encoding="utf-8") as f:
+            f.write(f"Installed via opam on {datetime.now().isoformat()}\n")
+        return True
+    else:
+        print_error("Rocq installation verification failed.")
+        return False
 
 
 def _compile_and_run_watchdogs():
@@ -1057,10 +1282,9 @@ def start_service_process(command, cwd, name, use_shell_windows=False):
 
     except FileNotFoundError:
         print_error(f"Command failed for {name}: '{command[0]}' not found.")
-        sys.exit(1)
+
     except Exception as e:
         print_error(f"Failed to start {name}: {e}")
-        sys.exit(1)
 
 
 def _terminate_service_robustly(process: subprocess.Popen, name: str):
@@ -1273,25 +1497,25 @@ def start_frontend():
     # Logic to build if missing or ensure deps
     if os.path.isdir(ZEPHYRINE_HOST_DIR):
         print_system(f"Ensuring Alire dependencies for {name} (AWS)...")
-        # Ensure AWS is present for the host
-        if not run_command(
-            ["alr", "with", "aws"],
-            cwd=ZEPHYRINE_HOST_DIR,
-            name=f"{name}-DEPS",
-            check=False,
-        ):
-            print_warning(f"Dependency check for {name} returned warnings.")
 
-        # If binary missing, we force a build (logic already exists in main block,
-        # but usually start_frontend assumes it might be built.
-        # If you want forced build here, copy the build logic from the main block.)
+        # Check for Alire
+        if not shutil.which("alr"):
+            print_error("'alr' not found. Cannot compile Ada host.")
+            setup_failures.append("Alire (alr) not found for Ada host build")
+        else:
+            # --- FIX: Fetch AWS dependency ---
+            print_system("Ensuring AWS dependency is added and fetched...")
+            if not run_command(
+                ["alr", "update"], cwd=ZEPHYRINE_HOST_DIR, name="ADA-AWS-UPDATE"
+            ):
+                print_error("Failed to fetch Alire dependencies. Ada build may fail.")
+                setup_failures.append("Alire update failed")
 
     if not os.path.exists(binary_path):
         print_error(f"CRITICAL: Frontend Host binary missing at {binary_path}")
         print_error(
             "Cannot start UI. Please run the full setup again to compile the host."
         )
-        sys.exit(1)
 
     # 4. Construct Command with Args
     command = [
@@ -1748,7 +1972,6 @@ def _handle_android_become_smartphone_setup() -> None:
             print_error(
                 "Please install it manually ('pkg install proot-distro') and restart."
             )
-            sys.exit(1)
 
     # 2. Reliably find the base path for proot-distro root filesystems
     prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
@@ -2000,7 +2223,6 @@ exit $?
     except Exception as e:
         print_error(f"Failed to write build script to proot environment: {e}")
         traceback.print_exc()
-        sys.exit(1)
 
     # 5. Re-execute the script inside the proot environment
     print_colored(
@@ -3605,7 +3827,6 @@ def _ensure_conda_package(
             print_error(f"Failed to install Conda package '{package_spec}'.")
             if is_critical:
                 print_error(f"'{package_spec}' is a critical dependency. Exiting.")
-                sys.exit(1)
             return False
         else:
             print_system(f"Successfully installed Conda package '{package_spec}'.")
@@ -4803,6 +5024,11 @@ def _ensure_and_launch_zephymesh():
         # --- Step 2: Clean up old state files and launch the process ---
         if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
             os.remove(ZEPHYMESH_PORT_INFO_FILE)
+
+        # chmod +x execution patch fix
+        if not IS_WINDOWS and os.path.exists(mesh_exe_path):
+            os.chmod(mesh_exe_path, 0o755)
+            print_system(f"Set executable permission on {mesh_exe_path}")
 
         # Use the standard service starter. This is the crucial change for cleanup.
         start_service_process([mesh_exe_path], ROOT_DIR, "zephymeshHand")
@@ -6369,8 +6595,11 @@ if __name__ == "__main__":
             )
             if not _ensure_libiconv_copy():
                 # The function handles its own error printing. We just need to record the failure.
+                print_error(
+                    "Libiconv Failure!!! Failed to install a compatible version of libiconv providing libiconv.so.1"
+                )
                 setup_failures.append(
-                    "Failed to install a compatible version of libiconv providing libiconv.so.1"
+                    "Libiconv Failure!!! Failed to install a compatible version of libiconv providing libiconv.so.1"
                 )
             print_system("--- Ensuring executable patching utility (patchelf) ---")
             if not _ensure_conda_package(
@@ -6399,17 +6628,48 @@ if __name__ == "__main__":
                 setup_failures.append(
                     "Failed to install openmpi, which is critical for terminal operations."
                 )
+            if not _ensure_conda_package("git", is_critical=True):
+                print_error(
+                    "Git Failure!!! Failed to install git, which is critical for terminal operations."
+                )
+                setup_failures.append(
+                    "Failed to install git, which is critical for terminal operations."
+                )
             if not _ensure_conda_package("cmake", is_critical=True):
                 setup_failures.append(
                     "Failed to install cmake>=3.21, which is critical for installation operations."
                 )
+
+            # xcode-cli install trigger native (not conda)
+            if platform.system() == "Darwin":
+                if not are_xcode_cli_tools_installed():
+                    print_warning(
+                        "Xcode Command Line Tools not found. Attempting to install..."
+                    )
+                    print_system(
+                        "A system dialog will appear. Please follow the prompts to install."
+                    )
+                    # Run the installer (non-blocking, but we inform the user)
+                    subprocess.Popen(["xcode-select", "--install"])
+                    print_system(
+                        "Installation started. Please wait for it to complete, then rerun this launcher."
+                    )
+                    # We cannot continue because the installation takes time and requires a reboot of the terminal session
+                    sys.exit(0)
+                else:
+                    print_system("Xcode Command Line Tools are already installed.")
+
             # Formal Mathematical Verifier ROCQ or CoQ (SPARK gnatprove assistant) (codegen ADA -> compiler -> SPARK gnatprove -> CoQ+SPARK -> code Output)
-            if not _ensure_conda_package(
-                "coq", conda_channel="conda-forge", is_critical=False
-            ):
-                print_warning(
-                    "Fatal Failure on Conda rcoq installation happened! Code generation will be worsened!"
+            # Install Rocq from source instead of using Conda package
+            if not _install_rocq_from_source():
+                print_error(
+                    "Rocq (Coq) source installation failed. Code generation may be impaired."
                 )
+                # For now lets bypass this but none rocq is deprecated
+                print_warning("for now let's bypass this but none rocq is deprecated")
+                # setup_failures.append(
+                #    "Due to requirement of an certain quality code generation. it is now flagged as critical and Coq or ROCQ failure has been detected!"
+                # )
 
             print_system("--- Ensuring jemalloc memory allocator ---")
             # We install 'jemalloc' from conda-forge. It contains the shared libraries.
@@ -6454,6 +6714,9 @@ if __name__ == "__main__":
                 )
             # Ensure Alire/GNAT for Ada compilation
             if not _ensure_alire_and_gnat_toolchain():
+                print_error(
+                    "Failed to install/ensure critical tool: Ada toolchain failed to install"
+                )
                 setup_failures.append(
                     f"Failed to install/ensure critical tool: Ada toolchain failed to install"
                 )
@@ -6562,53 +6825,93 @@ if __name__ == "__main__":
                     print_error("'alr' not found. Cannot compile Ada host.")
                     setup_failures.append("Alire (alr) not found for Ada host build")
                 else:
-                    # Construct the Build Command
-                    # We start with the basic alire exec command
-                    # We intentionally sanitize BUILD/MODE/bld/mode env vars for the command execution
-                    # to prevent the "arm64 vs Release" naming collision we fixed earlier.
+                    # There's something. if you are on local ALWAYS select toolchain on specific project first then do compile!
+                    alr_get_gnat_command = [
+                        "alr",
+                        "toolchain",
+                        "--select",
+                        "gnat_native",
+                        "gprbuild",
+                        "gnatchop",
+                    ]
 
-                    build_cmd = ["alr", "exec", "--"]
+                    # 1. Ensure AWS dependency is declared (idempotent)
+                    print_system("Ensuring AWS dependency is declared...")
+                    run_command(
+                        alr_get_gnat_command,
+                        cwd=ZEPHYRINE_HOST_DIR,
+                        name="ADA-AWS-TOOLCHAIN-SELECT-LOCAL",
+                        check=False,
+                    )
+                    run_command(
+                        ["alr", "with", "aws"],
+                        cwd=ZEPHYRINE_HOST_DIR,
+                        name="ADA-AWS-ADD",
+                        check=False,
+                    )
 
-                    # On Linux/macOS, we use 'env -u' to strip the conflicting vars from the inner scope
-                    if not IS_WINDOWS:
-                        build_cmd.extend(
-                            [
-                                "env",
-                                "-u",
-                                "BUILD",
-                                "-u",
-                                "MODE",
-                                "-u",
-                                "bld",
-                                "-u",
-                                "mode",
-                            ]
+                    # 2. Fetch and build all dependencies (including AWS)
+                    # --- ADA-BUILD-DEPS (dependency build) ---
+                    print_system("Fetching and building dependencies")
+                    if platform.system() == "Darwin":
+                        # On macOS, use the survival guide command to build the Ada host directly.
+                        # This bypasses the broken AWS dependency build and the gprbuild typing error.
+                        print_system(
+                            "Building Ada host on macOS using survival guide method..."
                         )
 
-                    build_cmd.append("gprbuild")
+                        run_command(
+                            ["gnatchop", "-c"],
+                            cwd=ZEPHYRINE_HOST_DIR,
+                            name="ADA-BUILD-MACOS",
+                        )
+                        # Ensure we are in the Ada project directory
+                        sdk_path = subprocess.check_output(
+                            ["xcrun", "--show-sdk-path"], text=True
+                        ).strip()
+                        build_cmd = [
+                            "alr",
+                            "exec",
+                            "--",
+                            "env",
+                            "-u",
+                            "BUILD",
+                            "-u",
+                            "MODE",
+                            "-u",
+                            "bld",
+                            "-u",
+                            "mode",
+                            "gprbuild",
+                            "-largs",
+                            f"-L{sdk_path}/usr/lib",
+                        ]
 
-                    # macOS Specific Linker Flags
-                    if platform.system() == "Darwin":
-                        try:
-                            sdk_path = subprocess.check_output(
-                                ["xcrun", "--show-sdk-path"], text=True
-                            ).strip()
-                            # We append the flags to the END of the command
-                            build_cmd.extend(["-largs", f"-L{sdk_path}/usr/lib"])
-                            print_system(f"Applied macOS SDK flags: {sdk_path}")
-                        except Exception as e_sdk:
-                            print_warning(
-                                f"Could not detect macOS SDK path: {e_sdk}. Build may fail."
+                        if not run_command(
+                            build_cmd, cwd=ZEPHYRINE_HOST_DIR, name="ADA-BUILD-MACOS"
+                        ):
+                            print_error("Ada host build failed on macOS.")
+                            setup_failures.append(
+                                "Zephyrine Ada Host compilation failed"
+                            )
+                        else:
+                            print_system(
+                                "✅ Ada UI Engine compiled successfully (macOS)."
                             )
 
-                    # Run the build
-                    if not run_command(
-                        build_cmd, cwd=ZEPHYRINE_HOST_DIR, name="ADA-BUILD"
-                    ):
-                        print_error("Ada Host compilation failed.")
-                        setup_failures.append("Zephyrine Ada Host compilation failed")
-                    else:
-                        print_system("✅ Ada UI Engine compiled successfully.")
+                    else:  # Linux and Windows
+                        print_system(
+                            "Building Ada host on Linux/Windows using standard alr build..."
+                        )
+                        if not run_command(
+                            ["alr", "build"], cwd=ZEPHYRINE_HOST_DIR, name="ADA-BUILD"
+                        ):
+                            print_error("Alire build failed.")
+                            setup_failures.append(
+                                "Zephyrine Ada Host compilation failed"
+                            )
+                        else:
+                            print_system("✅ Ada UI Engine compiled successfully.")
             else:
                 print_error(f"Ada Host directory not found at: {ZEPHYRINE_HOST_DIR}")
                 print_error(
@@ -8044,9 +8347,10 @@ if __name__ == "__main__":
                         f"'conda run' process finished with code: {exit_code_from_conda_run}."
                     )
                     relaunched_conda_process_obj = None  # Mark as handled for atexit
-                    sys.exit(
-                        exit_code_from_conda_run
-                    )  # Exit parent with child's return code
+                    if exit_code_from_conda_run == 0:
+                        sys.exit(
+                            exit_code_from_conda_run
+                        )  # Exit parent with child's return code
                 else:
                     print_error(
                         "Failed to start 'conda run' process. This should not happen after Popen check."
