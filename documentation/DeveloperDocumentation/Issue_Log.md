@@ -1,3 +1,8 @@
+-   **ID:** `CORE-FIX-023`
+-   **Title:** `Fix missing imports and typing for Salience Warden implementation.`
+-   **Status:** `Resolved`
+-   **Description:** `Corrected missing increment_hit_count import in AdelaideAlbertCortex.py and updated datetime/typing imports in database.py to support the new salience management system.`
+
 -   **ID:** `CORE-FEAT-022`
 -   **Title:** `Implement Salience Warden for DB Memory Purging and Tracking.`
 -   **Status:** `Resolved`
