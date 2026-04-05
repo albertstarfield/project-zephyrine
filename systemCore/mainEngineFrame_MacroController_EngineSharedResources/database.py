@@ -1959,28 +1959,64 @@ _log_writer_thread: Optional[threading.Thread] = None # This is the instance of 
 class PromptPruner:
     """
     Utility to extract the core user input from a full prompt template.
-    Uses regex patterns derived from CortexConfiguration to 'de-noise' strings.
+    Uses regex patterns dynamically generated from CortexConfiguration templates
+    as well as hardcoded fallbacks.
     """
     _patterns = []
+    _initialized = False
 
     @classmethod
     def _initialize_patterns(cls):
-        if cls._patterns:
+        if cls._initialized:
             return
         
-        # We target specific markers often found in templates
+        import CortexConfiguration
+        
+        # 1. Dynamic Generation from CortexConfiguration
+        # We look for all PROMPT_ strings that contain placeholders for user input
+        placeholders = ["{user_input}", "{input}"]
+        
+        for attr_name in dir(CortexConfiguration):
+            if attr_name.startswith("PROMPT_"):
+                template = getattr(CortexConfiguration, attr_name)
+                if not isinstance(template, str):
+                    continue
+                
+                for p in placeholders:
+                    if p in template:
+                        # Split the template into prefix and suffix around the placeholder
+                        parts = template.split(p)
+                        if len(parts) >= 2:
+                            # We take the immediate surrounding text (max 200 chars) 
+                            # to keep the regex efficient and avoid matching too much
+                            prefix = parts[0][-200:] if len(parts[0]) > 200 else parts[0]
+                            suffix = parts[1][:200] if len(parts[1]) > 200 else parts[1]
+                            
+                            # Create a regex that captures everything between prefix and suffix
+                            # We escape the prefix/suffix to treat them as literals
+                            reg_str = re.escape(prefix) + r"(.*?)" + re.escape(suffix)
+                            try:
+                                cls._patterns.append(re.compile(reg_str, re.DOTALL | re.IGNORECASE))
+                            except re.error:
+                                continue
+
+        # 2. Hardcoded Fallbacks (Standard Markers)
         markers = [
             r"\[用户当前请求 \(User's Current Request\)\]:\n?(.*?)\n---",
             r"\[User's Current Request\]:\n?(.*?)\n---",
             r"\[USER REQUEST\]:\n?(.*?)\n---",
             r"User Request:\n?(.*?)\n---",
             r"User Input:\n?(.*?)\n---",
+            r"The Query to Answer:\n?(.*?)\nYour Answer:",
             r"<\|im_start\|>user\n?(.*?)(?=<\|im_end\|>|$)",
-            r"system:.*?user:\n?(.*?)$", # Simple fallback for some templates
+            r"system:.*?user:\n?(.*?)$",
         ]
         
         for m in markers:
             cls._patterns.append(re.compile(m, re.DOTALL | re.IGNORECASE))
+            
+        cls._initialized = True
+        logger.debug(f"PromptPruner initialized with {len(cls._patterns)} patterns.")
 
     @classmethod
     def prune(cls, text: str) -> str:
@@ -1989,15 +2025,16 @@ class PromptPruner:
         
         cls._initialize_patterns()
         
+        # Try specific template matches first (they are more accurate)
         for pattern in cls._patterns:
             match = pattern.search(text)
             if match:
-                # Extract the captured group (the actual user input)
                 pruned = match.group(1).strip()
                 if pruned:
+                    # If we found a match but it still looks like a template (contains lots of \n\n---)
+                    # it might be a nested match. We don't recurse deeply but we check once.
                     return pruned
         
-        # If no template marker found, return original (might already be clean)
         return text.strip()
 
 def run_db_noise_cleaning(db: Session, limit: int = 1000):
