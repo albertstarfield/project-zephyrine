@@ -239,12 +239,13 @@ try:
         ZepZepAdaUI,
         add_interaction,
         add_interaction_no_commit,
-        calculate_lsh_hash,  # calculate_lsh_hash
+        calculate_lsh_hash,
         get_global_recent_interactions,
-        get_past_scriptingseqprogramminginterface_attempts,  # Added new DB function
-        get_past_tot_interactions,  # Added SystemInteractionScriptAttempt if needed here
+        get_past_scriptingseqprogramminginterface_attempts,
+        get_past_tot_interactions,
         get_pending_tot_result,
         get_recent_interactions,
+        increment_hit_count,
         init_db,
         mark_tot_delivered,
         queue_interaction_for_batch_logging,

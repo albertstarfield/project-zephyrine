@@ -2,7 +2,7 @@
 
 import os
 import sys
-import datetime
+from datetime import datetime, timezone, timedelta
 import time
 import atexit
 import shutil
@@ -33,7 +33,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base, Session
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
-from typing import List, Optional, Dict, Any, Tuple  # Added Tuple
+from typing import List, Optional, Dict, Any, Tuple, Union  # Added Tuple and Union
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.sqlite import DATETIME as SQLITE_DATETIME
 
