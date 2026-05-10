@@ -504,7 +504,9 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `DOC-FEAT-009`
     -   **Title:** Add ECSS standards and clarify high-integrity paradigms.
     -   **Status:** `Resolved`
-    -   **Description:** Updated `CONTRIBUTING.md` and `systemCore/README.md` to include "Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)". Refined DAL definitions to explicitly map DO-178C levels to ECSS Software Criticality Categories (A, B, C).
+    -   **Description:** Updated `README.md`, `CONTRIBUTING.md`, and `systemCore/README.md` to include "Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)". Refined DAL definitions to explicitly map DO-178C levels to ECSS Software Criticality Categories (A, B, C) and added a technical breakdown of how determinism is achieved (DAL isolation, SPARK verification, WCET, and Stella Icarus JIT hooks).
+
+
 
 
 
