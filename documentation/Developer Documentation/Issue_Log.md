@@ -588,3 +588,8 @@ This document serves as the master list for all tracked requirements, features, 
         3.  **Enhanced Web Search**: A complete overhaul of the `network_internet_knowledge_fetcher` module, adding support for Google, DuckDuckGo, and Searx engines, along with visual data extraction, CAPTCHA monitoring, and semantic ranking of search results.
         4.  **Bottom Gear Routing**: Refactored the specialized request pipeline with a dynamic router for specialist model selection and an optimized bypass for self-healing operations.
         5.  **Headless Mode**: Added a `--no-tui-headless` flag to `launcher.py` to support operation in environments without TUI capability.
+
+-   **ID:** `CORE-FEAT-023`
+    -   **Title:** Implement Global Document Refinement via Multi-Block Diffs.
+    -   **Status:** `Resolved`
+    -   **Description:** Introduced a new post-generation refinement phase (`_refine_final_buffer_via_diff`) in the core engine. This phase utilizes a specialized model to review long-form document buffers and apply targeted edits using a multi-block SEARCH/REPLACE diff format, effectively pruning redundancy and improving linguistic flow.

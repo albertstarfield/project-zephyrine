@@ -7836,6 +7836,99 @@ Output your response EXACTLY in this format:
         logger.error(f"❌ Diff/Patch failed after {max_retries} attempts.")
         return current_buffer, False
 
+    async def _refine_final_buffer_via_diff(
+        self,
+        db: Session,
+        session_id: str,
+        current_buffer: str,
+        user_original_query: str,
+        priority: int = ELP1,
+    ) -> str:
+        """
+        Global Review Phase: Refines the final long-form document buffer using multi-block diffs.
+        Prunes redundancy, fixes transitions, and ensures overall coherence.
+        """
+        log_prefix = f"💎 GlobalRefine|{'ELP1' if priority == ELP1 else 'ELP0'}"
+        logger.info(
+            f"{log_prefix}: Starting final global refinement on {len(current_buffer)} chars."
+        )
+
+        refine_model = self.provider.get_model("code") or self.provider.get_model("general")
+        if not refine_model:
+            return current_buffer
+
+        refine_prompt = f"""/no_think
+[TASK] Global Document Refinement.
+[CONTEXT] You have just generated a long document based on the query: "{user_original_query}".
+[GOAL] Review the entire document below and perform a final set of edits to:
+1. Remove redundant headers or repeated paragraphs.
+2. Fix broken sentence transitions between sections.
+3. Improve the flow and formatting.
+
+[CURRENT DOCUMENT]
+---
+{current_buffer}
+---
+
+[INSTRUCTION]
+Output your edits using MULTIPLE blocks of this format:
+<<<<< SEARCH
+(Exact text to remove or change)
+=====
+(Replacement text)
+>>>>>
+
+If no changes are needed, respond with "NO_CHANGES_NEEDED".
+"""
+
+        try:
+            chain = refine_model.bind(priority=priority) | StrOutputParser()
+            response = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,
+                refine_prompt,
+                interaction_data={},
+                priority=priority,
+                db=db,
+                session_id=session_id,
+            )
+
+            if "NO_CHANGES_NEEDED" in response:
+                logger.info(f"{log_prefix}: Model decided no final edits needed.")
+                return current_buffer
+
+            # Parse multiple blocks
+            blocks = re.findall(
+                r"<<<<< SEARCH\s*(.*?)\s*=====\s*(.*?)\s*>>>>>", response, re.DOTALL
+            )
+            if not blocks:
+                logger.warning(
+                    f"{log_prefix}: No valid diff blocks found in refinement output."
+                )
+                return current_buffer
+
+            updated_buffer = current_buffer
+            applied_count = 0
+            for search_text, replace_text in blocks:
+                search_text = search_text.strip()
+                replace_text = replace_text.strip()
+                if search_text in updated_buffer:
+                    updated_buffer = updated_buffer.replace(search_text, replace_text)
+                    applied_count += 1
+                else:
+                    logger.debug(
+                        f"{log_prefix}: Search block not found for an edit. Skipping."
+                    )
+
+            logger.success(
+                f"{log_prefix}: Applied {applied_count}/{len(blocks)} refinement edits."
+            )
+            return updated_buffer
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: Global refinement failed: {e}")
+            return current_buffer
+
     def _detect_agentic_usage(self, user_input: str, mode: str) -> bool:
         """
         Detects if the request is from an external agent (AgentPrecMode).
@@ -8512,8 +8605,11 @@ Output your response EXACTLY in this format:
                 except NameError:
                     pass  # Ignore if SSE not configured
 
-            # 3. Final Assembly
-            final_response_text = current_document_buffer
+            # 3. Global Refinement Phase (The "Diff Refine" Step)
+            # After LoD is finished, switch to multi-block diff refinement for final polish.
+            final_response_text = await self._refine_final_buffer_via_diff(
+                db, session_id, current_document_buffer, user_input, priority=priority
+            )
 
         # --- 4. SAFETY & POST-PROCESSING ---
 
