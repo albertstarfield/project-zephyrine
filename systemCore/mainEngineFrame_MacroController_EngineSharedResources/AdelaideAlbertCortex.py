@@ -2306,9 +2306,6 @@ class CortexThoughts:
                     "accuracy_stake": accuracy_stake
                 }
                 # We save it as a "transient" interaction to the DB
-                # or we just rely on add_interaction in the caller.
-                # However, for LUT hits, we need a consistent user_input.
-                # Let's use f"INTENTION_CHECK:{text_input}" as the input.
                 await asyncio.to_thread(
                     add_interaction,
                     db,
@@ -6909,13 +6906,23 @@ class CortexThoughts:
                 assistant_action_type=final_fallback_action["action_type"],
             )
             await asyncio.to_thread(db.commit)
-        except Exception as db_log_fallback_err:
-            logger.error(
-                f"{log_prefix} Failed to log keyword fallback action: {db_log_fallback_err}"
-            )
-            await asyncio.to_thread(db.rollback)
+        except Exception as e_log_final_fail:
+            logger.error(f"Failed to log final fallback action: {e_log_final_fail}")
+            if db:
+                await asyncio.to_thread(db.rollback)
 
         return final_fallback_action
+
+    def _check_for_elp1_interruption(self, log_prefix: str, priority: int):
+        """
+        Hardened Interruption Check: If an ELP0 task is running and ELP1_ACTIVE_FLAG is set,
+        immediately raise TaskInterruptedException to kill the background task.
+        """
+        if priority == ELP0:
+            import priority_lock
+            if priority_lock.ELP1_ACTIVE_FLAG:
+                logger.critical(f"🚦 {log_prefix} ELP1_ACTIVE_FLAG detected! Immediate killing of ELP0 task.")
+                raise TaskInterruptedException("ELP1 Priority Interruption (Atomic Flag)")
 
     # --- NEW HELPER: Translation ---
     # AdelaideAlbertCortex -> Inside CortexThoughts class
@@ -11155,6 +11162,32 @@ Extract the section titles and output them as a strict, valid JSON list of strin
             # Populate the variable for this path as well.
             existing_interaction_to_update = initial_interaction
 
+        # --- NEW: High-Fidelity Intention Analysis for ELP0 ---
+        intent_label = "Information"
+        if not is_reflection_task:
+            try:
+                (
+                    safety_label,
+                    pi_cat,
+                    intent_label,
+                    complexity_label,
+                    is_jb,
+                    acc_stake,
+                ) = await self._perform_intention_analysis(
+                    db, user_input, session_id, priority=ELP0
+                )
+                logger.info(
+                    f"🧠 {log_prefix} ELP0 Intention Analysis: Label='{intent_label}', Complexity='{complexity_label}', Stake='{acc_stake}'"
+                )
+                # --- Immediate Check after LLM Call ---
+                self._check_for_elp1_interruption(log_prefix, ELP0)
+                
+                interaction_data["classification"] = intent_label
+                if complexity_label == "Complex":
+                    interaction_data["requires_deep_thought"] = True
+            except Exception as e_intent:
+                logger.warning(f"{log_prefix} ELP0 Intention analysis failed: {e_intent}. Falling back to default.")
+
         # --- Optional Branch Prediction (Pre-processing) ---
         future_information_prediction = ""
         logger.info(f"🧬 {log_prefix} PRE-CHECK: About to check for Branch Predictor.")
@@ -11531,23 +11564,88 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                     # ==========================================================
                     initial_synthesis_or_action_result: str = ""
 
-                    logger.info(
-                        f"{log_prefix} Analyzing for agentic actions (search, scripts, etc.)..."
-                    )
                     action_payload_ctx = {
                         "history_summary": emotion_analysis_str_final,
                         "log_context": log_ctx_prompt_final,
                         "recent_direct_history": direct_hist_prompt_final,
                         "file_index_context": vec_file_ctx_result_str,
                     }
-                    action_details = await self._analyze_assistant_action(
-                        db, current_input_for_analysis, session_id, action_payload_ctx
-                    )
-                    detected_action_type = (
-                        action_details.get("action_type", "no_action")
-                        if action_details and isinstance(action_details, dict)
-                        else "no_action"
-                    )  # type: ignore
+
+                    # --- NEW: TOOL CALL ESCALATION STRATEGY ---
+                    action_details = None
+                    detected_action_type = "no_action"
+                    escalation_stage = 1
+                    max_stage1_retries = 3
+                    max_stage2_retries = 2
+                    last_error_context = ""
+
+                    while escalation_stage <= 3:
+                        # --- Immediate Check at start of escalation turn ---
+                        self._check_for_elp1_interruption(log_prefix, ELP0)
+                        
+                        logger.info(f"🛡️ {log_prefix} Tool Call Escalation: Stage {escalation_stage}...")
+                        
+                        if escalation_stage == 1:
+                            # Stage 1: Tool Fix Self-Healing (3x)
+                            for s1_retry in range(max_stage1_retries):
+                                logger.info(f"🛡️ {log_prefix} Stage 1 (Self-Healing) Attempt {s1_retry + 1}/{max_stage1_retries}")
+                                try:
+                                    # Inject last error context if available to help model self-heal
+                                    current_analysis_input = current_input_for_analysis
+                                    if last_error_context:
+                                        current_analysis_input += f"\n\n[SYSTEM: PREVIOUS ATTEMPT FAILED WITH ERROR: {last_error_context}. PLEASE FIX THE SYNTAX OR TOOL NAME.]"
+
+                                    action_details = await self._analyze_assistant_action(
+                                        db, current_analysis_input, session_id, action_payload_ctx
+                                    )
+                                    detected_action_type = action_details.get("action_type", "no_action") if action_details else "no_action"
+                                    
+                                    if action_details and detected_action_type != "no_action":
+                                        # Success in analysis, move to verification/execution
+                                        break
+                                except Exception as e_s1:
+                                    last_error_context = str(e_s1)
+                                    logger.warning(f"⚠️ {log_prefix} Stage 1 Attempt failed: {last_error_context}")
+
+                            if action_details and detected_action_type != "no_action":
+                                # Successfully analyzed, but we still need to check if the tool exists or is valid
+                                # Stage 2 check inside Stage 1 loop for "pre-emptive" repair
+                                action_details = self._programmatic_action_fix(action_details, log_prefix)
+                                detected_action_type = action_details.get("action_type", "no_action")
+                                break
+                            else:
+                                escalation_stage = 2 # Move to Stage 2
+                                continue
+
+                        elif escalation_stage == 2:
+                            # Stage 2: Entity Replace/Rename (2x)
+                            # We already tried self-healing, now we force programmatic renaming
+                            for s2_retry in range(max_stage2_retries):
+                                logger.info(f"🛡️ {log_prefix} Stage 2 (Entity Replace) Attempt {s2_retry + 1}/{max_stage2_retries}")
+                                if action_details:
+                                    action_details = self._programmatic_action_fix(action_details, log_prefix)
+                                    detected_action_type = action_details.get("action_type", "no_action")
+                                    if detected_action_type != "no_action":
+                                        break
+                                # If we reached here without details, Stage 1 really failed
+                                break 
+                            
+                            if action_details and detected_action_type != "no_action":
+                                break
+                            else:
+                                escalation_stage = 3 # Move to Stage 3
+                                continue
+
+                        elif escalation_stage == 3:
+                            # Stage 3: Parse Finale
+                            logger.warning(f"⚠️ {log_prefix} Stage 3 (Parse Finale): Using keyword fallback as last resort.")
+                            action_details = await asyncio.to_thread(
+                                self._generate_action_analysis_fallback, db, current_input_for_analysis, session_id, log_prefix
+                            )
+                            detected_action_type = action_details.get("action_type", "no_action") if action_details else "no_action"
+                            break
+
+                    # --- END ESCALATION LOOP ---
                     if action_details:
                         interaction_data.update(
                             {
@@ -11560,6 +11658,13 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                                 ),
                             }
                         )
+                        # Sync with database object immediately
+                        if existing_interaction_to_update:
+                            existing_interaction_to_update.assistant_action_analysis_json = interaction_data["assistant_action_analysis_json"]
+                            existing_interaction_to_update.assistant_action_type = interaction_data["assistant_action_type"]
+                            existing_interaction_to_update.assistant_action_params = interaction_data["assistant_action_params"]
+                            await asyncio.to_thread(db.commit)
+
                         await asyncio.to_thread(
                             add_interaction,
                             db,
@@ -11573,9 +11678,40 @@ Extract the section titles and output them as a strict, valid JSON list of strin
                         )
                         await asyncio.to_thread(db.commit)
 
-                    if detected_action_type != "no_action" and action_details:
+                    # --- NEW: AGENTIC MODE SWITCH ---
+                    is_full_agent_task = (
+                        detected_action_type in ["agentic_execution", "self_healing"]
+                        or intent_label in ["Self-Healing", "Tool-Fix"]
+                    )
+
+                    if is_full_agent_task and AdaptiveSystem_Agent:
+                        hand_off_msg = "[Task handed off to AdaptiveSystem_Agent for autonomous execution]"
+                        logger.success(
+                            f"🛠️ {log_prefix} Agentic Mode Switch: Handing off task {existing_interaction_to_update.id} to Whiplash Mode."
+                        )
+                        await _start_agent_task(
+                            AdaptiveSystem_Agent,
+                            existing_interaction_to_update.id,
+                            current_input_for_analysis,
+                            session_id,
+                            intent_label=intent_label
+                        )
+                        interaction_data["assistant_action_executed"] = True
+                        interaction_data["assistant_action_result"] = hand_off_msg
+                        
+                        # Update DB object
+                        if existing_interaction_to_update:
+                            existing_interaction_to_update.assistant_action_executed = True
+                            existing_interaction_to_update.assistant_action_result = hand_off_msg
+                            await asyncio.to_thread(db.commit)
+
+                        final_response_text_for_this_turn = hand_off_msg
+                        task_completed_successfully = True
+                        # SKIP text synthesis entirely
+                        is_elaboration_finished = True 
+                    elif detected_action_type != "no_action" and action_details:
                         logger.info(
-                            f"{log_prefix} Action '{detected_action_type}' detected. Executing tool..."
+                            f"{log_prefix} Action '{detected_action_type}' detected. Executing standard tool..."
                         )
                         if not existing_interaction_to_update:
                             raise RuntimeError(

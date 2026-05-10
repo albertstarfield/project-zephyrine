@@ -149,6 +149,11 @@ The installation process is now managed by a single, cross-platform launcher scr
     python launcher.py
     ```
 
+    **Headless Mode (Advanced):** To run without the Terminal UI (useful for remote environments or automated testing):
+    ```bash
+    python launcher.py --no-tui-headless
+    ```
+
     **First-Time Setup:** The first time you run the launcher, it will set up the Conda environment and download several gigabytes of model files. This process can take a notable amount of time, depending on your internet connection. Please be patient.
 
     **Subsequent Launches:** After the initial setup, subsequent launches will generally be much faster.

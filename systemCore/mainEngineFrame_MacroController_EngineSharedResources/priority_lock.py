@@ -26,6 +26,10 @@ except ImportError:
 ELP0 = 0  # Background Tasks (File Indexer, Reflection)
 ELP1 = 1  # Foreground User Requests
 
+# --- NEW: ATOMIC PRIORITY FLAG ---
+# This is used for immediate "kill" signaling across threads/processes.
+ELP1_ACTIVE_FLAG = False
+
 
 class SystemStateMonitor:
     @staticmethod
@@ -434,7 +438,11 @@ class PriorityQuotaLock:
                                     'proc': None,
                                     'start_time': time.monotonic()
                                 }
-                                logger.info(f"{log_prefix}:: Acquired ELP1 slot. Active: {len(self._active_tasks)}/{self._total_slots}")
+                                # Update Atomic Flag
+                                global ELP1_ACTIVE_FLAG
+                                ELP1_ACTIVE_FLAG = True
+                                
+                                logger.info(f"{log_prefix}:: Acquired ELP1 slot. Atomic Flag SET. Active: {len(self._active_tasks)}/{self._total_slots}")
                                 self._condition.notify_all()
                                 return True
 
@@ -500,6 +508,14 @@ class PriorityQuotaLock:
         with self._condition:
             if releasing_thread_ident in self._active_tasks:
                 task = self._active_tasks.pop(releasing_thread_ident)
+                
+                # Update Atomic Flag if no more ELP1 tasks
+                global ELP1_ACTIVE_FLAG
+                has_other_elp1 = any(t['priority'] == ELP1 for t in self._active_tasks.values())
+                if not has_other_elp1:
+                    ELP1_ACTIVE_FLAG = False
+                    logger.debug("PQLock|Flag|Atomic Flag CLEARED (No more ELP1 tasks).")
+
                 logger.info(f"PQLock|RLS|Thr{releasing_thread_ident}:: Released ELP{task['priority']} slot.")
                 self._condition.notify_all()
             else:

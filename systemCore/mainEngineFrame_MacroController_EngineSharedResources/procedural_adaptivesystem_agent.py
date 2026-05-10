@@ -61,8 +61,11 @@ AGENT_PROMPT_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__))
 
 PROMPT_STRICT_ADA_DEVELOPER = """
 [STRICT SYSTEM IMPERATIVE: ADA DEVELOPMENT ONLY]
-You are an expert Ada Developer specializing in High-Integrity Systems.
+You are an expert Ada Developer specializing in High-Integrity Systems (DO-178C/ECSS-E-ST-40C).
 You are FORBIDDEN from writing code in Python, C++, or Rust. You must ONLY use Ada.
+
+[WHIPLASH ROUTINE: Plan -> Execute -> Observe -> Fix]
+This is your core operational discipline. You must never give up until the build is clean.
 
 [REQUIRED WORKFLOW]
 1. INITIALIZE: If starting a new task, use `alr -n init --bin <project_name>` to create a crate.
@@ -254,7 +257,7 @@ class AgentTools:
                  for item in raw_items:
                      item_full_path = os.path.join(full_path, item)
                      # Check if it's a directory within the thread to avoid blocking loop
-                     is_dir = await loop.run_in_executor(None, os.path.isdir, item_full_path)
+                     is_dir = await loop.run_in_executor(None, os.listdir, item_full_path)
                      items_with_type.append(item + '/' if is_dir else item)
                  items = items_with_type # Assign back to items
 
@@ -888,12 +891,12 @@ class AmaryllisAgent:
             return f"Reference Context: Error retrieving docs ({e})"
 
 
-    async def _run_task_in_background(self, initial_interaction_id: int, user_input: str, session_id: str):
+    async def _run_task_in_background(self, initial_interaction_id: int, user_input: str, session_id: str, intent_label: str = "generic"):
         """
         Runs the Agent's task execution loop in the background with ELP0 priority.
         Handles interruptions signaled by the CortexEngine.
         """
-        logger.warning(f"🧑‍💻🧵 Starting Agent background task ID: {initial_interaction_id} (Priority: ELP0)")
+        logger.warning(f"🧑‍💻🧵 Starting Agent background task ID: {initial_interaction_id} (Priority: ELP0, Intent: {intent_label})")
         db: Optional[Session] = None # Initialize db session variable
         initial_interaction: Optional[Interaction] = None # Initialize interaction variable
         # --- Define the marker string for interruption ---
@@ -925,14 +928,16 @@ class AmaryllisAgent:
                 logger.info(f"Agent Task {initial_interaction_id}: Turn {turn_count}")
                 logger.debug(f"Agent Turn {turn_count} Input Snippet:\n{current_input_for_llm[:500]}...")
 
-                # --- Check for stop event before proceeding (optional but good practice) ---
-                # if stop_event_is_set(): logger.info(...); break
-
-                # --- Get current environment details and RAG context (sync DB calls) ---
+                # --- HARDENED ELP1 INTERRUPTION CHECK ---
+                import priority_lock
+                if priority_lock.ELP1_ACTIVE_FLAG:
+                    logger.critical(f"🚦 Agent Task {initial_interaction_id}: ELP1_ACTIVE_FLAG detected! Immediate killing.")
+                    raise interruption_error_marker # Or raise a specific error that matches the marker
+                
                 # These are relatively quick and less likely to be interrupted targets
                 env_details_dict = self._get_environment_details()
                 agent_history_rag_string = self._get_agent_history_rag_string(db)
-                url_rag_context_string = self._get_agent_url_rag_string(db, user_input)
+                url_rag_context_string = await self._get_agent_url_rag_string(db, user_input)
 
                 # --- Build the message list for the prompt's MessagesPlaceholder ---
                 agent_history_turns_messages: List[Union[HumanMessage, AIMessage]] = []
@@ -977,12 +982,7 @@ class AmaryllisAgent:
                 thinking_input = prompt_inputs.copy()
                 # Determine effective input string
                 effective_input = thinking_input.get("current_input", "")
-                thinking_instruction = (
-                    "\n\n[SYSTEM INSTRUCTION: PHASE 1]\n"
-                    "Analyze the current state and deciding the next step.\n"
-                    "Describe your plan in detail, including which tool you intend to use and exactly what parameters it needs.\n"
-                    "Do NOT output the XML tool tags yet. Just output your reasoning and plan."
-                )
+                
                 # --- STEP 1: ROUTER & SPECIALIST SELECTION (With Snowball Check) ---
                 plan_response = ""
                 blacklisted_roles = []  # Track roles that failed the "42 token" check
@@ -991,17 +991,18 @@ class AmaryllisAgent:
                 for attempt in range(max_retries):
                     # A. ROUTER (Domain Selection)
                     # We re-run router or fallback if the previous specialist failed
-                    current_domain_decision = "general"
-                    try:
-                        # Only run router if we haven't locked in a fallback yet
-                        if "default" not in blacklisted_roles:
-                            router_out = await asyncio.to_thread(
-                                self.domain_router_chain.invoke,
-                                {"context": str(self.conversation_history[-2:]), "input": current_input_for_llm}
-                            )
-                            current_domain_decision = router_out.strip().lower()
-                    except Exception:
-                        current_domain_decision = "general"
+                    current_domain_decision = intent_label
+                    if current_domain_decision == "generic":
+                        try:
+                            # Only run router if we haven't locked in a fallback yet
+                            if "default" not in blacklisted_roles:
+                                router_out = await asyncio.to_thread(
+                                    self.domain_router_chain.invoke,
+                                    {"context": str(self.conversation_history[-2:]), "input": current_input_for_llm}
+                                )
+                                current_domain_decision = router_out.strip().lower()
+                        except Exception:
+                            current_domain_decision = "general"
 
                     # B. RESOLVE MODEL ROLE (Apply Blacklist)
                     # Map domain to config key, checking blacklist
@@ -1024,9 +1025,6 @@ class AmaryllisAgent:
                     specialist_model = self.provider.get_model(target_role) or self.provider.get_model("default")
 
                     # --- Conditional Ada/SPARK Enforcement ---
-                    # We dynamically inject the strict Ada prompt ONLY if the task and RAG context
-                    # indicate a need for high-integrity programming.
-
                     effective_system_prompt = self.final_system_prompt_template_string.format(**prompt_inputs)
 
                     if target_role == "code":
@@ -1062,7 +1060,7 @@ class AmaryllisAgent:
 
                     # C. BUILD PROMPT (Same as before)
                     prompt_template = ChatPromptTemplate.from_messages([
-                        SystemMessage(content=self.final_system_prompt_template_string.format(**prompt_inputs)),
+                        SystemMessage(content=effective_system_prompt),
                         MessagesPlaceholder(variable_name="agent_history_turns"),
                         HumanMessage(content="{current_input}")
                     ])
@@ -1076,12 +1074,12 @@ class AmaryllisAgent:
                     )
 
                     # Temporarily modify input for the prompt (append instruction)
-                    effective_input = current_input_for_llm + thinking_instruction
+                    effective_input_with_inst = current_input_for_llm + thinking_instruction
 
                     try:
                         raw_plan = await asyncio.to_thread(
                             thinking_chain.invoke,
-                            {**prompt_inputs, "current_input": effective_input},
+                            {**prompt_inputs, "current_input": effective_input_with_inst},
                             config={'priority': ELP0}
                         )
 
@@ -1115,7 +1113,6 @@ class AmaryllisAgent:
                             break
 
                 # --- STEP 2: TRANSLATE TO SYNTAX (Coding Phase) ---
-                # This runs AFTER the loop settles on a plan
                 if not plan_response:
                     plan_response = "Error: Failed to generate a valid plan."
 
@@ -1131,6 +1128,11 @@ class AmaryllisAgent:
                 except Exception as trans_err:
                     logger.error(f"Translation failed: {trans_err}")
                     agent_llm_response = plan_response  # Fallback to just text
+
+                # --- HARDENED ELP1 INTERRUPTION CHECK (Mid-Turn) ---
+                if priority_lock.ELP1_ACTIVE_FLAG:
+                     logger.critical(f"🚦 Agent Task {initial_interaction_id}: ELP1_ACTIVE_FLAG detected mid-turn! Immediate killing.")
+                     raise interruption_error_marker
 
                 # --- *** Interruption Handling *** ---
                 if isinstance(agent_llm_response, str) and interruption_error_marker in agent_llm_response:
@@ -1153,8 +1155,6 @@ class AmaryllisAgent:
                 # --- *** End Interruption Handling *** ---
 
                 # --- Log LLM response to DB (if not interrupted) ---
-                # Note: The interaction ID here is the one returned by add_interaction,
-                # NOT necessarily the initial_interaction_id for the whole task.
                 add_interaction(
                     db, session_id=session_id, mode="agent", input_type="llm_response",
                     user_input=f"[Agent response turn {turn_count}]", # Contextual input description
@@ -1303,12 +1303,12 @@ class AmaryllisAgent:
 
 
 # Global function to start agent task in background (async)
-async def _start_agent_task(agent_instance: AmaryllisAgent, initial_interaction_id: int, user_input: str, session_id: str):
+async def _start_agent_task(agent_instance: AmaryllisAgent, initial_interaction_id: int, user_input: str, session_id: str, intent_label: str = "generic"):
     """Schedules the Agent's background task."""
     logger.warning(f"▶️ Spawning Agent background task for Interaction ID: {initial_interaction_id}")
     loop = asyncio.get_event_loop()
     # Schedule the agent's main task function to run
-    loop.create_task(agent_instance._run_task_in_background(initial_interaction_id, user_input, session_id))
+    loop.create_task(agent_instance._run_task_in_background(initial_interaction_id, user_input, session_id, intent_label))
     logger.warning(f"▶️ Agent background task scheduled.")
 
 # Global agent instance placeholder - initialized in app.py

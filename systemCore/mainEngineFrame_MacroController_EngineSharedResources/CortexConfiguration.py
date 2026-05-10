@@ -2752,6 +2752,8 @@ PROMPT_ASSISTANT_ACTION_ANALYSIS = """system
 - `search`: 搜索网页、本地文件、联系人、笔记等。
 - `basics`: 拨打电话、发送消息、设置计时器、进行计算。
 - `phone_interaction`: 打开应用/文件、切换系统设置（如Wi-Fi）、调节音量。
+- `agentic_execution`: 复杂的、多步骤的推理、编码或使用工具完成任务（例如：编写完整的系统脚本、分析大型代码库）。
+- `self_healing`: 自动修复环境、检查系统完整性、安装缺失的依赖或修复破损的工具链。
 - `no_action`: 普通聊天、提问、陈述观点，或意图模糊不清。
 
 **核心规则:**
