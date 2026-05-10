@@ -3798,7 +3798,12 @@ def _ensure_conda_package(
         print_system(
             f"Checking for executable '{executable_to_check}' (from Conda package '{log_package_name}')..."
         )
-        found_path = shutil.which(executable_to_check)
+        # Prioritize the target environment's bin/Scripts directory
+        bin_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "Scripts" if IS_WINDOWS else "bin")
+        found_path = shutil.which(executable_to_check, path=bin_dir)
+        if not found_path:
+            # Fallback to general PATH
+            found_path = shutil.which(executable_to_check)
         if found_path:
             try:
                 norm_found_path = os.path.normcase(os.path.realpath(found_path))
@@ -3880,8 +3885,11 @@ def _ensure_conda_package(
             if not executable_to_check:
                 return True
 
-            # Re-verify executable path after install
-            found_path_after = shutil.which(executable_to_check)
+            # Re-verify executable path after install, prioritizing the env's bin
+            bin_dir = os.path.join(TARGET_RUNTIME_ENV_PATH, "Scripts" if IS_WINDOWS else "bin")
+            found_path_after = shutil.which(executable_to_check, path=bin_dir)
+            if not found_path_after:
+                found_path_after = shutil.which(executable_to_check)
             if found_path_after and os.path.normcase(
                 os.path.realpath(found_path_after)
             ).startswith(os.path.normcase(os.path.realpath(TARGET_RUNTIME_ENV_PATH))):
@@ -7918,16 +7926,17 @@ if __name__ == "__main__":
             print_system("--- Python dependencies for Engine installed ---")
 
             # Global command variable final sanity check (should point to conda env versions now)
-            globals()["GIT_CMD"] = shutil.which("git") or (
+            bin_dir_final = os.path.join(TARGET_RUNTIME_ENV_PATH, "Scripts" if IS_WINDOWS else "bin")
+            globals()["GIT_CMD"] = shutil.which("git", path=bin_dir_final) or shutil.which("git") or (
                 "git.exe" if IS_WINDOWS else "git"
             )
-            globals()["CMAKE_CMD"] = shutil.which("cmake") or (
+            globals()["CMAKE_CMD"] = shutil.which("cmake", path=bin_dir_final) or shutil.which("cmake") or (
                 "cmake.exe" if IS_WINDOWS else "cmake"
             )
             # NPM_CMD is already set by the Node.js block, but this re-confirms or falls back if needed.
             npm_exe_name_check = "npm.cmd" if IS_WINDOWS else "npm"
             globals()["NPM_CMD"] = (
-                shutil.which(npm_exe_name_check) or npm_exe_name_check
+                shutil.which(npm_exe_name_check, path=bin_dir_final) or shutil.which(npm_exe_name_check) or npm_exe_name_check
             )  # Ensure this is updated from the conda env
 
             print_system(f"Using GIT_CMD: {GIT_CMD}")
@@ -7936,12 +7945,12 @@ if __name__ == "__main__":
             # One final comprehensive check for all critical tools
             if not all(
                 [
-                    GIT_CMD and shutil.which(GIT_CMD.split()[0]),
-                    CMAKE_CMD and shutil.which(CMAKE_CMD.split()[0]),
-                    NPM_CMD and shutil.which(NPM_CMD.split(".")[0]),
-                    shutil.which("node"),  # Directly check 'node' executable
-                    shutil.which("go"),  # Directly check 'go' executable
-                    shutil.which("alr"),  # Directly check 'alr' executable
+                    GIT_CMD and (shutil.which(GIT_CMD.split()[0], path=bin_dir_final) or shutil.which(GIT_CMD.split()[0])),
+                    CMAKE_CMD and (shutil.which(CMAKE_CMD.split()[0], path=bin_dir_final) or shutil.which(CMAKE_CMD.split()[0])),
+                    NPM_CMD and (shutil.which(NPM_CMD.split(".")[0], path=bin_dir_final) or shutil.which(NPM_CMD.split(".")[0])),
+                    shutil.which("node", path=bin_dir_final) or shutil.which("node"),  # Directly check 'node' executable
+                    shutil.which("go", path=bin_dir_final) or shutil.which("go"),  # Directly check 'go' executable
+                    shutil.which("alr", path=bin_dir_final) or shutil.which("alr"),  # Directly check 'alr' executable
                 ]
             ):
                 print_error(
