@@ -671,6 +671,37 @@ def _compile_watchtowers() -> bool:
     print_system("--- All ZephyWatchtower components compiled successfully. ---")
     return True
 
+def _run_pyrefly_integrity_check():
+    """Runs the Pyrefly static analysis/integrity check on the Python components."""
+    print_system("--- Running Pyrefly Integrity Check (Static Analysis) ---")
+
+    # We run it on the systemCore directory
+    target_dir = os.path.join(ROOT_DIR, "systemCore")
+
+    # We use the python executable from the venv
+    pyrefly_cmd = [PYTHON_EXECUTABLE, "-m", "pyrefly", "--path", target_dir]
+
+    try:
+        # We do not hide Warnings or Errors as requested.
+        # Running without capture_output allows them to stream to the terminal.
+        process = subprocess.run(
+            pyrefly_cmd,
+            cwd=ROOT_DIR,
+            check=False,
+            text=True
+        )
+
+        if process.returncode != 0:
+            print_error("Integrity Failure Python Glue")
+            sys.exit(1)
+
+        print_success("Pyrefly Integrity Check passed.")
+    except Exception as e:
+        print_error(f"Failed to execute Pyrefly: {e}")
+        print_error("Integrity Failure Python Glue")
+        sys.exit(1)
+
+
 
 def _install_rocq_from_source() -> bool:
     """Install Rocq (Coq) using opam (local root, pre‑built binaries)."""
@@ -5998,6 +6029,9 @@ if __name__ == "__main__":
                 except ImportError:
                     TUI_LIBRARIES_AVAILABLE = False
 
+                # Run Pyrefly Integrity Check before launching
+                _run_pyrefly_integrity_check()
+
                 # Now, call the parallel launcher
                 launch_all_services_in_parallel_and_monitor()
 
@@ -8091,6 +8125,9 @@ if __name__ == "__main__":
                     f_hash.write(current_hash)
 
                 print_system("Setup complete. Proceeding to launch.")
+                # Run Pyrefly Integrity Check before launching
+                _run_pyrefly_integrity_check()
+
                 # We will call our new parallel launch function here later.
                 # For now, put a placeholder to signify completion.
                 launch_all_services_in_parallel_and_monitor()
@@ -8499,10 +8536,9 @@ if __name__ == "__main__":
                         f"'conda run' process finished with code: {exit_code_from_conda_run}."
                     )
                     relaunched_conda_process_obj = None  # Mark as handled for atexit
-                    if exit_code_from_conda_run == 0:
-                        sys.exit(
-                            exit_code_from_conda_run
-                        )  # Exit parent with child's return code
+                    # If the relaunched script exited, the parent must exit with the same code.
+                    # This ensures that integrity failures (like Pyrefly) correctly stop the whole system without attempting "repair" retries.
+                    sys.exit(exit_code_from_conda_run)
                 else:
                     print_error(
                         "Failed to start 'conda run' process. This should not happen after Popen check."
