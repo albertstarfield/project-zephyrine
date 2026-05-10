@@ -578,3 +578,13 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Refactoring the build to prepare for Raven-Revolution into Stellar.
     -   **Status:** `Resolved`
     -   **Description:** Launcher.py now completed rocq/coq auto installation for the venv changes (None coq installation is soon deprecated and rocq is mandatory), (fixes some additional loop retry break sys.exit() ).
+
+-   **ID:** `CORE-FEAT-022`
+    -   **Title:** Implement Semantic Caching, Self-Healing Integrity, and Enhanced Web Search.
+    -   **Status:** `Resolved`
+    -   **Description:** This update introduces a multi-faceted enhancement to the core engine. Key changes include:
+        1.  **Semantic Caching**: Implementation of a semantic cache layer (`ENABLE_SEMANTIC_CACHE`) to store and retrieve responses based on query similarity, reducing redundant computation.
+        2.  **Self-Healing Integrity**: A new diagnostic suite (`_perform_self_healing_integrity`) that utilizes `pyrefly` for static integrity checks and `deal` for formal verification of code contracts, adhering to high-integrity safety standards.
+        3.  **Enhanced Web Search**: A complete overhaul of the `network_internet_knowledge_fetcher` module, adding support for Google, DuckDuckGo, and Searx engines, along with visual data extraction, CAPTCHA monitoring, and semantic ranking of search results.
+        4.  **Bottom Gear Routing**: Refactored the specialized request pipeline with a dynamic router for specialist model selection and an optimized bypass for self-healing operations.
+        5.  **Headless Mode**: Added a `--no-tui-headless` flag to `launcher.py` to support operation in environments without TUI capability.

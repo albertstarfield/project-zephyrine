@@ -146,6 +146,7 @@ qiskit-aer>=0.17.2
 qiskit-qrack-provider>=0.17.1
 pyzmq>=27.1.0
 pyrefly>=0.1.0
+deal>=4.24.3
 
 ################################################################################
 #                            Notes & Considerations                            #
