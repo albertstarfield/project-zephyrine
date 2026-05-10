@@ -626,3 +626,8 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Migrate Web Framework from Flask to Quart (ASGI-Native).
     -   **Status:** `Resolved`
     -   **Description:** Performed a major architectural migration of the core engine's web layer from Flask to Quart. This enables native asyncio support for all routes and middlewares, improving concurrency and eliminating the need for WSGI-to-ASGI adapters. Key changes include converting route handlers to `async def`, utilizing `await` for request data access, and implementing a native async SSE generator for chat streaming.
+
+-   **ID:** `CORE-INTEGRITY-001`
+    -   **Title:** Integrate SPARK flow analysis and frontend HTML/CSS validation.
+    -   **Status:** `Resolved`
+    -   **Description:** Implemented SPARK flow analysis for Ada components (Watchdog Level 2 and Frontface Backend Service) to enhance formal verification. Integrated HTMLHint and Stylelint into the launcher build pipeline for non-blocking frontend validation. Added detailed RATIONALE and WARRANTY annotations to Python core components for static analysis compatibility with Pyrefly. Enhanced launcher.py with Alire toolchain path management for self-contained builds.

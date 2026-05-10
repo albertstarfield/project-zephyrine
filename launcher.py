@@ -176,9 +176,16 @@ if not any(arg in sys.argv for arg in ["--help", "-h"]):
     os.makedirs(opam_root, exist_ok=True)
     os.makedirs(os.environ["NODE_PATH"], exist_ok=True)
 
-# Set the environment variables for all subprocesses
+# Set the environment variables for all subprocesses.
+# This redirects ALL alire state into zephyrineRuntimeVenv/alire/ so that:
+#  - Downloaded crates go to .../alire/cache/
+#  - GNAT and SPARK toolchain binaries go to .../alire/toolchains/
+#  - alr settings (toolchain selection etc.) go to .../alire/config/
+# This keeps the user's $HOME clean and makes the project fully self-contained.
 os.environ["ALIRE_SETTINGS_DIR"] = os.path.join(ALIRE_HOME, "config")
 os.environ["ALIRE_CACHE"] = os.path.join(ALIRE_HOME, "cache")
+ALIRE_TOOLCHAIN_DIR = os.path.join(ALIRE_HOME, "toolchains")
+os.environ["ALIRE_TOOLCHAIN_DIR"] = ALIRE_TOOLCHAIN_DIR
 
 # --- Rocq Configuration ---
 ROCQ_SOURCE_INSTALLED_FLAG_FILE = os.path.join(
@@ -678,6 +685,11 @@ def _compile_watchtowers() -> bool:
         )
         if process_ada.returncode == 0:
             print_system("Ada Watchdog (Thread 2) built successfully.")
+            # --- SPARK Flow Analysis (Advisory, Non-Fatal) ---
+            # Run gnatprove --mode=flow after a successful compile to verify
+            # data flow soundness. C_Bridge body is excluded via SPARK_Mode => Off.
+            _run_gnatprove_spark_check(ada_watchdog_dir)
+            # --------------------------------------------------
         else:
             print_error(
                 f"Failed to build Ada Watchdog. RC: {process_ada.returncode}\nSTDERR: {process_ada.stderr.strip()}"
@@ -4903,6 +4915,37 @@ def _ensure_alire_and_gnat_toolchain():
         print_error("Alire failed to install the GNAT toolchain.")
         return False
 
+    # Persist the toolchain.dir and cache.dir settings into the venv-local alire config.
+    # This ensures subsequent `alr exec` calls (including gnatprove) resolve binaries
+    # from zephyrineRuntimeVenv/alire/toolchains/ rather than the user's $HOME.
+    alire_settings_dir = os.environ.get("ALIRE_SETTINGS_DIR", "")
+    alire_toolchain_dir = os.environ.get("ALIRE_TOOLCHAIN_DIR", "")
+    alire_cache_dir = os.environ.get("ALIRE_CACHE", "")
+    if alire_settings_dir:
+        for setting_key, setting_val in [
+            ("toolchain.dir", alire_toolchain_dir),
+            ("cache.dir", alire_cache_dir),
+        ]:
+            if setting_val:
+                run_command(
+                    ["alr", "settings", "--global", f"--set={setting_key}={setting_val}"],
+                    cwd=ROOT_DIR, name=f"ALIRE-SET-{setting_key.upper().replace('.', '-')}",
+                    check=False,
+                )
+
+    # 3) Attempt to install SPARK (gnatprove) into the toolchain directory
+    # Note: gnatprove is a crate, not a toolchain component, so we use `alr install`
+    print_system("Attempting to install SPARK (gnatprove) verification tool...")
+    spark_install_cmd = ["alr", "-n", "-f", "install", f"--prefix={alire_toolchain_dir}", "gnatprove"]
+    if not run_command(spark_install_cmd, cwd=ROOT_DIR, name="ALIRE-INSTALL-SPARK", check=False):
+        print_warning(
+            "SPARK (gnatprove) toolchain not available via Alire index. "
+            "SPARK flow analysis will fall back to system PATH or be skipped. "
+            "This does NOT affect Ada compilation."
+        )
+    else:
+        print_system("✅ SPARK (gnatprove) toolchain installed via Alire.")
+
     print_system("✅ GNAT toolchain successfully installed via Alire.")
     with open(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE, "w") as f:
         f.write(f"Installed via Alire on {datetime.now().isoformat()}")
@@ -4950,6 +4993,181 @@ def _run_jshint_autofix(target_dir):
         "JSHINT-AUTOFIX"
     ):
         print_warning("JSHint Auto-Fix encountered issues. Build will proceed anyway.")
+
+def _ensure_html_css_linters_installed(target_dir):
+    """Ensures htmlhint and stylelint are installed in the target directory.
+    Non-blocking: installation failure just skips validation.
+    """
+    print_system("Checking for HTMLHint and Stylelint...")
+    htmlhint_bin = os.path.join(target_dir, "node_modules", ".bin", "htmlhint")
+    stylelint_bin = os.path.join(target_dir, "node_modules", ".bin", "stylelint")
+
+    if not os.path.exists(htmlhint_bin) or not os.path.exists(stylelint_bin):
+        print_system("HTMLHint or Stylelint not found. Installing locally...")
+        if not run_command(
+            [NPM_CMD, "install", "--save-dev",
+             "htmlhint",
+             "stylelint",
+             "stylelint-config-standard"],
+            target_dir,
+            "NPM-INSTALL-HTML-CSS-LINTERS",
+            check=False,
+        ):
+            print_warning("Failed to install HTMLHint/Stylelint. HTML/CSS validation will be skipped.")
+            return False
+    return True
+
+
+def _run_html_css_validation(target_dir):
+    """Runs htmlhint and stylelint on the frontend source.
+    Non-blocking: errors are logged as warnings but never halt the build pipeline.
+    This catches structural HTML issues and CSS property errors before Vite compiles.
+    """
+    print_system("--- Running HTML/CSS Validation (non-blocking) ---")
+    htmlhint_bin = os.path.join(target_dir, "node_modules", ".bin", "htmlhint")
+    stylelint_bin = os.path.join(target_dir, "node_modules", ".bin", "stylelint")
+    src_dir = os.path.join(target_dir, "src")
+
+    if not os.path.exists(src_dir):
+        print_warning(f"Frontend src/ directory not found: {src_dir}. Skipping HTML/CSS validation.")
+        return
+
+    # --- HTMLHint: Validate all .html files ---
+    # Scans the project root index.html and any HTML in src/
+    html_targets = []
+    index_html = os.path.join(target_dir, "index.html")
+    if os.path.exists(index_html):
+        html_targets.append(index_html)
+
+    # Walk src/ for .html files
+    for root, _, files in os.walk(src_dir):
+        for f in files:
+            if f.endswith(".html"):
+                html_targets.append(os.path.join(root, f))
+
+    if html_targets and os.path.exists(htmlhint_bin):
+        print_system(f"HTMLHint: Checking {len(html_targets)} HTML file(s)...")
+        if not run_command(
+            [htmlhint_bin] + html_targets,
+            target_dir,
+            "HTMLHINT",
+            check=False,
+        ):
+            print_warning("HTMLHint found HTML issues. Review [HTMLHINT] output above. Build continues.")
+    else:
+        print_system("HTMLHint: No HTML files found or htmlhint not installed. Skipping.")
+
+    # --- Stylelint: Validate all .css and .scss files in src/ ---
+    if os.path.exists(stylelint_bin):
+        # Build pattern for all CSS files; stylelint accepts glob
+        css_pattern = "src/**/*.css"
+        # Also check if there are any CSS files at all before running
+        has_css = any(
+            f.endswith(".css") or f.endswith(".scss")
+            for _, _, files in os.walk(src_dir)
+            for f in files
+        )
+        if has_css:
+            print_system("Stylelint: Checking CSS/SCSS files...")
+            # Write a minimal stylelint config if one doesn't exist
+            stylelint_config = os.path.join(target_dir, ".stylelintrc.json")
+            if not os.path.exists(stylelint_config):
+                import json as _json
+                with open(stylelint_config, "w", encoding="utf-8") as _f:
+                    _json.dump({"extends": ["stylelint-config-standard"]}, _f, indent=2)
+                print_system("Created minimal .stylelintrc.json for Stylelint.")
+            if not run_command(
+                [stylelint_bin, css_pattern, "--allow-empty-input"],
+                target_dir,
+                "STYLELINT",
+                check=False,
+            ):
+                print_warning("Stylelint found CSS issues. Review [STYLELINT] output above. Build continues.")
+        else:
+            print_system("Stylelint: No CSS/SCSS files found in src/. Skipping.")
+    else:
+        print_warning("Stylelint binary not found. CSS validation skipped.")
+
+    print_system("--- HTML/CSS Validation complete ---")
+
+
+def _run_gnatprove_spark_check(ada_watchdog_dir: str) -> bool:
+    """Runs gnatprove --mode=flow on the Ada watchdog for SPARK flow analysis.
+
+    This is a NON-FATAL advisory check. It verifies data flow integrity
+    (uninitialized variables, data dependencies) but does NOT block deployment
+    if proof fails — the Ada binary was already compiled successfully by gprbuild.
+
+    RATIONALE for --mode=flow:
+      The watchdog uses C FFI (fork, execvp, malloc). SPARK cannot formally prove
+      C-interop bodies. Flow analysis (data flow only) IS safe to run on mixed
+      Ada/SPARK code because it only traces variable initialization and data paths,
+      not memory safety proofs that require pure SPARK.
+
+    WARRANTY: The C_Bridge package body is marked SPARK_Mode => Off, so gnatprove
+    will skip it entirely and only analyze the annotated pure-Ada portions.
+    """
+    print_system("--- Running SPARK Flow Analysis (gnatprove --mode=flow) [Advisory] ---")
+
+    # Locate gnatprove: try via alr exec first (uses venv toolchain),
+    # then fall back to direct PATH search.
+    gnatprove_via_alr = ["alr", "exec", "--", "gnatprove"]
+    gnatprove_direct = shutil.which("gnatprove")
+
+    gpr_file = os.path.join(ada_watchdog_dir, "watchdog_thread2.gpr")
+    if not os.path.exists(gpr_file):
+        print_warning(f"SPARK check skipped: GPR file not found at {gpr_file}")
+        return True  # Non-fatal
+
+    # Build the prove command with venv-aware alr exec
+    prove_cmd = gnatprove_via_alr + [
+        "-P", gpr_file,
+        "--mode=flow",       # Flow analysis only — safe for FFI-heavy code
+        "-j0",               # Use all available cores
+        "--level=1",         # Speed-optimized; escalate to 4 for full proof later
+        "--warnings=continue",  # Emit warnings but don't abort
+        "--no-subprojects",  # Don't chase into external crates
+        "--quiet",           # Suppress proof explorer noise; we see errors only
+    ]
+
+    # Pass alire toolchain env so gnatprove resolves from venv toolchain dir
+    alire_env = {
+        "ALIRE_SETTINGS_DIR": os.environ.get("ALIRE_SETTINGS_DIR", ""),
+        "ALIRE_CACHE": os.environ.get("ALIRE_CACHE", ""),
+        "ALIRE_TOOLCHAIN_DIR": os.environ.get("ALIRE_TOOLCHAIN_DIR", ""),
+    }
+
+    result = run_command(
+        prove_cmd,
+        ada_watchdog_dir,
+        "GNATPROVE-FLOW",
+        check=False,           # Non-fatal: don't raise on non-zero exit
+        env_override=alire_env,
+    )
+
+    if result:
+        print_system("✅ SPARK flow analysis passed. Ada watchdog data flow is sound.")
+    else:
+        # Fall back: try direct gnatprove if alr exec failed (e.g. SPARK not in alr toolchain)
+        if gnatprove_direct:
+            print_warning("gnatprove via 'alr exec' failed. Retrying with system gnatprove...")
+            fallback_cmd = [gnatprove_direct, "-P", gpr_file,
+                            "--mode=flow", "-j0", "--level=1",
+                            "--warnings=continue", "--no-subprojects", "--quiet"]
+            result = run_command(fallback_cmd, ada_watchdog_dir, "GNATPROVE-FLOW-DIRECT", check=False)
+            if result:
+                print_system("✅ SPARK flow analysis passed (via system gnatprove).")
+            else:
+                print_warning("⚠️  SPARK flow analysis reported issues. Review [GNATPROVE-FLOW] output. Build continues.")
+        else:
+            print_warning(
+                "⚠️  SPARK flow analysis could not run (gnatprove not found in toolchain or PATH). "
+                "To enable it, ensure you have a SPARK Community edition compatible with your GNAT version.\n"
+                f"Install via: alr install --prefix={os.environ.get('ALIRE_TOOLCHAIN_DIR', '')} gnatprove"
+            )
+
+    return True  # Always non-fatal
+
 
 def _create_alire_helper_scripts():
     """
@@ -7048,6 +7266,11 @@ if __name__ == "__main__":
             if _ensure_jshint_installed(frontend_host_assets):
                 _run_jshint_autofix(frontend_host_assets)
             # -----------------------------------
+
+            # --- HTML/CSS Validation (htmlhint + stylelint) ---
+            if _ensure_html_css_linters_installed(frontend_host_assets):
+                _run_html_css_validation(frontend_host_assets)
+            # ---------------------------------------------------
 
             # 2. Build Static Assets (Vite)
             print_system("Building React frontend (Vite)...")
