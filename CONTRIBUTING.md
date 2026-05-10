@@ -9,13 +9,13 @@ The `launcher.py` script is the sole authority for installing dependencies and c
 
 ## Section 1.2: Architectural Safety Standards (Design Assurance Levels)
 
-Project Zephyrine adheres to a modified subset of **DO-178C** standards to manage the inherent risks of coupling non-deterministic AI with deterministic control systems. Every component in the repository is assigned a **Design Assurance Level (DAL)**.
+Project Zephyrine adheres to an **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)** to manage the inherent risks of coupling non-deterministic AI with deterministic control systems. Every component in the repository is assigned a **Design Assurance Level (DAL)**.
 
 Before contributing, you must identify the DAL of the module you are modifying. The rules for contribution change drastically between levels.
 
 
 
-### **DAL A: Catastrophic (The Hard-Real-Time Core)**
+### **DAL A: Catastrophic (The Hard-Real-Time Core / ECSS Category A)**
 * **Scope:** Microcontroller (uC) Hardware + firmware (NO MMU), Actuator Control, Power Management, Bootloaders, and "Hard-Limit" enforcement logic.
 * **Permitted Languages:** **Ada** (Preferred), **C/C++** (Strict Subset/MISRA compliant).
 * **Prohibited:** Python, JavaScript, Garbage Collection, Dynamic Memory Allocation (after initialization).
@@ -24,7 +24,7 @@ Before contributing, you must identify the DAL of the module you are modifying. 
     * **Manual Verification:** All PRs affecting DAL A must include a manual timing analysis (e.g., "Loop guarantees execution in <500µs").
     * **Failure Consequence:** Hardware damage, thermal runaway, or total system loss.
 
-### **DAL B: Hazardous (The Watchdog & Manager)**
+### **DAL B: Hazardous (The Watchdog & Manager / ECSS Category B)**
 * **Scope:** The Daemon Manager, Inter-Process Communication (IPC) Bridges, System Health Monitors, Shared Memory (SHM) Scoreboards.
 * **Permitted Languages:** **Ada** (Daemon), **Go** (Watchdog), **Rust**.
 * **Role:** This layer protects the system from the AI. It monitors the "Heartbeat" of DAL C and performs a "Kill/Restart" if the AI hangs or hallucinates unsafe values.
@@ -33,7 +33,7 @@ Before contributing, you must identify the DAL of the module you are modifying. 
     * **Focus:** Code must be proofed against deadlocks and race conditions.
     * **Failure Consequence:** Loss of intelligent guidance, reversion to ballistic/fallback mode.
 
-### **DAL C: Major (The Intelligent Orchestrator)**
+### **DAL C: Major (The Intelligent Orchestrator / ECSS Category C)**
 * **Scope:** The Zephyrine Orchestrator, Large Language Models (LLM), Stella Icarus Hooks, GNC (Guidance, Navigation, Control) Logic, User Interface, Network Mesh.
 * **Permitted Languages:** **Python**, **Ada**, **Ada/SPARK**, **C++** (StellaIcarus Hooks), **TypeScript/JavaScript (ONLY FOR LEGACY)**
 * **Role:** High-level reasoning, physics simulation, and user interaction. This layer is considered **Non-Deterministic**.

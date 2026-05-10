@@ -501,6 +501,13 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Open`
     -   **Description:** The project lacks a user-facing guide explaining how to use the main features like the agent, the creative processor, and the different search functionalities. A new document should be created in the `documentation` folder to serve as a user manual.
 
+-   **ID:** `DOC-FEAT-009`
+    -   **Title:** Add ECSS standards and clarify high-integrity paradigms.
+    -   **Status:** `Resolved`
+    -   **Description:** Updated `CONTRIBUTING.md` and `systemCore/README.md` to include "Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)". Refined DAL definitions to explicitly map DO-178C levels to ECSS Software Criticality Categories (A, B, C).
+
+
+
 ### Maintenance
 
 -   **ID:** `DOC-MAINT-001`
