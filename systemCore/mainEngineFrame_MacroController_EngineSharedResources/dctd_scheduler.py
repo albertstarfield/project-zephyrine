@@ -162,7 +162,7 @@ class DCTDSchedulerThread(threading.Thread):
                 session_id=session_id_val,
                 classification="scheduled_thought_execution",
                 image_b64=None,
-                update_interaction_id=source_interaction_id # Link back if needed
+                update_interaction_id=source_id # Link back if needed
             )
             
             # Update Task Status to COMPLETED

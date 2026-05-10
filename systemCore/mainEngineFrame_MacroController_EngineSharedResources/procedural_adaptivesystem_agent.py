@@ -9,6 +9,7 @@ import os
 import sys
 import subprocess # For executing commands
 import shlex # For safely splitting command strings
+import functools
 from loguru import logger
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional, Tuple, Union
@@ -143,13 +144,15 @@ class AgentTools:
             loop = asyncio.get_running_loop()
             process = await loop.run_in_executor(
                 None, # Use default ThreadPoolExecutor
-                subprocess.run,
-                cmd_list, # Pass list or string depending on OS/shell
-                shell=use_shell, # Set based on platform need
-                cwd=self.cwd,
-                capture_output=True,
-                text=True,
-                timeout=120 # Timeout for command execution
+                functools.partial(
+                    subprocess.run,
+                    cmd_list, # Pass list or string depending on OS/shell
+                    shell=use_shell, # Set based on platform need
+                    cwd=self.cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120 # Timeout for command execution
+                )
             )
 
             stdout = process.stdout.strip()
@@ -212,7 +215,7 @@ class AgentTools:
             # Ensure parent directory exists
             parent_dir = os.path.dirname(full_path)
             if parent_dir: # Only create if not writing to root CWD
-                await loop.run_in_executor(None, os.makedirs, parent_dir, exist_ok=True)
+                await loop.run_in_executor(None, functools.partial(os.makedirs, parent_dir, exist_ok=True))
 
             # Write file content in a thread
             await loop.run_in_executor(
@@ -257,7 +260,7 @@ class AgentTools:
                  for item in raw_items:
                      item_full_path = os.path.join(full_path, item)
                      # Check if it's a directory within the thread to avoid blocking loop
-                     is_dir = await loop.run_in_executor(None, os.listdir, item_full_path)
+                     is_dir = await loop.run_in_executor(None, os.path.isdir, item_full_path)
                      items_with_type.append(item + '/' if is_dir else item)
                  items = items_with_type # Assign back to items
 
@@ -759,7 +762,7 @@ class AmaryllisAgent:
             tool_method = getattr(self.agent_tools, tool_name, None)
             if tool_method and callable(tool_method):
                  logger.debug(f"Calling tool method: agent_tools.{tool_name}(**{parameters})")
-                 result = await tool_method(**parameters) # Call the tool method
+                 result = await tool_method(**parameters) # Call the tool method # pyrefly: ignore
             elif tool_name in ["attempt_completion", "plan_mode_respond", "ask_followup_question", "new_task", "load_mcp_documentation"]:
                  result = f"Error: LLM attempted to 'execute' output type tool '{tool_name}'. This indicates the LLM should have stopped."
                  logger.warning(f"LLM requested output tool '{tool_name}'.")

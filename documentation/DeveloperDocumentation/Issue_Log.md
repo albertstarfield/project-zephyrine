@@ -1,3 +1,23 @@
+-   **ID:** `CORE-REFACTOR-017`
+-   **Title:** `Implement ELP0/ELP1 priority propagation and concurrency control.`
+-   **Status:** `Resolved`
+-   **Description:** `Enhanced the PriorityQuotaLock and CortexEngine to support explicit priority propagation across direct generation and background tasks. Refactored the Quart stream generator for better log handling and client disconnection recovery. Standardized asyncio executor patterns using functools.partial for thread safety.`
+
+-   **ID:** `CORE-REFACTOR-016`
+-   **Title:** `Migrate Web Framework from Flask to Quart (ASGI-Native).`
+-   **Status:** `Resolved`
+-   **Description:** `Performed a major architectural migration of the core engine's web layer from Flask to Quart. This enables native asyncio support for all routes and middlewares, improving concurrency and eliminating the need for WSGI-to-ASGI adapters. Key changes include converting route handlers to async def, utilizing await for request data access, and implementing a native async SSE generator for chat streaming.`
+
+-   **ID:** `LAUNCHER-FIX-005`
+-   **Title:** `Resolve macOS build compatibility and implement port conflict detection.`
+-   **Status:** `Resolved`
+-   **Description:** `Integrated macOS-specific build fixes for Ada components, including gnatchop and linker flag adjustments. Added automated patching for pywhispercpp and stable-diffusion-cpp to remove incompatible Clang flags. Implemented proactive port conflict detection in the launcher to prevent startup failures.`
+
+-   **ID:** `UI-FEAT-007`
+-   **Title:** `Integrate PixiJS, Live2D, and html2canvas support.`
+-   **Status:** `Resolved`
+-   **Description:** `Expanded the frontend dependency stack to include PixiJS and pixi-live2d-display for interactive character rendering. Added html2canvas for screenshot capabilities and updated the environment configuration to use ESM modules.`
+
 -   **ID:** `CORE-REFACTOR-013`
 -   **Title:** `Refactor background tasks to Snowball-Enaga and implement priority propagation.`
 -   **Status:** `Resolved`

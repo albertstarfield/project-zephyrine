@@ -182,6 +182,9 @@ except ImportError as e:
 stella_icarus_daemon_manager = StellaIcarusAdaDaemonManager()
 logger.success("✅ StellaIcarus Ada Daemon Manager Initialized (not yet started).")
 
+# --- Global State for Checks ---
+full_context_string_for_check: str = ""
+
 # === Global Semaphores and Concurrency Control ===
 # Default to a small number, can be overridden by environment variable if desired
 _default_max_bg_tasks = 10  # Parallel control I forgot was this because of XNU limitation on handling bg parallel threads???
@@ -11035,6 +11038,7 @@ Extract the section titles and output them as a strict, valid JSON list of strin
         image_b64: Optional[str] = None,
         update_interaction_id: Optional[int] = None,  # For reflection tasks
         stop_event_for_bg: Optional[threading.Event] = None,
+        priority: int = ELP0,
         parent_ingestion_job_id: Optional[int] = None,
         result_callback_queue: Optional[asyncio.Queue] = None,
     ):  # Link to parent ingestion job
@@ -14447,84 +14451,77 @@ async def _stream_openai_chat_response_generator_quart(
         loop.call_soon_threadsafe(message_queue.put_nowait, ("LOG", formatted_log))
 
     sink_id = None
-    if STREAM_INTERNAL_LOGS:
-        log_context_id = f"{session_id}-async"
-        sink_id = logger.add(
-            log_sink,
-            level="INFO",
-            filter=lambda r: r["extra"].get("request_session_id") == log_context_id,
-        )
-
-    async def run_generate():
-        db_session = None
-        try:
-            db_session = SessionLocal()
-            log_context_id = f"{session_id}-async"
-            with logger.contextualize(request_session_id=log_context_id):
-                result = await cortex_text_interaction.direct_generate(
-                    db=db_session,
-                    user_input=user_input,
-                    session_id=session_id,
-                    image_b64=image_b64,
-                )
-                await message_queue.put(("RESULT", result))
-        except Exception as e:
-            logger.error(f"Generate Task Error: {e}")
-            await message_queue.put(("ERROR", str(e)))
-        finally:
-            if db_session:
-                db_session.close()
-            if sink_id is not None:
-                logger.remove(sink_id)
-
-    # Start the generation task
-    gen_task = asyncio.create_task(run_generate())
+    gen_task = None
 
     try:
-        yield yield_chunk(role="assistant", delta_content="<think>\n")
+        if STREAM_INTERNAL_LOGS:
+            log_context_id = f"{session_id}-async"
+            sink_id = logger.add(
+                log_sink,
+                level="INFO",
+                filter=lambda r: r["extra"].get("request_session_id") == log_context_id,
+            )
 
-        if _PREBUFFERED_THINK_CONTENT:
-            for word in _PREBUFFERED_THINK_CONTENT.split(" "):
-                yield yield_chunk(delta_content=word + " ")
-                await asyncio.sleep(0.001)
+        async def run_generate():
+            db_session = None
+            try:
+                db_session = SessionLocal()
+                log_context_id = f"{session_id}-async"
+                with logger.contextualize(request_session_id=log_context_id):
+                    result = await cortex_text_interaction.direct_generate(
+                        db=db_session,
+                        user_input=user_input,
+                        session_id=session_id,
+                        image_b64=image_b64,
+                    )
+                    await message_queue.put(("RESULT", result))
+            except Exception as e:
+                logger.error(f"Generate Task Error: {e}")
+                await message_queue.put(("ERROR", str(e)))
+            finally:
+                if db_session:
+                    db_session.close()
+                if sink_id is not None:
+                    try:
+                        logger.remove(sink_id)
+                    except Exception:
+                        pass
 
-        while True:
-            item = await message_queue.get()
-            msg_type, msg_content = item
+        # Start the generation task
+        gen_task = asyncio.create_task(run_generate())
 
-            if msg_type == "LOG":
-                safe_content = msg_content.replace("<", "＜").replace(">", "＞")
-                if message_queue.qsize() > 1:
-                    yield yield_chunk(delta_content=safe_content)
-                else:
-                    for char in safe_content:
-                        yield yield_chunk(delta_content=char)
-                        await asyncio.sleep(0.001)
-            elif msg_type == "RESULT":
-                yield yield_chunk(delta_content="\n</think>\n\n" + msg_content, finish_reason="stop")
-                break
-            elif msg_type == "ERROR":
-                yield yield_chunk(delta_content=f"\n[Error: {msg_content}]", finish_reason="error")
-                break
-    finally:
-        if not gen_task.done():
-            gen_task.cancel()
+        final_response_text = ""
+        try:
+            yield yield_chunk(role="assistant", delta_content="<think>\n")
+
+            if _PREBUFFERED_THINK_CONTENT:
+                for word in _PREBUFFERED_THINK_CONTENT.split(" "):
+                    yield yield_chunk(delta_content=word + " ")
+                    await asyncio.sleep(0.001)
+
+            while True:
+                item = await message_queue.get()
+                msg_type, msg_content = item
+
+                if msg_type == "LOG":
+                    safe_content = msg_content.replace("<", "＜").replace(">", "＞")
+                    if message_queue.qsize() > 1:
+                        yield yield_chunk(delta_content=safe_content)
+                    else:
+                        for char in safe_content:
+                            yield yield_chunk(delta_content=char)
+                            await asyncio.sleep(0.001)
+                elif msg_type == "RESULT":
                     final_response_text = msg_content
                     break
-
-            except queue.Empty:
-                if not background_thread.is_alive():
-                    final_response_text = (
-                        "[Adaptive System Resp: NoResponseForThisQuery_CogThrdDied]"
-                    )
+                elif msg_type == "ERROR":
+                    final_response_text = f"[Error: {msg_content}]"
                     break
+        finally:
+            if gen_task and not gen_task.done():
+                gen_task.cancel()
 
-                # Heartbeat if logs are off
-                if not STREAM_INTERNAL_LOGS:
-                    yield yield_chunk(delta_content=".")
-
-                    # 7. Close Think Tag
-        # We add newlines to ensure visual separation before closing
+        # 7. Close Think Tag
         yield yield_chunk(delta_content="\n\n</think>\n\n")
 
         # 8. Stream the Actual Result
@@ -14542,7 +14539,7 @@ async def _stream_openai_chat_response_generator_quart(
                     "[The Engine is responding with more than one message...]\n\n"
                 )
                 yield yield_chunk(delta_content=warning_message)
-                time.sleep(0.1)
+                await asyncio.sleep(0.1)
 
                 for msg_index, message_text in enumerate(messages_to_stream):
                     prefixed_message = f"Zephy [{msg_index + 1}]: {message_text}\n\n"
@@ -14550,23 +14547,28 @@ async def _stream_openai_chat_response_generator_quart(
                     for i, word in enumerate(words):
                         content_to_send = word + (" " if i < len(words) - 1 else "")
                         yield yield_chunk(delta_content=content_to_send)
-                        time.sleep(0.01)
+                        await asyncio.sleep(0.01)
             else:
                 words = messages_to_stream[0].split(" ")
                 for i, word in enumerate(words):
                     content_to_send = word + (" " if i < len(words) - 1 else "")
                     yield yield_chunk(delta_content=content_to_send)
-                    time.sleep(0.01)
+                    await asyncio.sleep(0.01)
 
             yield yield_chunk(finish_reason="stop")
 
     except GeneratorExit:
-        logger.warning(f"QUART_STREAM_V6 {resp_id}: Client disconnected.")
-        if sink_id_holder[0] is not None:
-            logger.remove(sink_id_holder[0])
+        logger.warning(f"QUART_STREAM_V7 {resp_id}: Client disconnected.")
+        if gen_task and not gen_task.done():
+            gen_task.cancel()
+        if sink_id is not None:
+            try:
+                logger.remove(sink_id)
+            except Exception:
+                pass
 
     except Exception as e:
-        logger.error(f"QUART_STREAM_V6 {resp_id}: Orchestration Error: {e}")
+        logger.error(f"QUART_STREAM_V7 {resp_id}: Orchestration Error: {e}")
         yield yield_chunk(delta_content=f"\n[STREAM ERROR: {e}]", finish_reason="error")
     finally:
         yield "data: [DONE]\n\n"
@@ -14700,8 +14702,11 @@ def _execute_audio_worker_with_priority(
         f"{log_prefix}: Acquiring shared resource lock (Priority: ELP{priority})..."
     )
 
-    # Assuming acquire method exists and works as previously discussed
-    lock_acquired = shared_priority_lock.acquire(priority=priority, timeout=None)
+    # Handle potential fallback to standard threading.Lock
+    if isinstance(shared_priority_lock, PriorityQuotaLock):
+        lock_acquired = shared_priority_lock.acquire(priority=priority) # pyrefly: ignore
+    else:
+        lock_acquired = shared_priority_lock.acquire()
     lock_wait_duration = time.monotonic() - start_lock_wait
 
     if lock_acquired:

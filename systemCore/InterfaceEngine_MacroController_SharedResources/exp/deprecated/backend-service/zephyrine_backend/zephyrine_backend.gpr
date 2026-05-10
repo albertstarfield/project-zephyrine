@@ -17,7 +17,7 @@ project Zephyrine_Backend is
    -- Define package-level configurations
    package Compiler is
       -- Using your recommended flags for flexibility and optimization.
-      for Default_Switches ("ada") use ("-gnatX", "-gnata", "-g", "-O2");
+      for Default_Switches ("ada") use ("-gnatX", "-gnat2022", "-gnata", "-g", "-O2");
    end Compiler;
 
    package Binder is

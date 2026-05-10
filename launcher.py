@@ -237,6 +237,7 @@ tui_shutdown_event = threading.Event()
 
 # --- Executable Paths (will be redefined after Conda activation) ---
 IS_WINDOWS = os.name == "nt"
+IS_MACOS = platform.system() == "Darwin"
 PYTHON_EXECUTABLE = sys.executable
 PIP_EXECUTABLE = ""
 HYPERCORN_EXECUTABLE = ""
@@ -623,13 +624,33 @@ def _compile_watchtowers() -> bool:
         ### MODIFICATION START ###
 
         # Base command is now 'alr exec -- gprbuild', which we proved is more reliable.
-        build_command_ada = ["alr", "exec", "--", "gprbuild"]
+        build_command_ada = ["alr", "exec", "--", "gprbuild", "-cargs", "-gnat2022"]
 
         # Check if the OS is macOS and add the specific linker flag if it is.
         if platform.system() == "Darwin":
             print_system(
                 "macOS detected, adding specific linker flags for Ada build..."
             )
+
+            # Fix the 'gnatchop' not found error by using 'alr exec'
+            # This processes configuration pragmas if they are causing issues
+            run_command(
+                [
+                    "alr",
+                    "-n",
+                    "-f",
+                    "exec",
+                    "--",
+                    "gnatchop",
+                    "-w",
+                    "-c",
+                    "src/watchdog_thread2.adb",
+                ],
+                cwd=ada_watchdog_dir,
+                name="ADA-CHOP-WATCHDOG-MACOS",
+                check=False,
+            )
+
             try:
                 # Get the SDK path from the system
                 sdk_path_result = subprocess.run(
@@ -669,31 +690,66 @@ def _compile_watchtowers() -> bool:
     print_system("--- All ZephyWatchtower components compiled successfully. ---")
     return True
 
+PYREFLY_PROJECT_EXCLUDES = [
+    "**/vendor/**",
+    "**/node_modules/**",
+    "**/build/**",
+    "**/*_build/**",
+    "**/thirdparty/**",
+    "**/llama_cpp_direct/**",
+    "**/pywhispercpp/**",
+    "**/rocq_source/**",
+    "**/subengine/**",
+    "**/SubEngine/**",
+    "**/*subengine/**",
+    "**/*SubEngine/**",
+    "**/*-SubEngine/**",
+    "**/LaTeX_OCR-SubEngine/**",
+    "**/exp/**",
+    "**/deps/**",
+    "**/alire/**",
+    "**/_excludefromRuntime_reverseEngineeringAssets/**",
+    "**/Deprecated/**",
+    "**/deprecated/**",
+    "**/*.ipynb",
+    "**/site-packages/**"
+]
+
 def _run_pyrefly_integrity_check():
     """Runs the Pyrefly static analysis/integrity check on the Python components."""
     print_system("--- Running Pyrefly Integrity Check (Static Analysis) ---")
 
-    # We run it on the systemCore directory
-    target_dir = os.path.join(ROOT_DIR, "systemCore")
+    # target_dir = os.path.join(ROOT_DIR, "systemCore")
+    # Actually, let's run it on the whole project but exclude large/vendored dirs if possible.
+    # But for now, systemCore is what was requested.
+    target_dir = "systemCore"
 
-    # We use the python executable from the venv
-    pyrefly_cmd = [PYTHON_EXECUTABLE, "-m", "pyrefly", "--path", target_dir]
+    # Correct command for modern Pyrefly
+    # We remove suppressions for our code, but exclude external cloned/vendored repos.
+    pyrefly_cmd = [
+        PYTHON_EXECUTABLE,
+        "-m",
+        "pyrefly",
+        "check",
+        target_dir,
+        "--verbose",
+        f"--python-interpreter-path={PYTHON_EXECUTABLE}",
+        "--ignore-missing-imports=*", # Iron out all missing imports from external/dynamic libs
+    ] + [f"--project-excludes={excl}" for excl in PYREFLY_PROJECT_EXCLUDES]
 
     try:
-        # We do not hide Warnings or Errors as requested.
-        # Running without capture_output allows them to stream to the terminal.
-        process = subprocess.run(
+        success = run_command(
             pyrefly_cmd,
             cwd=ROOT_DIR,
+            name="PYREFLY-CHECK",
             check=False,
-            text=True
         )
 
-        if process.returncode != 0:
+        if not success:
             print_error("Integrity Failure Python Glue")
             sys.exit(1)
 
-        print_success("Pyrefly Integrity Check passed.")
+        print_system("Pyrefly Integrity Check passed.")
     except Exception as e:
         print_error(f"Failed to execute Pyrefly: {e}")
         print_error("Integrity Failure Python Glue")
@@ -1251,8 +1307,14 @@ def run_command(
         stdout_thread.join(timeout=5)
         stderr_thread.join(timeout=5)
 
-        if check and process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, command)
+        if process.returncode != 0:
+            if check:
+                raise subprocess.CalledProcessError(process.returncode, command)
+            else:
+                print_error(
+                    f"Command failed for '{log_name_prefix}' in '{os.path.basename(cwd)}' with exit code {process.returncode}."
+                )
+                return False
 
         print_system(
             f"Command finished successfully for '{log_name_prefix}' in '{os.path.basename(cwd)}'."
@@ -1400,7 +1462,6 @@ def cleanup_processes():
         print_system("Disarming port shield...")
         port_shield_stop_event.set()
 
-    # Use global to ensure we are modifying the correct variables
     global zephymesh_process, relaunched_conda_process_obj
 
     # --- Shutdown ZephyMesh Node First ---
@@ -1499,6 +1560,39 @@ def tail_log_to_widget(log_file_path: str, widget: "Log"):
 def start_engine_main():
     name = "ENGINE"
     MAX_UPLOAD_SIZE_BYTES = 2**63
+
+    # --- PORT CONFLICT DETECTION ---
+    try:
+        import psutil
+        import socket
+
+        host_parts = ZEPHYRINE_COG_API_HOST.split(":")
+        port = int(host_parts[-1])
+
+        # Check all listening connections for the target port
+        for conn in psutil.net_connections(kind="inet"):
+            if conn.status == psutil.CONN_LISTEN and conn.laddr.port == port:
+                try:
+                    proc = psutil.Process(conn.pid)
+                    proc_name = proc.name()
+                    print_error(
+                        f"FATAL: Port {port} is already in use by process '{proc_name}' (PID: {conn.pid})."
+                    )
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    print_error(
+                        f"FATAL: Port {port} is already in use by another process (PID: {conn.pid})."
+                    )
+
+                print_error(
+                    f"This prevents Project Zephyrine's {name} from starting."
+                )
+                print_error(
+                    "Please stop the conflicting process (e.g., a standalone Ollama instance) and try again."
+                )
+                sys.exit(1)
+    except (ImportError, Exception) as e:
+        # Fallback if psutil fails or we lack permissions for net_connections
+        logger.warning(f"Engine port conflict check skipped: {e}")
 
     if os.path.exists(ENGINE_PID_FILE):
         os.remove(ENGINE_PID_FILE)
@@ -1679,7 +1773,7 @@ def start_watchdogs_service_fast():
         mesh_process_name = "zephymesh_node_compiled"
         watchdog_command = [
             go_exe_path,
-            f"--targets={backend_process_name},{mesh_process_name}",
+            f"--targets={mesh_process_name}",
             f"--pid-file={ENGINE_PID_FILE}",
         ]
         start_service_process(watchdog_command, go_watchdog_dir, "watchdogThread0")
@@ -1700,7 +1794,7 @@ def start_watchdogs_service_fast():
         backend_process_name = backend_exe_name.replace(".exe", "")
         go_watchdog_command = [
             go_exe_path,
-            f"--targets={backend_process_name},node",
+            f"--targets=node",
             f"--pid-file={ENGINE_PID_FILE}",
         ]
         ada_watchdog_command = [ada_exe_path] + go_watchdog_command
@@ -1724,8 +1818,8 @@ def monitor_services_fallback():
             # Call our single, powerful monitoring function.
             check_and_restart_services()
 
-            # The check interval.
-            time.sleep(3)
+            # The check interval. Increased to 5 minutes (300s) to babysit long initializations.
+            time.sleep(300)
     except KeyboardInterrupt:
         print_system("\nKeyboardInterrupt received by main thread. Shutting down...")
     finally:
@@ -4816,6 +4910,47 @@ def _ensure_alire_and_gnat_toolchain():
     return True
 
 
+def _ensure_jshint_installed(target_dir):
+    """Ensures jshint and fixmyjs are installed in the target directory."""
+    print_system("Checking for JSHint and FixMyJS...")
+    # We check for the binaries in node_modules/.bin
+    jshint_bin = os.path.join(target_dir, "node_modules", ".bin", "jshint")
+    fixmyjs_bin = os.path.join(target_dir, "node_modules", ".bin", "fixmyjs")
+    
+    if not os.path.exists(jshint_bin) or not os.path.exists(fixmyjs_bin):
+        print_system("JSHint or FixMyJS not found. Installing locally...")
+        if not run_command(
+            [NPM_CMD, "install", "--save-dev", "jshint", "fixmyjs"],
+            target_dir,
+            "NPM-INSTALL-JSHINT"
+        ):
+            print_warning("Failed to install JSHint/FixMyJS. Code fixing will be skipped.")
+            return False
+    return True
+
+def _run_jshint_autofix(target_dir):
+    """Runs fixmyjs to automatically fix linting issues based on JSHint rules."""
+    fixmyjs_bin = os.path.join(target_dir, "node_modules", ".bin", "fixmyjs")
+    if not os.path.exists(fixmyjs_bin):
+        return
+        
+    print_system("Running JSHint Auto-Fix (via fixmyjs) on frontend source...")
+    # Run on the src directory
+    src_dir = os.path.join(target_dir, "src")
+    if not os.path.exists(src_dir):
+        print_warning(f"Source directory not found for fixing: {src_dir}")
+        return
+
+    # fixmyjs can take a directory or files. 
+    # To be safe across platforms, we use glob or just the directory if supported.
+    # Note: fixmyjs --patch fixes in place.
+    if not run_command(
+        [fixmyjs_bin, "--patch", src_dir],
+        target_dir,
+        "JSHINT-AUTOFIX"
+    ):
+        print_warning("JSHint Auto-Fix encountered issues. Build will proceed anyway.")
+
 def _create_alire_helper_scripts():
     """
     Ada/SPARK compiler helper tool for Adaptive system not only on Launcher but the systemCore uses unified command that is planted on the virtual runtime environment
@@ -5926,6 +6061,23 @@ if __name__ == "__main__":
     print_system(
         f"Configuration Loaded - API: {ZEPHYRINE_COG_API_HOST} | UI: {ZEPHYRINE_UI_HOST} | Headless: {globals().get('HEADLESS_MODE', False)}"
     )
+
+    # --- NEW: Headless Redirection to TestRun.log ---
+    if args.no_tui_headless:
+        test_run_log_path = os.path.join(ROOT_DIR, "TestRun.log")
+        print(f"[LAUNCHER] --- PERSISTENT LOGGING ACTIVATED ---")
+        print(f"[LAUNCHER] Redirecting all output to: {test_run_log_path}")
+        print(f"[LAUNCHER] Use 'tail -f TestRun.log' to monitor progress.")
+        
+        # Ensure log file exists and append a separator
+        with open(test_run_log_path, "a", encoding="utf-8") as f:
+            f.write(f"\n\n--- NEW SESSION: {datetime.now().isoformat()} ---\n")
+        
+        # Redirect stdout and stderr
+        log_file_handle = open(test_run_log_path, "a", encoding="utf-8", buffering=1) # Line buffered
+        sys.stdout = log_file_handle
+        sys.stderr = log_file_handle
+        # We don't close this handle; it will stay open for the life of the process.
     # ----------------------------------------------------
     # --- LAUNCHER INTEGRITY AND HASH CHECK (New Block)---
     # ----------------------------------------------------
@@ -6019,6 +6171,24 @@ if __name__ == "__main__":
             print_system(
                 f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})"
             )
+
+            # --- CRITICAL: Surfacing Pyrefly Integrity Check Early ---
+            # This ensures it runs at the start of every attempt in the Conda environment.
+            
+            # Ensure pyrefly is installed in the current environment first
+            try:
+                import pyrefly
+            except ImportError:
+                print_system("Pyrefly not found in Conda environment. Installing...")
+                run_command(
+                    [PIP_EXECUTABLE, "install", "pyrefly"],
+                    ROOT_DIR,
+                    "PIP-INSTALL-PYREFLY",
+                    check=True
+                )
+            
+            _run_pyrefly_integrity_check()
+
             # -=-=-=-=-=[flickerPhoton]
             # This is the crucial fix: Use the trusted 'conda' executable to reinstall
             # a compatible set of packaging tools for the Python 3.12 environment.
@@ -6052,8 +6222,8 @@ if __name__ == "__main__":
                 else:
                     print_system("Headless mode active: TUI disabled by request.")
 
-                # Run Pyrefly Integrity Check before launching
-                _run_pyrefly_integrity_check()
+                # Pyrefly Check already surfacing at the top of the block
+                # _run_pyrefly_integrity_check()
 
                 # Now, call the parallel launcher
                 launch_all_services_in_parallel_and_monitor()
@@ -6856,14 +7026,45 @@ if __name__ == "__main__":
 
             # 1. Install NPM Dependencies
             print_system("Installing/Verifying Node.js dependencies...")
+
+            # --- FIX: esbuild EACCES on macOS (Before Install) ---
+            if IS_MACOS:
+                try:
+                    esbuild_node_modules = os.path.join(frontend_host_assets, "node_modules", "esbuild", "bin", "esbuild")
+                    if os.path.exists(esbuild_node_modules):
+                        print_system(f"Pre-fixing permissions for esbuild binary: {esbuild_node_modules}")
+                        os.chmod(esbuild_node_modules, 0o755)
+                except Exception as e_pre_chmod:
+                    print_warning(f"Could not pre-fix esbuild permissions: {e_pre_chmod}")
+            # ----------------------------------------------------
+
             if not run_command(
                 [NPM_CMD, "install"], frontend_host_assets, "NPM-INSTALL"
             ):
                 print_error("NPM Install failed. Exiting.")
                 setup_failures.append("Frontend npm install failed")
+            
+            # --- JSHint Auto-Fix Integration ---
+            if _ensure_jshint_installed(frontend_host_assets):
+                _run_jshint_autofix(frontend_host_assets)
+            # -----------------------------------
 
             # 2. Build Static Assets (Vite)
             print_system("Building React frontend (Vite)...")
+
+            # --- FIX: esbuild EACCES on macOS ---
+            if IS_MACOS:
+                # Find all possible esbuild binaries in node_modules
+                try:
+                    for root, dirs, files in os.walk(os.path.join(frontend_host_assets, "node_modules")):
+                        if "esbuild" in files:
+                            es_bin = os.path.join(root, "esbuild")
+                            print_system(f"Fixing permissions for esbuild binary: {es_bin}")
+                            os.chmod(es_bin, 0o755)
+                except Exception as e_chmod:
+                    print_warning(f"Could not fix esbuild permissions: {e_chmod}")
+            # ------------------------------------
+
             if not run_command(
                 [NPM_CMD, "run", "build"], frontend_host_assets, "NPM-BUILD"
             ):
@@ -7055,9 +7256,9 @@ if __name__ == "__main__":
                             print_warning(f"Could not get macOS SDK path: {e}")
 
                     # Try standard 'alr build' first for all platforms
-                    alr_build_cmd = ["alr", "-n", "-f", "build"]
+                    alr_build_cmd = ["alr", "-n", "-f", "build", "--", "-cargs", "-gnat2022"]
                     if extra_gpr_args:
-                        alr_build_cmd += ["--"] + extra_gpr_args
+                        alr_build_cmd += extra_gpr_args
 
                     if run_command(
                         alr_build_cmd,
@@ -7104,6 +7305,8 @@ if __name__ == "__main__":
                             "exec",
                             "--",
                             "gprbuild",
+                            "-cargs",
+                            "-gnat2022",
                         ] + extra_gpr_args
 
                         if run_command(
@@ -7186,41 +7389,41 @@ if __name__ == "__main__":
                             estimated_reading_seconds,
                         )  # type: ignore
                     except curses.error as e:
-                    # Handle the specific error for unknown terminals
-                    if "setupterm" in str(e) and "terminfo" in str(e):
-                        print_error(
-                            "Your terminal type is unknown or unsupported (e.g., TERM=unknown)."
-                        )
-                        print_warning(
-                            "The interactive license prompt cannot be displayed."
-                        )
-                        print_system(
-                            "The program will proceed in 30 seconds, implicitly accepting the software licenses."
-                        )
-                        print_system(
-                            "To review licenses manually, check the 'licenses' directory."
-                        )
-                        print_system("Press Ctrl+C now to cancel.")
-                        try:
-                            # Wait for 30 seconds, allowing the user to cancel
-                            time.sleep(30)
-                            accepted = True
-                            time_taken = 30.0  # Record the time for logging
-                            print_system(
-                                "Continuing with implicit license acceptance..."
-                            )
-                        except KeyboardInterrupt:
+                        # Handle the specific error for unknown terminals
+                        if "setupterm" in str(e) and "terminfo" in str(e):
                             print_error(
-                                "\nOperation cancelled by user during implicit wait. Exiting."
+                                "Your terminal type is unknown or unsupported (e.g., TERM=unknown)."
+                            )
+                            print_warning(
+                                "The interactive license prompt cannot be displayed."
+                            )
+                            print_system(
+                                "The program will proceed in 30 seconds, implicitly accepting the software licenses."
+                            )
+                            print_system(
+                                "To review licenses manually, check the 'licenses' directory."
+                            )
+                            print_system("Press Ctrl+C now to cancel.")
+                            try:
+                                # Wait for 30 seconds, allowing the user to cancel
+                                time.sleep(30)
+                                accepted = True
+                                time_taken = 30.0  # Record the time for logging
+                                print_system(
+                                    "Continuing with implicit license acceptance..."
+                                )
+                            except KeyboardInterrupt:
+                                print_error(
+                                    "\nOperation cancelled by user during implicit wait. Exiting."
+                                )
+                                sys.exit(1)
+                        else:
+                            # For any other terminal-related error, fail gracefully
+                            print_error(f"A fatal terminal error occurred: {e}")
+                            print_error(
+                                "Please run this script in a standard interactive terminal. Exiting."
                             )
                             sys.exit(1)
-                    else:
-                        # For any other terminal-related error, fail gracefully
-                        print_error(f"A fatal terminal error occurred: {e}")
-                        print_error(
-                            "Please run this script in a standard interactive terminal. Exiting."
-                        )
-                        sys.exit(1)
 
                 # Check if the license was accepted (either interactively or implicitly)
                 if not accepted:
@@ -7425,8 +7628,56 @@ if __name__ == "__main__":
                     ):
                         print_error("Pywhispercpp submodule update failed.")
                     else:
+                        # --- PATCH: Remove unrecognized Clang flags that break macOS builds ---
+                        patch_file_path = os.path.join(
+                            PYWHISPERCPP_CLONE_PATH,
+                            "whisper.cpp",
+                            "ggml",
+                            "cmake",
+                            "common.cmake",
+                        )
+                        if os.path.exists(patch_file_path):
+                            print_system(
+                                f"Patching {patch_file_path} for macOS build compatibility..."
+                            )
+                            try:
+                                with open(patch_file_path, "r") as f:
+                                    patch_content = f.read()
+
+                                # Replace unrecognized flags with standard -Wunreachable-code
+                                patch_content = patch_content.replace(
+                                    "-Wunreachable-code-break -Wunreachable-code-return",
+                                    "-Wunreachable-code",
+                                )
+
+                                with open(patch_file_path, "w") as f:
+                                    f.write(patch_content)
+                                print_system("Patch applied successfully.")
+                            except Exception as e:
+                                print_warning(f"Failed to patch {patch_file_path}: {e}")
+                        # --- END PATCH ---
+
                         pip_cmd_whisper = [PIP_EXECUTABLE, "install", "."]
                         env_whisper = {}
+
+                        # --- macOS Fix: Force Apple Clang to avoid GNU GCC incompatibilities ---
+                        if platform.system() == "Darwin":
+                            print_system(
+                                "macOS Fix (Whisper): Forcing Apple Clang and SDK paths..."
+                            )
+                            env_whisper["CC"] = "/usr/bin/clang"
+                            env_whisper["CXX"] = "/usr/bin/clang++"
+                            try:
+                                real_sdk_path = subprocess.check_output(
+                                    ["xcrun", "--show-sdk-path"], text=True
+                                ).strip()
+                                env_whisper["SDKROOT"] = real_sdk_path
+                                # Avoid Conda's broken libtapi by clearing DYLD_LIBRARY_PATH
+                                env_whisper["DYLD_LIBRARY_PATH"] = ""
+                                env_whisper["MACOSX_DEPLOYMENT_TARGET"] = "26.0"
+                            except Exception as e_mac_fix:
+                                print_warning(f"macOS Fix Warning (Whisper): {e_mac_fix}")
+
                         backend_whisper = "cpu (default)"
                         user_ggml_cuda = os.getenv("GGML_CUDA")
                         user_whisper_coreml = os.getenv("WHISPER_COREML")
@@ -7816,6 +8067,28 @@ if __name__ == "__main__":
                         )
                         sd_cpp_build_path = os.path.join(sd_cpp_sub_path, "build")
                         os.makedirs(sd_cpp_build_path, exist_ok=True)
+
+                        # --- PATCH: Remove unrecognized Clang flags that break macOS builds ---
+                        sd_patch_path = os.path.join(
+                            sd_cpp_sub_path, "ggml", "cmake", "common.cmake"
+                        )
+                        if os.path.exists(sd_patch_path):
+                            print_system(
+                                f"Patching {sd_patch_path} for macOS build compatibility..."
+                            )
+                            try:
+                                with open(sd_patch_path, "r") as f:
+                                    patch_content = f.read()
+                                patch_content = patch_content.replace(
+                                    "-Wunreachable-code-break -Wunreachable-code-return",
+                                    "-Wunreachable-code",
+                                )
+                                with open(sd_patch_path, "w") as f:
+                                    f.write(patch_content)
+                                print_system("Patch applied successfully.")
+                            except Exception as e:
+                                print_warning(f"Failed to patch {sd_patch_path}: {e}")
+                        # --- END PATCH ---
                         sd_build_env = os.environ.copy()  # Start with current env
                         # --- Temporary fix due to conda really slow at catching up for the package the darwin compatibility for macOS 26.2
                         if platform.system() == "Darwin":

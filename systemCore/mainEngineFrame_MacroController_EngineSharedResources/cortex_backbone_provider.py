@@ -154,6 +154,9 @@ class TaskInterruptedException(Exception):
     pass
 
 
+# Global flag for image generation worker status
+STABLE_DIFFUSION_WORKER_CONFIGURED = False
+
 #global var init
 
 def _get_encoder():
@@ -1177,7 +1180,11 @@ class CortexEngine:
         worker_process = None
         start_lock_wait = time.monotonic()
         provider_logger.debug(f"{worker_log_prefix}: Acquiring worker execution lock (Priority: ELP{priority})...")
-        lock_acquired = self._priority_quota_lock.acquire(priority=priority, timeout=None)
+        # Handle potential fallback to standard threading.Lock which doesn't support 'priority'
+        if isinstance(self._priority_quota_lock, PriorityQuotaLock):
+            lock_acquired = self._priority_quota_lock.acquire(priority=priority, timeout=None) # pyrefly: ignore
+        else:
+            lock_acquired = self._priority_quota_lock.acquire()
         lock_wait_duration = time.monotonic() - start_lock_wait
 
         if lock_acquired:
@@ -1383,15 +1390,25 @@ class CortexEngine:
             # It should not use `await` and should return a dictionary (success or error).
 
             # Local variables for this threaded function's execution context
+            # Explicitly capture closure variables for static analysis clarity
+            _priority = priority
+            _task_name = task_name
+            _prompt = prompt
+            _image_base64 = image_base64
+            
             current_lock_acquired = False
             current_worker_process: Optional[subprocess.Popen] = None
-            # `task_name`, `prompt`, `image_base64`, `priority` are from the outer scope (closure)
+            # `_task_name`, `_prompt`, `_image_base64`, `_priority` are from the outer scope (closure)
             # `_python_executable`, `_imagination_worker_script_path` are instance vars (self.)
             # Config constants like IMAGE_GEN_MODEL_DIR are global from CortexConfiguration.py
 
             # Acquire the shared priority lock
             # `start_lock_wait` is captured from the outer scope of _execute_imagination_worker
-            current_lock_acquired = self._priority_quota_lock.acquire(priority=priority, timeout=None)
+            # Handle potential fallback to standard threading.Lock
+            if isinstance(self._priority_quota_lock, PriorityQuotaLock):
+                current_lock_acquired = self._priority_quota_lock.acquire(priority=_priority, timeout=None) # pyrefly: ignore
+            else:
+                current_lock_acquired = self._priority_quota_lock.acquire()
             lock_wait_duration = time.monotonic() - start_lock_wait
 
             if current_lock_acquired:

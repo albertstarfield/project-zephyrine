@@ -124,7 +124,7 @@ except ImportError:
 
     # This dummy class now uses the _DummyEnumMember to satisfy the linter.
     class FileIndex:
-        def __init__(self):
+        def __init__(self, **kwargs):
             self.id: int = 0
             self.file_path: str = ""
             self.file_name: str = ""
@@ -140,6 +140,8 @@ except ImportError:
             self.latex_representation: str = ""
             self.latex_explanation: str = ""
             self.vlm_processing_status: str = ""
+            for k, v in kwargs.items():
+                setattr(self, k, v)
 
     # Dummy Enum to satisfy type hints and imports
     class IndexStatusEnum:
