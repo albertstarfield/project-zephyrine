@@ -3052,6 +3052,12 @@ VLM_TARGET_EXTENSIONS = {".pdf"}
 # ---
 
 
+# --- Semantic Caching & Integrity Settings ---
+ENABLE_SEMANTIC_CACHE = os.getenv("ENABLE_SEMANTIC_CACHE", "True").lower() == "true"
+SEMANTIC_CACHE_THRESHOLD = float(os.getenv("SEMANTIC_CACHE_THRESHOLD", "0.85"))
+ENABLE_INTEGRITY_SELF_HEALING = os.getenv("ENABLE_INTEGRITY_SELF_HEALING", "True").lower() == "true"
+REQUIRED_FORMAL_TOOLS = ["opam", "alr", "gnatprove", "dafny", "node", "npm"]
+
 # --- Validation ---
 
 if PROVIDER == "llama_cpp" and not os.path.isdir(LLAMA_CPP_GGUF_DIR):

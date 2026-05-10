@@ -5907,6 +5907,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Auto-agree to all prompts (by this you already know the license and agree to terms and condition of this)",
     )
+    parser.add_argument(
+        "--no-tui-headless",
+        action="store_true",
+        help="Run in headless mode without TUI, falling back to standard terminal output.",
+    )
 
     # Use parse_known_args to avoid crashing if other flags are passed effectively
     args, unknown = parser.parse_known_args()
@@ -5915,6 +5920,7 @@ if __name__ == "__main__":
     ZEPHYRINE_COG_API_HOST = args.host_cogAPI
     ZEPHYRINE_UI_HOST = args.host_UI
     globals()["AUTO_AGREE"] = args.agreetoLicenseAndToC
+    globals()["HEADLESS_MODE"] = args.no_tui_headless
 
     print_system(
         f"Configuration Loaded - API: {ZEPHYRINE_COG_API_HOST} | UI: {ZEPHYRINE_UI_HOST}"
@@ -6035,13 +6041,15 @@ if __name__ == "__main__":
                 )
 
                 TUI_LIBRARIES_AVAILABLE = False
-                try:
-                    import psutil
-                    import textual
-
-                    TUI_LIBRARIES_AVAILABLE = True
-                except ImportError:
-                    TUI_LIBRARIES_AVAILABLE = False
+                if not globals().get("HEADLESS_MODE", False):
+                    try:
+                        import psutil
+                        import textual
+                        TUI_LIBRARIES_AVAILABLE = True
+                    except ImportError:
+                        TUI_LIBRARIES_AVAILABLE = False
+                else:
+                    print_system("Headless mode active: TUI disabled by request.")
 
                 # Run Pyrefly Integrity Check before launching
                 _run_pyrefly_integrity_check()
@@ -7984,13 +7992,14 @@ if __name__ == "__main__":
                 TUI_AVAILABLE = False
 
             TUI_LIBRARIES_AVAILABLE = False
-            try:
-                # Check if the required libraries can be imported
-                import psutil
-                import textual
-
-                TUI_LIBRARIES_AVAILABLE = True
-            except ImportError:
+            if not globals().get("HEADLESS_MODE", False):
+                try:
+                    import psutil
+                    import textual
+                    TUI_LIBRARIES_AVAILABLE = True
+                except ImportError:
+                    TUI_LIBRARIES_AVAILABLE = False
+            else:
                 TUI_LIBRARIES_AVAILABLE = False
 
             # This function will contain the fallback launch logic to avoid code duplication
