@@ -1,9 +1,10 @@
 # README: Main Engine Frame - MacroController (Shared Resources)
 
 ## Overview
-The `mainEngineFrame_MacroController_EngineSharedResources` serves as the primary execution framework for the MacroController when operating within a Shared Resources environment. This architectural choice implies that CPU time is not federated or pre-allocated; instead, the system relies on dynamic scheduling. 
+The `mainEngineFrame_MacroController_EngineSharedResources` serves as the primary execution framework for the MacroController when operating within a Shared Resources environment. This architectural choice implies that CPU time is not federated or pre-allocated; instead, the system relies on dynamic scheduling. This follows the **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)**.
 
-This engine is specifically engineered to meet **Assurance Level B and C** requirements. It utilizes a multi-language architecture, integrating the safety and formal verification of Ada/SPARK with the flexibility of C++ and compiled Python.
+This engine is specifically engineered to meet **Design Assurance Level B and C (DAL B/C / ECSS Category B/C)** requirements. It utilizes a multi-language architecture, integrating the safety and formal verification of Ada/SPARK with the flexibility of C++ and compiled Python.
+
 
 ## System Architecture and Components
 The framework is divided into specific functional areas to manage core logic, deterministic API hooks, and background processes.

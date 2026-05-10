@@ -1,10 +1,10 @@
 # README: Interface Engine uC RT Engine (Assurance Level A)
 
 ## Overview
-The `InterfaceEngine_uC_RT_Engine` is a high-integrity interface module designed for Microcontroller (uC) environments requiring strictly deterministic performance. This engine is the primary solution for systems that necessitate a Real-Time (RT) Embedded Display and must adhere to the highest safety standards.
+The `InterfaceEngine_uC_RT_Engine` is a high-integrity interface module designed for Microcontroller (uC) environments requiring strictly deterministic performance. This engine is the primary solution for systems that necessitate a Real-Time (RT) Embedded Display and must adhere to the highest safety standards. This follows the **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)**.
 
 ## Safety and Assurance Levels
-This module is designed for **Assurance Level A**. 
+This module is designed for **Design Assurance Level A (DAL A / ECSS Category A)**. 
 
 Unlike the MacroController shared resource variants, this engine is built to meet mission-critical requirements where failure could result in catastrophic system loss. It is intended for use in environments where formal proof of correctness is mandatory.
 

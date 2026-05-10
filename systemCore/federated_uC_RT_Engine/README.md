@@ -1,10 +1,10 @@
 # README: Federated Microcontroller Real-Time Engine (federated_uC_RT_Engine)
 
 ## Overview
-The `federated_uC_RT_Engine` is a high-criticality execution environment designed for microcontrollers (uC) operating within a federated architecture. This module is engineered specifically for mission-critical applications where deterministic behavior and formal safety proofs are mandatory.
+The `federated_uC_RT_Engine` is a high-criticality execution environment designed for microcontrollers (uC) operating within a federated architecture. This module is engineered specifically for mission-critical applications where deterministic behavior and formal safety proofs are mandatory. This follows the **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)**.
 
 ## Safety and Assurance Requirements
-This component is classified for **Design Assurance Level A (DAL A)**. All development within this folder must adhere to the following technical constraints:
+This component is classified for **Design Assurance Level A (DAL A / ECSS Category A)**. All development within this folder must adhere to the following technical constraints:
 
 ### 1. Language and Formal Verification
 *   **Mandatory:** Implementation must be written in **Ada 2012 + SPARK**.

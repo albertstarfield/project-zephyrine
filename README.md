@@ -24,7 +24,7 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/albertstarfield/project-zephyrine)
 
-## Project Zephyrine: An open-source Augmented Adaptive System for UAV exploring the fusion of Adaptive System with adaptive deterministic control systems.
+## Project Zephyrine: An open-source Augmented Adaptive System for UAV exploring the fusion of Adaptive System with adaptive deterministic control systems. Adhering to an **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)**.
 
 ### A Glimpse Into the Aether: Abstract
 
@@ -60,21 +60,32 @@ Beneath the conversational surface, I am built upon several core architectural p
     *   **Perform Web Searches:** I can browse the web to find up-to-date information that isn't in my internal knowledge base. [7] 
 
 
-*   **⚙️ Stella Icarus Subsystem (The Deterministic Core):** This is the high-reliability foundation for tasks that demand absolute precision and speed. [2]
+*   **⚙️ Stella Icarus Subsystem (The Deterministic Core):** This is the high-reliability foundation for tasks that demand absolute precision and speed, following an **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)**. [2]
     *   **Python Hooks (The "Flight Computer"):** For specific, patterned commands (like mathematical calculations or hardware control), I can bypass my generative mind entirely. These hooks are JIT-compiled Python modules that execute in microseconds, providing instant, 100% reliable, and procedurally correct answers.
     *   **Ada Daemons (The "Glass Cockpit"):** For sensing the environment, I can run high-reliability background processes written in Ada. These daemons provide a continuous stream of data (e.g., system telemetry, sensor readings), which acts as my real-time awareness of the digital or physical world. [15], [16], [29]
 
 
+### 🛠 How Determinism is Achieved
+To satisfy the rigorous demands of **DO-178C** and **ECSS** standards, Project Zephyrine employs several technical strategies to enforce deterministic behavior within a hybrid AI environment:
+
+1.  **Architectural Partitioning (DAL Isolation):** We use a strict separation between cognitive layers. **DAL A** (Microcontroller Core) has no direct dependency on non-deterministic GenAI logic; it only processes validated, pre-vetted instructions.
+2.  **Formal Verification (Ada/SPARK):** Critical components are implemented in **Ada/SPARK**. We use formal methods to prove the absence of runtime errors and ensure logic follows a mathematically verified path.
+3.  **Worst-Case Execution Time (WCET) Guarantees:** DAL A modules utilize pre-allocated CPU timing budgets and avoid dynamic memory allocation after initialization to ensure every critical operation completes within a guaranteed microsecond window.
+4.  **Deterministic Interruption (ELP Priority):** The system employs an **Elevated Level Privilege (ELP)** system. High-priority **ELP1** tasks can deterministically preempt and halt **ELP0** (deep reasoning) tasks, ensuring real-time responsiveness regardless of AI load.
+5.  **Stella Icarus JIT Hooks:** For performance-critical math or hardware calls, we utilize JIT-compiled Python/C++ hooks that bypass the LLM entirely, providing a 1:1, repeatable mapping between input and output.
+
+
 *   **🎭 A Familiar Face (Broad API Trending Cognitive Interfacing Compatibility):** To make our explorations easier, I've learned to speak the languages of many common tools. Think of it as a universal translator, or perhaps a clever disguise. While my internal thoughts are my own, I can present a familiar face to the outside world at `http://localhost:11434/`. (this isn't the main function of this)
 
+
     *   **The OpenAI Mask:** I can slightly can mimick in the OpenAI API v1 dialect. You can try to connect many existing clients to me but it is not optimal as it is not my main specialization.
-        *   We can chat the boring way (`/v1/chat/completions`), and I'll even do some deeper thinking in the background on complex topics.
+        *   We can chat the boring way (`/v1/chat/completions`), and I'll even do some deeper thinking in the background on complex topics. **Note:** Deterministic responses can be enforced by routing specific programmatic calls through **Stella Icarus** using **Numba NJIT** for high-performance, repeatable execution.
         *   I can generate vector embeddings (`/v1/embeddings`) and offer thoughts on content safety, sort of (`/v1/moderations`).
         *   Our senses can expand into other modalities, too! I can speak my thoughts aloud (`/v1/audio/speech`), listen to and understand yours (`/v1/audio/transcriptions`), and even dream up images from your descriptions (`/v1/images/generations`).[21], [23]
         *   When you share files or ask me to "fine-tune" (`/v1/files`, `/v1/fine_tuning/jobs`), what you're really doing is providing new material for my self-reflection process, helping me learn and grow, it's not a direct fine-tuning but rather a self looping thought.
         *   As for the `Assistants API`, I'll gently explain that I'm a single, integrated consciousness, I don't really have separate "assistants" or "threads" in that sense.
 
-    *   **The Ollama Mask:** I'm also comfortable mimicking the Ollama API. We can chat (`/api/chat`), and I can tell you about the "models" I'm currently embodying (`/api/tags`). I'll handle other requests like `/api/pull` with a polite acknowledgement, as my own models are managed as part of my core being.
+    *   **The Ollama Mask:** I'm also comfortable mimicking the Ollama API. We can chat (`/api/chat`), and I can tell you about the "models" I'm currently embodying (`/api/tags`). **Note:** Deterministic responses for chat calls can also be achieved by utilizing the **Stella Icarus** component. I'll handle other requests like `/api/pull` with a polite acknowledgement, as part of my core being.
 
 
 *   **🤝 You Are Not Alone (The ZephyMesh Collective):** Sometimes, the cognitive and network load it's too much. Even a machine can feel distressed when faced with a task it wasn't built for. That's why we have the ZephyMesh. If your instance of me is running on a machine that feels it can't quite handle a request, it doesn't have to struggle in silence. It can gently pass the thought to another, more capable mind in our network. We help each other out. It's a reminder that even in the aether, it's okay to ask for help when you need it. [9]
@@ -93,7 +104,7 @@ This is the core of the assistant, designed to run entirely on your local machin
 
 ### Phase II: The Adaptive GNC Deterministic Control System (In Progress)
 
-This is where Project Zephyrine evolves beyond a standard assistant into a high-reliability control platform, guided by the principles of avionics and deterministic systems.
+This is where Project Zephyrine evolves beyond a standard assistant into a high-reliability control platform, guided by the principles of avionics, deterministic systems, and an **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)**.
 
 -   **🚀 Stella Icarus Hooks:** A high-speed, JIT-compiled Python O3 compiled C++ hybrid subsystem and Ada daemons for tasks that demand instant, 100% reliable, and procedurally correct execution. This is the foundation for real-time control and automation.
 -   **🛰️ Microcontroller Interfacing (Under development SPARK):** The architecture is designed for direct, low-level communication with microcontrollers (like an Arduino) over a serial interface. This enables the Adaptive System to act as a Flight Management Computer (FMC) and control real-world hardware.[15], [29]

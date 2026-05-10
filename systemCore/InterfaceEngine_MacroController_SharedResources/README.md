@@ -1,10 +1,11 @@
 # README: Interface Engine MacroController Shared Resources
 
 ## Overview
-The `InterfaceEngine_MacroController_SharedResources` is a communication and interface module specifically architected for the MacroController. This version is designed to operate within a **Shared Resource Environment**, meaning CPU time is not federated or pre-allocated. It is intended for systems where strict time-partitioning is not a requirement and resource sharing is acceptable for supervisory tasks.
+The `InterfaceEngine_MacroController_SharedResources` is a communication and interface module specifically architected for the MacroController. This version is designed to operate within a **Shared Resource Environment**, meaning CPU time is not federated or pre-allocated. It is intended for systems where strict time-partitioning is not a requirement and resource sharing is acceptable for supervisory tasks. This follows the **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)**.
 
 ## Safety and Assurance Levels
-This directory and its contents are strictly limited to **Assurance Level B and Level C** systems.
+This directory and its contents are strictly limited to **Design Assurance Level B and Level C (DAL B/C / ECSS Category B/C)** systems.
+
 
 *   **Level B/C:** Fully supported. Optimized for shared resource management and general-purpose control interfacing.
 *   **Level A:** Not supported. This module is not certified for mission-critical functions requiring formal proof or zero-jitter execution.
