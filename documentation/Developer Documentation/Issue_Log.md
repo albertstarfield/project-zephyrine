@@ -593,3 +593,8 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Implement Global Document Refinement via Multi-Block Diffs.
     -   **Status:** `Resolved`
     -   **Description:** Introduced a new post-generation refinement phase (`_refine_final_buffer_via_diff`) in the core engine. This phase utilizes a specialized model to review long-form document buffers and apply targeted edits using a multi-block SEARCH/REPLACE diff format, effectively pruning redundancy and improving linguistic flow.
+
+-   **ID:** `CORE-FEAT-024`
+    -   **Title:** Implement Fuzzy Matching and Self-Healing for Diff Refinement.
+    -   **Status:** `Resolved`
+    -   **Description:** Enhanced the document refinement system (`_apply_diff_to_buffer` and `_refine_final_buffer_via_diff`) with a robust fuzzy matching strategy (85% threshold) and a 5-attempt self-healing retry loop. This allows the system to recover from minor model hallucinations in SEARCH anchors and improves the overall success rate of automated document polishing.
