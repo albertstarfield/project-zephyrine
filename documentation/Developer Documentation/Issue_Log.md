@@ -598,3 +598,8 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Implement Fuzzy Matching and Self-Healing for Diff Refinement.
     -   **Status:** `Resolved`
     -   **Description:** Enhanced the document refinement system (`_apply_diff_to_buffer` and `_refine_final_buffer_via_diff`) with a robust fuzzy matching strategy (85% threshold) and a 5-attempt self-healing retry loop. This allows the system to recover from minor model hallucinations in SEARCH anchors and improves the overall success rate of automated document polishing.
+
+-   **ID:** `CORE-REFACTOR-013`
+    -   **Title:** Migrate Web Framework from Flask to Quart (ASGI-Native).
+    -   **Status:** `Resolved`
+    -   **Description:** Performed a major architectural migration of the core engine's web layer from Flask to Quart. This enables native asyncio support for all routes and middlewares, improving concurrency and eliminating the need for WSGI-to-ASGI adapters. Key changes include converting route handlers to `async def`, utilizing `await` for request data access, and implementing a native async SSE generator for chat streaming.

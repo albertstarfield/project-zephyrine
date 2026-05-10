@@ -105,17 +105,18 @@ except ImportError:
     )
 
 
-# --- Flask Imports ---
-from flask import (  # Use Flask imports
-    Flask,
+# --- Quart Imports ---
+from quart import (  # Use Quart imports
+    Quart,
     Response,
     g,
     jsonify,
     redirect,
     request,
-    stream_with_context,
+    current_app,
+    make_response
 )
-from flask_cors import CORS
+from quart_cors import cors
 from network_internet_knowledge_fetcher import search_and_scrape_web_async
 from sqlalchemy import asc, desc
 
@@ -1221,7 +1222,7 @@ def _programmatic_json_parse_and_fix(
 async def zep_ui_websocket_handler(scope, receive, send):
     """
     Directly handles the /zepzepadaui WebSocket protocol.
-    Bypasses Flask to provide high-speed, state-aware communication for the UI.
+    Bypasses Quart to provide high-speed, state-aware communication for the UI.
     """
     # Accept the connection
     await send({"type": "websocket.accept"})
@@ -1492,15 +1493,13 @@ async def handle_ws_delete_chat(send, payload):
 # --- 3. The Middleware (The Glue) ---
 class AdaptiveSystemMiddleware:
     """
-    Wraps the Flask app to intercept /zepzepadaui traffic.
+    Wraps the Quart app to intercept /zepzepadaui traffic.
     Routes WebSockets to the Native Handler above.
-    Routes HTTP REST to Flask (via WsgiToAsgi).
+    Routes HTTP REST to Quart directly.
     """
 
-    def __init__(self, flask_app, ws_handler):
-        from asgiref.wsgi import WsgiToAsgi
-
-        self.flask_asgi = WsgiToAsgi(flask_app)
+    def __init__(self, quart_app, ws_handler):
+        self.quart_app = quart_app
         self.ws_handler = ws_handler
 
     async def __call__(self, scope, receive, send):
@@ -1508,13 +1507,14 @@ class AdaptiveSystemMiddleware:
         if scope["type"] == "websocket" and scope["path"] == "/zepzepadaui":
             await self.ws_handler(scope, receive, send)
         else:
-            # Pass everything else to the Flask System
-            await self.flask_asgi(scope, receive, send)
+            # Pass everything else to the Quart System
+            await self.quart_app(scope, receive, send)
 
 
 # --- System Setup ---
 SYSTEM_START_TIME = time.monotonic()
-system = Flask(__name__)  # Use Flask Server
+system = Quart(__name__)  # Use Quart Server
+system = cors(system, allow_origin="*")  # Allow all origin
 systemSocketPlug = AdaptiveSystemMiddleware(
     system, zep_ui_websocket_handler
 )  # websocket glue system
@@ -1522,14 +1522,9 @@ systemSocketPlug = AdaptiveSystemMiddleware(
 system.config["MAX_CONTENT_LENGTH"] = None
 
 
-# This is important for Zephy GUI to work
-# CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
-CORS(system)  # Allow all origin
-
-
 # --- Request Context Functions for DB ---
 @system.before_request
-def setup_and_log_request():
+async def setup_and_log_request():
     """Opens DB session and logs incoming request details."""
     # 0. Signal Busy Start
     if not server_is_busy_event.is_set():  # Avoid unnecessary locking if already set
@@ -1567,7 +1562,7 @@ def setup_and_log_request():
         # Body logging snippet (optional, use with caution) - Same as before
         # if request.content_length and request.content_length < 5000: # Only log small bodies
         #    try:
-        #        body_snippet = request.get_data(as_text=True)[:500] # Read snippet
+        #        body_snippet = await request.get_data(as_text=True)[:500] # Read snippet
         #        logger.debug(f"    REQ Body Snippet: {body_snippet}...")
         #    except Exception as body_err: logger.warning(f"    REQ Body: Error reading snippet: {body_err}")
         # elif request.content_length: logger.debug(f"    REQ Body: Exists but not logging snippet (Length: {request.content_length}).")
@@ -1579,7 +1574,7 @@ def setup_and_log_request():
 
 
 @system.after_request
-def add_cors_headers(response):
+async def add_cors_headers(response):
     # Only add headers for the specified origin
     # You can add more complex logic here if needed (e.g., checking request.origin)
     response.headers["Access-Control-Allow-Origin"] = "*"  # everywhere
@@ -1596,7 +1591,7 @@ def add_cors_headers(response):
 
 
 @system.after_request
-def log_and_clear_busy(response: Response) -> Response:
+async def log_and_clear_busy(response: Response) -> Response:
     """Logs details of the outgoing response AFTER the route handler."""
     # (Keep the exact same logic as the previous log_outgoing_response function)
     try:
@@ -1638,7 +1633,7 @@ def log_and_clear_busy(response: Response) -> Response:
 
 
 @system.teardown_request
-def teardown_request_db(
+async def teardown_request_db(
     exception=None,
 ):  # Use your original function name if you prefer
     """Close the DB session after each request."""
@@ -14194,7 +14189,7 @@ def _async_compatible_openai_streamer(
 ):
     """
     A synchronous generator for streaming OpenAI-compatible SSE chunks.
-    This version is designed to be returned directly from an async Flask route
+    This version is designed to be returned directly from an async Quart route
     without using `stream_with_context`, making it safe for ASGI servers.
     """
     resp_id = f"chatcmpl-asyncstream-{uuid.uuid4()}"
@@ -14263,7 +14258,7 @@ def _pseudo_stream_sync_generator(
     """
     Takes a completed text string and yields it word-by-word in the
     OpenAI-compatible SSE format. This function is fully synchronous and
-    avoids any asyncio context conflicts with Flask.
+    avoids any asyncio context conflicts with Quart.
     """
     resp_id = f"chatcmpl-syncstream-{uuid.uuid4()}"
     timestamp = int(time.time())
@@ -14406,7 +14401,7 @@ def _format_openai_chat_response(
 GENERATION_DONE_SENTINEL = object()
 
 
-def _stream_openai_chat_response_generator_flask(
+async def _stream_openai_chat_response_generator_quart(
     session_id: str,
     user_input: str,
     classification: str,
@@ -14414,20 +14409,14 @@ def _stream_openai_chat_response_generator_flask(
     model_name: str = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream",
 ):
     """
-    The definitive Server-Sent Events (SSE) generator for Flask.
-    POLISHED V6:
-    - Streams pre-buffered thoughts.
-    - Streams LIVE LOGS with a "typing" effect (smart catch-up).
-    - Sanitizes logs to prevent UI breakage.
-    - Cleanly closes the thought block before the final answer.
+    Native async SSE generator for Quart.
     """
     resp_id = f"chatcmpl-{uuid.uuid4()}"
     timestamp = int(time.time())
     logger.debug(
-        f"FLASK_STREAM_V6 {resp_id}: Starting generator with smart log streaming."
+        f"QUART_STREAM_V7 {resp_id}: Starting async generator."
     )
 
-    # 1. Helper to format chunks
     def yield_chunk(
         delta_content: Optional[str] = None,
         role: Optional[str] = None,
@@ -14447,112 +14436,79 @@ def _stream_openai_chat_response_generator_flask(
         }
         return f"data: {json.dumps(chunk_payload)}\n\n"
 
-    # Queue Protocol:
-    # 1. ("LOG", "Log message string")
-    # 2. ("RESULT", "Final Text String")
-    # 3. ("ERROR", "Error String")
-    message_queue = queue.Queue()
-    sink_id_holder = [None]
+    message_queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    # Log sink helper
+    def log_sink(message):
+        record = message.record
+        clean_msg = record["message"]
+        formatted_log = f"\n> {clean_msg}"
+        loop.call_soon_threadsafe(message_queue.put_nowait, ("LOG", formatted_log))
+
+    sink_id = None
+    if STREAM_INTERNAL_LOGS:
+        log_context_id = f"{session_id}-async"
+        sink_id = logger.add(
+            log_sink,
+            level="INFO",
+            filter=lambda r: r["extra"].get("request_session_id") == log_context_id,
+        )
+
+    async def run_generate():
+        db_session = None
+        try:
+            db_session = SessionLocal()
+            log_context_id = f"{session_id}-async"
+            with logger.contextualize(request_session_id=log_context_id):
+                result = await cortex_text_interaction.direct_generate(
+                    db=db_session,
+                    user_input=user_input,
+                    session_id=session_id,
+                    image_b64=image_b64,
+                )
+                await message_queue.put(("RESULT", result))
+        except Exception as e:
+            logger.error(f"Generate Task Error: {e}")
+            await message_queue.put(("ERROR", str(e)))
+        finally:
+            if db_session:
+                db_session.close()
+            if sink_id is not None:
+                logger.remove(sink_id)
+
+    # Start the generation task
+    gen_task = asyncio.create_task(run_generate())
 
     try:
-        # 2. Send initial Role and Open Think Tag
         yield yield_chunk(role="assistant", delta_content="<think>\n")
 
-        # 3. Define the Background Task
-        def run_async_generate_in_thread():
-            log_context_id = f"{session_id}-{threading.get_ident()}"
-
-            def log_sink(message):
-                record = message.record
-                if record["extra"].get("request_session_id") == log_context_id:
-                    clean_msg = record["message"]
-                    # Add newline for UI separation
-                    formatted_log = f"\n> {clean_msg}"
-                    try:
-                        message_queue.put_nowait(("LOG", formatted_log))
-                    except queue.Full:
-                        pass
-
-            if STREAM_INTERNAL_LOGS:
-                sink_id_holder[0] = logger.add(
-                    log_sink,
-                    level="INFO",
-                    filter=lambda r: r["extra"].get("request_session_id")
-                    == log_context_id,
-                )
-
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            db_session: Optional[Session] = None
-
-            try:
-                db_session = SessionLocal()
-                with logger.contextualize(request_session_id=log_context_id):
-                    result = loop.run_until_complete(
-                        cortex_text_interaction.direct_generate(
-                            db=db_session,
-                            user_input=user_input,
-                            session_id=session_id,
-                            image_b64=image_b64,
-                        )
-                    )
-                    message_queue.put(("RESULT", result))
-            except Exception as e:
-                logger.error(f"BG Task Error: {e}", exc_info=True)
-                message_queue.put(("ERROR", f"[Error: {type(e).__name__} - {e}]"))
-            finally:
-                if db_session:
-                    db_session.close()
-                loop.close()
-                if sink_id_holder[0] is not None:
-                    logger.remove(sink_id_holder[0])
-
-        # 4. Start the Background Thread
-        background_thread = threading.Thread(
-            target=run_async_generate_in_thread, daemon=True
-        )
-        background_thread.start()
-
-        # 5. Play Pre-buffered "Fake Thinking" (Typing effect)
         if _PREBUFFERED_THINK_CONTENT:
-            think_words = _PREBUFFERED_THINK_CONTENT.split(" ")
-            for word in think_words:
+            for word in _PREBUFFERED_THINK_CONTENT.split(" "):
                 yield yield_chunk(delta_content=word + " ")
-                time.sleep(0.001)
-
-                # 6. Stream Live Logs with Smart Typing Effect
-        final_response_text = None
+                await asyncio.sleep(0.001)
 
         while True:
-            try:
-                # Poll queue
-                item = message_queue.get(timeout=STREAM_ANIMATION_DELAY_SECONDS)
+            item = await message_queue.get()
+            msg_type, msg_content = item
 
-                msg_type, msg_content = item
-
-                if msg_type == "LOG":
-                    if STREAM_INTERNAL_LOGS:
-                        # Sanitize to prevent breaking the UI <think> block
-                        # Replace brackets with fullwidth or HTML entities so they aren't parsed as tags
-                        safe_content = msg_content.replace("<", "＜").replace(">", "＞")
-
-                        # SMART CATCH-UP LOGIC
-                        # If the queue has backed up (more than 1 item waiting), dump the text instantly.
-                        # If the queue is clear, type it out character-by-character for the cool effect.
-                        if message_queue.qsize() > 1:
-                            yield yield_chunk(delta_content=safe_content)
-                        else:
-                            # Typewriter effect
-                            for char in safe_content:
-                                yield yield_chunk(delta_content=char)
-                                # 2ms delay = ~500 chars/sec. Fast but visible.
-                                time.sleep(0.001)
-
-                elif msg_type == "RESULT":
-                    final_response_text = msg_content
-                    break
-
-                elif msg_type == "ERROR":
+            if msg_type == "LOG":
+                safe_content = msg_content.replace("<", "＜").replace(">", "＞")
+                if message_queue.qsize() > 1:
+                    yield yield_chunk(delta_content=safe_content)
+                else:
+                    for char in safe_content:
+                        yield yield_chunk(delta_content=char)
+                        await asyncio.sleep(0.001)
+            elif msg_type == "RESULT":
+                yield yield_chunk(delta_content="\n</think>\n\n" + msg_content, finish_reason="stop")
+                break
+            elif msg_type == "ERROR":
+                yield yield_chunk(delta_content=f"\n[Error: {msg_content}]", finish_reason="error")
+                break
+    finally:
+        if not gen_task.done():
+            gen_task.cancel()
                     final_response_text = msg_content
                     break
 
@@ -14605,12 +14561,12 @@ def _stream_openai_chat_response_generator_flask(
             yield yield_chunk(finish_reason="stop")
 
     except GeneratorExit:
-        logger.warning(f"FLASK_STREAM_V6 {resp_id}: Client disconnected.")
+        logger.warning(f"QUART_STREAM_V6 {resp_id}: Client disconnected.")
         if sink_id_holder[0] is not None:
             logger.remove(sink_id_holder[0])
 
     except Exception as e:
-        logger.error(f"FLASK_STREAM_V6 {resp_id}: Orchestration Error: {e}")
+        logger.error(f"QUART_STREAM_V6 {resp_id}: Orchestration Error: {e}")
         yield yield_chunk(delta_content=f"\n[STREAM ERROR: {e}]", finish_reason="error")
     finally:
         yield "data: [DONE]\n\n"
@@ -15861,7 +15817,7 @@ def _create_assistants_api_stub_response(
     return jsonify(response_body), 200
 
 
-# === Flask Routes (Async) ===
+# === Quart Routes (Async) ===
 
 
 # ====== Server Root =======
@@ -15879,7 +15835,7 @@ async def handle_interaction():
     # It will execute correctly within an async function.
     if request.method in ["GET", "HEAD"]:
         # Force consumption of request body to satisfy ASGI state machine
-        _ = request.get_data()
+        _ = await request.get_data()
 
         user_agent = request.headers.get("User-Agent", "")
 
@@ -15894,12 +15850,12 @@ async def handle_interaction():
 
                 if request.method == "HEAD":
                     # 1. Force request consumption (Keep this from your previous attempt)
-                    _ = request.get_data()
+                    _ = await request.get_data()
 
-                    # 2. [THE FIX] Trick Flask into sending a body.
-                    # Flask strips the body for HEAD requests, which causes the Hypercorn
+                    # 2. [THE FIX] Trick Quart into sending a body.
+                    # Quart strips the body for HEAD requests, which causes the Hypercorn
                     # wrapper to skip sending headers (bug). By changing the method in the
-                    # environ to 'GET', Flask will yield the body (""), triggering the headers.
+                    # environ to 'GET', Quart will yield the body (""), triggering the headers.
                     request.environ["REQUEST_METHOD"] = "GET"
 
                     # 2. Return EMPTY body. This sets Content-Length to 0.
@@ -15931,7 +15887,7 @@ async def handle_interaction():
 
     try:
         # Request parsing is synchronous
-        request_data = request.get_json()
+        request_data = await request.get_json()
         if not request_data:
             return Response("Empty request payload.", status=400, mimetype="text/plain")
 
@@ -15996,26 +15952,7 @@ async def handle_instrument_viewport_stream():
             yield f"data: {json.dumps(data_packet)}\n\n"
             await asyncio.sleep(1.0 / INSTRUMENT_STREAM_RATE_HZ)
 
-    def stream_wrapper():
-        async def inner():
-            async for item in generate_data_stream():
-                yield item
-
-        # This is a common pattern to bridge async generators with sync frameworks
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        gen = inner()
-        try:
-            while True:
-                yield loop.run_until_complete(gen.__anext__())
-        except StopAsyncIteration:
-            pass  # Generator finished
-        except Exception as e:
-            logger.error(f"{req_id}: Error in stream wrapper: {e}")
-        finally:
-            loop.close()
-
-    return Response(stream_with_context(stream_wrapper()), mimetype="text/event-stream")
+    return Response(generate_data_stream(), mimetype="text/event-stream")
 
 
 @system.route("/meshCommunityServeProcessor", methods=["POST"])
@@ -16054,14 +15991,14 @@ async def handle_mesh_community_serve_processor():
             )
 
             # --- Step 1.1: Validate and Extract Request Data ---
-            audio_file_storage = request.files.get("file")
+            audio_file_storage = (await request.files).get("file")
             if not audio_file_storage or not audio_file_storage.filename:
                 raise ValueError(
                     "A 'file' part with a filename is required for audio transcription."
                 )
 
             # Extract parameters from the form part of the request.
-            language = request.form.get("language", "auto")
+            language = (await request.form).get("language", "auto")
 
             # --- Step 1.2: Securely Save the Uploaded Audio File ---
             # Use `secure_filename` to prevent directory traversal attacks.
@@ -16109,7 +16046,7 @@ async def handle_mesh_community_serve_processor():
             "application/json"
         ):
             # This block handles all non-file-upload requests.
-            request_data = request.get_json()
+            request_data = await request.get_json()
             if not request_data:
                 raise ValueError("Empty JSON payload.")
 
@@ -16257,7 +16194,7 @@ async def handle_mesh_community_serve_processor():
 
 # === Zephy Cortex Configuration API ===
 @system.route("/ZephyCortexConfig", methods=["GET", "POST"])
-def handle_cortex_config():
+async def handle_cortex_config():
     """
     GET: Returns the current adjustable configuration.
     POST: Updates the configuration by writing to a .env file.
@@ -16277,7 +16214,7 @@ def handle_cortex_config():
     elif request.method == "POST":
         logger.info(f"🚀 {req_id}: Received POST /ZephyCortexConfig")
         try:
-            new_settings = request.get_json()
+            new_settings = await request.get_json()
             if not isinstance(new_settings, dict):
                 raise ValueError("Invalid JSON payload. Expected an object.")
 
@@ -16351,13 +16288,13 @@ def handle_cortex_config():
 # This route MUST be handled by a server that supports websockets (Hypercorn)
 # Moved into the top
 # === NEW OpenAI Compatible Embeddings Route ===
-# AdelaideAlbertCortex -> Flask Routes Section
+# AdelaideAlbertCortex -> Quart Routes Section
 
 
 # =============[Self Test Status]===============
 @system.route("/v1/primedready", methods=["GET"])
 @system.route("/primedready", methods=["GET"])
-def handle_primed_ready_status():
+async def handle_primed_ready_status():
     """
     Custom endpoint for the GUI to check if the initial startup benchmark
     has completed, using the legacy T-minus countdown format.
@@ -16392,31 +16329,31 @@ def handle_primed_ready_status():
 
 # --- Zephy specific SSE Notification Endpoint ---
 @system.route("/v1/chat/notification")
-def sse_notification_stream():
+async def sse_notification_stream():
     """
     This endpoint streams notifications to the client using SSE.
     """
     logger.info("SSE Client connected to notification stream.")
 
-    def generate():
+    async def generate():
         try:
             yield format_sse_notification(
                 {"status": "connected"}, event="connection_ack"
             )
             while True:
-                try:
-                    message = sse_notification_queue.get(timeout=30)
-                    if message is None:
-                        break
-                    yield message
-                except queue.Empty:
-                    yield ": keep-alive\n\n"
+                # Use asyncio.to_thread to avoid blocking if sse_notification_queue.get blocks
+                message = await asyncio.to_thread(sse_notification_queue.get, timeout=30)
+                if message is None:
+                    break
+                yield message
+        except asyncio.TimeoutError:
+            yield ": keep-alive\n\n"
         except GeneratorExit:
-            logger.warning(
-                "SSE notification stream generator exited (client likely disconnected)."
-            )
+            logger.warning("SSE Client disconnected.")
+        except Exception as e:
+            logger.error(f"SSE stream error: {e}")
 
-    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+    return Response(generate(), mimetype="text/event-stream")
 
 
 @system.route("/v1/chat/responsezeph", methods=["POST"])
@@ -16436,7 +16373,7 @@ async def handle_zephyrine_chat_response():
     final_response_status_code: int = 500
 
     try:
-        raw_request_data_dict = request.get_json()
+        raw_request_data_dict = await request.get_json()
         if not raw_request_data_dict:
             raise ValueError("Empty JSON payload.")
 
@@ -16748,7 +16685,7 @@ async def handle_openai_embeddings():
     return Response(response_payload, status=status_code, mimetype="application/json")
 
 
-# AdelaideAlbertCortex -> Flask Routes Section
+# AdelaideAlbertCortex -> Quart Routes Section
 
 
 @system.route("/v1/completions", methods=["POST"])
@@ -16757,7 +16694,7 @@ async def handle_legacy_completions():
     """
     Asynchronous and CONTEXT-SAFE version of the handler for the legacy OpenAI /v1/completions endpoint.
     This is the definitive implementation for a non-blocking ASGI server like Hypercorn.
-    It manually manages its own database session to avoid Flask context issues.
+    It manually manages its own database session to avoid Quart context issues.
     """
     endpoint_hit = request.path
     start_req = time.monotonic()
@@ -16778,7 +16715,7 @@ async def handle_legacy_completions():
             raise RuntimeError("Failed to create a database session for this request.")
 
         # --- Step 2: Parse and Validate Incoming Request ---
-        raw_request_data = request.get_json()
+        raw_request_data = await request.get_json()
         if not raw_request_data:
             raise ValueError("Empty JSON payload.")
 
@@ -16889,7 +16826,7 @@ async def handle_openai_chat_completion():
     """
     Asynchronous and CONTEXT-SAFE version of the OpenAI chat completion handler.
     This is the definitive implementation for a non-blocking ASGI server like Hypercorn.
-    It manually manages its own database session to avoid Flask context issues and
+    It manually manages its own database session to avoid Quart context issues and
     uses a context-free generator for streaming to prevent crashes.
     """
     start_req_time_main_handler = time.monotonic()
@@ -16908,7 +16845,7 @@ async def handle_openai_chat_completion():
             raise RuntimeError("Failed to create a database session for this request.")
 
         # --- Step 2: Parse and Validate Incoming Request ---
-        raw_request_data_dict = request.get_json()
+        raw_request_data_dict = await request.get_json()
         if not raw_request_data_dict:
             raise ValueError("Empty JSON payload.")
 
@@ -16976,8 +16913,7 @@ async def handle_openai_chat_completion():
             )
 
             # Use the context-free streamer which is safe for async routes
-            # _stream_openai_chat_response_generator_flask
-            async_safe_generator = _stream_openai_chat_response_generator_flask(
+            async_safe_generator = _stream_openai_chat_response_generator_quart(
                 session_id=session_id_for_logs,
                 user_input=user_input_from_req,
                 classification="chat_complex",  # Or pass the actual classification if determined earlier
@@ -17058,7 +16994,7 @@ async def handle_openai_moderations():
     """
     start_req_time = time.monotonic()
     request_id = f"req-mod-{uuid.uuid4()}"
-    logger.info(f"🚀 Flask OpenAI-Style Moderation Request ID: {request_id}")
+    logger.info(f"🚀 Quart OpenAI-Style Moderation Request ID: {request_id}")
 
     db: Session = g.db
     final_status_code: int = 500
@@ -17071,7 +17007,7 @@ async def handle_openai_moderations():
         try:
             raw_request_data = (
                 await request.get_json()
-            )  # Assuming Quart, or request.get_json() for Flask sync
+            )  # Assuming Quart, or await request.get_json() for Quart sync
             if not raw_request_data:
                 raise ValueError("Empty JSON payload received.")
         except Exception as json_err:
@@ -17181,7 +17117,7 @@ async def handle_openai_moderations():
         logger.info(
             f"{request_id}: Calling direct_generate for moderation. Input snippet: '{input_text_to_moderate[:70]}...'"
         )
-        # direct_generate is async, and this Flask route is async
+        # direct_generate is async, and this Quart route is async
         llm_assessment_text = await cortex_text_interaction.direct_generate(
             db,  # Pass the current request's DB session
             moderation_prompt_filled,
@@ -17461,7 +17397,7 @@ async def handle_ollama_chat():
             raise RuntimeError("Failed to create a database session for this request.")
 
         # --- Step 2: Parse and Validate Incoming Request ---
-        raw_request_data_dict = request.get_json()
+        raw_request_data_dict = await request.get_json()
         if not raw_request_data_dict:
             raise ValueError("Empty JSON payload.")
 
@@ -17643,7 +17579,7 @@ async def handle_ollama_tags():
 
     response_body = {"models": ollama_models}
 
-    # Flask's jsonify works correctly within an async route handler.
+    # Quart's jsonify works correctly within an async route handler.
     response = jsonify(response_body)
     response.status_code = status_code
 
@@ -17706,11 +17642,11 @@ async def handle_openai_asr_transcriptions():
         ):
             raise ValueError("Invalid content type. Must be multipart/form-data.")
 
-        audio_file_storage = request.files.get("file")
-        model_requested = request.form.get("model")
-        language_param_for_log = request.form.get("language")
-        response_format_req = request.form.get("response_format", "json").lower()
-        session_id_for_log = request.form.get("session_id", session_id_for_log)
+        audio_file_storage = (await request.files).get("file")
+        model_requested = (await request.form).get("model")
+        language_param_for_log = (await request.form).get("language")
+        response_format_req = (await request.form).get("response_format", "json").lower()
+        session_id_for_log = (await request.form).get("session_id", session_id_for_log)
 
         if not cortex_text_interaction:
             raise RuntimeError(
@@ -18042,17 +17978,17 @@ async def handle_openai_audio_translations():
             "multipart/form-data"
         ):
             raise ValueError("Invalid content type. Must be multipart/form-data.")
-        audio_file_storage = request.files.get("file")
-        model_requested = request.form.get(
+        audio_file_storage = (await request.files).get("file")
+        model_requested = (await request.form).get(
             "model"
         )  # Should match AUDIO_TRANSLATION_MODEL_CLIENT_FACING
-        target_language_code = request.form.get(
+        target_language_code = (await request.form).get(
             "target_language", DEFAULT_TRANSLATION_TARGET_LANGUAGE
         ).lower()
-        source_language_code_asr = request.form.get("source_language", "auto").lower()
-        output_voice_requested = request.form.get("voice")
-        output_audio_format = request.form.get("response_format", "mp3").lower()
-        session_id_for_log = request.form.get("session_id", session_id_for_log)
+        source_language_code_asr = (await request.form).get("source_language", "auto").lower()
+        output_voice_requested = (await request.form).get("voice")
+        output_audio_format = (await request.form).get("response_format", "mp3").lower()
+        session_id_for_log = (await request.form).get("session_id", session_id_for_log)
         if cortex_text_interaction:
             cortex_text_interaction.current_session_id = session_id_for_log
         if audio_file_storage and audio_file_storage.filename:
@@ -18481,8 +18417,8 @@ async def handle_openai_tts():  # <<< CHANGED to async def
     request_data_snippet_for_log: str = "No request data processed"
 
     try:
-        # Use request.get_json() directly as Flask context is available
-        raw_request_data = request.get_json()
+        # Use await request.get_json() directly as Quart context is available
+        raw_request_data = await request.get_json()
         if not raw_request_data:
             raise ValueError("Empty JSON payload received.")
 
@@ -18674,8 +18610,8 @@ async def handle_openai_image_generations():  # Route is async
         f"🚀 OpenAI-Style Image Generation Request ID: {request_id} (ELP1 Priority)"
     )
 
-    # Get DB session from Flask's g or create if not present (ensure before_request/teardown_request handle this)
-    # For simplicity here, assuming g.db is correctly managed by Flask context handlers
+    # Get DB session from Quart's g or create if not present (ensure before_request/teardown_request handle this)
+    # For simplicity here, assuming g.db is correctly managed by Quart context handlers
     db: Optional[Session] = getattr(g, "db", None)
     if (
         db is None
@@ -18698,8 +18634,8 @@ async def handle_openai_image_generations():  # Route is async
         # --- 1. Get and Validate Request JSON Body ---
         try:
             raw_request_data = (
-                request.get_json()
-            )  # Use await if using Quart, or request.get_json() for Flask
+                await request.get_json()
+            )  # Use await if using Quart, or await request.get_json() for Quart
             if not raw_request_data:
                 raise ValueError("Empty JSON payload received.")
             try:
@@ -19148,7 +19084,7 @@ async def handle_api_show():
     Returns the Modelfile and details for the requested model.
     """
     try:
-        request_data = request.get_json()
+        request_data = await request.get_json()
         model_name = request_data.get("model")
         logger.info(f"Ollama requested details for model: {model_name}")
 
@@ -19555,7 +19491,7 @@ async def handle_list_pseudo_fine_tuning_jobs():
 
 
 @system.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>", methods=["GET"])
-def handle_retrieve_fine_tuning_job(fine_tuning_job_id: str):
+async def handle_retrieve_fine_tuning_job(fine_tuning_job_id: str):
     request_id = f"req-ft-retrieve-{uuid.uuid4()}"
     logger.info(
         f"🚀 {request_id}: Received GET /v1/fine_tuning/jobs/{fine_tuning_job_id} (Placeholder)"
@@ -19713,7 +19649,7 @@ async def handle_upload_and_ingest_file():
     request_id = f"req-file-upload-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received POST /v1/files (File Upload Only)")
 
-    db: Session = g.db  # Use the DB session from Flask's g context
+    db: Session = g.db  # Use the DB session from Quart's g context
     final_status_code: int = 500
     response_body: Dict[str, Any] = {}
     temp_file_path: Optional[str] = None
@@ -19723,13 +19659,13 @@ async def handle_upload_and_ingest_file():
     )
 
     try:
-        if "file" not in request.files:
+        if "file" not in (await request.files):
             raise ValueError(
                 "No file part in the request. Please upload a file using the 'file' field."
             )
 
-        file_storage = request.files["file"]
-        purpose = request.form.get(
+        file_storage = (await request.files)["file"]
+        purpose = (await request.form).get(
             "purpose"
         )  # Still accept purpose, but processing is triggered by /fine_tuning/jobs
 
@@ -19996,7 +19932,7 @@ async def handle_retrieve_file_metadata_stub(file_id: str):
 
 
 @system.route("/v1/files/<string:file_id>", methods=["DELETE"])
-def handle_delete_file_stub(file_id: str):
+async def handle_delete_file_stub(file_id: str):
     request_id = f"req-file-delete-stub-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received DELETE /v1/files/{file_id} (Placeholder)")
 
@@ -20021,7 +19957,7 @@ def handle_delete_file_stub(file_id: str):
 
 
 @system.route("/v1/files/<string:file_id>/content", methods=["GET"])
-def handle_retrieve_file_content_stub(file_id: str):
+async def handle_retrieve_file_content_stub(file_id: str):
     request_id = f"req-file-content-stub-{uuid.uuid4()}"
     logger.info(
         f"🚀 {request_id}: Received GET /v1/files/{file_id}/content (Placeholder/DB Lookup)"
