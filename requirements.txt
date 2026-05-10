@@ -27,10 +27,9 @@ cst_lsp>=0.1.3
 # fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install
 pytesseract>=0.3.13
 PyMuPDF>=1.26.6
-# --- Core Web Framework & ASGI/WSGI Server ---
-Flask>=3.1.2
-flask[async]>=3.1.2
-Flask-Cors>=6.0.1
+# --- Core Web Framework & ASGI Server (Migrated to Quart) ---
+Quart>=0.20.0
+Quart-Cors>=0.7.0
 Hypercorn>=0.18.0
 # uvicorn>=0.15             # Alternative ASGI server (optional) - Kept commented No longer needed
 Werkzeug>=3.1.4
