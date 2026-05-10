@@ -1,4 +1,5 @@
 pragma Ada_2022;
+pragma SPARK_Mode (Off);
 with Ada.Text_IO;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;

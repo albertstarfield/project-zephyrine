@@ -1,3 +1,5 @@
+pragma Ada_2022;
+pragma SPARK_Mode (Off);
 with AWS.Net.WebSocket;
 with AWS.Status;
 with AWS.Net;

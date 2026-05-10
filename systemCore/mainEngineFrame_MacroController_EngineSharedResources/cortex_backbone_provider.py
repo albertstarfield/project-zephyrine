@@ -1179,8 +1179,9 @@ class CortexEngine:
         lock_acquired = False
         worker_process = None
         start_lock_wait = time.monotonic()
-        provider_logger.debug(f"{worker_log_prefix}: Acquiring worker execution lock (Priority: ELP{priority})...")
-        # Handle potential fallback to standard threading.Lock which doesn't support 'priority'
+        # RATIONALE: _priority_quota_lock is polymorphic (PriorityQuotaLock | threading.Lock).
+        # The isinstance check below guarantees runtime safety; Pyrefly's static inference 
+        # may not always track the narrowed type.
         if isinstance(self._priority_quota_lock, PriorityQuotaLock):
             lock_acquired = self._priority_quota_lock.acquire(priority=priority, timeout=None) # pyrefly: ignore
         else:
@@ -1402,9 +1403,9 @@ class CortexEngine:
             # `_python_executable`, `_imagination_worker_script_path` are instance vars (self.)
             # Config constants like IMAGE_GEN_MODEL_DIR are global from CortexConfiguration.py
 
-            # Acquire the shared priority lock
-            # `start_lock_wait` is captured from the outer scope of _execute_imagination_worker
-            # Handle potential fallback to standard threading.Lock
+            # RATIONALE: Shared resource lock narrowing (PriorityQuotaLock | threading.Lock).
+            # WARRANTY: isinstance check guarantees that 'priority' is only passed to the 
+            # correct class type at runtime, preventing TypeErrors.
             if isinstance(self._priority_quota_lock, PriorityQuotaLock):
                 current_lock_acquired = self._priority_quota_lock.acquire(priority=_priority, timeout=None) # pyrefly: ignore
             else:

@@ -1,3 +1,5 @@
+pragma Ada_2022;
+pragma SPARK_Mode (Off);
 -- connection_manager.ads
 with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Strings.Hash;

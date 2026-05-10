@@ -1,4 +1,5 @@
 pragma Ada_2022;
+pragma SPARK_Mode (Off);
 with Ada.Text_IO;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;

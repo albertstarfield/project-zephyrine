@@ -1,3 +1,5 @@
+pragma Ada_2022;
+pragma SPARK_Mode (Off);
 with Models;
 
 package Database is

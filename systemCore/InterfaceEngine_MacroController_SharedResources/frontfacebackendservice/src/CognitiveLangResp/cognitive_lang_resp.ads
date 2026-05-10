@@ -1,4 +1,5 @@
 pragma Ada_2022;
+pragma SPARK_Mode (On);
 
 package Cognitive_Lang_Resp is
 

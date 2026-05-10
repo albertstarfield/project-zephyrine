@@ -1,4 +1,5 @@
 pragma Ada_2022;
+pragma SPARK_Mode (On);
 
 with AWS.Client;
 with AWS.Response;

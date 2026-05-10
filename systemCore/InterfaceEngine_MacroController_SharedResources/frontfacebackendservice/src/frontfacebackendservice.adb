@@ -1,4 +1,5 @@
 pragma Ada_2022;
+pragma SPARK_Mode (Off);
 
 -- 1. Standard Library
 with Ada.Text_IO;           use Ada.Text_IO;

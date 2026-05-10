@@ -762,6 +762,9 @@ class AmaryllisAgent:
             tool_method = getattr(self.agent_tools, tool_name, None)
             if tool_method and callable(tool_method):
                  logger.debug(f"Calling tool method: agent_tools.{tool_name}(**{parameters})")
+                 # RATIONALE: tool_method is dynamically retrieved via getattr. 
+                 # WARRANTY: All methods in AgentTools are verified as 'async def' in the 
+                 # class definition; thus they are guaranteed awaitables at runtime.
                  result = await tool_method(**parameters) # Call the tool method # pyrefly: ignore
             elif tool_name in ["attempt_completion", "plan_mode_respond", "ask_followup_question", "new_task", "load_mcp_documentation"]:
                  result = f"Error: LLM attempted to 'execute' output type tool '{tool_name}'. This indicates the LLM should have stopped."

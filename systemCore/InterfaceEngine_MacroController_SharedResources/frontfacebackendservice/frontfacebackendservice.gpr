@@ -30,4 +30,13 @@ project Frontfacebackendservice is
       for Artifacts (".") use ("share");
    end Install;
 
+   package Prove is
+      for Proof_Switches ("Ada") use
+        ("-j0",
+         "--mode=flow",
+         "--level=1",
+         "--warnings=continue",
+         "--no-subprojects");
+   end Prove;
+
 end Frontfacebackendservice;

@@ -14702,7 +14702,9 @@ def _execute_audio_worker_with_priority(
         f"{log_prefix}: Acquiring shared resource lock (Priority: ELP{priority})..."
     )
 
-    # Handle potential fallback to standard threading.Lock
+    # RATIONALE: shared_priority_lock can be PriorityQuotaLock or threading.Lock.
+    # WARRANTY: isinstance check ensures only the correct type receives the 'priority' argument,
+    # preventing runtime TypeErrors from standard threading.Lock.
     if isinstance(shared_priority_lock, PriorityQuotaLock):
         lock_acquired = shared_priority_lock.acquire(priority=priority) # pyrefly: ignore
     else:

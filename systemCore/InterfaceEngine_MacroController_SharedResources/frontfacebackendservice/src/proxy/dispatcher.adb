@@ -1,4 +1,5 @@
 pragma Ada_2022;
+pragma SPARK_Mode (Off);
 with AWS.MIME;
 with AWS.Messages;
 with AWS.Response;
