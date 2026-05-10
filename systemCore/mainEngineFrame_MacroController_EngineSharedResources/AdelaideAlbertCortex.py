@@ -7747,7 +7747,7 @@ class CortexThoughts:
             logger.error("DiffApply: No Code/General model available.")
             return current_buffer, False
 
-        max_retries = 2
+        max_retries = 5
         updated_buffer = current_buffer
         success = False
 
@@ -7796,14 +7796,35 @@ Output your response EXACTLY in this format:
                                 )
                                 success = True
                             else:
-                                logger.warning(
-                                    f"{log_prefix}: Search anchor not found in buffer. Trying simple append."
-                                )
-                                updated_buffer = (
-                                    current_buffer
-                                    + f"\n\n## {section_title}\n{new_content_request}"
-                                )
-                                success = True
+                                # --- NEW: FUZZY MATCHING (85% THRESHOLD) ---
+                                logger.info(f"{log_prefix}: Search anchor not found exactly. Attempting fuzzy match (85% threshold)...")
+                                best_match_start = -1
+                                best_score = 0
+                                search_len = len(search_part)
+                                
+                                # Optimization: Only search in windows of similar length
+                                for i in range(len(current_buffer) - search_len + 1):
+                                    candidate = current_buffer[i : i + search_len]
+                                    score = fuzz.ratio(search_part, candidate)
+                                    if score > best_score:
+                                        best_score = score
+                                        best_match_start = i
+                                    if score == 100: break
+
+                                if best_score >= 85:
+                                    logger.success(f"{log_prefix}: Fuzzy match found (Score: {best_score}%). Applying edit.")
+                                    candidate_to_replace = current_buffer[best_match_start : best_match_start + search_len]
+                                    updated_buffer = current_buffer.replace(candidate_to_replace, replace_part)
+                                    success = True
+                                else:
+                                    logger.warning(
+                                        f"{log_prefix}: No suitable fuzzy match found (Best: {best_score}%). Falling back to direct append."
+                                    )
+                                    updated_buffer = (
+                                        current_buffer
+                                        + f"\n\n## {section_title}\n{new_content_request}"
+                                    )
+                                    success = True
                     except Exception as parse_err:
                         logger.error(
                             f"{log_prefix}: Failed to parse markers: {parse_err}"
@@ -7881,53 +7902,85 @@ Output your edits using MULTIPLE blocks of this format:
 If no changes are needed, respond with "NO_CHANGES_NEEDED".
 """
 
-        try:
-            chain = refine_model.bind(priority=priority) | StrOutputParser()
-            response = await asyncio.to_thread(
-                self._call_llm_with_timing,
-                chain,
-                refine_prompt,
-                interaction_data={},
-                priority=priority,
-                db=db,
-                session_id=session_id,
-            )
+        max_retries = 5
+        last_error = ""
+        for attempt in range(1, max_retries + 1):
+            try:
+                current_prompt = refine_prompt
+                if last_error:
+                    current_prompt += f"\n\n[SYSTEM: PREVIOUS ATTEMPT FAILED: {last_error}. PLEASE FIX THE XML/DIFF SYNTAX AND TRY AGAIN.]"
 
-            if "NO_CHANGES_NEEDED" in response:
-                logger.info(f"{log_prefix}: Model decided no final edits needed.")
-                return current_buffer
-
-            # Parse multiple blocks
-            blocks = re.findall(
-                r"<<<<< SEARCH\s*(.*?)\s*=====\s*(.*?)\s*>>>>>", response, re.DOTALL
-            )
-            if not blocks:
-                logger.warning(
-                    f"{log_prefix}: No valid diff blocks found in refinement output."
+                chain = refine_model.bind(priority=priority) | StrOutputParser()
+                response = await asyncio.to_thread(
+                    self._call_llm_with_timing,
+                    chain,
+                    current_prompt,
+                    interaction_data={},
+                    priority=priority,
+                    db=db,
+                    session_id=session_id,
                 )
-                return current_buffer
 
-            updated_buffer = current_buffer
-            applied_count = 0
-            for search_text, replace_text in blocks:
-                search_text = search_text.strip()
-                replace_text = replace_text.strip()
-                if search_text in updated_buffer:
-                    updated_buffer = updated_buffer.replace(search_text, replace_text)
-                    applied_count += 1
-                else:
-                    logger.debug(
-                        f"{log_prefix}: Search block not found for an edit. Skipping."
-                    )
+                if "NO_CHANGES_NEEDED" in response:
+                    logger.info(f"{log_prefix}: Model decided no final edits needed.")
+                    return current_buffer
 
-            logger.success(
-                f"{log_prefix}: Applied {applied_count}/{len(blocks)} refinement edits."
-            )
-            return updated_buffer
+                # Parse multiple blocks
+                blocks = re.findall(
+                    r"<<<<< SEARCH\s*(.*?)\s*=====\s*(.*?)\s*>>>>>", response, re.DOTALL
+                )
+                if not blocks:
+                    last_error = "No valid <<<<< SEARCH / ===== / >>>>> blocks found."
+                    logger.warning(f"{log_prefix} Attempt {attempt}: {last_error}")
+                    continue
 
-        except Exception as e:
-            logger.error(f"{log_prefix}: Global refinement failed: {e}")
-            return current_buffer
+                updated_buffer = current_buffer
+                applied_count = 0
+                for search_text, replace_text in blocks:
+                    search_text = search_text.strip()
+                    replace_text = replace_text.strip()
+                    
+                    if search_text in updated_buffer:
+                        updated_buffer = updated_buffer.replace(search_text, replace_text)
+                        applied_count += 1
+                    else:
+                        # --- NEW: FUZZY MATCHING (85% THRESHOLD) ---
+                        logger.debug(f"{log_prefix}: Search block not found exactly. Trying fuzzy match...")
+                        best_match_start = -1
+                        best_score = 0
+                        s_len = len(search_text)
+                        
+                        # Optimization: only check chunks if search_text isn't huge
+                        if s_len < 1000:
+                            for i in range(len(updated_buffer) - s_len + 1):
+                                cand = updated_buffer[i : i + s_len]
+                                score = fuzz.ratio(search_text, cand)
+                                if score > best_score:
+                                    best_score = score
+                                    best_match_start = i
+                                if score == 100: break
+                            
+                            if best_score >= 85:
+                                logger.success(f"{log_prefix}: Global Refine Fuzzy Match found ({best_score}%).")
+                                cand_to_rep = updated_buffer[best_match_start : best_match_start + s_len]
+                                updated_buffer = updated_buffer.replace(cand_to_rep, replace_text)
+                                applied_count += 1
+                                continue
+
+                        logger.debug(f"{log_prefix}: Search block not found even with fuzzy logic. Skipping.")
+
+                logger.success(
+                    f"{log_prefix}: Applied {applied_count}/{len(blocks)} refinement edits."
+                )
+                return updated_buffer
+
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"{log_prefix} Attempt {attempt} failed: {last_error}")
+                if attempt == max_retries:
+                    return current_buffer
+        
+        return current_buffer
 
     def _detect_agentic_usage(self, user_input: str, mode: str) -> bool:
         """
