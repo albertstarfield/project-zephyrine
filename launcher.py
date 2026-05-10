@@ -167,8 +167,14 @@ PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE = os.path.join(
 # --- Alire (Ada package manager) Configuration ---
 ALIRE_HOME = os.path.join(TARGET_RUNTIME_ENV_PATH, "alire")
 
-# Create the directory
-os.makedirs(ALIRE_HOME, exist_ok=True)
+# Create the directory only if not just checking help
+opam_root = os.path.join(TARGET_RUNTIME_ENV_PATH, "opam_root")
+os.environ["NODE_PATH"] = os.path.join(TARGET_RUNTIME_ENV_PATH, "node_modules")
+
+if not any(arg in sys.argv for arg in ["--help", "-h"]):
+    os.makedirs(ALIRE_HOME, exist_ok=True)
+    os.makedirs(opam_root, exist_ok=True)
+    os.makedirs(os.environ["NODE_PATH"], exist_ok=True)
 
 # Set the environment variables for all subprocesses
 os.environ["ALIRE_SETTINGS_DIR"] = os.path.join(ALIRE_HOME, "config")
@@ -217,14 +223,6 @@ GNAT_BUILD_DIR = os.path.join(ROOT_DIR, "gnat_community_build")
 GNAT_SOURCE_URL = "https://github.com/AdaCore/gnat-community-sources/archive/refs/tags/gnat-community-2021.tar.gz"
 GNAT_TAR_FILENAME = "gnat-community-2021.tar.gz"
 # --- END GNAT Configuration ---
-#
-# --- OPAM configuration Ocaml Rocq req (as an aux of Ada/SPARK) ---
-opam_root = os.path.join(TARGET_RUNTIME_ENV_PATH, "opam_root")
-os.makedirs(opam_root, exist_ok=True)
-
-# NPM Node_Modules JS COnfiguration
-os.environ["NODE_PATH"] = os.path.join(TARGET_RUNTIME_ENV_PATH, "node_modules")
-os.makedirs(os.environ["NODE_PATH"], exist_ok=True)
 
 
 # --- START of new retry logic ---
@@ -5891,7 +5889,10 @@ if TUI_AVAILABLE:
 # and global configurations (ROOT_DIR, REQUIRED_NODE_MAJOR, etc.) are defined correctly above this block.
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Zephyrine Launcher")
+    parser = argparse.ArgumentParser(
+        description="Zephyrine Launcher: High-Integrity Augmented Adaptive System for UAV and System Hardening.",
+        epilog="Maintainers: Zephyrine Foundation 2023-2026. See README.md for advanced configuration.",
+    )
     parser.add_argument(
         "--host_cogAPI",
         default="127.0.0.1:11434",
@@ -5923,7 +5924,7 @@ if __name__ == "__main__":
     globals()["HEADLESS_MODE"] = args.no_tui_headless
 
     print_system(
-        f"Configuration Loaded - API: {ZEPHYRINE_COG_API_HOST} | UI: {ZEPHYRINE_UI_HOST}"
+        f"Configuration Loaded - API: {ZEPHYRINE_COG_API_HOST} | UI: {ZEPHYRINE_UI_HOST} | Headless: {globals().get('HEADLESS_MODE', False)}"
     )
     # ----------------------------------------------------
     # --- LAUNCHER INTEGRITY AND HASH CHECK (New Block)---
