@@ -1,7 +1,7 @@
 # README: System Core Architecture (systemCore)
 
 ## Overview
-The `systemCore` directory contains the foundational architecture for the Zephyrine framework. The system is strictly partitioned based on Design Assurance Levels (DAL) to ensure that mission-critical, hard real-time operations are fully isolated from general-purpose, shared-resource computing tasks.
+The `systemCore` directory contains the foundational architecture for the Zephyrine framework. The system is strictly partitioned based on Design Assurance Levels (DAL) to ensure that mission-critical, hard real-time operations are fully isolated from general-purpose, shared-resource computing tasks. This architecture represents an **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)**.
 
 ## Terminology
 Before navigating the architecture, note the distinction between the two primary compute environments:

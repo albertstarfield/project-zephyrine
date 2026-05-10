@@ -5902,6 +5902,11 @@ if __name__ == "__main__":
         default="127.0.0.1:5173",
         help="Host address for the UI Frontend (default: 127.0.0.1:5173)",
     )
+    parser.add_argument(
+        "--agreetoLicenseAndToC",
+        action="store_true",
+        help="Auto-agree to all prompts (by this you already know the license and agree to terms and condition of this)",
+    )
 
     # Use parse_known_args to avoid crashing if other flags are passed effectively
     args, unknown = parser.parse_known_args()
@@ -5909,6 +5914,7 @@ if __name__ == "__main__":
     # Update Globals
     ZEPHYRINE_COG_API_HOST = args.host_cogAPI
     ZEPHYRINE_UI_HOST = args.host_UI
+    globals()["AUTO_AGREE"] = args.agreetoLicenseAndToC
 
     print_system(
         f"Configuration Loaded - API: {ZEPHYRINE_COG_API_HOST} | UI: {ZEPHYRINE_UI_HOST}"
@@ -7158,14 +7164,19 @@ if __name__ == "__main__":
                 accepted = False
                 time_taken = 0.0
 
-                try:
-                    # Attempt to display the interactive license prompt
-                    accepted, time_taken = curses.wrapper(
-                        display_license_prompt,
-                        combined_license_text.splitlines(),
-                        estimated_reading_seconds,
-                    )  # type: ignore
-                except curses.error as e:
+                if globals().get("AUTO_AGREE"):
+                    print_system("Auto-agree mode (--yes) detected: Implicitly accepting all software licenses.")
+                    accepted = True
+                    time_taken = 0.0
+                else:
+                    try:
+                        # Attempt to display the interactive license prompt
+                        accepted, time_taken = curses.wrapper(
+                            display_license_prompt,
+                            combined_license_text.splitlines(),
+                            estimated_reading_seconds,
+                        )  # type: ignore
+                    except curses.error as e:
                     # Handle the specific error for unknown terminals
                     if "setupterm" in str(e) and "terminfo" in str(e):
                         print_error(
