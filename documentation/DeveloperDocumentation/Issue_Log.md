@@ -1,3 +1,8 @@
+-   **ID:** `SYS-FIX-024`
+-   **Title:** `Enhance build system for macOS compatibility, frontend verification, and backend SPARK analysis.`
+-   **Status:** `Resolved`
+-   **Description:** `Implemented macOS SDK path detection and sysroot integration for Ada components (Watchdog, Frontface Backend). Integrated JSHint and HTML/CSS verification for frontend assets. Added advisory SPARK flow analysis for the backend service. Refined launcher monitoring intervals and integrity check sequences. Added auto-agreement for TOC/License.`
+
 -   **ID:** `CORE-REFACTOR-017`
 -   **Title:** `Implement ELP0/ELP1 priority propagation and concurrency control.`
 -   **Status:** `Resolved`
