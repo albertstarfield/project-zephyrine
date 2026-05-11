@@ -464,6 +464,9 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     ROCQ_SOURCE_INSTALLED_FLAG_FILE,
 ]
 
+# Monitoring Interval (User requested 5 minutes)
+MONITORING_INTERVAL_SECONDS = 300 
+
 
 # Global list to keep track of running subprocesses
 running_processes = []
@@ -667,8 +670,10 @@ def _compile_watchtowers() -> bool:
                     check=True,
                 )
                 sdk_path = sdk_path_result.stdout.strip()
-                # Append the necessary linker arguments to the command
-                build_command_ada.extend(["-largs", f"-L{sdk_path}/usr/lib"])
+                # Pass SDK_PATH to alr exec environment via env_override if possible, 
+                # or just set it in the current process env for this run.
+                os.environ["SDK_PATH"] = sdk_path
+                print_system(f"macOS SDK path detected and exported: {sdk_path}")
             except Exception as e:
                 print_error(f"Could not get macOS SDK path for Ada build: {e}")
                 return False
@@ -702,6 +707,75 @@ def _compile_watchtowers() -> bool:
     print_system("--- All ZephyWatchtower components compiled successfully. ---")
     return True
 
+def _compile_frontface_backend() -> bool:
+    """
+    Compiles the Ada frontfacebackend service proxy.
+    """
+    print_system("--- Compiling Frontface Backend Service ---")
+    
+    if not os.path.isdir(BACKEND_SERVICE_DIR):
+        print_error(f"Backend service directory not found: {BACKEND_SERVICE_DIR}")
+        return False
+
+    if not shutil.which("alr"):
+        print_error("'alr' command not found. Cannot build backend service.")
+        return False
+
+    try:
+        # Ensure SDK_PATH is set for macOS
+        if platform.system() == "Darwin":
+            sdk_path = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
+            os.environ["SDK_PATH"] = sdk_path
+            print_system(f"macOS SDK path exported for backend build: {sdk_path}")
+
+        # Standard build command via alr exec
+        build_cmd = ["alr", "exec", "--", "gprbuild", "-P", "frontfacebackendservice.gpr", "-cargs", "-gnat2022"]
+        
+        result = run_command(
+            build_cmd,
+            cwd=BACKEND_SERVICE_DIR,
+            name="ADA-BACKEND-BUILD",
+            check=False
+        )
+        
+        if result:
+            print_system("✅ Frontface Backend Service compiled successfully.")
+            # Run optional SPARK check for backend
+            _run_backend_spark_check()
+            return True
+        else:
+            print_error("Failed to build Frontface Backend Service.")
+            return False
+    except Exception as e:
+        print_error(f"An unexpected error occurred during backend build: {e}")
+        return False
+
+def _run_backend_spark_check():
+    """Runs gnatprove on the backend service business logic units."""
+    print_system("--- Running SPARK Flow Analysis on Backend [Advisory] ---")
+    
+    gpr_file = os.path.join(BACKEND_SERVICE_DIR, "frontfacebackendservice.gpr")
+    if not os.path.exists(gpr_file):
+        return
+
+    # We only prove the core logic unit to avoid duplicate SSL dependency errors in GPR2
+    prove_cmd = ["alr", "exec", "--", "gnatprove", "-P", gpr_file, "--mode=flow", "-u", "cognitive_lang_resp.adb", "-XPROVING=True", "-j0", "--level=1"]
+    
+    alire_env = {
+        "ALIRE_SETTINGS_DIR": os.environ.get("ALIRE_SETTINGS_DIR", ""),
+        "ALIRE_CACHE": os.environ.get("ALIRE_CACHE", ""),
+        "ALIRE_TOOLCHAIN_DIR": os.environ.get("ALIRE_TOOLCHAIN_DIR", ""),
+        "SDK_PATH": os.environ.get("SDK_PATH", ""),
+    }
+
+    run_command(
+        prove_cmd,
+        BACKEND_SERVICE_DIR,
+        "GNATPROVE-BACKEND",
+        check=False,
+        env_override=alire_env,
+    )
+
 PYREFLY_PROJECT_EXCLUDES = [
     "**/vendor/**",
     "**/node_modules/**",
@@ -717,6 +791,11 @@ PYREFLY_PROJECT_EXCLUDES = [
     "**/*SubEngine/**",
     "**/*-SubEngine/**",
     "**/LaTeX_OCR-SubEngine/**",
+    "**/MeloAudioTTS_SubEngine/**",
+    "**/ChatterboxTTS_subengine/**",
+    "**/llama-cpp-python_build/**",
+    "**/stable-diffusion-cpp-python_build/**",
+    "**/pywhispercpp_build/**",
     "**/exp/**",
     "**/deps/**",
     "**/alire/**",
@@ -724,7 +803,9 @@ PYREFLY_PROJECT_EXCLUDES = [
     "**/Deprecated/**",
     "**/deprecated/**",
     "**/*.ipynb",
-    "**/site-packages/**"
+    "**/site_packages/**",
+    "**/venv/**",
+    "**/zephyrineRuntimeVenv/**"
 ]
 
 def _run_pyrefly_integrity_check():
@@ -766,6 +847,49 @@ def _run_pyrefly_integrity_check():
         print_error(f"Failed to execute Pyrefly: {e}")
         print_error("Integrity Failure Python Glue")
         sys.exit(1)
+
+def _ensure_jshint_installed() -> bool:
+    """Ensures jshint is installed via npm."""
+    if shutil.which("jshint"):
+        return True
+    
+    print_system("JSHint not found. Installing via npm...")
+    return run_command([NPM_CMD, "install", "-g", "jshint"], ROOT_DIR, "NPM-INSTALL-JSHINT", check=False)
+
+def _verify_frontend_assets():
+    """Runs JSHint and basic HTML/CSS verification on frontend assets."""
+    print_system("--- Verifying Frontend Assets (HTML/CSS/JS) ---")
+    
+    if not os.path.exists(frontend_host_assets):
+        print_warning(f"Frontend assets directory not found: {frontend_host_assets}")
+        return
+
+    if not _ensure_jshint_installed():
+        print_warning("Skipping JS verification: JSHint installation failed.")
+    else:
+        # Run jshint on JS files recursively
+        print_system(f"Running JSHint on {frontend_host_assets}...")
+        run_command(["jshint", "--extra-ext", ".js", frontend_host_assets], ROOT_DIR, "JSHINT-CHECK", check=False)
+    
+    # HTML/CSS verification logic (placeholder for more robust linting)
+    print_system("Verifying HTML/CSS files structure...")
+    valid = True
+    for root, dirs, files in os.walk(frontend_host_assets):
+        for file in files:
+            if file.endswith(".html"):
+                path = os.path.join(root, file)
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        if "<html>" not in content.lower() and "<!doctype html>" not in content.lower():
+                            print_warning(f"  Missing HTML doctype/tag in {file}")
+                except Exception:
+                    pass
+            elif file.endswith(".css"):
+                # Basic CSS existence check
+                pass
+    
+    print_system("✅ Frontend assets verification complete.")
 
 
 
@@ -913,10 +1037,15 @@ def _compile_and_run_watchdogs():
     to not require any arguments, as the start_service_process function
     now handles logging to files automatically.
     """
-    # First, call the existing compile function
+    # First, call the existing compile functions
     if not _compile_watchtowers():
         # _compile_watchtowers already prints detailed errors
         print_error("Halting watchdog startup due to compilation failure.")
+        return
+
+    # NEW: Compile Frontface Backend Service
+    if not _compile_frontface_backend():
+        print_error("Halting backend service startup due to compilation failure.")
         return
 
     print_system("--- Launching Watchdog Services ---")
@@ -5127,7 +5256,7 @@ def _run_gnatprove_spark_check(ada_watchdog_dir: str) -> bool:
         "--level=1",         # Speed-optimized; escalate to 4 for full proof later
         "--warnings=continue",  # Emit warnings but don't abort
         "--no-subprojects",  # Don't chase into external crates
-        "--quiet",           # Suppress proof explorer noise; we see errors only
+        "-XPROVING=True",    # Set scenario variable for GPR
     ]
 
     # Pass alire toolchain env so gnatprove resolves from venv toolchain dir
@@ -5135,6 +5264,7 @@ def _run_gnatprove_spark_check(ada_watchdog_dir: str) -> bool:
         "ALIRE_SETTINGS_DIR": os.environ.get("ALIRE_SETTINGS_DIR", ""),
         "ALIRE_CACHE": os.environ.get("ALIRE_CACHE", ""),
         "ALIRE_TOOLCHAIN_DIR": os.environ.get("ALIRE_TOOLCHAIN_DIR", ""),
+        "SDK_PATH": os.environ.get("SDK_PATH", ""),
     }
 
     result = run_command(
@@ -6335,6 +6465,14 @@ if __name__ == "__main__":
     else:
         print_system("Launcher integrity check passed. Using existing environment.")
 
+    # --- AUTO-AGREE TOC ---
+    if globals().get("AUTO_AGREE", False):
+        if not os.path.exists(LICENSE_FLAG_FILE):
+            os.makedirs(os.path.dirname(LICENSE_FLAG_FILE), exist_ok=True)
+            with open(LICENSE_FLAG_FILE, "w") as f:
+                f.write(f"Auto-accepted on {datetime.now().isoformat()}\n")
+            print_system("✅ Auto-agreed to License and ToC.")
+
     # ----------------------------------------------------
     # --- END LAUNCHER INTEGRITY CHECK -------------------
     # ----------------------------------------------------
@@ -6371,6 +6509,11 @@ if __name__ == "__main__":
                 ):  # Check the relaunch flag
                     is_already_in_correct_env = True
                     ACTIVE_ENV_PATH = current_conda_env_path_check
+                    
+                    # --- FATAL INTEGRITY CHECK BEFORE RETRY ---
+                    # Run Pyrefly now that we are in the correct environment.
+                    # If this fails, the system will exit(1) and NOT retry.
+                    _run_pyrefly_integrity_check()
             except Exception as e_path_check:
                 print_warning(
                     f"Error comparing Conda paths during initial check: {e_path_check}"
@@ -7321,6 +7464,8 @@ if __name__ == "__main__":
 
             # 4. Compile Ada UI Engine
             if os.path.isdir(ZEPHYRINE_HOST_DIR):
+                # NEW: Verify frontend assets before building the host
+                _verify_frontend_assets()
                 print_system(f"--- Compiling Ada UI Engine in {ZEPHYRINE_HOST_DIR} ---")
 
                 # Check for Alire
@@ -8572,7 +8717,7 @@ if __name__ == "__main__":
                             )
                             break
 
-                        time.sleep(5)
+                        time.sleep(MONITORING_INTERVAL_SECONDS)
                 except KeyboardInterrupt:
                     print_system(
                         "\nKeyboardInterrupt received by main thread. Shutting down..."
@@ -8651,9 +8796,6 @@ if __name__ == "__main__":
                     f_hash.write(current_hash)
 
                 print_system("Setup complete. Proceeding to launch.")
-                # Run Pyrefly Integrity Check before launching
-                _run_pyrefly_integrity_check()
-
                 # We will call our new parallel launch function here later.
                 # For now, put a placeholder to signify completion.
                 launch_all_services_in_parallel_and_monitor()
