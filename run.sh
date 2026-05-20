@@ -1,13 +1,12 @@
 #!/bin/bash
 set -e
 
-# Adelaide-Lite Universal Runner (System-Integrated Build)
+# Adelaide-Lite Universal Runner (Final Fix Attempt)
 BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$BASE_DIR"
 
-# 1. Environment lockdown
+# 1. Environment Lockdown for macOS
 export SDKROOT=$(xcrun --show-sdk-path)
-# Ensure system headers are visible to all compilers
 export C_INCLUDE_PATH="$SDKROOT/usr/include:/opt/homebrew/include"
 export CPLUS_INCLUDE_PATH="$SDKROOT/usr/include:/opt/homebrew/include"
 export LIBRARY_PATH="$SDKROOT/usr/lib:/usr/local/lib:/opt/homebrew/lib"
@@ -25,15 +24,14 @@ if [ ! -f "llama.cpp/build/src/libllama.a" ]; then
     cd ../..
 fi
 
-# 3. Clean indices (macOS specific safety)
-echo "[*] Cleaning Alire cache and re-indexing..."
-rm -rf Adelaide_Lite/obj Adelaide_Lite/bin
+# 3. Fix Library Indices (Force permissions)
+echo "[*] Ensuring library indices are correct..."
+find "$HOME/.local/share/alire/builds" -name "*.a" -exec chmod +w {} \; 2>/dev/null || true
 find "$HOME/.local/share/alire/builds" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
 
 # 4. Build Ada Server
 echo "[*] Building Adelaide-Lite Server..."
 cd Adelaide_Lite
-# Use -n to avoid interactive prompts
 alr -n build
 
 # 5. Run Server
@@ -41,6 +39,6 @@ if [ -f "./bin/adelaide_server" ]; then
     echo "[*] Starting Adelaide-Lite Server on port 11420..."
     nice -n -20 ./bin/adelaide_server
 else
-    echo "[!] Build failed. Bin/adelaide_server not found."
+    echo "[!] Build failed."
     exit 1
 fi

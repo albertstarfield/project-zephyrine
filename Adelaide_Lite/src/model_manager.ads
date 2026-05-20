@@ -9,7 +9,7 @@ package Model_Manager is
 
    procedure Initialize;
 
-   procedure Load_Model (Kind : Model_Type; Success : out Boolean);
+   procedure Load_Model (Kind : Model_Type; Success : out Boolean; Requested_Ctx : Positive := 4096);
 
    procedure Unload_Model (Kind : Model_Type);
 
@@ -18,7 +18,7 @@ package Model_Manager is
    function Get_Model (Kind : Model_Type) return Llama_Interface.Llama_Model;
 
    --  Perform inference (simplified for now)
-   function Generate (Kind : Model_Type; Prompt : String) return String;
+   function Generate (Kind : Model_Type; Prompt : String; Requested_Ctx : Positive := 4096) return String;
 
    --  Perform multi-hop reasoning (0.8b thinking -> 4b final)
    function Hybrid_Generate (Prompt : String) return String;
