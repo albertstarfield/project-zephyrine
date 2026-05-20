@@ -92,9 +92,9 @@ fi
 cd ..
 
 # 5. Run SPARK Formal Proofs (GNATprove)
-echo "[*] Running SPARK Formal Verification (Level 2)..."
+echo "[*] Running SPARK Formal Verification (Level 2) on Core Units..."
 cd Adelaide_Lite
-alr exec gnatprove -- -P adelaide_lite.gpr --level=2
+alr exec gnatprove -- -P adelaide_lite.gpr --level=2 integrity_utils math_utils
 cd ..
 
 # 6. AFL++ Fuzzing placeholder

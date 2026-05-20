@@ -4,8 +4,10 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
-
 with Ada.Real_Time; use Ada.Real_Time;
+with Database_Manager;
+with Tool_Manager;
+with Ada.Strings.Fixed;
 
 package body Model_Manager is
 
@@ -19,7 +21,7 @@ package body Model_Manager is
    end record;
 
    Models : array (Model_Type) of Model_Record;
-   
+
    --  Task to monitor idle models and unload them
    task Idle_Monitor is
       pragma Storage_Size (1024 * 1024); -- 1MB stack
@@ -36,7 +38,7 @@ package body Model_Manager is
       loop
          Next_Check := Clock + Interval;
          Now := Clock;
-         
+
          for Kind in Model_Type loop
             if Models (Kind).Loaded and then
                not Models (Kind).In_Use and then
@@ -47,7 +49,7 @@ package body Model_Manager is
                Unload_Model (Kind);
             end if;
          end loop;
-         
+
          delay until Next_Check;
       end loop;
    end Idle_Monitor;
@@ -58,6 +60,7 @@ package body Model_Manager is
    procedure Initialize is
    begin
       Llama_Backend_Init;
+      Database_Manager.Initialize;
       Models (Qwen_0_8B).Path := To_Unbounded_String
         ("../llama.cpp/models/qwen3.5/Qwen3.5-0.8B-Q4_K_S.gguf");
       Models (Qwen_4B).Path   := To_Unbounded_String
@@ -66,7 +69,7 @@ package body Model_Manager is
         ("../llama.cpp/models/qwen3.5/Qwen3-Embedding-0.6B-Q8_0.gguf");
       Models (MMProj).Path := To_Unbounded_String
         ("../llama.cpp/models/qwen3.5/mmproj-0.8B-F16.gguf");
-      
+
       Idle_Monitor.Start;
    end Initialize;
 
@@ -206,12 +209,13 @@ package body Model_Manager is
            (Tokens : System.Address; N_Tokens : int) return Llama_Batch;
          pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
 
-         B : Llama_Batch := Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
+         constant_B : constant Llama_Batch :=
+           Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
       begin
          --  Enable embeddings output for this context
          Llama_Set_Embeddings (Models (Kind).Context, True);
 
-         if Llama_Decode (Models (Kind).Context, B) /= 0 then
+         if Llama_Decode (Models (Kind).Context, constant_B) /= 0 then
             return (1 .. 0 => 0.0);
          end if;
       end;
@@ -241,99 +245,140 @@ package body Model_Manager is
    -- Hybrid_Generate --
    ---------------------
    function Hybrid_Generate (Prompt : String) return String is
-      Thinking : Unbounded_String;
-      Final_Res : Unbounded_String;
-      
       Whimsical_Adelaide : constant String :=
-        "You are Adelaide Zephyrine Charlotte, a whimsical yet highly skilled " &
+        "You are Adelaide Zephyrine Charlotte, a whimsical yet skilled " &
         "senior software engineer. Be whimsical, intelligent, direct, and " &
         "charming. Use sophisticated vocabulary but remain professional.";
 
-      Router_System : constant String :=
-        Whimsical_Adelaide & ASCII.LF &
-        "You are the OIPRouter. Analyze the input and provide a concise " &
-        "strategic plan for the 4B model to follow. " &
-        "Output ONLY your plan wrapped in <plan> tags. Do NOT repeat tags.";
+      Internal_State : Unbounded_String := Null_Unbounded_String;
+      Current_Response : Unbounded_String;
 
-      --  Paging constants
       Page_Size : constant Positive := 4000;
       Num_Pages : constant Positive :=
         (Prompt'Length + Page_Size - 1) / Page_Size;
       Current_Page : Natural := 1;
-      
+
       Max_Hops : constant Positive := 99;
       Current_Hop : Positive := 1;
-      
-      Internal_State : Unbounded_String := Null_Unbounded_String;
    begin
       Put_Line ("[Hybrid] Adelaide initiating whimsical reasoning...");
-      
+
+      declare
+         Past_Memory : constant String := Database_Manager.Recall (Prompt);
+      begin
+         if Past_Memory /= "" then
+            Put_Line ("[Hybrid] Adelaide recalling past context...");
+            Append (Internal_State, "[MEMORY]: " & Past_Memory & ASCII.LF);
+         end if;
+      end;
+
       if Num_Pages > 1 then
          Put_Line ("[Hybrid] Large input detected (" & Prompt'Length'Img &
-                  " chars). Enabling Context Paging (" & Num_Pages'Img &
-                  " pages).");
+                  " chars). Paging enabled (" & Num_Pages'Img & " pages).");
       end if;
 
       loop
          declare
+            use Ada.Strings.Fixed;
             Start_Idx : constant Positive := (Current_Page - 1) * Page_Size + 1;
             End_Idx   : constant Positive :=
               Positive'Min (Current_Page * Page_Size, Prompt'Length);
             Chunk     : constant String := Prompt (Start_Idx .. End_Idx);
-            
+
+            Router_System : constant String :=
+              Whimsical_Adelaide & ASCII.LF &
+              "You are the OIPRouter. Select an action." & ASCII.LF &
+              "Tools: `[NEXT_PAGE]`, `[PREV_PAGE]`, `[FINISH]`, " &
+              "`[ACTION: name(params)]`." & ASCII.LF &
+              "Actions: ls(path), cat(filename), search(query)." & ASCII.LF &
+              "Output ONLY tool call or [FINISH] wrapped in <plan> tags.";
+
             Paging_Instr : constant String :=
-              "[AGENT PAGING MODE ENABLED]" & ASCII.LF &
-              "You are viewing Page " & Current_Page'Img & " of " &
+              "[AGENT MODE] Page " & Current_Page'Img & " of " &
               Num_Pages'Img & "." & ASCII.LF &
-              "Tools: `[NEXT_PAGE]`, `[PREV_PAGE]`, `[FINISH]`." & ASCII.LF &
-              "Current Knowledge: " & To_String (Internal_State);
-            
+              "Knowledge: " & To_String (Internal_State);
+
             Router_Prompt : constant String :=
               Router_System & ASCII.LF & Paging_Instr & ASCII.LF &
-              "User: [PAGE CONTENT]" & ASCII.LF & Chunk & ASCII.LF &
+              "User: [CONTENT]" & ASCII.LF & Chunk & ASCII.LF &
               "Assistant: <plan>";
+
+            Think_Step : Unbounded_String;
          begin
-            Put_Line ("[Hybrid] Hop " & Current_Hop'Img & " (Page " &
-                     Current_Page'Img & ")");
-            Thinking := To_Unbounded_String (Generate (Qwen_0_8B, Router_Prompt));
-            
-            --  Check for navigation tools
-            if Index (Thinking, "[NEXT_PAGE]") > 0 and then
+            Put_Line ("[Hybrid] Hop " & Current_Hop'Img & " (Action Selection)");
+            Think_Step := To_Unbounded_String (Generate (Qwen_0_8B,
+                                               Router_Prompt));
+
+            if Index (To_String (Think_Step), "[NEXT_PAGE]") > 0 and then
                Current_Page < Num_Pages
             then
                Current_Page := Current_Page + 1;
-               Append (Internal_State, Thinking);
-            elsif Index (Thinking, "[PREV_PAGE]") > 0 and then
+               Append (Internal_State, "[NAVIGATED TO PAGE " &
+                      Current_Page'Img & "]" & ASCII.LF);
+            elsif Index (To_String (Think_Step), "[PREV_PAGE]") > 0 and then
                   Current_Page > 1
             then
                Current_Page := Current_Page - 1;
-               Append (Internal_State, Thinking);
+               Append (Internal_State, "[NAVIGATED TO PAGE " &
+                      Current_Page'Img & "]" & ASCII.LF);
+            elsif Index (To_String (Think_Step), "[ACTION:") > 0 then
+               declare
+                  T_Str : constant String := To_String (Think_Step);
+                  S_Pos : constant Natural := Index (T_Str, "[ACTION:") + 8;
+                  E_Pos : constant Natural := Index (T_Str, ")]", S_Pos);
+                  A_Full : constant String := T_Str (S_Pos .. E_Pos - 1);
+                  P_Pos : constant Natural := Index (A_Full, "(");
+                  T_Name : constant String := A_Full (1 .. P_Pos - 1);
+                  T_Pars : constant String := A_Full (P_Pos + 1 ..
+                                                      A_Full'Length);
+                  R : constant Tool_Manager.Tool_Result :=
+                    Tool_Manager.Execute_Tool (T_Name, T_Pars);
+               begin
+                  Append (Internal_State, "[TOOL OUTPUT (" & T_Name & ")]: " &
+                         To_String (R.Output) & ASCII.LF);
+               end;
             else
-               --  [FINISH] or no more pages or unhandled
-               Append (Internal_State, Thinking);
+               Append (Internal_State, "[PLAN]: " & To_String (Think_Step) &
+                      ASCII.LF);
                exit;
             end if;
          end;
-         
+
          Current_Hop := Current_Hop + 1;
          exit when Current_Hop > Max_Hops;
       end loop;
 
-      --  Final Synthesis
-      Put_Line ("[Hybrid] Final Hop: Synthesis (4B)...");
+      Put_Line ("[Hybrid] Synthesizing final response (4B)...");
       declare
          Synth_Prompt : constant String :=
            Whimsical_Adelaide & ASCII.LF &
-           "User: " & Prompt (1 .. Positive'Min (Prompt'Length, 8000)) &
-           ASCII.LF & "Strategic Plan: " & To_String (Internal_State) &
+           "User: " & Prompt (Prompt'First ..
+                              Positive'Min (Prompt'Length, 8000)) &
+           ASCII.LF & "Context: " & To_String (Internal_State) &
            ASCII.LF & "Assistant: ";
       begin
-         Final_Res := To_Unbounded_String (Generate (Qwen_4B, Synth_Prompt));
+         Current_Response := To_Unbounded_String (Generate (Qwen_4B,
+                                                  Synth_Prompt));
       end;
 
-      return "<think>" & ASCII.LF & "[Adelaide-Lite Strategic Plan]" &
+      Put_Line ("[Hybrid] Adelaide performing internal critique...");
+      declare
+         Crit_Sys : constant String :=
+           Whimsical_Adelaide & ASCII.LF &
+           "Critique response for quality. Output ONLY improved response.";
+         Crit_Prom : constant String :=
+           Crit_Sys & ASCII.LF & "Original: " & To_String (Current_Response) &
+           ASCII.LF & "Improved: ";
+      begin
+         Current_Response := To_Unbounded_String (Generate (Qwen_0_8B,
+                                                  Crit_Prom));
+      end;
+
+      Database_Manager.Remember (Prompt, To_String (Current_Response));
+
+      return "<think>" & ASCII.LF & "[Adelaide-Lite Reasoning Pipeline]" &
         ASCII.LF & To_String (Internal_State) & ASCII.LF & "</think>" &
-        ASCII.LF & To_String (Final_Res);
+        ASCII.LF & To_String (Current_Response);
    end Hybrid_Generate;
 
    --------------
@@ -369,7 +414,6 @@ package body Model_Manager is
       end if;
 
       Batch := Llama_Batch_Init (N_Toks, 0, 1);
-      --  Note: Need to fill the batch
       Llama_Batch_Free (Batch);
 
       declare
@@ -377,9 +421,10 @@ package body Model_Manager is
            (Tokens : System.Address; N_Tokens : int) return Llama_Batch;
          pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
 
-         B : Llama_Batch := Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
+         constant_B : constant Llama_Batch :=
+           Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
       begin
-         if Llama_Decode (Models (Kind).Context, B) /= 0 then
+         if Llama_Decode (Models (Kind).Context, constant_B) /= 0 then
             return "ERROR: Decode failed";
          end if;
       end;
@@ -388,9 +433,9 @@ package body Model_Manager is
       Sampler := Llama_Sampler_Chain_Init (S_Params);
       Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Greedy);
 
-      for I in 1 .. 400 loop --  Increased limit
+      for I in 1 .. 400 loop
          declare
-            Token : Llama_Token :=
+            Token : constant Llama_Token :=
               Llama_Sampler_Sample (Sampler, Models (Kind).Context, -1);
             Piece : array (1 .. 256) of aliased Character;
             Len   : int;
@@ -407,12 +452,12 @@ package body Model_Manager is
                end loop;
             end if;
 
-            --  Decode the new token
             declare
                function Llama_Batch_Get_One
                  (Tokens : System.Address; N_Tokens : int) return Llama_Batch;
                pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
-               B : Llama_Batch := Llama_Batch_Get_One (Token'Address, 1);
+               B : constant Llama_Batch :=
+                 Llama_Batch_Get_One (Token'Address, 1);
             begin
                if Llama_Decode (Models (Kind).Context, B) /= 0 then
                   exit;
