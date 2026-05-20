@@ -2,6 +2,8 @@ with "config/adelaide_lite_config.gpr";
 with "aws";
 with "gnatcoll";
 with "gnatcoll_minimal";
+with "gnatcoll_sql";
+with "gnatcoll_sqlite";
 project Adelaide_Lite is
 
    for Languages use ("Ada", "C");
@@ -35,6 +37,7 @@ project Adelaide_Lite is
          "-framework", "Accelerate",
          "-framework", "Metal",
          "-framework", "Foundation",
+         "-lsqlite3",
          "-lc++"
       );
    end Linker;

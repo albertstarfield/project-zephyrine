@@ -7,6 +7,7 @@ with Integrity_Utils;
 with Interfaces; use Interfaces;
 
 procedure Adelaide_Server is
+   pragma Spark_Mode (Off);
    procedure Set_Darwin_Realtime;
    pragma Import (C, Set_Darwin_Realtime, "set_darwin_realtime");
 
@@ -20,22 +21,24 @@ procedure Adelaide_Server is
       Success    : Boolean;
    begin
       Ada.Text_IO.Put_Line ("[*] Running Formal Integrity Self-Test...");
-      
+
       --  1. Generate CRCs and Parity
       CRCs (1) := Calculate_CRC32 (Data (1 .. 4));
       CRCs (2) := Calculate_CRC32 (Data (5 .. 8));
       Generate_Parity (Data, Block_Size, Parity);
-      
+
       --  2. Simulate corruption
-      Data (1) := 99; 
-      
+      Data (1) := 99;
+
       --  3. Attempt Self-Patch
       Self_Patch (Data, Block_Size, CRCs, Parity, Success);
-      
+
       if Success and then Data (1) = 1 then
-         Ada.Text_IO.Put_Line ("[+] Integrity Core: VERIFIED (Self-Patch Operational)");
+         Ada.Text_IO.Put_Line
+           ("[+] Integrity Core: VERIFIED (Self-Patch Operational)");
       else
-         Ada.Text_IO.Put_Line ("[!] Integrity Core: FAILED. Check SPARK proofs.");
+         Ada.Text_IO.Put_Line
+           ("[!] Integrity Core: FAILED. Check SPARK proofs.");
       end if;
    end Run_Integrity_Self_Test;
 
@@ -62,8 +65,10 @@ begin
       Port       => Server_Port
    );
 
-   Ada.Text_IO.Put_Line ("[+] Adelaide-Lite is running on port" & Server_Port'Img);
-   Ada.Text_IO.Put_Line ("[+] Internal llama.cpp engine initialized with GPU acceleration.");
+   Ada.Text_IO.Put_Line ("[+] Adelaide-Lite is running on port" &
+                         Server_Port'Img);
+   Ada.Text_IO.Put_Line
+     ("[+] Internal llama.cpp engine initialized with GPU acceleration.");
 
    --  Keep the main thread alive indefinitely to service incoming requests
    loop
