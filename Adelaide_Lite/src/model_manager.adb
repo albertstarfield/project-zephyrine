@@ -18,6 +18,7 @@ package body Model_Manager is
       Loaded     : Boolean := False;
       In_Use     : Boolean := False;
       Last_Used  : Time := Time_First;
+      Current_Ctx : unsigned := 0;
    end record;
 
    Models : array (Model_Type) of Model_Record;
@@ -76,20 +77,42 @@ package body Model_Manager is
    ----------------
    -- Load_Model --
    ----------------
-   procedure Load_Model (Kind : Model_Type; Success : out Boolean) is
+   procedure Load_Model
+     (Kind : Model_Type; Success : out Boolean; Requested_Ctx : Positive := 4096)
+   is
       M_Params : Llama_Model_Params := Llama_Model_Default_Params;
       C_Params : Llama_Context_Params := Llama_Context_Default_Params;
       Path_C   : chars_ptr := New_String (To_String (Models (Kind).Path));
+
+      --  Binning logic for N_CTX: 4096, 16384, 32768
+      Actual_Ctx : unsigned;
    begin
+      if Requested_Ctx <= 4096 then
+         Actual_Ctx := 4096;
+      elsif Requested_Ctx <= 16384 then
+         Actual_Ctx := 16384;
+      else
+         Actual_Ctx := 32768;
+      end if;
+
       Success := False;
       if Models (Kind).Loaded then
-         Models (Kind).Last_Used := Clock;
-         Models (Kind).In_Use    := True;
-         Success := True;
-         return;
+         --  Check if current context is large enough
+         if unsigned (Requested_Ctx) <= Models (Kind).Current_Ctx then
+            Models (Kind).Last_Used := Clock;
+            Models (Kind).In_Use    := True;
+            Success := True;
+            return;
+         else
+            Put_Line ("[+] Requested context (" & Requested_Ctx'Img &
+                     ") larger than current (" & Models (Kind).Current_Ctx'Img &
+                     "). Reloading context...");
+            Unload_Model (Kind);
+         end if;
       end if;
 
       Put_Line ("[+] Loading model: " & To_String (Models (Kind).Path));
+      Put_Line ("[+] N_CTX =" & Actual_Ctx'Img);
 
       --  Enable maximum GPU offloading by default for performance
       M_Params.N_Gpu_Layers := -1;
@@ -98,9 +121,13 @@ package body Model_Manager is
       Free (Path_C);
 
       if Models (Kind).Model /= Null_Model then
-         C_Params.N_Ctx := 4096;
+         C_Params.N_Ctx := Actual_Ctx;
          C_Params.N_Threads := 8;
          C_Params.N_Threads_Batch := 8;
+
+         --  Set KV cache quantization to Q4_1 (3)
+         C_Params.Type_K := 3; -- GGML_TYPE_Q4_1
+         C_Params.Type_V := 3; -- GGML_TYPE_Q4_1
 
          Models (Kind).Context :=
            Llama_Init_From_Model (Models (Kind).Model, C_Params);
@@ -108,6 +135,7 @@ package body Model_Manager is
             Models (Kind).Loaded := True;
             Models (Kind).Last_Used := Clock;
             Models (Kind).In_Use    := True;
+            Models (Kind).Current_Ctx := Actual_Ctx;
             Success := True;
             Put_Line ("[+] Model loaded successfully.");
          else
@@ -131,6 +159,7 @@ package body Model_Manager is
          Models (Kind).Context := Null_Context;
          Models (Kind).Model := Null_Model;
          Models (Kind).Loaded := False;
+         Models (Kind).Current_Ctx := 0;
          Put_Line ("[+] Unloaded model: " & Model_Type'Image (Kind));
       end if;
    end Unload_Model;
@@ -260,6 +289,9 @@ package body Model_Manager is
 
       Max_Hops : constant Positive := 99;
       Current_Hop : Positive := 1;
+
+      --  Estimate required context size (tokens approx chars/4)
+      Estimated_Tokens : constant Positive := (Prompt'Length / 3) + 1024;
    begin
       Put_Line ("[Hybrid] Adelaide initiating whimsical reasoning...");
 
@@ -306,8 +338,9 @@ package body Model_Manager is
             Think_Step : Unbounded_String;
          begin
             Put_Line ("[Hybrid] Hop " & Current_Hop'Img & " (Action Selection)");
-            Think_Step := To_Unbounded_String (Generate (Qwen_0_8B,
-                                               Router_Prompt));
+            Think_Step := To_Unbounded_String
+              (Generate (Qwen_0_8B, Router_Prompt,
+               Requested_Ctx => Estimated_Tokens));
 
             if Index (To_String (Think_Step), "[NEXT_PAGE]") > 0 and then
                Current_Page < Num_Pages
@@ -357,8 +390,9 @@ package body Model_Manager is
            ASCII.LF & "Context: " & To_String (Internal_State) &
            ASCII.LF & "Assistant: ";
       begin
-         Current_Response := To_Unbounded_String (Generate (Qwen_4B,
-                                                  Synth_Prompt));
+         Current_Response := To_Unbounded_String
+           (Generate (Qwen_4B, Synth_Prompt,
+            Requested_Ctx => Estimated_Tokens));
       end;
 
       Put_Line ("[Hybrid] Adelaide performing internal critique...");
@@ -370,8 +404,9 @@ package body Model_Manager is
            Crit_Sys & ASCII.LF & "Original: " & To_String (Current_Response) &
            ASCII.LF & "Improved: ";
       begin
-         Current_Response := To_Unbounded_String (Generate (Qwen_0_8B,
-                                                  Crit_Prom));
+         Current_Response := To_Unbounded_String
+           (Generate (Qwen_0_8B, Crit_Prom,
+            Requested_Ctx => Estimated_Tokens));
       end;
 
       Database_Manager.Remember (Prompt, To_String (Current_Response));
@@ -384,7 +419,9 @@ package body Model_Manager is
    --------------
    -- Generate --
    --------------
-   function Generate (Kind : Model_Type; Prompt : String) return String is
+   function Generate
+     (Kind : Model_Type; Prompt : String; Requested_Ctx : Positive := 4096)
+   return String is
       Success : Boolean;
       Result  : Unbounded_String := Null_Unbounded_String;
       Vocab   : Llama_Vocab;
@@ -395,12 +432,11 @@ package body Model_Manager is
       S_Params : Llama_Sampler_Chain_Params;
       Prompt_C : chars_ptr := New_String (Prompt);
    begin
-      if not Models (Kind).Loaded then
-         Load_Model (Kind, Success);
-         if not Success then
-            return "ERROR: Failed to load model";
-         end if;
+      Load_Model (Kind, Success, Requested_Ctx => Requested_Ctx);
+      if not Success then
+         return "ERROR: Failed to load model";
       end if;
+
       Models (Kind).Last_Used := Clock;
 
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);

@@ -645,6 +645,10 @@ package body Adelaide_Server_Pkg is
                      Res : constant Read_Result := Read (Body_Str);
                      Model_Name : Unbounded_String :=
                        To_Unbounded_String ("adelaide-hybrid");
+                     
+                     --  Estimate required context size
+                     Estimated_Tokens : constant Positive :=
+                       (Body_Str'Length / 3) + 2048;
                   begin
                      if Res.Success and then Has_Field (Res.Value, "model") then
                         Model_Name := To_Unbounded_String
@@ -661,7 +665,9 @@ package body Adelaide_Server_Pkg is
                               Model_Str = "gemini-1.5-pro" or else
                               Model_Str = "lm-studio"
                            then Model_Manager.Hybrid_Generate (Prompt)
-                           else Model_Manager.Generate (Kind, Prompt));
+                           else Model_Manager.Generate
+                             (Kind, Prompt,
+                              Requested_Ctx => Estimated_Tokens));
                         Formatted_Resp : constant String :=
                           Format_Universal_Response (URI_Str, Gen_Text, 0.0);
                         Resp : AWS.Response.Data :=
