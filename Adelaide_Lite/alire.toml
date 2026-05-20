@@ -18,3 +18,6 @@ aws = "^25.2.0"
 
 [[depends-on]]
 gnatcoll = "^25.0.0"
+
+[[depends-on]]
+gnatcoll_minimal = "^25.0.0"

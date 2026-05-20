@@ -46,6 +46,13 @@ echo "=========================================================="
 echo "      Adelaide_Lite Formal Test & Verification Suite      "
 echo "=========================================================="
 
+# 0. Dependencies check
+echo "[*] Ensuring Alire dependencies (AUnit, strategy)..."
+cd Adelaide_Lite
+alr get aunit --build || true
+alr get strategy --build || true
+cd ..
+
 # 1. Compile C Helper
 echo "[*] Compiling Mach Real-time Scheduling Helper..."
 mkdir -p Adelaide_Lite/obj/development
@@ -77,6 +84,7 @@ cd Adelaide_Lite
 alr test
 # Ensure gnatcov is available or handle its absence
 if command -v gnatcov &>/dev/null; then
+    echo "[*] Generating coverage report with gnatcov..."
     gnatcov run --annotate=xcov ./bin/adelaide_lite
 else
     echo "[!] gnatcov not found in PATH, skipping coverage."
@@ -89,14 +97,18 @@ cd Adelaide_Lite
 alr exec gnatprove -- -P adelaide_lite.gpr --level=2
 cd ..
 
+# 6. AFL++ Fuzzing placeholder
+echo "[*] Checking for AFL++..."
+if command -v afl-fuzz &>/dev/null; then
+    echo "[+] AFL++ found. You can run fuzzing with:"
+    echo "    mkdir -p afl_in afl_out"
+    echo "    echo 'similarity 2 0.1 0.2 0.3 0.4' > afl_in/test1"
+    echo "    afl-fuzz -i afl_in -o afl_out -- ./Adelaide_Lite/bin/adelaide_lite"
+else
+    echo "[!] AFL++ not found. Fuzz testing skipped."
+fi
+
 echo ""
 echo "=========================================================="
 echo "  [+] All Tests and Formal Proofs Completed Successfully! "
-echo "=========================================================="
-echo ""
-echo "To run fuzzing with AFL++:"
-echo "1. Build Adelaide_Lite binary with AFL compiler wrapper (afl-clang/afl-gcc or afl-gnat)."
-echo "2. Create input/output directories: mkdir -p afl_in afl_out"
-echo "3. Run AFL++ fuzzer:"
-echo "   afl-fuzz -i afl_in -o afl_out -- ./Adelaide_Lite/bin/adelaide_lite"
 echo "=========================================================="
