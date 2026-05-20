@@ -1,0 +1,41 @@
+.TH OLLAMACALLMODIFIER 1 "May 2026" "Adelaide-Lite" "Project-Zephyrine"
+.SH NAME
+ollamaCallModifier \- Self-Healing Orchestration Proxy for Ollama
+.SH SYNOPSIS
+.B python3 ollamaCallModifier.py
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B ollamaCallModifier
+(also known as Adelaide-Lite) is a high-signal self-healing tool call proxy that wraps standard LLM API calls. It is specifically built for calling on apps using very small-insignificant models, adding a layer of robustness and orchestrated intelligence. It implements the "Project-Zephyrine Lite" framework, providing semantic memory retrieval, strategic routing, and real-time telemetry blocks. Embrace Hallucination! I mean what do you expect from a very small model, the fuck m8.
+.SH OPTIONS
+.TP
+.B \-\-port \fIPORT\fR
+Set the port on which the proxy listens (default is 11435).
+.TP
+.B \-\-help
+Display a detailed help message and exit.
+.SH FEATURES
+.TP
+.B Orchestrated Intelligence
+Automatically routes queries to internal tools (Search, Logic, Action) based on semantic analysis.
+.TP
+.B Semantic Cache (LUT)
+Stores prompt/response pairs with embedding similarity thresholds (0.95-0.995) for near-instant retrieval of familiar queries.
+.TP
+.B Memory Management
+Enforces strict single-model residency in VRAM to prevent system instability on resource-constrained hardware.
+.TP
+.B Real-time Telemetry
+Streams internal reasoning steps directly to the client via <think> blocks.
+.SH ENVIRONMENT
+.TP
+.B OLLAMA_HOST
+The host address of the upstream Ollama server.
+.SH FILES
+.TP
+.I response_cache.json
+Persistent semantic cache of familiar prompts and responses.
+.SH BUGS
+If the model outputs an exact match to a cached entry, the cache is bypassed to ensure response quality.
+.SH AUTHOR
+Adelaide Zephyrine Charlotte (via Project-Zephyrine Lite)
