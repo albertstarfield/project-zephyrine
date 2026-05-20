@@ -14,6 +14,7 @@ package body Model_Manager is
       Context    : Llama_Context := Null_Context;
       Path       : Unbounded_String;
       Loaded     : Boolean := False;
+      In_Use     : Boolean := False;
       Last_Used  : Time := Time_First;
    end record;
 
@@ -21,6 +22,7 @@ package body Model_Manager is
    
    --  Task to monitor idle models and unload them
    task Idle_Monitor is
+      pragma Storage_Size (1024 * 1024); -- 1MB stack
       entry Start;
    end Idle_Monitor;
 
@@ -37,6 +39,7 @@ package body Model_Manager is
          
          for Kind in Model_Type loop
             if Models (Kind).Loaded and then
+               not Models (Kind).In_Use and then
                (Now - Models (Kind).Last_Used) > Timeout
             then
                Put_Line ("[Idle] Unloading " & Model_Type'Image (Kind) &
@@ -78,6 +81,7 @@ package body Model_Manager is
       Success := False;
       if Models (Kind).Loaded then
          Models (Kind).Last_Used := Clock;
+         Models (Kind).In_Use    := True;
          Success := True;
          return;
       end if;
@@ -100,6 +104,7 @@ package body Model_Manager is
          if Models (Kind).Context /= Null_Context then
             Models (Kind).Loaded := True;
             Models (Kind).Last_Used := Clock;
+            Models (Kind).In_Use    := True;
             Success := True;
             Put_Line ("[+] Model loaded successfully.");
          else
@@ -246,8 +251,9 @@ package body Model_Manager is
 
       Router_System : constant String :=
         Whimsical_Adelaide & ASCII.LF &
-        "You are the OIPRouter. Decompose the user's intent and provide a plan. " &
-        "Output ONLY your plan wrapped in <plan> tags.";
+        "You are the OIPRouter. Analyze the input and provide a concise " &
+        "strategic plan for the 4B model to follow. " &
+        "Output ONLY your plan wrapped in <plan> tags. Do NOT repeat tags.";
 
       --  Paging constants
       Page_Size : constant Positive := 4000;
@@ -416,8 +422,13 @@ package body Model_Manager is
       end loop;
 
       Llama_Sampler_Free (Sampler);
+      Models (Kind).In_Use := False;
 
       return To_String (Result);
+   exception
+      when others =>
+         Models (Kind).In_Use := False;
+         raise;
    end Generate;
 
 end Model_Manager;
