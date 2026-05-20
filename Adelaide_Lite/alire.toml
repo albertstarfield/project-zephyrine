@@ -1,0 +1,20 @@
+name = "adelaide_lite"
+description = ""
+version = "0.1.0-dev"
+
+authors = ["Albert Starfield"]
+maintainers = ["Albert Starfield <albertstarfield2001@gmail.com>"]
+licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = []
+
+executables = ["adelaide_lite"]
+
+[[depends-on]]
+gnatprove = "^15.1.0"
+
+[[depends-on]]
+aws = "^25.2.0"
+
+[[depends-on]]
+gnatcoll = "^25.0.0"

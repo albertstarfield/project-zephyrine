@@ -1,0 +1,37 @@
+{
+  "base_env": {
+    "HOME": "/Users/albertstarfield",
+    "PATH": "/Users/albertstarfield/.opam/default/bin:/Users/albertstarfield/.antigravity/antigravity/bin:/opt/homebrew/opt/heimdal/bin:/Users/albertstarfield/.local/bin:/opt/homebrew/anaconda3/bin:/opt/homebrew/anaconda3/condabin:/opt/homebrew/bin:/Users/albertstarfield/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/pkg/env/active/bin:/opt/pmk/env/global/bin:/opt/X11/bin:/Library/Apple/usr/bin:/Library/TeX/texbin:/Applications/VMware Fusion.app/Contents/Public:/usr/local/share/dotnet:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/opt/podman/bin:/Applications/iTerm.app/Contents/Resources/utilities:/usr/local/Homebrew/bin:/Users/albertstarfield/.lmstudio/bin",
+    "RECOLL_CONFDIR": "/Users/albertstarfield/.recoll"
+  },
+  "searx_instances": [
+    "https://search.inetol.net/",
+    "https://search.rhscz.eu/",
+    "https://priv.au/",
+    "https://northboot.xyz/",
+    "https://searx.be/",
+    "https://searx.tiekoetter.com/",
+    "https://search.hbubli.cc/",
+    "https://search.indst.eu/",
+    "https://search.ononoki.org/",
+    "https://search.citw.lgbt/",
+    "https://searx.oloke.xyz/",
+    "https://searx.dresden.network/",
+    "https://search.einfachzocken.eu/",
+    "https://seek.fyi/",
+    "https://search.sapti.me/",
+    "https://searx.foobar.vip/",
+    "https://www.gruble.de/",
+    "https://search.rowie.at/",
+    "https://searxng.site/",
+    "https://baresearch.org/",
+    "https://search.projectsegfau.lt/",
+    "https://suche.dasnetzundich.de/",
+    "https://search.catboy.house/",
+    "https://search.im-in.space/",
+    "https://searxng.f24o.zip/",
+    "https://search.ipv6s.net/",
+    "https://searxng.world/",
+    "https://search.nordh.tech/"
+  ]
+}

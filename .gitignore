@@ -1,0 +1,9 @@
+**/.venv**/
+**/bin/
+**alirevenv**
+**venv**
+**/obj/
+**/ollama_data/
+**/*.log
+
+**cinst.txt**
