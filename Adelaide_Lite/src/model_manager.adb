@@ -476,4 +476,9 @@ package body Model_Manager is
          raise;
    end Generate;
 
+   function Is_Loaded (Kind : Model_Type) return Boolean is
+   begin
+      return Models (Kind).Loaded;
+   end Is_Loaded;
+
 end Model_Manager;
