@@ -8,6 +8,7 @@ with AWS.Response.Set;
 with GNATCOLL.JSON;
 with Math_Utils;
 with Model_Manager;
+with Ada.Strings.Fixed;
 
 package body Adelaide_Server_Pkg is
 
@@ -103,7 +104,7 @@ package body Adelaide_Server_Pkg is
       return New_Resp;
    end Clone_And_Filter_Response;
 
-   --  Extract prompt string from request body
+   --  Extract prompt string from request body (Universal format)
    function Extract_Prompt (Body_Str : String) return String is
       use GNATCOLL.JSON;
       Res : constant Read_Result := Read (Body_Str);
@@ -118,6 +119,7 @@ package body Adelaide_Server_Pkg is
             return "";
          end if;
 
+         --  1. Ollama/OpenAI format
          if Has_Field (Val, "prompt") then
             declare
                Prompt_Val : constant JSON_Value := Get (Val, "prompt");
@@ -148,6 +150,40 @@ package body Adelaide_Server_Pkg is
                               begin
                                  if Content_Val.Kind = JSON_String_Type then
                                     return Get (Content_Val);
+                                 end if;
+                              end;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+
+         --  2. Gemini format
+         elsif Has_Field (Val, "contents") then
+            declare
+               Contents_Val : constant JSON_Value := Get (Val, "contents");
+            begin
+               if Contents_Val.Kind = JSON_Array_Type then
+                  declare
+                     Arr : constant JSON_Array := Get (Contents_Val);
+                     Len : constant Natural := Length (Arr);
+                  begin
+                     if Len > 0 then
+                        declare
+                           Last_C : constant JSON_Value := Get (Arr, Len);
+                        begin
+                           if Last_C.Kind = JSON_Object_Type and then
+                              Has_Field (Last_C, "parts")
+                           then
+                              declare
+                                 Parts : constant JSON_Array :=
+                                   Get (Get (Last_C, "parts"));
+                                 First_Part : constant JSON_Value :=
+                                   Get (Parts, 1);
+                              begin
+                                 if Has_Field (First_Part, "text") then
+                                    return Get (Get (First_Part, "text"));
                                  end if;
                               end;
                            end if;
@@ -188,10 +224,10 @@ package body Adelaide_Server_Pkg is
       return Empty_Array;
    end Load_Cache;
 
-   --  Format cached response to match API endpoint specification
-   function Format_Cache_Response
+   --  Format response based on requested API type
+   function Format_Universal_Response
      (URI_Str : String;
-      Cached_Resp : String;
+      Text    : String;
       Similarity : Float) return String
    is
       use GNATCOLL.JSON;
@@ -204,43 +240,86 @@ package body Adelaide_Server_Pkg is
          "</think>" & ASCII.LF;
       Is_Match : constant Boolean := Similarity > 0.0;
       Full_Content : constant String :=
-        (if Is_Match then Think_Header & Cached_Resp else Cached_Resp);
+        (if Is_Match then Think_Header & Text else Text);
    begin
-      if URI_Str = "/api/chat" or else URI_Str = "/api/chat/" then
-         Set_Field (Res_Obj, String'("model"), String'("adelaide-hybrid"));
+      --  1. Anthropic Format
+      if URI_Str = "/v1/messages" then
+         Set_Field (Res_Obj, "id", String'("msg_adelaide"));
+         Set_Field (Res_Obj, "type", String'("message"));
+         Set_Field (Res_Obj, "role", String'("assistant"));
          declare
-            Msg_Obj : constant JSON_Value := Create_Object;
+            Content_Arr : JSON_Array;
+            Text_Obj    : constant JSON_Value := Create_Object;
          begin
-            Set_Field (Msg_Obj, String'("role"), String'("assistant"));
-            Set_Field (Msg_Obj, String'("content"), Full_Content);
-            Set_Field (Res_Obj, String'("message"), Msg_Obj);
+            Set_Field (Text_Obj, "type", String'("text"));
+            Set_Field (Text_Obj, "text", Full_Content);
+            Append (Content_Arr, Text_Obj);
+            Set_Field (Res_Obj, "content", Content_Arr);
          end;
-         Set_Field (Res_Obj, String'("done"), True);
+         Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
+         Set_Field (Res_Obj, "stop_reason", String'("end_turn"));
+         return Write (Res_Obj);
+
+      --  2. Gemini Format
+      elsif Ada.Strings.Fixed.Index (URI_Str, ":generateContent") > 0 then
+         declare
+            Cand_Arr : JSON_Array;
+            Cand_Obj : constant JSON_Value := Create_Object;
+            Cont_Obj : constant JSON_Value := Create_Object;
+            Part_Arr : JSON_Array;
+            Part_Obj : constant JSON_Value := Create_Object;
+         begin
+            Set_Field (Part_Obj, "text", Full_Content);
+            Append (Part_Arr, Part_Obj);
+            Set_Field (Cont_Obj, "parts", Part_Arr);
+            Set_Field (Cont_Obj, "role", String'("model"));
+            Set_Field (Cand_Obj, "content", Cont_Obj);
+            Set_Field (Cand_Obj, "finish_reason", String'("STOP"));
+            Append (Cand_Arr, Cand_Obj);
+            Set_Field (Res_Obj, "candidates", Cand_Arr);
+         end;
+         return Write (Res_Obj);
+
+      --  3. OpenAI Format
       elsif URI_Str = "/v1/chat/completions" then
-         Set_Field (Res_Obj, String'("id"), String'("chatcmpl-adelaide"));
-         Set_Field (Res_Obj, String'("object"), String'("chat.completion"));
-         Set_Field (Res_Obj, String'("model"), String'("adelaide-hybrid"));
+         Set_Field (Res_Obj, "id", String'("chatcmpl-adelaide"));
+         Set_Field (Res_Obj, "object", String'("chat.completion"));
+         Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
          declare
             Choices_Arr : JSON_Array;
             Choice_Obj  : constant JSON_Value := Create_Object;
             Msg_Obj     : constant JSON_Value := Create_Object;
          begin
-            Set_Field (Msg_Obj, String'("role"), String'("assistant"));
-            Set_Field (Msg_Obj, String'("content"), Full_Content);
-            Set_Field (Choice_Obj, String'("index"), Integer'(0));
-            Set_Field (Choice_Obj, String'("message"), Msg_Obj);
-            Set_Field (Choice_Obj, String'("finish_reason"), String'("stop"));
+            Set_Field (Msg_Obj, "role", String'("assistant"));
+            Set_Field (Msg_Obj, "content", Full_Content);
+            Set_Field (Choice_Obj, "index", Integer'(0));
+            Set_Field (Choice_Obj, "message", Msg_Obj);
+            Set_Field (Choice_Obj, "finish_reason", String'("stop"));
             Append (Choices_Arr, Choice_Obj);
-            Set_Field (Res_Obj, String'("choices"), Choices_Arr);
+            Set_Field (Res_Obj, "choices", Choices_Arr);
          end;
+         return Write (Res_Obj);
+
+      --  4. Ollama Format (Default)
       else
-         --  default /api/generate
-         Set_Field (Res_Obj, String'("model"), String'("adelaide-hybrid"));
-         Set_Field (Res_Obj, String'("response"), Full_Content);
-         Set_Field (Res_Obj, String'("done"), True);
+         if URI_Str = "/api/chat" or else URI_Str = "/api/chat/" then
+            Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
+            declare
+               Msg_Obj : constant JSON_Value := Create_Object;
+            begin
+               Set_Field (Msg_Obj, "role", String'("assistant"));
+               Set_Field (Msg_Obj, "content", Full_Content);
+               Set_Field (Res_Obj, "message", Msg_Obj);
+            end;
+            Set_Field (Res_Obj, "done", True);
+         else
+            Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
+            Set_Field (Res_Obj, "response", Full_Content);
+            Set_Field (Res_Obj, "done", True);
+         end if;
+         return Write (Res_Obj);
       end if;
-      return Write (Res_Obj);
-   end Format_Cache_Response;
+   end Format_Universal_Response;
 
    --  Forward GET requests directly to local Ollama
    function Forward_Get (Request : AWS.Status.Data) return AWS.Response.Data is
@@ -351,7 +430,10 @@ package body Adelaide_Server_Pkg is
                Set_CORS (Resp);
                return Resp;
             end;
-         elsif URI_Str = "/api/tags" or else URI_Str = "/tags" then
+         elsif URI_Str = "/api/tags" or else
+               URI_Str = "/tags" or else
+               URI_Str = "/v1/models"
+         then
             declare
                use GNATCOLL.JSON;
                Res_Obj    : constant JSON_Value := Create_Object;
@@ -363,6 +445,7 @@ package body Adelaide_Server_Pkg is
                   D : constant JSON_Value := Create_Object;
                begin
                   Set_Field (M, "name", Name);
+                  Set_Field (M, "id", Name); -- OpenAI format
                   Set_Field (M, "model", Name);
                   Set_Field (M, "modified_at",
                              String'("2024-05-20T11:42:00Z"));
@@ -377,7 +460,12 @@ package body Adelaide_Server_Pkg is
             begin
                Append (Models_Arr,
                        Create_Model_Info ("adelaide-hybrid", 3_100_000_000));
-               Set_Field (Res_Obj, "models", Models_Arr);
+               if URI_Str = "/v1/models" then
+                  Set_Field (Res_Obj, "object", String'("list"));
+                  Set_Field (Res_Obj, "data", Models_Arr);
+               else
+                  Set_Field (Res_Obj, "models", Models_Arr);
+               end if;
                Resp := AWS.Response.Build
                  (Content_Type => "application/json",
                   Message_Body => Write (Res_Obj));
@@ -451,9 +539,31 @@ package body Adelaide_Server_Pkg is
                      return Resp;
                   end;
                end;
+            elsif URI_Str = "/api/pull" or else URI_Str = "/api/push" or else
+                  URI_Str = "/api/create" or else URI_Str = "/api/copy"
+            then
+               declare
+                  Resp : AWS.Response.Data :=
+                    AWS.Response.Build (Content_Type => "application/json",
+                                        Message_Body => "{""status"":""success""}");
+               begin
+                  Set_CORS (Resp);
+                  return Resp;
+               end;
+            elsif URI_Str = "/api/delete" then
+                declare
+                  Resp : AWS.Response.Data :=
+                    AWS.Response.Build (Content_Type => "application/json",
+                                        Message_Body => "{""status"":""success""}");
+               begin
+                  Set_CORS (Resp);
+                  return Resp;
+               end;
             elsif URI_Str = "/api/chat" or else
                URI_Str = "/api/generate" or else
                URI_Str = "/v1/chat/completions" or else
+               URI_Str = "/v1/messages" or else
+               Ada.Strings.Fixed.Index (URI_Str, ":generateContent") > 0 or else
                URI_Str = "/think"
             then
                declare
@@ -512,7 +622,7 @@ package body Adelaide_Server_Pkg is
                               if Max_Sim >= 0.85 and then Max_Sim < 0.98 then
                                  declare
                                     Formatted_Resp : constant String :=
-                                      Format_Cache_Response
+                                      Format_Universal_Response
                                         (URI_Str, To_String (Best_Resp),
                                          Max_Sim);
                                     Resp : AWS.Response.Data :=
@@ -534,7 +644,7 @@ package body Adelaide_Server_Pkg is
                      use GNATCOLL.JSON;
                      Res : constant Read_Result := Read (Body_Str);
                      Model_Name : Unbounded_String :=
-                       To_Unbounded_String ("qwen3.5:0.8b");
+                       To_Unbounded_String ("adelaide-hybrid");
                   begin
                      if Res.Success and then Has_Field (Res.Value, "model") then
                         Model_Name := To_Unbounded_String
@@ -546,11 +656,13 @@ package body Adelaide_Server_Pkg is
                         Kind : constant Model_Manager.Model_Type :=
                           Model_Manager.Get_Kind_For_Model_Name (Model_Str);
                         Gen_Text : constant String :=
-                          (if Model_Str = "adelaide-hybrid"
+                          (if Model_Str = "adelaide-hybrid" or else
+                              Model_Str = "claude-3-5-sonnet-20241022" or else
+                              Model_Str = "gemini-1.5-pro"
                            then Model_Manager.Hybrid_Generate (Prompt)
                            else Model_Manager.Generate (Kind, Prompt));
                         Formatted_Resp : constant String :=
-                          Format_Cache_Response (URI_Str, Gen_Text, 0.0);
+                          Format_Universal_Response (URI_Str, Gen_Text, 0.0);
                         Resp : AWS.Response.Data :=
                           AWS.Response.Build
                             (Content_Type => "application/json",
@@ -561,7 +673,10 @@ package body Adelaide_Server_Pkg is
                      end;
                   end;
                end;
-            elsif URI_Str = "/api/embed" or else URI_Str = "/api/embeddings" then
+            elsif URI_Str = "/api/embed" or else
+                  URI_Str = "/api/embeddings" or else
+                  URI_Str = "/v1/embeddings"
+            then
                declare
                   Prompt : constant String := Extract_Prompt (Body_Str);
                   Vec    : constant Math_Utils.Vector :=
@@ -573,12 +688,26 @@ package body Adelaide_Server_Pkg is
                   for I in Vec'Range loop
                      Append (Arr, Create (Vec (I)));
                   end loop;
-                  Set_Field (Res_Obj, "embedding", Arr);
+                  if URI_Str = "/v1/embeddings" then
+                     declare
+                        Data_Arr : JSON_Array;
+                        Data_Obj : constant JSON_Value := Create_Object;
+                     begin
+                        Set_Field (Data_Obj, "object", String'("embedding"));
+                        Set_Field (Data_Obj, "index", Integer'(0));
+                        Set_Field (Data_Obj, "embedding", Arr);
+                        Append (Data_Arr, Data_Obj);
+                        Set_Field (Res_Obj, "object", String'("list"));
+                        Set_Field (Res_Obj, "data", Data_Arr);
+                        Set_Field (Res_Obj, "model", String'("qwen-embedding"));
+                     end;
+                  else
+                     Set_Field (Res_Obj, "embedding", Arr);
+                  end if;
                   declare
                      Resp : AWS.Response.Data :=
-                       AWS.Response.Build
-                         (Content_Type => "application/json",
-                          Message_Body => Write (Res_Obj));
+                       AWS.Response.Build (Content_Type => "application/json",
+                                           Message_Body => Write (Res_Obj));
                   begin
                      Set_CORS (Resp);
                      return Resp;
