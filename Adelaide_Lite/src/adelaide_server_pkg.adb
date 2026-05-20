@@ -7,13 +7,12 @@ with AWS.Messages;
 with AWS.Response.Set;
 with GNATCOLL.JSON;
 with Math_Utils;
+with Model_Manager;
 
 package body Adelaide_Server_Pkg is
 
    OLLAMA_PORT : constant String := "11434";
    OLLAMA_URL  : constant String := "http://localhost:" & OLLAMA_PORT;
-   PYTHON_PORT : constant String := "11436";
-   PYTHON_URL  : constant String := "http://localhost:" & PYTHON_PORT;
 
    --  Helper to convert JSON Array to Vector
    function JSON_Array_To_Vector
@@ -165,75 +164,10 @@ package body Adelaide_Server_Pkg is
          return "";
    end Extract_Prompt;
 
-   --  Get text embedding vector from local Ollama nomic-embed-text
+   --  Get text embedding vector from local Model_Manager
    function Get_Query_Embedding (Prompt : String) return Math_Utils.Vector is
-      use GNATCOLL.JSON;
-      Req_Obj : constant JSON_Value := Create_Object;
    begin
-      Set_Field (Req_Obj, String'("model"), String'("nomic-embed-text"));
-      Set_Field (Req_Obj, String'("input"), Prompt);
-
-      declare
-         Req_Body : constant String := Write (Req_Obj);
-         Resp     : AWS.Response.Data;
-      begin
-         Resp := AWS.Client.Post
-           (URL          => OLLAMA_URL & "/api/embed",
-            Data         => Req_Body,
-            Content_Type => "application/json");
-
-         declare
-            Resp_Str : constant String := AWS.Response.Message_Body (Resp);
-            Res      : constant Read_Result := Read (Resp_Str);
-         begin
-            if not Res.Success then
-               return (1 .. 0 => 0.0);
-            end if;
-
-            declare
-               Val : constant JSON_Value := Res.Value;
-            begin
-               if Val.Kind /= JSON_Object_Type then
-                  return (1 .. 0 => 0.0);
-               end if;
-
-               if Has_Field (Val, "embeddings") then
-                  declare
-                     Embeds_Val : constant JSON_Value :=
-                       Get (Val, "embeddings");
-                  begin
-                     if Embeds_Val.Kind = JSON_Array_Type then
-                        declare
-                           Arr : constant JSON_Array := Get (Embeds_Val);
-                        begin
-                           if Length (Arr) > 0 then
-                              declare
-                                 First_Embed_Val : constant JSON_Value :=
-                                   Get (Arr, 1);
-                              begin
-                                 if First_Embed_Val.Kind = JSON_Array_Type then
-                                    return JSON_Array_To_Vector
-                                      (Get (First_Embed_Val));
-                                 end if;
-                              end;
-                           end if;
-                        end;
-                     end if;
-                  end;
-               elsif Has_Field (Val, "embedding") then
-                  declare
-                     Embed_Val : constant JSON_Value :=
-                       Get (Val, "embedding");
-                  begin
-                     if Embed_Val.Kind = JSON_Array_Type then
-                        return JSON_Array_To_Vector (Get (Embed_Val));
-                     end if;
-                  end;
-               end if;
-            end;
-         end;
-      end;
-      return (1 .. 0 => 0.0);
+      return Model_Manager.Get_Embedding (Prompt);
    exception
       when E : others =>
          Ada.Text_IO.Put_Line
@@ -246,11 +180,6 @@ package body Adelaide_Server_Pkg is
       use GNATCOLL.JSON;
       Res : Read_Result;
    begin
-      Res := Read_File ("python/response_cache.json");
-      if Res.Success and then Res.Value.Kind = JSON_Array_Type then
-         return Get (Res.Value);
-      end if;
-
       Res := Read_File ("Adelaide_Lite/python/response_cache.json");
       if Res.Success and then Res.Value.Kind = JSON_Array_Type then
          return Get (Res.Value);
@@ -273,7 +202,9 @@ package body Adelaide_Server_Pkg is
          "[Adelaide-Lite Memory Thoughts Match - Similarity:" &
          Sim_Str & "]" & ASCII.LF &
          "</think>" & ASCII.LF;
-      Full_Content : constant String := Think_Header & Cached_Resp;
+      Is_Match : constant Boolean := Similarity > 0.0;
+      Full_Content : constant String :=
+        (if Is_Match then Think_Header & Cached_Resp else Cached_Resp);
    begin
       if URI_Str = "/api/chat" or else URI_Str = "/api/chat/" then
          Set_Field (Res_Obj, String'("model"), String'("adelaide-hybrid"));
@@ -313,7 +244,9 @@ package body Adelaide_Server_Pkg is
 
    --  Forward GET requests directly to local Ollama
    function Forward_Get (Request : AWS.Status.Data) return AWS.Response.Data is
-      URL : constant String := OLLAMA_URL & AWS.Status.URI (Request);
+      use AWS.Status;
+      URI_Str : constant String := URI (Request);
+      URL     : constant String := OLLAMA_URL & URI_Str;
       Headers : constant AWS.Headers.List := Filter_Request_Headers (Request);
    begin
       return Clone_And_Filter_Response
@@ -332,17 +265,17 @@ package body Adelaide_Server_Pkg is
    --  Forward POST requests to specified downstream endpoint
    function Forward_Post
      (Request : AWS.Status.Data;
-      Target_Host : String;
       Body_Str : String) return AWS.Response.Data
    is
-      URL : constant String := Target_Host & AWS.Status.URI (Request);
+      use AWS.Status;
+      URL : constant String := OLLAMA_URL & URI (Request);
       Headers : constant AWS.Headers.List := Filter_Request_Headers (Request);
    begin
       return Clone_And_Filter_Response
         (AWS.Client.Post
            (URL          => URL,
             Data         => Body_Str,
-            Content_Type => AWS.Status.Content_Type (Request),
+            Content_Type => Content_Type (Request),
             Headers      => Headers));
    exception
       when E : others =>
@@ -361,151 +294,207 @@ package body Adelaide_Server_Pkg is
       use AWS.Status;
       URI_Str : constant String := URI (Request);
       Method_Val : constant Request_Method := Method (Request);
+
+      --  Inject CORS headers helper
+      procedure Set_CORS (Resp : in out AWS.Response.Data) is
+      begin
+         AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
+         AWS.Response.Set.Add_Header
+           (Resp, "Access-Control-Allow-Methods",
+            "GET, POST, PUT, DELETE, OPTIONS, HEAD");
+         AWS.Response.Set.Add_Header
+           (Resp, "Access-Control-Allow-Headers",
+            "Content-Type, Authorization, X-Requested-With");
+      end Set_CORS;
    begin
       --  1. Preflight/CORS OPTIONS handling
       if Method_Val = OPTIONS then
          declare
-            Resp : AWS.Response.Data;
+            Resp : AWS.Response.Data :=
+              AWS.Response.Acknowledge (AWS.Messages.S200);
          begin
-            Resp := AWS.Response.Acknowledge (AWS.Messages.S200);
-            AWS.Response.Set.Add_Header
-              (Resp, "Access-Control-Allow-Origin", "*");
-            AWS.Response.Set.Add_Header
-              (Resp, "Access-Control-Allow-Methods",
-               "GET, POST, PUT, DELETE, OPTIONS, HEAD");
-            AWS.Response.Set.Add_Header
-              (Resp, "Access-Control-Allow-Headers",
-               "Content-Type, Authorization, X-Requested-With");
+            Set_CORS (Resp);
             return Resp;
          end;
       end if;
 
-      --  2. Forward non-POST requests to Ollama
-      if Method_Val /= POST then
-         return Forward_Get (Request);
+      --  2. Handle GET routes
+      if Method_Val = GET then
+         if URI_Str = "/api/tags" or else URI_Str = "/tags" then
+            declare
+               use GNATCOLL.JSON;
+               Res_Obj    : constant JSON_Value := Create_Object;
+               Models_Arr : JSON_Array;
+               function Create_Model_Info
+                 (Name : String; Size : Long_Long_Integer) return JSON_Value
+               is
+                  M : constant JSON_Value := Create_Object;
+               begin
+                  Set_Field (M, "name", Name);
+                  Set_Field (M, "size", Create (Size));
+                  return M;
+               end Create_Model_Info;
+               Resp : AWS.Response.Data;
+            begin
+               Append (Models_Arr,
+                       Create_Model_Info ("adelaide-hybrid", 3_100_000_000));
+               Set_Field (Res_Obj, "models", Models_Arr);
+               Resp := AWS.Response.Build
+                 (Content_Type => "application/json",
+                  Message_Body => Write (Res_Obj));
+               Set_CORS (Resp);
+               return Resp;
+            end;
+         else
+            return Forward_Get (Request);
+         end if;
       end if;
 
       --  3. Handle POST request
-      declare
-         Body_Str : constant String := To_String (Binary_Data (Request));
-      begin
-         --  Check if this is an ML/thinking route
-         if URI_Str = "/api/chat" or else
-            URI_Str = "/api/generate" or else
-            URI_Str = "/v1/chat/completions" or else
-            URI_Str = "/think"
-         then
-            declare
-               Prompt : constant String := Extract_Prompt (Body_Str);
-            begin
-               if Prompt /= "" then
+      if Method_Val = POST then
+         declare
+            Body_Str : constant String := To_String (Binary_Data (Request));
+         begin
+            if URI_Str = "/api/chat" or else
+               URI_Str = "/api/generate" or else
+               URI_Str = "/v1/chat/completions" or else
+               URI_Str = "/think"
+            then
+               declare
+                  Prompt : constant String := Extract_Prompt (Body_Str);
+               begin
+                  if Prompt /= "" then
+                     declare
+                        Query_Vec : constant Math_Utils.Vector :=
+                          Get_Query_Embedding (Prompt);
+                     begin
+                        if Query_Vec'Length > 0 then
+                           declare
+                              use GNATCOLL.JSON;
+                              Cache_Arr : constant JSON_Array := Load_Cache;
+                              Len : constant Natural := Length (Cache_Arr);
+                              Max_Sim   : Float := -2.0;
+                              Best_Resp : Unbounded_String;
+                           begin
+                              for I in 1 .. Len loop
+                                 declare
+                                    Entry_Val : constant JSON_Value :=
+                                      Get (Cache_Arr, I);
+                                 begin
+                                    if Entry_Val.Kind = JSON_Object_Type and then
+                                       Has_Field (Entry_Val, "embedding") and then
+                                       Has_Field (Entry_Val, "response")
+                                    then
+                                       declare
+                                          Arr : constant JSON_Array :=
+                                            Get (Get (Entry_Val, "embedding"));
+                                          Resp_Val : constant String :=
+                                            Get (Get (Entry_Val, "response"));
+                                       begin
+                                          if Length (Arr) = Query_Vec'Length then
+                                             declare
+                                                Entry_Vec : constant
+                                                  Math_Utils.Vector :=
+                                                    JSON_Array_To_Vector (Arr);
+                                                Sim : constant Float :=
+                                                  Math_Utils.Cosine_Similarity
+                                                    (Query_Vec, Entry_Vec);
+                                             begin
+                                                if Sim > Max_Sim then
+                                                   Max_Sim := Sim;
+                                                   Best_Resp :=
+                                                     To_Unbounded_String
+                                                       (Resp_Val);
+                                                end if;
+                                             end;
+                                          end if;
+                                       end;
+                                    end if;
+                                 end;
+                              end loop;
+
+                              if Max_Sim >= 0.85 and then Max_Sim < 0.98 then
+                                 declare
+                                    Formatted_Resp : constant String :=
+                                      Format_Cache_Response
+                                        (URI_Str, To_String (Best_Resp),
+                                         Max_Sim);
+                                    Resp : AWS.Response.Data :=
+                                      AWS.Response.Build
+                                        (Content_Type => "application/json",
+                                         Message_Body => Formatted_Resp);
+                                 begin
+                                    Set_CORS (Resp);
+                                    return Resp;
+                                 end;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end if;
+
+                  --  Cache miss: internal Model_Manager
                   declare
-                     Query_Vec : constant Math_Utils.Vector :=
-                       Get_Query_Embedding (Prompt);
+                     use GNATCOLL.JSON;
+                     Res : constant Read_Result := Read (Body_Str);
+                     Model_Name : Unbounded_String :=
+                       To_Unbounded_String ("qwen3.5:0.8b");
                   begin
-                     if Query_Vec'Length > 0 then
-                        declare
-                           use GNATCOLL.JSON;
-                           Cache_Arr : constant JSON_Array := Load_Cache;
-                           Len : constant Natural := Length (Cache_Arr);
-                           Max_Sim   : Float := -2.0;
-                           Best_Resp : Unbounded_String;
-                        begin
-                           for I in 1 .. Len loop
-                              declare
-                                 Entry_Val : constant JSON_Value :=
-                                   Get (Cache_Arr, I);
-                              begin
-                                 if Entry_Val.Kind = JSON_Object_Type and then
-                                    Has_Field (Entry_Val, "embedding") and then
-                                    Has_Field (Entry_Val, "response")
-                                 then
-                                    declare
-                                       Embed_Val : constant JSON_Value :=
-                                         Get (Entry_Val, "embedding");
-                                       Resp_Val  : constant JSON_Value :=
-                                         Get (Entry_Val, "response");
-                                    begin
-                                       if Embed_Val.Kind = JSON_Array_Type
-                                         and then Resp_Val.Kind =
-                                           JSON_String_Type
-                                       then
-                                          declare
-                                             Arr : constant JSON_Array :=
-                                               Get (Embed_Val);
-                                             Arr_Len : constant Natural :=
-                                               Length (Arr);
-                                          begin
-                                             if Arr_Len = Query_Vec'Length then
-                                                declare
-                                                   use Math_Utils;
-                                                   Entry_Vec : constant Vector
-                                                     := JSON_Array_To_Vector
-                                                          (Arr);
-                                                   Sim : constant Float :=
-                                                     Cosine_Similarity
-                                                       (Query_Vec, Entry_Vec);
-                                                begin
-                                                   if Sim > Max_Sim then
-                                                      Max_Sim   := Sim;
-                                                      Best_Resp :=
-                                                        Unbounded_String'(
-                                                          Get (Resp_Val));
-                                                   end if;
-                                                end;
-                                             end if;
-                                          end;
-                                       end if;
-                                    end;
-                                 end if;
-                              end;
-                           end loop;
-
-                           --  Evaluate Similarity Window
-                           if Max_Sim >= 0.85 and then Max_Sim < 0.98 then
-                              Ada.Text_IO.Put_Line
-                                ("[Cache Hit] Match found. Similarity: " &
-                                 Float'Image (Max_Sim));
-                              declare
-                                 Formatted_Resp : constant String :=
-                                    Format_Cache_Response
-                                      (URI_Str,
-                                       To_String (Best_Resp),
-                                       Max_Sim);
-                                 Resp : AWS.Response.Data;
-                              begin
-                                 Resp := AWS.Response.Build
-                                   (Content_Type => "application/json",
-                                    Message_Body => Formatted_Resp,
-                                    Status_Code  => AWS.Messages.S200);
-                                 AWS.Response.Set.Add_Header
-                                   (Resp, "Access-Control-Allow-Origin", "*");
-                                 AWS.Response.Set.Add_Header
-                                   (Resp, "Access-Control-Allow-Methods",
-                                    "GET, POST, PUT, DELETE, OPTIONS, HEAD");
-                                 AWS.Response.Set.Add_Header
-                                   (Resp,
-                                    "Access-Control-Allow-Headers",
-                                    "Content-Type, Authorization, " &
-                                    "X-Requested-With");
-                                 return Resp;
-                              end;
-                           end if;
-                        end;
+                     if Res.Success and then Has_Field (Res.Value, "model") then
+                        Model_Name := To_Unbounded_String
+                          (String'(Get (Get (Res.Value, "model"))));
                      end if;
-                  end;
-               end if;
-            end;
 
-            --  Cache miss: forward to Python agentic service on 11436
-            Ada.Text_IO.Put_Line
-              ("[Cache Miss] Forwarding request to Python agentic backend...");
-            return Forward_Post (Request, PYTHON_URL, Body_Str);
-         else
-            --  Direct pass-through for other endpoints to Ollama
-            return Forward_Post (Request, OLLAMA_URL, Body_Str);
-         end if;
-      end;
+                     declare
+                        Model_Str : constant String := To_String (Model_Name);
+                        Kind : constant Model_Manager.Model_Type :=
+                          Model_Manager.Get_Kind_For_Model_Name (Model_Str);
+                        Gen_Text : constant String :=
+                          (if Model_Str = "adelaide-hybrid"
+                           then Model_Manager.Hybrid_Generate (Prompt)
+                           else Model_Manager.Generate (Kind, Prompt));
+                        Formatted_Resp : constant String :=
+                          Format_Cache_Response (URI_Str, Gen_Text, 0.0);
+                        Resp : AWS.Response.Data :=
+                          AWS.Response.Build
+                            (Content_Type => "application/json",
+                             Message_Body => Formatted_Resp);
+                     begin
+                        Set_CORS (Resp);
+                        return Resp;
+                     end;
+                  end;
+               end;
+            elsif URI_Str = "/api/embed" or else URI_Str = "/api/embeddings" then
+               declare
+                  Prompt : constant String := Extract_Prompt (Body_Str);
+                  Vec    : constant Math_Utils.Vector :=
+                    Get_Query_Embedding (Prompt);
+                  use GNATCOLL.JSON;
+                  Res_Obj : constant JSON_Value := Create_Object;
+                  Arr     : JSON_Array;
+               begin
+                  for I in Vec'Range loop
+                     Append (Arr, Create (Vec (I)));
+                  end loop;
+                  Set_Field (Res_Obj, "embedding", Arr);
+                  declare
+                     Resp : AWS.Response.Data :=
+                       AWS.Response.Build
+                         (Content_Type => "application/json",
+                          Message_Body => Write (Res_Obj));
+                  begin
+                     Set_CORS (Resp);
+                     return Resp;
+                  end;
+               end;
+            else
+               return Forward_Post (Request, Body_Str);
+            end if;
+         end;
+      end if;
+
+      return AWS.Response.Acknowledge (AWS.Messages.S404);
    end Dispatch;
 
 end Adelaide_Server_Pkg;
