@@ -1,5 +1,4 @@
-with GNATCOLL.SQL.Exec;
-with GNATCOLL.SQL.SQLite;
+with Ada_Sqlite3;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Database_Manager is

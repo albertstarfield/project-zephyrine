@@ -2,8 +2,7 @@ with "config/adelaide_lite_config.gpr";
 with "aws";
 with "gnatcoll";
 with "gnatcoll_minimal";
-with "gnatcoll_sql";
-with "gnatcoll_sqlite";
+with "ada_sqlite3";
 project Adelaide_Lite is
 
    for Languages use ("Ada", "C");
