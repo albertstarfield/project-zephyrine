@@ -96,10 +96,12 @@ package body Integrity_Utils is
 
       --  Identify corrupted block using CRC
       for B_Idx in 1 .. Num_Blocks loop
+         pragma Loop_Invariant (Corrupt_Count <= B_Idx - 1);
+         pragma Loop_Invariant (if Corrupt_Count = 1 then Corrupt_Idx <= Num_Blocks);
          declare
             Start_Pos : constant Positive :=
               Data_Start + (B_Idx - 1) * Block_Size;
-            End_Pos   : constant Positive := Start_Pos + Block_Size - 1;
+            End_Pos   : constant Positive := Start_Pos + (Block_Size - 1);
             Actual_CRC : constant Unsigned_32 :=
               Calculate_CRC32 (Data (Start_Pos .. End_Pos));
          begin

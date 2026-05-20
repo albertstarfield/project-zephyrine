@@ -307,6 +307,8 @@ package body Adelaide_Server_Pkg is
             "Content-Type, Authorization, X-Requested-With");
       end Set_CORS;
    begin
+      Ada.Text_IO.Put_Line ("[Request] " & Method_Val'Img & " " & URI_Str);
+
       --  1. Preflight/CORS OPTIONS handling
       if Method_Val = OPTIONS then
          declare
@@ -318,9 +320,38 @@ package body Adelaide_Server_Pkg is
          end;
       end if;
 
-      --  2. Handle GET routes
+      --  2. Handle HEAD / (Health check for Ollama CLI)
+      if Method_Val = HEAD and then URI_Str = "/" then
+         declare
+            Resp : AWS.Response.Data :=
+              AWS.Response.Acknowledge (AWS.Messages.S200);
+         begin
+            Set_CORS (Resp);
+            return Resp;
+         end;
+      end if;
+
+      --  3. Handle GET routes
       if Method_Val = GET then
-         if URI_Str = "/api/tags" or else URI_Str = "/tags" then
+         if URI_Str = "/" then
+            declare
+               Resp : AWS.Response.Data :=
+                 AWS.Response.Build (Content_Type => "text/plain",
+                                     Message_Body => "Ollama is running");
+            begin
+               Set_CORS (Resp);
+               return Resp;
+            end;
+         elsif URI_Str = "/api/version" then
+            declare
+               Resp : AWS.Response.Data :=
+                 AWS.Response.Build (Content_Type => "application/json",
+                                     Message_Body => "{""version"":""0.1.48""}");
+            begin
+               Set_CORS (Resp);
+               return Resp;
+            end;
+         elsif URI_Str = "/api/tags" or else URI_Str = "/tags" then
             declare
                use GNATCOLL.JSON;
                Res_Obj    : constant JSON_Value := Create_Object;
@@ -329,9 +360,17 @@ package body Adelaide_Server_Pkg is
                  (Name : String; Size : Long_Long_Integer) return JSON_Value
                is
                   M : constant JSON_Value := Create_Object;
+                  D : constant JSON_Value := Create_Object;
                begin
                   Set_Field (M, "name", Name);
+                  Set_Field (M, "model", Name);
+                  Set_Field (M, "modified_at",
+                             String'("2024-05-20T11:42:00Z"));
                   Set_Field (M, "size", Create (Size));
+                  Set_Field (M, "digest", String'("adelaide-lite-v1"));
+                  Set_Field (D, "format", String'("gguf"));
+                  Set_Field (D, "family", String'("qwen"));
+                  Set_Field (M, "details", D);
                   return M;
                end Create_Model_Info;
                Resp : AWS.Response.Data;
@@ -345,17 +384,74 @@ package body Adelaide_Server_Pkg is
                Set_CORS (Resp);
                return Resp;
             end;
+         elsif URI_Str = "/api/ps" then
+            declare
+               use GNATCOLL.JSON;
+               Res_Obj    : constant JSON_Value := Create_Object;
+               Models_Arr : JSON_Array;
+               function Create_Running_Info (Name : String) return JSON_Value is
+                  M : constant JSON_Value := Create_Object;
+                  D : constant JSON_Value := Create_Object;
+               begin
+                  Set_Field (M, "name", Name);
+                  Set_Field (M, "model", Name);
+                  Set_Field (M, "size", Create (Long_Long_Integer'(0)));
+                  Set_Field (M, "digest", String'("adelaide-lite-run"));
+                  Set_Field (D, "format", String'("gguf"));
+                  Set_Field (M, "details", D);
+                  Set_Field (M, "expires_at", String'("2026-05-20T23:59:59Z"));
+                  Set_Field (M, "size_vram", Create (Long_Long_Integer'(0)));
+                  return M;
+               end Create_Running_Info;
+               Resp : AWS.Response.Data;
+            begin
+               if Model_Manager.Is_Loaded (Model_Manager.Qwen_0_8B) then
+                  Append (Models_Arr, Create_Running_Info ("qwen3.5:0.8b"));
+               end if;
+               if Model_Manager.Is_Loaded (Model_Manager.Qwen_4B) then
+                  Append (Models_Arr, Create_Running_Info ("qwen3.5:4b"));
+               end if;
+               Set_Field (Res_Obj, "models", Models_Arr);
+               Resp := AWS.Response.Build
+                 (Content_Type => "application/json",
+                  Message_Body => Write (Res_Obj));
+               Set_CORS (Resp);
+               return Resp;
+            end;
          else
             return Forward_Get (Request);
          end if;
       end if;
 
-      --  3. Handle POST request
+      --  4. Handle POST request
       if Method_Val = POST then
          declare
             Body_Str : constant String := To_String (Binary_Data (Request));
          begin
-            if URI_Str = "/api/chat" or else
+            if URI_Str = "/api/show" then
+               declare
+                  use GNATCOLL.JSON;
+                  Res_Obj : constant JSON_Value := Create_Object;
+                  Det_Obj : constant JSON_Value := Create_Object;
+               begin
+                  Set_Field (Res_Obj, "modelfile",
+                             String'("FROM adelaide-hybrid"));
+                  Set_Field (Res_Obj, "parameters", String'("stop <think>"));
+                  Set_Field (Res_Obj, "template", String'("{{ .Prompt }}"));
+                  Set_Field (Res_Obj, "system", String'("You are Adelaide."));
+                  Set_Field (Det_Obj, "format", String'("gguf"));
+                  Set_Field (Det_Obj, "family", String'("qwen"));
+                  Set_Field (Res_Obj, "details", Det_Obj);
+                  declare
+                     Resp : AWS.Response.Data :=
+                       AWS.Response.Build (Content_Type => "application/json",
+                                           Message_Body => Write (Res_Obj));
+                  begin
+                     Set_CORS (Resp);
+                     return Resp;
+                  end;
+               end;
+            elsif URI_Str = "/api/chat" or else
                URI_Str = "/api/generate" or else
                URI_Str = "/v1/chat/completions" or else
                URI_Str = "/think"

@@ -29,4 +29,6 @@ package Model_Manager is
 
    function Get_Kind_For_Model_Name (Name : String) return Model_Type;
 
+   function Is_Loaded (Kind : Model_Type) return Boolean;
+
 end Model_Manager;

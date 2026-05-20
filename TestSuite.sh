@@ -94,7 +94,8 @@ cd ..
 # 5. Run SPARK Formal Proofs (GNATprove)
 echo "[*] Running SPARK Formal Verification (Level 2) on Core Units..."
 cd Adelaide_Lite
-alr exec gnatprove -- -P adelaide_lite.gpr --level=2 integrity_utils math_utils
+# Use -u to analyze only the specified units and their dependencies (without analyzing libraries)
+alr exec gnatprove -- -P adelaide_lite.gpr --level=2 -u src/integrity_utils.ads src/math_utils.ads
 cd ..
 
 # 6. AFL++ Fuzzing placeholder
