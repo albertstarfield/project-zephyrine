@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+
+# Adelaide-Lite Universal Runner (System-Integrated Build)
+BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$BASE_DIR"
+
+# 1. Environment lockdown
+export SDKROOT=$(xcrun --show-sdk-path)
+# Ensure system headers are visible to all compilers
+export C_INCLUDE_PATH="$SDKROOT/usr/include:/opt/homebrew/include"
+export CPLUS_INCLUDE_PATH="$SDKROOT/usr/include:/opt/homebrew/include"
+export LIBRARY_PATH="$SDKROOT/usr/lib:/usr/local/lib:/opt/homebrew/lib"
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
+
+echo "[*] Initializing Adelaide-Lite Environment..."
+
+# 2. Build llama.cpp if needed
+if [ ! -f "llama.cpp/build/src/libllama.a" ]; then
+    echo "[!] llama.cpp libraries not found. Building..."
+    cd llama.cpp
+    mkdir -p build && cd build
+    cmake .. -DBUILD_SHARED_LIBS=OFF -DCMAKE_OSX_SYSROOT="$SDKROOT"
+    cmake --build . --config Release --target llama llama-cli llama-server
+    cd ../..
+fi
+
+# 3. Clean indices (macOS specific safety)
+echo "[*] Cleaning Alire cache and re-indexing..."
+rm -rf Adelaide_Lite/obj Adelaide_Lite/bin
+find "$HOME/.local/share/alire/builds" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
+
+# 4. Build Ada Server
+echo "[*] Building Adelaide-Lite Server..."
+cd Adelaide_Lite
+# Use -n to avoid interactive prompts
+alr -n build
+
+# 5. Run Server
+if [ -f "./bin/adelaide_server" ]; then
+    echo "[*] Starting Adelaide-Lite Server on port 11420..."
+    nice -n -20 ./bin/adelaide_server
+else
+    echo "[!] Build failed. Bin/adelaide_server not found."
+    exit 1
+fi

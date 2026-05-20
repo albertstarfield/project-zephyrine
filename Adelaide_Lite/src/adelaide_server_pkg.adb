@@ -280,7 +280,7 @@ package body Adelaide_Server_Pkg is
          end;
          return Write (Res_Obj);
 
-      --  3. OpenAI Format
+      --  3. OpenAI Format (Used by LMStudio too)
       elsif URI_Str = "/v1/chat/completions" then
          Set_Field (Res_Obj, "id", String'("chatcmpl-adelaide"));
          Set_Field (Res_Obj, "object", String'("chat.completion"));
@@ -658,7 +658,8 @@ package body Adelaide_Server_Pkg is
                         Gen_Text : constant String :=
                           (if Model_Str = "adelaide-hybrid" or else
                               Model_Str = "claude-3-5-sonnet-20241022" or else
-                              Model_Str = "gemini-1.5-pro"
+                              Model_Str = "gemini-1.5-pro" or else
+                              Model_Str = "lm-studio"
                            then Model_Manager.Hybrid_Generate (Prompt)
                            else Model_Manager.Generate (Kind, Prompt));
                         Formatted_Resp : constant String :=

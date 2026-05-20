@@ -15,15 +15,12 @@ gnatprove = "^15.1.0"
 
 [[depends-on]]
 aws = "^25.2.0"
-
 [[depends-on]]
 gnatcoll = "^25.0.0"
 
 [[depends-on]]
-gnatcoll_sql = "^25.0.0"
-
-[[depends-on]]
-gnatcoll_sqlite = "^25.0.0"
+ada_sqlite3 = "^0.1.1"
 
 [[depends-on]]
 gnatcoll_minimal = "^25.0.0"
+
