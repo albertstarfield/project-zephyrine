@@ -327,8 +327,27 @@ package body Adelaide_Server_Pkg is
 
    --  Get text embedding vector from local Model_Manager
    function Get_Query_Embedding (Prompt : String) return Math_Utils.Vector is
+      task Worker is
+         entry Start (P : String);
+         entry Finish (R : out Math_Utils.Vector);
+      end Worker;
+      task body Worker is
+         Local_P : Unbounded_String;
+         Local_V : Math_Utils.Vector (1 .. 1024);
+      begin
+         accept Start (P : String) do
+            Local_P := To_Unbounded_String (P);
+         end Start;
+         Model_Manager.Get_Embedding (To_String (Local_P), Local_V);
+         accept Finish (R : out Math_Utils.Vector) do
+            R := Local_V;
+         end Finish;
+      end Worker;
+      Res_V : Math_Utils.Vector (1 .. 1024);
    begin
-      return Model_Manager.Get_Embedding (Prompt);
+      Worker.Start (Prompt);
+      Worker.Finish (Res_V);
+      return Res_V;
    exception
       when E : others =>
          Ada.Text_IO.Put_Line

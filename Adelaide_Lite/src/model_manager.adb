@@ -645,11 +645,6 @@ package body Model_Manager is
        return To_String (Result);
     end Sanitize_Think_Tags;
 
-    procedure Push_Chunk
-      (Stream     : Streaming_Queue.Queue_Access;
-       Session_ID : String;
-       Str_Piece  : String);
-
     procedure Process_And_Push_Chunk
       (Stream     : Streaming_Queue.Queue_Access;
        Session_ID : String;
