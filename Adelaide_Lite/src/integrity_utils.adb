@@ -105,7 +105,9 @@ package body Integrity_Utils is
             Actual_CRC : constant Unsigned_32 :=
               Calculate_CRC32 (Data (Start_Pos .. End_Pos));
          begin
-            if Actual_CRC /= Expected_CRCs (Expected_CRCs'First + B_Idx - 1) then
+            if Actual_CRC /=
+              Expected_CRCs (Expected_CRCs'First + (B_Idx - 1))
+            then
                Corrupt_Count := Corrupt_Count + 1;
                Corrupt_Idx   := B_Idx;
             end if;
