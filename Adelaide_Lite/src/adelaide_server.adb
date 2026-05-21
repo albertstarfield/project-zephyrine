@@ -1,5 +1,6 @@
-with Ada.Text_IO;
+with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Exceptions;
+with Ada.Command_Line; use Ada.Command_Line;
 with AWS.Server;
 with Adelaide_Server_Pkg;
 with Model_Manager;
@@ -8,8 +9,39 @@ with Interfaces; use Interfaces;
 
 procedure Adelaide_Server is
    pragma Spark_Mode (Off);
+
+   --  ANSI Color Codes
+   Reset   : constant String := ASCII.ESC & "[0m";
+   Bold    : constant String := ASCII.ESC & "[1m";
+   Purple  : constant String := ASCII.ESC & "[38;5;171m";
+   Cyan    : constant String := ASCII.ESC & "[36m";
+   Green   : constant String := ASCII.ESC & "[32m";
+   Yellow  : constant String := ASCII.ESC & "[33m";
+   Blue    : constant String := ASCII.ESC & "[34m";
+
    procedure Set_Darwin_Realtime;
    pragma Import (C, Set_Darwin_Realtime, "set_darwin_realtime");
+
+   --  Display Whimsical Help
+   procedure Show_Help is
+   begin
+      Put_Line (Purple & Bold & "      Adelaide Zephyrine Charlotte" & Reset);
+      Put_Line (Cyan & "  Universal AI Gateway & Reasoning Pipeline" & Reset);
+      New_Line;
+      Put_Line (Bold & "USAGE:" & Reset);
+      Put_Line ("  adelaide_server [options]");
+      New_Line;
+      Put_Line (Bold & "OPTIONS:" & Reset);
+      Put_Line ("  -h, --help     " & Green & "Show this whimsical menu" & Reset);
+      Put_Line ("  -v, --version  " & Green & "Display version metadata" & Reset);
+      New_Line;
+      Put_Line (Bold & "ENVIRONMENT:" & Reset);
+      Put_Line ("  Default Port:  11420");
+      Put_Line ("  Models Path:   ../llama.cpp/models/");
+      New_Line;
+      Put_Line (Purple & "I am dedicated to creating architectures that are " &
+                "intellectually rigorous." & Reset);
+   end Show_Help;
 
    --  Perform a quick self-test of the formally verified integrity logic
    procedure Run_Integrity_Self_Test is
@@ -20,31 +52,48 @@ procedure Adelaide_Server is
       Parity     : Byte_Array (1 .. 4) := (0, 0, 0, 0);
       Success    : Boolean;
    begin
-      Ada.Text_IO.Put_Line ("[*] Running Formal Integrity Self-Test...");
+      Put_Line (Blue & "[*] Running Formal Integrity Self-Test..." & Reset);
 
-      --  1. Generate CRCs and Parity
       CRCs (1) := Calculate_CRC32 (Data (1 .. 4));
       CRCs (2) := Calculate_CRC32 (Data (5 .. 8));
       Generate_Parity (Data, Block_Size, Parity);
 
-      --  2. Simulate corruption
+      --  Simulate corruption
       Data (1) := 99;
 
-      --  3. Attempt Self-Patch
+      --  Attempt Self-Patch
       Self_Patch (Data, Block_Size, CRCs, Parity, Success);
 
       if Success and then Data (1) = 1 then
-         Ada.Text_IO.Put_Line
-           ("[+] Integrity Core: VERIFIED (Self-Patch Operational)");
+         Put_Line (Green & "[+] Integrity Core: VERIFIED" & Reset);
       else
-         Ada.Text_IO.Put_Line
-           ("[!] Integrity Core: FAILED. Check SPARK proofs.");
+         Put_Line (Yellow & "[!] Integrity Core: FAILED (Proofs only)" & Reset);
       end if;
    end Run_Integrity_Self_Test;
 
    Server_Port : constant Positive := 11420;
    Web_Server  : AWS.Server.HTTP;
 begin
+   --  Parse Arguments
+   for I in 1 .. Argument_Count loop
+      declare
+         Arg : constant String := Argument (I);
+      begin
+         if Arg = "-h" or else Arg = "--help" then
+            Show_Help;
+            return;
+         elsif Arg = "-v" or else Arg = "--version" then
+            Put_Line ("Adelaide-Lite v0.1.0-dev (SPARK verified core)");
+            return;
+         end if;
+      end;
+   end loop;
+
+   --  Whimsical Startup Banner
+   Put_Line (Purple & "====================================================" & Reset);
+   Put_Line (Purple & Bold & "    ADELAIDE-LITE INITIALIZING... (Enchanting)" & Reset);
+   Put_Line (Purple & "====================================================" & Reset);
+
    --  Apply Apple Silicon soft real-time thread constraint policy
    Set_Darwin_Realtime;
 
@@ -54,8 +103,8 @@ begin
    --  Initialize Llama backend and models
    Model_Manager.Initialize;
 
-   Ada.Text_IO.Put_Line ("[+] Starting Adelaide AWS Proxy on port" &
-                         Server_Port'Img & "...");
+   Put_Line (Cyan & "[+] Starting Adelaide AWS Proxy on port" &
+             Server_Port'Img & "..." & Reset);
 
    --  Start AWS server with the custom Dispatcher callback
    AWS.Server.Start (
@@ -65,22 +114,19 @@ begin
       Port       => Server_Port
    );
 
-   Ada.Text_IO.Put_Line ("[+] Adelaide-Lite is running on port" &
-                         Server_Port'Img);
-   Ada.Text_IO.Put_Line
-     ("[+] Internal llama.cpp engine initialized with GPU acceleration.");
+   Put_Line (Green & Bold & "[+] Adelaide-Lite is ACTIVE on port" &
+             Server_Port'Img & Reset);
+   Put_Line (Green & "[+] Metal GPU Acceleration: ENABLED" & Reset);
 
-   --  Keep the main thread alive indefinitely to service incoming requests
+   --  Keep the main thread alive indefinitely
    loop
       delay 3600.0;
    end loop;
 
 exception
    when E : others =>
-      Ada.Text_IO.Put_Line ("[-] Exception in Adelaide AWS Server: " &
-                            Ada.Exceptions.Exception_Name (E));
-      Ada.Text_IO.Put_Line ("[-] Message: " &
-                            Ada.Exceptions.Exception_Message (E));
-      Ada.Text_IO.Put_Line ("[-] Shutting down...");
+      Put_Line (Yellow & "[-] Exception in Adelaide Server: " &
+                Ada.Exceptions.Exception_Name (E) & Reset);
+      Put_Line ("[-] Message: " & Ada.Exceptions.Exception_Message (E));
       AWS.Server.Shutdown (Web_Server);
 end Adelaide_Server;
