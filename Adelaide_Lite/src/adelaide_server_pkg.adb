@@ -645,7 +645,7 @@ package body Adelaide_Server_Pkg is
                      Res : constant Read_Result := Read (Body_Str);
                      Model_Name : Unbounded_String :=
                        To_Unbounded_String ("adelaide-hybrid");
-                     
+
                      --  Estimate required context size
                      Estimated_Tokens : constant Positive :=
                        (Body_Str'Length / 3) + 2048;

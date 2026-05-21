@@ -1,7 +1,6 @@
 with "config/adelaide_lite_config.gpr";
 with "aws";
 with "gnatcoll";
-with "gnatcoll_minimal";
 with "ada_sqlite3";
 project Adelaide_Lite is
 

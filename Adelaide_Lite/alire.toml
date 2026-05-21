@@ -8,7 +8,7 @@ licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
 website = ""
 tags = []
 
-executables = ["adelaide_lite"]
+executables = ["adelaide_lite", "adelaide_server"]
 
 [[depends-on]]
 gnatprove = "^15.1.0"
@@ -19,8 +19,14 @@ aws = "^25.2.0"
 gnatcoll = "^25.0.0"
 
 [[depends-on]]
-ada_sqlite3 = "^0.1.1"
+libgpr = "^25.0.0"
 
 [[depends-on]]
-gnatcoll_minimal = "^25.0.0"
+xmlada = "^25.0.0"
+
+[[depends-on]]
+openssl = "*"
+
+[[depends-on]]
+ada_sqlite3 = "^0.1.1"
 
