@@ -580,18 +580,19 @@ package body Adelaide_Server_Pkg is
             "Content-Type, Authorization, X-Requested-With");
       end Set_CORS;
    begin
-      Ada.Text_IO.Put_Line ("[Request] " & Method_Val'Img & " " & URI_Str);
+      begin
+         Ada.Text_IO.Put_Line ("[Request] " & Method_Val'Img & " " & URI_Str);
 
-      --  1. Preflight/CORS OPTIONS handling
-      if Method_Val = OPTIONS then
-         declare
-            Resp : AWS.Response.Data :=
-              AWS.Response.Acknowledge (AWS.Messages.S200);
-         begin
-            Set_CORS (Resp);
-            return Resp;
-         end;
-      end if;
+         --  1. Preflight/CORS OPTIONS handling
+         if Method_Val = OPTIONS then
+            declare
+               Resp : AWS.Response.Data :=
+                 AWS.Response.Acknowledge (AWS.Messages.S200);
+            begin
+               Set_CORS (Resp);
+               return Resp;
+            end;
+         end if;
 
       --  2. Handle HEAD / (Health check for Ollama CLI)
       if Method_Val = HEAD and then URI_Str = "/" then
@@ -1044,6 +1045,20 @@ package body Adelaide_Server_Pkg is
       end if;
 
       return AWS.Response.Acknowledge (AWS.Messages.S404);
+   exception
+      when E : others =>
+         Ada.Text_IO.Put_Line (" [FATAL] Exception in Dispatch: " & 
+                               Ada.Exceptions.Exception_Name (E) & " - " &
+                               Ada.Exceptions.Exception_Message (E));
+         declare
+            Resp : AWS.Response.Data := 
+              AWS.Response.Build (Content_Type => "application/json",
+                                  Message_Body => "{""error"":""Internal Server Error""}",
+                                  Status_Code  => AWS.Messages.S500);
+         begin
+            return Resp;
+         end;
+   end;
    end Dispatch;
 
 end Adelaide_Server_Pkg;
