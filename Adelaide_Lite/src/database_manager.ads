@@ -44,6 +44,8 @@ package Database_Manager is
       Target   : String;
       Weight   : Float := 1.0);
 
+   procedure Export_GraphML (Filename : String);
+
    procedure Close;
 
 end Database_Manager;
