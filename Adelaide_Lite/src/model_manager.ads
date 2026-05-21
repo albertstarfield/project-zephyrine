@@ -7,6 +7,7 @@ package Model_Manager is
    pragma Spark_Mode (Off);
 
    type Model_Type is (Qwen_0_8B, Qwen_4B, Qwen_Embedding, MMProj);
+   type ELP_Level is (ELP0, ELP1);
 
    procedure Initialize;
 
@@ -35,13 +36,15 @@ package Model_Manager is
       Session_ID      : String := "";
       Requested_Ctx   : Positive := 4096;
       Stream          : Streaming_Queue.Queue_Access := null;
-      Orch_Think_Open : Boolean := False) return String;
+      Orch_Think_Open : Boolean := False;
+      Level           : ELP_Level := ELP1) return String;
 
    --  Perform multi-hop reasoning (0.8b thinking -> 4b final)
    function Hybrid_Generate
      (Prompt     : String;
       Session_ID : String := "";
-      Stream     : Streaming_Queue.Queue_Access := null) return String;
+      Stream     : Streaming_Queue.Queue_Access := null;
+      Level      : ELP_Level := ELP1) return String;
 
    function Get_Embedding (Prompt : String) return Math_Utils.Vector;
 
@@ -53,14 +56,16 @@ package Model_Manager is
 
    function Get_Request_Category
      (Msg        : String;
-      Session_ID : String := "") return String;
+      Session_ID : String := "";
+      Level      : ELP_Level := ELP1) return String;
 
    function Grade_Response_Quality
      (Response_Text : String;
       Prompt        : String;
       Search_Used   : Boolean;
       Has_Citations : Boolean;
-      Session_ID    : String := "") return Natural;
+      Session_ID    : String := "";
+      Level         : ELP_Level := ELP1) return Natural;
 
    function Generator_Callback (Prompt : String) return String;
 
