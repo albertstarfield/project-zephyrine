@@ -67,7 +67,8 @@ package body Knowledge_Manager is
             Resp := AWS.Client.Post (ORCHESTRATOR_URL, Write (Request_Body));
             if AWS.Response.Status_Code (Resp) = S200 then
                declare
-                  Val : constant JSON_Value := Read (AWS.Response.Message_Body (Resp)).Value;
+                  B_Str : constant String := AWS.Response.Message_Body (Resp);
+                  Val : constant JSON_Value := Read (B_Str).Value;
                   Content : constant String := Get (Val, "content");
                begin
                   if Content'Length > 0 then
@@ -103,17 +104,18 @@ package body Knowledge_Manager is
 
       procedure Scan_Dir (Dir : String) is
          use Ada.Directories;
-         Filter : constant Filter_Type := (Ordinary_File => True, others => False);
+         Filter : constant Filter_Type := 
+           (Ordinary_File => True, others => False);
          Ent    : Directory_Entry_Type;
          Search : Search_Type;
       begin
          Start_Search (Search, Dir, "*", Filter);
-         while Has_More_Entries (Search) loop
-            Get_Next_Entry (Search, Ent);
-            Process_File (Full_Name (Ent));
+         while Ada.Directories.Has_More_Entries (Search) loop
+            Ada.Directories.Get_Next_Entry (Search, Ent);
+            Process_File (Ada.Directories.Full_Name (Ent));
             exit when Model_Manager.Should_Abort_ELP0;
          end loop;
-         End_Search (Search);
+         Ada.Directories.End_Search (Search);
       end Scan_Dir;
 
    begin
@@ -135,9 +137,10 @@ package body Knowledge_Manager is
    task body Thought_Task is
       Res : Unbounded_String;
       Prompt : constant String := 
-        "Synthesize a new research hypothesis based on the existing literature. " &
-        "Focus on cross-domain connections. Output in JSON: " &
-        "{""subject"": ""..."", ""relation"": ""..."", ""target"": ""..."", ""thought"": ""...""}";
+        "Synthesize a new research hypothesis based on the existing " &
+        "literature. Focus on cross-domain connections. Output in JSON: " &
+        "{""subject"": ""..."", ""relation"": ""...""," &
+        " ""target"": ""..."", ""thought"": ""...""}";
    begin
       accept Start;
       loop
@@ -147,7 +150,8 @@ package body Knowledge_Manager is
                
                --  Use ELP0 for background thinking
                Model_Manager.Hybrid_Generate
-                 (Prompt, Res, "background-thought-loop", null, Model_Manager.ELP0);
+                 (Prompt, Res, "background-thought-loop", 
+                  null, Model_Manager.ELP0);
                
                declare
                   use GNATCOLL.JSON;
@@ -167,7 +171,8 @@ package body Knowledge_Manager is
 
                   if Start_Idx > 0 and then End_Idx > Start_Idx then
                      declare
-                        JSON_Raw : constant String := Raw (Start_Idx .. End_Idx);
+                        JSON_Raw : constant String := 
+                          Raw (Start_Idx .. End_Idx);
                         Val : constant Read_Result := Read (JSON_Raw);
                      begin
                         if Val.Success then
