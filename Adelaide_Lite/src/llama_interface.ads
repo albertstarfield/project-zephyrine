@@ -9,13 +9,14 @@ package Llama_Interface is
    type Llama_Context is new System.Address;
    type Llama_Vocab is new System.Address;
    type Llama_Sampler is new System.Address;
-   
+
    type Llama_Token is new int;
    type Llama_Pos is new int;
    type Llama_Seq_Id is new int;
 
    Null_Model   : constant Llama_Model := Llama_Model (System.Null_Address);
-   Null_Context : constant Llama_Context := Llama_Context (System.Null_Address);
+   Null_Context : constant Llama_Context :=
+     Llama_Context (System.Null_Address);
 
    type Llama_Token_Data is record
       Id    : Llama_Token;
@@ -64,13 +65,13 @@ package Llama_Interface is
       N_Rs_Seq        : unsigned;
       N_Threads       : int;
       N_Threads_Batch : int;
-      
+
       Ctx_Type           : int;
       Rope_Scaling_Type  : int;
       Pooling_Type       : int;
       Attention_Type     : int;
       Flash_Attn_Type    : int;
-      
+
       Rope_Freq_Base   : Float;
       Rope_Freq_Scale  : Float;
       Yarn_Ext_Factor  : Float;
@@ -79,23 +80,23 @@ package Llama_Interface is
       Yarn_Beta_Slow   : Float;
       Yarn_Orig_Ctx    : unsigned;
       Defrag_Thold     : Float;
-      
+
       Cb_Eval           : System.Address;
       Cb_Eval_User_Data : System.Address;
-      
+
       Type_K : int;
       Type_V : int;
-      
+
       Abort_Callback      : System.Address;
       Abort_Callback_Data : System.Address;
-      
+
       Embeddings  : Boolean;
       Offload_Kqv : Boolean;
       No_Perf     : Boolean;
       Op_Offload  : Boolean;
       Swa_Full    : Boolean;
       Kv_Unified  : Boolean;
-      
+
       Samplers    : System.Address;
       N_Samplers  : size_t;
    end record;
@@ -116,7 +117,8 @@ package Llama_Interface is
    pragma Import (C, Llama_Model_Default_Params, "llama_model_default_params");
 
    function Llama_Context_Default_Params return Llama_Context_Params;
-   pragma Import (C, Llama_Context_Default_Params, "llama_context_default_params");
+   pragma Import
+     (C, Llama_Context_Default_Params, "llama_context_default_params");
 
    procedure Llama_Backend_Init;
    pragma Import (C, Llama_Backend_Init, "llama_backend_init");
@@ -124,25 +126,30 @@ package Llama_Interface is
    procedure Llama_Backend_Free;
    pragma Import (C, Llama_Backend_Free, "llama_backend_free");
 
-   function Llama_Model_Load_From_File (Path_Model : chars_ptr; Params : Llama_Model_Params) return Llama_Model;
-   pragma Import (C, Llama_Model_Load_From_File, "llama_model_load_from_file");
+   function Llama_Model_Load_From_File
+     (Path_Model : chars_ptr; Params : Llama_Model_Params) return Llama_Model;
+   pragma Import
+     (C, Llama_Model_Load_From_File, "llama_model_load_from_file");
 
    procedure Llama_Model_Free (Model : Llama_Model);
    pragma Import (C, Llama_Model_Free, "llama_model_free");
 
-   function Llama_Init_From_Model (Model : Llama_Model; Params : Llama_Context_Params) return Llama_Context;
+   function Llama_Init_From_Model
+     (Model : Llama_Model; Params : Llama_Context_Params) return Llama_Context;
    pragma Import (C, Llama_Init_From_Model, "llama_init_from_model");
 
    procedure Llama_Free (Context : Llama_Context);
    pragma Import (C, Llama_Free, "llama_free");
 
-   function Llama_Batch_Init (N_Tokens : int; Embd : int; N_Seq_Max : int) return Llama_Batch;
+   function Llama_Batch_Init
+     (N_Tokens : int; Embd : int; N_Seq_Max : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Init, "llama_batch_init");
 
    procedure Llama_Batch_Free (Batch : Llama_Batch);
    pragma Import (C, Llama_Batch_Free, "llama_batch_free");
 
-   function Llama_Decode (Context : Llama_Context; Batch : Llama_Batch) return int;
+   function Llama_Decode
+     (Context : Llama_Context; Batch : Llama_Batch) return int;
    pragma Import (C, Llama_Decode, "llama_decode");
 
    function Llama_Get_Logits (Context : Llama_Context) return System.Address;
@@ -154,7 +161,8 @@ package Llama_Interface is
    function Llama_Get_Embeddings (Context : Llama_Context) return System.Address;
    pragma Import (C, Llama_Get_Embeddings, "llama_get_embeddings");
 
-   procedure Llama_Set_N_Threads (Context : Llama_Context; N_Threads : int; N_Threads_Batch : int);
+   procedure Llama_Set_N_Threads
+     (Context : Llama_Context; N_Threads : int; N_Threads_Batch : int);
    pragma Import (C, Llama_Set_N_Threads, "llama_set_n_threads");
 
    function Llama_N_Vocab (Model : Llama_Model) return int;
@@ -166,39 +174,37 @@ package Llama_Interface is
    function Llama_Vocab_N_Tokens (Vocab : Llama_Vocab) return int;
    pragma Import (C, Llama_Vocab_N_Tokens, "llama_vocab_n_tokens");
 
-   function Llama_Vocab_Is_Eog (Vocab : Llama_Vocab; Token : Llama_Token) return Boolean;
+   function Llama_Vocab_Is_Eog
+     (Vocab : Llama_Vocab; Token : Llama_Token) return Boolean;
    pragma Import (C, Llama_Vocab_Is_Eog, "llama_vocab_is_eog");
 
-   function Llama_Token_To_Piece (
-     Vocab   : Llama_Vocab;
-     Token   : Llama_Token;
-     Buf     : System.Address;
-     Length  : int;
-     Lstrip  : int;
-     Special : Boolean
-   ) return int;
+   function Llama_Token_To_Piece
+     (Vocab   : Llama_Vocab;
+      Token   : Llama_Token;
+      Buf     : System.Address;
+      Length  : int;
+      Lstrip  : int;
+      Special : Boolean) return int;
    pragma Import (C, Llama_Token_To_Piece, "llama_token_to_piece");
 
-   function Llama_Tokenize (
-     Vocab        : Llama_Vocab;
-     Text         : chars_ptr;
-     Text_Len     : int;
-     Tokens       : System.Address;
-     N_Tokens_Max : int;
-     Add_Special  : Boolean;
-     Parse_Special : Boolean
-   ) return int;
+   function Llama_Tokenize
+     (Vocab        : Llama_Vocab;
+      Text         : chars_ptr;
+      Text_Len     : int;
+      Tokens       : System.Address;
+      N_Tokens_Max : int;
+      Add_Special  : Boolean;
+      Parse_Special : Boolean) return int;
    pragma Import (C, Llama_Tokenize, "llama_tokenize");
 
-   function Llama_Detokenize (
-     Vocab          : Llama_Vocab;
-     Tokens         : System.Address;
-     N_Tokens       : int;
-     Text           : chars_ptr;
-     Text_Len_Max   : int;
-     Remove_Special : Boolean;
-     Unparse_Special : Boolean
-   ) return int;
+   function Llama_Detokenize
+     (Vocab          : Llama_Vocab;
+      Tokens         : System.Address;
+      N_Tokens       : int;
+      Text           : chars_ptr;
+      Text_Len_Max   : int;
+      Remove_Special : Boolean;
+      Unparse_Special : Boolean) return int;
    pragma Import (C, Llama_Detokenize, "llama_detokenize");
 
    type Llama_Sampler_Chain_Params is record
@@ -208,9 +214,11 @@ package Llama_Interface is
 
    --  Sampling API
    function Llama_Sampler_Chain_Default_Params return Llama_Sampler_Chain_Params;
-   pragma Import (C, Llama_Sampler_Chain_Default_Params, "llama_sampler_chain_default_params");
+   pragma Import
+     (C, Llama_Sampler_Chain_Default_Params, "llama_sampler_chain_default_params");
 
-   function Llama_Sampler_Chain_Init (Params : Llama_Sampler_Chain_Params) return Llama_Sampler;
+   function Llama_Sampler_Chain_Init
+     (Params : Llama_Sampler_Chain_Params) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Chain_Init, "llama_sampler_chain_init");
 
    procedure Llama_Sampler_Chain_Add (Chain : Llama_Sampler; Smpl : Llama_Sampler);
@@ -222,13 +230,23 @@ package Llama_Interface is
    function Llama_Sampler_Init_Top_K (K : int) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Init_Top_K, "llama_sampler_init_top_k");
 
-   function Llama_Sampler_Init_Top_P (P : Float; Min_Keep : size_t) return Llama_Sampler;
+   function Llama_Sampler_Init_Top_P
+     (P : Float; Min_Keep : size_t) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Init_Top_P, "llama_sampler_init_top_p");
 
    function Llama_Sampler_Init_Temp (T : Float) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Init_Temp, "llama_sampler_init_temp");
 
-   function Llama_Sampler_Sample (Smpl : Llama_Sampler; Context : Llama_Context; Idx : int) return Llama_Token;
+   function Llama_Sampler_Init_Penalties
+     (Penalty_Last_N : int;
+      Penalty_Repeat : Float;
+      Penalty_Freq   : Float;
+      Penalty_Present : Float) return Llama_Sampler;
+   pragma Import
+     (C, Llama_Sampler_Init_Penalties, "llama_sampler_init_penalties");
+
+   function Llama_Sampler_Sample
+     (Smpl : Llama_Sampler; Context : Llama_Context; Idx : int) return Llama_Token;
    pragma Import (C, Llama_Sampler_Sample, "llama_sampler_sample");
 
    procedure Llama_Sampler_Free (Smpl : Llama_Sampler);

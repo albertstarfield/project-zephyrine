@@ -1,43 +1,52 @@
 #!/bin/bash
 set -e
 
-# Adelaide-Lite Universal Runner (Final Fix Attempt)
+# Adelaide-Lite Universal Runner (Compiler-Safe Fix)
 BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$BASE_DIR"
 
-# 1. Environment Lockdown for macOS
+# 1. Conservative Environment Setup
+# We use 16.0 as the floor for Alire compatibility.
+export MACOSX_DEPLOYMENT_TARGET="16.0"
 export SDKROOT=$(xcrun --show-sdk-path)
-export C_INCLUDE_PATH="$SDKROOT/usr/include:/opt/homebrew/include"
-export CPLUS_INCLUDE_PATH="$SDKROOT/usr/include:/opt/homebrew/include"
-export LIBRARY_PATH="$SDKROOT/usr/lib:/usr/local/lib:/opt/homebrew/lib"
+
+# DO NOT set C_INCLUDE_PATH or CPLUS_INCLUDE_PATH as they break C++ stdlib lookups on macOS.
+# Instead, let CMake/Clang find the headers using the SDKROOT.
+unset C_INCLUDE_PATH
+unset CPLUS_INCLUDE_PATH
+export LIBRARY_PATH="/usr/lib:/usr/local/lib:/opt/homebrew/lib"
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 
-echo "[*] Initializing Adelaide-Lite Environment..."
+echo "[*] Initializing Adelaide-Lite (Target: macOS $MACOSX_DEPLOYMENT_TARGET)..."
 
-# 2. Build llama.cpp if needed
+# 2. Rebuild llama.cpp if needed
 if [ ! -f "llama.cpp/build/src/libllama.a" ]; then
-    echo "[!] llama.cpp libraries not found. Building..."
+    echo "[!] Building llama.cpp..."
     cd llama.cpp
-    mkdir -p build && cd build
-    cmake .. -DBUILD_SHARED_LIBS=OFF -DCMAKE_OSX_SYSROOT="$SDKROOT"
+    rm -rf build && mkdir -p build && cd build
+    cmake .. -DBUILD_SHARED_LIBS=OFF \
+             -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+             -DCMAKE_OSX_SYSROOT="$SDKROOT"
     cmake --build . --config Release --target llama llama-cli llama-server
     cd ../..
 fi
 
-# 3. Fix Library Indices (Force permissions)
-echo "[*] Ensuring library indices are correct..."
+# 3. Clean and Fix Dependencies
+echo "[*] Normalizing library indices..."
 find "$HOME/.local/share/alire/builds" -name "*.a" -exec chmod +w {} \; 2>/dev/null || true
 find "$HOME/.local/share/alire/builds" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
+find "llama.cpp/build" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
 
 # 4. Build Ada Server
 echo "[*] Building Adelaide-Lite Server..."
 cd Adelaide_Lite
+# Only clean if target was recently changed (handled by manual intervention if needed)
 alr -n build
 
 # 5. Run Server
 if [ -f "./bin/adelaide_server" ]; then
     echo "[*] Starting Adelaide-Lite Server on port 11420..."
-    nice -n -20 ./bin/adelaide_server
+    nice -n -20 ./bin/adelaide_server || ./bin/adelaide_server
 else
     echo "[!] Build failed."
     exit 1

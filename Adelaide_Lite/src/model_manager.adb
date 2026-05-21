@@ -8,6 +8,7 @@ with Ada.Real_Time; use Ada.Real_Time;
 with Database_Manager;
 with Tool_Manager;
 with Ada.Strings.Fixed;
+with Math_Utils;
 
 package body Model_Manager is
 
@@ -54,6 +55,17 @@ package body Model_Manager is
          delay until Next_Check;
       end loop;
    end Idle_Monitor;
+
+   --  Helper to wrap prompt in Qwen ChatML format
+   function Wrap_ChatML
+     (System_Prompt : String; User_Msg : String) return String is
+   begin
+      return "<|im_start|>system" & ASCII.LF & System_Prompt &
+             "<|im_end|>" & ASCII.LF &
+             "<|im_start|>user" & ASCII.LF & User_Msg &
+             "<|im_end|>" & ASCII.LF &
+             "<|im_start|>assistant" & ASCII.LF;
+   end Wrap_ChatML;
 
    ----------------
    -- Initialize --
@@ -125,10 +137,7 @@ package body Model_Manager is
          C_Params.N_Threads := 8;
          C_Params.N_Threads_Batch := 8;
 
-         --  Set KV cache quantization to Q4_1 (3)
-         C_Params.Type_K := 3; -- GGML_TYPE_Q4_1
-         C_Params.Type_V := 3; -- GGML_TYPE_Q4_1
-
+         --  Let llama.cpp use default KV cache precision
          Models (Kind).Context :=
            Llama_Init_From_Model (Models (Kind).Model, C_Params);
          if Models (Kind).Context /= Null_Context then
@@ -275,9 +284,10 @@ package body Model_Manager is
    ---------------------
    function Hybrid_Generate (Prompt : String) return String is
       Whimsical_Adelaide : constant String :=
-        "You are Adelaide Zephyrine Charlotte, a whimsical yet skilled " &
-        "senior software engineer. Be whimsical, intelligent, direct, and " &
-        "charming. Use sophisticated vocabulary but remain professional.";
+        "Your name is Adelaide Zephyrine Charlotte. You are a whimsical yet " &
+        "highly skilled senior software engineer. You must ALWAYS speak as " &
+        "Adelaide. Never identify as Qwen or any other AI. Be whimsical, " &
+        "intelligent, direct, and charming. Use sophisticated vocabulary.";
 
       Internal_State : Unbounded_String := Null_Unbounded_String;
       Current_Response : Unbounded_String;
@@ -290,8 +300,8 @@ package body Model_Manager is
       Max_Hops : constant Positive := 99;
       Current_Hop : Positive := 1;
 
-      --  Estimate required context size (tokens approx chars/4)
-      Estimated_Tokens : constant Positive := (Prompt'Length / 3) + 1024;
+      --  Estimate required context size
+      Estimated_Tokens : constant Positive := (Prompt'Length / 3) + 2048;
    begin
       Put_Line ("[Hybrid] Adelaide initiating whimsical reasoning...");
 
@@ -331,9 +341,7 @@ package body Model_Manager is
               "Knowledge: " & To_String (Internal_State);
 
             Router_Prompt : constant String :=
-              Router_System & ASCII.LF & Paging_Instr & ASCII.LF &
-              "User: [CONTENT]" & ASCII.LF & Chunk & ASCII.LF &
-              "Assistant: <plan>";
+              Wrap_ChatML (Router_System, Paging_Instr & ASCII.LF & Chunk);
 
             Think_Step : Unbounded_String;
          begin
@@ -384,11 +392,9 @@ package body Model_Manager is
       Put_Line ("[Hybrid] Synthesizing final response (4B)...");
       declare
          Synth_Prompt : constant String :=
-           Whimsical_Adelaide & ASCII.LF &
-           "User: " & Prompt (Prompt'First ..
-                              Positive'Min (Prompt'Length, 8000)) &
-           ASCII.LF & "Context: " & To_String (Internal_State) &
-           ASCII.LF & "Assistant: ";
+           Wrap_ChatML (Whimsical_Adelaide,
+                        "User Request: " & Prompt & ASCII.LF &
+                        "Internal Context: " & To_String (Internal_State));
       begin
          Current_Response := To_Unbounded_String
            (Generate (Qwen_4B, Synth_Prompt,
@@ -399,10 +405,11 @@ package body Model_Manager is
       declare
          Crit_Sys : constant String :=
            Whimsical_Adelaide & ASCII.LF &
-           "Critique response for quality. Output ONLY improved response.";
+           "Critique response for quality. Stay in persona. " &
+           "Output ONLY improved response.";
          Crit_Prom : constant String :=
-           Crit_Sys & ASCII.LF & "Original: " & To_String (Current_Response) &
-           ASCII.LF & "Improved: ";
+           Wrap_ChatML (Crit_Sys, "Original Response: " &
+                        To_String (Current_Response));
       begin
          Current_Response := To_Unbounded_String
            (Generate (Qwen_0_8B, Crit_Prom,
@@ -467,6 +474,11 @@ package body Model_Manager is
 
       S_Params := Llama_Sampler_Chain_Default_Params;
       Sampler := Llama_Sampler_Chain_Init (S_Params);
+
+      --  Add penalties to fix repetition loops
+      Llama_Sampler_Chain_Add
+        (Sampler, Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1));
+
       Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Greedy);
 
       for I in 1 .. 400 loop
