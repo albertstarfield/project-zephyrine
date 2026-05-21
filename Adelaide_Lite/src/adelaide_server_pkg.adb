@@ -86,6 +86,7 @@ package body Adelaide_Server_Pkg is
       entry Start
         (Stream_Ptr     : Streaming_Queue.Queue_Access;
          Prompt_Val     : String;
+         Images_Val     : GNATCOLL.JSON.JSON_Array;
          Session_ID_Val : String;
          URI_Str_Val    : String;
          Start_Time_Val : Ada.Calendar.Time;
@@ -97,18 +98,21 @@ package body Adelaide_Server_Pkg is
    task body Generator_Task is
       Stream     : Streaming_Queue.Queue_Access;
       Prompt     : Unbounded_String;
+      Images     : GNATCOLL.JSON.JSON_Array;
       Session_ID : Unbounded_String;
       Level      : Model_Manager.ELP_Level;
    begin
       accept Start
         (Stream_Ptr     : Streaming_Queue.Queue_Access;
          Prompt_Val     : String;
+         Images_Val     : GNATCOLL.JSON.JSON_Array;
          Session_ID_Val : String;
          URI_Str_Val    : String;
          Start_Time_Val : Ada.Calendar.Time;
          Level_Val      : Model_Manager.ELP_Level := Model_Manager.ELP1) do
          Stream     := Stream_Ptr;
          Prompt     := To_Unbounded_String (Prompt_Val);
+         Images     := Images_Val;
          Session_ID := To_Unbounded_String (Session_ID_Val);
          Level      := Level_Val;
       end Start;
@@ -117,7 +121,7 @@ package body Adelaide_Server_Pkg is
          Res : Unbounded_String;
       begin
          Model_Manager.Hybrid_Generate
-             (To_String (Prompt), Res, To_String (Session_ID), Stream, Level);
+             (To_String (Prompt), Res, Images, To_String (Session_ID), Stream, Level);
          Stream_Registry.Unregister (To_String (Session_ID));
       exception
          when E : others =>
@@ -144,7 +148,6 @@ package body Adelaide_Server_Pkg is
                Len : constant Natural := Length (Arr);
             begin
                if Len > 0 then
-                  --  Check for multimodal content
                   declare
                      Last_Msg : constant JSON_Value := Get (Arr, Len);
                   begin
@@ -155,21 +158,20 @@ package body Adelaide_Server_Pkg is
                            if Cont.Kind = JSON_String_Type then
                               return Get (Cont);
                            elsif Cont.Kind = JSON_Array_Type then
-                              --  OpenAI Multimodal format
                               declare
                                  C_Arr : constant JSON_Array := Get (Cont);
-                                 Prompt_Acc : Unbounded_String;
+                                 P_Acc : Unbounded_String;
                               begin
                                  for I in 1 .. Length (C_Arr) loop
                                     declare
                                        Item : constant JSON_Value := Get (C_Arr, I);
                                     begin
                                        if Get (Item, "type") = "text" then
-                                          Append (Prompt_Acc, String'(Get (Get (Item, "text"))));
+                                          Append (P_Acc, String'(Get (Get (Item, "text"))));
                                        end if;
                                     end;
                                  end loop;
-                                 return To_String (Prompt_Acc);
+                                 return To_String (P_Acc);
                               end;
                            end if;
                         end;
@@ -184,8 +186,7 @@ package body Adelaide_Server_Pkg is
       when others => return "";
    end Extract_Prompt;
 
-   --  Extract Images (Base64) for Multimodal
-   function Extract_Images (Body_Str : String) return JSON_Array is
+   function Extract_Images (Body_Str : String) return GNATCOLL.JSON.JSON_Array is
       use GNATCOLL.JSON;
       Res : constant Read_Result := Read (Body_Str);
       Empty : JSON_Array := Empty_Array;
@@ -197,7 +198,7 @@ package body Adelaide_Server_Pkg is
          if Has_Field (Val, "images") then
             return Get (Get (Val, "images"));
          elsif Has_Field (Val, "messages") then
-             declare
+            declare
                Arr : constant JSON_Array := Get (Get (Val, "messages"));
                Len : constant Natural := Length (Arr);
             begin
@@ -205,9 +206,7 @@ package body Adelaide_Server_Pkg is
                   declare
                      Last_Msg : constant JSON_Value := Get (Arr, Len);
                   begin
-                     if Has_Field (Last_Msg, "content") and then 
-                        Get (Last_Msg, "content").Kind = JSON_Array_Type 
-                     then
+                     if Has_Field (Last_Msg, "content") and then Get (Last_Msg, "content").Kind = JSON_Array_Type then
                         declare
                            C_Arr : constant JSON_Array := Get (Get (Last_Msg, "content"));
                            Res_Arr : JSON_Array := Empty_Array;
@@ -247,7 +246,6 @@ package body Adelaide_Server_Pkg is
       when others => return False;
    end Extract_Stream;
 
-   --  Format response based on requested API type
    function Format_Universal_Response
      (URI_Str : String;
       Text    : String;
@@ -259,10 +257,6 @@ package body Adelaide_Server_Pkg is
    begin
       Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
       Set_Field (Res_Obj, "done", True);
-      if Duration_Ns > 0 then
-         Set_Field (Res_Obj, "total_duration", Create (Duration_Ns));
-      end if;
-
       if URI_Str = "/api/chat" or else URI_Str = "/v1/chat/completions" then
          declare
             Msg_Obj : constant JSON_Value := Create_Object;
@@ -274,12 +268,9 @@ package body Adelaide_Server_Pkg is
                   Choice_Arr : JSON_Array := Empty_Array;
                   Choice_Obj : constant JSON_Value := Create_Object;
                begin
-                  Set_Field (Choice_Obj, "index", Integer'(0));
                   Set_Field (Choice_Obj, "message", Msg_Obj);
-                  Set_Field (Choice_Obj, "finish_reason", String'("stop"));
                   Append (Choice_Arr, Choice_Obj);
                   Set_Field (Res_Obj, "choices", Choice_Arr);
-                  Set_Field (Res_Obj, "object", String'("chat.completion"));
                end;
             else
                Set_Field (Res_Obj, "message", Msg_Obj);
@@ -291,10 +282,6 @@ package body Adelaide_Server_Pkg is
       return Write (Res_Obj);
    end Format_Universal_Response;
 
-   --------------
-   -- Dispatch --
-   --------------
-
    function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
       use AWS.Status;
       URI_Str : constant String := URI (Request);
@@ -304,7 +291,6 @@ package body Adelaide_Server_Pkg is
       procedure Set_CORS (Resp : in out AWS.Response.Data) is
       begin
          AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
-         AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
          AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Headers", "Content-Type, Authorization, Session-ID");
       end Set_CORS;
    begin
@@ -321,11 +307,6 @@ package body Adelaide_Server_Pkg is
             end;
          end if;
 
-         --  HEAD / (Ollama CLI check)
-         if Method_Val = HEAD and then URI_Str = "/" then
-            return AWS.Response.Acknowledge (AWS.Messages.S200);
-         end if;
-
          if Method_Val = GET then
             if URI_Str = "/v1/models" or else URI_Str = "/api/tags" then
                declare
@@ -337,43 +318,23 @@ package body Adelaide_Server_Pkg is
                begin
                   Set_Field (M, "name", String'("adelaide-hybrid"));
                   Set_Field (M, "id", String'("adelaide-hybrid"));
-                  Set_Field (M, "model", String'("adelaide-hybrid"));
                   Set_Field (D, "format", String'("gguf"));
                   Set_Field (D, "family", String'("qwen"));
-                  --  METAMODEL ADVERTISEMENT: Infinite Context Architecture
+                  --  METAMODEL ADVERTISEMENT
                   Set_Field (D, "context_length", Create (Long_Long_Integer (9_223_372_036_854_775_807)));
                   Set_Field (D, "embedding_length", Create (Long_Long_Integer (4_294_967_295)));
                   Set_Field (M, "details", D);
                   Append (Models_Arr, M);
-                  
-                  if URI_Str = "/v1/models" then
-                     Set_Field (Res_Obj, "object", String'("list"));
-                     Set_Field (Res_Obj, "data", Models_Arr);
-                  else
-                     Set_Field (Res_Obj, "models", Models_Arr);
-                  end if;
-                  
+                  if URI_Str = "/v1/models" then Set_Field (Res_Obj, "data", Models_Arr); else Set_Field (Res_Obj, "models", Models_Arr); end if;
                   declare
-                     Resp : AWS.Response.Data := 
-                       AWS.Response.Build (Content_Type => "application/json",
-                                           Message_Body => Write (Res_Obj));
+                     Resp : AWS.Response.Data := AWS.Response.Build (Content_Type => "application/json", Message_Body => Write (Res_Obj));
                   begin
                      Set_CORS (Resp);
                      return Resp;
                   end;
                end;
             elsif URI_Str = "/api/version" then
-               return AWS.Response.Build (Content_Type => "application/json",
-                                          Message_Body => "{""version"":""0.1.48""}");
-            elsif URI_Str = "/api/ps" then
-               declare
-                  use GNATCOLL.JSON;
-                  Res_Obj : constant JSON_Value := Create_Object;
-                  Arr : JSON_Array := Empty_Array;
-               begin
-                  Set_Field (Res_Obj, "models", Arr);
-                  return AWS.Response.Build (Content_Type => "application/json", Message_Body => Write (Res_Obj));
-               end;
+               return AWS.Response.Build (Content_Type => "application/json", Message_Body => "{""version"":""0.1.48""}");
             end if;
          end if;
 
@@ -382,12 +343,12 @@ package body Adelaide_Server_Pkg is
                Body_Str : constant String := To_String (Binary_Data (Request));
                Prompt_Raw : constant String := Extract_Prompt (Body_Str);
                Prompt : Unbounded_String := To_Unbounded_String (Prompt_Raw);
+               Images : constant GNATCOLL.JSON.JSON_Array := Extract_Images (Body_Str);
                Session_H : constant String := AWS.Headers.Get (AWS.Status.Header (Request), "Session-ID");
                Session_ID : constant String := (if Session_H /= "" then Session_H else AWS.Status.Peername (Request));
             begin
                if URI_Str = "/api/chat" or else URI_Str = "/v1/chat/completions" or else URI_Str = "/api/generate" then
                   if Prompt_Raw /= "" then
-                     --  RAG: Search local literature
                      declare
                         use Database_Manager;
                         V : Math_Utils.Vector (1 .. 16384);
@@ -410,41 +371,25 @@ package body Adelaide_Server_Pkg is
                         end if;
                      end;
 
-                     declare
-                        Is_Stream : constant Boolean := Extract_Stream (Body_Str);
-                     begin
-                        if Is_Stream then
-                           declare
-                              Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
-                              T : constant Generator_Task_Access := new Generator_Task;
-                              RS : constant Streaming_Queue.Response_Stream_Access := 
-                                new Streaming_Queue.Response_Stream'(AWS.Resources.Streams.Stream_Type with Q => Q);
-                              Resp : AWS.Response.Data;
-                           begin
-                              Stream_Registry.Register (Session_ID, Q);
-                              T.Start (Q, To_String (Prompt), Session_ID, URI_Str, Start_Time, Model_Manager.ELP1);
-                              Resp := AWS.Response.Stream (Content_Type => "text/event-stream", Handle => RS);
-                              Set_CORS (Resp);
-                              return Resp;
-                           end;
-                        else
-                           declare
-                              Gen_Res : Unbounded_String;
-                           begin
-                              Model_Manager.Hybrid_Generate (To_String (Prompt), Gen_Res, Session_ID, null, Model_Manager.ELP1);
-                              declare
-                                 End_Time : constant Ada.Calendar.Time := Ada.Calendar.Clock;
-                                 Elapsed_Ns : constant Long_Integer := Long_Integer ((End_Time - Start_Time) * 1_000_000_000.0);
-                                 Resp : AWS.Response.Data := AWS.Response.Build
-                                   (Content_Type => "application/json",
-                                    Message_Body => Format_Universal_Response (URI_Str, To_String (Gen_Res), 0.0, Elapsed_Ns));
-                              begin
-                                 Set_CORS (Resp);
-                                 return Resp;
-                              end;
-                           end;
-                        end if;
-                     end;
+                     if Extract_Stream (Body_Str) then
+                        declare
+                           Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
+                           T : constant Generator_Task_Access := new Generator_Task;
+                           RS : constant Streaming_Queue.Response_Stream_Access := 
+                             new Streaming_Queue.Response_Stream'(AWS.Resources.Streams.Stream_Type with Q => Q);
+                        begin
+                           Stream_Registry.Register (Session_ID, Q);
+                           T.Start (Q, To_String (Prompt), Images, Session_ID, URI_Str, Start_Time, Model_Manager.ELP1);
+                           return AWS.Response.Stream (Content_Type => "text/event-stream", Handle => RS);
+                        end;
+                     else
+                        declare
+                           Gen_Res : Unbounded_String;
+                        begin
+                           Model_Manager.Hybrid_Generate (To_String (Prompt), Gen_Res, Images, Session_ID, null, Model_Manager.ELP1);
+                           return AWS.Response.Build (Content_Type => "application/json", Message_Body => Format_Universal_Response (URI_Str, To_String (Gen_Res)));
+                        end;
+                     end if;
                   end if;
                elsif URI_Str = "/api/embeddings" or else URI_Str = "/v1/embeddings" then
                   declare
@@ -455,38 +400,18 @@ package body Adelaide_Server_Pkg is
                      Arr : JSON_Array := Empty_Array;
                   begin
                      Model_Manager.Get_Embedding (Prompt_Raw, V, V_Len);
-                     for I in 1 .. V_Len loop
-                        Append (Arr, Create (V (I)));
-                     end loop;
+                     for I in 1 .. V_Len loop Append (Arr, Create (V (I))); end loop;
                      Set_Field (Res_Obj, "embedding", Arr);
-                     declare
-                        Resp : AWS.Response.Data := AWS.Response.Build (Content_Type => "application/json", Message_Body => Write (Res_Obj));
-                     begin
-                        Set_CORS (Resp);
-                        return Resp;
-                     end;
-                  end;
-               elsif URI_Str = "/api/adelaide/log" then
-                  declare
-                     use GNATCOLL.JSON;
-                     Val : constant JSON_Value := Read (Body_Str).Value;
-                     SID : constant String := (if Has_Field (Val, "session_id") then Get (Val, "session_id") else "");
-                     Log_Msg : constant String := (if Has_Field (Val, "log") then Get (Val, "log") else "");
-                  begin
-                     Stream_Registry.Push_Log (SID, Log_Msg);
-                     return AWS.Response.Build (Content_Type => "application/json", Message_Body => "{""status"":""ok""}");
+                     return AWS.Response.Build (Content_Type => "application/json", Message_Body => Write (Res_Obj));
                   end;
                end if;
             end;
          end if;
-
          return AWS.Response.Acknowledge (AWS.Messages.S404);
       exception
          when E : others =>
             Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "[FATAL] Dispatch Exception: " & Ada.Exceptions.Exception_Message (E));
-            return AWS.Response.Build (Content_Type => "application/json",
-                                       Message_Body => "{""error"":""Internal Error""}",
-                                       Status_Code => AWS.Messages.S500);
+            return AWS.Response.Build (Content_Type => "application/json", Message_Body => "{""error"":""Internal Error""}", Status_Code => AWS.Messages.S500);
       end;
    end Dispatch;
 
