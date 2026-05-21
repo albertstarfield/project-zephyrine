@@ -49,7 +49,11 @@ package body Adelaide_Server_Pkg is
          end;
       elsif URI = "/api/chat" or else URI = "/v1/chat/completions" then
          declare
-            Payload : constant String := AWS.Status.Payload (Request);
+            --  Try Binary_Data if Payload is empty
+            Payload : constant String := 
+              (if AWS.Status.Payload (Request) /= "" 
+               then AWS.Status.Payload (Request)
+               else To_String (AWS.Status.Binary_Data (Request)));
             Val     : JSON_Value;
             Prompt  : Unbounded_String := To_Unbounded_String ("No payload");
             Images  : JSON_Array := Empty_Array;
@@ -59,7 +63,7 @@ package body Adelaide_Server_Pkg is
             Choice  : constant JSON_Value := Create_Object;
             Msg_Out : constant JSON_Value := Create_Object;
          begin
-            Put_Line ("[Server] Payload: " & Payload);
+            Put_Line ("[Server] Resolved Payload length: " & Payload'Length'Image);
             
             if Payload /= "" then
                Val := Read (Payload);
