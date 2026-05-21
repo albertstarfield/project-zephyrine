@@ -609,6 +609,9 @@ package body Adelaide_Server_Pkg is
                   Set_Field (M, "digest", String'("adelaide-lite-v1"));
                   Set_Field (D, "format", String'("gguf"));
                   Set_Field (D, "family", String'("qwen"));
+                  --  Massive Context Capability
+                  Set_Field (D, "context_length", Create (Long_Long_Integer'(9_223_372_036_854_775_807)));
+                  Set_Field (D, "embedding_length", Create (Long_Long_Integer'(4_294_967_295)));
                   Set_Field (M, "details", D);
                   return M;
                end Create_Model_Info;
@@ -856,6 +859,26 @@ package body Adelaide_Server_Pkg is
                               Resp : AWS.Response.Data;
 
                             begin
+                               --  RAG: Search local literature
+                               declare
+                                  use Database_Manager;
+                                  V : Math_Utils.Vector (1 .. 1024);
+                                  Results : Chunk_Array (1 .. 3);
+                                  N_Res   : Natural;
+                                  RAG_Context : Unbounded_String;
+                               begin
+                                  Model_Manager.Get_Embedding (Prompt, V);
+                                  Search_Literature (V, Results, N_Res);
+                                  if N_Res > 0 then
+                                     Append (RAG_Context, "[LOCAL LITERATURE CONTEXT]" & ASCII.LF);
+                                     for J in 1 .. N_Res loop
+                                        Append (RAG_Context, "Source: " & To_String (Results (J).File_Path) & ASCII.LF);
+                                        Append (RAG_Context, To_String (Results (J).Content) & ASCII.LF & "---" & ASCII.LF);
+                                     end loop;
+                                     Prompt := To_String (RAG_Context) & ASCII.LF & Prompt;
+                                  end if;
+                               end;
+
                                Stream_Registry.Register (Session_ID, Q);
                                T.Start (Q, Prompt, Session_ID, URI_Str,
                                         Start_Time, Model_Manager.ELP1);
@@ -866,6 +889,26 @@ package body Adelaide_Server_Pkg is
                                return Resp;
                             end;
                         else
+                           --  RAG: Search local literature
+                           declare
+                              use Database_Manager;
+                              V : Math_Utils.Vector (1 .. 1024);
+                              Results : Chunk_Array (1 .. 3);
+                              N_Res   : Natural;
+                              RAG_Context : Unbounded_String;
+                           begin
+                              Model_Manager.Get_Embedding (Prompt, V);
+                              Search_Literature (V, Results, N_Res);
+                              if N_Res > 0 then
+                                 Append (RAG_Context, "[LOCAL LITERATURE CONTEXT]" & ASCII.LF);
+                                 for J in 1 .. N_Res loop
+                                    Append (RAG_Context, "Source: " & To_String (Results (J).File_Path) & ASCII.LF);
+                                    Append (RAG_Context, To_String (Results (J).Content) & ASCII.LF & "---" & ASCII.LF);
+                                 end loop;
+                                 Prompt := To_String (RAG_Context) & ASCII.LF & Prompt;
+                              end if;
+                           end;
+
                            declare
                                Gen_Text : Unbounded_String;
                            begin
