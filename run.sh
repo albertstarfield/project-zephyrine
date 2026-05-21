@@ -1,47 +1,119 @@
 #!/bin/bash
 set -e
 
-# Adelaide-Lite Universal Runner (Compiler-Safe Fix)
+# Adelaide-Lite Universal Runner & Test Suite Integration
 BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$BASE_DIR"
 
+export ALIRE_SETTINGS_DIR="$BASE_DIR/alirevenv/settings"
+export ALIRE_CACHE_DIR="$BASE_DIR/alirevenv/cache"
+
 # 1. Conservative Environment Setup
-# We use 16.0 as the floor for Alire compatibility.
 export MACOSX_DEPLOYMENT_TARGET="16.0"
-export SDKROOT=$(xcrun --show-sdk-path)
-
-# DO NOT set C_INCLUDE_PATH or CPLUS_INCLUDE_PATH as they break C++ stdlib lookups on macOS.
-# Instead, let CMake/Clang find the headers using the SDKROOT.
-unset C_INCLUDE_PATH
-unset CPLUS_INCLUDE_PATH
-export LIBRARY_PATH="/usr/lib:/usr/local/lib:/opt/homebrew/lib"
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
+OS_TYPE=$(uname -s)
 
-echo "[*] Initializing Adelaide-Lite (Target: macOS $MACOSX_DEPLOYMENT_TARGET)..."
+if [ "$OS_TYPE" = "Darwin" ]; then
+    echo "[*] macOS detected. Configuring SDK paths and PATH order..."
+    if [ -z "$SDKROOT" ]; then
+        if command -v xcrun &>/dev/null; then
+            export SDKROOT=$(xcrun --show-sdk-path)
+        else
+            export SDKROOT="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+        fi
+    fi
+    export CFLAGS="-isysroot $SDKROOT"
+    export C_INCLUDE_PATH="$SDKROOT/usr/include"
+    export LIBRARY_PATH="$SDKROOT/usr/lib:/usr/local/lib:/opt/homebrew/lib"
+    echo "[*] SDKROOT is set to: $SDKROOT"
+else
+    echo "[*] Linux/non-macOS detected. Standard environment will be used."
+fi
 
-# 2. Rebuild llama.cpp if needed
+echo "=========================================================="
+echo "      Adelaide_Lite Formal Test & Verification Suite      "
+echo "=========================================================="
+
+# 2. Auto-configure toolchain if not already done
+if [ ! -d "$ALIRE_SETTINGS_DIR" ] || [ ! -d "$ALIRE_CACHE_DIR/toolchains" ]; then
+    echo "[*] Initializing isolated Alire toolchain in alirevenv..."
+    mkdir -p "$ALIRE_SETTINGS_DIR" "$ALIRE_CACHE_DIR"
+    alr -n toolchain --select
+fi
+
+# 3. Ensure Alire dependencies (AUnit, strategy)
+echo "[*] Ensuring Alire dependencies (AUnit, strategy)..."
+cd Adelaide_Lite
+alr get aunit --build || true
+alr get strategy --build || true
+cd ..
+
+# 4. Rebuild llama.cpp if needed
 if [ ! -f "llama.cpp/build/src/libllama.a" ]; then
     echo "[!] Building llama.cpp..."
     cd llama.cpp
     rm -rf build && mkdir -p build && cd build
-    cmake .. -DBUILD_SHARED_LIBS=OFF \
-             -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
-             -DCMAKE_OSX_SYSROOT="$SDKROOT"
-    cmake --build . --config Release --target llama llama-cli llama-server
+    (
+        unset C_INCLUDE_PATH
+        unset CPLUS_INCLUDE_PATH
+        cmake .. -DBUILD_SHARED_LIBS=OFF \
+                 -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+                 -DCMAKE_OSX_SYSROOT="$SDKROOT"
+        cmake --build . --config Release --target llama llama-cli llama-server
+    )
     cd ../..
 fi
 
-# 3. Run Test Suite
-echo "[*] Running Adelaide_Lite Test Suite..."
-./TestSuite.sh
+# 5. Compile C Helper
+echo "[*] Compiling Mach Real-time Scheduling Helper..."
+mkdir -p Adelaide_Lite/obj/development
+if [ "$OS_TYPE" = "Darwin" ]; then
+    clang -c -isysroot "$SDKROOT" Adelaide_Lite/src/scheduling.c -o Adelaide_Lite/obj/development/scheduling.o
+else
+    gcc -c Adelaide_Lite/src/scheduling.c -o Adelaide_Lite/obj/development/scheduling.o
+fi
 
-# 4. Clean and Fix Dependencies
+# 6. Build Ada Binary
+echo "[*] Building Adelaide_Lite Ada binary..."
+cd Adelaide_Lite
+alr build
+cd ..
+
+# 7. Run Math and Parity Unit Tests
+echo "[*] Running Adelaide_Lite Unit Tests..."
+if [ -f "Adelaide_Lite/pyvenv/bin/python" ]; then
+    echo "[*] Ensuring test dependencies (numpy, requests) are installed..."
+    Adelaide_Lite/pyvenv/bin/pip install -q requests numpy
+    Adelaide_Lite/pyvenv/bin/python Adelaide_Lite/python/test_adelaide.py
+else
+    python3 Adelaide_Lite/python/test_adelaide.py
+fi
+
+# 8. Run Alire Tests and Coverage
+echo "[*] Running alr test and gnatcov..."
+cd Adelaide_Lite
+alr test
+if command -v gnatcov &>/dev/null; then
+    echo "[*] Generating coverage report with gnatcov..."
+    gnatcov run --annotate=xcov ./bin/adelaide_lite
+else
+    echo "[!] gnatcov not found in PATH, skipping coverage."
+fi
+cd ..
+
+# 9. Run SPARK Formal Proofs (GNATprove)
+echo "[*] Running SPARK Formal Verification (Level 2) on Core Units..."
+cd Adelaide_Lite
+alr exec gnatprove -- -P adelaide_lite.gpr --level=2 -u src/integrity_utils.ads src/math_utils.ads
+cd ..
+
+# 10. Normalizing library indices
 echo "[*] Normalizing library indices..."
 find "$HOME/.local/share/alire/builds" -name "*.a" -exec chmod +w {} \; 2>/dev/null || true
 find "$HOME/.local/share/alire/builds" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
 find "llama.cpp/build" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
 
-# 5. Run Server
+# 11. Run Server
 cd Adelaide_Lite
 if [ -f "./bin/adelaide_server" ]; then
     echo "[*] Starting Adelaide-Lite Server on port 11420..."

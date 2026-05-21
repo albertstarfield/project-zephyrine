@@ -1,6 +1,4 @@
 with Ada.Text_IO;
-with Ada.Real_Time; use Ada.Real_Time;
-with Model_Manager; use Model_Manager;
 
 package body Watchdog_Manager is
    pragma Spark_Mode (On);
@@ -38,7 +36,9 @@ package body Watchdog_Manager is
          Out_Model   : out Model_Type)
       is
       begin
-         if Active and then not Aborted and then (Now - Start_Time) > Limit then
+         if Active and then not Aborted and then
+           (Now - Start_Time) > Limit
+         then
             Aborted := True;
             Out_Aborted := True;
             Out_Model := Current_Model;
@@ -50,9 +50,10 @@ package body Watchdog_Manager is
 
    end Inference_Monitor;
 
-   pragma Spark_Mode (Off); -- Task body contains calls to Clock and print with side-effects
-
    task body Watchdog_Task is
+      pragma SPARK_Mode (Off);
+      --  Task body contains calls to Clock and print with side-effects.
+
       Interval   : constant Time_Span := Seconds (1);
       Limit      : constant Time_Span := Seconds (45);
       Now        : Time;
@@ -71,11 +72,12 @@ package body Watchdog_Manager is
          if Aborted then
             Ada.Text_IO.Put_Line
               (ASCII.ESC & "[91m" &
-               "[BUGCHECK] Llama inference thread became unresponsive (timeout > 45s)." &
-               " Force-reloading model " & Model_Type'Image (Model) & "..." &
+               "[BUGCHECK] Llama inference thread became unresponsive " &
+               "(timeout > 45s). Force-reloading model " &
+               Model_Type'Image (Model) & "..." &
                ASCII.ESC & "[0m");
-            
-            -- Call model manager to unload and reload the context/model
+
+            --  Call model manager to unload and reload the context/model.
             Model_Manager.Force_Unload_And_Reload (Model);
          end if;
       end loop;
