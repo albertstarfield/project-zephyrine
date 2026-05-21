@@ -31,11 +31,32 @@ package body Adelaide_Server_Pkg is
       Put_Line ("[Log] [" & ID & "] " & Log);
    end Push_Log;
 
+   --  CORS and Header Helper
+   function Build_Response
+     (Content : String;
+      Status  : AWS.Messages.Status_Code := AWS.Messages.S200;
+      Type_Str : String := "application/json") return AWS.Response.Data
+   is
+      Resp : AWS.Response.Data := AWS.Response.Build
+        (Content_Type => Type_Str,
+         Message_Body => Content,
+         Status_Code  => Status);
+   begin
+      AWS.Response.Header (Resp, "Access-Control-Allow-Origin", "*");
+      AWS.Response.Header (Resp, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      AWS.Response.Header (Resp, "Access-Control-Allow-Headers", "Content-Type, Authorization");
+      return Resp;
+   end Build_Response;
+
    function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
       URI    : constant String := AWS.Status.URI (Request);
       Method : constant String := AWS.Status.Method (Request);
    begin
       Put_Line ("[Server] " & Method & " " & URI);
+
+      if Method = "OPTIONS" then
+         return Build_Response ("", AWS.Messages.S204);
+      end if;
 
       if URI = "/v1/models" or else URI = "/api/tags" then
          declare
@@ -46,8 +67,19 @@ package body Adelaide_Server_Pkg is
                M : constant JSON_Value := Create_Object;
                D : constant JSON_Value := Create_Object;
             begin
+               --  OpenAI fields
                Set_Field (M, "id", Id);
+               Set_Field (M, "object", "model");
+               Set_Field (M, "created", Long_Integer'(1686935002));
+               Set_Field (M, "owned_by", "adelaide");
+
+               --  Ollama fields
                Set_Field (M, "name", Id);
+               Set_Field (M, "model", Id);
+               Set_Field (M, "modified_at", "2024-05-21T15:00:00Z");
+               Set_Field (M, "size", Long_Integer'(4000000000));
+               Set_Field (M, "digest", "sha256:adelaide" & Id);
+
                Set_Field (D, "format", "gguf");
                Set_Field (D, "family", Family);
                Set_Field (M, "details", D);
@@ -59,11 +91,10 @@ package body Adelaide_Server_Pkg is
             Add_Model ("metamodel", "qwen2");
             Add_Model ("adelaide-metamodel", "qwen2");
 
+            Set_Field (Resp, "object", "list");
             Set_Field (Resp, "data", Models);
             Set_Field (Resp, "models", Models);
-            return AWS.Response.Build
-              (Content_Type => "application/json",
-               Message_Body => Write (Resp));
+            return Build_Response (Write (Resp));
          end;
 
       elsif URI = "/api/show" then
@@ -174,9 +205,7 @@ package body Adelaide_Server_Pkg is
                   Set_Field (Resp, "model_info", Model_Info);
                end if;
 
-               return AWS.Response.Build
-                 (Content_Type => "application/json",
-                  Message_Body => Write (Resp));
+               return Build_Response (Write (Resp));
             end;
          end;
 
@@ -384,12 +413,27 @@ package body Adelaide_Server_Pkg is
                Set_Field (Resp, "prompt_eval_duration", Long_Integer'(0));
                Set_Field (Resp, "eval_count",
                           Long_Integer (Model_Manager.Count_Tokens (To_String (Result))));
+               --  eval_duration is also measured in nanoseconds
                Set_Field (Resp, "eval_duration", Total_Ns);
+
+               --  Additional OpenAI-compatible fields
+               Set_Field (Resp, "id", "chatcmpl-adelaide-" & TS_Str);
+               Set_Field (Resp, "object", "chat.completion");
+               declare
+                  Usage : constant JSON_Value := Create_Object;
+                  P_Tok : constant Long_Integer :=
+                    Long_Integer (Model_Manager.Count_Tokens (To_String (Prompt)));
+                  E_Tok : constant Long_Integer :=
+                    Long_Integer (Model_Manager.Count_Tokens (To_String (Result)));
+               begin
+                  Set_Field (Usage, "prompt_tokens", P_Tok);
+                  Set_Field (Usage, "completion_tokens", E_Tok);
+                  Set_Field (Usage, "total_tokens", P_Tok + E_Tok);
+                  Set_Field (Resp, "usage", Usage);
+               end;
             end;
 
-            return AWS.Response.Build
-              (Content_Type => "application/json",
-               Message_Body => Write (Resp));
+            return Build_Response (Write (Resp));
          end;
 
       elsif URI = "/api/embeddings" or else URI = "/v1/embeddings" then
@@ -539,24 +583,16 @@ package body Adelaide_Server_Pkg is
                Set_Field (Resp, "embedding", Empty_Array);
             end if;
 
-            return AWS.Response.Build
-              (Content_Type => "application/json",
-               Message_Body => Write (Resp));
+            return Build_Response (Write (Resp));
          end;
 
       else
-         return AWS.Response.Build
-           (Content_Type => "text/plain",
-            Message_Body => "Adelaide API Endpoint",
-            Status_Code  => AWS.Messages.S404);
+         return Build_Response ("Adelaide API Endpoint", AWS.Messages.S404, "text/plain");
       end if;
    exception
       when E : others =>
          Put_Line ("[Server] Error: " & Ada.Exceptions.Exception_Message (E));
-         return AWS.Response.Build
-           (Content_Type => "application/json",
-            Message_Body => "{}",
-            Status_Code  => AWS.Messages.S500);
+         return Build_Response ("{}", AWS.Messages.S500);
    end Dispatch;
 
 end Adelaide_Server_Pkg;
