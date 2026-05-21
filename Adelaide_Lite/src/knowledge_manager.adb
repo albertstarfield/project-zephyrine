@@ -133,7 +133,7 @@ package body Knowledge_Manager is
       Prompt : constant String := 
         "Synthesize a new research hypothesis based on the existing literature. " &
         "Focus on cross-domain connections. Output in JSON: " &
-        "{\"subject\": \"...\", \"relation\": \"...\", \"target\": \"...\", \"thought\": \"...\"}";
+        "{""subject"": ""..."", ""relation"": ""..."", ""target"": ""..."", ""thought"": ""...""}";
    begin
       accept Start;
       loop
