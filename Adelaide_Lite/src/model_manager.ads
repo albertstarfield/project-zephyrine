@@ -2,6 +2,7 @@ with Llama_Interface;
 with Math_Utils;
 with Streaming_Queue;
 with System;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Model_Manager is
    pragma Spark_Mode (Off);
@@ -68,6 +69,11 @@ package Model_Manager is
       Has_Citations : Boolean;
       Session_ID    : String := "";
       Level         : ELP_Level := ELP1) return Natural;
+
+   procedure Push_Chunk
+     (Stream     : Streaming_Queue.Queue_Access;
+      Session_ID : String;
+      Str_Piece  : String);
 
    function Generator_Callback (Prompt : String) return String;
 
