@@ -24,11 +24,6 @@ package body Knowledge_Manager is
       Thought_Task.Start;
    end Start_Tasks;
 
-   procedure Process_File (Path : String) is
-   begin
-      Put_Line ("[Knowledge] Indexing: " & Path);
-   end Process_File;
-
    task body Indexing_Task is
    begin
       accept Start;
