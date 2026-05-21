@@ -98,7 +98,11 @@ package body Model_Manager is
         ("../llama.cpp/models/mmproj-model-f16.gguf");
    end Initialize;
 
-   procedure Load_Model (Kind : Model_Type; Success : out Boolean; Requested_Ctx : Positive := 4096) is
+   procedure Load_Model
+     (Kind          : Model_Type;
+      Success       : out Boolean;
+      Requested_Ctx : Positive := 4096)
+   is
       M_P : Llama_Model_Params := Llama_Model_Default_Params;
       C_P : Llama_Context_Params := Llama_Context_Default_Params;
       P_C : chars_ptr;
@@ -146,10 +150,10 @@ package body Model_Manager is
       Model_Gate.Release (Kind);
    end Force_Unload_And_Reload;
 
-   function Wrap_ChatML (S_M, U_M : String) return String is
+   function Wrap_ChatML (System_Msg : String; User_Msg : String) return String is
    begin
-      return "<|im_start|>system" & ASCII.LF & S_M & "<|im_end|>" & ASCII.LF &
-             "<|im_start|>user" & ASCII.LF & U_M & "<|im_end|>" & ASCII.LF &
+      return "<|im_start|>system" & ASCII.LF & System_Msg & "<|im_end|>" & ASCII.LF &
+             "<|im_start|>user" & ASCII.LF & User_Msg & "<|im_end|>" & ASCII.LF &
              "<|im_start|>assistant" & ASCII.LF;
    end Wrap_ChatML;
 
@@ -170,7 +174,11 @@ package body Model_Manager is
       return To_String (Res);
    end Sanitize_Think_Tags;
 
-   procedure Push_Chunk (Stream : Streaming_Queue.Queue_Access; Session_ID : String; Str_Piece : String) is
+   procedure Push_Chunk
+     (Stream     : Streaming_Queue.Queue_Access;
+      Session_ID : String;
+      Str_Piece  : String)
+   is
       use GNATCOLL.JSON;
       C_O : constant JSON_Value := Create_Object;
    begin
@@ -301,7 +309,11 @@ package body Model_Manager is
       Model_Gate.Release (Kind);
    end Generate;
 
-   procedure Get_Embedding (Prompt : String; Result : out Math_Utils.Vector; Length : out Natural) is
+   procedure Get_Embedding
+     (Prompt : String; 
+      Result : out Math_Utils.Vector;
+      Length : out Natural)
+   is
       S : Boolean;
    begin
       Length := 0;
@@ -348,12 +360,40 @@ package body Model_Manager is
    end Get_Embedding;
 
    function Should_Abort_ELP0 return Boolean is (Model_Gate.Should_Abort_ELP0);
-   function Get_Kind_For_Model_Name (N : String) return Model_Type is 
-     (if Index (N, "4b") > 0 then Qwen_4B else Qwen_0_8B);
-   function Is_Loaded (K : Model_Type) return Boolean is (Models (K).Loaded);
-   function Count_Tokens (T : String) return Positive is (Positive'Max (1, T'Length / 4));
-   function Get_Request_Category (M : String; S : String := ""; L : ELP_Level := ELP1) return String is 
-     (if Index (Ada.Characters.Handling.To_Lower (M), "hello") > 0 then "casual" else "technical");
+
+   function Get_Kind_For_Model_Name (Name : String) return Model_Type is
+   begin
+      if Index (Name, "4b") > 0 or else Index (Name, "3b") > 0 then
+         return Qwen_4B;
+      elsif Index (Name, "embed") > 0 then
+         return Qwen_Embedding;
+      else
+         return Qwen_0_8B;
+      end if;
+   end Get_Kind_For_Model_Name;
+
+   function Is_Loaded (Kind : Model_Type) return Boolean is
+   begin
+      return Models (Kind).Loaded;
+   end Is_Loaded;
+
+   function Count_Tokens (Text : String) return Positive is
+   begin
+      return Positive'Max (1, Text'Length / 4);
+   end Count_Tokens;
+
+   function Get_Request_Category
+     (Msg        : String;
+      Session_ID : String := "";
+      Level      : ELP_Level := ELP1) return String
+   is
+   begin
+      if Index (Ada.Characters.Handling.To_Lower (Msg), "hello") > 0 then
+         return "casual";
+      else
+         return "technical";
+      end if;
+   end Get_Request_Category;
 
    function Grade_Response_Quality
      (Response_Text : String;
@@ -363,10 +403,10 @@ package body Model_Manager is
       Session_ID    : String := "";
       Level         : ELP_Level := ELP1) return Natural is (85);
 
-   function Generator_Callback (P : String) return String is 
+   function Generator_Callback (Prompt : String) return String is 
       Res : Unbounded_String;
    begin
-      Generate (Qwen_4B, P, Res, GNATCOLL.JSON.Empty_Array, "", 4096, null, False, ELP1);
+      Generate (Qwen_4B, Prompt, Res, GNATCOLL.JSON.Empty_Array, "", 4096, null, False, ELP1);
       return To_String (Res);
    end Generator_Callback;
 
