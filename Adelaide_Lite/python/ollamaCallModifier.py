@@ -2027,13 +2027,23 @@ CRITICAL: Output ONLY the JSON block. Be decisive and strategic.'''
         logger.error(f"[-] Router error: {e}")
         return {"needs_search": v_dec["search"], "use_strong_model": v_dec["strong"], "engines": v_dec["engines"]}
 
-from html2image import Html2Image
-hti = Html2Image(output_path=os.path.join(SCRATCH_DIR, "vision_renders"))
+try:
+    from html2image import Html2Image
+    hti = Html2Image(output_path=os.path.join(SCRATCH_DIR, "vision_renders"))
+except Exception as e:
+    logger.error(f"[!] Vision rendering initialization failed: {e}")
+    hti = None
 
 def do_vision_render_loop(html_code, css_code="", status_callback=None):
     """Renders HTML/CSS to an image and uses the VISION_MODEL for verification."""
+    if hti is None:
+        return False, "Vision rendering not initialized (permission error?)"
+    
     if not os.path.exists(hti.output_path):
-        os.makedirs(hti.output_path)
+        try:
+            os.makedirs(hti.output_path, exist_ok=True)
+        except Exception as e:
+            return False, f"Failed to create vision render directory: {e}"
     
     img_name = f"render_{int(time.time())}.png"
     img_path = os.path.join(hti.output_path, img_name)
