@@ -309,17 +309,17 @@ package body Adelaide_Server_Pkg is
                         use Database_Manager;
                         V : Math_Utils.Vector (1 .. 16384);
                         VL : Natural;
-                        Res : Chunk_Array (1 .. 3);
+                        Ref_Res : Chunk_Array (1 .. 3);
                         NR : Natural;
                         Ctx : Unbounded_String;
                      begin
                         Model_Manager.Get_Embedding (To_String (Prompt), V, VL);
                         if VL > 0 then
-                           Search_Literature (V (1 .. VL), Res, NR);
+                           Search_Literature (V (1 .. VL), Ref_Res, NR);
                            if NR > 0 then
                               Append (Ctx, "[CONTEXT]" & ASCII.LF);
                               for J in 1 .. NR loop
-                                 Append (Ctx, To_String (Res (J).Content) & ASCII.LF);
+                                 Append (Ctx, To_String (Ref_Res (J).Content) & ASCII.LF);
                               end loop;
                               Prompt := Ctx & Prompt;
                            end if;
