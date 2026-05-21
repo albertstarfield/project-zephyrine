@@ -55,32 +55,34 @@ package body Knowledge_Manager is
                   B_Str : constant String := AWS.Response.Message_Body (Resp);
                   R_Res : constant Read_Result := Read (B_Str);
                begin
-                  if R_Res.Success then
-                     declare
-                        C_Text : constant String := Get (R_Res.Value, "content");
-                     begin
-                        if C_Text'Length > 0 then
-                           declare
-                              V : Math_Utils.Vector (1 .. 16384);
-                              VL : Natural;
-                              Pos : Positive := C_Text'First;
-                           begin
-                              while Pos <= C_Text'Last loop
-                                 declare
-                                    L : constant Positive := Positive'Min (Pos + 999, C_Text'Last);
-                                    Chunk : constant String := C_Text (Pos .. L);
-                                 begin
-                                    Model_Manager.Get_Embedding (Chunk, V, VL);
-                                    if VL > 0 then
-                                       Database_Manager.Add_Literature_Chunk (Path, Chunk, V (1 .. VL), "hash");
-                                    end if;
-                                    Pos := L + 1;
-                                    exit when Model_Manager.Should_Abort_ELP0;
-                                 end;
-                              end loop;
-                           end;
-                        end if;
-                     end;
+                  if R_Res.Success and then R_Res.Value.Kind = JSON_Object_Type then
+                     if Has_Field (R_Res.Value, "content") then
+                        declare
+                           C_Text : constant String := Get (R_Res.Value, "content");
+                        begin
+                           if C_Text'Length > 0 then
+                              declare
+                                 V : Math_Utils.Vector (1 .. 16384);
+                                 VL : Natural;
+                                 Pos : Positive := C_Text'First;
+                              begin
+                                 while Pos <= C_Text'Last loop
+                                    declare
+                                       L : constant Positive := Positive'Min (Pos + 999, C_Text'Last);
+                                       Chunk : constant String := C_Text (Pos .. L);
+                                    begin
+                                       Model_Manager.Get_Embedding (Chunk, V, VL);
+                                       if VL > 0 then
+                                          Database_Manager.Add_Literature_Chunk (Path, Chunk, V (1 .. VL), "hash");
+                                       end if;
+                                       Pos := L + 1;
+                                       exit when Model_Manager.Should_Abort_ELP0;
+                                    end;
+                                 end loop;
+                              end;
+                           end if;
+                        end;
+                     end if;
                   end if;
                end;
             end if;
