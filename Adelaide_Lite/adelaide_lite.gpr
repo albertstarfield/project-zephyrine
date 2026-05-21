@@ -31,7 +31,6 @@ project Adelaide_Lite is
          "-lggml-metal",
          "-L/opt/homebrew/opt/sqlite/lib",
          "-lsqlite3",
-         "-L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/lib",
          "-framework", "Accelerate",
          "-framework", "Metal",
          "-framework", "Foundation",
