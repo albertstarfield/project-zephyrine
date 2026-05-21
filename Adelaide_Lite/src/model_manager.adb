@@ -490,10 +490,198 @@ package body Model_Manager is
          return 85;
    end Grade_Response_Quality;
 
-   function Generator_Callback (Prompt : String) return String is
-   begin
-      return Generate (Qwen_4B, Prompt, "", 4096, null);
-   end Generator_Callback;
+    function Generator_Callback (Prompt : String) return String is
+    begin
+       return Generate (Qwen_4B, Prompt, "", 4096, null);
+    end Generator_Callback;
+
+    type Stream_Parser_State is record
+       Orch_Think_Open : Boolean := False;
+       Header_Closed   : Boolean := False;
+       Think_State     : Natural := 0; --  0 = thinking, 1 = answer
+       Buffer          : Unbounded_String;
+       Closing_Buffer  : Unbounded_String;
+       Sanitize_Buffer : Unbounded_String;
+    end record;
+
+    function Is_Whitespace (C : Character) return Boolean is
+    begin
+       return C = ' ' or else C = ASCII.HT or else
+              C = ASCII.LF or else C = ASCII.CR;
+    end Is_Whitespace;
+
+    function Strip_Leading_Whitespace (S : String) return String is
+       Start : Positive := S'First;
+    begin
+       while Start <= S'Last and then Is_Whitespace (S (Start)) loop
+          Start := Start + 1;
+       end loop;
+       return S (Start .. S'Last);
+    end Strip_Leading_Whitespace;
+
+    function Matches_Prefix
+      (Buf : String; Pattern : String) return Boolean is
+       Stripped : constant String := Strip_Leading_Whitespace (Buf);
+    begin
+       if Stripped'Length = 0 then
+          return True;
+       end if;
+       if Stripped'Length > Pattern'Length then
+          return False;
+       end if;
+       return Ada.Characters.Handling.To_Lower (Stripped) =
+              Ada.Characters.Handling.To_Lower
+                (Pattern (Pattern'First ..
+                          Pattern'First + Stripped'Length - 1));
+    end Matches_Prefix;
+
+    function Sanitize_Think_Tags (Text : String) return String is
+       Result : Unbounded_String := Null_Unbounded_String;
+       I : Positive := Text'First;
+    begin
+       while I <= Text'Last loop
+          if I + 6 <= Text'Last and then
+             Ada.Characters.Handling.To_Lower (Text (I .. I + 6)) = "<think>"
+          then
+             I := I + 7;
+          elsif I + 7 <= Text'Last and then
+             Ada.Characters.Handling.To_Lower (Text (I .. I + 7)) = "</think>"
+          then
+             I := I + 8;
+          else
+             Append (Result, Text (I));
+             I := I + 1;
+          end if;
+       end loop;
+       return To_String (Result);
+    end Sanitize_Think_Tags;
+
+    procedure Push_Chunk
+      (Stream     : Streaming_Queue.Queue_Access;
+       Session_ID : String;
+       Str_Piece  : String);
+
+    procedure Process_And_Push_Chunk
+      (Stream     : Streaming_Queue.Queue_Access;
+       Session_ID : String;
+       Parser     : in out Stream_Parser_State;
+       Chunk      : String)
+    is
+    begin
+       for I in Chunk'Range loop
+          declare
+             C : constant Character := Chunk (I);
+          begin
+             if not Parser.Header_Closed then
+                Append (Parser.Buffer, C);
+                declare
+                   Buf_Str  : constant String := To_String (Parser.Buffer);
+                   Stripped : constant String :=
+                     Strip_Leading_Whitespace (Buf_Str);
+                begin
+                   if Matches_Prefix (Buf_Str, "<think>") then
+                      if Stripped = "<think>" then
+                         Parser.Buffer := Null_Unbounded_String;
+                         Parser.Header_Closed := True;
+                         Parser.Think_State := 0;
+                      elsif Stripped'Length >= 7 then
+                         Parser.Header_Closed := True;
+                         Parser.Think_State := 0;
+                      end if;
+                   else
+                      Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
+                      Push_Chunk (Stream, Session_ID, Buf_Str);
+                      Parser.Buffer := Null_Unbounded_String;
+                      Parser.Header_Closed := True;
+                      Parser.Think_State := 1;
+                   end if;
+                end;
+             else
+                if Parser.Think_State = 0 then
+                   if Length (Parser.Closing_Buffer) > 0 or else C = '<' then
+                      Append (Parser.Closing_Buffer, C);
+                      declare
+                         Close_Str : constant String :=
+                           To_String (Parser.Closing_Buffer);
+                      begin
+                         if Matches_Prefix (Close_Str, "</think>") then
+                            if Close_Str = "</think>" then
+                               Push_Chunk (Stream, Session_ID,
+                                           "</think>" & ASCII.LF);
+                               Parser.Closing_Buffer := Null_Unbounded_String;
+                               Parser.Think_State := 1;
+                            end if;
+                         else
+                            Push_Chunk (Stream, Session_ID, Close_Str);
+                            Parser.Closing_Buffer := Null_Unbounded_String;
+                         end if;
+                      end;
+                   else
+                      declare
+                         Single_Char : constant String (1 .. 1) := (1 => C);
+                      begin
+                         Push_Chunk (Stream, Session_ID, Single_Char);
+                      end;
+                   end if;
+                else
+                   if Length (Parser.Sanitize_Buffer) > 0 or else C = '<' then
+                      Append (Parser.Sanitize_Buffer, C);
+                      declare
+                         San_Str : constant String :=
+                           To_String (Parser.Sanitize_Buffer);
+                      begin
+                         if Matches_Prefix (San_Str, "<think>") or else
+                            Matches_Prefix (San_Str, "</think>")
+                         then
+                            if San_Str = "<think>" or else
+                               San_Str = "</think>"
+                            then
+                               Parser.Sanitize_Buffer := Null_Unbounded_String;
+                            end if;
+                         else
+                            Push_Chunk (Stream, Session_ID, San_Str);
+                            Parser.Sanitize_Buffer := Null_Unbounded_String;
+                         end if;
+                      end;
+                   else
+                      declare
+                         Single_Char : constant String (1 .. 1) := (1 => C);
+                      begin
+                         Push_Chunk (Stream, Session_ID, Single_Char);
+                      end;
+                   end if;
+                end if;
+             end if;
+          end;
+       end loop;
+    end Process_And_Push_Chunk;
+
+    procedure Flush_Parser
+      (Stream     : Streaming_Queue.Queue_Access;
+       Session_ID : String;
+       Parser     : in out Stream_Parser_State)
+    is
+    begin
+       if not Parser.Header_Closed then
+          Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
+          if Length (Parser.Buffer) > 0 then
+             Push_Chunk (Stream, Session_ID, To_String (Parser.Buffer));
+          end if;
+       else
+          if Parser.Think_State = 0 then
+             if Length (Parser.Closing_Buffer) > 0 then
+                Push_Chunk (Stream, Session_ID,
+                            To_String (Parser.Closing_Buffer));
+             end if;
+             Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
+          else
+             if Length (Parser.Sanitize_Buffer) > 0 then
+                Push_Chunk (Stream, Session_ID,
+                            To_String (Parser.Sanitize_Buffer));
+             end if;
+          end if;
+       end if;
+    end Flush_Parser;
 
    procedure Push_Chunk
      (Stream     : Streaming_Queue.Queue_Access;
@@ -731,10 +919,7 @@ package body Model_Manager is
          end if;
       end if;
 
-      --  2. Close Proxy Thinking Block
-      if Stream /= null then
-         Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
-      end if;
+      --  2. Proxy thinking block remains open for synthesis model to merge.
 
       --  3. Logic Synthesis & Dynamic Context Allocation
       Put_Line (ASCII.ESC & "[32m" & " [Hybrid] 4B Synthesis..." &
@@ -750,11 +935,50 @@ package body Model_Manager is
       begin
          Put_Line ("[Hybrid] Dynamic Context Size Allocated: " &
                    Target_Ctx'Img & " tokens.");
-         Current_Response :=
-           To_Unbounded_String
-             (Generate
-                (Qwen_4B, Synth_Prompt, Session_ID, Target_Ctx, Stream));
-      end;
+          Current_Response :=
+            To_Unbounded_String
+              (Generate
+                 (Kind            => Qwen_4B,
+                  Prompt          => Synth_Prompt,
+                  Session_ID      => Session_ID,
+                  Requested_Ctx   => Target_Ctx,
+                  Stream          => Stream,
+                  Orch_Think_Open => (Stream /= null)));
+          declare
+             Orch_Prefix : constant String :=
+               "<think>" & ASCII.LF &
+               "[ADELAIDE CORE ORCHESTRATION]" & ASCII.LF &
+               "Initiating Orchestrated Intelligence (Adelaide-Lite)..." &
+               ASCII.LF &
+               "Categorized intent as: " & Category &
+               ". Tailoring orchestration depth..." & ASCII.LF &
+               (if Category /= "casual"
+                then "Analyzing request with the precision of " &
+                     "a master watchmaker..." & ASCII.LF
+                else "Resolved casual conversation. Initiating " &
+                     "rapid response..." & ASCII.LF) &
+               To_String (Internal_State);
+             Resp_Str : constant String := To_String (Current_Response);
+             End_Idx  : constant Natural := Index (Resp_Str, "</think>");
+          begin
+             if End_Idx > 0 then
+                declare
+                   Part1 : constant String :=
+                     Resp_Str (Resp_Str'First .. End_Idx - 1);
+                   Part2 : constant String :=
+                     Resp_Str (End_Idx + 8 .. Resp_Str'Last);
+                begin
+                   Current_Response := To_Unbounded_String
+                     (Orch_Prefix & Sanitize_Think_Tags (Part1) &
+                      "</think>" & ASCII.LF & Sanitize_Think_Tags (Part2));
+                end;
+             else
+                Current_Response := To_Unbounded_String
+                  (Orch_Prefix & "</think>" & ASCII.LF &
+                   Sanitize_Think_Tags (Resp_Str));
+             end if;
+          end;
+       end;
 
       --  4. Realism Auditor & Warnings Injection
       declare
@@ -864,20 +1088,26 @@ package body Model_Manager is
          Stream.Close;
       end if;
 
-      return "<think>" & ASCII.LF & "[Adelaide Reasoning]" & ASCII.LF &
-        To_String (Internal_State) & ASCII.LF & "</think>" &
-        ASCII.LF & To_String (Current_Response);
+      return To_String (Current_Response);
    end Hybrid_Generate;
 
    function Generate
-     (Kind          : Model_Type;
-      Prompt        : String;
-      Session_ID    : String := "";
-      Requested_Ctx : Positive := 4096;
-      Stream        : Streaming_Queue.Queue_Access := null) return String
+     (Kind            : Model_Type;
+      Prompt          : String;
+      Session_ID      : String := "";
+      Requested_Ctx   : Positive := 4096;
+      Stream          : Streaming_Queue.Queue_Access := null;
+      Orch_Think_Open : Boolean := False) return String
    is
       Success  : Boolean;
       Result   : Unbounded_String;
+      Parser   : Stream_Parser_State :=
+        (Orch_Think_Open => Orch_Think_Open,
+         Header_Closed   => not Orch_Think_Open,
+         Think_State     => (if Orch_Think_Open then 0 else 1),
+         Buffer          => Null_Unbounded_String,
+         Closing_Buffer  => Null_Unbounded_String,
+         Sanitize_Buffer => Null_Unbounded_String);
       Vocab    : Llama_Vocab;
       Tokens   : array (1 .. 32768) of Llama_Token;
       N_Toks   : int;
@@ -970,46 +1200,8 @@ package body Model_Manager is
                      Append (Result, Piece (Integer (J)));
                   end loop;
                   if Stream /= null then
-                     declare
-                        use GNATCOLL.JSON;
-                        Chunk_Obj : constant JSON_Value := Create_Object;
-                     begin
-                        if Session_ID'Length > 0 and then
-                           Session_ID (Session_ID'First) = '/'
-                        then
-                           --  OpenAI Format
-                           Set_Field (Chunk_Obj, "choices", Empty_Array);
-                           declare
-                              Choices : JSON_Array :=
-                                Get (Chunk_Obj, "choices");
-                              Choice  : constant JSON_Value := Create_Object;
-                              Delta_Obj   : constant JSON_Value :=
-                                Create_Object;
-                           begin
-                              Set_Field (Delta_Obj, "content", Str_Piece);
-                              Set_Field (Choice, "delta", Delta_Obj);
-                              Set_Field (Choice, "index", Integer'(0));
-                              Append (Choices, Choice);
-                              Set_Field (Chunk_Obj, "choices", Choices);
-                           end;
-                           Stream.Push ("data: " & Write (Chunk_Obj) &
-                                        ASCII.LF & ASCII.LF);
-                        else
-                           --  Ollama Format
-                           Set_Field (Chunk_Obj, "model",
-                                      String'("adelaide-hybrid"));
-                           declare
-                              Msg_Obj : constant JSON_Value := Create_Object;
-                           begin
-                              Set_Field
-                                (Msg_Obj, "role", String'("assistant"));
-                              Set_Field (Msg_Obj, "content", Str_Piece);
-                              Set_Field (Chunk_Obj, "message", Msg_Obj);
-                           end;
-                           Set_Field (Chunk_Obj, "done", False);
-                           Stream.Push (Write (Chunk_Obj) & ASCII.LF);
-                        end if;
-                     end;
+                     Process_And_Push_Chunk
+                       (Stream, Session_ID, Parser, Str_Piece);
                   end if;
                end;
             end if;
@@ -1026,6 +1218,9 @@ package body Model_Manager is
             end;
          end;
       end loop;
+      if Stream /= null then
+         Flush_Parser (Stream, Session_ID, Parser);
+      end if;
       Llama_Sampler_Free (Sampler);
       Watchdog_Manager.Inference_Monitor.Stop_Inference;
       Models (Kind).In_Use := False;
