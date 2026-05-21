@@ -8,44 +8,198 @@ with Math_Utils;
 package body Database_Manager is
 
    DB_File : constant String := "adelaide_memory.db";
+   Lit_DB_File : constant String := "literatureRefIndex.db";
 
    type DB_Access is access all Ada_Sqlite3.Database;
    Main_DB_Ptr : DB_Access := null;
+   Lit_DB_Ptr  : DB_Access := null;
 
    ----------------
    -- Initialize --
    ----------------
    procedure Initialize is
    begin
-      if Main_DB_Ptr /= null then
-         return;
+      if Main_DB_Ptr = null then
+         Main_DB_Ptr := new Ada_Sqlite3.Database'(Open (DB_File));
+
+         --  Memories table
+         Execute (Main_DB_Ptr.all,
+                  "CREATE TABLE IF NOT EXISTS memories (" &
+                  "id INTEGER PRIMARY KEY AUTOINCREMENT," &
+                  "input TEXT," &
+                  "response TEXT," &
+                  "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+
+         --  Response Cache table (Semantic)
+         Execute (Main_DB_Ptr.all,
+                  "CREATE TABLE IF NOT EXISTS response_cache (" &
+                  "id INTEGER PRIMARY KEY AUTOINCREMENT," &
+                  "prompt TEXT," &
+                  "embedding TEXT," &
+                  "response TEXT," &
+                  "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
       end if;
 
-      Main_DB_Ptr := new Ada_Sqlite3.Database'(Open (DB_File));
+      if Lit_DB_Ptr = null then
+         Lit_DB_Ptr := new Ada_Sqlite3.Database'(Open (Lit_DB_File));
 
-      --  Memories table
-      Execute (Main_DB_Ptr.all,
-               "CREATE TABLE IF NOT EXISTS memories (" &
-               "id INTEGER PRIMARY KEY AUTOINCREMENT," &
-               "input TEXT," &
-               "response TEXT," &
-               "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+         --  Chunks table for literature
+         Execute (Lit_DB_Ptr.all,
+                  "CREATE TABLE IF NOT EXISTS chunks (" &
+                  "id INTEGER PRIMARY KEY AUTOINCREMENT," &
+                  "file_path TEXT," &
+                  "content TEXT," &
+                  "embedding TEXT," &
+                  "hash TEXT," &
+                  "indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
-      --  Response Cache table (Semantic)
-      Execute (Main_DB_Ptr.all,
-               "CREATE TABLE IF NOT EXISTS response_cache (" &
-               "id INTEGER PRIMARY KEY AUTOINCREMENT," &
-               "prompt TEXT," &
-               "embedding TEXT," &
-               "response TEXT," &
-               "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+         --  Graph table for relationships
+         Execute (Lit_DB_Ptr.all,
+                  "CREATE TABLE IF NOT EXISTS knowledge_graph (" &
+                  "id INTEGER PRIMARY KEY AUTOINCREMENT," &
+                  "source TEXT," &
+                  "relation TEXT," &
+                  "target TEXT," &
+                  "weight REAL," &
+                  "context TEXT," &
+                  "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
+      end if;
 
-      Put_Line ("[DB] Semantic Memory Core initialized.");
+      Put_Line ("[DB] Semantic Memory and Literature Core initialized.");
    exception
       when E : others =>
          Put_Line ("[DB] Critical Init Error: " &
            Ada.Exceptions.Exception_Message (E));
    end Initialize;
+
+   --------------------------
+   -- Add_Literature_Chunk --
+   --------------------------
+   procedure Add_Literature_Chunk
+     (File_Path : String; 
+      Content   : String; 
+      Embedding : Math_Utils.Vector;
+      Doc_Hash  : String)
+   is
+      use GNATCOLL.JSON;
+      Vec_Obj : JSON_Array := Empty_Array;
+   begin
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
+
+      for I in Embedding'Range loop
+         Append (Vec_Obj, Create (Embedding (I)));
+      end loop;
+
+      declare
+         Stmt : Statement := Prepare
+           (Lit_DB_Ptr.all,
+            "INSERT INTO chunks (file_path, content, embedding, hash) " &
+            "VALUES (?, ?, ?, ?)");
+      begin
+         Bind_Text (Stmt, 1, File_Path);
+         Bind_Text (Stmt, 2, Content);
+         Bind_Text (Stmt, 3, Write (Create (Vec_Obj)));
+         Bind_Text (Stmt, 4, Doc_Hash);
+         Step (Stmt);
+      end;
+   exception
+      when others =>
+         Put_Line ("[DB] Error adding literature chunk.");
+   end Add_Literature_Chunk;
+
+   -----------------------
+   -- Search_Literature --
+   -----------------------
+   procedure Search_Literature
+     (Embedding : Math_Utils.Vector;
+      Results   : out Chunk_Array;
+      Count     : out Natural)
+   is
+      use GNATCOLL.JSON;
+      Idx : Positive := Results'First;
+   begin
+      Count := 0;
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
+
+      declare
+         Stmt : Statement := Prepare
+           (Lit_DB_Ptr.all, "SELECT file_path, content, embedding FROM chunks");
+      begin
+         while Step (Stmt) = ROW and Idx <= Results'Last loop
+            declare
+               Path_Str : constant String := Column_Text (Stmt, 0);
+               Text_Str : constant String := Column_Text (Stmt, 1);
+               Raw_Vec  : constant String := Column_Text (Stmt, 2);
+               JSON_Vec : constant Read_Result := Read (Raw_Vec);
+            begin
+               if JSON_Vec.Success then
+                  declare
+                     Arr : constant JSON_Array := Get (JSON_Vec.Value);
+                     Len : constant Natural := Length (Arr);
+                     Entry_Vec : Math_Utils.Vector (1 .. Len);
+                  begin
+                     if Len = Embedding'Length then
+                        for I in 1 .. Len loop
+                           Entry_Vec (I) := Get (Get (Arr, I));
+                        end loop;
+
+                        declare
+                           Sim : constant Float :=
+                             Math_Utils.Cosine_Similarity
+                               (Embedding, Entry_Vec);
+                        begin
+                           if Sim >= 0.65 then
+                              Results (Idx).File_Path := To_Unbounded_String (Path_Str);
+                              Results (Idx).Content   := To_Unbounded_String (Text_Str);
+                              Results (Idx).Score     := Sim;
+                              Idx := Idx + 1;
+                              Count := Count + 1;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+      end;
+   exception
+      when others =>
+         null;
+   end Search_Literature;
+
+   ------------------------
+   -- Add_Graph_Relation --
+   ------------------------
+   procedure Add_Graph_Relation
+     (Source   : String;
+      Relation : String;
+      Target   : String;
+      Weight   : Float := 1.0)
+   is
+   begin
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
+      declare
+         Stmt : Statement := Prepare
+           (Lit_DB_Ptr.all,
+            "INSERT INTO knowledge_graph (source, relation, target, weight) " &
+            "VALUES (?, ?, ?, ?)");
+      begin
+         Bind_Text (Stmt, 1, Source);
+         Bind_Text (Stmt, 2, Relation);
+         Bind_Text (Stmt, 3, Target);
+         Bind_Double (Stmt, 4, Long_Float (Weight));
+         Step (Stmt);
+      end;
+   exception
+      when others =>
+         null;
+   end Add_Graph_Relation;
 
    ------------------
    -- Add_To_Cache --

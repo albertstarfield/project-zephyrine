@@ -36,18 +36,22 @@ package body Model_Manager is
    --  QUEUE MANAGER: Serialize access to models
    --  to prevent concurrent decode crashes.
    --  ELP1 (API/Client) has priority over ELP0 (Background/Indexing).
+   --  ELP1 also preempts ELP0 (signals abort).
    protected Model_Gate is
       entry Acquire_ELP1 (Model_Type);
       entry Acquire_ELP0 (Model_Type);
       procedure Release (Kind : Model_Type);
+      function Should_Abort_ELP0 return Boolean;
    private
       Busy : Busy_Array := (others => False);
+      Abort_Flag : Boolean := False;
    end Model_Gate;
 
    protected body Model_Gate is
       entry Acquire_ELP1 (for K in Model_Type) when not Busy (K) is
       begin
          Busy (K) := True;
+         Abort_Flag := True; -- Signal any active ELP0 to stop
       end Acquire_ELP1;
 
       entry Acquire_ELP0 (for K in Model_Type) 
@@ -55,12 +59,29 @@ package body Model_Manager is
       is
       begin
          Busy (K) := True;
+         Abort_Flag := False; -- Reset when ELP0 successfully starts
       end Acquire_ELP0;
 
       procedure Release (Kind : Model_Type) is
       begin
          Busy (Kind) := False;
+         --  Reset abort flag if no more ELP1 requests are pending
+         declare
+            Total_ELP1_Wait : Natural := 0;
+         begin
+            for K in Model_Type loop
+               Total_ELP1_Wait := Total_ELP1_Wait + Acquire_ELP1 (K)'Count;
+            end loop;
+            if Total_ELP1_Wait = 0 then
+               Abort_Flag := False;
+            end if;
+         end;
       end Release;
+
+      function Should_Abort_ELP0 return Boolean is
+      begin
+         return Abort_Flag;
+      end Should_Abort_ELP0;
    end Model_Gate;
 
    task Idle_Monitor is
@@ -228,87 +249,134 @@ package body Model_Manager is
    procedure Get_Embedding (Prompt : String; Result : out Math_Utils.Vector) is
       Success  : Boolean;
       Kind     : constant Model_Type := Qwen_Embedding;
-      Vocab    : Llama_Vocab;
-      Tokens   : array (1 .. 32768) of Llama_Token;
-      N_Toks   : int;
-      Prompt_C : chars_ptr := New_String (Prompt);
-   begin
-      Model_Gate.Acquire_ELP1 (Kind);
-      Load_Model (Kind, Success);
-      if not Success then
-         Model_Gate.Release (Kind);
-         Result := (1 .. 0 => 0.0);
-         return;
-      end if;
-
-      Models (Kind).In_Use := True;
-      Models (Kind).Last_Used := Clock;
-      Watchdog_Manager.Inference_Monitor.Start_Inference (Kind, Clock);
-
-      Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-      N_Toks := Llama_Tokenize
-        (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address,
-         32768, True, True);
-      Free (Prompt_C);
-      if N_Toks <= 0 then
-         Watchdog_Manager.Inference_Monitor.Stop_Inference;
-         Models (Kind).In_Use := False;
-         Model_Gate.Release (Kind);
-         Result := (1 .. 0 => 0.0);
-         return;
-      end if;
-
-      declare
-         function Llama_Batch_Get_One (T : System.Address; N : int)
-           return Llama_Batch;
-         pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
-         B : constant Llama_Batch :=
-           Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
+      
+      --  Internal helper for single chunk embedding
+      procedure Get_Chunk_Embedding (Chunk : String; V : out Math_Utils.Vector) is
+         Vocab    : Llama_Vocab;
+         Tokens   : array (1 .. 32768) of Llama_Token;
+         N_Toks   : int;
+         Prompt_C : chars_ptr := New_String (Chunk);
       begin
-         Llama_Set_Embeddings (Models (Kind).Context, True);
-         if Llama_Decode (Models (Kind).Context, B) /= 0 then
-            Watchdog_Manager.Inference_Monitor.Stop_Inference;
-            Models (Kind).In_Use := False;
-            Model_Gate.Release (Kind);
-            Result := (1 .. 0 => 0.0);
+         Load_Model (Kind, Success);
+         if not Success then
+            V := (1 .. 0 => 0.0);
             return;
          end if;
-      end;
 
-      declare
-         function Llama_Model_N_Embd (M : Llama_Model) return int;
-         pragma Import (C, Llama_Model_N_Embd, "llama_model_n_embd");
-         Dim : constant int := Llama_Model_N_Embd (Models (Kind).Model);
-         Ptr : constant System.Address :=
-           Llama_Get_Embeddings (Models (Kind).Context);
-         type Float_Array is array (1 .. Integer (Dim)) of Float;
-         pragma Convention (C, Float_Array);
-         Embed : Float_Array;
-         for Embed'Address use Ptr;
-         V : Math_Utils.Vector (1 .. Integer (Dim));
-      begin
-         for I in 1 .. Integer (Dim) loop
-            V (I) := Embed (I);
-         end loop;
-         Watchdog_Manager.Inference_Monitor.Stop_Inference;
-         Models (Kind).In_Use := False;
-         Model_Gate.Release (Kind);
-         Result := V;
-         return;
-      end;
+         Models (Kind).In_Use := True;
+         Models (Kind).Last_Used := Clock;
+         Watchdog_Manager.Inference_Monitor.Start_Inference (Kind, Clock);
+
+         Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
+         N_Toks := Llama_Tokenize
+           (Vocab, Prompt_C, int (Chunk'Length), Tokens (1)'Address,
+            32768, True, True);
+         Free (Prompt_C);
+         if N_Toks <= 0 then
+            Watchdog_Manager.Inference_Monitor.Stop_Inference;
+            Models (Kind).In_Use := False;
+            V := (1 .. 0 => 0.0);
+            return;
+         end if;
+
+         declare
+            function Llama_Batch_Get_One (T : System.Address; N : int)
+              return Llama_Batch;
+            pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
+            B : constant Llama_Batch :=
+              Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
+         begin
+            Llama_Set_Embeddings (Models (Kind).Context, True);
+            if Llama_Decode (Models (Kind).Context, B) /= 0 then
+               Watchdog_Manager.Inference_Monitor.Stop_Inference;
+               Models (Kind).In_Use := False;
+               V := (1 .. 0 => 0.0);
+               return;
+            end if;
+         end;
+
+         declare
+            function Llama_Model_N_Embd (M : Llama_Model) return int;
+            pragma Import (C, Llama_Model_N_Embd, "llama_model_n_embd");
+            Dim : constant int := Llama_Model_N_Embd (Models (Kind).Model);
+            Ptr : constant System.Address :=
+              Llama_Get_Embeddings (Models (Kind).Context);
+            type Float_Array is array (1 .. Integer (Dim)) of Float;
+            pragma Convention (C, Float_Array);
+            Embed : Float_Array;
+            for Embed'Address use Ptr;
+         begin
+            V := (others => 0.0);
+            for I in 1 .. Integer (Dim) loop
+               V (I) := Embed (I);
+            end loop;
+            Watchdog_Manager.Inference_Monitor.Stop_Inference;
+            Models (Kind).In_Use := False;
+         end;
+      exception
+         when others =>
+            Watchdog_Manager.Inference_Monitor.Stop_Inference;
+            Models (Kind).In_Use := False;
+            V := (1 .. 0 => 0.0);
+      end Get_Chunk_Embedding;
+
+   begin
+      Model_Gate.Acquire_ELP1 (Kind);
+      
+      if Prompt'Length <= 800 then
+         Get_Chunk_Embedding (Prompt, Result);
+      else
+         --  Chunking: 800 chars with 100 char overlap
+         declare
+            Chunk_Size : constant Positive := 800;
+            Overlap    : constant Natural := 100;
+            Step       : constant Positive := Chunk_Size - Overlap;
+            Pos        : Positive := Prompt'First;
+            Sum_Vec    : Math_Utils.Vector (1 .. 1024) := (others => 0.0);
+            Temp_Vec   : Math_Utils.Vector (1 .. 1024);
+            C_Count    : Natural := 0;
+         begin
+            while Pos <= Prompt'Last loop
+               declare
+                  Last : constant Positive := 
+                    Positive'Min (Pos + Chunk_Size - 1, Prompt'Last);
+                  Sub  : constant String := Prompt (Pos .. Last);
+               begin
+                  Get_Chunk_Embedding (Sub, Temp_Vec);
+                  if Temp_Vec'Length = Sum_Vec'Length then
+                     for I in Sum_Vec'Range loop
+                        Sum_Vec (I) := Sum_Vec (I) + Temp_Vec (I);
+                     end loop;
+                     C_Count := C_Count + 1;
+                  end if;
+                  Pos := Pos + Step;
+                  exit when Last = Prompt'Last;
+               end;
+            end loop;
+            
+            if C_Count > 0 then
+               for I in Sum_Vec'Range loop
+                  Sum_Vec (I) := Sum_Vec (I) / Float (C_Count);
+               end loop;
+               Result := Sum_Vec;
+            else
+               Result := (1 .. 0 => 0.0);
+            end if;
+         end;
+      end if;
+
+      Model_Gate.Release (Kind);
    exception
       when others =>
-         Watchdog_Manager.Inference_Monitor.Stop_Inference;
-         Put_Line
-           (ASCII.ESC & "[91m" &
-            "[BUGCHECK] GGML/Llama crash or exception detected" &
-            " during Get_Embedding." &
-            ASCII.ESC & "[0m");
-         Unload_Model (Kind);
-         Models (Kind).In_Use := False;
+         Put_Line (ASCII.ESC & "[91m" & "[BUGCHECK] Get_Embedding Failed" & ASCII.ESC & "[0m");
          Model_Gate.Release (Kind);
          Result := (1 .. 0 => 0.0);
    end Get_Embedding;
+
+   function Should_Abort_ELP0 return Boolean is
+   begin
+      return Model_Gate.Should_Abort_ELP0;
+   end Should_Abort_ELP0;
 
    function Get_Random_Suffix return String is
       subtype Rand_Range is Integer range 0 .. 15;
