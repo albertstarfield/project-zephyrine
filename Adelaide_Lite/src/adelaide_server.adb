@@ -4,6 +4,7 @@ with Ada.Command_Line; use Ada.Command_Line;
 with AWS.Server;
 with Adelaide_Server_Pkg;
 with Model_Manager;
+with Knowledge_Manager;
 with Integrity_Utils;
 with Toolchain_Manager;
 with Interfaces; use Interfaces;
@@ -116,6 +117,10 @@ begin
 
    --  Initialize Llama backend and models
    Model_Manager.Initialize;
+
+   --  Initialize Knowledge Index and start background tasks (ELP0)
+   Knowledge_Manager.Initialize;
+   Knowledge_Manager.Start_Tasks;
 
    Put_Line (Cyan & "[+] Starting Adelaide AWS Proxy on port" &
              Server_Port'Img & "..." & Reset);
