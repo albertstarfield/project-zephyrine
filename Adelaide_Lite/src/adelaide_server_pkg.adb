@@ -435,7 +435,7 @@ package body Adelaide_Server_Pkg is
          Set_Field (Res_Obj, "type", String'("message"));
          Set_Field (Res_Obj, "role", String'("assistant"));
          declare
-            Content_Arr : JSON_Array;
+            Content_Arr : JSON_Array := Empty_Array;
             Text_Obj    : constant JSON_Value := Create_Object;
          begin
             Set_Field (Text_Obj, "type", String'("text"));
@@ -450,10 +450,10 @@ package body Adelaide_Server_Pkg is
       --  2. Gemini Format
       elsif Ada.Strings.Fixed.Index (URI_Str, ":generateContent") > 0 then
          declare
-            Cand_Arr : JSON_Array;
+            Cand_Arr : JSON_Array := Empty_Array;
             Cand_Obj : constant JSON_Value := Create_Object;
             Cont_Obj : constant JSON_Value := Create_Object;
-            Part_Arr : JSON_Array;
+            Part_Arr : JSON_Array := Empty_Array;
             Part_Obj : constant JSON_Value := Create_Object;
          begin
             Set_Field (Part_Obj, "text", Full_Content);
@@ -473,7 +473,7 @@ package body Adelaide_Server_Pkg is
          Set_Field (Res_Obj, "object", String'("chat.completion"));
          Set_Field (Res_Obj, "model", Meta_Model);
          declare
-            Choices_Arr : JSON_Array;
+            Choices_Arr : JSON_Array := Empty_Array;
             Choice_Obj  : constant JSON_Value := Create_Object;
             Msg_Obj     : constant JSON_Value := Create_Object;
          begin
@@ -1007,14 +1007,14 @@ package body Adelaide_Server_Pkg is
                     Get_Query_Embedding (Prompt);
                   use GNATCOLL.JSON;
                   Res_Obj : constant JSON_Value := Create_Object;
-                  Arr     : JSON_Array;
+                  Arr     : JSON_Array := Empty_Array;
                begin
                   for I in Vec'Range loop
                      Append (Arr, Create (Vec (I)));
                   end loop;
                   if URI_Str = "/v1/embeddings" then
                      declare
-                        Data_Arr : JSON_Array;
+                        Data_Arr : JSON_Array := Empty_Array;
                         Data_Obj : constant JSON_Value := Create_Object;
                      begin
                         Set_Field (Data_Obj, "object", String'("embedding"));
