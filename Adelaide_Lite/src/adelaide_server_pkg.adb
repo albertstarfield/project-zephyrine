@@ -160,9 +160,13 @@ package body Adelaide_Server_Pkg is
                            Acc : Unbounded_String;
                         begin
                            for I in 1 .. Length (C_Arr) loop
-                              if Get (Get (C_Arr, I), "type") = "text" then
-                                 Append (Acc, String'(Get (Get (Get (C_Arr, I), "text"))));
-                              end if;
+                              declare
+                                 Item : constant JSON_Value := Get (C_Arr, I);
+                              begin
+                                 if Get (Item, "type") = Create ("text") then
+                                    Append (Acc, String'(Get (Get (Item, "text"))));
+                                 end if;
+                              end;
                            end loop;
                            return To_String (Acc);
                         end;
@@ -200,9 +204,13 @@ package body Adelaide_Server_Pkg is
                         R_Arr : JSON_Array := Empty_Array;
                      begin
                         for I in 1 .. Length (C_Arr) loop
-                           if Get (Get (C_Arr, I), "type") = "image_url" then
-                              Append (R_Arr, Get (Get (Get (C_Arr, I), "image_url"), "url"));
-                           end if;
+                           declare
+                              Item : constant JSON_Value := Get (C_Arr, I);
+                           begin
+                              if Get (Item, "type") = Create ("image_url") then
+                                 Append (R_Arr, Get (Get (Item, "image_url"), "url"));
+                              end if;
+                           end;
                         end loop;
                         return R_Arr;
                      end;
