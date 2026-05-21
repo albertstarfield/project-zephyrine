@@ -3868,6 +3868,56 @@ def stream_orchestrated_response(req_data, is_chat=True, is_openai=False):
         finished_requests += 1
         last_activity_time = time.time()
 
+@app.route('/api/adelaide/extract', methods=['POST'])
+def extract_file_content():
+    """Extracts text from various file formats (PDF, OCR images, etc)."""
+    try:
+        data = request.json
+        file_path = data.get("path")
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({"error": "File not found"}), 404
+        
+        ext = os.path.splitext(file_path)[1].lower()
+        text = ""
+        
+        # 1. PDFs
+        if ext == '.pdf':
+            try:
+                import fitz
+                doc = fitz.open(file_path)
+                for page in doc:
+                    text += page.get_text() + "\n"
+            except Exception as e:
+                return jsonify({"error": f"PDF extraction failed: {e}"}), 500
+        
+        # 2. Images (OCR)
+        elif ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+            try:
+                from PIL import Image
+                import pytesseract
+                img = Image.open(file_path)
+                text = pytesseract.image_to_string(img)
+            except Exception as e:
+                # pytesseract might not be installed, fallback to skip or placeholder
+                return jsonify({"error": f"OCR failed: {e}"}), 500
+                
+        # 3. Spreadsheets/Docs (optional fallback)
+        elif ext in ['.xlsx', '.docx']:
+             # Can use existing logic from searchlocalref.py if needed
+             text = "Document Extraction Placeholder"
+             
+        # 4. Plain Text / Code
+        else:
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    text = f.read()
+            except Exception as e:
+                return jsonify({"error": f"Read failed: {e}"}), 500
+
+        return jsonify({"path": file_path, "content": text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/chat', methods=['POST'])
 def proxy_ollama_chat():
     if not OLLAMA_TARGET:
