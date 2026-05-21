@@ -9,6 +9,7 @@ with System;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Real_Time; use Ada.Real_Time;
+with Ada.Unchecked_Conversion;
 
 package body Model_Manager is
 
@@ -24,6 +25,13 @@ package body Model_Manager is
 
    Models : array (Model_Type) of Model_Record;
 
+   type Model_Type_Refs is array (Model_Type) of aliased Model_Type;
+   Model_Refs : constant Model_Type_Refs :=
+     (Qwen_0_8B      => Qwen_0_8B,
+      Qwen_4B        => Qwen_4B,
+      Qwen_Embedding => Qwen_Embedding,
+      MMProj         => MMProj);
+
    type Owner_Array is array (Model_Type) of ELP_Level;
    type Busy_Array is array (Model_Type) of Boolean;
 
@@ -37,6 +45,7 @@ package body Model_Manager is
       entry Acquire_ELP0 (Kind : Model_Type) (Success : out Boolean);
       procedure Release_ELP0 (Kind : Model_Type);
       function Should_Abort return Boolean;
+      function Is_ELP0_Owner (Kind : Model_Type) return Boolean;
    private
       ELP1_Pending      : Natural := 0;
       ELP1_Active_Count : Natural := 0;
@@ -61,6 +70,7 @@ package body Model_Manager is
       procedure Release_ELP1 (Kind : Model_Type) is
       begin
          Busy (Kind) := False;
+         Owner (Kind) := ELP0;
          if ELP1_Active_Count > 0 then
             ELP1_Active_Count := ELP1_Active_Count - 1;
          end if;
@@ -89,6 +99,11 @@ package body Model_Manager is
       begin
          return ELP1_Pending > 0 or ELP1_Active_Count > 0;
       end Should_Abort;
+
+      function Is_ELP0_Owner (Kind : Model_Type) return Boolean is
+      begin
+         return Owner (Kind) = ELP0;
+      end Is_ELP0_Owner;
    end Priority_Model_Gate;
 
    task Idle_Monitor is
@@ -175,6 +190,8 @@ package body Model_Manager is
          C_Params.N_Ubatch := 1024;
          C_Params.N_Threads := 8;
          C_Params.N_Threads_Batch := 8;
+         C_Params.Abort_Callback := Llama_Abort_Callback'Address;
+         C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;
          Models (Kind).Context :=
            Llama_Init_From_Model (Models (Kind).Model, C_Params);
          if Models (Kind).Context /= Null_Context then
@@ -223,9 +240,18 @@ package body Model_Manager is
    end Get_Model;
 
    function Llama_Abort_Callback (Data : System.Address) return Boolean is
-      pragma Unreferenced (Data);
+      use System;
+      type Model_Type_Ptr is access all Model_Type;
+      function To_Ptr is new Ada.Unchecked_Conversion
+        (System.Address, Model_Type_Ptr);
+      Ptr : Model_Type_Ptr;
    begin
-      return False;
+      if Data = System.Null_Address then
+         return False;
+      end if;
+      Ptr := To_Ptr (Data);
+      return Priority_Model_Gate.Is_ELP0_Owner (Ptr.all)
+        and then Priority_Model_Gate.Should_Abort;
    end Llama_Abort_Callback;
 
    function Should_Abort_ELP0 return Boolean is

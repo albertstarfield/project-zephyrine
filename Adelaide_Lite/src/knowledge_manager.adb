@@ -126,6 +126,11 @@ package body Knowledge_Manager is
         "Adelaide Zephyrine Charlotte is a senior engineer. " &
         "She designs the Adelaide-Lite orchestration platform in Ada. " &
         "Ada is a structured, statically typed programming language.";
+      Success       : Boolean;
+      Chunk_Content : Unbounded_String;
+      Target_Text   : Unbounded_String;
+      Prompt        : Unbounded_String;
+      Res_Val       : Unbounded_String;
    begin
       accept Start;
       loop
@@ -133,61 +138,97 @@ package body Knowledge_Manager is
             delay 1.0;
          else
             Put_Line ("[Thought] Background thinker active. Processing...");
-            
-            declare
-                  while Start <= Res_Str'Last loop
-                     Next := Index (Res_Str (Start .. Res_Str'Last), (1 => ASCII.LF));
-                     declare
-                        Line_End : constant Natural :=
-                          (if Next = 0 then Res_Str'Last else Next - 1);
-                        Line     : constant String :=
-                          Trim (Res_Str (Start .. Line_End), Ada.Strings.Both);
-                        Pipe1    : constant Natural := Index (Line, "|");
-                     begin
-                        if Pipe1 > 0 then
-                           declare
-                              Pipe2 : constant Natural :=
-                                Index (Line (Pipe1 + 1 .. Line'Last), "|");
-                           begin
-                              if Pipe2 > 0 then
-                                 declare
-                                    Src : constant String :=
-                                      Trim
-                                        (Line (Line'First .. Pipe1 - 1),
-                                         Ada.Strings.Both);
-                                    Rel : constant String :=
-                                      Trim
-                                        (Line (Pipe1 + 1 .. Pipe2 - 1),
-                                         Ada.Strings.Both);
-                                    Tgt : constant String :=
-                                      Trim
-                                        (Line (Pipe2 + 1 .. Line'Last),
-                                         Ada.Strings.Both);
-                                 begin
-                                    if Src'Length > 0 and then
-                                       Tgt'Length > 0
-                                    then
-                                       Database_Manager.Add_Graph_Relation
-                                         (Src, Rel, Tgt);
-                                    end if;
-                                 end;
-                              end if;
-                           end;
+            Database_Manager.Get_Random_Literature_Chunk
+              (Chunk_Content, Success);
+            if Success and then Length (Chunk_Content) > 0 then
+               Target_Text := Chunk_Content;
+            else
+               Target_Text := To_Unbounded_String (Fallback_Text);
+            end if;
+
+            Prompt := To_Unbounded_String
+              ("Extract key entities and their relationships from this " &
+               "text: """ & To_String (Target_Text) & """. " &
+               "Format the output strictly as a list of pipe-separated " &
+               "relations: Source | Relation | Target. " &
+               "Return nothing else, no explanation.");
+
+            begin
+               Model_Manager.Generate
+                 (Kind          => Model_Manager.Qwen_0_8B,
+                  Prompt        => To_String (Prompt),
+                  Result        => Res_Val,
+                  Level         => Model_Manager.ELP0);
+
+               if To_String (Res_Val) /= "ERROR: Preempted" and then
+                  Length (Res_Val) > 0
+               then
+                  declare
+                     Res_Str : constant String := To_String (Res_Val);
+                     Start_Idx : Positive := 1;
+                     Next_Idx  : Natural;
+                  begin
+                     while Start_Idx <= Res_Str'Last loop
+                        Next_Idx := Index
+                          (Res_Str (Start_Idx .. Res_Str'Last),
+                           (1 => ASCII.LF));
+                        declare
+                           Line_End : constant Natural :=
+                             (if Next_Idx = 0 then Res_Str'Last
+                              else Next_Idx - 1);
+                           Line     : constant String :=
+                             Trim
+                               (Res_Str (Start_Idx .. Line_End),
+                                Ada.Strings.Both);
+                           Pipe1    : constant Natural := Index (Line, "|");
+                        begin
+                           if Pipe1 > 0 then
+                              declare
+                                 Pipe2 : constant Natural :=
+                                   Index
+                                     (Line (Pipe1 + 1 .. Line'Last), "|");
+                              begin
+                                 if Pipe2 > 0 then
+                                    declare
+                                       Src : constant String :=
+                                         Trim
+                                           (Line (Line'First .. Pipe1 - 1),
+                                            Ada.Strings.Both);
+                                       Rel : constant String :=
+                                         Trim
+                                           (Line (Pipe1 + 1 .. Pipe2 - 1),
+                                            Ada.Strings.Both);
+                                       Tgt : constant String :=
+                                         Trim
+                                           (Line (Pipe2 + 1 .. Line'Last),
+                                            Ada.Strings.Both);
+                                    begin
+                                       if Src'Length > 0 and then
+                                          Tgt'Length > 0
+                                       then
+                                          Database_Manager.Add_Graph_Relation
+                                            (Src, Rel, Tgt);
+                                       end if;
+                                    end;
+                                 end if;
+                              end;
+                           end if;
+                        end;
+
+                        if Next_Idx = 0 then
+                           exit;
                         end if;
-                     end;
+                        Start_Idx := Next_Idx + 1;
+                     end loop;
+                  end;
 
-                     if Next = 0 then
-                        exit;
-                     end if;
-                     Start := Next + 1;
-                  end loop;
-               end;
-
-               --  Export current knowledge graph to GraphML format
-               Database_Manager.Export_GraphML ("literature.graphml");
+                  --  Export current knowledge graph to GraphML format
+                  Database_Manager.Export_GraphML ("literature.graphml");
+               end if;
             exception
                when others =>
-                  Put_Line ("[Thought] Error in background thought extraction.");
+                  Put_Line
+                    ("[Thought] Error in background thought extraction.");
             end;
 
             delay 15.0;
