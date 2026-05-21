@@ -68,9 +68,6 @@ package body Adelaide_Server_Pkg is
                Payload := Raw_B;
             end if;
 
-            Put_Line ("[Server] Resolved Payload length: " &
-                      Length (Payload)'Image);
-
             if Length (Payload) > 0 then
                Val := Read (To_String (Payload));
                if Val.Has_Field ("messages") then
