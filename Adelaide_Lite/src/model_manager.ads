@@ -30,11 +30,12 @@ package Model_Manager is
 
    --  Perform inference (simplified for now)
    function Generate
-     (Kind          : Model_Type;
-      Prompt        : String;
-      Session_ID    : String := "";
-      Requested_Ctx : Positive := 4096;
-      Stream        : Streaming_Queue.Queue_Access := null) return String;
+     (Kind            : Model_Type;
+      Prompt          : String;
+      Session_ID      : String := "";
+      Requested_Ctx   : Positive := 4096;
+      Stream          : Streaming_Queue.Queue_Access := null;
+      Orch_Think_Open : Boolean := False) return String;
 
    --  Perform multi-hop reasoning (0.8b thinking -> 4b final)
    function Hybrid_Generate
