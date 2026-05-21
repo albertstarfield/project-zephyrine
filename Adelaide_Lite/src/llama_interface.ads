@@ -233,11 +233,14 @@ package Llama_Interface is
    function Llama_Sampler_Init_Top_P
      (P : Float; Min_Keep : size_t) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Init_Top_P, "llama_sampler_init_top_p");
+function Llama_Sampler_Init_Temp (T : Float) return Llama_Sampler;
+pragma Import (C, Llama_Sampler_Init_Temp, "llama_sampler_init_temp");
 
-   function Llama_Sampler_Init_Temp (T : Float) return Llama_Sampler;
-   pragma Import (C, Llama_Sampler_Init_Temp, "llama_sampler_init_temp");
+function Llama_Sampler_Init_Dist (Seed : unsigned) return Llama_Sampler;
+pragma Import (C, Llama_Sampler_Init_Dist, "llama_sampler_init_dist");
 
-   function Llama_Sampler_Init_Penalties
+function Llama_Sampler_Init_Penalties
+
      (Penalty_Last_N : int;
       Penalty_Repeat : Float;
       Penalty_Freq   : Float;

@@ -7,7 +7,7 @@ with AWS.Messages;
 with AWS.Response.Set;
 with GNATCOLL.JSON;
 with Math_Utils;
-with Model_Manager;
+with Model_Manager; use Model_Manager;
 with Ada.Strings.Fixed;
 
 package body Adelaide_Server_Pkg is
@@ -241,6 +241,9 @@ package body Adelaide_Server_Pkg is
       Is_Match : constant Boolean := Similarity > 0.0;
       Full_Content : constant String :=
         (if Is_Match then Think_Header & Text else Text);
+      
+      --  Metamodel Label
+      Meta_Model : constant String := "adelaide-hybrid";
    begin
       --  1. Anthropic Format
       if URI_Str = "/v1/messages" then
@@ -256,7 +259,7 @@ package body Adelaide_Server_Pkg is
             Append (Content_Arr, Text_Obj);
             Set_Field (Res_Obj, "content", Content_Arr);
          end;
-         Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
+         Set_Field (Res_Obj, "model", Meta_Model);
          Set_Field (Res_Obj, "stop_reason", String'("end_turn"));
          return Write (Res_Obj);
 
@@ -284,7 +287,7 @@ package body Adelaide_Server_Pkg is
       elsif URI_Str = "/v1/chat/completions" then
          Set_Field (Res_Obj, "id", String'("chatcmpl-adelaide"));
          Set_Field (Res_Obj, "object", String'("chat.completion"));
-         Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
+         Set_Field (Res_Obj, "model", Meta_Model);
          declare
             Choices_Arr : JSON_Array;
             Choice_Obj  : constant JSON_Value := Create_Object;
@@ -303,7 +306,7 @@ package body Adelaide_Server_Pkg is
       --  4. Ollama Format (Default)
       else
          if URI_Str = "/api/chat" or else URI_Str = "/api/chat/" then
-            Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
+            Set_Field (Res_Obj, "model", Meta_Model);
             declare
                Msg_Obj : constant JSON_Value := Create_Object;
             begin
@@ -313,7 +316,7 @@ package body Adelaide_Server_Pkg is
             end;
             Set_Field (Res_Obj, "done", True);
          else
-            Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
+            Set_Field (Res_Obj, "model", Meta_Model);
             Set_Field (Res_Obj, "response", Full_Content);
             Set_Field (Res_Obj, "done", True);
          end if;
@@ -639,42 +642,24 @@ package body Adelaide_Server_Pkg is
                      end;
                   end if;
 
-                  --  Cache miss: internal Model_Manager
+                  --  ENFORCED SERVER AUTHORITY: Always use Hybrid 4B Pipeline
+                  --  Ignoring client model choice to maintain architecture integrity.
                   declare
                      use GNATCOLL.JSON;
-                     Res : constant Read_Result := Read (Body_Str);
-                     Model_Name : Unbounded_String :=
-                       To_Unbounded_String ("adelaide-hybrid");
-
-                     --  Estimate required context size
-                     Estimated_Tokens : constant Positive :=
-                       (Body_Str'Length / 3) + 2048;
                   begin
-                     if Res.Success and then Has_Field (Res.Value, "model") then
-                        Model_Name := To_Unbounded_String
-                          (String'(Get (Get (Res.Value, "model"))));
-                     end if;
+                     Ada.Text_IO.Put_Line (" [INPUT] Prompt: " & Prompt);
+                     Ada.Text_IO.Put_Line (" [SERVER] Authority: Routing to Hybrid 4B Pipeline (Adelaide).");
 
                      declare
-                        Model_Str : constant String := To_String (Model_Name);
-                        Kind : constant Model_Manager.Model_Type :=
-                          Model_Manager.Get_Kind_For_Model_Name (Model_Str);
-                        Gen_Text : constant String :=
-                          (if Model_Str = "adelaide-hybrid" or else
-                              Model_Str = "claude-3-5-sonnet-20241022" or else
-                              Model_Str = "gemini-1.5-pro" or else
-                              Model_Str = "lm-studio"
-                           then Model_Manager.Hybrid_Generate (Prompt)
-                           else Model_Manager.Generate
-                             (Kind, Prompt,
-                              Requested_Ctx => Estimated_Tokens));
+                        Gen_Text : constant String := Model_Manager.Hybrid_Generate (Prompt);
                         Formatted_Resp : constant String :=
                           Format_Universal_Response (URI_Str, Gen_Text, 0.0);
-                        Resp : AWS.Response.Data :=
-                          AWS.Response.Build
-                            (Content_Type => "application/json",
-                             Message_Body => Formatted_Resp);
+                        Resp : AWS.Response.Data;
                      begin
+                        Ada.Text_IO.Put_Line (" [OUTPUT] Final Response Ready.");
+                        Resp := AWS.Response.Build
+                          (Content_Type => "application/json",
+                           Message_Body => Formatted_Resp);
                         Set_CORS (Resp);
                         return Resp;
                      end;
@@ -686,6 +671,7 @@ package body Adelaide_Server_Pkg is
             then
                declare
                   Prompt : constant String := Extract_Prompt (Body_Str);
+                  --  ENFORCED SERVER AUTHORITY: Model_Manager.Get_Embedding is locked to Qwen_Embedding.
                   Vec    : constant Math_Utils.Vector :=
                     Get_Query_Embedding (Prompt);
                   use GNATCOLL.JSON;
@@ -706,7 +692,7 @@ package body Adelaide_Server_Pkg is
                         Append (Data_Arr, Data_Obj);
                         Set_Field (Res_Obj, "object", String'("list"));
                         Set_Field (Res_Obj, "data", Data_Arr);
-                        Set_Field (Res_Obj, "model", String'("qwen-embedding"));
+                        Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
                      end;
                   else
                      Set_Field (Res_Obj, "embedding", Arr);
