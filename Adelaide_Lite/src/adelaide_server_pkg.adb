@@ -746,12 +746,12 @@ package body Adelaide_Server_Pkg is
                URI_Str = "/think"
             then
                declare
-                  Prompt : constant String := Extract_Prompt (Body_Str);
+                  Prompt : Unbounded_String := To_Unbounded_String (Extract_Prompt (Body_Str));
                begin
-                  if Prompt /= "" then
+                  if To_String (Prompt) /= "" then
                      declare
                         Query_Vec : constant Math_Utils.Vector :=
-                          Get_Query_Embedding (Prompt);
+                          Get_Query_Embedding (To_String (Prompt));
                      begin
                         if Query_Vec'Length > 0 then
                            declare
@@ -836,7 +836,7 @@ package body Adelaide_Server_Pkg is
                          else AWS.Status.Peername (Request));
                   begin
                      Ada.Text_IO.Put_Line
-                       (" [INPUT] Prompt: " & Prompt &
+                       (" [INPUT] Prompt: " & To_String (Prompt) &
                         " (Session: " & Session_ID & ")");
                      Ada.Text_IO.Put_Line
                        (" [SERVER] Authority: " &
@@ -868,7 +868,7 @@ package body Adelaide_Server_Pkg is
                                   N_Res   : Natural;
                                   RAG_Context : Unbounded_String;
                                begin
-                                  Model_Manager.Get_Embedding (Prompt, V);
+                                  Model_Manager.Get_Embedding (To_String (Prompt), V);
                                   Search_Literature (V, Results, N_Res);
                                   if N_Res > 0 then
                                      Append (RAG_Context, "[LOCAL LITERATURE CONTEXT]" & ASCII.LF);
@@ -876,12 +876,12 @@ package body Adelaide_Server_Pkg is
                                         Append (RAG_Context, "Source: " & To_String (Results (J).File_Path) & ASCII.LF);
                                         Append (RAG_Context, To_String (Results (J).Content) & ASCII.LF & "---" & ASCII.LF);
                                      end loop;
-                                     Prompt := To_String (RAG_Context) & ASCII.LF & Prompt;
+                                     Prompt := RAG_Context & Prompt;
                                   end if;
                                end;
 
                                Stream_Registry.Register (Session_ID, Q);
-                               T.Start (Q, Prompt, Session_ID, URI_Str,
+                               T.Start (Q, To_String (Prompt), Session_ID, URI_Str,
                                         Start_Time, Model_Manager.ELP1);
                                Resp := AWS.Response.Stream
                                  (Content_Type => "text/event-stream",
@@ -898,7 +898,7 @@ package body Adelaide_Server_Pkg is
                               N_Res   : Natural;
                               RAG_Context : Unbounded_String;
                            begin
-                              Model_Manager.Get_Embedding (Prompt, V);
+                              Model_Manager.Get_Embedding (To_String (Prompt), V);
                               Search_Literature (V, Results, N_Res);
                               if N_Res > 0 then
                                  Append (RAG_Context, "[LOCAL LITERATURE CONTEXT]" & ASCII.LF);
@@ -906,7 +906,7 @@ package body Adelaide_Server_Pkg is
                                     Append (RAG_Context, "Source: " & To_String (Results (J).File_Path) & ASCII.LF);
                                     Append (RAG_Context, To_String (Results (J).Content) & ASCII.LF & "---" & ASCII.LF);
                                  end loop;
-                                 Prompt := To_String (RAG_Context) & ASCII.LF & Prompt;
+                                 Prompt := RAG_Context & Prompt;
                               end if;
                            end;
 
@@ -914,7 +914,7 @@ package body Adelaide_Server_Pkg is
                                Gen_Text : Unbounded_String;
                            begin
                                Model_Manager.Hybrid_Generate
-                                   (Prompt, Gen_Text, Session_ID, null,
+                                   (To_String (Prompt), Gen_Text, Session_ID, null,
                                     Model_Manager.ELP1);
                                declare
                                   End_Time : constant Ada.Calendar.Time :=
