@@ -7,6 +7,7 @@ with Model_Manager;
 with Integrity_Utils;
 with Toolchain_Manager;
 with Interfaces; use Interfaces;
+with GNAT.OS_Lib;
 
 procedure Adelaide_Server is
    pragma Spark_Mode (Off);
@@ -152,7 +153,7 @@ begin
          end;
       end loop;
       if not Success then
-         return;
+         GNAT.OS_Lib.OS_Exit (1);
       end if;
    end;
 
