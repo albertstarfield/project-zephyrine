@@ -20,83 +20,61 @@ package body Knowledge_Manager is
    
    First_Index_Done : Boolean := False;
 
-   --  Task to traverse and index files
    task Indexing_Task is
       entry Start;
    end Indexing_Task;
 
-   --  Task for proactive background thinking
    task Thought_Task is
       entry Start;
    end Thought_Task;
 
-   ----------------
-   -- Initialize --
-   ----------------
    procedure Initialize is
    begin
       Database_Manager.Initialize;
    end Initialize;
 
-   -----------------
-   -- Start_Tasks --
-   -----------------
    procedure Start_Tasks is
    begin
       Indexing_Task.Start;
       Thought_Task.Start;
    end Start_Tasks;
 
-   -------------------
-   -- Indexing_Task --
-   -------------------
    task body Indexing_Task is
       procedure Process_File (Path : String) is
          use GNATCOLL.JSON;
-         Request_Body : constant JSON_Value := Create_Object;
-         Resp : AWS.Response.Data;
+         Body_Obj : constant JSON_Value := Create_Object;
+         Resp     : AWS.Response.Data;
       begin
-         --  Check preemption
-         if Model_Manager.Should_Abort_ELP0 then
-            return;
-         end if;
-
+         if Model_Manager.Should_Abort_ELP0 then return; end if;
          Put_Line ("[Indexer] Processing: " & Path);
-         Set_Field (Request_Body, "path", Path);
-         
+         Set_Field (Body_Obj, "path", Path);
          begin
-            Resp := AWS.Client.Post (ORCHESTRATOR_URL, Write (Request_Body));
+            Resp := AWS.Client.Post (ORCHESTRATOR_URL, Write (Body_Obj));
             if AWS.Response.Status_Code (Resp) = S200 then
                declare
                   B_Str : constant String := AWS.Response.Message_Body (Resp);
-                  Val_Res : constant Read_Result := Read (B_Str);
+                  R_Res : constant Read_Result := Read (B_Str);
                begin
-                  if Val_Res.Success then
+                  if R_Res.Success then
                      declare
-                        Val : constant JSON_Value := Val_Res.Value;
-                        Content : constant String := Get (Val, "content");
+                        C_Text : constant String := Get (R_Res.Value, "content");
                      begin
-                        if Content'Length > 0 then
-                           --  Chunking (simplified for now)
+                        if C_Text'Length > 0 then
                            declare
-                              C_Size : constant Positive := 1000;
-                              Pos    : Positive := Content'First;
-                              V      : Math_Utils.Vector (1 .. 16384);
-                              V_Len  : Natural;
+                              V : Math_Utils.Vector (1 .. 16384);
+                              VL : Natural;
+                              Pos : Positive := C_Text'First;
                            begin
-                              while Pos <= Content'Last loop
+                              while Pos <= C_Text'Last loop
                                  declare
-                                    Last : constant Positive := 
-                                      Positive'Min (Pos + C_Size - 1, Content'Last);
-                                    Chunk : constant String := Content (Pos .. Last);
+                                    L : constant Positive := Positive'Min (Pos + 999, C_Text'Last);
+                                    Chunk : constant String := C_Text (Pos .. L);
                                  begin
-                                    Model_Manager.Get_Embedding (Chunk, V, V_Len);
-                                    if V_Len > 0 then
-                                       Database_Manager.Add_Literature_Chunk
-                                         (Path, Chunk, V (1 .. V_Len), "hash_placeholder");
+                                    Model_Manager.Get_Embedding (Chunk, V, VL);
+                                    if VL > 0 then
+                                       Database_Manager.Add_Literature_Chunk (Path, Chunk, V (1 .. VL), "hash");
                                     end if;
-                                    Pos := Pos + C_Size;
-
+                                    Pos := L + 1;
                                     exit when Model_Manager.Should_Abort_ELP0;
                                  end;
                               end loop;
@@ -105,116 +83,68 @@ package body Knowledge_Manager is
                      end;
                   end if;
                end;
-
             end if;
-         exception
-            when others =>
-               Put_Line ("[Indexer] Extraction bridge failed for " & Path);
-         end;
+         exception when others => null; end;
       end Process_File;
 
-      procedure Scan_Dir (Dir : String) is
+      procedure Scan (Dir : String) is
          use Ada.Directories;
-         Filter : constant Filter_Type := 
-           (Ordinary_File => True, others => False);
-         Ent    : Directory_Entry_Type;
          Search : Search_Type;
+         Ent : Directory_Entry_Type;
       begin
-         Start_Search (Search, Dir, "*", Filter);
-         while Ada.Directories.More_Entries (Search) loop
-            Ada.Directories.Get_Next_Entry (Search, Ent);
-            Process_File (Ada.Directories.Full_Name (Ent));
+         Start_Search (Search, Dir, "*");
+         while More_Entries (Search) loop
+            Get_Next_Entry (Search, Ent);
+            if Kind (Ent) = Ordinary_File then Process_File (Full_Name (Ent)); end if;
             exit when Model_Manager.Should_Abort_ELP0;
          end loop;
-         Ada.Directories.End_Search (Search);
-      end Scan_Dir;
-
+         End_Search (Search);
+      exception when others => null; end Scan;
    begin
       accept Start;
       loop
          begin
-            Put_Line ("[Indexer] Starting background crawl...");
-            Scan_Dir ("legacyPython");
-            Scan_Dir ("Adelaide_Lite/src");
-            
+            Put_Line ("[Indexer] Crawl started.");
+            Scan ("legacyPython");
+            Scan ("Adelaide_Lite/src");
             First_Index_Done := True;
-            Put_Line ("[Indexer] Crawl complete. Sleeping...");
-            delay 300.0; --  Wait 5 mins before re-scan
-         exception
-            when E : others =>
-               Put_Line ("[Indexer] Fatal Error in loop: " & 
-                         Ada.Exceptions.Exception_Message (E));
-               delay 60.0;
-         end;
+            Put_Line ("[Indexer] Crawl done.");
+            delay 300.0;
+         exception when E : others => delay 60.0; end;
       end loop;
    end Indexing_Task;
 
-   ------------------
-   -- Thought_Task --
-   ------------------
    task body Thought_Task is
       Res : Unbounded_String;
-      Prompt : constant String := 
-        "Synthesize a new research hypothesis based on the existing " &
-        "literature. Focus on cross-domain connections. Output in JSON: " &
-        "{""subject"": ""..."", ""relation"": ""...""," &
-        " ""target"": ""..."", ""thought"": ""...""}";
+      Prompt : constant String := "Synthesize knowledge relation in JSON: {""subject"": ""..."",""relation"": ""..."",""target"": ""...""}";
    begin
       accept Start;
       loop
          begin
-            if First_Index_Done then
-               if not Model_Manager.Should_Abort_ELP0 then
-                  Put_Line ("[Proactive] Initiating background thought cycle...");
-                  
-                  --  Use ELP0 for background thinking
-                  Model_Manager.Hybrid_Generate
-                    (Prompt, Res, "background-thought-loop", 
-                     null, Model_Manager.ELP0);
-                  
-                  declare
-                     use GNATCOLL.JSON;
-                     Raw : constant String := To_String (Res);
-                     --  Attempt to parse JSON from thought
-                     Start_Idx : constant Natural := Index (Raw, "{");
-                     End_Idx   : Natural := 0;
-                  begin
-                     if Start_Idx > 0 then
-                        for K in reverse Raw'Range loop
-                           if Raw (K) = '}' then
-                              End_Idx := K;
-                              exit;
-                           end if;
-                        end loop;
-                     end if;
-
-                     if Start_Idx > 0 and then End_Idx > Start_Idx then
+            if First_Index_Done and then not Model_Manager.Should_Abort_ELP0 then
+               Model_Manager.Hybrid_Generate (Prompt, Res, GNATCOLL.JSON.Empty_Array, "thought-loop", null, Model_Manager.ELP0);
+               declare
+                  use GNATCOLL.JSON;
+                  S : constant String := To_String (Res);
+                  P1 : constant Natural := Index (S, "{");
+                  P2 : Natural := 0;
+               begin
+                  if P1 > 0 then
+                     for K in reverse S'Range loop if S (K) = '}' then P2 := K; exit; end if; end loop;
+                     if P2 > P1 then
                         declare
-                           JSON_Raw : constant String := 
-                             Raw (Start_Idx .. End_Idx);
-                           Val : constant Read_Result := Read (JSON_Raw);
+                           R : constant Read_Result := Read (S (P1 .. P2));
                         begin
-                           if Val.Success then
-                              Database_Manager.Add_Graph_Relation
-                                (Get (Val.Value, "subject"),
-                                 Get (Val.Value, "relation"),
-                                 Get (Val.Value, "target"));
-                              Put_Line ("[Proactive] Knowledge Graph updated: " &
-                                        Get (Val.Value, "subject") & " -> " &
-                                        Get (Val.Value, "relation") & " -> " &
-                                        Get (Val.Value, "target"));
+                           if R.Success then
+                              Database_Manager.Add_Graph_Relation (Get (R.Value, "subject"), Get (R.Value, "relation"), Get (R.Value, "target"));
                            end if;
                         end;
                      end if;
-                  end;
-               end if;
+                  end if;
+               end;
             end if;
-         exception
-            when E : others =>
-               Put_Line ("[Proactive] Error in thought cycle: " &
-                         Ada.Exceptions.Exception_Message (E));
-         end;
-         delay 60.0; --  Wait 1 min between thoughts
+         exception when others => null; end;
+         delay 60.0;
       end loop;
    end Thought_Task;
 
