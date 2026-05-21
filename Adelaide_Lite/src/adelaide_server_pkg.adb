@@ -9,6 +9,7 @@ with AWS.Resources.Streams;
 with GNATCOLL.JSON;
 with Math_Utils;
 with Model_Manager; use Model_Manager;
+with Database_Manager;
 with Ada.Strings.Fixed;
 with Ada.Calendar; use Ada.Calendar;
 with Streaming_Queue;
