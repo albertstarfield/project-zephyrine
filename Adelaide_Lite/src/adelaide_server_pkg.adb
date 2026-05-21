@@ -330,25 +330,64 @@ package body Adelaide_Server_Pkg is
    function Get_Query_Embedding (Prompt : String) return Math_Utils.Vector is
       task Worker is
          entry Start (P : String);
-         entry Finish (R : out Math_Utils.Vector);
+         entry Finish (R : out Unbounded_String);
       end Worker;
       task body Worker is
          Local_P : Unbounded_String;
-         Local_V : Math_Utils.Vector (1 .. 1024);
+         Local_V : Math_Utils.Vector (1 .. 16384); --  Large safe buffer
+         V_Len   : Natural := 0;
       begin
          accept Start (P : String) do
             Local_P := To_Unbounded_String (P);
          end Start;
-         Model_Manager.Get_Embedding (To_String (Local_P), Local_V);
-         accept Finish (R : out Math_Utils.Vector) do
-            R := Local_V;
+         
+         declare
+            --  Temporary vector to get result
+            T_Vec : Math_Utils.Vector (1 .. 16384);
+         begin
+            Model_Manager.Get_Embedding (To_String (Local_P), T_Vec);
+            V_Len := T_Vec'Length;
+            if V_Len > 0 then
+               Local_V (1 .. V_Len) := T_Vec;
+            end if;
+         end;
+
+         accept Finish (R : out Unbounded_String) do
+            --  Encode vector as JSON string for safe transport through task
+            declare
+               use GNATCOLL.JSON;
+               Arr : JSON_Array := Empty_Array;
+            begin
+               for I in 1 .. V_Len loop
+                  Append (Arr, Create (Local_V (I)));
+               end loop;
+               R := To_Unbounded_String (Write (Create (Arr)));
+            end;
          end Finish;
       end Worker;
-      Res_V : Math_Utils.Vector (1 .. 1024);
+      Res_U : Unbounded_String;
    begin
       Worker.Start (Prompt);
-      Worker.Finish (Res_V);
-      return Res_V;
+      Worker.Finish (Res_U);
+      
+      declare
+         use GNATCOLL.JSON;
+         Val : constant Read_Result := Read (To_String (Res_U));
+      begin
+         if Val.Success then
+            declare
+               Arr : constant JSON_Array := Get (Val.Value);
+               Len : constant Natural := Length (Arr);
+               Ret_V : Math_Utils.Vector (1 .. Len);
+            begin
+               for I in 1 .. Len loop
+                  Ret_V (I) := Get (Get (Arr, I));
+               end loop;
+               return Ret_V;
+            end;
+         end if;
+      end;
+      return (1 .. 0 => 0.0);
    exception
       when E : others =>
          Ada.Text_IO.Put_Line
@@ -594,7 +633,7 @@ package body Adelaide_Server_Pkg is
             declare
                use GNATCOLL.JSON;
                Res_Obj    : constant JSON_Value := Create_Object;
-               Models_Arr : JSON_Array;
+               Models_Arr : JSON_Array := Empty_Array;
                function Create_Model_Info
                  (Name : String; Size : Long_Long_Integer) return JSON_Value
                is
@@ -611,8 +650,8 @@ package body Adelaide_Server_Pkg is
                   Set_Field (D, "format", String'("gguf"));
                   Set_Field (D, "family", String'("qwen"));
                   --  Massive Context Capability
-                  Set_Field (D, "context_length", Create (Long_Long_Integer'(9_223_372_036_854_775_807)));
-                  Set_Field (D, "embedding_length", Create (Long_Long_Integer'(4_294_967_295)));
+                  Set_Field (D, "context_length", Create (Long_Long_Integer (9_223_372_036_854_775_807)));
+                  Set_Field (D, "embedding_length", Create (Long_Long_Integer (4_294_967_295)));
                   Set_Field (M, "details", D);
                   return M;
                end Create_Model_Info;
@@ -636,7 +675,7 @@ package body Adelaide_Server_Pkg is
             declare
                use GNATCOLL.JSON;
                Res_Obj    : constant JSON_Value := Create_Object;
-               Models_Arr : JSON_Array;
+               Models_Arr : JSON_Array := Empty_Array;
                function Create_Running_Info (Name : String) return JSON_Value is
                   M : constant JSON_Value := Create_Object;
                   D : constant JSON_Value := Create_Object;
