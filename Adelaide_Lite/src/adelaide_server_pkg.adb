@@ -849,28 +849,31 @@ package body Adelaide_Server_Pkg is
                             end;
                         else
                            declare
-                               Gen_Text : constant String :=
-                                 Model_Manager.Hybrid_Generate
-                                   (Prompt, Session_ID, null,
-                                    Model_Manager.ELP1);
-                               End_Time : constant Ada.Calendar.Time :=
-                                 Ada.Calendar.Clock;
-                               Elapsed_Secs : constant Duration :=
-                                 End_Time - Start_Time;
-                               Elapsed_Ns   : constant Long_Integer :=
-                                 Long_Integer
-                                   (Elapsed_Secs * 1_000_000_000.0);
-                               Formatted_Resp : constant String :=
-                                 Format_Universal_Response
-                                   (URI_Str, Gen_Text, 0.0, Elapsed_Ns);
-                              Resp : AWS.Response.Data;
+                               Gen_Text : Unbounded_String;
                            begin
-                              Ada.Text_IO.Put_Line (" [OUTPUT] Final Response Ready.");
-                              Resp := AWS.Response.Build
-                                (Content_Type => "application/json",
-                                 Message_Body => Formatted_Resp);
-                              Set_CORS (Resp);
-                              return Resp;
+                               Model_Manager.Hybrid_Generate
+                                   (Prompt, Gen_Text, Session_ID, null,
+                                    Model_Manager.ELP1);
+                               declare
+                                  End_Time : constant Ada.Calendar.Time :=
+                                    Ada.Calendar.Clock;
+                                  Elapsed_Secs : constant Duration :=
+                                    End_Time - Start_Time;
+                                  Elapsed_Ns   : constant Long_Integer :=
+                                    Long_Integer
+                                      (Elapsed_Secs * 1_000_000_000.0);
+                                  Formatted_Resp : constant String :=
+                                    Format_Universal_Response
+                                      (URI_Str, To_String (Gen_Text), 0.0, Elapsed_Ns);
+                                 Resp : AWS.Response.Data;
+                              begin
+                                 Ada.Text_IO.Put_Line (" [OUTPUT] Final Response Ready.");
+                                 Resp := AWS.Response.Build
+                                   (Content_Type => "application/json",
+                                    Message_Body => Formatted_Resp);
+                                 Set_CORS (Resp);
+                                 return Resp;
+                               end;
                            end;
                         end if;
                      end;

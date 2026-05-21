@@ -406,28 +406,57 @@ package body Model_Manager is
    function Get_Request_Category
      (Msg : String; Session_ID : String := ""; Level : ELP_Level := ELP1) return String
    is
-      Prompt : constant String :=
-        "Analyze this request: '" & Msg &
-        "'. Categorize as 'casual' or 'technical'. " &
-        "Respond with just one word.";
-      Result : constant String :=
-        Generate
-          (Qwen_0_8B,
-           Wrap_ChatML ("You are the Router. Categorize the request.", Prompt),
-           Session_ID, 2048, null, False, Level);
-   begin
-      Put_Line ("[Intent Phase] Raw response: '" & Result & "'");
-      declare
-         use Ada.Characters.Handling;
-         Lower_Res : constant String := To_Lower (Result);
+      task Worker is
+         entry Start (M : String; S : String; L : ELP_Level);
+         entry Finish (R : out Unbounded_String);
+      end Worker;
+      task body Worker is
+         Local_M : Unbounded_String;
+         Local_S : Unbounded_String;
+         Local_L : ELP_Level;
+         Local_R : Unbounded_String;
       begin
-         if Index (Lower_Res, "casual") > 0 then
-            Put_Line ("[Intent Phase] Resolved as CASUAL.");
-            return "casual";
-         else
-            Put_Line ("[Intent Phase] Resolved as TECHNICAL.");
-            return "technical";
-         end if;
+         accept Start (M : String; S : String; L : ELP_Level) do
+            Local_M := To_Unbounded_String (M);
+            Local_S := To_Unbounded_String (S);
+            Local_L := L;
+         end Start;
+         declare
+            Prompt : constant String :=
+              "Analyze this request: '" & To_String (Local_M) &
+              "'. Categorize as 'casual' or 'technical'. " &
+              "Respond with just one word.";
+         begin
+            Generate
+              (Qwen_0_8B,
+               Wrap_ChatML ("You are the Router. Categorize the request.", Prompt),
+               Local_R,
+               To_String (Local_S), 2048, null, False, Local_L);
+         end;
+         accept Finish (R : out Unbounded_String) do
+            R := Local_R;
+         end Finish;
+      end Worker;
+      Res_U : Unbounded_String;
+   begin
+      Worker.Start (Msg, Session_ID, Level);
+      Worker.Finish (Res_U);
+      declare
+         Result : constant String := To_String (Res_U);
+      begin
+         Put_Line ("[Intent Phase] Raw response: '" & Result & "'");
+         declare
+            use Ada.Characters.Handling;
+            Lower_Res : constant String := To_Lower (Result);
+         begin
+            if Index (Lower_Res, "casual") > 0 then
+               Put_Line ("[Intent Phase] Resolved as CASUAL.");
+               return "casual";
+            else
+               Put_Line ("[Intent Phase] Resolved as TECHNICAL.");
+               return "technical";
+            end if;
+         end;
       end;
    exception
       when others =>
@@ -505,10 +534,28 @@ package body Model_Manager is
    end Grade_Response_Quality;
 
     function Generator_Callback (Prompt : String) return String is
+       task Worker is
+          entry Start (P : String);
+          entry Finish (R : out Unbounded_String);
+       end Worker;
+       task body Worker is
+          Local_P : Unbounded_String;
+          Local_R : Unbounded_String;
+       begin
+          accept Start (P : String) do
+             Local_P := To_Unbounded_String (P);
+          end Start;
+          Generate (Qwen_4B, To_String (Local_P), Local_R, "", 4096, null, False, ELP1);
+          accept Finish (R : out Unbounded_String) do
+             R := Local_R;
+          end Finish;
+       end Worker;
+       Res : Unbounded_String;
     begin
-       return Generate (Qwen_4B, Prompt, "", 4096, null);
+       Worker.Start (Prompt);
+       Worker.Finish (Res);
+       return To_String (Res);
     end Generator_Callback;
-
     type Stream_Parser_State is record
        Orch_Think_Open : Boolean := False;
        Header_Closed   : Boolean := False;
