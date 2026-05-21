@@ -14,8 +14,6 @@ with Streaming_Queue;
 
 package body Adelaide_Server_Pkg is
 
-   OLLAMA_PORT : constant String := "11435";
-
    subtype ID_Type is String (1 .. 64);
    type Entry_Rec is record
       ID  : ID_Type;
@@ -56,17 +54,18 @@ package body Adelaide_Server_Pkg is
          for I in 1 .. Count loop
             if Map (I).ID (1 .. Map (I).Len) = ID then
                Map (I .. Count - 1) := Map (I + 1 .. Count);
-               Count := Count - 1; return;
+               Count := Count - 1;
+               return;
             end if;
          end loop;
       end Unregister;
 
       procedure Push_Log (ID : String; Log : String) is
-         use Streaming_Queue;
       begin
          for I in 1 .. Count loop
             if Map (I).ID (1 .. Map (I).Len) = ID then
-               Model_Manager.Push_Chunk (Map (I).Q, ID, Log); return;
+               Model_Manager.Push_Chunk (Map (I).Q, ID, Log);
+               return;
             end if;
          end loop;
          Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "[Log] " & ID & ": " & Log);
@@ -74,35 +73,64 @@ package body Adelaide_Server_Pkg is
    end Stream_Registry;
 
    procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is
-   begin Stream_Registry.Register (ID, Q); end Register;
+   begin
+      Stream_Registry.Register (ID, Q);
+   end Register;
 
    procedure Unregister (ID : String) is
-   begin Stream_Registry.Unregister (ID); end Unregister;
+   begin
+      Stream_Registry.Unregister (ID);
+   end Unregister;
 
    procedure Push_Log (ID : String; Log : String) is
-   begin Stream_Registry.Push_Log (ID, Log); end Push_Log;
+   begin
+      Stream_Registry.Push_Log (ID, Log);
+   end Push_Log;
 
    task type Generator_Task is
-      entry Start (Stream_Ptr : Streaming_Queue.Queue_Access; Prompt_Val : String; Images_Val : GNATCOLL.JSON.JSON_Array; Session_ID_Val : String; URI_Str_Val : String; Start_Time_Val : Ada.Calendar.Time; Level_Val : Model_Manager.ELP_Level := Model_Manager.ELP1);
+      entry Start
+        (Stream_Ptr     : Streaming_Queue.Queue_Access;
+         Prompt_Val     : String;
+         Images_Val     : GNATCOLL.JSON.JSON_Array;
+         Session_ID_Val : String;
+         URI_Str_Val    : String;
+         Start_Time_Val : Ada.Calendar.Time;
+         Level_Val      : Model_Manager.ELP_Level := Model_Manager.ELP1);
    end Generator_Task;
+
    type Generator_Task_Access is access Generator_Task;
 
    task body Generator_Task is
-      Stream : Streaming_Queue.Queue_Access;
-      Prompt : Unbounded_String;
-      Images : GNATCOLL.JSON.JSON_Array;
+      Stream     : Streaming_Queue.Queue_Access;
+      Prompt     : Unbounded_String;
+      Images     : GNATCOLL.JSON.JSON_Array;
       Session_ID : Unbounded_String;
-      Level : Model_Manager.ELP_Level;
+      Level      : Model_Manager.ELP_Level;
    begin
-      accept Start (Stream_Ptr : Streaming_Queue.Queue_Access; Prompt_Val : String; Images_Val : GNATCOLL.JSON.JSON_Array; Session_ID_Val : String; URI_Str_Val : String; Start_Time_Val : Ada.Calendar.Time; Level_Val : Model_Manager.ELP_Level := Model_Manager.ELP1) do
-         Stream := Stream_Ptr; Prompt := To_Unbounded_String (Prompt_Val); Images := Images_Val; Session_ID := To_Unbounded_String (Session_ID_Val); Level := Level_Val;
+      accept Start
+        (Stream_Ptr     : Streaming_Queue.Queue_Access;
+         Prompt_Val     : String;
+         Images_Val     : GNATCOLL.JSON.JSON_Array;
+         Session_ID_Val : String;
+         URI_Str_Val    : String;
+         Start_Time_Val : Ada.Calendar.Time;
+         Level_Val      : Model_Manager.ELP_Level := Model_Manager.ELP1) do
+         Stream     := Stream_Ptr;
+         Prompt     := To_Unbounded_String (Prompt_Val);
+         Images     := Images_Val;
+         Session_ID := To_Unbounded_String (Session_ID_Val);
+         Level      := Level_Val;
       end Start;
+
       declare
          Res : Unbounded_String;
       begin
-         Model_Manager.Hybrid_Generate (To_String (Prompt), Res, Images, To_String (Session_ID), Stream, Level);
+         Model_Manager.Hybrid_Generate
+             (To_String (Prompt), Res, Images, To_String (Session_ID), Stream, Level);
          Stream_Registry.Unregister (To_String (Session_ID));
-      exception when others => Stream_Registry.Unregister (To_String (Session_ID));
+      exception
+         when others =>
+            Stream_Registry.Unregister (To_String (Session_ID));
       end;
    end Generator_Task;
 
@@ -110,8 +138,11 @@ package body Adelaide_Server_Pkg is
       use GNATCOLL.JSON;
       Res : constant Read_Result := Read (Body_Str);
    begin
-      if not Res.Success or else Res.Value.Kind /= JSON_Object_Type then return ""; end if;
-      if Has_Field (Res.Value, "prompt") then return Get (Get (Res.Value, "prompt"));
+      if not Res.Success or else Res.Value.Kind /= JSON_Object_Type then
+         return "";
+      end if;
+      if Has_Field (Res.Value, "prompt") then
+         return Get (Get (Res.Value, "prompt"));
       elsif Has_Field (Res.Value, "messages") then
          declare
             Arr : constant JSON_Array := Get (Get (Res.Value, "messages"));
@@ -121,14 +152,17 @@ package body Adelaide_Server_Pkg is
                   Last : constant JSON_Value := Get (Arr, Length (Arr));
                begin
                   if Has_Field (Last, "content") then
-                     if Get (Last, "content").Kind = JSON_String_Type then return Get (Get (Last, "content"));
+                     if Get (Last, "content").Kind = JSON_String_Type then
+                        return Get (Get (Last, "content"));
                      elsif Get (Last, "content").Kind = JSON_Array_Type then
                         declare
                            C_Arr : constant JSON_Array := Get (Get (Last, "content"));
                            Acc : Unbounded_String;
                         begin
                            for I in 1 .. Length (C_Arr) loop
-                              if Get (Get (C_Arr, I), "type") = "text" then Append (Acc, String'(Get (Get (Get (C_Arr, I), "text")))); end if;
+                              if Get (Get (C_Arr, I), "type") = "text" then
+                                 Append (Acc, String'(Get (Get (Get (C_Arr, I), "text"))));
+                              end if;
                            end loop;
                            return To_String (Acc);
                         end;
@@ -145,8 +179,11 @@ package body Adelaide_Server_Pkg is
       use GNATCOLL.JSON;
       Res : constant Read_Result := Read (Body_Str);
    begin
-      if not Res.Success then return Empty_Array; end if;
-      if Has_Field (Res.Value, "images") then return Get (Get (Res.Value, "images"));
+      if not Res.Success then
+         return Empty_Array;
+      end if;
+      if Has_Field (Res.Value, "images") then
+         return Get (Get (Res.Value, "images"));
       elsif Has_Field (Res.Value, "messages") then
          declare
             Arr : constant JSON_Array := Get (Get (Res.Value, "messages"));
@@ -155,13 +192,17 @@ package body Adelaide_Server_Pkg is
                declare
                   Last : constant JSON_Value := Get (Arr, Length (Arr));
                begin
-                  if Has_Field (Last, "content") and then Get (Last, "content").Kind = JSON_Array_Type then
+                  if Has_Field (Last, "content") and then 
+                     Get (Last, "content").Kind = JSON_Array_Type 
+                  then
                      declare
                         C_Arr : constant JSON_Array := Get (Get (Last, "content"));
                         R_Arr : JSON_Array := Empty_Array;
                      begin
                         for I in 1 .. Length (C_Arr) loop
-                           if Get (Get (C_Arr, I), "type") = "image_url" then Append (R_Arr, Get (Get (Get (C_Arr, I), "image_url"), "url")); end if;
+                           if Get (Get (C_Arr, I), "type") = "image_url" then
+                              Append (R_Arr, Get (Get (Get (C_Arr, I), "image_url"), "url"));
+                           end if;
                         end loop;
                         return R_Arr;
                      end;
@@ -190,12 +231,17 @@ package body Adelaide_Server_Pkg is
                   C_Arr : JSON_Array := Empty_Array;
                   C_Obj : constant JSON_Value := Create_Object;
                begin
-                  Set_Field (C_Obj, "message", Msg); Append (C_Arr, C_Obj);
+                  Set_Field (C_Obj, "message", Msg);
+                  Append (C_Arr, C_Obj);
                   Set_Field (Obj, "choices", C_Arr);
                end;
-            else Set_Field (Obj, "message", Msg); end if;
+            else
+               Set_Field (Obj, "message", Msg);
+            end if;
          end;
-      else Set_Field (Obj, "response", Text); end if;
+      else
+         Set_Field (Obj, "response", Text);
+      end if;
       return Write (Obj);
    end Format_Universal_Response;
 
@@ -203,7 +249,7 @@ package body Adelaide_Server_Pkg is
       use AWS.Status;
       URI_Str : constant String := URI (Request);
       Method_Val : constant Request_Method := Method (Request);
-      Start_Time : constant Time := Clock;
+      Start_T : constant Time := Clock;
    begin
       begin
          if Method_Val = OPTIONS then
@@ -211,7 +257,8 @@ package body Adelaide_Server_Pkg is
                R : AWS.Response.Data := AWS.Response.Acknowledge (AWS.Messages.S200);
             begin
                AWS.Response.Set.Add_Header (R, "Access-Control-Allow-Origin", "*");
-               AWS.Response.Set.Add_Header (R, "Access-Control-Allow-Headers", "Content-Type, Authorization, Session-ID");
+               AWS.Response.Set.Add_Header (R, "Access-Control-Allow-Headers", 
+                                            "Content-Type, Authorization, Session-ID");
                return R;
             end;
          end if;
@@ -228,15 +275,21 @@ package body Adelaide_Server_Pkg is
                   Set_Field (M, "name", String'("adelaide-hybrid"));
                   Set_Field (M, "id", String'("adelaide-hybrid"));
                   Set_Field (D, "format", String'("gguf"));
-                  Set_Field (D, "context_length", Create (Long_Long_Integer (9_223_372_036_854_775_807)));
-                  Set_Field (D, "embedding_length", Create (Long_Long_Integer (4_294_967_295)));
+                  Set_Field (D, "context_length", Create (Long_Long_Integer'(9_223_372_036_854_775_807)));
+                  Set_Field (D, "embedding_length", Create (Long_Long_Integer'(4_294_967_295)));
                   Set_Field (M, "details", D);
                   Append (Arr, M);
-                  if URI_Str = "/v1/models" then Set_Field (Res, "data", Arr); else Set_Field (Res, "models", Arr); end if;
-                  return AWS.Response.Build (Content_Type => "application/json", Message_Body => Write (Res));
+                  if URI_Str = "/v1/models" then
+                     Set_Field (Res, "data", Arr);
+                  else
+                     Set_Field (Res, "models", Arr);
+                  end if;
+                  return AWS.Response.Build (Content_Type => "application/json", 
+                                             Message_Body => Write (Res));
                end;
             elsif URI_Str = "/api/version" then
-               return AWS.Response.Build (Content_Type => "application/json", Message_Body => "{""version"":""0.1.48""}");
+               return AWS.Response.Build (Content_Type => "application/json", 
+                                          Message_Body => "{""version"":""0.1.48""}");
             end if;
          end if;
 
@@ -251,7 +304,7 @@ package body Adelaide_Server_Pkg is
                SID : constant String := (if SID_H /= "" then SID_H else Peername (Request));
             begin
                if URI_Str = "/api/chat" or else URI_Str = "/v1/chat/completions" or else URI_Str = "/api/generate" then
-                  if P_Raw /= "" then
+                  if Length (Prompt) > 0 then
                      declare
                         use Database_Manager;
                         V : Math_Utils.Vector (1 .. 16384);
@@ -260,29 +313,35 @@ package body Adelaide_Server_Pkg is
                         NR : Natural;
                         Ctx : Unbounded_String;
                      begin
-                        Model_Manager.Get_Embedding (P_Raw, V, VL);
+                        Model_Manager.Get_Embedding (To_String (Prompt), V, VL);
                         if VL > 0 then
                            Search_Literature (V (1 .. VL), Res, NR);
                            if NR > 0 then
                               Append (Ctx, "[CONTEXT]" & ASCII.LF);
-                              for J in 1 .. NR loop Append (Ctx, To_String (Res (J).Content) & ASCII.LF); end loop;
+                              for J in 1 .. NR loop
+                                 Append (Ctx, To_String (Res (J).Content) & ASCII.LF);
+                              end loop;
                               Prompt := Ctx & Prompt;
                            end if;
                         end if;
                      end;
+                     
                      declare
-                        Res_Read : constant Read_Result := Read (B_Str);
-                        Is_Stream : Boolean := False;
+                        Res_R : constant Read_Result := Read (B_Str);
+                        Is_Str : Boolean := False;
                      begin
-                        if Res_Read.Success and then Has_Field (Res_Read.Value, "stream") then Is_Stream := Get (Get (Res_Read.Value, "stream")); end if;
-                        if Is_Stream then
+                        if Res_R.Success and then Has_Field (Res_R.Value, "stream") then
+                           Is_Str := Get (Get (Res_R.Value, "stream"));
+                        end if;
+                        if Is_Str then
                            declare
                               Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
                               T : constant Generator_Task_Access := new Generator_Task;
-                              RS : constant Streaming_Queue.Response_Stream_Access := new Streaming_Queue.Response_Stream'(AWS.Resources.Streams.Stream_Type with Q => Q);
+                              RS : constant Streaming_Queue.Response_Stream_Access := 
+                                new Streaming_Queue.Response_Stream'(AWS.Resources.Streams.Stream_Type with Q => Q);
                            begin
                               Stream_Registry.Register (SID, Q);
-                              T.Start (Q, To_String (Prompt), Images, SID, URI_Str, Start_Time, ELP1);
+                              T.Start (Q, To_String (Prompt), Images, SID, URI_Str, Start_T, ELP1);
                               return AWS.Response.Stream (Content_Type => "text/event-stream", Handle => RS);
                            end;
                         else
@@ -290,7 +349,8 @@ package body Adelaide_Server_Pkg is
                               G_Res : Unbounded_String;
                            begin
                               Hybrid_Generate (To_String (Prompt), G_Res, Images, SID, null, ELP1);
-                              return AWS.Response.Build (Content_Type => "application/json", Message_Body => Format_Universal_Response (URI_Str, To_String (G_Res)));
+                              return AWS.Response.Build (Content_Type => "application/json", 
+                                                         Message_Body => Format_Universal_Response (URI_Str, To_String (G_Res)));
                            end;
                         end if;
                      end;
@@ -302,17 +362,21 @@ package body Adelaide_Server_Pkg is
                      Obj : constant JSON_Value := Create_Object;
                      A : JSON_Array := Empty_Array;
                   begin
-                     Get_Embedding (P_Raw, V, VL);
+                     Get_Embedding (To_String (Prompt), V, VL);
                      for I in 1 .. VL loop Append (A, Create (V (I))); end loop;
                      Set_Field (Obj, "embedding", A);
-                     return AWS.Response.Build (Content_Type => "application/json", Message_Body => Write (Obj));
+                     return AWS.Response.Build (Content_Type => "application/json", 
+                                                Message_Body => Write (Obj));
                   end;
                end if;
             end;
          end if;
          return AWS.Response.Acknowledge (AWS.Messages.S404);
-      exception when E : others =>
-         return AWS.Response.Build (Content_Type => "application/json", Message_Body => "{""error"":""Internal""}", Status_Code => AWS.Messages.S500);
+      exception
+         when E : others =>
+            return AWS.Response.Build (Content_Type => "application/json", 
+                                       Message_Body => "{""error"":""Internal""}", 
+                                       Status_Code => AWS.Messages.S500);
       end;
    end Dispatch;
 
