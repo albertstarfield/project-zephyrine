@@ -26,6 +26,7 @@ begin
 
    exception
       when E : others =>
-         Put_Line ("[FATAL] Core Error: " & Ada.Exceptions.Exception_Message (E));
+         Put_Line ("[FATAL] Core Error: " &
+                   Ada.Exceptions.Exception_Message (E));
    end;
 end Adelaide_Lite;

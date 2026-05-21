@@ -33,9 +33,9 @@ package body Adelaide_Server_Pkg is
 
       if URI = "/v1/models" or else URI = "/api/tags" then
          declare
-            Resp   : JSON_Value := Create_Object;
+            Resp   : constant JSON_Value := Create_Object;
             Models : JSON_Array := Empty_Array;
-            M1     : JSON_Value := Create_Object;
+            M1     : constant JSON_Value := Create_Object;
          begin
             Set_Field (M1, "id", "adelaide-hybrid");
             Set_Field (M1, "name", "adelaide-hybrid");
@@ -49,10 +49,10 @@ package body Adelaide_Server_Pkg is
       elsif URI = "/api/chat" or else URI = "/v1/chat/completions" then
          declare
             Result : Unbounded_String;
-            Resp : JSON_Value := Create_Object;
+            Resp   : constant JSON_Value := Create_Object;
             Choices : JSON_Array := Empty_Array;
-            Choice : JSON_Value := Create_Object;
-            Msg : JSON_Value := Create_Object;
+            Choice : constant JSON_Value := Create_Object;
+            Msg    : constant JSON_Value := Create_Object;
          begin
             Model_Manager.Hybrid_Generate
               (Prompt     => "User request",
@@ -72,11 +72,11 @@ package body Adelaide_Server_Pkg is
          end;
       elsif URI = "/api/embeddings" or else URI = "/v1/embeddings" then
          declare
-            Resp : JSON_Value := Create_Object;
+            Resp : constant JSON_Value := Create_Object;
             Embeddings : JSON_Array := Empty_Array;
          begin
-            Append (Embeddings, Create (0.1));
-            Append (Embeddings, Create (0.2));
+            Append (Embeddings, Create (Long_Float (0.1)));
+            Append (Embeddings, Create (Long_Float (0.2)));
             Set_Field (Resp, "embedding", Embeddings);
             return AWS.Response.Build
               (Content_Type => "application/json",
