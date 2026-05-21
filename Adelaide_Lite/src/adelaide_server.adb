@@ -117,12 +117,44 @@ begin
              Server_Port'Img & "..." & Reset);
 
    --  Start AWS server with the custom Dispatcher callback
-   AWS.Server.Start (
-      Web_Server => Web_Server,
-      Name       => "Adelaide-Inference-Server",
-      Callback   => Adelaide_Server_Pkg.Dispatch'Access,
-      Port       => Server_Port
-   );
+   declare
+      Max_Retries : constant Positive := 3;
+      Success     : Boolean := False;
+   begin
+      for Attempt in 1 .. Max_Retries loop
+         begin
+            AWS.Server.Start (
+               Web_Server => Web_Server,
+               Name       => "Adelaide-Inference-Server",
+               Callback   => Adelaide_Server_Pkg.Dispatch'Access,
+               Port       => Server_Port
+            );
+            Success := True;
+            exit;
+         exception
+            when E : others =>
+               Put_Line
+                 (Yellow & "[!] Port" & Server_Port'Img &
+                  " bind attempt" & Attempt'Img & " failed." & Reset);
+               if Attempt < Max_Retries then
+                  Put_Line ("[!] Retrying in 1 second...");
+                  delay 1.0;
+               else
+                  Put_Line
+                    (ASCII.ESC & "[91m" &
+                     "[BUGCHECK] Failed to bind to port" &
+                     Server_Port'Img & " after" & Max_Retries'Img &
+                     " attempts." & ASCII.LF & "Issue: " &
+                     Ada.Exceptions.Exception_Name (E) & " - " &
+                     Ada.Exceptions.Exception_Message (E) &
+                     ASCII.ESC & "[0m");
+               end if;
+         end;
+      end loop;
+      if not Success then
+         return;
+      end if;
+   end;
 
    Put_Line (Green & Bold & "[+] Adelaide-Lite is ACTIVE on port" &
              Server_Port'Img & Reset);
