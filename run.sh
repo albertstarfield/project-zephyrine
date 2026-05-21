@@ -31,19 +31,18 @@ if [ ! -f "llama.cpp/build/src/libllama.a" ]; then
     cd ../..
 fi
 
-# 3. Clean and Fix Dependencies
+# 3. Run Test Suite
+echo "[*] Running Adelaide_Lite Test Suite..."
+./TestSuite.sh
+
+# 4. Clean and Fix Dependencies
 echo "[*] Normalizing library indices..."
 find "$HOME/.local/share/alire/builds" -name "*.a" -exec chmod +w {} \; 2>/dev/null || true
 find "$HOME/.local/share/alire/builds" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
 find "llama.cpp/build" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
 
-# 4. Build Ada Server
-echo "[*] Building Adelaide-Lite Server..."
-cd Adelaide_Lite
-# Only clean if target was recently changed (handled by manual intervention if needed)
-alr -n build
-
 # 5. Run Server
+cd Adelaide_Lite
 if [ -f "./bin/adelaide_server" ]; then
     echo "[*] Starting Adelaide-Lite Server on port 11420..."
     nice -n -20 ./bin/adelaide_server || ./bin/adelaide_server
