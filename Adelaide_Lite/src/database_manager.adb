@@ -129,7 +129,7 @@ package body Database_Manager is
          Stmt : Statement := Prepare
            (Lit_DB_Ptr.all, "SELECT file_path, content, embedding FROM chunks");
       begin
-         while Step (Stmt) = ROW and Idx <= Results'Last loop
+         while Step (Stmt) = ROW and then Idx <= Results'Last loop
             declare
                Path_Str : constant String := Column_Text (Stmt, 0);
                Text_Str : constant String := Column_Text (Stmt, 1);
@@ -153,8 +153,10 @@ package body Database_Manager is
                                (Embedding, Entry_Vec);
                         begin
                            if Sim >= 0.65 then
-                              Results (Idx).File_Path := To_Unbounded_String (Path_Str);
-                              Results (Idx).Content   := To_Unbounded_String (Text_Str);
+                              Results (Idx).File_Path := 
+                                To_Unbounded_String (Path_Str);
+                              Results (Idx).Content   := 
+                                To_Unbounded_String (Text_Str);
                               Results (Idx).Score     := Sim;
                               Idx := Idx + 1;
                               Count := Count + 1;

@@ -150,8 +150,17 @@ package body Knowledge_Manager is
                   Raw : constant String := To_String (Res);
                   --  Attempt to parse JSON from thought
                   Start_Idx : constant Natural := Index (Raw, "{");
-                  End_Idx   : constant Natural := Index (Raw, "}", Raw'Last, Ada.Strings.Backward);
+                  End_Idx   : Natural := 0;
                begin
+                  if Start_Idx > 0 then
+                     for K in reverse Raw'Range loop
+                        if Raw (K) = '}' then
+                           End_Idx := K;
+                           exit;
+                        end if;
+                     end loop;
+                  end if;
+
                   if Start_Idx > 0 and then End_Idx > Start_Idx then
                      declare
                         JSON_Raw : constant String := Raw (Start_Idx .. End_Idx);
