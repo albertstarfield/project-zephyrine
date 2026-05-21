@@ -630,6 +630,7 @@ package body Adelaide_Server_Pkg is
                URI_Str = "/tags" or else
                URI_Str = "/v1/models"
          then
+            Ada.Text_IO.Put_Line (" [DEBUG] /v1/models request received.");
             declare
                use GNATCOLL.JSON;
                Res_Obj    : constant JSON_Value := Create_Object;
@@ -640,6 +641,7 @@ package body Adelaide_Server_Pkg is
                   M : constant JSON_Value := Create_Object;
                   D : constant JSON_Value := Create_Object;
                begin
+                  Ada.Text_IO.Put_Line (" [DEBUG] Creating model info for " & Name);
                   Set_Field (M, "name", Name);
                   Set_Field (M, "id", Name); -- OpenAI format
                   Set_Field (M, "model", Name);
@@ -650,6 +652,7 @@ package body Adelaide_Server_Pkg is
                   Set_Field (D, "format", String'("gguf"));
                   Set_Field (D, "family", String'("qwen"));
                   --  Massive Context Capability
+                  Ada.Text_IO.Put_Line (" [DEBUG] Setting context limits.");
                   Set_Field (D, "context_length", Create (Long_Long_Integer (9_223_372_036_854_775_807)));
                   Set_Field (D, "embedding_length", Create (Long_Long_Integer (4_294_967_295)));
                   Set_Field (M, "details", D);
@@ -665,10 +668,12 @@ package body Adelaide_Server_Pkg is
                else
                   Set_Field (Res_Obj, "models", Models_Arr);
                end if;
+               Ada.Text_IO.Put_Line (" [DEBUG] Writing JSON response.");
                Resp := AWS.Response.Build
                  (Content_Type => "application/json",
                   Message_Body => Write (Res_Obj));
                Set_CORS (Resp);
+               Ada.Text_IO.Put_Line (" [DEBUG] Returning response.");
                return Resp;
             end;
          elsif URI_Str = "/api/ps" then
