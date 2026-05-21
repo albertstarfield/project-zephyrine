@@ -16,6 +16,33 @@ package Database_Manager is
    --  Simple keyword recall (Existing logic)
    function Recall (Query : String) return String;
 
+   --  Literature/Reference Index storage (ELP0)
+   procedure Add_Literature_Chunk
+     (File_Path : String; 
+      Content   : String; 
+      Embedding : Math_Utils.Vector;
+      Doc_Hash  : String);
+
+   --  Semantic Retrieval for RAG (ELP1)
+   type Chunk_Result is record
+      File_Path : Unbounded_String;
+      Content   : Unbounded_String;
+      Score     : Float;
+   end record;
+   type Chunk_Array is array (Positive range <>) of Chunk_Result;
+
+   procedure Search_Literature
+     (Embedding : Math_Utils.Vector;
+      Results   : out Chunk_Array;
+      Count     : out Natural);
+
+   --  Knowledge Graph (GraphML style)
+   procedure Add_Graph_Relation
+     (Source   : String;
+      Relation : String;
+      Target   : String;
+      Weight   : Float := 1.0);
+
    procedure Close;
 
 end Database_Manager;

@@ -51,6 +51,8 @@ package Model_Manager is
 
    procedure Get_Embedding (Prompt : String; Result : out Math_Utils.Vector);
 
+   function Should_Abort_ELP0 return Boolean;
+
    function Get_Kind_For_Model_Name (Name : String) return Model_Type;
 
    function Is_Loaded (Kind : Model_Type) return Boolean;
