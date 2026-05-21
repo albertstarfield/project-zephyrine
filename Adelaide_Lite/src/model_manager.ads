@@ -30,23 +30,25 @@ package Model_Manager is
      (Kind : Model_Type) return Llama_Interface.Llama_Model;
 
    --  Perform inference (simplified for now)
-   function Generate
+   procedure Generate
      (Kind            : Model_Type;
       Prompt          : String;
+      Result          : out Unbounded_String;
       Session_ID      : String := "";
       Requested_Ctx   : Positive := 4096;
       Stream          : Streaming_Queue.Queue_Access := null;
       Orch_Think_Open : Boolean := False;
-      Level           : ELP_Level := ELP1) return String;
+      Level           : ELP_Level := ELP1);
 
    --  Perform multi-hop reasoning (0.8b thinking -> 4b final)
-   function Hybrid_Generate
+   procedure Hybrid_Generate
      (Prompt     : String;
+      Result     : out Unbounded_String;
       Session_ID : String := "";
       Stream     : Streaming_Queue.Queue_Access := null;
-      Level      : ELP_Level := ELP1) return String;
+      Level      : ELP_Level := ELP1);
 
-   function Get_Embedding (Prompt : String) return Math_Utils.Vector;
+   procedure Get_Embedding (Prompt : String; Result : out Math_Utils.Vector);
 
    function Get_Kind_For_Model_Name (Name : String) return Model_Type;
 

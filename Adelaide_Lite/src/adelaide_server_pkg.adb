@@ -18,6 +18,14 @@ package body Adelaide_Server_Pkg is
    OLLAMA_PORT : constant String := "11435";
    OLLAMA_URL  : constant String := "http://localhost:" & OLLAMA_PORT;
 
+   subtype ID_Type is String (1 .. 64);
+   type Entry_Rec is record
+      ID  : ID_Type;
+      Len : Natural;
+      Q   : Streaming_Queue.Queue_Access;
+   end record;
+   type Map_Type is array (1 .. 100) of Entry_Rec;
+
    --  Registry to track active streaming queues by Session ID
    --  for cross-component log streaming (e.g. from Python).
    protected Stream_Registry is
@@ -25,29 +33,27 @@ package body Adelaide_Server_Pkg is
       procedure Unregister (ID : String);
       procedure Push_Log (ID : String; Log : String);
    private
-      type Entry_Rec is record
-         ID : Unbounded_String;
-         Q  : Streaming_Queue.Queue_Access;
-      end record;
-      type Map_Type is array (1 .. 100) of Entry_Rec;
-      Map : Map_Type;
+      Map   : Map_Type;
       Count : Natural := 0;
    end Stream_Registry;
 
    protected body Stream_Registry is
       procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is
+         S_ID : ID_Type := (others => ' ');
       begin
          if Count < 100 then
             Count := Count + 1;
-            Map (Count).ID := To_Unbounded_String (ID);
-            Map (Count).Q  := Q;
+            S_ID (1 .. ID'Length) := ID;
+            Map (Count).ID  := S_ID;
+            Map (Count).Len := ID'Length;
+            Map (Count).Q   := Q;
          end if;
       end Register;
 
       procedure Unregister (ID : String) is
       begin
          for I in 1 .. Count loop
-            if To_String (Map (I).ID) = ID then
+            if Map (I).ID (1 .. Map (I).Len) = ID then
                Map (I .. Count - 1) := Map (I + 1 .. Count);
                Count := Count - 1;
                return;
@@ -58,13 +64,13 @@ package body Adelaide_Server_Pkg is
       procedure Push_Log (ID : String; Log : String) is
       begin
          for I in 1 .. Count loop
-            if To_String (Map (I).ID) = ID then
+            if Map (I).ID (1 .. Map (I).Len) = ID then
                --  Push to the specific queue
                Model_Manager.Push_Chunk (Map (I).Q, ID, Log);
                return;
             end if;
          end loop;
-         --  Fallback: if no specific session, could push to all or log to console
+         --  Fallback: if no specific session, log to console
          Ada.Text_IO.Put_Line ("[Orchestrator Log] " & ID & ": " & Log);
       end Push_Log;
    end Stream_Registry;
@@ -101,11 +107,10 @@ package body Adelaide_Server_Pkg is
       end Start;
 
       declare
-         Result : constant String :=
-           Model_Manager.Hybrid_Generate
-             (To_String (Prompt), To_String (Session_ID), Stream, Level);
-         pragma Unreferenced (Result);
+         Res : Unbounded_String;
       begin
+         Model_Manager.Hybrid_Generate
+             (To_String (Prompt), Res, To_String (Session_ID), Stream, Level);
          Stream_Registry.Unregister (To_String (Session_ID));
       end;
    end Generator_Task;
