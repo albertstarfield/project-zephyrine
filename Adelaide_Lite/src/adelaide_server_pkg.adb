@@ -9,6 +9,9 @@ with Streaming_Queue;
 with Ada.Exceptions;
 with Math_Utils;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Ada.Calendar;
+with Ada.Calendar.Formatting;
+with Ada.Real_Time;
 
 package body Adelaide_Server_Pkg is
 
@@ -340,20 +343,49 @@ package body Adelaide_Server_Pkg is
                   To_String (Prompt));
             end if;
 
-            Model_Manager.Hybrid_Generate
-              (Prompt     => To_String (Prompt),
-               Result     => Result,
-               Images     => Images,
-               Session_ID => "web-api");
+            declare
+               use Ada.Real_Time;
+               T_Start  : constant Time := Clock;
+               T_End    : Time;
+               Dur      : Time_Span;
+               Total_Ns : Long_Integer;
+               Now      : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+               TS_Str   : String := Ada.Calendar.Formatting.Image (Now);
+            begin
+               if TS_Str'Length >= 11 then
+                  TS_Str (11) := 'T';
+               end if;
 
-            Set_Field (Msg_Out, "role", "assistant");
-            Set_Field (Msg_Out, "content", To_String (Result));
-            Set_Field (Choice, "message", Msg_Out);
-            Append (Choices, Choice);
-            Set_Field (Resp, "model", To_String (Req_Model));
-            Set_Field (Resp, "choices", Choices);
-            Set_Field (Resp, "message", Msg_Out);
-            Set_Field (Resp, "done", True);
+               Model_Manager.Hybrid_Generate
+                 (Prompt     => To_String (Prompt),
+                  Result     => Result,
+                  Images     => Images,
+                  Session_ID => "web-api");
+
+               T_End := Clock;
+               Dur := T_End - T_Start;
+               Total_Ns := Long_Integer (To_Duration (Dur) * 1_000_000_000.0);
+
+               Set_Field (Msg_Out, "role", "assistant");
+               Set_Field (Msg_Out, "content", To_String (Result));
+               Set_Field (Choice, "message", Msg_Out);
+               Append (Choices, Choice);
+               Set_Field (Resp, "model", To_String (Req_Model));
+               Set_Field (Resp, "choices", Choices);
+               Set_Field (Resp, "message", Msg_Out);
+               Set_Field (Resp, "done", True);
+
+               --  Add missing fields for validation and compatibility
+               Set_Field (Resp, "created_at", TS_Str & "Z");
+               Set_Field (Resp, "total_duration", Total_Ns);
+               Set_Field (Resp, "load_duration", Long_Integer'(0));
+               Set_Field (Resp, "prompt_eval_count",
+                          Long_Integer (Model_Manager.Count_Tokens (To_String (Prompt))));
+               Set_Field (Resp, "prompt_eval_duration", Long_Integer'(0));
+               Set_Field (Resp, "eval_count",
+                          Long_Integer (Model_Manager.Count_Tokens (To_String (Result))));
+               Set_Field (Resp, "eval_duration", Total_Ns);
+            end;
 
             return AWS.Response.Build
               (Content_Type => "application/json",
