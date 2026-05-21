@@ -14,12 +14,17 @@ package body Database_Manager is
    Main_DB_Ptr : DB_Access := null;
    Lit_DB_Ptr  : DB_Access := null;
 
-   ----------------
-   -- Initialize --
-   ----------------
-   procedure Initialize is
-   begin
-      if Main_DB_Ptr = null then
+   protected Init_Gate is
+      procedure Do_Init;
+   private
+      Done : Boolean := False;
+   end Init_Gate;
+
+   protected body Init_Gate is
+      procedure Do_Init is
+      begin
+         if Done then return; end if;
+         
          Main_DB_Ptr := new Ada_Sqlite3.Database'(Open (DB_File));
 
          --  Memories table
@@ -38,9 +43,7 @@ package body Database_Manager is
                   "embedding TEXT," &
                   "response TEXT," &
                   "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
-      end if;
 
-      if Lit_DB_Ptr = null then
          Lit_DB_Ptr := new Ada_Sqlite3.Database'(Open (Lit_DB_File));
 
          --  Chunks table for literature
@@ -63,9 +66,18 @@ package body Database_Manager is
                   "weight REAL," &
                   "context TEXT," &
                   "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
-      end if;
 
-      Put_Line ("[DB] Semantic Memory and Literature Core initialized.");
+         Done := True;
+         Put_Line ("[DB] Semantic Memory and Literature Core initialized.");
+      end Do_Init;
+   end Init_Gate;
+
+   ----------------
+   -- Initialize --
+   ----------------
+   procedure Initialize is
+   begin
+      Init_Gate.Do_Init;
    exception
       when E : others =>
          Put_Line ("[DB] Critical Init Error: " &
