@@ -27,10 +27,11 @@ project Adelaide_Lite is
          "-lggml",
          "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/ggml/src/ggml-metal",
          "-lggml-metal",
+         "-L/opt/homebrew/opt/sqlite/lib",
+         "-lsqlite3",
          "-framework", "Accelerate",
          "-framework", "Metal",
          "-framework", "Foundation",
-         "-lsqlite3",
          "-lc++"
       );
    end Linker;
