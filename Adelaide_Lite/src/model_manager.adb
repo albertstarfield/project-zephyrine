@@ -200,16 +200,12 @@ package body Model_Manager is
    ----------------------------
    function Get_Kind_For_Model_Name (Name : String) return Model_Type is
    begin
-      if Name = "adelaide-hybrid" then
-         return Qwen_4B;
-      elsif Name = "qwen3.5:0.8b" or else Name = "qwen3.5" then
-         return Qwen_0_8B;
-      elsif Name = "qwen3.5:4b" then
+      if Name = "adelaide-hybrid" or else Name = "qwen3.5:4b" then
          return Qwen_4B;
       elsif Name = "qwen-embedding" or else Name = "nomic-embed-text" then
          return Qwen_Embedding;
       else
-         return Qwen_0_8B; -- Default
+         return Qwen_0_8B; -- Internal default for hops
       end if;
    end Get_Kind_For_Model_Name;
 
@@ -303,20 +299,19 @@ package body Model_Manager is
       --  Estimate required context size
       Estimated_Tokens : constant Positive := (Prompt'Length / 3) + 2048;
    begin
-      Put_Line ("[Hybrid] Adelaide initiating whimsical reasoning...");
+      Ada.Text_IO.Put_Line (ASCII.ESC & "[38;5;171m" & "[Hybrid] Adelaide initiating whimsical reasoning loop..." & ASCII.ESC & "[0m");
 
       declare
          Past_Memory : constant String := Database_Manager.Recall (Prompt);
       begin
          if Past_Memory /= "" then
-            Put_Line ("[Hybrid] Adelaide recalling past context...");
+            Ada.Text_IO.Put_Line (" [Hybrid] Recalling past context...");
             Append (Internal_State, "[MEMORY]: " & Past_Memory & ASCII.LF);
          end if;
       end;
 
       if Num_Pages > 1 then
-         Put_Line ("[Hybrid] Large input detected (" & Prompt'Length'Img &
-                  " chars). Paging enabled (" & Num_Pages'Img & " pages).");
+         Ada.Text_IO.Put_Line (" [Hybrid] Paging enabled (" & Num_Pages'Img & " pages).");
       end if;
 
       loop
@@ -345,7 +340,7 @@ package body Model_Manager is
 
             Think_Step : Unbounded_String;
          begin
-            Put_Line ("[Hybrid] Hop " & Current_Hop'Img & " (Action Selection)");
+            Ada.Text_IO.Put_Line (ASCII.ESC & "[34m" & " [Hybrid] Hop" & Current_Hop'Img & " (Action Selection)" & ASCII.ESC & "[0m");
             Think_Step := To_Unbounded_String
               (Generate (Qwen_0_8B, Router_Prompt,
                Requested_Ctx => Estimated_Tokens));
@@ -389,7 +384,7 @@ package body Model_Manager is
          exit when Current_Hop > Max_Hops;
       end loop;
 
-      Put_Line ("[Hybrid] Synthesizing final response (4B)...");
+      Ada.Text_IO.Put_Line (ASCII.ESC & "[32m" & " [Hybrid] Synthesizing final response (4B)..." & ASCII.ESC & "[0m");
       declare
          Synth_Prompt : constant String :=
            Wrap_ChatML (Whimsical_Adelaide,
@@ -398,21 +393,6 @@ package body Model_Manager is
       begin
          Current_Response := To_Unbounded_String
            (Generate (Qwen_4B, Synth_Prompt,
-            Requested_Ctx => Estimated_Tokens));
-      end;
-
-      Put_Line ("[Hybrid] Adelaide performing internal critique...");
-      declare
-         Crit_Sys : constant String :=
-           Whimsical_Adelaide & ASCII.LF &
-           "Critique response for quality. Stay in persona. " &
-           "Output ONLY improved response.";
-         Crit_Prom : constant String :=
-           Wrap_ChatML (Crit_Sys, "Original Response: " &
-                        To_String (Current_Response));
-      begin
-         Current_Response := To_Unbounded_String
-           (Generate (Qwen_0_8B, Crit_Prom,
             Requested_Ctx => Estimated_Tokens));
       end;
 
@@ -479,7 +459,13 @@ package body Model_Manager is
       Llama_Sampler_Chain_Add
         (Sampler, Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1));
 
-      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Greedy);
+      --  Distribution Sampling (T=0.7, Top-K=40, Top-P=0.9)
+      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_K (40));
+      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_P (0.9, 1));
+      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Temp (0.7));
+      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Dist (1234));
+
+      Ada.Text_IO.Put_Line (" [ENGINE SUBMIT] Prompt: " & Prompt);
 
       for I in 1 .. 400 loop
          declare
