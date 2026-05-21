@@ -1,18 +1,21 @@
 with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Directories; use Ada.Directories;
+with Ada.Directories;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Strings;
 with Ada.Calendar; use Ada.Calendar;
 with Database_Manager;
 with Model_Manager;
+with Math_Utils;
 with AWS.Client;
 with AWS.Response;
+with AWS.Messages; use AWS.Messages;
 with GNATCOLL.JSON;
 
 package body Knowledge_Manager is
 
-   ORCHESTRATOR_URL : constant String := "http://localhost:11435/api/adelaide/extract";
+   ORCHESTRATOR_URL : constant String := 
+     "http://localhost:11435/api/adelaide/extract";
    
    First_Index_Done : Boolean := False;
 
@@ -62,7 +65,7 @@ package body Knowledge_Manager is
          
          begin
             Resp := AWS.Client.Post (ORCHESTRATOR_URL, Write (Request_Body));
-            if AWS.Response.Status_Code (Resp) = 200 then
+            if AWS.Response.Status_Code (Resp) = S200 then
                declare
                   Val : constant JSON_Value := Read (AWS.Response.Message_Body (Resp)).Value;
                   Content : constant String := Get (Val, "content");
@@ -99,6 +102,7 @@ package body Knowledge_Manager is
       end Process_File;
 
       procedure Scan_Dir (Dir : String) is
+         use Ada.Directories;
          Filter : constant Filter_Type := (Ordinary_File => True, others => False);
          Ent    : Directory_Entry_Type;
          Search : Search_Type;
