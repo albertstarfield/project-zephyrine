@@ -27,7 +27,8 @@ begin
       Put_Line ("[Main] Initializing index crawl...");
       Knowledge_Manager.Start_Tasks;
 
-      Put_Line ("[Main] Server is UP. Press Q to shutdown (or kill if background).");
+      Put_Line
+        ("[Main] Server is UP. Press Q to shutdown (or kill if background).");
 
       --  Avoid Get_Line failure in background
       loop

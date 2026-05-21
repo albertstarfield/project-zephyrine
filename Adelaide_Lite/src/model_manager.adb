@@ -12,6 +12,7 @@ with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Unchecked_Conversion;
 
 package body Model_Manager is
+   use Streaming_Queue;
 
    type Model_Record is record
       Model       : Llama_Model := Null_Model;
@@ -40,9 +41,9 @@ package body Model_Manager is
    --  ELP1 requests preempt running ELP0 requests.
    protected Priority_Model_Gate is
       procedure Request_ELP1;
-      entry Acquire_ELP1 (Kind : Model_Type);
+      entry Acquire_ELP1 (Model_Type);
       procedure Release_ELP1 (Kind : Model_Type);
-      entry Acquire_ELP0 (Kind : Model_Type) (Success : out Boolean);
+      entry Acquire_ELP0 (Model_Type) (Success : out Boolean);
       procedure Release_ELP0 (Kind : Model_Type);
       function Should_Abort return Boolean;
       function Is_ELP0_Owner (Kind : Model_Type) return Boolean;
@@ -97,7 +98,7 @@ package body Model_Manager is
 
       function Should_Abort return Boolean is
       begin
-         return ELP1_Pending > 0 or ELP1_Active_Count > 0;
+         return ELP1_Pending > 0 or else ELP1_Active_Count > 0;
       end Should_Abort;
 
       function Is_ELP0_Owner (Kind : Model_Type) return Boolean is
@@ -228,14 +229,18 @@ package body Model_Manager is
    function Get_Context
      (Kind : Model_Type) return Llama_Interface.Llama_Context is
    begin
-      if Models (Kind).Loaded then Models (Kind).Last_Used := Clock; end if;
+      if Models (Kind).Loaded then
+         Models (Kind).Last_Used := Clock;
+      end if;
       return Models (Kind).Context;
    end Get_Context;
 
    function Get_Model
      (Kind : Model_Type) return Llama_Interface.Llama_Model is
    begin
-      if Models (Kind).Loaded then Models (Kind).Last_Used := Clock; end if;
+      if Models (Kind).Loaded then
+         Models (Kind).Last_Used := Clock;
+      end if;
       return Models (Kind).Model;
    end Get_Model;
 
@@ -261,7 +266,11 @@ package body Model_Manager is
 
    function Get_Kind_For_Model_Name (Name : String) return Model_Type is
    begin
-      if Name = "adelaide-hybrid" or else Name = "qwen3.5:4b" then
+      if Name = "adelaide-hybrid"
+        or else Name = "qwen3.5:4b"
+        or else Name = "metamodel"
+        or else Name = "adelaide-metamodel"
+      then
          return Qwen_4B;
       elsif Name = "qwen-embedding" or else Name = "adelaide-embedding" then
          return Qwen_Embedding;
@@ -429,8 +438,10 @@ package body Model_Manager is
                   End_Idx := Prompt'Last;
                end if;
                declare
-                  Sub_Prompt : constant String := Prompt (Start_Idx .. End_Idx);
-                  Sub_Vec    : Math_Utils.Vector (Result'Range) := (others => 0.0);
+                  Sub_Prompt : constant String :=
+                    Prompt (Start_Idx .. End_Idx);
+                  Sub_Vec    : Math_Utils.Vector (Result'Range) :=
+                    (others => 0.0);
                   Sub_Len    : Natural := 0;
                begin
                   Get_Single_Embedding (Sub_Prompt, Sub_Vec, Sub_Len);
@@ -696,7 +707,9 @@ package body Model_Manager is
 
             declare
                To_Decode : constant int :=
-                 (if Tokens_Left > Batch_Size then Batch_Size else Tokens_Left);
+                 (if Tokens_Left > Batch_Size
+                  then Batch_Size
+                  else Tokens_Left);
                B : constant Llama_Batch :=
                  Llama_Batch_Get_One
                    (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
@@ -815,9 +828,10 @@ package body Model_Manager is
    begin
       Put_Line ("[Hybrid] Starting reasoning chain...");
 
-      --  1. Pre-emptive Fact Check
-      if Index (Prompt, "What is") > 0 or else Index (Prompt, "Who is") > 0 or else
-         Index (Prompt, "tell me about") > 0
+      --  1. Factual checking
+      if Index (Prompt, "What is") > 0
+        or else Index (Prompt, "Who is") > 0
+        or else Index (Prompt, "tell me about") > 0
       then
          declare
             R : constant Tool_Manager.Tool_Result :=
@@ -866,9 +880,12 @@ package body Model_Manager is
                   begin
                      if E_Pos > S_Pos then
                         declare
-                           A_Full : constant String := Step (S_Pos .. E_Pos - 1);
-                           P_Pos  : constant Natural := Index (A_Full, "(");
-                           EP_Pos : constant Natural := Index (A_Full, ")", P_Pos);
+                           A_Full : constant String :=
+                             Step (S_Pos .. E_Pos - 1);
+                           P_Pos  : constant Natural :=
+                             Index (A_Full, "(");
+                           EP_Pos : constant Natural :=
+                             Index (A_Full, ")", P_Pos);
                         begin
                            if P_Pos > 0 and then EP_Pos > P_Pos then
                               declare
@@ -945,12 +962,11 @@ package body Model_Manager is
          begin
             if Tag_Idx > 0 then
                declare
-                  Part1 : constant String :=
-                    To_String (Current_Response)
-                      (Current_Response'First .. Tag_Idx - 1);
-                  Part2 : constant String :=
-                    To_String (Current_Response)
-                      (Tag_Idx + 8 .. Current_Response'Last);
+                  Resp_Str : constant String := To_String (Current_Response);
+                  Part1    : constant String :=
+                    Resp_Str (Resp_Str'First .. Tag_Idx - 1);
+                  Part2    : constant String :=
+                    Resp_Str (Tag_Idx + 8 .. Resp_Str'Last);
                begin
                   Merged :=
                     To_Unbounded_String
