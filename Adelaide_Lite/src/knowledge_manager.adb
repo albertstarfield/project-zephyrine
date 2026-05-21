@@ -73,26 +73,29 @@ package body Knowledge_Manager is
                begin
                   if Content'Length > 0 then
                      --  Chunking (simplified for now)
-                     declare
-                        C_Size : constant Positive := 1000;
-                        Pos    : Positive := Content'First;
-                        V      : Math_Utils.Vector (1 .. 1024);
-                     begin
-                        while Pos <= Content'Last loop
-                           declare
-                              Last : constant Positive := 
-                                Positive'Min (Pos + C_Size - 1, Content'Last);
-                              Chunk : constant String := Content (Pos .. Last);
-                           begin
-                              Model_Manager.Get_Embedding (Chunk, V);
-                              Database_Manager.Add_Literature_Chunk
-                                (Path, Chunk, V, "hash_placeholder");
-                              Pos := Pos + C_Size;
-                              
-                              exit when Model_Manager.Should_Abort_ELP0;
-                           end;
-                        end loop;
-                     end;
+                        declare
+                           C_Size : constant Positive := 1000;
+                           Pos    : Positive := Content'First;
+                           V      : Math_Utils.Vector (1 .. 16384);
+                           V_Len  : Natural;
+                        begin
+                           while Pos <= Content'Last loop
+                              declare
+                                 Last : constant Positive := 
+                                   Positive'Min (Pos + C_Size - 1, Content'Last);
+                                 Chunk : constant String := Content (Pos .. Last);
+                              begin
+                                 Model_Manager.Get_Embedding (Chunk, V, V_Len);
+                                 if V_Len > 0 then
+                                    Database_Manager.Add_Literature_Chunk
+                                      (Path, Chunk, V (1 .. V_Len), "hash_placeholder");
+                                 end if;
+                                 Pos := Pos + C_Size;
+                                 
+                                 exit when Model_Manager.Should_Abort_ELP0;
+                              end;
+                           end loop;
+                        end;
                   end if;
                end;
             end if;

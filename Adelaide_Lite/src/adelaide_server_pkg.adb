@@ -907,13 +907,18 @@ package body Adelaide_Server_Pkg is
                                --  RAG: Search local literature
                                declare
                                   use Database_Manager;
-                                  V : Math_Utils.Vector (1 .. 1024);
+                                  V : Math_Utils.Vector (1 .. 16384);
                                   Results : Chunk_Array (1 .. 3);
                                   N_Res   : Natural;
                                   RAG_Context : Unbounded_String;
+                                  V_Len   : Natural;
                                begin
-                                  Model_Manager.Get_Embedding (To_String (Prompt), V);
-                                  Search_Literature (V, Results, N_Res);
+                                  Model_Manager.Get_Embedding (To_String (Prompt), V, V_Len);
+                                  if V_Len > 0 then
+                                     Search_Literature (V (1 .. V_Len), Results, N_Res);
+                                  else
+                                     N_Res := 0;
+                                  end if;
                                   if N_Res > 0 then
                                      Append (RAG_Context, "[LOCAL LITERATURE CONTEXT]" & ASCII.LF);
                                      for J in 1 .. N_Res loop
@@ -937,13 +942,18 @@ package body Adelaide_Server_Pkg is
                            --  RAG: Search local literature
                            declare
                               use Database_Manager;
-                              V : Math_Utils.Vector (1 .. 1024);
+                              V : Math_Utils.Vector (1 .. 16384);
                               Results : Chunk_Array (1 .. 3);
                               N_Res   : Natural;
                               RAG_Context : Unbounded_String;
+                              V_Len : Natural;
                            begin
-                              Model_Manager.Get_Embedding (To_String (Prompt), V);
-                              Search_Literature (V, Results, N_Res);
+                              Model_Manager.Get_Embedding (To_String (Prompt), V, V_Len);
+                              if V_Len > 0 then
+                                 Search_Literature (V (1 .. V_Len), Results, N_Res);
+                              else
+                                 N_Res := 0;
+                              end if;
                               if N_Res > 0 then
                                  Append (RAG_Context, "[LOCAL LITERATURE CONTEXT]" & ASCII.LF);
                                  for J in 1 .. N_Res loop

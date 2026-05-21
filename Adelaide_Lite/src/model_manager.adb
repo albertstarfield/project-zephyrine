@@ -246,20 +246,29 @@ package body Model_Manager is
       end if;
    end Get_Kind_For_Model_Name;
 
-   procedure Get_Embedding (Prompt : String; Result : out Math_Utils.Vector) is
+   procedure Get_Embedding 
+     (Prompt : String; 
+      Result : out Math_Utils.Vector;
+      Length : out Natural)
+   is
       Success  : Boolean;
       Kind     : constant Model_Type := Qwen_Embedding;
+      Actual_Dim : Natural := 0;
       
       --  Internal helper for single chunk embedding
-      procedure Get_Chunk_Embedding (Chunk : String; V : out Math_Utils.Vector) is
+      procedure Get_Chunk_Embedding 
+        (Chunk : String; 
+         V     : out Math_Utils.Vector;
+         L     : out Natural) 
+      is
          Vocab    : Llama_Vocab;
          Tokens   : array (1 .. 32768) of Llama_Token;
          N_Toks   : int;
          Prompt_C : chars_ptr := New_String (Chunk);
       begin
+         L := 0;
          Load_Model (Kind, Success);
          if not Success then
-            V := (1 .. 0 => 0.0);
             return;
          end if;
 
@@ -275,7 +284,6 @@ package body Model_Manager is
          if N_Toks <= 0 then
             Watchdog_Manager.Inference_Monitor.Stop_Inference;
             Models (Kind).In_Use := False;
-            V := (1 .. 0 => 0.0);
             return;
          end if;
 
@@ -290,7 +298,6 @@ package body Model_Manager is
             if Llama_Decode (Models (Kind).Context, B) /= 0 then
                Watchdog_Manager.Inference_Monitor.Stop_Inference;
                Models (Kind).In_Use := False;
-               V := (1 .. 0 => 0.0);
                return;
             end if;
          end;
@@ -306,10 +313,12 @@ package body Model_Manager is
             Embed : Float_Array;
             for Embed'Address use Ptr;
          begin
-            V := (others => 0.0);
-            for I in 1 .. Integer (Dim) loop
-               V (I) := Embed (I);
-            end loop;
+            L := Natural (Dim);
+            if L <= V'Length then
+               for I in 1 .. L loop
+                  V (V'First + I - 1) := Embed (I);
+               end loop;
+            end if;
             Watchdog_Manager.Inference_Monitor.Stop_Inference;
             Models (Kind).In_Use := False;
          end;
@@ -317,14 +326,15 @@ package body Model_Manager is
          when others =>
             Watchdog_Manager.Inference_Monitor.Stop_Inference;
             Models (Kind).In_Use := False;
-            V := (1 .. 0 => 0.0);
+            L := 0;
       end Get_Chunk_Embedding;
 
    begin
+      Length := 0;
       Model_Gate.Acquire_ELP1 (Kind);
       
       if Prompt'Length <= 800 then
-         Get_Chunk_Embedding (Prompt, Result);
+         Get_Chunk_Embedding (Prompt, Result, Length);
       else
          --  Chunking: 800 chars with 100 char overlap
          declare
@@ -332,8 +342,9 @@ package body Model_Manager is
             Overlap    : constant Natural := 100;
             Step       : constant Positive := Chunk_Size - Overlap;
             Pos        : Positive := Prompt'First;
-            Sum_Vec    : Math_Utils.Vector (1 .. 1024) := (others => 0.0);
-            Temp_Vec   : Math_Utils.Vector (1 .. 1024);
+            Sum_Vec    : Math_Utils.Vector (1 .. 16384) := (others => 0.0);
+            Temp_Vec   : Math_Utils.Vector (1 .. 16384);
+            L          : Natural;
             C_Count    : Natural := 0;
          begin
             while Pos <= Prompt'Last loop
@@ -342,12 +353,17 @@ package body Model_Manager is
                     Positive'Min (Pos + Chunk_Size - 1, Prompt'Last);
                   Sub  : constant String := Prompt (Pos .. Last);
                begin
-                  Get_Chunk_Embedding (Sub, Temp_Vec);
-                  if Temp_Vec'Length = Sum_Vec'Length then
-                     for I in Sum_Vec'Range loop
-                        Sum_Vec (I) := Sum_Vec (I) + Temp_Vec (I);
-                     end loop;
-                     C_Count := C_Count + 1;
+                  Get_Chunk_Embedding (Sub, Temp_Vec, L);
+                  if L > 0 then
+                     if Actual_Dim = 0 then
+                        Actual_Dim := L;
+                     end if;
+                     if L = Actual_Dim then
+                        for I in 1 .. L loop
+                           Sum_Vec (I) := Sum_Vec (I) + Temp_Vec (I);
+                        end loop;
+                        C_Count := C_Count + 1;
+                     end if;
                   end if;
                   Pos := Pos + Step;
                   exit when Last = Prompt'Last;
@@ -355,12 +371,14 @@ package body Model_Manager is
             end loop;
             
             if C_Count > 0 then
-               for I in Sum_Vec'Range loop
-                  Sum_Vec (I) := Sum_Vec (I) / Float (C_Count);
-               end loop;
-               Result := Sum_Vec;
-            else
-               Result := (1 .. 0 => 0.0);
+               Length := Actual_Dim;
+               if Length <= Result'Length then
+                  for I in 1 .. Length loop
+                     Result (Result'First + I - 1) := Sum_Vec (I) / Float (C_Count);
+                  end loop;
+               else
+                  Length := 0; -- Buffer too small
+               end if;
             end if;
          end;
       end if;
@@ -370,7 +388,7 @@ package body Model_Manager is
       when others =>
          Put_Line (ASCII.ESC & "[91m" & "[BUGCHECK] Get_Embedding Failed" & ASCII.ESC & "[0m");
          Model_Gate.Release (Kind);
-         Result := (1 .. 0 => 0.0);
+         Length := 0;
    end Get_Embedding;
 
    function Should_Abort_ELP0 return Boolean is
