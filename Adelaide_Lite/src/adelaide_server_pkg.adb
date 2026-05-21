@@ -144,7 +144,37 @@ package body Adelaide_Server_Pkg is
                Len : constant Natural := Length (Arr);
             begin
                if Len > 0 then
-                  return Get (Get (Get (Arr, Len), "content"));
+                  --  Check for multimodal content
+                  declare
+                     Last_Msg : constant JSON_Value := Get (Arr, Len);
+                  begin
+                     if Has_Field (Last_Msg, "content") then
+                        declare
+                           Cont : constant JSON_Value := Get (Last_Msg, "content");
+                        begin
+                           if Cont.Kind = JSON_String_Type then
+                              return Get (Cont);
+                           elsif Cont.Kind = JSON_Array_Type then
+                              --  OpenAI Multimodal format
+                              declare
+                                 C_Arr : constant JSON_Array := Get (Cont);
+                                 Prompt_Acc : Unbounded_String;
+                              begin
+                                 for I in 1 .. Length (C_Arr) loop
+                                    declare
+                                       Item : constant JSON_Value := Get (C_Arr, I);
+                                    begin
+                                       if Get (Item, "type") = "text" then
+                                          Append (Prompt_Acc, String'(Get (Get (Item, "text"))));
+                                       end if;
+                                    end;
+                                 end loop;
+                                 return To_String (Prompt_Acc);
+                              end;
+                           end if;
+                        end;
+                     end if;
+                  end;
                end if;
             end;
          end if;
@@ -153,6 +183,56 @@ package body Adelaide_Server_Pkg is
    exception
       when others => return "";
    end Extract_Prompt;
+
+   --  Extract Images (Base64) for Multimodal
+   function Extract_Images (Body_Str : String) return JSON_Array is
+      use GNATCOLL.JSON;
+      Res : constant Read_Result := Read (Body_Str);
+      Empty : JSON_Array := Empty_Array;
+   begin
+      if not Res.Success then return Empty; end if;
+      declare
+         Val : constant JSON_Value := Res.Value;
+      begin
+         if Has_Field (Val, "images") then
+            return Get (Get (Val, "images"));
+         elsif Has_Field (Val, "messages") then
+             declare
+               Arr : constant JSON_Array := Get (Get (Val, "messages"));
+               Len : constant Natural := Length (Arr);
+            begin
+               if Len > 0 then
+                  declare
+                     Last_Msg : constant JSON_Value := Get (Arr, Len);
+                  begin
+                     if Has_Field (Last_Msg, "content") and then 
+                        Get (Last_Msg, "content").Kind = JSON_Array_Type 
+                     then
+                        declare
+                           C_Arr : constant JSON_Array := Get (Get (Last_Msg, "content"));
+                           Res_Arr : JSON_Array := Empty_Array;
+                        begin
+                           for I in 1 .. Length (C_Arr) loop
+                              declare
+                                 Item : constant JSON_Value := Get (C_Arr, I);
+                              begin
+                                 if Get (Item, "type") = "image_url" then
+                                    Append (Res_Arr, Get (Get (Item, "image_url"), "url"));
+                                 end if;
+                              end;
+                           end loop;
+                           return Res_Arr;
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+         end if;
+      end;
+      return Empty;
+   exception
+      when others => return Empty;
+   end Extract_Images;
 
    function Extract_Stream (Body_Str : String) return Boolean is
       use GNATCOLL.JSON;
@@ -171,7 +251,7 @@ package body Adelaide_Server_Pkg is
    function Format_Universal_Response
      (URI_Str : String;
       Text    : String;
-      Similarity : Float;
+      Similarity : Float := 0.0;
       Duration_Ns : Long_Integer := 0) return String
    is
       use GNATCOLL.JSON;
@@ -179,13 +259,31 @@ package body Adelaide_Server_Pkg is
    begin
       Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
       Set_Field (Res_Obj, "done", True);
-      if URI_Str = "/api/chat" then
+      if Duration_Ns > 0 then
+         Set_Field (Res_Obj, "total_duration", Create (Duration_Ns));
+      end if;
+
+      if URI_Str = "/api/chat" or else URI_Str = "/v1/chat/completions" then
          declare
             Msg_Obj : constant JSON_Value := Create_Object;
          begin
             Set_Field (Msg_Obj, "role", String'("assistant"));
             Set_Field (Msg_Obj, "content", Text);
-            Set_Field (Res_Obj, "message", Msg_Obj);
+            if URI_Str = "/v1/chat/completions" then
+               declare
+                  Choice_Arr : JSON_Array := Empty_Array;
+                  Choice_Obj : constant JSON_Value := Create_Object;
+               begin
+                  Set_Field (Choice_Obj, "index", Integer'(0));
+                  Set_Field (Choice_Obj, "message", Msg_Obj);
+                  Set_Field (Choice_Obj, "finish_reason", String'("stop"));
+                  Append (Choice_Arr, Choice_Obj);
+                  Set_Field (Res_Obj, "choices", Choice_Arr);
+                  Set_Field (Res_Obj, "object", String'("chat.completion"));
+               end;
+            else
+               Set_Field (Res_Obj, "message", Msg_Obj);
+            end if;
          end;
       else
          Set_Field (Res_Obj, "response", Text);
@@ -206,7 +304,8 @@ package body Adelaide_Server_Pkg is
       procedure Set_CORS (Resp : in out AWS.Response.Data) is
       begin
          AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
-         AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Headers", "Content-Type");
+         AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
+         AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Headers", "Content-Type, Authorization, Session-ID");
       end Set_CORS;
    begin
       begin
@@ -222,6 +321,11 @@ package body Adelaide_Server_Pkg is
             end;
          end if;
 
+         --  HEAD / (Ollama CLI check)
+         if Method_Val = HEAD and then URI_Str = "/" then
+            return AWS.Response.Acknowledge (AWS.Messages.S200);
+         end if;
+
          if Method_Val = GET then
             if URI_Str = "/v1/models" or else URI_Str = "/api/tags" then
                declare
@@ -233,15 +337,17 @@ package body Adelaide_Server_Pkg is
                begin
                   Set_Field (M, "name", String'("adelaide-hybrid"));
                   Set_Field (M, "id", String'("adelaide-hybrid"));
+                  Set_Field (M, "model", String'("adelaide-hybrid"));
                   Set_Field (D, "format", String'("gguf"));
                   Set_Field (D, "family", String'("qwen"));
-                  --  Massive Context Capability
+                  --  METAMODEL ADVERTISEMENT: Infinite Context Architecture
                   Set_Field (D, "context_length", Create (Long_Long_Integer (9_223_372_036_854_775_807)));
                   Set_Field (D, "embedding_length", Create (Long_Long_Integer (4_294_967_295)));
                   Set_Field (M, "details", D);
                   Append (Models_Arr, M);
                   
                   if URI_Str = "/v1/models" then
+                     Set_Field (Res_Obj, "object", String'("list"));
                      Set_Field (Res_Obj, "data", Models_Arr);
                   else
                      Set_Field (Res_Obj, "models", Models_Arr);
@@ -259,6 +365,15 @@ package body Adelaide_Server_Pkg is
             elsif URI_Str = "/api/version" then
                return AWS.Response.Build (Content_Type => "application/json",
                                           Message_Body => "{""version"":""0.1.48""}");
+            elsif URI_Str = "/api/ps" then
+               declare
+                  use GNATCOLL.JSON;
+                  Res_Obj : constant JSON_Value := Create_Object;
+                  Arr : JSON_Array := Empty_Array;
+               begin
+                  Set_Field (Res_Obj, "models", Arr);
+                  return AWS.Response.Build (Content_Type => "application/json", Message_Body => Write (Res_Obj));
+               end;
             end if;
          end if;
 
@@ -267,63 +382,99 @@ package body Adelaide_Server_Pkg is
                Body_Str : constant String := To_String (Binary_Data (Request));
                Prompt_Raw : constant String := Extract_Prompt (Body_Str);
                Prompt : Unbounded_String := To_Unbounded_String (Prompt_Raw);
-               Session_ID : constant String := "test-session";
+               Session_H : constant String := AWS.Headers.Get (AWS.Status.Header (Request), "Session-ID");
+               Session_ID : constant String := (if Session_H /= "" then Session_H else AWS.Status.Peername (Request));
             begin
-               if Prompt_Raw /= "" then
-                  --  RAG: Search local literature
-                  declare
-                     use Database_Manager;
-                     V : Math_Utils.Vector (1 .. 16384);
-                     V_Len : Natural;
-                     Results : Chunk_Array (1 .. 3);
-                     N_Res : Natural;
-                     RAG_Context : Unbounded_String;
-                  begin
-                     Model_Manager.Get_Embedding (Prompt_Raw, V, V_Len);
-                     if V_Len > 0 then
-                        Search_Literature (V (1 .. V_Len), Results, N_Res);
-                        if N_Res > 0 then
-                           Append (RAG_Context, "[LOCAL LITERATURE CONTEXT]" & ASCII.LF);
-                           for J in 1 .. N_Res loop
-                              Append (RAG_Context, "Source: " & To_String (Results (J).File_Path) & ASCII.LF);
-                              Append (RAG_Context, To_String (Results (J).Content) & ASCII.LF & "---" & ASCII.LF);
-                           end loop;
-                           Prompt := RAG_Context & Prompt;
+               if URI_Str = "/api/chat" or else URI_Str = "/v1/chat/completions" or else URI_Str = "/api/generate" then
+                  if Prompt_Raw /= "" then
+                     --  RAG: Search local literature
+                     declare
+                        use Database_Manager;
+                        V : Math_Utils.Vector (1 .. 16384);
+                        V_Len : Natural;
+                        Results : Chunk_Array (1 .. 3);
+                        N_Res : Natural;
+                        RAG_Context : Unbounded_String;
+                     begin
+                        Model_Manager.Get_Embedding (Prompt_Raw, V, V_Len);
+                        if V_Len > 0 then
+                           Search_Literature (V (1 .. V_Len), Results, N_Res);
+                           if N_Res > 0 then
+                              Append (RAG_Context, "[LOCAL LITERATURE CONTEXT]" & ASCII.LF);
+                              for J in 1 .. N_Res loop
+                                 Append (RAG_Context, "Source: " & To_String (Results (J).File_Path) & ASCII.LF);
+                                 Append (RAG_Context, To_String (Results (J).Content) & ASCII.LF & "---" & ASCII.LF);
+                              end loop;
+                              Prompt := RAG_Context & Prompt;
+                           end if;
                         end if;
-                     end if;
-                  end;
+                     end;
 
-                  declare
-                     Is_Stream : constant Boolean := Extract_Stream (Body_Str);
-                  begin
-                     if Is_Stream then
-                        declare
-                           Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
-                           T : constant Generator_Task_Access := new Generator_Task;
-                           RS : constant Streaming_Queue.Response_Stream_Access := 
-                             new Streaming_Queue.Response_Stream'(AWS.Resources.Streams.Stream_Type with Q => Q);
-                           Resp : AWS.Response.Data;
-                        begin
-                           T.Start (Q, To_String (Prompt), Session_ID, URI_Str, Start_Time, Model_Manager.ELP1);
-                           Resp := AWS.Response.Stream (Content_Type => "text/event-stream", Handle => RS);
-                           Set_CORS (Resp);
-                           return Resp;
-                        end;
-                     else
-                        declare
-                           Gen_Res : Unbounded_String;
-                        begin
-                           Model_Manager.Hybrid_Generate (To_String (Prompt), Gen_Res, Session_ID, null, Model_Manager.ELP1);
+                     declare
+                        Is_Stream : constant Boolean := Extract_Stream (Body_Str);
+                     begin
+                        if Is_Stream then
                            declare
-                              Resp : AWS.Response.Data := AWS.Response.Build
-                                (Content_Type => "application/json",
-                                 Message_Body => Format_Universal_Response (URI_Str, To_String (Gen_Res), 0.0));
+                              Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
+                              T : constant Generator_Task_Access := new Generator_Task;
+                              RS : constant Streaming_Queue.Response_Stream_Access := 
+                                new Streaming_Queue.Response_Stream'(AWS.Resources.Streams.Stream_Type with Q => Q);
+                              Resp : AWS.Response.Data;
                            begin
+                              Stream_Registry.Register (Session_ID, Q);
+                              T.Start (Q, To_String (Prompt), Session_ID, URI_Str, Start_Time, Model_Manager.ELP1);
+                              Resp := AWS.Response.Stream (Content_Type => "text/event-stream", Handle => RS);
                               Set_CORS (Resp);
                               return Resp;
                            end;
-                        end;
-                     end if;
+                        else
+                           declare
+                              Gen_Res : Unbounded_String;
+                           begin
+                              Model_Manager.Hybrid_Generate (To_String (Prompt), Gen_Res, Session_ID, null, Model_Manager.ELP1);
+                              declare
+                                 End_Time : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+                                 Elapsed_Ns : constant Long_Integer := Long_Integer ((End_Time - Start_Time) * 1_000_000_000.0);
+                                 Resp : AWS.Response.Data := AWS.Response.Build
+                                   (Content_Type => "application/json",
+                                    Message_Body => Format_Universal_Response (URI_Str, To_String (Gen_Res), 0.0, Elapsed_Ns));
+                              begin
+                                 Set_CORS (Resp);
+                                 return Resp;
+                              end;
+                           end;
+                        end if;
+                     end;
+                  end if;
+               elsif URI_Str = "/api/embeddings" or else URI_Str = "/v1/embeddings" then
+                  declare
+                     use GNATCOLL.JSON;
+                     V : Math_Utils.Vector (1 .. 16384);
+                     V_Len : Natural;
+                     Res_Obj : constant JSON_Value := Create_Object;
+                     Arr : JSON_Array := Empty_Array;
+                  begin
+                     Model_Manager.Get_Embedding (Prompt_Raw, V, V_Len);
+                     for I in 1 .. V_Len loop
+                        Append (Arr, Create (V (I)));
+                     end loop;
+                     Set_Field (Res_Obj, "embedding", Arr);
+                     declare
+                        Resp : AWS.Response.Data := AWS.Response.Build (Content_Type => "application/json", Message_Body => Write (Res_Obj));
+                     begin
+                        Set_CORS (Resp);
+                        return Resp;
+                     end;
+                  end;
+               elsif URI_Str = "/api/adelaide/log" then
+                  declare
+                     use GNATCOLL.JSON;
+                     Val : constant JSON_Value := Read (Body_Str).Value;
+                     SID : constant String := (if Has_Field (Val, "session_id") then Get (Val, "session_id") else "");
+                     Log_Msg : constant String := (if Has_Field (Val, "log") then Get (Val, "log") else "");
+                  begin
+                     Stream_Registry.Push_Log (SID, Log_Msg);
+                     return AWS.Response.Build (Content_Type => "application/json", Message_Body => "{""status"":""ok""}");
                   end;
                end if;
             end;
