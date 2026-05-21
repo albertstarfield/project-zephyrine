@@ -27,7 +27,7 @@ package body Adelaide_Server_Pkg is
    end Push_Log;
 
    function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
-      URI : constant String := AWS.Status.URI (Request);
+      URI    : constant String := AWS.Status.URI (Request);
       Method : constant String := AWS.Status.Method (Request);
    begin
       Put_Line ("[Server] " & Method & " " & URI);
@@ -49,11 +49,10 @@ package body Adelaide_Server_Pkg is
          end;
       elsif URI = "/api/chat" or else URI = "/v1/chat/completions" then
          declare
-            --  Try Binary_Data if Payload is empty
-            Payload : constant String := 
-              (if AWS.Status.Payload (Request) /= "" 
-               then AWS.Status.Payload (Request)
-               else To_String (AWS.Status.Binary_Data (Request)));
+            Raw_S   : constant String := AWS.Status.Payload (Request);
+            Raw_B   : constant Unbounded_String :=
+              AWS.Status.Binary_Data (Request);
+            Payload : Unbounded_String;
             Val     : JSON_Value;
             Prompt  : Unbounded_String := To_Unbounded_String ("No payload");
             Images  : JSON_Array := Empty_Array;
@@ -63,10 +62,17 @@ package body Adelaide_Server_Pkg is
             Choice  : constant JSON_Value := Create_Object;
             Msg_Out : constant JSON_Value := Create_Object;
          begin
-            Put_Line ("[Server] Resolved Payload length: " & Payload'Length'Image);
-            
-            if Payload /= "" then
-               Val := Read (Payload);
+            if Raw_S /= "" then
+               Payload := To_Unbounded_String (Raw_S);
+            else
+               Payload := Raw_B;
+            end if;
+
+            Put_Line ("[Server] Resolved Payload length: " &
+                      Length (Payload)'Image);
+
+            if Length (Payload) > 0 then
+               Val := Read (To_String (Payload));
                if Val.Has_Field ("messages") then
                   declare
                      Msgs : constant JSON_Array := Get (Val, "messages");
