@@ -19,6 +19,14 @@ package body Adelaide_Server_Pkg is
    OLLAMA_PORT : constant String := "11435";
    OLLAMA_URL  : constant String := "http://localhost:" & OLLAMA_PORT;
 
+   subtype ID_Type is String (1 .. 64);
+   type Entry_Rec is record
+      ID  : ID_Type;
+      Len : Natural;
+      Q   : Streaming_Queue.Queue_Access;
+   end record;
+   type Map_Type is array (1 .. 100) of Entry_Rec;
+
    --  Registry to track active streaming queues by Session ID
    --  for cross-component log streaming (e.g. from Python).
    protected Stream_Registry is
