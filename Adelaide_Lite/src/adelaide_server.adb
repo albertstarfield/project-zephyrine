@@ -120,7 +120,7 @@ begin
 
    --  Initialize Knowledge Index and start background tasks (ELP0)
    Knowledge_Manager.Initialize;
-   Knowledge_Manager.Start_Tasks;
+   --  Knowledge_Manager.Start_Tasks;
 
    Put_Line (Cyan & "[+] Starting Adelaide AWS Proxy on port" &
              Server_Port'Img & "..." & Reset);
