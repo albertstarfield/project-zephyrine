@@ -345,10 +345,9 @@ package body Adelaide_Server_Pkg is
             --  Temporary vector to get result
             T_Vec : Math_Utils.Vector (1 .. 16384);
          begin
-            Model_Manager.Get_Embedding (To_String (Local_P), T_Vec);
-            V_Len := T_Vec'Length;
+            Model_Manager.Get_Embedding (To_String (Local_P), T_Vec, V_Len);
             if V_Len > 0 then
-               Local_V (1 .. V_Len) := T_Vec;
+               Local_V (1 .. V_Len) := T_Vec (1 .. V_Len);
             end if;
          end;
 
