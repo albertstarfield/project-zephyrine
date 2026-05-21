@@ -582,6 +582,7 @@ package body Adelaide_Server_Pkg is
    begin
       begin
          Ada.Text_IO.Put_Line ("[Request] " & Method_Val'Img & " " & URI_Str);
+         Ada.Text_IO.Flush;
 
          --  1. Preflight/CORS OPTIONS handling
          if Method_Val = OPTIONS then
@@ -651,10 +652,9 @@ package body Adelaide_Server_Pkg is
                   Set_Field (M, "digest", String'("adelaide-lite-v1"));
                   Set_Field (D, "format", String'("gguf"));
                   Set_Field (D, "family", String'("qwen"));
-                  --  Massive Context Capability
-                  Ada.Text_IO.Put_Line (" [DEBUG] Setting context limits.");
-                  Set_Field (D, "context_length", Create (Long_Long_Integer (9_223_372_036_854_775_807)));
-                  Set_Field (D, "embedding_length", Create (Long_Long_Integer (4_294_967_295)));
+                  --  Safe Context Capability
+                  Set_Field (D, "context_length", Integer (131072));
+                  Set_Field (D, "embedding_length", Integer (1024));
                   Set_Field (M, "details", D);
                   return M;
                end Create_Model_Info;
