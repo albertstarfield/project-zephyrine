@@ -35,15 +35,19 @@ package body Model_Manager is
 
    --  QUEUE MANAGER: Serialize access to models
    --  to prevent concurrent decode crashes.
+   --  ELP1 (API/Client) has priority over ELP0 (Background/Indexing).
    protected Model_Gate is
-      entry Acquire (Model_Type);
+      entry Acquire (Kind : Model_Type; Level : ELP_Level);
       procedure Release (Kind : Model_Type);
    private
       Busy : Busy_Array := (others => False);
    end Model_Gate;
 
    protected body Model_Gate is
-      entry Acquire (for K in Model_Type) when not Busy (K) is
+      entry Acquire (for K in Model_Type) (Level : ELP_Level) 
+        when not Busy (K) and then 
+             (Level = ELP1 or else Acquire (K)(ELP1)'Count = 0) 
+      is
       begin
          Busy (K) := True;
       end Acquire;
@@ -172,7 +176,7 @@ package body Model_Manager is
    procedure Force_Unload_And_Reload (Kind : Model_Type) is
       Success : Boolean;
    begin
-      Model_Gate.Acquire (Kind);
+      Model_Gate.Acquire (Kind, ELP1);
       begin
          Unload_Model (Kind);
          Load_Model (Kind, Success);
@@ -224,7 +228,7 @@ package body Model_Manager is
       N_Toks   : int;
       Prompt_C : chars_ptr := New_String (Prompt);
    begin
-      Model_Gate.Acquire (Kind);
+      Model_Gate.Acquire (Kind, ELP1);
       Load_Model (Kind, Success);
       if not Success then
          Model_Gate.Release (Kind);
@@ -391,7 +395,7 @@ package body Model_Manager is
    end Count_Tokens;
 
    function Get_Request_Category
-     (Msg : String; Session_ID : String := "") return String
+     (Msg : String; Session_ID : String := ""; Level : ELP_Level := ELP1) return String
    is
       Prompt : constant String :=
         "Analyze this request: '" & Msg &
@@ -401,7 +405,7 @@ package body Model_Manager is
         Generate
           (Qwen_0_8B,
            Wrap_ChatML ("You are the Router. Categorize the request.", Prompt),
-           Session_ID, 2048, null);
+           Session_ID, 2048, null, False, Level);
    begin
       Put_Line ("[Intent Phase] Raw response: '" & Result & "'");
       declare
@@ -428,7 +432,8 @@ package body Model_Manager is
       Prompt        : String;
       Search_Used   : Boolean;
       Has_Citations : Boolean;
-      Session_ID    : String := "") return Natural
+      Session_ID    : String := "";
+      Level         : ELP_Level := ELP1) return Natural
    is
       Grade_Prompt : constant String :=
         "Evaluate the following response to the user's prompt on a " &
@@ -456,7 +461,7 @@ package body Model_Manager is
         Generate
           (Qwen_0_8B,
            Wrap_ChatML ("You are the Realism Auditor.", Grade_Prompt),
-           Session_ID, 2048, null);
+           Session_ID, 2048, null, False, Level);
       Grade  : Natural := 85;
    begin
       Put_Line ("[Audit Phase] Raw Grade Response: '" & Result & "'");
@@ -767,7 +772,8 @@ package body Model_Manager is
    function Hybrid_Generate
      (Prompt     : String;
       Session_ID : String := "";
-      Stream     : Streaming_Queue.Queue_Access := null) return String
+      Stream     : Streaming_Queue.Queue_Access := null;
+      Level      : ELP_Level := ELP1) return String
    is
       Whimsical_Adelaide : constant String :=
         "You are Adelaide Zephyrine Charlotte, a whimsical and " &
@@ -778,12 +784,12 @@ package body Model_Manager is
       Current_Hop : Positive := 1;
 
       --  Orchestration states
-      Category : constant String := Get_Request_Category (Prompt, Session_ID);
+      Category : constant String := Get_Request_Category (Prompt, Session_ID, Level);
       Search_Used : Boolean := False;
       Dafny_Used : Boolean := False;
    begin
       Put_Line (ASCII.ESC & "[38;5;171m" & "[Hybrid] Session: " &
-                Session_ID & ASCII.ESC & "[0m");
+                Session_ID & " (Level: " & ELP_Level'Image (Level) & ")" & ASCII.ESC & "[0m");
       Put_Line (ASCII.ESC & "[38;5;171m" &
                 "[Hybrid] Starting reasoning chain (Category: " &
                 Category & ")..." & ASCII.ESC & "[0m");
@@ -1097,7 +1103,8 @@ package body Model_Manager is
       Session_ID      : String := "";
       Requested_Ctx   : Positive := 4096;
       Stream          : Streaming_Queue.Queue_Access := null;
-      Orch_Think_Open : Boolean := False) return String
+      Orch_Think_Open : Boolean := False;
+      Level           : ELP_Level := ELP1) return String
    is
       Success  : Boolean;
       Result   : Unbounded_String;
@@ -1115,7 +1122,7 @@ package body Model_Manager is
       S_Params : Llama_Sampler_Chain_Params;
       Prompt_C : chars_ptr := New_String (Prompt);
    begin
-      Model_Gate.Acquire (Kind);
+      Model_Gate.Acquire (Kind, Level);
       Load_Model (Kind, Success, Requested_Ctx);
       if not Success then
          Model_Gate.Release (Kind);
