@@ -34,8 +34,11 @@ class AdelaideBridge:
                     bufsize=1
                 )
                 # Read the initial "[+] Adelaide_Lite ready." line
-                ready_line = self.process.stdout.readline().strip()
-                if "[+] Adelaide_Lite ready." not in ready_line:
+                if self.process is not None and self.process.stdout is not None:
+                    ready_line = self.process.stdout.readline().strip()
+                    if "[+] Adelaide_Lite ready." not in ready_line:
+                        self.process = None
+                else:
                     self.process = None
             except Exception as e:
                 print(f"⚠️ Failed to start Adelaide_Lite core: {e}", file=sys.stderr)
@@ -56,15 +59,16 @@ class AdelaideBridge:
             v2_str = " ".join(f"{float(x):.10f}" for x in v2)
             
             # Send command and data
-            self.process.stdin.write(f"similarity\n")
-            self.process.stdin.write(f"{dim} {v1_str} {v2_str}\n")
-            self.process.stdin.flush()
-            
-            # Read response
-            resp = self.process.stdout.readline().strip()
-            if resp.startswith("SIMILARITY:"):
-                val_str = resp.split(":")[1].strip()
-                return float(val_str)
+            if self.process is not None and self.process.stdin is not None and self.process.stdout is not None:
+                self.process.stdin.write(f"similarity\n")
+                self.process.stdin.write(f"{dim} {v1_str} {v2_str}\n")
+                self.process.stdin.flush()
+                
+                # Read response
+                resp = self.process.stdout.readline().strip()
+                if resp.startswith("SIMILARITY:"):
+                    val_str = resp.split(":")[1].strip()
+                    return float(val_str)
         except Exception as e:
             print(f"⚠️ Adelaide_Lite IPC error: {e}", file=sys.stderr)
             # Try to restart for next call

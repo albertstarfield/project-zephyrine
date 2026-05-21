@@ -5,15 +5,55 @@ with AWS.Client;
 with AWS.Headers;
 with AWS.Messages;
 with AWS.Response.Set;
+with AWS.Resources.Streams;
 with GNATCOLL.JSON;
 with Math_Utils;
 with Model_Manager; use Model_Manager;
 with Ada.Strings.Fixed;
+with Ada.Calendar; use Ada.Calendar;
+with Streaming_Queue;
 
 package body Adelaide_Server_Pkg is
 
    OLLAMA_PORT : constant String := "11434";
    OLLAMA_URL  : constant String := "http://localhost:" & OLLAMA_PORT;
+
+   task type Generator_Task is
+      entry Start
+        (Stream_Ptr     : Streaming_Queue.Queue_Access;
+         Prompt_Val     : String;
+         Session_ID_Val : String;
+         URI_Str_Val    : String;
+         Start_Time_Val : Ada.Calendar.Time);
+   end Generator_Task;
+
+   type Generator_Task_Access is access Generator_Task;
+
+   task body Generator_Task is
+      Stream     : Streaming_Queue.Queue_Access;
+      Prompt     : Unbounded_String;
+      Session_ID : Unbounded_String;
+   begin
+      accept Start
+        (Stream_Ptr     : Streaming_Queue.Queue_Access;
+         Prompt_Val     : String;
+         Session_ID_Val : String;
+         URI_Str_Val    : String;
+         Start_Time_Val : Ada.Calendar.Time) do
+         Stream     := Stream_Ptr;
+         Prompt     := To_Unbounded_String (Prompt_Val);
+         Session_ID := To_Unbounded_String (Session_ID_Val);
+      end Start;
+
+      declare
+         Result : constant String :=
+           Model_Manager.Hybrid_Generate
+             (To_String (Prompt), To_String (Session_ID), Stream);
+         pragma Unreferenced (Result);
+      begin
+         null;
+      end;
+   end Generator_Task;
 
    --  Helper to convert JSON Array to Vector
    function JSON_Array_To_Vector
@@ -200,6 +240,31 @@ package body Adelaide_Server_Pkg is
          return "";
    end Extract_Prompt;
 
+   function Extract_Stream (Body_Str : String) return Boolean is
+      use GNATCOLL.JSON;
+      Res : constant Read_Result := Read (Body_Str);
+   begin
+      if not Res.Success then
+         return False;
+      end if;
+      declare
+         Val : constant JSON_Value := Res.Value;
+      begin
+         if Val.Kind = JSON_Object_Type and then Has_Field (Val, "stream") then
+            declare
+               Stream_Val : constant JSON_Value := Get (Val, "stream");
+            begin
+               if Stream_Val.Kind = JSON_Boolean_Type then
+                  return Get (Stream_Val);
+               end if;
+            end;
+         end if;
+      end;
+      return False;
+   exception
+      when others => return False;
+   end Extract_Stream;
+
    --  Get text embedding vector from local Model_Manager
    function Get_Query_Embedding (Prompt : String) return Math_Utils.Vector is
    begin
@@ -228,7 +293,8 @@ package body Adelaide_Server_Pkg is
    function Format_Universal_Response
      (URI_Str : String;
       Text    : String;
-      Similarity : Float) return String
+      Similarity : Float;
+      Duration_Ns : Long_Integer := 0) return String
    is
       use GNATCOLL.JSON;
       Res_Obj : constant JSON_Value := Create_Object;
@@ -241,7 +307,7 @@ package body Adelaide_Server_Pkg is
       Is_Match : constant Boolean := Similarity > 0.0;
       Full_Content : constant String :=
         (if Is_Match then Think_Header & Text else Text);
-      
+
       --  Metamodel Label
       Meta_Model : constant String := "adelaide-hybrid";
    begin
@@ -305,8 +371,16 @@ package body Adelaide_Server_Pkg is
 
       --  4. Ollama Format (Default)
       else
+         Set_Field (Res_Obj, "model", Meta_Model);
+         Set_Field (Res_Obj, "done", True);
+         --  Satisfy strict type validation (e.g. from qwen/ollama-js)
+         Set_Field (Res_Obj, "created_at", String'("2026-05-21T00:00:00Z"));
+         Set_Field (Res_Obj, "total_duration", Duration_Ns);
+         Set_Field (Res_Obj, "load_duration", Long_Integer'(0));
+         Set_Field (Res_Obj, "prompt_eval_count", Integer'(10));
+         Set_Field (Res_Obj, "eval_count", Integer'(100));
+
          if URI_Str = "/api/chat" or else URI_Str = "/api/chat/" then
-            Set_Field (Res_Obj, "model", Meta_Model);
             declare
                Msg_Obj : constant JSON_Value := Create_Object;
             begin
@@ -314,11 +388,8 @@ package body Adelaide_Server_Pkg is
                Set_Field (Msg_Obj, "content", Full_Content);
                Set_Field (Res_Obj, "message", Msg_Obj);
             end;
-            Set_Field (Res_Obj, "done", True);
          else
-            Set_Field (Res_Obj, "model", Meta_Model);
             Set_Field (Res_Obj, "response", Full_Content);
-            Set_Field (Res_Obj, "done", True);
          end if;
          return Write (Res_Obj);
       end if;
@@ -376,11 +447,13 @@ package body Adelaide_Server_Pkg is
       use AWS.Status;
       URI_Str : constant String := URI (Request);
       Method_Val : constant Request_Method := Method (Request);
+      Start_Time : constant Ada.Calendar.Time := Ada.Calendar.Clock;
 
       --  Inject CORS headers helper
       procedure Set_CORS (Resp : in out AWS.Response.Data) is
       begin
-         AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
+         AWS.Response.Set.Add_Header
+           (Resp, "Access-Control-Allow-Origin", "*");
          AWS.Response.Set.Add_Header
            (Resp, "Access-Control-Allow-Methods",
             "GET, POST, PUT, DELETE, OPTIONS, HEAD");
@@ -427,8 +500,9 @@ package body Adelaide_Server_Pkg is
          elsif URI_Str = "/api/version" then
             declare
                Resp : AWS.Response.Data :=
-                 AWS.Response.Build (Content_Type => "application/json",
-                                     Message_Body => "{""version"":""0.1.48""}");
+                 AWS.Response.Build
+                   (Content_Type => "application/json",
+                    Message_Body => "{""version"":""0.1.48""}");
             begin
                Set_CORS (Resp);
                return Resp;
@@ -547,21 +621,23 @@ package body Adelaide_Server_Pkg is
             then
                declare
                   Resp : AWS.Response.Data :=
-                    AWS.Response.Build (Content_Type => "application/json",
-                                        Message_Body => "{""status"":""success""}");
+                    AWS.Response.Build
+                      (Content_Type => "application/json",
+                       Message_Body => "{""status"":""success""}");
                begin
                   Set_CORS (Resp);
                   return Resp;
                end;
             elsif URI_Str = "/api/delete" then
                 declare
-                  Resp : AWS.Response.Data :=
-                    AWS.Response.Build (Content_Type => "application/json",
-                                        Message_Body => "{""status"":""success""}");
-               begin
-                  Set_CORS (Resp);
-                  return Resp;
-               end;
+                   Resp : AWS.Response.Data :=
+                     AWS.Response.Build
+                       (Content_Type => "application/json",
+                        Message_Body => "{""status"":""success""}");
+                begin
+                   Set_CORS (Resp);
+                   return Resp;
+                end;
             elsif URI_Str = "/api/chat" or else
                URI_Str = "/api/generate" or else
                URI_Str = "/v1/chat/completions" or else
@@ -624,10 +700,17 @@ package body Adelaide_Server_Pkg is
 
                               if Max_Sim >= 0.85 and then Max_Sim < 0.98 then
                                  declare
+                                    End_Time : constant Ada.Calendar.Time :=
+                                      Ada.Calendar.Clock;
+                                    Elapsed_Secs : constant Duration :=
+                                      End_Time - Start_Time;
+                                    Elapsed_Ns   : constant Long_Integer :=
+                                      Long_Integer
+                                        (Elapsed_Secs * 1_000_000_000.0);
                                     Formatted_Resp : constant String :=
                                       Format_Universal_Response
                                         (URI_Str, To_String (Best_Resp),
-                                         Max_Sim);
+                                         Max_Sim, Elapsed_Ns);
                                     Resp : AWS.Response.Data :=
                                       AWS.Response.Build
                                         (Content_Type => "application/json",
@@ -645,23 +728,72 @@ package body Adelaide_Server_Pkg is
                   --  ENFORCED SERVER AUTHORITY: Always use Hybrid 4B Pipeline
                   --  Ignoring client model choice to maintain architecture integrity.
                   declare
-                     use GNATCOLL.JSON;
+                      Session_H : constant String :=
+                        AWS.Headers.Get
+                          (AWS.Status.Header (Request), "Session-ID");
+                      Session_ID : constant String :=
+                        (if Session_H /= "" then Session_H
+                         else AWS.Status.Peername (Request));
                   begin
-                     Ada.Text_IO.Put_Line (" [INPUT] Prompt: " & Prompt);
-                     Ada.Text_IO.Put_Line (" [SERVER] Authority: Routing to Hybrid 4B Pipeline (Adelaide).");
+                     Ada.Text_IO.Put_Line
+                       (" [INPUT] Prompt: " & Prompt &
+                        " (Session: " & Session_ID & ")");
+                     Ada.Text_IO.Put_Line
+                       (" [SERVER] Authority: " &
+                        "Routing to Hybrid 4B Pipeline (Adelaide).");
 
                      declare
-                        Gen_Text : constant String := Model_Manager.Hybrid_Generate (Prompt);
-                        Formatted_Resp : constant String :=
-                          Format_Universal_Response (URI_Str, Gen_Text, 0.0);
-                        Resp : AWS.Response.Data;
+                        Is_Stream : constant Boolean := Extract_Stream (Body_Str);
                      begin
-                        Ada.Text_IO.Put_Line (" [OUTPUT] Final Response Ready.");
-                        Resp := AWS.Response.Build
-                          (Content_Type => "application/json",
-                           Message_Body => Formatted_Resp);
-                        Set_CORS (Resp);
-                        return Resp;
+                        Ada.Text_IO.Put_Line (" [DEBUG] Is_Stream: " & Is_Stream'Img);
+                        if Is_Stream then
+                           Ada.Text_IO.Put_Line (" [OUTPUT] Streaming Response Started.");
+                           declare
+                               type Response_Stream_Access is access all
+                                 Streaming_Queue.Response_Stream;
+                               Q : constant Streaming_Queue.Queue_Access :=
+                                 new Streaming_Queue.Queue;
+                               T : constant Generator_Task_Access :=
+                                 new Generator_Task;
+                               RS : constant Response_Stream_Access :=
+                                 new Streaming_Queue.Response_Stream'
+                                   (AWS.Resources.Streams.Stream_Type with
+                                    Q => Q);
+                               Resp : AWS.Response.Data;
+                            begin
+                               T.Start (Q, Prompt, Session_ID, URI_Str,
+                                        Start_Time);
+                               Resp := AWS.Response.Stream
+                                 (Content_Type => "text/event-stream",
+                                  Handle       => RS);
+                               Set_CORS (Resp);
+                               return Resp;
+                            end;
+                        else
+                           declare
+                               Gen_Text : constant String :=
+                                 Model_Manager.Hybrid_Generate
+                                   (Prompt, Session_ID);
+                               End_Time : constant Ada.Calendar.Time :=
+                                 Ada.Calendar.Clock;
+                               Elapsed_Secs : constant Duration :=
+                                 End_Time - Start_Time;
+                               Elapsed_Ns   : constant Long_Integer :=
+                                 Long_Integer
+                                   (Elapsed_Secs * 1_000_000_000.0);
+                               Formatted_Resp : constant String :=
+                                 Format_Universal_Response
+                                   (URI_Str, Gen_Text, 0.0, Elapsed_Ns);
+                              Resp : AWS.Response.Data;
+                           begin
+                              Ada.Text_IO.Put_Line (" [OUTPUT] Final Response Ready.");
+                              Resp := AWS.Response.Build
+                                (Content_Type => "application/json",
+                                 Message_Body => Formatted_Resp);
+                              Set_CORS (Resp);
+                              return Resp;
+                           end;
+                        end if;
                      end;
                   end;
                end;
@@ -671,7 +803,8 @@ package body Adelaide_Server_Pkg is
             then
                declare
                   Prompt : constant String := Extract_Prompt (Body_Str);
-                  --  ENFORCED SERVER AUTHORITY: Model_Manager.Get_Embedding is locked to Qwen_Embedding.
+                  --  ENFORCED SERVER AUTHORITY: Model_Manager.Get_Embedding
+                  --  is locked to Qwen_Embedding.
                   Vec    : constant Math_Utils.Vector :=
                     Get_Query_Embedding (Prompt);
                   use GNATCOLL.JSON;
@@ -692,7 +825,8 @@ package body Adelaide_Server_Pkg is
                         Append (Data_Arr, Data_Obj);
                         Set_Field (Res_Obj, "object", String'("list"));
                         Set_Field (Res_Obj, "data", Data_Arr);
-                        Set_Field (Res_Obj, "model", String'("adelaide-hybrid"));
+                        Set_Field
+                          (Res_Obj, "model", String'("adelaide-hybrid"));
                      end;
                   else
                      Set_Field (Res_Obj, "embedding", Arr);

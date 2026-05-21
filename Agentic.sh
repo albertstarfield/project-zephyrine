@@ -28,5 +28,5 @@ cd "$WORKSPACE"
 
 # Execute the agentic command
 # Note: Using the user-provided instruction path as the session baseline
-qwen -y --vlm-switch-mode persist --prompt-interactive \
+qwen -y --prompt-interactive \
     "I want you to read @/Users/albertstarfield/Documents/JournalingNotebook/JournalingNotebook/midnighthelper/Instruction.md for this session. (Don't forget to use absolute_path to read this)"

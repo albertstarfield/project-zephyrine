@@ -1,0 +1,418 @@
+with Ada.Text_IO; use Ada.Text_IO;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Database_Manager;
+with Tool_Manager;
+with Llama_Interface; use Llama_Interface;
+with Math_Utils;
+with System;
+with Interfaces.C; use Interfaces.C;
+with Interfaces.C.Strings; use Interfaces.C.Strings;
+with Ada.Real_Time; use Ada.Real_Time;
+
+package body Model_Manager is
+
+   type Model_Record is record
+      Model      : Llama_Model := Null_Model;
+      Context    : Llama_Context := Null_Context;
+      Path       : Unbounded_String;
+      Loaded     : Boolean := False;
+      In_Use     : Boolean := False;
+      Last_Used  : Time := Time_First;
+      Current_Ctx : unsigned := 0;
+   end record;
+
+   Models : array (Model_Type) of Model_Record;
+
+   type Busy_Array is array (Model_Type) of Boolean;
+
+   --  QUEUE MANAGER: Serialize access to models to prevent concurrent decode crashes
+   protected Model_Gate is
+      entry Acquire (Model_Type);
+      procedure Release (Kind : Model_Type);
+   private
+      Busy : Busy_Array := (others => False);
+   end Model_Gate;
+
+   protected body Model_Gate is
+      entry Acquire (for K in Model_Type) when not Busy (K) is
+      begin
+         Busy (K) := True;
+      end Acquire;
+
+      procedure Release (Kind : Model_Type) is
+      begin
+         Busy (Kind) := False;
+      end Release;
+   end Model_Gate;
+
+   task Idle_Monitor is
+      pragma Storage_Size (1024 * 1024);
+      entry Start;
+   end Idle_Monitor;
+
+   task body Idle_Monitor is
+      Next_Check : Time;
+      Interval   : constant Time_Span := Seconds (1);
+      Timeout    : constant Time_Span := Seconds (30); -- Increased timeout for better caching
+      Now        : Time;
+   begin
+      accept Start;
+      loop
+         Next_Check := Clock + Interval;
+         Now := Clock;
+         for Kind in Model_Type loop
+            if Models (Kind).Loaded and then
+               not Models (Kind).In_Use and then
+               (Now - Models (Kind).Last_Used) > Timeout
+            then
+               Put_Line ("[Idle] Unloading " & Model_Type'Image (Kind));
+               Unload_Model (Kind);
+            end if;
+         end loop;
+         delay until Next_Check;
+      end loop;
+   end Idle_Monitor;
+
+   function Wrap_ChatML (Sys : String; Msg : String) return String is
+   begin
+      return "<|im_start|>system" & ASCII.LF & Sys & "<|im_end|>" & ASCII.LF &
+             "<|im_start|>user" & ASCII.LF & Msg & "<|im_end|>" & ASCII.LF &
+             "<|im_start|>assistant" & ASCII.LF;
+   end Wrap_ChatML;
+
+   procedure Initialize is
+   begin
+      Llama_Backend_Init;
+      Database_Manager.Initialize;
+      Models (Qwen_0_8B).Path := To_Unbounded_String
+        ("../llama.cpp/models/qwen3.5/Qwen3.5-0.8B-Q4_K_S.gguf");
+      Models (Qwen_4B).Path   := To_Unbounded_String
+        ("../llama.cpp/models/qwen3.5/Qwen3.5-4B-Q4_K_S.gguf");
+      Models (Qwen_Embedding).Path := To_Unbounded_String
+        ("../llama.cpp/models/qwen3.5/Qwen3-Embedding-0.6B-Q8_0.gguf");
+      Models (MMProj).Path := To_Unbounded_String
+        ("../llama.cpp/models/qwen3.5/mmproj-0.8B-F16.gguf");
+      Idle_Monitor.Start;
+   end Initialize;
+
+   procedure Load_Model
+     (Kind : Model_Type; Success : out Boolean; Requested_Ctx : Positive := 4096)
+   is
+      M_Params : Llama_Model_Params := Llama_Model_Default_Params;
+      C_Params : Llama_Context_Params := Llama_Context_Default_Params;
+      Path_C   : chars_ptr := New_String (To_String (Models (Kind).Path));
+      Actual_Ctx : unsigned;
+   begin
+      Actual_Ctx := (if Requested_Ctx <= 4096 then 4096 
+                     else (if Requested_Ctx <= 16384 then 16384 else 32768));
+      Success := False;
+      if Models (Kind).Loaded then
+         if unsigned (Requested_Ctx) <= Models (Kind).Current_Ctx then
+            Models (Kind).Last_Used := Clock;
+            Success := True;
+            return;
+         end if;
+         Unload_Model (Kind);
+      end if;
+
+      Put_Line ("[+] Loading " & Model_Type'Image (Kind) & " (N_CTX=" & Actual_Ctx'Img & ")");
+      M_Params.N_Gpu_Layers := -1;
+      Models (Kind).Model := Llama_Model_Load_From_File (Path_C, M_Params);
+      Free (Path_C);
+
+      if Models (Kind).Model /= Null_Model then
+         C_Params.N_Ctx := Actual_Ctx;
+         C_Params.N_Batch := 4096;
+         C_Params.N_Ubatch := 1024;
+         C_Params.N_Threads := 8;
+         C_Params.N_Threads_Batch := 8;
+         Models (Kind).Context := Llama_Init_From_Model (Models (Kind).Model, C_Params);
+         if Models (Kind).Context /= Null_Context then
+            Models (Kind).Loaded := True;
+            Models (Kind).Last_Used := Clock;
+            Models (Kind).Current_Ctx := Actual_Ctx;
+            Success := True;
+         else
+            Llama_Model_Free (Models (Kind).Model);
+            Models (Kind).Model := Null_Model;
+         end if;
+      end if;
+   end Load_Model;
+
+   procedure Unload_Model (Kind : Model_Type) is
+   begin
+      if Models (Kind).Loaded then
+         Llama_Free (Models (Kind).Context);
+         Llama_Model_Free (Models (Kind).Model);
+         Models (Kind).Context := Null_Context;
+         Models (Kind).Model := Null_Model;
+         Models (Kind).Loaded := False;
+         Models (Kind).Current_Ctx := 0;
+      end if;
+   end Unload_Model;
+
+   function Get_Context (Kind : Model_Type) return Llama_Context is
+   begin
+      if Models (Kind).Loaded then Models (Kind).Last_Used := Clock; end if;
+      return Models (Kind).Context;
+   end Get_Context;
+
+   function Get_Model (Kind : Model_Type) return Llama_Model is
+   begin
+      if Models (Kind).Loaded then Models (Kind).Last_Used := Clock; end if;
+      return Models (Kind).Model;
+   end Get_Model;
+
+   function Get_Kind_For_Model_Name (Name : String) return Model_Type is
+   begin
+      if Name = "adelaide-hybrid" or else Name = "qwen3.5:4b" then return Qwen_4B;
+      elsif Name = "qwen-embedding" then return Qwen_Embedding;
+      else return Qwen_0_8B; end if;
+   end Get_Kind_For_Model_Name;
+
+   function Get_Embedding (Prompt : String) return Math_Utils.Vector is
+      Success : Boolean;
+      Kind    : constant Model_Type := Qwen_Embedding;
+      Vocab   : Llama_Vocab;
+      Tokens  : array (1 .. 32768) of Llama_Token;
+      N_Toks  : int;
+      Prompt_C : chars_ptr := New_String (Prompt);
+   begin
+      Model_Gate.Acquire (Kind);
+      Load_Model (Kind, Success);
+      if not Success then 
+         Model_Gate.Release (Kind);
+         return (1 .. 0 => 0.0); 
+      end if;
+      Models (Kind).Last_Used := Clock;
+      Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
+      N_Toks := Llama_Tokenize (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address, 32768, True, True);
+      Free (Prompt_C);
+      if N_Toks <= 0 then 
+         Model_Gate.Release (Kind);
+         return (1 .. 0 => 0.0); 
+      end if;
+      declare
+         function Llama_Batch_Get_One (T : System.Address; N : int) return Llama_Batch;
+         pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
+         B : constant Llama_Batch := Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
+      begin
+         Llama_Set_Embeddings (Models (Kind).Context, True);
+         if Llama_Decode (Models (Kind).Context, B) /= 0 then 
+            Model_Gate.Release (Kind);
+            return (1 .. 0 => 0.0); 
+         end if;
+      end;
+      declare
+         function Llama_Model_N_Embd (M : Llama_Model) return int;
+         pragma Import (C, Llama_Model_N_Embd, "llama_model_n_embd");
+         Dim : constant int := Llama_Model_N_Embd (Models (Kind).Model);
+         Ptr : constant System.Address := Llama_Get_Embeddings (Models (Kind).Context);
+         type Float_Array is array (1 .. Integer (Dim)) of Float;
+         pragma Convention (C, Float_Array);
+         Embed : Float_Array;
+         for Embed'Address use Ptr;
+         Result : Math_Utils.Vector (1 .. Integer (Dim));
+      begin
+         for I in 1 .. Integer (Dim) loop Result (I) := Embed (I); end loop;
+         Model_Gate.Release (Kind);
+         return Result;
+      end;
+   exception
+      when others =>
+         Model_Gate.Release (Kind);
+         return (1 .. 0 => 0.0);
+   end Get_Embedding;
+
+   function Hybrid_Generate (Prompt : String; Session_ID : String := ""; Stream : Streaming_Queue.Queue_Access := null) return String is
+      Whimsical_Adelaide : constant String :=
+        "You are Adelaide Zephyrine Charlotte, a whimsical and sophisticated senior engineer. " &
+        "Stay in character. Provide brilliant responses based on verified information.";
+      Internal_State : Unbounded_String := Null_Unbounded_String;
+      Current_Response : Unbounded_String;
+      Current_Hop : Positive := 1;
+      Est_Tokens : constant Positive := (Prompt'Length / 3) + 8192;
+   begin
+      --  Session_ID is tracked for future per-client KV management
+      Put_Line (ASCII.ESC & "[38;5;171m" & "[Hybrid] Session: " & Session_ID & ASCII.ESC & "[0m");
+      Put_Line (ASCII.ESC & "[38;5;171m" & "[Hybrid] Starting reasoning chain..." & ASCII.ESC & "[0m");
+      
+      --  1. Pre-emptive Fact Check
+      if Index (Prompt, "What is") > 0 or else Index (Prompt, "Who is") > 0 or else 
+         Index (Prompt, "tell me about") > 0 
+      then
+         Put_Line (" [Hybrid] Factual trigger. Spawning search...");
+         declare
+            R : constant Tool_Manager.Tool_Result := Tool_Manager.Execute_Tool ("searchglobalref", Prompt);
+         begin
+            Append (Internal_State, "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+         end;
+      end if;
+
+      loop
+         declare
+            Router_Sys : constant String :=
+              "You are the Router. You decide if a tool is needed. " &
+              "If the user says hello or greets you, output [FINISH]. " &
+              "If you need to search, use [ACTION: search(query)]. " &
+              "If you need to read a file, use [ACTION: cat(filename)]. " &
+              "If you are done, output [FINISH]. " &
+              "Example User: 'Hello' -> [FINISH] " &
+              "Example User: 'List my files' -> [ACTION: ls('.')] " &
+              "Output ONLY the tag.";
+            Paging_Instr : constant String := "Current Data: " & To_String (Internal_State);
+            Step_Raw : constant String := Generate (Qwen_0_8B, Wrap_ChatML (Router_Sys, Paging_Instr & ASCII.LF & Prompt), Session_ID, 2048, null);
+            Step : constant String := Trim (Step_Raw, Ada.Strings.Both);
+         begin
+            Put_Line (ASCII.ESC & "[34m" & " [Hybrid] Hop" & Current_Hop'Img & ": " & Step & ASCII.ESC & "[0m");
+            
+            if Index (Step, "[ACTION:") > 0 then
+               declare
+                  S_Pos : constant Natural := Index (Step, "[ACTION:") + 8;
+                  E_Pos : constant Natural := Index (Step, "]", S_Pos);
+               begin
+                  if E_Pos > S_Pos then
+                     declare
+                        A_Full : constant String := Step (S_Pos .. E_Pos - 1);
+                        P_Pos  : constant Natural := Index (A_Full, "(");
+                        EP_Pos : constant Natural := Index (A_Full, ")", P_Pos);
+                     begin
+                        if P_Pos > 0 and then EP_Pos > P_Pos then
+                           declare
+                              T_Name : constant String := Trim (A_Full (A_Full'First .. P_Pos - 1), Ada.Strings.Both);
+                              T_Pars : constant String := Trim (A_Full (P_Pos + 1 .. EP_Pos - 1), Ada.Strings.Both);
+                           begin
+                              if T_Pars'Length < 256 and then 
+                                 Index (To_String (Internal_State), T_Name & "(" & T_Pars & ")") = 0 
+                              then
+                                 declare
+                                    R : constant Tool_Manager.Tool_Result := Tool_Manager.Execute_Tool (T_Name, T_Pars);
+                                 begin
+                                    Append (Internal_State, "[TOOL (" & T_Name & ")]: " & To_String (R.Output) & ASCII.LF);
+                                 end;
+                              else
+                                 exit;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end if;
+               end;
+            elsif Index (Step, "[FINISH]") > 0 then
+               exit;
+            else
+               exit;
+            end if;
+         end;
+         Current_Hop := Current_Hop + 1;
+         exit when Current_Hop > 5;
+      end loop;
+
+      Put_Line (ASCII.ESC & "[32m" & " [Hybrid] 4B Synthesis..." & ASCII.ESC & "[0m");
+      declare
+         Synth_Prompt : constant String := Wrap_ChatML (Whimsical_Adelaide, "User: " & Prompt & ASCII.LF & "Fact-Check: " & To_String (Internal_State));
+      begin
+         Current_Response := To_Unbounded_String (Generate (Qwen_4B, Synth_Prompt, Session_ID, Est_Tokens));
+      end;
+      Database_Manager.Remember (Prompt, To_String (Current_Response));
+      return "<think>" & ASCII.LF & "[Adelaide Reasoning]" & ASCII.LF & To_String (Internal_State) & ASCII.LF & "</think>" &
+        ASCII.LF & To_String (Current_Response);
+   end Hybrid_Generate;
+
+   function Generate (Kind : Model_Type; Prompt : String; Session_ID : String := ""; Requested_Ctx : Positive := 4096) return String is
+      Success : Boolean;
+      Result  : Unbounded_String;
+      Vocab   : Llama_Vocab;
+      Tokens  : array (1 .. 32768) of Llama_Token;
+      N_Toks  : int;
+      Sampler : Llama_Sampler;
+      S_Params : Llama_Sampler_Chain_Params;
+      Prompt_C : chars_ptr := New_String (Prompt);
+   begin
+      Model_Gate.Acquire (Kind);
+      Load_Model (Kind, Success, Requested_Ctx);
+      if not Success then 
+         Model_Gate.Release (Kind);
+         return "ERROR: Load failed"; 
+      end if;
+      
+      Models (Kind).In_Use := True;
+      Models (Kind).Last_Used := Clock;
+      Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
+      N_Toks := Llama_Tokenize (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address, 32768, True, True);
+      Free (Prompt_C);
+      if N_Toks < 0 then 
+         Models (Kind).In_Use := False;
+         Model_Gate.Release (Kind);
+         return "ERROR: Tokenization failed"; 
+      end if;
+
+      --  CHUNKED DECODING
+      declare
+         function Llama_Batch_Get_One (T : System.Address; N : int) return Llama_Batch;
+         pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
+         
+         Batch_Size : constant int := 4096;
+         Current_Pos : int := 0;
+         Tokens_Left : int := N_Toks;
+      begin
+         while Tokens_Left > 0 loop
+            declare
+               To_Decode : constant int := (if Tokens_Left > Batch_Size then Batch_Size else Tokens_Left);
+               B : constant Llama_Batch := Llama_Batch_Get_One (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
+            begin
+               if Llama_Decode (Models (Kind).Context, B) /= 0 then 
+                  Models (Kind).In_Use := False;
+                  Model_Gate.Release (Kind);
+                  return "ERROR: Decode failed"; 
+               end if;
+               Tokens_Left := Tokens_Left - To_Decode;
+               Current_Pos := Current_Pos + To_Decode;
+            end;
+         end loop;
+      end;
+
+      S_Params := Llama_Sampler_Chain_Default_Params;
+      Sampler := Llama_Sampler_Chain_Init (S_Params);
+      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1));
+      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_K (40));
+      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_P (0.9, 1));
+      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Temp (0.7));
+      Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Dist (1234));
+
+      for I in 1 .. 2048 loop
+         declare
+            Token : constant Llama_Token := Llama_Sampler_Sample (Sampler, Models (Kind).Context, -1);
+            Piece : array (1 .. 256) of aliased Character;
+            Len   : int;
+         begin
+            if Llama_Vocab_Is_Eog (Vocab, Token) then exit; end if;
+            Len := Llama_Token_To_Piece (Vocab, Token, Piece (1)'Address, 256, 0, True);
+            if Len > 0 then
+               for J in 1 .. Len loop Append (Result, Piece (Integer (J))); end loop;
+            end if;
+            declare
+               function Llama_Batch_Get_One (T : System.Address; N : int) return Llama_Batch;
+               pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
+               B : constant Llama_Batch := Llama_Batch_Get_One (Token'Address, 1);
+            begin
+               if Llama_Decode (Models (Kind).Context, B) /= 0 then exit; end if;
+            end;
+         end;
+      end loop;
+      Llama_Sampler_Free (Sampler);
+      Models (Kind).In_Use := False;
+      Model_Gate.Release (Kind);
+      return To_String (Result);
+   exception
+      when others =>
+         Models (Kind).In_Use := False;
+         Model_Gate.Release (Kind);
+         raise;
+   end Generate;
+
+   function Is_Loaded (Kind : Model_Type) return Boolean is
+   begin return Models (Kind).Loaded; end Is_Loaded;
+
+end Model_Manager;

@@ -3,6 +3,9 @@ with GNAT.OS_Lib;
 with Ada.Directories;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Model_Manager;
+with Verification_Manager;
+with GNATCOLL.JSON;
 
 package body Tool_Manager is
 
@@ -106,6 +109,47 @@ package body Tool_Manager is
             when others =>
                Res.Success := False;
                Res.Output := To_Unbounded_String ("Error: File unreadable.");
+         end;
+      elsif Name = "dafny_programmer" then
+         declare
+            use GNATCOLL.JSON;
+            Spec : Unbounded_String := Null_Unbounded_String;
+            Lang : Unbounded_String := To_Unbounded_String ("js");
+            Val  : JSON_Value;
+         begin
+            begin
+               Val := Read (Params);
+               if Has_Field (Val, "specification") then
+                  Spec := To_Unbounded_String (String'(Get (Val, "specification")));
+               end if;
+               if Has_Field (Val, "target_language") then
+                  Lang := To_Unbounded_String (String'(Get (Val, "target_language")));
+               end if;
+            exception
+               when others =>
+                  -- Fallback: if Params is not valid JSON, check for a comma separator or use whole Params as spec
+                  declare
+                     Comma : constant Natural := Index (Params, ",");
+                  begin
+                     if Comma > 0 then
+                        Spec := To_Unbounded_String (Trim (Params (Params'First .. Comma - 1), Ada.Strings.Both));
+                        Lang := To_Unbounded_String (Trim (Params (Comma + 1 .. Params'Last), Ada.Strings.Both));
+                     else
+                        Spec := To_Unbounded_String (Params);
+                     end if;
+                  end;
+            end;
+
+            Put_Line ("[Tool] Invoking Dafny Verification & Compilation Pipeline...");
+            declare
+               Result_Code : constant String := Verification_Manager.Verify_And_Compile_Dafny
+                 (Specification => To_String (Spec),
+                  Target_Lang   => To_String (Lang),
+                  Generator     => Model_Manager.Generator_Callback'Access);
+            begin
+               Res.Success := (Index (Result_Code, "Failed to verify Dafny code") = 0);
+               Res.Output := To_Unbounded_String (Result_Code);
+            end;
          end;
       else
          Res.Success := False;
