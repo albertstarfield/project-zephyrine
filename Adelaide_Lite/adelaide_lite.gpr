@@ -23,8 +23,10 @@ project Adelaide_Lite is
       for Switches ("Ada") use (
          "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/src",
          "-lllama",
-         "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/common",
-         "-lcommon",
+         "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/ggml/src",
+         "-lggml",
+         "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/ggml/src/ggml-metal",
+         "-lggml-metal",
          "-framework", "Accelerate",
          "-framework", "Metal",
          "-framework", "Foundation",
