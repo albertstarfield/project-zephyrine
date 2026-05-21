@@ -96,8 +96,10 @@ package body Adelaide_Server_Pkg is
             Set_Field (Msg_Out, "content", To_String (Result));
             Set_Field (Choice, "message", Msg_Out);
             Append (Choices, Choice);
+            Set_Field (Resp, "model", "adelaide-hybrid");
             Set_Field (Resp, "choices", Choices);
             Set_Field (Resp, "message", Msg_Out);
+            Set_Field (Resp, "done", True);
 
             return AWS.Response.Build
               (Content_Type => "application/json",
