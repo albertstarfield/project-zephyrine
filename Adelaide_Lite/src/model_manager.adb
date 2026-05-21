@@ -1349,6 +1349,13 @@ package body Model_Manager is
       Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Dist (1234));
 
       for I in 1 .. 2048 loop
+         --  Check preemption for ELP0
+         if Level = ELP0 and then Model_Gate.Should_Abort_ELP0 then
+            Put_Line (ASCII.ESC & "[93m" & "[Preempt] Terminating ELP0 task due to ELP1 request." & ASCII.ESC & "[0m");
+            Result := To_Unbounded_String (To_String (Result) & ASCII.LF & "[PREEMPTED]");
+            exit;
+         end if;
+
          declare
             Token : constant Llama_Token :=
               Llama_Sampler_Sample (Sampler, Models (Kind).Context, -1);
