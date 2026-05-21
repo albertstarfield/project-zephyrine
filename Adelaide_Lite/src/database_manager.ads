@@ -1,4 +1,5 @@
 with Math_Utils;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Database_Manager is
    pragma Spark_Mode (Off);
