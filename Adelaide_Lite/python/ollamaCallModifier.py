@@ -703,7 +703,7 @@ def before_req():
             g.streaming_held = True
     
     # Start tracking the task
-    g.task_id = str(uuid.uuid4())
+    g.task_id = request.headers.get("Session-ID") or str(uuid.uuid4())
     update_active_task(req_desc, quiet=True)
     with metrics_lock:
         active_task_details[g.task_id] = {'desc': req_desc, 'callback': None, 'start_time': time.time()}
@@ -766,6 +766,17 @@ def teardown_req(exception=None):
 
 def update_active_task(task_name, append=True, quiet=False):
     """Updates the globally visible task state. skips client-side streaming if quiet=True."""
+    if not hasattr(g, 'task_id'):
+        return
+
+    # Push to Ada Server for cross-component streaming
+    try:
+        requests.post("http://localhost:11420/api/adelaide/log", 
+                      json={"session_id": g.task_id, "log": f"[Orchestrator] {task_name}\n"},
+                      timeout=0.1)
+    except:
+        pass
+
     with metrics_lock:
         active_task_details[g.task_id] = {
             "desc": task_name,

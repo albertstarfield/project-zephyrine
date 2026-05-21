@@ -846,7 +846,7 @@ package body Model_Manager is
                  Generate
                    (Qwen_0_8B,
                     Wrap_ChatML (Router_Sys, Paging_Instr & ASCII.LF & Prompt),
-                    Session_ID, 2048, null);
+                    Session_ID, 2048, null, False, Level);
                Step : constant String := Trim (Step_Raw, Ada.Strings.Both);
             begin
                Put_Line (ASCII.ESC & "[34m" & " [Hybrid] Hop" &
@@ -949,7 +949,8 @@ package body Model_Manager is
                   Session_ID      => Session_ID,
                   Requested_Ctx   => Target_Ctx,
                   Stream          => Stream,
-                  Orch_Think_Open => (Stream /= null)));
+                  Orch_Think_Open => (Stream /= null),
+                  Level           => Level));
           declare
              Orch_Prefix : constant String :=
                "<think>" & ASCII.LF &
@@ -1015,7 +1016,7 @@ package body Model_Manager is
          declare
             Grade : constant Natural :=
               Grade_Response_Quality (To_String (Current_Response), Prompt,
-                                      Search_Used, Has_Cite, Session_ID);
+                                      Search_Used, Has_Cite, Session_ID, Level);
             Grade_Str : constant String :=
               ASCII.LF & "> [Response Grade: " &
               Trim (Grade'Img, Ada.Strings.Both) & "/100]" & ASCII.LF;

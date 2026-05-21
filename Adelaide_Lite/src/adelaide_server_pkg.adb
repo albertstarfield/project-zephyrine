@@ -15,8 +15,59 @@ with Streaming_Queue;
 
 package body Adelaide_Server_Pkg is
 
-   OLLAMA_PORT : constant String := "11434";
+   OLLAMA_PORT : constant String := "11435";
    OLLAMA_URL  : constant String := "http://localhost:" & OLLAMA_PORT;
+
+   --  Registry to track active streaming queues by Session ID
+   --  for cross-component log streaming (e.g. from Python).
+   protected Stream_Registry is
+      procedure Register (ID : String; Q : Streaming_Queue.Queue_Access);
+      procedure Unregister (ID : String);
+      procedure Push_Log (ID : String; Log : String);
+   private
+      type Entry_Rec is record
+         ID : Unbounded_String;
+         Q  : Streaming_Queue.Queue_Access;
+      end record;
+      type Map_Type is array (1 .. 100) of Entry_Rec;
+      Map : Map_Type;
+      Count : Natural := 0;
+   end Stream_Registry;
+
+   protected body Stream_Registry is
+      procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is
+      begin
+         if Count < 100 then
+            Count := Count + 1;
+            Map (Count).ID := To_Unbounded_String (ID);
+            Map (Count).Q  := Q;
+         end if;
+      end Register;
+
+      procedure Unregister (ID : String) is
+      begin
+         for I in 1 .. Count loop
+            if To_String (Map (I).ID) = ID then
+               Map (I .. Count - 1) := Map (I + 1 .. Count);
+               Count := Count - 1;
+               return;
+            end if;
+         end loop;
+      end Unregister;
+
+      procedure Push_Log (ID : String; Log : String) is
+      begin
+         for I in 1 .. Count loop
+            if To_String (Map (I).ID) = ID then
+               --  Push to the specific queue
+               Model_Manager.Push_Chunk (Map (I).Q, ID, Log);
+               return;
+            end if;
+         end loop;
+         --  Fallback: if no specific session, could push to all or log to console
+         Ada.Text_IO.Put_Line ("[Orchestrator Log] " & ID & ": " & Log);
+      end Push_Log;
+   end Stream_Registry;
 
    task type Generator_Task is
       entry Start
@@ -24,7 +75,8 @@ package body Adelaide_Server_Pkg is
          Prompt_Val     : String;
          Session_ID_Val : String;
          URI_Str_Val    : String;
-         Start_Time_Val : Ada.Calendar.Time);
+         Start_Time_Val : Ada.Calendar.Time;
+         Level_Val      : Model_Manager.ELP_Level := Model_Manager.ELP1);
    end Generator_Task;
 
    type Generator_Task_Access is access Generator_Task;
@@ -33,25 +85,28 @@ package body Adelaide_Server_Pkg is
       Stream     : Streaming_Queue.Queue_Access;
       Prompt     : Unbounded_String;
       Session_ID : Unbounded_String;
+      Level      : Model_Manager.ELP_Level;
    begin
       accept Start
         (Stream_Ptr     : Streaming_Queue.Queue_Access;
          Prompt_Val     : String;
          Session_ID_Val : String;
          URI_Str_Val    : String;
-         Start_Time_Val : Ada.Calendar.Time) do
+         Start_Time_Val : Ada.Calendar.Time;
+         Level_Val      : Model_Manager.ELP_Level := Model_Manager.ELP1) do
          Stream     := Stream_Ptr;
          Prompt     := To_Unbounded_String (Prompt_Val);
          Session_ID := To_Unbounded_String (Session_ID_Val);
+         Level      := Level_Val;
       end Start;
 
       declare
          Result : constant String :=
            Model_Manager.Hybrid_Generate
-             (To_String (Prompt), To_String (Session_ID), Stream);
+             (To_String (Prompt), To_String (Session_ID), Stream, Level);
          pragma Unreferenced (Result);
       begin
-         null;
+         Stream_Registry.Unregister (To_String (Session_ID));
       end;
    end Generator_Task;
 
@@ -638,6 +693,23 @@ package body Adelaide_Server_Pkg is
                    Set_CORS (Resp);
                    return Resp;
                 end;
+            elsif URI_Str = "/api/adelaide/log" then
+               declare
+                  use GNATCOLL.JSON;
+                  Val : constant JSON_Value := Read (Body_Str).Value;
+                  SID : constant String := (if Has_Field (Val, "session_id") then Get (Val, "session_id") else "");
+                  Log : constant String := (if Has_Field (Val, "log") then Get (Val, "log") else "");
+               begin
+                  Stream_Registry.Push_Log (SID, Log);
+                  declare
+                     Resp : AWS.Response.Data :=
+                       AWS.Response.Build (Content_Type => "application/json",
+                                           Message_Body => "{""status"":""ok""}");
+                  begin
+                     Set_CORS (Resp);
+                     return Resp;
+                  end;
+               end;
             elsif URI_Str = "/api/chat" or else
                URI_Str = "/api/generate" or else
                URI_Str = "/v1/chat/completions" or else
@@ -761,8 +833,9 @@ package body Adelaide_Server_Pkg is
                                     Q => Q);
                                Resp : AWS.Response.Data;
                             begin
+                               Stream_Registry.Register (Session_ID, Q);
                                T.Start (Q, Prompt, Session_ID, URI_Str,
-                                        Start_Time);
+                                        Start_Time, Model_Manager.ELP1);
                                Resp := AWS.Response.Stream
                                  (Content_Type => "text/event-stream",
                                   Handle       => RS);
@@ -773,7 +846,8 @@ package body Adelaide_Server_Pkg is
                            declare
                                Gen_Text : constant String :=
                                  Model_Manager.Hybrid_Generate
-                                   (Prompt, Session_ID);
+                                   (Prompt, Session_ID, null,
+                                    Model_Manager.ELP1);
                                End_Time : constant Ada.Calendar.Time :=
                                  Ada.Calendar.Clock;
                                Elapsed_Secs : constant Duration :=
