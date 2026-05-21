@@ -40,6 +40,10 @@ package body Adelaide_Server_Pkg is
          Message_Body => Content,
          Status_Code  => Status);
    begin
+      Put_Line ("[Server] Output JSON:");
+      Put_Line (Content);
+      Put_Line ("[Server] Status: " & AWS.Messages.Image (Status));
+
       AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
       AWS.Response.Set.Add_Header
         (Resp, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -51,14 +55,26 @@ package body Adelaide_Server_Pkg is
    function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
       URI    : constant String := AWS.Status.URI (Request);
       Method : constant String := AWS.Status.Method (Request);
+      Raw_S  : constant String := AWS.Status.Payload (Request);
+      Raw_B  : constant Unbounded_String := AWS.Status.Binary_Data (Request);
    begin
-      Put_Line ("[Server] " & Method & " " & URI);
+      Put_Line ("[Server] >>> Incoming Request: " & Method & " " & URI);
+      if Raw_S /= "" then
+         Put_Line ("[Server] Raw Input Payload (String):");
+         Put_Line (Raw_S);
+      elsif Length (Raw_B) > 0 then
+         Put_Line ("[Server] Raw Input Payload (Binary, length=" & Length (Raw_B)'Img & ")");
+      else
+         Put_Line ("[Server] No Payload received.");
+      end if;
 
       if Method = "OPTIONS" then
+         Put_Line ("[Server] Handling Preflight OPTIONS request.");
          return Build_Response ("", AWS.Messages.S204);
       end if;
 
       if URI = "/v1/models" or else URI = "/api/tags" then
+         Put_Line ("[Server] Processing Model List request...");
          declare
             Resp   : constant JSON_Value := Create_Object;
             Models : JSON_Array := Empty_Array;
@@ -67,6 +83,7 @@ package body Adelaide_Server_Pkg is
                M : constant JSON_Value := Create_Object;
                D : constant JSON_Value := Create_Object;
             begin
+               Put_Line ("[Server] Adding model to list: " & Id);
                --  OpenAI fields
                Set_Field (M, "id", Id);
                Set_Field (M, "object", "model");
@@ -98,10 +115,8 @@ package body Adelaide_Server_Pkg is
          end;
 
       elsif URI = "/api/show" then
+         Put_Line ("[Server] Processing API Show request...");
          declare
-            Raw_S   : constant String := AWS.Status.Payload (Request);
-            Raw_B   : constant Unbounded_String :=
-              AWS.Status.Binary_Data (Request);
             Payload : Unbounded_String;
             Model_Name : Unbounded_String :=
               To_Unbounded_String ("adelaide-hybrid");
@@ -133,6 +148,7 @@ package body Adelaide_Server_Pkg is
                end;
             end if;
 
+            Put_Line ("[Server] Target Model for show: " & To_String (Model_Name));
             declare
                Resp : constant JSON_Value := Create_Object;
                Details : constant JSON_Value := Create_Object;
@@ -291,6 +307,7 @@ package body Adelaide_Server_Pkg is
                         Req_Model := To_Unbounded_String
                           (String'(Get (Val, "model")));
                      end if;
+                     Put_Line ("[Server] Requested Model: " & To_String (Req_Model));
 
                      if Has_Field (Val, "messages") then
                         declare
@@ -372,6 +389,9 @@ package body Adelaide_Server_Pkg is
                   To_String (Prompt));
             end if;
 
+            Put_Line ("[Server] Final Internal Prompt:");
+            Put_Line (To_String (Prompt));
+
             declare
                use Ada.Real_Time;
                T_Start  : constant Time := Clock;
@@ -385,12 +405,14 @@ package body Adelaide_Server_Pkg is
                   TS_Str (11) := 'T';
                end if;
 
+               Put_Line ("[Server] Invoking Hybrid_Generate reasoning chain...");
                Model_Manager.Hybrid_Generate
                  (Prompt     => To_String (Prompt),
                   Result     => Result,
                   Images     => Images,
                   Session_ID => "web-api");
 
+               Put_Line ("[Server] Hybrid_Generate completed.");
                T_End := Clock;
                Dur := T_End - T_Start;
                Total_Ns := Long_Integer (To_Duration (Dur) * 1_000_000_000.0);
@@ -495,6 +517,7 @@ package body Adelaide_Server_Pkg is
             end if;
 
             if Length (Prompt) > 0 then
+               Put_Line ("[Server] Generating single embedding for prompt...");
                declare
                   Vec     : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
                   Len     : Natural := 0;
@@ -531,6 +554,7 @@ package body Adelaide_Server_Pkg is
                   end if;
                end;
             elsif Length (Inputs) > 0 then
+               Put_Line ("[Server] Generating batch embeddings (count=" & Length (Inputs)'Img & ")...");
                declare
                   Data_Arr     : JSON_Array := Empty_Array;
                   Usage_Obj    : constant JSON_Value := Create_Object;
