@@ -37,20 +37,25 @@ package body Model_Manager is
    --  to prevent concurrent decode crashes.
    --  ELP1 (API/Client) has priority over ELP0 (Background/Indexing).
    protected Model_Gate is
-      entry Acquire (Kind : Model_Type; Level : ELP_Level);
+      entry Acquire_ELP1 (Model_Type);
+      entry Acquire_ELP0 (Model_Type);
       procedure Release (Kind : Model_Type);
    private
       Busy : Busy_Array := (others => False);
    end Model_Gate;
 
    protected body Model_Gate is
-      entry Acquire (for K in Model_Type) (Level : ELP_Level) 
-        when not Busy (K) and then 
-             (Level = ELP1 or else Acquire (K)(ELP1)'Count = 0) 
+      entry Acquire_ELP1 (for K in Model_Type) when not Busy (K) is
+      begin
+         Busy (K) := True;
+      end Acquire_ELP1;
+
+      entry Acquire_ELP0 (for K in Model_Type) 
+        when not Busy (K) and then Acquire_ELP1 (K)'Count = 0 
       is
       begin
          Busy (K) := True;
-      end Acquire;
+      end Acquire_ELP0;
 
       procedure Release (Kind : Model_Type) is
       begin
@@ -176,7 +181,7 @@ package body Model_Manager is
    procedure Force_Unload_And_Reload (Kind : Model_Type) is
       Success : Boolean;
    begin
-      Model_Gate.Acquire (Kind, ELP1);
+      Model_Gate.Acquire_ELP1 (Kind);
       begin
          Unload_Model (Kind);
          Load_Model (Kind, Success);
@@ -220,7 +225,7 @@ package body Model_Manager is
       end if;
    end Get_Kind_For_Model_Name;
 
-   function Get_Embedding (Prompt : String) return Math_Utils.Vector is
+   procedure Get_Embedding (Prompt : String; Result : out Math_Utils.Vector) is
       Success  : Boolean;
       Kind     : constant Model_Type := Qwen_Embedding;
       Vocab    : Llama_Vocab;
@@ -228,11 +233,12 @@ package body Model_Manager is
       N_Toks   : int;
       Prompt_C : chars_ptr := New_String (Prompt);
    begin
-      Model_Gate.Acquire (Kind, ELP1);
+      Model_Gate.Acquire_ELP1 (Kind);
       Load_Model (Kind, Success);
       if not Success then
          Model_Gate.Release (Kind);
-         return (1 .. 0 => 0.0);
+         Result := (1 .. 0 => 0.0);
+         return;
       end if;
 
       Models (Kind).In_Use := True;
@@ -248,7 +254,8 @@ package body Model_Manager is
          Watchdog_Manager.Inference_Monitor.Stop_Inference;
          Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
-         return (1 .. 0 => 0.0);
+         Result := (1 .. 0 => 0.0);
+         return;
       end if;
 
       declare
@@ -263,7 +270,8 @@ package body Model_Manager is
             Watchdog_Manager.Inference_Monitor.Stop_Inference;
             Models (Kind).In_Use := False;
             Model_Gate.Release (Kind);
-            return (1 .. 0 => 0.0);
+            Result := (1 .. 0 => 0.0);
+            return;
          end if;
       end;
 
@@ -277,15 +285,16 @@ package body Model_Manager is
          pragma Convention (C, Float_Array);
          Embed : Float_Array;
          for Embed'Address use Ptr;
-         Result : Math_Utils.Vector (1 .. Integer (Dim));
+         V : Math_Utils.Vector (1 .. Integer (Dim));
       begin
          for I in 1 .. Integer (Dim) loop
-            Result (I) := Embed (I);
+            V (I) := Embed (I);
          end loop;
          Watchdog_Manager.Inference_Monitor.Stop_Inference;
          Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
-         return Result;
+         Result := V;
+         return;
       end;
    exception
       when others =>
@@ -298,7 +307,7 @@ package body Model_Manager is
          Unload_Model (Kind);
          Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
-         return (1 .. 0 => 0.0);
+         Result := (1 .. 0 => 0.0);
    end Get_Embedding;
 
    function Get_Random_Suffix return String is
@@ -769,11 +778,12 @@ package body Model_Manager is
              Index (Lower_Text, "```java") > 0;
    end Has_Prohibited_Blocks;
 
-   function Hybrid_Generate
+   procedure Hybrid_Generate
      (Prompt     : String;
+      Result     : out Unbounded_String;
       Session_ID : String := "";
       Stream     : Streaming_Queue.Queue_Access := null;
-      Level      : ELP_Level := ELP1) return String
+      Level      : ELP_Level := ELP1)
    is
       Whimsical_Adelaide : constant String :=
         "You are Adelaide Zephyrine Charlotte, a whimsical and " &
@@ -788,6 +798,7 @@ package body Model_Manager is
       Search_Used : Boolean := False;
       Dafny_Used : Boolean := False;
    begin
+      Result := Null_Unbounded_String;
       Put_Line (ASCII.ESC & "[38;5;171m" & "[Hybrid] Session: " &
                 Session_ID & " (Level: " & ELP_Level'Image (Level) & ")" & ASCII.ESC & "[0m");
       Put_Line (ASCII.ESC & "[38;5;171m" &
@@ -842,76 +853,80 @@ package body Model_Manager is
                  "Output ONLY the tag.";
                Paging_Instr : constant String :=
                  "Current Data: " & To_String (Internal_State);
-               Step_Raw : constant String :=
-                 Generate
-                   (Qwen_0_8B,
-                    Wrap_ChatML (Router_Sys, Paging_Instr & ASCII.LF & Prompt),
-                    Session_ID, 2048, null, False, Level);
-               Step : constant String := Trim (Step_Raw, Ada.Strings.Both);
+               Step_Res : Unbounded_String;
             begin
-               Put_Line (ASCII.ESC & "[34m" & " [Hybrid] Hop" &
-                         Current_Hop'Img & ": " & Step & ASCII.ESC & "[0m");
+               Generate
+                 (Qwen_0_8B,
+                  Wrap_ChatML (Router_Sys, Paging_Instr & ASCII.LF & Prompt),
+                  Step_Res,
+                  Session_ID, 2048, null, False, Level);
+               declare
+                  Step : constant String := Trim (To_String (Step_Res), Ada.Strings.Both);
+               begin
+                  Put_Line (ASCII.ESC & "[34m" & " [Hybrid] Hop" &
+                            Current_Hop'Img & ": " & Step & ASCII.ESC & "[0m");
 
-               if Index (Step, "[ACTION:") > 0 then
-                  declare
-                     S_Pos : constant Natural := Index (Step, "[ACTION:") + 8;
-                     E_Pos : constant Natural := Index (Step, "]", S_Pos);
-                  begin
-                     if E_Pos > S_Pos then
-                        declare
-                           A_Full : constant String :=
-                             Step (S_Pos .. E_Pos - 1);
-                           P_Pos  : constant Natural := Index (A_Full, "(");
-                           EP_Pos : constant Natural :=
-                             Index (A_Full, ")", P_Pos);
-                        begin
-                           if P_Pos > 0 and then EP_Pos > P_Pos then
-                              declare
-                                 T_Name : constant String :=
-                                   Trim (A_Full (A_Full'First .. P_Pos - 1),
-                                         Ada.Strings.Both);
-                                 T_Pars : constant String :=
-                                   Trim (A_Full (P_Pos + 1 .. EP_Pos - 1),
-                                         Ada.Strings.Both);
-                              begin
-                                 if T_Pars'Length < 256 and then
-                                    Index (To_String (Internal_State),
-                                           T_Name & "(" & T_Pars & ")") = 0
-                                 then
-                                    --  Track Search
-                                    if Index (T_Name, "search") > 0 or else
-                                       T_Name = "searchglobalref"
+                  if Index (Step, "[ACTION:") > 0 then
+                     declare
+                        S_Pos : constant Natural := Index (Step, "[ACTION:") + 8;
+                        E_Pos : constant Natural := Index (Step, "]", S_Pos);
+                     begin
+                        if E_Pos > S_Pos then
+                           declare
+                              A_Full : constant String :=
+                                Step (S_Pos .. E_Pos - 1);
+                              P_Pos  : constant Natural := Index (A_Full, "(");
+                              EP_Pos : constant Natural :=
+                                Index (A_Full, ")", P_Pos);
+                           begin
+                              if P_Pos > 0 and then EP_Pos > P_Pos then
+                                 declare
+                                    T_Name : constant String :=
+                                      Trim (A_Full (A_Full'First .. P_Pos - 1),
+                                            Ada.Strings.Both);
+                                    T_Pars : constant String :=
+                                      Trim (A_Full (P_Pos + 1 .. EP_Pos - 1),
+                                            Ada.Strings.Both);
+                                 begin
+                                    if T_Pars'Length < 256 and then
+                                       Index (To_String (Internal_State),
+                                              T_Name & "(" & T_Pars & ")") = 0
                                     then
-                                       Search_Used := True;
-                                    end if;
-                                    --  Track Dafny
-                                    if T_Name = "dafny_programmer" then
-                                       Dafny_Used := True;
-                                    end if;
+                                       --  Track Search
+                                       if Index (T_Name, "search") > 0 or else
+                                          T_Name = "searchglobalref"
+                                       then
+                                          Search_Used := True;
+                                       end if;
+                                       --  Track Dafny
+                                       if T_Name = "dafny_programmer" then
+                                          Dafny_Used := True;
+                                       end if;
 
-                                    declare
-                                       R : constant Tool_Manager.Tool_Result :=
-                                         Tool_Manager.Execute_Tool
-                                           (T_Name, T_Pars);
-                                    begin
-                                       Append (Internal_State,
-                                               "[TOOL (" & T_Name & ")]: " &
-                                               To_String (R.Output) &
-                                               ASCII.LF);
-                                    end;
-                                 else
-                                    exit;
-                                 end if;
-                              end;
-                           end if;
-                        end;
-                     end if;
-                  end;
-               elsif Index (Step, "[FINISH]") > 0 then
-                  exit;
-               else
-                  exit;
-               end if;
+                                       declare
+                                          R : constant Tool_Manager.Tool_Result :=
+                                            Tool_Manager.Execute_Tool
+                                              (T_Name, T_Pars);
+                                       begin
+                                          Append (Internal_State,
+                                                  "[TOOL (" & T_Name & ")]: " &
+                                                  To_String (R.Output) &
+                                                  ASCII.LF);
+                                       end;
+                                    else
+                                       exit;
+                                    end if;
+                                 end;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  elsif Index (Step, "[FINISH]") > 0 then
+                     exit;
+                  else
+                     exit;
+                  end if;
+               end;
             end;
             Current_Hop := Current_Hop + 1;
             exit when Current_Hop > 5;
@@ -941,16 +956,15 @@ package body Model_Manager is
       begin
          Put_Line ("[Hybrid] Dynamic Context Size Allocated: " &
                    Target_Ctx'Img & " tokens.");
-          Current_Response :=
-            To_Unbounded_String
-              (Generate
-                 (Kind            => Qwen_4B,
-                  Prompt          => Synth_Prompt,
-                  Session_ID      => Session_ID,
-                  Requested_Ctx   => Target_Ctx,
-                  Stream          => Stream,
-                  Orch_Think_Open => (Stream /= null),
-                  Level           => Level));
+          Generate
+             (Kind            => Qwen_4B,
+              Prompt          => Synth_Prompt,
+              Result          => Current_Response,
+              Session_ID      => Session_ID,
+              Requested_Ctx   => Target_Ctx,
+              Stream          => Stream,
+              Orch_Think_Open => (Stream /= null),
+              Level           => Level);
           declare
              Orch_Prefix : constant String :=
                "<think>" & ASCII.LF &
@@ -1095,20 +1109,20 @@ package body Model_Manager is
          Stream.Close;
       end if;
 
-      return To_String (Current_Response);
+      Result := Current_Response;
    end Hybrid_Generate;
 
-   function Generate
+   procedure Generate
      (Kind            : Model_Type;
       Prompt          : String;
+      Result          : out Unbounded_String;
       Session_ID      : String := "";
       Requested_Ctx   : Positive := 4096;
       Stream          : Streaming_Queue.Queue_Access := null;
       Orch_Think_Open : Boolean := False;
-      Level           : ELP_Level := ELP1) return String
+      Level           : ELP_Level := ELP1)
    is
       Success  : Boolean;
-      Result   : Unbounded_String;
       Parser   : Stream_Parser_State :=
         (Orch_Think_Open => Orch_Think_Open,
          Header_Closed   => not Orch_Think_Open,
@@ -1123,11 +1137,18 @@ package body Model_Manager is
       S_Params : Llama_Sampler_Chain_Params;
       Prompt_C : chars_ptr := New_String (Prompt);
    begin
-      Model_Gate.Acquire (Kind, Level);
+      Result := Null_Unbounded_String;
+      if Level = ELP1 then
+         Model_Gate.Acquire_ELP1 (Kind);
+      else
+         Model_Gate.Acquire_ELP0 (Kind);
+      end if;
+
       Load_Model (Kind, Success, Requested_Ctx);
       if not Success then
          Model_Gate.Release (Kind);
-         return "ERROR: Load failed";
+         Result := To_Unbounded_String ("ERROR: Load failed");
+         return;
       end if;
 
       Models (Kind).In_Use := True;
@@ -1143,7 +1164,8 @@ package body Model_Manager is
          Watchdog_Manager.Inference_Monitor.Stop_Inference;
          Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
-         return "ERROR: Tokenization failed";
+         Result := To_Unbounded_String ("ERROR: Tokenization failed");
+         return;
       end if;
 
       --  CHUNKED DECODING
@@ -1170,7 +1192,8 @@ package body Model_Manager is
                   Watchdog_Manager.Inference_Monitor.Stop_Inference;
                   Models (Kind).In_Use := False;
                   Model_Gate.Release (Kind);
-                  return "ERROR: Decode failed";
+                  Result := To_Unbounded_String ("ERROR: Decode failed");
+                  return;
                end if;
                Tokens_Left := Tokens_Left - To_Decode;
                Current_Pos := Current_Pos + To_Decode;
@@ -1233,7 +1256,7 @@ package body Model_Manager is
       Watchdog_Manager.Inference_Monitor.Stop_Inference;
       Models (Kind).In_Use := False;
       Model_Gate.Release (Kind);
-      return To_String (Result);
+      return;
    exception
       when others =>
          Watchdog_Manager.Inference_Monitor.Stop_Inference;
@@ -1245,7 +1268,7 @@ package body Model_Manager is
          Unload_Model (Kind);
          Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
-         return "ERROR: Llama execution crash or timeout";
+         Result := To_Unbounded_String ("ERROR: Llama execution crash or timeout");
    end Generate;
 
    function Is_Loaded (Kind : Model_Type) return Boolean is
