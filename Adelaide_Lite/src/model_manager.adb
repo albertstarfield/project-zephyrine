@@ -230,16 +230,23 @@ package body Model_Manager is
          Model_Gate.Release (Kind);
          return (1 .. 0 => 0.0);
       end if;
+
+      Models (Kind).In_Use := True;
       Models (Kind).Last_Used := Clock;
+      Watchdog_Manager.Inference_Monitor.Start_Inference (Kind, Clock);
+
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
       N_Toks := Llama_Tokenize
         (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address,
          32768, True, True);
       Free (Prompt_C);
       if N_Toks <= 0 then
+         Watchdog_Manager.Inference_Monitor.Stop_Inference;
+         Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
          return (1 .. 0 => 0.0);
       end if;
+
       declare
          function Llama_Batch_Get_One (T : System.Address; N : int)
            return Llama_Batch;
@@ -249,10 +256,13 @@ package body Model_Manager is
       begin
          Llama_Set_Embeddings (Models (Kind).Context, True);
          if Llama_Decode (Models (Kind).Context, B) /= 0 then
+            Watchdog_Manager.Inference_Monitor.Stop_Inference;
+            Models (Kind).In_Use := False;
             Model_Gate.Release (Kind);
             return (1 .. 0 => 0.0);
          end if;
       end;
+
       declare
          function Llama_Model_N_Embd (M : Llama_Model) return int;
          pragma Import (C, Llama_Model_N_Embd, "llama_model_n_embd");
@@ -268,11 +278,21 @@ package body Model_Manager is
          for I in 1 .. Integer (Dim) loop
             Result (I) := Embed (I);
          end loop;
+         Watchdog_Manager.Inference_Monitor.Stop_Inference;
+         Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
          return Result;
       end;
    exception
       when others =>
+         Watchdog_Manager.Inference_Monitor.Stop_Inference;
+         Put_Line
+           (ASCII.ESC & "[91m" &
+            "[BUGCHECK] GGML/Llama crash or exception detected" &
+            " during Get_Embedding." &
+            ASCII.ESC & "[0m");
+         Unload_Model (Kind);
+         Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
          return (1 .. 0 => 0.0);
    end Get_Embedding;
@@ -990,7 +1010,7 @@ package body Model_Manager is
                            Stream.Push (Write (Chunk_Obj) & ASCII.LF);
                         end if;
                      end;
-                  end;
+                  end if;
                end;
             end if;
             declare
