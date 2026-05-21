@@ -111,6 +111,9 @@ begin
    --  Verify external toolchain and dependencies
    Toolchain_Manager.Verify_And_Heal;
 
+   --  Start Python Orchestrator for step log streaming
+   Toolchain_Manager.Start_Orchestrator;
+
    --  Initialize Llama backend and models
    Model_Manager.Initialize;
 

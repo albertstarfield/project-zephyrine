@@ -131,6 +131,35 @@ package body Toolchain_Manager is
       end if;
    end Verify_Python_Package;
 
+   procedure Start_Orchestrator is
+      use GNAT.OS_Lib;
+      Python_Path : constant String := "pyvenv/bin/python3";
+      Script_Path : constant String := "python/ollamaCallModifier.py";
+      Args        : Argument_List (1 .. 2);
+      Pid         : Process_Id;
+   begin
+      if not Ada.Directories.Exists (Python_Path) then
+         Put_Line ("[!] Python venv not found at " & Python_Path);
+         return;
+      end if;
+
+      Put_Line ("[*] Starting Python Orchestrator (ollamaCallModifier.py)...");
+      Args (1) := new String'(Script_Path);
+      Args (2) := new String'("--port=11435");
+      
+      --  Run in background
+      Pid := Non_Blocking_Spawn (Python_Path, Args);
+      
+      Free (Args (1));
+      Free (Args (2));
+      
+      if Pid /= Invalid_Pid then
+         Put_Line ("[+] Python Orchestrator started in background.");
+      else
+         Put_Line ("[!] Failed to start Python Orchestrator.");
+      end if;
+   end Start_Orchestrator;
+
    ---------------------
    -- Verify_And_Heal --
    ---------------------
