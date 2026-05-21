@@ -1,11 +1,9 @@
-with AWS.Status;
-with AWS.Response;
-with AWS.Messages;
+with AWS.Headers;
+with AWS.Headers.Set;
 with GNATCOLL.JSON; use GNATCOLL.JSON;
 with Ada.Text_IO; use Ada.Text_IO;
 with Model_Manager;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
-with Streaming_Queue;
 with Ada.Exceptions;
 with Math_Utils;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
@@ -37,15 +35,19 @@ package body Adelaide_Server_Pkg is
       Status  : AWS.Messages.Status_Code := AWS.Messages.S200;
       Type_Str : String := "application/json") return AWS.Response.Data
    is
-      Resp : AWS.Response.Data := AWS.Response.Build
+      HD : AWS.Headers.List;
+   begin
+      AWS.Headers.Set.Add (HD, "Access-Control-Allow-Origin", "*");
+      AWS.Headers.Set.Add
+        (HD, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      AWS.Headers.Set.Add
+        (HD, "Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+      return AWS.Response.Build
         (Content_Type => Type_Str,
          Message_Body => Content,
-         Status_Code  => Status);
-   begin
-      AWS.Response.Header (Resp, "Access-Control-Allow-Origin", "*");
-      AWS.Response.Header (Resp, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      AWS.Response.Header (Resp, "Access-Control-Allow-Headers", "Content-Type, Authorization");
-      return Resp;
+         Status_Code  => Status,
+         Header       => HD);
    end Build_Response;
 
    function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
@@ -409,10 +411,12 @@ package body Adelaide_Server_Pkg is
                Set_Field (Resp, "total_duration", Total_Ns);
                Set_Field (Resp, "load_duration", Long_Integer'(0));
                Set_Field (Resp, "prompt_eval_count",
-                          Long_Integer (Model_Manager.Count_Tokens (To_String (Prompt))));
+                          Long_Integer
+                            (Model_Manager.Count_Tokens (To_String (Prompt))));
                Set_Field (Resp, "prompt_eval_duration", Long_Integer'(0));
                Set_Field (Resp, "eval_count",
-                          Long_Integer (Model_Manager.Count_Tokens (To_String (Result))));
+                          Long_Integer
+                            (Model_Manager.Count_Tokens (To_String (Result))));
                --  eval_duration is also measured in nanoseconds
                Set_Field (Resp, "eval_duration", Total_Ns);
 
@@ -422,9 +426,11 @@ package body Adelaide_Server_Pkg is
                declare
                   Usage : constant JSON_Value := Create_Object;
                   P_Tok : constant Long_Integer :=
-                    Long_Integer (Model_Manager.Count_Tokens (To_String (Prompt)));
+                    Long_Integer
+                      (Model_Manager.Count_Tokens (To_String (Prompt)));
                   E_Tok : constant Long_Integer :=
-                    Long_Integer (Model_Manager.Count_Tokens (To_String (Result)));
+                    Long_Integer
+                      (Model_Manager.Count_Tokens (To_String (Result)));
                begin
                   Set_Field (Usage, "prompt_tokens", P_Tok);
                   Set_Field (Usage, "completion_tokens", E_Tok);
