@@ -3,6 +3,7 @@ with Math_Utils;
 with Streaming_Queue;
 with System;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with GNATCOLL.JSON;
 
 package Model_Manager is
    pragma Spark_Mode (Off);
