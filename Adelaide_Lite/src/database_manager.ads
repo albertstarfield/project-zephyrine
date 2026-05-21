@@ -37,6 +37,11 @@ package Database_Manager is
       Results   : out Chunk_Array;
       Count     : out Natural);
 
+   --  Retrieve a random literature chunk for background thinking
+   procedure Get_Random_Literature_Chunk
+     (Content : out Unbounded_String;
+      Success : out Boolean);
+
    --  Knowledge Graph (GraphML style)
    procedure Add_Graph_Relation
      (Source   : String;

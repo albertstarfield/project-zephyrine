@@ -353,6 +353,153 @@ package body Database_Manager is
          return "";
    end Recall;
 
+   ----------------
+   -- Escape_XML --
+   ----------------
+   function Escape_XML (S : String) return String is
+      Res : Unbounded_String;
+   begin
+      for I in S'Range loop
+         case S (I) is
+            when '&' => Append (Res, "&amp;");
+            when '<' => Append (Res, "&lt;");
+            when '>' => Append (Res, "&gt;");
+            when '"' => Append (Res, "&quot;");
+            when ''' => Append (Res, "&apos;");
+            when others => Append (Res, S (I));
+         end case;
+      end loop;
+      return To_String (Res);
+   end Escape_XML;
+
+   --------------------
+   -- Export_GraphML --
+   --------------------
+   procedure Export_GraphML (Filename : String) is
+      File : File_Type;
+   begin
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
+
+      Create (File, Out_File, Filename);
+      Put_Line (File, "<?xml version=""1.0"" encoding=""UTF-8""?>");
+      Put_Line
+        (File,
+         "<graphml xmlns=""http://graphml.graphdrawing.org/xmlns""");
+      Put_Line
+        (File,
+         "    xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance""");
+      Put_Line
+        (File,
+         "    xsi:schemaLocation=" &
+         """http://graphml.graphdrawing.org/xmlns " &
+         "http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"">");
+      Put_Line
+        (File,
+         "  <key id=""d0"" for=""edge"" " &
+         "attr.name=""relation"" attr.type=""string""/>");
+      Put_Line
+        (File,
+         "  <key id=""d1"" for=""edge"" " &
+         "attr.name=""weight"" attr.type=""double""/>");
+      Put_Line (File, "  <graph id=""G"" edgedefault=""directed"">");
+
+      --  First write all unique nodes
+      declare
+         Node_Stmt : Statement := Prepare
+           (Lit_DB_Ptr.all,
+            "SELECT DISTINCT node FROM (" &
+            "SELECT source AS node FROM knowledge_graph " &
+            "UNION " &
+            "SELECT target AS node FROM knowledge_graph)");
+      begin
+         while Step (Node_Stmt) = ROW loop
+            declare
+               Node_Name : constant String := Column_Text (Node_Stmt, 0);
+            begin
+               Put_Line
+                 (File,
+                  "    <node id=""" & Escape_XML (Node_Name) & """/>");
+            end;
+         end loop;
+      exception
+         when others => null;
+      end;
+
+      --  Now write edges
+      declare
+         Edge_Stmt : Statement := Prepare
+           (Lit_DB_Ptr.all,
+            "SELECT id, source, target, relation, weight " &
+            "FROM knowledge_graph");
+      begin
+         while Step (Edge_Stmt) = ROW loop
+            declare
+               Id_Val : constant String := Column_Text (Edge_Stmt, 0);
+               Src    : constant String := Column_Text (Edge_Stmt, 1);
+               Tgt    : constant String := Column_Text (Edge_Stmt, 2);
+               Rel    : constant String := Column_Text (Edge_Stmt, 3);
+               Wgt    : constant String := Column_Text (Edge_Stmt, 4);
+            begin
+               Put_Line
+                 (File,
+                  "    <edge id=""e" & Id_Val &
+                  """ source=""" & Escape_XML (Src) &
+                  """ target=""" & Escape_XML (Tgt) & """>");
+               Put_Line
+                 (File,
+                  "      <data key=""d0"">" & Escape_XML (Rel) &
+                  "</data>");
+               Put_Line
+                 (File,
+                  "      <data key=""d1"">" & Wgt & "</data>");
+               Put_Line (File, "    </edge>");
+            end;
+         end loop;
+      exception
+         when others => null;
+      end;
+
+      Put_Line (File, "  </graph>");
+      Put_Line (File, "</graphml>");
+      Close (File);
+   exception
+      when others =>
+         if Is_Open (File) then
+            Close (File);
+         end if;
+   end Export_GraphML;
+
+   ---------------------------------
+   -- Get_Random_Literature_Chunk --
+   ---------------------------------
+   procedure Get_Random_Literature_Chunk
+     (Content : out Unbounded_String;
+      Success : out Boolean)
+   is
+   begin
+      Success := False;
+      Content := Null_Unbounded_String;
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
+
+      declare
+         Stmt : Statement := Prepare
+           (Lit_DB_Ptr.all,
+            "SELECT content FROM chunks ORDER BY RANDOM() LIMIT 1");
+      begin
+         if Step (Stmt) = ROW then
+            Content := To_Unbounded_String (Column_Text (Stmt, 0));
+            Success := True;
+         end if;
+      end;
+   exception
+      when others =>
+         null;
+   end Get_Random_Literature_Chunk;
+
    -----------
    -- Close --
    -----------
