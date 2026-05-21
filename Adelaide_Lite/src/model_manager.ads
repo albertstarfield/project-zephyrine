@@ -52,8 +52,8 @@ package Model_Manager is
       Stream     : Streaming_Queue.Queue_Access := null;
       Level      : ELP_Level := ELP1);
 
-   procedure Get_Embedding 
-     (Prompt : String; 
+   procedure Get_Embedding
+     (Prompt : String;
       Result : out Math_Utils.Vector;
       Length : out Natural);
 
