@@ -12,14 +12,6 @@ package body Model_Manager is
    use GNATCOLL.JSON;
    use Streaming_Queue;
 
-   Model_Path : constant String :=
-     "llama.cpp/models/qwen2.5-0.5b-instruct.gguf";
-
-   type Gate_Record is record
-      Abort_Flag : Boolean := False;
-   end record;
-   Model_Gate : Gate_Record;
-
    procedure Initialize is
    begin
       Put_Line ("[Model] Initializing Llama Backend...");
@@ -49,7 +41,7 @@ package body Model_Manager is
    function Llama_Abort_Callback (Data : System.Address) return Boolean is
       pragma Unreferenced (Data);
    begin
-      return Model_Gate.Abort_Flag;
+      return False;
    end Llama_Abort_Callback;
 
    function Get_Context
@@ -77,13 +69,13 @@ package body Model_Manager is
       Orch_Think_Open : Boolean := False;
       Level           : ELP_Level := ELP1) is
       pragma Unreferenced (Requested_Ctx, Orch_Think_Open, Level, Session_ID);
+      use type Streaming_Queue.Queue_Access;
    begin
       if Images.Length > 0 then
-         Put_Line ("[Model] Multimodal request received with" &
-                   Images.Length'Image & " images.");
+         Put_Line ("[Model] Multimodal request with images.");
       end if;
 
-      Result := To_Unbounded_String ("Response to: " & Prompt);
+      Result := To_Unbounded_String ("Response to: " & Prompt & " [" & Kind'Image & "]");
 
       if Stream /= null then
          Stream.Push ("Piece 1 of " & Prompt);
@@ -174,7 +166,7 @@ package body Model_Manager is
 
    function Should_Abort_ELP0 return Boolean is
    begin
-      return Model_Gate.Abort_Flag;
+      return False;
    end Should_Abort_ELP0;
 
 end Model_Manager;
