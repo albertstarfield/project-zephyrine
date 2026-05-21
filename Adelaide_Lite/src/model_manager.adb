@@ -75,7 +75,8 @@ package body Model_Manager is
          Put_Line ("[Model] Multimodal request with images.");
       end if;
 
-      Result := To_Unbounded_String ("Response to: " & Prompt & " [" & Kind'Image & "]");
+      Result := To_Unbounded_String
+        ("Response to: " & Prompt & " [" & Kind'Image & "]");
 
       if Stream /= null then
          Stream.Push ("Piece 1 of " & Prompt);

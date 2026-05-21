@@ -4,7 +4,7 @@ with "gnatcoll";
 with "ada_sqlite3";
 project Adelaide_Lite is
 
-   for Languages use ("Ada", "C", "C++");
+   for Languages use ("Ada");
    for Source_Dirs use ("src/", "config/");
    for Object_Dir use "obj/" & Adelaide_Lite_Config.Build_Profile;
    for Create_Missing_Dirs use "True";
@@ -15,13 +15,7 @@ project Adelaide_Lite is
       for Default_Switches ("Ada") use
         Adelaide_Lite_Config.Ada_Compiler_Switches &
         ("-gnat2022", "-gnatX", "-mmacosx-version-min=14.0");
-      for Default_Switches ("C") use ("-mmacosx-version-min=14.0");
-      for Default_Switches ("C++") use ("-mmacosx-version-min=14.0");
    end Compiler;
-
-   package Binder is
-      for Switches ("Ada") use ("-Es"); --  Symbolic stack traces
-   end Binder;
 
    package Linker is
       for Switches ("Ada") use (
@@ -34,14 +28,12 @@ project Adelaide_Lite is
          "-L/opt/homebrew/opt/sqlite/lib",
          "-lsqlite3",
          "-mmacosx-version-min=14.0",
+         "-Wl,-syslibroot,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
          "-framework", "Accelerate",
          "-framework", "Metal",
-         "-framework", "Foundation"
+         "-framework", "Foundation",
+         "-lc++"
       );
    end Linker;
-
-   package Install is
-      for Artifacts (".") use ("share");
-   end Install;
 
 end Adelaide_Lite;
