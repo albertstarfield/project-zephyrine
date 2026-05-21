@@ -110,7 +110,7 @@ package body Knowledge_Manager is
          Search : Search_Type;
       begin
          Start_Search (Search, Dir, "*", Filter);
-         while Ada.Directories.Has_More_Entries (Search) loop
+         while Ada.Directories.More_Entries (Search) loop
             Ada.Directories.Get_Next_Entry (Search, Ent);
             Process_File (Ada.Directories.Full_Name (Ent));
             exit when Model_Manager.Should_Abort_ELP0;
