@@ -30,21 +30,23 @@ package Model_Manager is
    function Get_Model
      (Kind : Model_Type) return Llama_Interface.Llama_Model;
 
-   --  Perform inference (simplified for now)
+   --  Perform inference
    procedure Generate
      (Kind            : Model_Type;
       Prompt          : String;
       Result          : out Unbounded_String;
+      Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
       Session_ID      : String := "";
       Requested_Ctx   : Positive := 4096;
       Stream          : Streaming_Queue.Queue_Access := null;
       Orch_Think_Open : Boolean := False;
       Level           : ELP_Level := ELP1);
 
-   --  Perform multi-hop reasoning (0.8b thinking -> 4b final)
+   --  Perform multi-hop reasoning
    procedure Hybrid_Generate
      (Prompt     : String;
       Result     : out Unbounded_String;
+      Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
       Session_ID : String := "";
       Stream     : Streaming_Queue.Queue_Access := null;
       Level      : ELP_Level := ELP1);
