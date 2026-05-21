@@ -565,33 +565,31 @@ package body Adelaide_Server_Pkg is
       use AWS.Status;
       URI_Str : constant String := URI (Request);
       Method_Val : constant Request_Method := Method (Request);
-      Start_Time : constant Ada.Calendar.Time := Ada.Calendar.Clock;
-
-      --  Inject CORS headers helper
-      procedure Set_CORS (Resp : in out AWS.Response.Data) is
-      begin
-         AWS.Response.Set.Add_Header
-           (Resp, "Access-Control-Allow-Origin", "*");
-         AWS.Response.Set.Add_Header
-           (Resp, "Access-Control-Allow-Methods",
-            "GET, POST, PUT, DELETE, OPTIONS, HEAD");
-         AWS.Response.Set.Add_Header
-           (Resp, "Access-Control-Allow-Headers",
-            "Content-Type, Authorization, X-Requested-With");
-      end Set_CORS;
    begin
       begin
-         Ada.Text_IO.Put_Line ("[Request] " & Method_Val'Img & " " & URI_Str);
-         Ada.Text_IO.Flush;
+         Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "[Request] " & Method_Val'Img & " " & URI_Str);
+         Ada.Text_IO.Flush (Ada.Text_IO.Standard_Error);
 
-         --  1. Preflight/CORS OPTIONS handling
-         if Method_Val = OPTIONS then
+         if Method_Val = GET and then URI_Str = "/v1/models" then
             declare
-               Resp : AWS.Response.Data :=
-                 AWS.Response.Acknowledge (AWS.Messages.S200);
+               use GNATCOLL.JSON;
+               Res_Obj : constant JSON_Value := Create_Object;
+               Data_Arr : JSON_Array := Empty_Array;
+               Model_Obj : constant JSON_Value := Create_Object;
             begin
-               Set_CORS (Resp);
-               return Resp;
+               Set_Field (Model_Obj, "id", String'("adelaide-hybrid"));
+               Set_Field (Model_Obj, "object", String'("model"));
+               Append (Data_Arr, Model_Obj);
+               Set_Field (Res_Obj, "object", String'("list"));
+               Set_Field (Res_Obj, "data", Data_Arr);
+               
+               declare
+                  Resp : AWS.Response.Data := 
+                    AWS.Response.Build (Content_Type => "application/json",
+                                        Message_Body => Write (Res_Obj));
+               begin
+                  return Resp;
+               end;
             end;
          end if;
 
