@@ -48,23 +48,43 @@ package body Adelaide_Server_Pkg is
          end;
       elsif URI = "/api/chat" or else URI = "/v1/chat/completions" then
          declare
-            Result : Unbounded_String;
-            Resp   : constant JSON_Value := Create_Object;
+            Payload : constant String := AWS.Status.Payload (Request);
+            Val     : constant JSON_Value := Read (Payload);
+            Prompt  : Unbounded_String := To_Unbounded_String ("");
+            Images  : JSON_Array := Empty_Array;
+            Result  : Unbounded_String;
+            Resp    : constant JSON_Value := Create_Object;
             Choices : JSON_Array := Empty_Array;
-            Choice : constant JSON_Value := Create_Object;
-            Msg    : constant JSON_Value := Create_Object;
+            Choice  : constant JSON_Value := Create_Object;
+            Msg_Out : constant JSON_Value := Create_Object;
          begin
+            --  Extract prompt from messages or prompt field
+            if Val.Has_Field ("messages") then
+               declare
+                  Msgs : constant JSON_Array := Get (Val, "messages");
+                  Last : constant JSON_Value := Get (Msgs, Msgs.Length);
+               begin
+                  Prompt := To_Unbounded_String (Get (Last, "content"));
+                  if Last.Has_Field ("images") then
+                     Images := Get (Last, "images");
+                  end if;
+               end;
+            elsif Val.Has_Field ("prompt") then
+               Prompt := To_Unbounded_String (Get (Val, "prompt"));
+            end if;
+
             Model_Manager.Hybrid_Generate
-              (Prompt     => "User request",
+              (Prompt     => To_String (Prompt),
                Result     => Result,
+               Images     => Images,
                Session_ID => "web-api");
 
-            Set_Field (Msg, "role", "assistant");
-            Set_Field (Msg, "content", To_String (Result));
-            Set_Field (Choice, "message", Msg);
+            Set_Field (Msg_Out, "role", "assistant");
+            Set_Field (Msg_Out, "content", To_String (Result));
+            Set_Field (Choice, "message", Msg_Out);
             Append (Choices, Choice);
             Set_Field (Resp, "choices", Choices);
-            Set_Field (Resp, "message", Msg);
+            Set_Field (Resp, "message", Msg_Out);
 
             return AWS.Response.Build
               (Content_Type => "application/json",
@@ -89,7 +109,8 @@ package body Adelaide_Server_Pkg is
             Status_Code  => AWS.Messages.S404);
       end if;
    exception
-      when others =>
+      when E : others =>
+         Put_Line ("[Server] Error: " & Ada.Exceptions.Exception_Message (E));
          return AWS.Response.Build
            (Content_Type => "application/json",
             Message_Body => "{}",

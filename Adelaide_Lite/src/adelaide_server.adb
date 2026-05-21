@@ -27,18 +27,13 @@ begin
       Put_Line ("[Main] Initializing index crawl...");
       Knowledge_Manager.Start_Tasks;
 
-      Put_Line ("[Main] Server is UP. Press Q to shutdown.");
+      Put_Line ("[Main] Server is UP. Press Q to shutdown (or kill if background).");
 
+      --  Avoid Get_Line failure in background
       loop
-         declare
-            Input : constant String := Get_Line;
-         begin
-            exit when Input = "q" or else Input = "Q";
-         end;
+         delay 10.0;
       end loop;
 
-      Put_Line ("[Main] Shutting down...");
-      AWS.Server.Shutdown (WS);
    exception
       when E : others =>
          Put_Line ("[FATAL] Server Error: " &
