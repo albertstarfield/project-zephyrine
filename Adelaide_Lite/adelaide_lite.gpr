@@ -14,7 +14,7 @@ project Adelaide_Lite is
    package Compiler is
       for Default_Switches ("Ada") use
         Adelaide_Lite_Config.Ada_Compiler_Switches &
-        ("-gnat2022", "-gnatX", "-mmacosx-version-min=14.0");
+        ("-gnat2022", "-gnatX", "-mmacosx-version-min=15.0");
    end Compiler;
 
    package Linker is
@@ -27,8 +27,8 @@ project Adelaide_Lite is
          "-lggml-metal",
          "-L/opt/homebrew/opt/sqlite/lib",
          "-lsqlite3",
-         "-mmacosx-version-min=14.0",
-         "-Wl,-syslibroot,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+         "-mmacosx-version-min=15.0",
+         "-Wl,-syslibroot,/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk",
          "-framework", "Accelerate",
          "-framework", "Metal",
          "-framework", "Foundation",
