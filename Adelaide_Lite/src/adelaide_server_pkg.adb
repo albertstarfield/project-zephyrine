@@ -29,8 +29,10 @@ package body Adelaide_Server_Pkg is
    function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
       URI : constant String := AWS.Status.URI (Request);
       Method : constant String := AWS.Status.Method (Request);
+      CL : constant String := AWS.Status.Header (Request, "Content-Length");
    begin
       Put_Line ("[Server] " & Method & " " & URI);
+      Put_Line ("[Server] Content-Length: " & CL);
 
       if URI = "/v1/models" or else URI = "/api/tags" then
          declare
@@ -50,8 +52,8 @@ package body Adelaide_Server_Pkg is
       elsif URI = "/api/chat" or else URI = "/v1/chat/completions" then
          declare
             Payload : constant String := AWS.Status.Payload (Request);
-            Val     : constant JSON_Value := Read (Payload);
-            Prompt  : Unbounded_String := To_Unbounded_String ("");
+            Val     : JSON_Value;
+            Prompt  : Unbounded_String := To_Unbounded_String ("No content");
             Images  : JSON_Array := Empty_Array;
             Result  : Unbounded_String;
             Resp    : constant JSON_Value := Create_Object;
@@ -59,18 +61,22 @@ package body Adelaide_Server_Pkg is
             Choice  : constant JSON_Value := Create_Object;
             Msg_Out : constant JSON_Value := Create_Object;
          begin
-            if Val.Has_Field ("messages") then
-               declare
-                  Msgs : constant JSON_Array := Get (Val, "messages");
-                  Last : constant JSON_Value := Get (Msgs, Msgs.Length);
-               begin
-                  Prompt := To_Unbounded_String (String'(Get (Last, "content")));
-                  if Last.Has_Field ("images") then
-                     Images := Get (Last, "images");
-                  end if;
-               end;
-            elsif Val.Has_Field ("prompt") then
-               Prompt := To_Unbounded_String (String'(Get (Val, "prompt")));
+            if Payload'Length > 0 then
+               Val := Read (Payload);
+               if Val.Has_Field ("messages") then
+                  declare
+                     Msgs : constant JSON_Array := Get (Val, "messages");
+                     Last : constant JSON_Value := Get (Msgs, Msgs.Length);
+                  begin
+                     Prompt := To_Unbounded_String
+                       (String'(Get (Last, "content")));
+                     if Last.Has_Field ("images") then
+                        Images := Get (Last, "images");
+                     end if;
+                  end;
+               elsif Val.Has_Field ("prompt") then
+                  Prompt := To_Unbounded_String (String'(Get (Val, "prompt")));
+               end if;
             end if;
 
             Model_Manager.Hybrid_Generate
