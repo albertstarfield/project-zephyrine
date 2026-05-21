@@ -1,6 +1,7 @@
 with Llama_Interface;
 with Math_Utils;
 with Streaming_Queue;
+with System;
 
 package Model_Manager is
    pragma Spark_Mode (Off);
@@ -15,6 +16,11 @@ package Model_Manager is
       Requested_Ctx : Positive := 4096);
 
    procedure Unload_Model (Kind : Model_Type);
+
+   procedure Force_Unload_And_Reload (Kind : Model_Type);
+
+   function Llama_Abort_Callback (Data : System.Address) return Boolean;
+   pragma Convention (C, Llama_Abort_Callback);
 
    function Get_Context
      (Kind : Model_Type) return Llama_Interface.Llama_Context;

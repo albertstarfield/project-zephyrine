@@ -4,6 +4,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Database_Manager;
 with Tool_Manager;
 with Llama_Interface; use Llama_Interface;
+with Watchdog_Manager;
 with System;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
@@ -141,6 +142,7 @@ package body Model_Manager is
          C_Params.N_Ubatch := 1024;
          C_Params.N_Threads := 8;
          C_Params.N_Threads_Batch := 8;
+         C_Params.Abort_Callback := Llama_Abort_Callback'Address;
          Models (Kind).Context :=
            Llama_Init_From_Model (Models (Kind).Model, C_Params);
          if Models (Kind).Context /= Null_Context then
@@ -166,6 +168,26 @@ package body Model_Manager is
          Models (Kind).Current_Ctx := 0;
       end if;
    end Unload_Model;
+
+   procedure Force_Unload_And_Reload (Kind : Model_Type) is
+      Success : Boolean;
+   begin
+      Model_Gate.Acquire (Kind);
+      begin
+         Unload_Model (Kind);
+         Load_Model (Kind, Success);
+      exception
+         when others =>
+            null;
+      end;
+      Model_Gate.Release (Kind);
+   end Force_Unload_And_Reload;
+
+   function Llama_Abort_Callback (Data : System.Address) return Boolean is
+      pragma Unreferenced (Data);
+   begin
+      return Watchdog_Manager.Inference_Monitor.Is_Aborted;
+   end Llama_Abort_Callback;
 
    function Get_Context (Kind : Model_Type) return Llama_Context is
    begin
@@ -852,12 +874,15 @@ package body Model_Manager is
 
       Models (Kind).In_Use := True;
       Models (Kind).Last_Used := Clock;
+      Watchdog_Manager.Inference_Monitor.Start_Inference (Kind, Clock);
+
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
       N_Toks := Llama_Tokenize
         (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address,
          32768, True, True);
       Free (Prompt_C);
       if N_Toks < 0 then
+         Watchdog_Manager.Inference_Monitor.Stop_Inference;
          Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
          return "ERROR: Tokenization failed";
@@ -884,6 +909,7 @@ package body Model_Manager is
                    (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
             begin
                if Llama_Decode (Models (Kind).Context, B) /= 0 then
+                  Watchdog_Manager.Inference_Monitor.Stop_Inference;
                   Models (Kind).In_Use := False;
                   Model_Gate.Release (Kind);
                   return "ERROR: Decode failed";
@@ -964,7 +990,7 @@ package body Model_Manager is
                            Stream.Push (Write (Chunk_Obj) & ASCII.LF);
                         end if;
                      end;
-                  end if;
+                  end;
                end;
             end if;
             declare
@@ -981,14 +1007,22 @@ package body Model_Manager is
          end;
       end loop;
       Llama_Sampler_Free (Sampler);
+      Watchdog_Manager.Inference_Monitor.Stop_Inference;
       Models (Kind).In_Use := False;
       Model_Gate.Release (Kind);
       return To_String (Result);
    exception
       when others =>
+         Watchdog_Manager.Inference_Monitor.Stop_Inference;
+         Put_Line
+           (ASCII.ESC & "[91m" &
+            "[BUGCHECK] GGML/Llama crash or exception detected" &
+            " during Generate for " & Model_Type'Image (Kind) &
+            "." & ASCII.ESC & "[0m");
+         Unload_Model (Kind);
          Models (Kind).In_Use := False;
          Model_Gate.Release (Kind);
-         raise;
+         return "ERROR: Llama execution crash or timeout";
    end Generate;
 
    function Is_Loaded (Kind : Model_Type) return Boolean is
