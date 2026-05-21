@@ -12,26 +12,19 @@ project Adelaide_Lite is
    for Main use ("adelaide_lite.adb", "adelaide_server.adb");
 
    package Compiler is
-      for Default_Switches ("Ada") use
-        Adelaide_Lite_Config.Ada_Compiler_Switches & ("-gnat2012");
+      for Default_Switches ("Ada") use Adelaide_Lite_Config.Ada_Compiler_Switches & ("-gnat2022", "-gnatX");
    end Compiler;
 
-   package Prove is
-      for Proof_Switches ("Ada") use ("--level=2", "--report=fail", "--warnings=off");
-   end Prove;
-
    package Binder is
-      for Switches ("Ada") use ("-Es"); --  Symbolic traceback
+      for Switches ("Ada") use ("-Es"); --  Symbolic stack traces
    end Binder;
 
    package Linker is
-      for Default_Switches ("Ada") use (
-         "-Wl,-syslibroot,/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
-         Project'Project_Dir & "obj/development/scheduling.o",
-         "-L" & Project'Project_Dir & "../llama.cpp/build/src", "-lllama",
-         "-L" & Project'Project_Dir & "../llama.cpp/build/ggml/src", "-lggml", "-lggml-base", "-lggml-cpu",
-         "-L" & Project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-metal", "-lggml-metal",
-         "-L" & Project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-blas", "-lggml-blas",
+      for Switches ("Ada") use (
+         "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/src",
+         "-lllama",
+         "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/common",
+         "-lcommon",
          "-framework", "Accelerate",
          "-framework", "Metal",
          "-framework", "Foundation",
