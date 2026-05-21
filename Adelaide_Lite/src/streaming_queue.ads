@@ -7,7 +7,7 @@ package Streaming_Queue is
 
    protected type Queue is
       entry Push (Item : String);
-      entry Pop (Item : out String; Is_Closed : out Boolean);
+      entry Pop (Item : out String; Last : out Natural; Is_Closed : out Boolean);
       procedure Close;
    private
       Buffer    : Unbounded_String := Null_Unbounded_String;
