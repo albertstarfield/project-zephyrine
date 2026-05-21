@@ -1,0 +1,27 @@
+--- Adelaide_Lite/src/model_manager.adb
++++ Adelaide_Lite/src/model_manager.adb
+@@ -321,7 +321,7 @@
+         ASCII.LF & To_String (Current_Response);
+    end Hybrid_Generate;
+ 
+-   function Generate (Kind : Model_Type; Prompt : String; Session_ID : String := ""; Requested_Ctx : Positive := 4096) return String is
++   function Generate (Kind : Model_Type; Prompt : String; Session_ID : String := ""; Requested_Ctx : Positive := 4096; Stream : Streaming_Queue.Queue_Access := null) return String is
+       Success : Boolean;
+       Result  : Unbounded_String;
+       Vocab   : Llama_Vocab;
+@@ -387,7 +387,14 @@
+             if Llama_Vocab_Is_Eog (Vocab, Token) then exit; end if;
+             Len := Llama_Token_To_Piece (Vocab, Token, Piece (1)'Address, 256, 0, True);
+             if Len > 0 then
+-               for J in 1 .. Len loop Append (Result, Piece (Integer (J))); end loop;
++               declare
++                  Str_Piece : constant String := String (Piece (1 .. Integer (Len)));
++               begin
++                  for J in 1 .. Len loop Append (Result, Piece (Integer (J))); end loop;
++                  if Stream /= null then
++                     Stream.Push (Str_Piece);
++                  end if;
++               end;
+             end if;
+             declare
+                function Llama_Batch_Get_One (T : System.Address; N : int) return Llama_Batch;

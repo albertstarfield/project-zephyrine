@@ -5,6 +5,7 @@ with AWS.Server;
 with Adelaide_Server_Pkg;
 with Model_Manager;
 with Integrity_Utils;
+with Toolchain_Manager;
 with Interfaces; use Interfaces;
 
 procedure Adelaide_Server is
@@ -32,8 +33,10 @@ procedure Adelaide_Server is
       Put_Line ("  adelaide_server [options]");
       New_Line;
       Put_Line (Bold & "OPTIONS:" & Reset);
-      Put_Line ("  -h, --help     " & Green & "Show this whimsical menu" & Reset);
-      Put_Line ("  -v, --version  " & Green & "Display version metadata" & Reset);
+      Put_Line ("  -h, --help     " & Green &
+                "Show this whimsical menu" & Reset);
+      Put_Line ("  -v, --version  " & Green &
+                "Display version metadata" & Reset);
       New_Line;
       Put_Line (Bold & "ENVIRONMENT:" & Reset);
       Put_Line ("  Default Port:  11420");
@@ -67,7 +70,8 @@ procedure Adelaide_Server is
       if Success and then Data (1) = 1 then
          Put_Line (Green & "[+] Integrity Core: VERIFIED" & Reset);
       else
-         Put_Line (Yellow & "[!] Integrity Core: FAILED (Proofs only)" & Reset);
+         Put_Line (Yellow &
+                   "[!] Integrity Core: FAILED (Proofs only)" & Reset);
       end if;
    end Run_Integrity_Self_Test;
 
@@ -90,15 +94,21 @@ begin
    end loop;
 
    --  Whimsical Startup Banner
-   Put_Line (Purple & "====================================================" & Reset);
-   Put_Line (Purple & Bold & "    ADELAIDE-LITE INITIALIZING... (Enchanting)" & Reset);
-   Put_Line (Purple & "====================================================" & Reset);
+   Put_Line (Purple & "==========================" &
+             "==========================" & Reset);
+   Put_Line (Purple & Bold &
+             "    ADELAIDE-LITE INITIALIZING... (Enchanting)" & Reset);
+   Put_Line (Purple & "==========================" &
+             "==========================" & Reset);
 
    --  Apply Apple Silicon soft real-time thread constraint policy
    Set_Darwin_Realtime;
 
    --  Verify data integrity subsystem
    Run_Integrity_Self_Test;
+
+   --  Verify external toolchain and dependencies
+   Toolchain_Manager.Verify_And_Heal;
 
    --  Initialize Llama backend and models
    Model_Manager.Initialize;
