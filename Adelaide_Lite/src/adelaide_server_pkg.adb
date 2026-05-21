@@ -1,5 +1,5 @@
-with AWS.Headers;
-with AWS.Headers.Set;
+with AWS.Response.Set;
+with AWS.Messages;
 with GNATCOLL.JSON; use GNATCOLL.JSON;
 with Ada.Text_IO; use Ada.Text_IO;
 with Model_Manager;
@@ -35,19 +35,17 @@ package body Adelaide_Server_Pkg is
       Status  : AWS.Messages.Status_Code := AWS.Messages.S200;
       Type_Str : String := "application/json") return AWS.Response.Data
    is
-      HD : AWS.Headers.List;
-   begin
-      AWS.Headers.Set.Add (HD, "Access-Control-Allow-Origin", "*");
-      AWS.Headers.Set.Add
-        (HD, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      AWS.Headers.Set.Add
-        (HD, "Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-      return AWS.Response.Build
+      Resp : AWS.Response.Data := AWS.Response.Build
         (Content_Type => Type_Str,
          Message_Body => Content,
-         Status_Code  => Status,
-         Header       => HD);
+         Status_Code  => Status);
+   begin
+      AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
+      AWS.Response.Set.Add_Header
+        (Resp, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      AWS.Response.Set.Add_Header
+        (Resp, "Access-Control-Allow-Headers", "Content-Type, Authorization");
+      return Resp;
    end Build_Response;
 
    function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
