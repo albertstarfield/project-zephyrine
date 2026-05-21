@@ -29,10 +29,8 @@ package body Adelaide_Server_Pkg is
    function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
       URI : constant String := AWS.Status.URI (Request);
       Method : constant String := AWS.Status.Method (Request);
-      CL : constant String := AWS.Status.Header (Request, "Content-Length");
    begin
       Put_Line ("[Server] " & Method & " " & URI);
-      Put_Line ("[Server] Content-Length: " & CL);
 
       if URI = "/v1/models" or else URI = "/api/tags" then
          declare
@@ -53,7 +51,7 @@ package body Adelaide_Server_Pkg is
          declare
             Payload : constant String := AWS.Status.Payload (Request);
             Val     : JSON_Value;
-            Prompt  : Unbounded_String := To_Unbounded_String ("No content");
+            Prompt  : Unbounded_String := To_Unbounded_String ("No payload");
             Images  : JSON_Array := Empty_Array;
             Result  : Unbounded_String;
             Resp    : constant JSON_Value := Create_Object;
@@ -61,7 +59,9 @@ package body Adelaide_Server_Pkg is
             Choice  : constant JSON_Value := Create_Object;
             Msg_Out : constant JSON_Value := Create_Object;
          begin
-            if Payload'Length > 0 then
+            Put_Line ("[Server] Payload: " & Payload);
+            
+            if Payload /= "" then
                Val := Read (Payload);
                if Val.Has_Field ("messages") then
                   declare
