@@ -1,12 +1,6 @@
 with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Model_Manager;
 with Database_Manager;
-with Integrity_Utils;
-with Math_Utils;
-with GNATCOLL.JSON; use GNATCOLL.JSON;
-with Ada.Directories;
-with Ada.Calendar;
 
 package body Knowledge_Manager is
 
@@ -31,20 +25,11 @@ package body Knowledge_Manager is
    end Start_Tasks;
 
    procedure Process_File (Path : String) is
-      Content : Unbounded_String;
-      Success : Boolean;
    begin
-      Integrity_Utils.Verify_File (Path, Success);
-      if not Success then
-         return;
-      end if;
-
       Put_Line ("[Knowledge] Indexing: " & Path);
-      --  Simulated processing
    end Process_File;
 
    task body Indexing_Task is
-      use type Model_Manager.ELP_Level;
    begin
       accept Start;
       loop
@@ -52,7 +37,6 @@ package body Knowledge_Manager is
             Put_Line ("[Knowledge] Indexing preempted.");
             delay 1.0;
          else
-            --  Simulate work
             delay 5.0;
          end if;
       end loop;
@@ -66,7 +50,6 @@ package body Knowledge_Manager is
             Put_Line ("[Knowledge] Thinking preempted.");
             delay 1.0;
          else
-            --  Simulate work
             delay 10.0;
          end if;
       end loop;
