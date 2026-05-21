@@ -69,36 +69,43 @@ package body Knowledge_Manager is
             if AWS.Response.Status_Code (Resp) = S200 then
                declare
                   B_Str : constant String := AWS.Response.Message_Body (Resp);
-                  Val : constant JSON_Value := Read (B_Str).Value;
-                  Content : constant String := Get (Val, "content");
+                  Val_Res : constant Read_Result := Read (B_Str);
                begin
-                  if Content'Length > 0 then
-                     --  Chunking (simplified for now)
-                        declare
-                           C_Size : constant Positive := 1000;
-                           Pos    : Positive := Content'First;
-                           V      : Math_Utils.Vector (1 .. 16384);
-                           V_Len  : Natural;
-                        begin
-                           while Pos <= Content'Last loop
-                              declare
-                                 Last : constant Positive := 
-                                   Positive'Min (Pos + C_Size - 1, Content'Last);
-                                 Chunk : constant String := Content (Pos .. Last);
-                              begin
-                                 Model_Manager.Get_Embedding (Chunk, V, V_Len);
-                                 if V_Len > 0 then
-                                    Database_Manager.Add_Literature_Chunk
-                                      (Path, Chunk, V (1 .. V_Len), "hash_placeholder");
-                                 end if;
-                                 Pos := Pos + C_Size;
-                                 
-                                 exit when Model_Manager.Should_Abort_ELP0;
-                              end;
-                           end loop;
-                        end;
+                  if Val_Res.Success then
+                     declare
+                        Val : constant JSON_Value := Val_Res.Value;
+                        Content : constant String := Get (Val, "content");
+                     begin
+                        if Content'Length > 0 then
+                           --  Chunking (simplified for now)
+                           declare
+                              C_Size : constant Positive := 1000;
+                              Pos    : Positive := Content'First;
+                              V      : Math_Utils.Vector (1 .. 16384);
+                              V_Len  : Natural;
+                           begin
+                              while Pos <= Content'Last loop
+                                 declare
+                                    Last : constant Positive := 
+                                      Positive'Min (Pos + C_Size - 1, Content'Last);
+                                    Chunk : constant String := Content (Pos .. Last);
+                                 begin
+                                    Model_Manager.Get_Embedding (Chunk, V, V_Len);
+                                    if V_Len > 0 then
+                                       Database_Manager.Add_Literature_Chunk
+                                         (Path, Chunk, V (1 .. V_Len), "hash_placeholder");
+                                    end if;
+                                    Pos := Pos + C_Size;
+
+                                    exit when Model_Manager.Should_Abort_ELP0;
+                                 end;
+                              end loop;
+                           end;
+                        end if;
+                     end;
                   end if;
                end;
+
             end if;
          exception
             when others =>
