@@ -20,6 +20,8 @@ package Streaming_Queue is
       Q : Queue_Access;
    end record;
 
+   type Response_Stream_Access is access all Response_Stream;
+
    overriding function End_Of_File (Resource : Response_Stream) return Boolean;
    overriding procedure Read
      (Resource : in out Response_Stream;
