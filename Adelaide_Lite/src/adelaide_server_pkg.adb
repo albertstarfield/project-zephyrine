@@ -65,13 +65,23 @@ package body Adelaide_Server_Pkg is
 
       elsif URI = "/api/show" then
          declare
-            Raw_S : constant String := AWS.Status.Payload (Request);
+            Raw_S   : constant String := AWS.Status.Payload (Request);
+            Raw_B   : constant Unbounded_String :=
+              AWS.Status.Binary_Data (Request);
+            Payload : Unbounded_String;
             Model_Name : Unbounded_String :=
               To_Unbounded_String ("adelaide-hybrid");
          begin
             if Raw_S /= "" then
+               Payload := To_Unbounded_String (Raw_S);
+            else
+               Payload := Raw_B;
+            end if;
+
+            if Length (Payload) > 0 then
                declare
-                  Parser_Result : constant Read_Result := Read (Raw_S);
+                  Parser_Result : constant Read_Result :=
+                    Read (To_String (Payload));
                begin
                   if Parser_Result.Success then
                      declare
@@ -113,7 +123,7 @@ package body Adelaide_Server_Pkg is
                      Long_Integer'(100000000));
                   Set_Field
                     (Model_Info, "bert.context_length",
-                     Create (Long_Float (4294967296.0)));
+                     Long_Integer'(4294967296));
 
                   Set_Field
                     (Resp, "modelfile",
@@ -144,7 +154,7 @@ package body Adelaide_Server_Pkg is
                      Long_Integer'(4000000000));
                   Set_Field
                     (Model_Info, "qwen2.context_length",
-                     Create (Long_Float (9223372036854775808.0)));
+                     Long_Integer'(9223372036854775807));
 
                   Set_Field
                     (Resp, "modelfile",
