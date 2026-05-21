@@ -6,6 +6,7 @@ with Ada.Text_IO; use Ada.Text_IO;
 with Model_Manager;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Streaming_Queue;
+with Ada.Exceptions;
 
 package body Adelaide_Server_Pkg is
 
@@ -58,19 +59,18 @@ package body Adelaide_Server_Pkg is
             Choice  : constant JSON_Value := Create_Object;
             Msg_Out : constant JSON_Value := Create_Object;
          begin
-            --  Extract prompt from messages or prompt field
             if Val.Has_Field ("messages") then
                declare
                   Msgs : constant JSON_Array := Get (Val, "messages");
                   Last : constant JSON_Value := Get (Msgs, Msgs.Length);
                begin
-                  Prompt := To_Unbounded_String (Get (Last, "content"));
+                  Prompt := To_Unbounded_String (String'(Get (Last, "content")));
                   if Last.Has_Field ("images") then
                      Images := Get (Last, "images");
                   end if;
                end;
             elsif Val.Has_Field ("prompt") then
-               Prompt := To_Unbounded_String (Get (Val, "prompt"));
+               Prompt := To_Unbounded_String (String'(Get (Val, "prompt")));
             end if;
 
             Model_Manager.Hybrid_Generate
