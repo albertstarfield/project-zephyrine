@@ -473,60 +473,88 @@ package body Model_Manager is
       Session_ID    : String := "";
       Level         : ELP_Level := ELP1) return Natural
    is
-      Grade_Prompt : constant String :=
-        "Evaluate the following response to the user's prompt on a " &
-        "scale of 1-100." & ASCII.LF & ASCII.LF &
-        "CRITERIA:" & ASCII.LF &
-        "1. Realism & Depth (0-100): Is it grounded in technical " &
-        "specificity and social reality?" & ASCII.LF &
-        "2. Evidence & Triangulation:" & ASCII.LF &
-        "   - TRIANGULATED REALISM: If the response is backed by " &
-        "CITATIONS and external search, maintain the full score." &
-        ASCII.LF &
-        "   - SELF-CLAIMED REALISM: If the response claims realism " &
-        "but lacks citations/search, you MUST HALVE or reduce the " &
-        "final score." & ASCII.LF & ASCII.LF &
-        "Context:" & ASCII.LF &
-        "- External Search Performed: " &
-        (if Search_Used then "True" else "False") & ASCII.LF &
-        "- IEEE Citations Present: " &
-        (if Has_Citations then "True" else "False") & ASCII.LF & ASCII.LF &
-        "User Prompt: " & Prompt & ASCII.LF &
-        "Assistant Response: " & Response_Text & ASCII.LF & ASCII.LF &
-        "Respond ONLY with the final numerical grade.";
-
-      Result : constant String :=
-        Generate
-          (Qwen_0_8B,
-           Wrap_ChatML ("You are the Realism Auditor.", Grade_Prompt),
-           Session_ID, 2048, null, False, Level);
-      Grade  : Natural := 85;
-   begin
-      Put_Line ("[Audit Phase] Raw Grade Response: '" & Result & "'");
-      declare
-         First_Digit : Natural := 0;
-         Last_Digit  : Natural := 0;
+      task Worker is
+         entry Start (RT : String; P : String; SU : Boolean; HC : Boolean; S : String; L : ELP_Level);
+         entry Finish (R : out Unbounded_String);
+      end Worker;
+      task body Worker is
+         Local_RT, Local_P, Local_S, Local_R : Unbounded_String;
+         Local_SU, Local_HC : Boolean;
+         Local_L : ELP_Level;
       begin
-         for K in Result'Range loop
-            if Result (K) in '0' .. '9' then
-               if First_Digit = 0 then
-                  First_Digit := K;
-               end if;
-               Last_Digit := K;
-            else
-               if First_Digit /= 0 then
+         accept Start (RT : String; P : String; SU : Boolean; HC : Boolean; S : String; L : ELP_Level) do
+            Local_RT := To_Unbounded_String (RT);
+            Local_P := To_Unbounded_String (P);
+            Local_SU := SU;
+            Local_HC := HC;
+            Local_S := To_Unbounded_String (S);
+            Local_L := L;
+         end Start;
+         declare
+            Grade_Prompt : constant String :=
+              "Evaluate the following response to the user's prompt on a " &
+              "scale of 1-100." & ASCII.LF & ASCII.LF &
+              "CRITERIA:" & ASCII.LF &
+              "1. Realism & Depth (0-100): Is it grounded in technical " &
+              "specificity and social reality?" & ASCII.LF &
+              "2. Evidence & Triangulation:" & ASCII.LF &
+              "   - TRIANGULATED REALISM: If the response is backed by " &
+              "CITATIONS and external search, maintain the full score." &
+              ASCII.LF &
+              "   - SELF-CLAIMED REALISM: If the response claims realism " &
+              "but lacks citations/search, you MUST HALVE or reduce the " &
+              "final score." & ASCII.LF & ASCII.LF &
+              "Context:" & ASCII.LF &
+              "- External Search Performed: " &
+              (if Local_SU then "True" else "False") & ASCII.LF &
+              "- IEEE Citations Present: " &
+              (if Local_HC then "True" else "False") & ASCII.LF & ASCII.LF &
+              "User Prompt: " & To_String (Local_P) & ASCII.LF &
+              "Assistant Response: " & To_String (Local_RT) & ASCII.LF & ASCII.LF &
+              "Respond ONLY with the final numerical grade.";
+         begin
+            Generate
+              (Qwen_0_8B,
+               Wrap_ChatML ("You are the Realism Auditor.", Grade_Prompt),
+               Local_R,
+               To_String (Local_S), 2048, null, False, Local_L);
+         end;
+         accept Finish (R : out Unbounded_String) do
+            R := Local_R;
+         end Finish;
+      end Worker;
+      Res_U : Unbounded_String;
+   begin
+      Worker.Start (Response_Text, Prompt, Search_Used, Has_Citations, Session_ID, Level);
+      Worker.Finish (Res_U);
+      declare
+         Result : constant String := To_String (Res_U);
+         Grade  : Natural := 85;
+      begin
+         Put_Line ("[Audit Phase] Raw Grade Response: '" & Result & "'");
+         declare
+            First_Digit : Natural := 0;
+            Last_Digit  : Natural := 0;
+         begin
+            for I in Result'Range loop
+               if Result (I) in '0' .. '9' then
+                  if First_Digit = 0 then
+                     First_Digit := I;
+                  end if;
+                  Last_Digit := I;
+               elsif First_Digit /= 0 then
                   exit;
                end if;
+            end loop;
+            if First_Digit /= 0 then
+               Grade := Natural'Value (Result (First_Digit .. Last_Digit));
+               Put_Line ("[Audit Phase] Extracted Grade: " & Grade'Img);
+            else
+               Put_Line ("[Audit Phase] Could not find grade. Defaulting to 85.");
             end if;
-         end loop;
-         if First_Digit /= 0 then
-            Grade := Natural'Value (Result (First_Digit .. Last_Digit));
-            Put_Line ("[Audit Phase] Extracted Grade: " & Grade'Img);
-         else
-            Put_Line ("[Audit Phase] Could not find grade. Defaulting to 85.");
-         end if;
+         end;
+         return Grade;
       end;
-      return Grade;
    exception
       when others =>
          Put_Line ("[Audit Phase] Grading exception. Defaulting to 85.");
