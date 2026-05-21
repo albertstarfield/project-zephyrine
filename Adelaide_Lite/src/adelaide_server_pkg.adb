@@ -845,17 +845,16 @@ package body Adelaide_Server_Pkg is
                         if Is_Stream then
                            Ada.Text_IO.Put_Line (" [OUTPUT] Streaming Response Started.");
                            declare
-                               type Response_Stream_Access is access all
-                                 Streaming_Queue.Response_Stream;
-                               Q : constant Streaming_Queue.Queue_Access :=
-                                 new Streaming_Queue.Queue;
-                               T : constant Generator_Task_Access :=
-                                 new Generator_Task;
-                               RS : constant Response_Stream_Access :=
-                                 new Streaming_Queue.Response_Stream'
-                                   (AWS.Resources.Streams.Stream_Type with
-                                    Q => Q);
-                               Resp : AWS.Response.Data;
+                              Q : constant Streaming_Queue.Queue_Access :=
+                                new Streaming_Queue.Queue;
+                              T : constant Generator_Task_Access :=
+                                new Generator_Task;
+                              RS : constant Streaming_Queue.Response_Stream_Access :=
+                                new Streaming_Queue.Response_Stream'
+                                  (AWS.Resources.Streams.Stream_Type with
+                                   Q => Q);
+                              Resp : AWS.Response.Data;
+
                             begin
                                Stream_Registry.Register (Session_ID, Q);
                                T.Start (Q, Prompt, Session_ID, URI_Str,
