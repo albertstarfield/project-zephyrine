@@ -185,7 +185,8 @@ package body Adelaide_Server_Pkg is
               To_Unbounded_String ("adelaide-hybrid");
 
             --  Helper procedure to extract text and image fields from
-            --  OpenAI-style content array to avoid deep nesting and long lines.
+            --  OpenAI-style content array to avoid deep nesting and
+            --  long lines.
             procedure Parse_Content_Array (C_Arr : JSON_Array) is
             begin
                Prompt := Null_Unbounded_String;
@@ -222,7 +223,7 @@ package body Adelaide_Server_Pkg is
                                     end;
                                  else
                                     Append (Images, Create (Url_Str));
-                                 end;
+                                 end if;
                               end;
                            end if;
                         end;
@@ -403,98 +404,98 @@ package body Adelaide_Server_Pkg is
                end;
             end if;
 
-             if Length (Prompt) > 0 then
-                declare
-                   Vec     : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
-                   Len     : Natural := 0;
-                   Emb_Arr : JSON_Array := Empty_Array;
-                begin
-                   Model_Manager.Get_Embedding
-                     (To_String (Prompt), Vec, Len);
-                   for I in 1 .. Len loop
-                      Append (Emb_Arr, Create (Long_Float (Vec (I))));
-                   end loop;
+            if Length (Prompt) > 0 then
+               declare
+                  Vec     : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
+                  Len     : Natural := 0;
+                  Emb_Arr : JSON_Array := Empty_Array;
+               begin
+                  Model_Manager.Get_Embedding
+                    (To_String (Prompt), Vec, Len);
+                  for I in 1 .. Len loop
+                     Append (Emb_Arr, Create (Long_Float (Vec (I))));
+                  end loop;
 
-                   if URI = "/api/embeddings" then
-                      Set_Field (Resp, "embedding", Emb_Arr);
-                   else
-                      declare
-                         Data_Arr  : JSON_Array := Empty_Array;
-                         Data_Obj  : constant JSON_Value := Create_Object;
-                         Usage_Obj : constant JSON_Value := Create_Object;
-                      begin
-                         Set_Field (Data_Obj, "object", "embedding");
-                         Set_Field (Data_Obj, "index", Integer'(0));
-                         Set_Field (Data_Obj, "embedding", Emb_Arr);
-                         Append (Data_Arr, Data_Obj);
-                         Set_Field (Resp, "object", "list");
-                         Set_Field (Resp, "data", Data_Arr);
-                         Set_Field
-                           (Resp, "model", "adelaide-embedding");
-                         Set_Field
-                           (Usage_Obj, "prompt_tokens", Integer'(10));
-                         Set_Field
-                           (Usage_Obj, "total_tokens", Integer'(10));
-                         Set_Field (Resp, "usage", Usage_Obj);
-                      end;
-                   end if;
-                end;
-             elsif Length (Inputs) > 0 then
-                declare
-                   Data_Arr     : JSON_Array := Empty_Array;
-                   Usage_Obj    : constant JSON_Value := Create_Object;
-                   Total_Tokens : Natural := 0;
-                begin
-                   for I in 1 .. Length (Inputs) loop
-                      declare
-                         In_Str  : constant String :=
-                           String'(Get (Get (Inputs, I)));
-                         Vec     : Math_Utils.Vector (1 .. 4096) :=
-                           (others => 0.0);
-                         Len     : Natural := 0;
-                         Emb_Arr : JSON_Array := Empty_Array;
-                         Data_Obj : constant JSON_Value := Create_Object;
-                      begin
-                         Model_Manager.Get_Embedding (In_Str, Vec, Len);
-                         for J in 1 .. Len loop
-                            Append (Emb_Arr, Create (Long_Float (Vec (J))));
-                         end loop;
+                  if URI = "/api/embeddings" then
+                     Set_Field (Resp, "embedding", Emb_Arr);
+                  else
+                     declare
+                        Data_Arr  : JSON_Array := Empty_Array;
+                        Data_Obj  : constant JSON_Value := Create_Object;
+                        Usage_Obj : constant JSON_Value := Create_Object;
+                     begin
+                        Set_Field (Data_Obj, "object", "embedding");
+                        Set_Field (Data_Obj, "index", Integer'(0));
+                        Set_Field (Data_Obj, "embedding", Emb_Arr);
+                        Append (Data_Arr, Data_Obj);
+                        Set_Field (Resp, "object", "list");
+                        Set_Field (Resp, "data", Data_Arr);
+                        Set_Field
+                          (Resp, "model", "adelaide-embedding");
+                        Set_Field
+                          (Usage_Obj, "prompt_tokens", Integer'(10));
+                        Set_Field
+                          (Usage_Obj, "total_tokens", Integer'(10));
+                        Set_Field (Resp, "usage", Usage_Obj);
+                     end;
+                  end if;
+               end;
+            elsif Length (Inputs) > 0 then
+               declare
+                  Data_Arr     : JSON_Array := Empty_Array;
+                  Usage_Obj    : constant JSON_Value := Create_Object;
+                  Total_Tokens : Natural := 0;
+               begin
+                  for I in 1 .. Length (Inputs) loop
+                     declare
+                        In_Str   : constant String :=
+                          String'(Get (Get (Inputs, I)));
+                        Vec      : Math_Utils.Vector (1 .. 4096) :=
+                          (others => 0.0);
+                        Len      : Natural := 0;
+                        Emb_Arr  : JSON_Array := Empty_Array;
+                        Data_Obj : constant JSON_Value := Create_Object;
+                     begin
+                        Model_Manager.Get_Embedding (In_Str, Vec, Len);
+                        for J in 1 .. Len loop
+                           Append (Emb_Arr, Create (Long_Float (Vec (J))));
+                        end loop;
 
-                         if URI = "/api/embeddings" then
-                            Append (Data_Arr, Create (Emb_Arr));
-                         else
-                            Set_Field (Data_Obj, "object", "embedding");
-                            Set_Field (Data_Obj, "index", Integer'(I - 1));
-                            Set_Field (Data_Obj, "embedding", Emb_Arr);
-                            Append (Data_Arr, Data_Obj);
-                         end if;
-                         Total_Tokens := Total_Tokens + 10;
-                      end;
-                   end loop;
+                        if URI = "/api/embeddings" then
+                           Append (Data_Arr, Create (Emb_Arr));
+                        else
+                           Set_Field (Data_Obj, "object", "embedding");
+                           Set_Field (Data_Obj, "index", Integer'(I - 1));
+                           Set_Field (Data_Obj, "embedding", Emb_Arr);
+                           Append (Data_Arr, Data_Obj);
+                        end if;
+                        Total_Tokens := Total_Tokens + 10;
+                     end;
+                  end loop;
 
-                   if URI = "/api/embeddings" then
-                      if Length (Data_Arr) = 1 then
-                         Set_Field (Resp, "embedding", Get (Data_Arr, 1));
-                      else
-                         Set_Field (Resp, "embeddings", Data_Arr);
-                      end if;
-                   else
-                      Set_Field (Resp, "object", "list");
-                      Set_Field (Resp, "data", Data_Arr);
-                      Set_Field
-                        (Resp, "model", "adelaide-embedding");
-                      Set_Field
-                        (Usage_Obj, "prompt_tokens",
-                         Integer'(Total_Tokens));
-                      Set_Field
-                        (Usage_Obj, "total_tokens",
-                         Integer'(Total_Tokens));
-                      Set_Field (Resp, "usage", Usage_Obj);
-                   end if;
-                end;
-             else
-                Set_Field (Resp, "embedding", Empty_Array);
-             end if;
+                  if URI = "/api/embeddings" then
+                     if Length (Data_Arr) = 1 then
+                        Set_Field (Resp, "embedding", Get (Data_Arr, 1));
+                     else
+                        Set_Field (Resp, "embeddings", Data_Arr);
+                     end if;
+                  else
+                     Set_Field (Resp, "object", "list");
+                     Set_Field (Resp, "data", Data_Arr);
+                     Set_Field
+                       (Resp, "model", "adelaide-embedding");
+                     Set_Field
+                       (Usage_Obj, "prompt_tokens",
+                        Integer'(Total_Tokens));
+                     Set_Field
+                       (Usage_Obj, "total_tokens",
+                        Integer'(Total_Tokens));
+                     Set_Field (Resp, "usage", Usage_Obj);
+                  end if;
+               end;
+            else
+               Set_Field (Resp, "embedding", Empty_Array);
+            end if;
 
             return AWS.Response.Build
               (Content_Type => "application/json",
