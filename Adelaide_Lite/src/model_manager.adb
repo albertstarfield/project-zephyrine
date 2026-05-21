@@ -311,8 +311,12 @@ package body Model_Manager is
    function Count_Tokens (T : String) return Positive is (Positive'Max (1, T'Length / 4));
    function Get_Request_Category (M : String; S : String := ""; L : ELP_Level := ELP1) return String is (if Index (Ada.Characters.Handling.To_Lower (M), "hello") > 0 then "casual" else "technical");
    function Grade_Response_Quality (RT, P, S : String; SU, HC : Boolean; L : ELP_Level) return Natural is (85);
-   function Generator_Callback (P : String) return String is 
-     (declare R : Unbounded_String; 
-      begin Generate (Qwen_4B, P, R, GNATCOLL.JSON.Empty_Array, "", 4096, null, False, ELP1); return To_String (R); end);
+
+   function Generator_Callback (P : String) return String is
+      R : Unbounded_String;
+   begin
+      Generate (Qwen_4B, P, R, GNATCOLL.JSON.Empty_Array, "", 4096, null, False, ELP1);
+      return To_String (R);
+   end Generator_Callback;
 
 end Model_Manager;
