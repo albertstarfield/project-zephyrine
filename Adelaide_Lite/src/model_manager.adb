@@ -670,10 +670,13 @@ package body Model_Manager is
       end if;
 
       declare
-         procedure Llama_KV_Cache_Clear (Ctx : Llama_Context);
-         pragma Import (C, Llama_KV_Cache_Clear, "llama_kv_cache_clear");
+         function Llama_Get_Memory (Ctx : Llama_Context) return System.Address;
+         pragma Import (C, Llama_Get_Memory, "llama_get_memory");
+
+         procedure Llama_Memory_Clear (Mem : System.Address; Data : Boolean);
+         pragma Import (C, Llama_Memory_Clear, "llama_memory_clear");
       begin
-         Llama_KV_Cache_Clear (Models (Kind).Context);
+         Llama_Memory_Clear (Llama_Get_Memory (Models (Kind).Context), False);
       end;
 
       Models (Kind).In_Use := True;
