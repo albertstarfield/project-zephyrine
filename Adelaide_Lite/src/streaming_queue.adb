@@ -1,4 +1,4 @@
-with GNATCOLL.JSON; use GNATCOLL.JSON;
+with GNATCOLL.JSON;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;
 with Ada.Strings.Unbounded;
@@ -9,11 +9,11 @@ package body Streaming_Queue is
       procedure Set_Format (F : Format_Type; Model : String := "") is
       begin
          Format := F;
-         Model_ID := To_Unbounded_String (Model);
+         Model_ID := Ada.Strings.Unbounded.To_Unbounded_String (Model);
       end Set_Format;
 
       entry Push (Item : String) when True is
-         Resp : constant JSON_Value := Create_Object;
+         Resp : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
          Now  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
          TS   : String := Ada.Calendar.Formatting.Image (Now);
       begin
@@ -26,52 +26,52 @@ package body Streaming_Queue is
                Ada.Strings.Unbounded.Append (Buffer, Item);
             when Ollama =>
                declare
-                  Msg : constant JSON_Value := Create_Object;
+                  Msg : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
                begin
-                  Set_Field (Msg, "role", "assistant");
-                  Set_Field (Msg, "content", Item);
-                  Set_Field (Resp, "model", To_String (Model_ID));
-                  Set_Field (Resp, "created_at", TS & "Z");
-                  Set_Field (Resp, "message", Msg);
-                  Set_Field (Resp, "done", False);
-                  Ada.Strings.Unbounded.Append (Buffer, Write (Resp) & ASCII.LF);
+                  GNATCOLL.JSON.Set_Field (Msg, "role", "assistant");
+                  GNATCOLL.JSON.Set_Field (Msg, "content", Item);
+                  GNATCOLL.JSON.Set_Field (Resp, "model", Ada.Strings.Unbounded.To_String (Model_ID));
+                  GNATCOLL.JSON.Set_Field (Resp, "created_at", TS & "Z");
+                  GNATCOLL.JSON.Set_Field (Resp, "message", Msg);
+                  GNATCOLL.JSON.Set_Field (Resp, "done", False);
+                  Ada.Strings.Unbounded.Append (Buffer, GNATCOLL.JSON.Write (Resp) & ASCII.LF);
                end;
             when OpenAI =>
                declare
-                  Choice : constant JSON_Value := Create_Object;
-                  D_Val  : constant JSON_Value := Create_Object;
-                  Arr    : JSON_Array := Empty_Array;
+                  Choice : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
+                  D_Val  : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
+                  Arr    : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
                begin
-                  Set_Field (D_Val, "content", Item);
-                  Set_Field (Choice, "delta", D_Val);
-                  Set_Field (Choice, "index", Integer'(0));
-                  Append (Arr, Choice);
-                  Set_Field (Resp, "id", "chatcmpl-adelaide-stream");
-                  Set_Field (Resp, "object", "chat.completion.chunk");
-                  Set_Field (Resp, "created", Long_Integer'(1686935002));
-                  Set_Field (Resp, "model", To_String (Model_ID));
-                  Set_Field (Resp, "choices", Arr);
-                  Ada.Strings.Unbounded.Append (Buffer, "data: " & Write (Resp) & ASCII.LF);
+                  GNATCOLL.JSON.Set_Field (D_Val, "content", Item);
+                  GNATCOLL.JSON.Set_Field (Choice, "delta", D_Val);
+                  GNATCOLL.JSON.Set_Field (Choice, "index", Integer'(0));
+                  GNATCOLL.JSON.Append (Arr, Choice);
+                  GNATCOLL.JSON.Set_Field (Resp, "id", "chatcmpl-adelaide-stream");
+                  GNATCOLL.JSON.Set_Field (Resp, "object", "chat.completion.chunk");
+                  GNATCOLL.JSON.Set_Field (Resp, "created", Long_Integer'(1686935002));
+                  GNATCOLL.JSON.Set_Field (Resp, "model", Ada.Strings.Unbounded.To_String (Model_ID));
+                  GNATCOLL.JSON.Set_Field (Resp, "choices", Arr);
+                  Ada.Strings.Unbounded.Append (Buffer, "data: " & GNATCOLL.JSON.Write (Resp) & ASCII.LF);
                end;
          end case;
       end Push;
 
       entry Pop (Item : out String; Last : out Natural; Is_Closed : out Boolean)
-        when Length (Buffer) > 0 or else Closed
+        when Ada.Strings.Unbounded.Length (Buffer) > 0 or else Closed
       is
-         Len : constant Natural := Natural'Min (Length (Buffer), Item'Length);
+         Len : constant Natural := Natural'Min (Ada.Strings.Unbounded.Length (Buffer), Item'Length);
       begin
          Last := Len;
          if Len > 0 then
             Item (Item'First .. Item'First + Len - 1) := 
-              To_String (Unbounded_Slice (Buffer, 1, Len));
-            Buffer := Unbounded_Slice (Buffer, Len + 1, Length (Buffer));
+              Ada.Strings.Unbounded.To_String (Ada.Strings.Unbounded.Unbounded_Slice (Buffer, 1, Len));
+            Buffer := Ada.Strings.Unbounded.Unbounded_Slice (Buffer, Len + 1, Ada.Strings.Unbounded.Length (Buffer));
          end if;
-         Is_Closed := Closed and then Length (Buffer) = 0;
+         Is_Closed := Closed and then Ada.Strings.Unbounded.Length (Buffer) = 0;
       end Pop;
 
       procedure Close is
-         Resp : constant JSON_Value := Create_Object;
+         Resp : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
          Now  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
          TS   : String := Ada.Calendar.Formatting.Image (Now);
       begin
@@ -82,10 +82,10 @@ package body Streaming_Queue is
          case Format is
             when Raw => null;
             when Ollama =>
-               Set_Field (Resp, "model", To_String (Model_ID));
-               Set_Field (Resp, "created_at", TS & "Z");
-               Set_Field (Resp, "done", True);
-               Ada.Strings.Unbounded.Append (Buffer, Write (Resp) & ASCII.LF);
+               GNATCOLL.JSON.Set_Field (Resp, "model", Ada.Strings.Unbounded.To_String (Model_ID));
+               GNATCOLL.JSON.Set_Field (Resp, "created_at", TS & "Z");
+               GNATCOLL.JSON.Set_Field (Resp, "done", True);
+               Ada.Strings.Unbounded.Append (Buffer, GNATCOLL.JSON.Write (Resp) & ASCII.LF);
             when OpenAI =>
                Ada.Strings.Unbounded.Append (Buffer, "data: [DONE]" & ASCII.LF);
          end case;
