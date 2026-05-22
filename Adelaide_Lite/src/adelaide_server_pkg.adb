@@ -460,7 +460,9 @@ package body Adelaide_Server_Pkg is
                      end if;
                   end;
                exception
-                  when others =>
+                  when E : others =>
+                     Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Server Error]" & AnsiAda.Reset & " Exception while parsing: " & Ada.Exceptions.Exception_Message (E));
+                     Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Server Error]" & AnsiAda.Reset & " Payload: " & To_String (Payload));
                      return Build_Response ("{""error"": ""Payload processing error""}", AWS.Messages.S400);
                end;
             end if;
