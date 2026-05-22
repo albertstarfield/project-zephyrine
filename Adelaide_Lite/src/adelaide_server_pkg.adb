@@ -635,6 +635,12 @@ package body Adelaide_Server_Pkg is
                   GNATCOLL.JSON.Set_Field
                     (Resp, "response", To_String (Result));
                   GNATCOLL.JSON.Set_Field (Resp, "done", True);
+                  GNATCOLL.JSON.Set_Field (Resp, "created_at", TS_Str & "Z");
+                  GNATCOLL.JSON.Set_Field (Resp, "eval_count", Integer'(0));
+                  GNATCOLL.JSON.Set_Field (Resp, "prompt_eval_count", Integer'(0));
+                  GNATCOLL.JSON.Set_Field (Resp, "total_duration", Integer'(0));
+                  GNATCOLL.JSON.Set_Field (Resp, "load_duration", Integer'(0));
+                  GNATCOLL.JSON.Set_Field (Resp, "prompt_eval_duration", Integer'(0));
                else
                   declare
                      Msg_Out : constant GNATCOLL.JSON.JSON_Value :=
