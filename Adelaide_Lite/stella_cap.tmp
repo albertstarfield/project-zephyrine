@@ -1,1 +1,14 @@
-2026-05-22 23:26:29.636 | INFO     | stella_icarus_utils:load_hooks:73 - StellaIcarusHookManager: Loading hooks from '/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/StellaIcarus'...
+2026-05-22 23:26:32.018 | INFO     | stella_icarus_utils:load_hooks:73 - StellaIcarusHookManager: Loading hooks from '/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/StellaIcarus'...
+✅ StellaMatrixHook: Active Engine -> GPU (Apple MPS)
+2026-05-22 23:26:32.628 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_matrix_math_hook' (Interpreted)
+[*] Trickshot: Compiling optimized core...
+[-] Trickshot: Compilation failed (g++ missing?).
+2026-05-22 23:26:32.677 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_trickshot_stellaicarus_benchmark_simplearitmatic' (Interpreted)
+2026-05-22 23:26:32.679 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_hello_world_hook_example_dev_getstarted' (Interpreted)
+FMC SERVO HOOK: Numba JIT init failed (No module named '<dynamic>'). This hook will use a Python fallback for calculations.
+2026-05-22 23:26:33.034 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_fmc_servo_manual_hook_test'
+✅ StellaMath: C++ Engine Active (Tier 1)
+2026-05-22 23:26:33.037 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_math_hook' (Interpreted)
+2026-05-22 23:26:33.037 | DEBUG    | stella_icarus_utils:check_and_execute:151 - StellaIcarusHook 'stella_hook_basic_math_hook' matched. Handler duration: 11.459 µs.
+__STELLA_MATCH__
+This is what I get or the result of my calculation: 2023
