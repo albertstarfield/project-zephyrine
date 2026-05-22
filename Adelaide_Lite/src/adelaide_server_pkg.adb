@@ -127,6 +127,18 @@ package body Adelaide_Server_Pkg is
          end if;
       end if;
 
+      if URI = "/api/version" then
+         return Build_Response ("{""version"": ""Project-Zephyrine-0.27""}");
+      end if;
+
+      if URI = "/api/ps" then
+         return Build_Response ("{""models"": [{""name"": ""metamodel-ELP0"", ""size"": 0, ""size_vram"": 0}, {""name"": ""metamodel-ELP1"", ""size"": 0, ""size_vram"": 0}]}");
+      end if;
+
+      if URI = "/api/pull" or else URI = "/api/create" or else URI = "/api/push" or else URI = "/api/copy" or else URI = "/api/delete" then
+         return Build_Response ("{""status"": ""success""}");
+      end if;
+
       if URI = "/v1/models" or else URI = "/api/tags" then
          declare
             Resp   : constant GNATCOLL.JSON.JSON_Value :=
@@ -475,7 +487,7 @@ package body Adelaide_Server_Pkg is
             end if;
          end;
 
-      elsif URI = "/api/embeddings" or else URI = "/v1/embeddings" then
+      elsif URI = "/api/embeddings" or else URI = "/v1/embeddings" or else URI = "/api/embed" then
          declare
             Payload : Unbounded_String :=
               (if Raw_S /= "" then To_Unbounded_String (Raw_S) else Raw_B);
@@ -525,7 +537,7 @@ package body Adelaide_Server_Pkg is
                        (Emb_Arr, GNATCOLL.JSON.Create (Long_Float (Vec (I))));
                   end loop;
                end if;
-               if URI = "/api/embeddings" then
+               if URI = "/api/embeddings" or else URI = "/api/embed" then
                   GNATCOLL.JSON.Set_Field (Resp, "embedding", Emb_Arr);
                else
                   declare
