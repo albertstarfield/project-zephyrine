@@ -1,7 +1,7 @@
 <h1 align="center">
 
 <sub>
-<img src="https://github.com/albertstarfield/project-zephyrine/blob/main/documentation/ProjectZephy023LogoRenewal.png?raw=true" height=256>
+<img src="documentation/ProjectZephy023LogoRenewal.png" height=256>
 </sub>
 <br>
 </h1>
@@ -11,7 +11,7 @@
 
 <h5 align="center">
 <sub align="center">
-<img src="https://github.com/albertstarfield/project-zephyrine/blob/main/documentation/Project%20Zephyrine%20HandDrawnPersonalized%20Logo.png?raw=true" height=128>
+<img src="documentation/Project%20Zephyrine%20HandDrawnPersonalized%20Logo.png" height=128>
 
 </sub>
 </h5>
@@ -34,7 +34,7 @@ This is not just another LLM wrapper. Adelaide Lite represents the integration o
 
 Adelaide Lite is specifically tailored for environments with lower storage and constrained runtime memory capacity.
 
-1.  **Ada/SPARK Foundation:** The entire networking, caching, and task-scheduling layer is written in Ada, providing mathematically verifiable safety against buffer overflows, race conditions, and memory leaks.
+1.  **Ada/SPARK Foundation:** Inspired by the rigorous aerospace high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C), the entire networking, caching, and task-scheduling layer is written in Ada, providing mathematically verifiable safety against buffer overflows, race conditions, and memory leaks.
 2.  **WCET Enforcements:** The Worst-Case Execution Time (WCET) manager actively monitors and terminates non-deterministic AI generation if it breaches strict latency budgets, falling back to cached or deterministic responses.
 3.  **Hybrid Deno Web-Scraping Hooks:** Instead of embedding fragile web drivers, Adelaide Lite securely spawns isolated Deno/TypeScript subprocesses (`playwright_scraper.ts`) that utilize stealth-plugin techniques to breach bot-detection challenges and retrieve factual data for the generative core without compromising the stability of the Ada parent process.
 
@@ -69,7 +69,7 @@ Adelaide Lite is designed to be highly portable but requires a specific set of t
     ./run.sh
     ```
 
-    *The script will automatically fetch Ada Web Server (AWS) packages via Alire, install the Deno Playwright Chromium binaries, and start the local API listener on port `8080`.*
+    *The script will automatically fetch Ada Web Server (AWS) packages via Alire, install the Deno Playwright Chromium binaries, and start the local API listener on port `11420`.*
 
 ## Warning
 > A Warning to Adelaide Lite Users newcomers
@@ -83,7 +83,7 @@ Adelaide Lite is designed to be highly portable but requires a specific set of t
 ---
 <h1 align="center">
 <sub>
-<img src="https://github.com/albertstarfield/project-zephyrine/blob/main/documentation/madeFromZephyFoundation.png?raw=true" height=128>
+<img src="documentation/madeFromZephyFoundation.png" height=128>
 </sub>
 <h5 align="center">
 Made with Love, Dreams, and Disciplines.<br>
