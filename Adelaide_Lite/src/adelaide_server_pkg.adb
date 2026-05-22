@@ -299,6 +299,8 @@ package body Adelaide_Server_Pkg is
                return Build_Response ("{""error"": ""Invalid request: missing prompt or messages""}", AWS.Messages.S400);
             end if;
 
+            Ada.Text_IO.Put_Line ("[Server] Extracted Prompt: " & To_String (Prompt));
+
             if Is_Streaming then
                declare
                   Q : constant Streaming_Queue.Queue_Access :=
