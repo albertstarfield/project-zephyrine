@@ -1,3 +1,4 @@
+with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
@@ -20,7 +21,7 @@ package body Model_Manager is
    begin
       loop
          delay 30.0;
-         Ada.Text_IO.Put_Line ("[WCET] Current Pipeline WCET: " & Current_WCET'Img & " seconds");
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red) & "[WCET]" & AnsiAda.Reset & " Current Pipeline WCET: " & Current_WCET'Img & " seconds");
       end loop;
    end WCET_Printer;
 
@@ -139,7 +140,7 @@ package body Model_Manager is
                not Models (Kind).In_Use and then
                (Now - Models (Kind).Last_Used) > Timeout
             then
-               Put_Line ("[Idle] Unloading " & Model_Type'Image (Kind));
+               Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Idle]" & AnsiAda.Reset & " Unloading " & Model_Type'Image (Kind));
                Unload_Model (Kind);
             end if;
          end loop;
@@ -860,7 +861,7 @@ package body Model_Manager is
          Cached_Res : constant String := Database_Manager.Get_Cached_Response (Emb_Vec (1 .. Emb_Len), Current_WCET);
       begin
          if Cached_Res /= "" then
-            Put_Line ("[Hybrid] Cache HIT. Returning cached response.");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) & "[Hybrid]" & AnsiAda.Reset & " Cache HIT. Returning cached response.");
             Result := To_Unbounded_String (Cached_Res);
             if Stream /= null then
                Stream.Push (Cached_Res);
@@ -869,7 +870,7 @@ package body Model_Manager is
          end if;
       end;
 
-      Put_Line ("[Hybrid] Starting reasoning chain...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) & "[Hybrid]" & AnsiAda.Reset & " Starting reasoning chain...");
 
       if Stream /= null then
          Stream.Push

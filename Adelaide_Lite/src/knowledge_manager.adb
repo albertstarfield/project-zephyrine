@@ -1,3 +1,4 @@
+with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
@@ -17,7 +18,7 @@ package body Knowledge_Manager is
 
    procedure Initialize is
    begin
-      Put_Line ("[Knowledge] Initializing Knowledge Base...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Initializing Knowledge Base...");
       Database_Manager.Initialize;
    end Initialize;
 
@@ -45,7 +46,7 @@ package body Knowledge_Manager is
                Opened := True;
             exception
                when others =>
-                  Put_Line ("[Knowledge] references.bib not found. Skipping.");
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " references.bib not found. Skipping.");
             end;
       end;
 
@@ -53,11 +54,11 @@ package body Knowledge_Manager is
          return;
       end if;
 
-      Put_Line ("[Knowledge] Parsing and indexing references.bib...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Parsing and indexing references.bib...");
 
       while not End_Of_File (File) loop
          if Model_Manager.Should_Abort_ELP0 then
-            Put_Line ("[Knowledge] Indexing aborted due to ELP1 preemption.");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Indexing aborted due to ELP1 preemption.");
             Close (File);
             return;
          end if;
@@ -97,7 +98,7 @@ package body Knowledge_Manager is
       end if;
 
       Close (File);
-      Put_Line ("[Knowledge] references.bib indexing completed.");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " references.bib indexing completed.");
    exception
       when others =>
          if Is_Open (File) then
@@ -137,7 +138,7 @@ package body Knowledge_Manager is
          if Model_Manager.Should_Abort_ELP0 then
             delay 1.0;
          else
-            Put_Line ("[Thought] Background thinker active. Processing...");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Yellow) & "[Thought]" & AnsiAda.Reset & " Background thinker active. Processing...");
             Database_Manager.Get_Random_Literature_Chunk
               (Chunk_Content, Success);
             if Success and then Length (Chunk_Content) > 0 then
@@ -227,8 +228,7 @@ package body Knowledge_Manager is
                end if;
             exception
                when others =>
-                  Put_Line
-                    ("[Thought] Error in background thought extraction.");
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Light_Yellow) & "[Thought]" & AnsiAda.Reset & " Error in background thought extraction.");
             end;
 
             delay 15.0;
