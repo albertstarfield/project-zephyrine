@@ -888,7 +888,7 @@ package body Model_Manager is
                if Raw_Prompt then
                   declare
                      Sub_Str : constant String := "<|im_start|>assistant" & ASCII.LF;
-                     Idx     : constant Natural := Index (Prompt, Sub_Str);
+                     Idx     : constant Natural := Index (Prompt, Sub_Str, Going => Ada.Strings.Backward);
                   begin
                      if Idx > 0 then
                         return Prompt (Prompt'First .. Idx - 1) &
@@ -991,7 +991,7 @@ package body Model_Manager is
             if Raw_Prompt then
                declare
                   Sub_Str : constant String := "<|im_start|>assistant" & ASCII.LF;
-                  Idx     : constant Natural := Index (Prompt, Sub_Str);
+                  Idx     : constant Natural := Index (Prompt, Sub_Str, Going => Ada.Strings.Backward);
                begin
                   if Idx > 0 then
                      return Prompt (Prompt'First .. Idx - 1) &
