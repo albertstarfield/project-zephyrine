@@ -51,7 +51,8 @@ package Model_Manager is
       Session_ID : String := "";
       Stream     : Streaming_Queue.Queue_Access := null;
       Level      : ELP_Level := ELP1;
-      Agentic    : Boolean := False);
+      Agentic    : Boolean := False;
+      Raw_Prompt : Boolean := False);
 
    procedure Get_Embedding
      (Prompt : String;
