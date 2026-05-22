@@ -4,17 +4,17 @@ set -e
 echo "[*] Setting up Adelaide-Lite environment..."
 
 # Check and clone llama.cpp
-if [ ! -d "llama.cpp" ]; then
+if [ ! -d "../llama.cpp" ]; then
     echo "[*] Cloning llama.cpp..."
-    git clone https://github.com/ggerganov/llama.cpp.git
+    git clone https://github.com/ggerganov/llama.cpp.git ../llama.cpp
 else
     echo "[*] llama.cpp already exists, skipping clone."
 fi
 
 # Check and clone supertonic
-if [ ! -d "supertonic" ]; then
+if [ ! -d "../supertonic" ]; then
     echo "[*] Cloning supertonic..."
-    git clone https://github.com/supertone-inc/supertonic.git
+    git clone https://github.com/supertone-inc/supertonic.git ../supertonic
 else
     echo "[*] supertonic already exists, skipping clone."
 fi
@@ -30,9 +30,12 @@ echo "[*] Booting StellaIcarus Ada Daemon Manager..."
 python3 python/stellaicarus_daemon_runner.py &
 DAEMON_PID=$!
 
+cleanup() {
+    echo "[*] Shutting down daemon..."
+    kill $DAEMON_PID 2>/dev/null || true
+    wait $DAEMON_PID 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
 echo "[*] Booting Adelaide Intelligence Server..."
 alr run
-
-# Cleanup daemon on exit
-kill $DAEMON_PID
-wait $DAEMON_PID 2>/dev/null
