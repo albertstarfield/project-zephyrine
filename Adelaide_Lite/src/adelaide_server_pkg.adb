@@ -314,10 +314,8 @@ package body Adelaide_Server_Pkg is
                GNATCOLL.JSON.Append (Models, M);
             end Add_Model;
          begin
-            Add_Model ("adelaide-hybrid", "qwen2");
-            Add_Model ("adelaide-embedding", "bert");
-            Add_Model ("metamodel", "qwen2");
-            Add_Model ("adelaide-metamodel", "qwen2");
+            Add_Model ("Snowball-Enaga", "qwen2");
+            Add_Model ("Snowball-Enaga-Embedding", "bert");
             GNATCOLL.JSON.Set_Field (Resp, "object", "list");
             GNATCOLL.JSON.Set_Field (Resp, "data", Models);
             GNATCOLL.JSON.Set_Field (Resp, "models", Models);
@@ -342,7 +340,7 @@ package body Adelaide_Server_Pkg is
             Payload : Unbounded_String :=
               (if Raw_S /= "" then To_Unbounded_String (Raw_S) else Raw_B);
             Model_Name : Unbounded_String :=
-              To_Unbounded_String ("adelaide-hybrid");
+              To_Unbounded_String ("Snowball-Enaga");
          begin
             if Length (Payload) > 0 then
                declare
@@ -374,7 +372,7 @@ package body Adelaide_Server_Pkg is
                  GNATCOLL.JSON.Empty_Array;
                Name_Str : constant String := To_String (Model_Name);
             begin
-               if Name_Str = "adelaide-embedding" then
+               if Name_Str = "Snowball-Enaga-Embedding" then
                   GNATCOLL.JSON.Append (Families,
                                         GNATCOLL.JSON.Create ("bert"));
                   GNATCOLL.JSON.Set_Field (Details, "family", "bert");
@@ -401,7 +399,7 @@ package body Adelaide_Server_Pkg is
             Resp    : constant GNATCOLL.JSON.JSON_Value :=
               GNATCOLL.JSON.Create_Object;
             Req_Model : Unbounded_String :=
-              To_Unbounded_String ("adelaide-hybrid");
+              To_Unbounded_String ("Snowball-Enaga");
             Is_Streaming : Boolean := False;
             Is_Agentic   : Boolean := False;
             Is_Raw_Prompt : Boolean := False;
