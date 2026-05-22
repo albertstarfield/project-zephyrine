@@ -119,6 +119,12 @@ package body Adelaide_Server_Pkg is
          return Build_Response ("", AWS.Messages.S204);
       end if;
 
+      if (URI'Length >= 10 and then URI (1 .. 10) = "/v1/audio/") or else
+         (URI'Length >= 11 and then URI (1 .. 11) = "/v1/images/")
+      then
+         return Build_Response ("{""error"": ""For Adelaide-Lite it is unavailable for now, please visit the project-zephyrine full instead""}", AWS.Messages.S501);
+      end if;
+
       if URI = "/" then
          if Method = "HEAD" then
             return AWS.Response.Build ("text/plain", "");
@@ -139,7 +145,84 @@ package body Adelaide_Server_Pkg is
          return Build_Response ("{""status"": ""success""}");
       end if;
 
-      if URI = "/v1/models" or else URI = "/api/tags" then
+      if URI = "/v1/files" and then Method = "POST" then
+         declare
+            use GNATCOLL.JSON;
+            Req_CT : constant String := AWS.Status.Content_Type (Req);
+            B_Idx  : constant Natural := Ada.Strings.Fixed.Index (Req_CT, "boundary=");
+            Boundary : Unbounded_String;
+            Raw    : constant String := AWS.Status.Payload (Req);
+            Content : Unbounded_String;
+            Resp   : constant JSON_Value := Create_Object;
+         begin
+            if B_Idx > 0 then
+               Boundary := To_Unbounded_String ("--" & Req_CT (B_Idx + 9 .. Req_CT'Last));
+            end if;
+            
+            declare
+               Start_Sig : constant String := "name=""file""";
+               F_Idx     : constant Natural := Ada.Strings.Fixed.Index (Raw, Start_Sig);
+            begin
+               if F_Idx > 0 then
+                  declare
+                     H_End : constant Natural := Ada.Strings.Fixed.Index (Raw (F_Idx .. Raw'Last), ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF);
+                  begin
+                     if H_End > 0 then
+                        declare
+                           C_Start : constant Natural := H_End + 4;
+                           B_End   : constant Natural := Ada.Strings.Fixed.Index (Raw (C_Start .. Raw'Last), To_String (Boundary));
+                        begin
+                           if B_End > C_Start then
+                              Content := To_Unbounded_String (Raw (C_Start .. B_End - 3));
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+            
+            declare
+               File_ID : constant String := "file-" & TS_Str;
+               Emb_Vec : Math_Utils.Vector (1 .. 1536) := (others => 0.0);
+               Emb_Len : Natural := 1536;
+            begin
+               if Length (Content) > 0 then
+                  Model_Manager.Get_Embedding (To_String (Content), Emb_Vec, Emb_Len);
+                  Database_Manager.Add_Literature_Chunk
+                    (File_Path => ".state/uploads/" & File_ID & ".txt",
+                     Content   => To_String (Content),
+                     Embedding => Emb_Vec (1 .. Emb_Len),
+                     Doc_Hash  => File_ID);
+               end if;
+
+               Set_Field (Resp, "id", File_ID);
+               Set_Field (Resp, "object", "file");
+               Set_Field (Resp, "bytes", Length (Content));
+               Set_Field (Resp, "created_at", Long_Integer'(1686935002));
+               Set_Field (Resp, "filename", File_ID & ".txt");
+               Set_Field (Resp, "purpose", "fine-tune");
+               
+               return Build_Response (Write (Resp));
+            end;
+         end;
+
+      elsif URI = "/v1/fine_tuning/jobs" or else URI = "/v1/batches" then
+         declare
+            use GNATCOLL.JSON;
+            Resp : constant JSON_Value := Create_Object;
+            Job_ID : constant String := (if URI = "/v1/batches" then "batch-" else "ftjob-") & TS_Str;
+         begin
+            Database_Manager.Export_GraphML ("literature.graphml");
+            
+            Set_Field (Resp, "id", Job_ID);
+            Set_Field (Resp, "object", (if URI = "/v1/batches" then "batch" else "fine_tuning.job"));
+            Set_Field (Resp, "status", "validating_files");
+            Set_Field (Resp, "created_at", Long_Integer'(1686935002));
+            
+            return Build_Response (Write (Resp));
+         end;
+
+      elsif URI = "/v1/models" or else URI = "/api/tags" then
          declare
             Resp   : constant GNATCOLL.JSON.JSON_Value :=
               GNATCOLL.JSON.Create_Object;
