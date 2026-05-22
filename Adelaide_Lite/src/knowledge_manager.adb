@@ -7,6 +7,8 @@ with Database_Manager;
 with Math_Utils;
 with Ada.Directories;
 with Ada.Environment_Variables;
+with GNAT.Expect;
+with GNAT.OS_Lib;
 
 package body Knowledge_Manager is
 
@@ -137,10 +139,53 @@ package body Knowledge_Manager is
          Vec     : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
          Len     : Natural := 0;
          use type Ada.Directories.File_Size;
+
+         procedure Process_Text (Text : String) is
+            Local_Content : Unbounded_String;
+            Start_Idx     : Positive := Text'First;
+            End_Idx       : Natural;
+         begin
+            while Start_Idx <= Text'Last loop
+               End_Idx := Ada.Strings.Fixed.Index (Text (Start_Idx .. Text'Last), (1 => ASCII.LF));
+               if End_Idx = 0 then
+                  End_Idx := Text'Last + 1;
+               end if;
+               Append (Local_Content, Text (Start_Idx .. End_Idx - 1) & ASCII.LF);
+               if Length (Local_Content) > 1000 then
+                  Model_Manager.Get_Embedding (To_String (Local_Content), Vec, Len);
+                  if Len > 0 then
+                     Database_Manager.Add_Literature_Chunk
+                       (Path, To_String (Local_Content), Vec (1 .. Len), "hash");
+                  end if;
+                  Local_Content := Null_Unbounded_String;
+               end if;
+               Start_Idx := End_Idx + 1;
+            end loop;
+            if Length (Local_Content) > 0 then
+               Model_Manager.Get_Embedding (To_String (Local_Content), Vec, Len);
+               if Len > 0 then
+                  Database_Manager.Add_Literature_Chunk
+                    (Path, To_String (Local_Content), Vec (1 .. Len), "hash");
+               end if;
+            end if;
+         end Process_Text;
+
       begin
          if Ada.Directories.Size (Path) > 5_000_000 then
             return;
          end if;
+         
+         if Ada.Strings.Fixed.Index (Path, ".pdf") > 0 then
+            declare
+               Args : GNAT.OS_Lib.Argument_List (1 .. 1);
+               Status : aliased Integer;
+            begin
+               Args (1) := new String'(Path);
+               Process_Text (GNAT.Expect.Get_Command_Output ("python/extract_pdf.py", Args, "", Status'Access));
+            end;
+            return;
+         end if;
+
          Open (File, In_File, Path);
          while not End_Of_File (File) loop
             Line := To_Unbounded_String (Get_Line (File));
@@ -192,7 +237,8 @@ package body Knowledge_Manager is
                         Index (N, ".md") > 0 or else
                         Index (N, ".adb") > 0 or else 
                         Index (N, ".ads") > 0 or else
-                        Index (N, ".py") > 0 
+                        Index (N, ".py") > 0 or else
+                        Index (N, ".pdf") > 0
                      then
                         Index_File (P);
                      end if;
