@@ -885,15 +885,54 @@ package body Model_Manager is
          or else Index (Prompt, "tell me about") > 0)
       then
          declare
-            R : constant Tool_Manager.Tool_Result :=
-              Tool_Manager.Execute_Tool ("searchglobalref", Prompt);
+            Start_Tag : constant String := "<|im_start|>user";
+            End_Tag   : constant String := "<|im_end|>";
+            S_Idx     : Natural := Index (Prompt, Start_Tag, Ada.Strings.Backward);
+            E_Idx     : Natural;
+            Raw_Q     : Unbounded_String;
+            Gen_Q     : Unbounded_String;
          begin
-            Append
-              (Internal_State,
-               "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
-            if Stream /= null then
-               Stream.Push ("[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+            if S_Idx > 0 then
+               S_Idx := S_Idx + Start_Tag'Length;
+               E_Idx := Index (Prompt (S_Idx .. Prompt'Last), End_Tag);
+               if E_Idx > 0 then
+                  Raw_Q := To_Unbounded_String (Trim (Prompt (S_Idx .. E_Idx - 1), Ada.Strings.Both));
+               else
+                  Raw_Q := To_Unbounded_String (Trim (Prompt (S_Idx .. Prompt'Last), Ada.Strings.Both));
+               end if;
+            else
+               Raw_Q := To_Unbounded_String (Trim (Prompt, Ada.Strings.Both));
             end if;
+
+            declare
+               Actual_Prompt : constant String :=
+                 "You are an expert search query generator. Based on the user's " &
+                 "request: """ & To_String (Raw_Q) & """, generate a single, highly " &
+                 "optimized, short search query (keywords only) to find factual " &
+                 "information. Do not include quotes, explanations, or extra text. " &
+                 "Just the query.";
+            begin
+               Model_Manager.Generate
+                 (Kind            => Model_Manager.Qwen_0_8B,
+                  Prompt          => Actual_Prompt,
+                  Result          => Gen_Q,
+                  Level           => Level);
+            end;
+
+            declare
+               Final_Q : constant String :=
+                 (if Length (Gen_Q) > 0 and then To_String (Gen_Q) /= "ERROR: Preempted"
+                  then To_String (Gen_Q) else To_String (Raw_Q));
+               R : constant Tool_Manager.Tool_Result :=
+                 Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
+            begin
+               Append
+                 (Internal_State,
+                  "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+               if Stream /= null then
+                  Stream.Push ("[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+               end if;
+            end;
          end;
       end if;
 
