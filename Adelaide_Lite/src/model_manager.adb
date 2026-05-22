@@ -828,7 +828,8 @@ package body Model_Manager is
       Session_ID : String := "";
       Stream     : Streaming_Queue.Queue_Access := null;
       Level      : ELP_Level := ELP1;
-      Agentic    : Boolean := False)
+      Agentic    : Boolean := False;
+      Raw_Prompt : Boolean := False)
    is
       Whimsical_Adelaide : constant String :=
         "You are Adelaide Zephyrine Charlotte, a senior engineer. " &
@@ -873,10 +874,30 @@ package body Model_Manager is
             Paging_Instr : constant String :=
               "Current Data: " & To_String (Internal_State);
             Step_Raw     : Unbounded_String;
+            
+            function Get_Router_Prompt return String is
+            begin
+               if Raw_Prompt then
+                  declare
+                     Sub_Str : constant String := "<|im_start|>assistant" & ASCII.LF;
+                     Idx     : constant Natural := Index (Prompt, Sub_Str);
+                  begin
+                     if Idx > 0 then
+                        return Prompt (Prompt'First .. Idx - 1) &
+                               "System Override: " & Router_Sys & ASCII.LF &
+                               Paging_Instr & ASCII.LF & Sub_Str;
+                     else
+                        return Prompt & ASCII.LF & "System Override: " & Router_Sys & ASCII.LF & Paging_Instr & ASCII.LF & Sub_Str;
+                     end if;
+                  end;
+               else
+                  return Wrap_ChatML (Router_Sys, Paging_Instr & ASCII.LF & Prompt);
+               end if;
+            end Get_Router_Prompt;
          begin
             Generate
               (Qwen_0_8B,
-               Wrap_ChatML (Router_Sys, Paging_Instr & ASCII.LF & Prompt),
+               Get_Router_Prompt,
                Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 2048,
                null, False, Level);
 
@@ -959,11 +980,30 @@ package body Model_Manager is
       end if;
 
       declare
-         Synth_Prompt : constant String :=
-           Wrap_ChatML
-             (Whimsical_Adelaide,
-              "User: " & Prompt & ASCII.LF &
-              "Fact-Check: " & To_String (Internal_State));
+         function Get_Final_Prompt return String is
+         begin
+            if Raw_Prompt then
+               declare
+                  Sub_Str : constant String := "<|im_start|>assistant" & ASCII.LF;
+                  Idx     : constant Natural := Index (Prompt, Sub_Str);
+               begin
+                  if Idx > 0 then
+                     return Prompt (Prompt'First .. Idx - 1) &
+                            "Fact-Check: " & To_String (Internal_State) & ASCII.LF &
+                            Sub_Str;
+                  else
+                     return Prompt & ASCII.LF & "Fact-Check: " & To_String (Internal_State) & ASCII.LF & Sub_Str;
+                  end if;
+               end;
+            else
+               return Wrap_ChatML
+                 (Whimsical_Adelaide,
+                  "User: " & Prompt & ASCII.LF &
+                  "Fact-Check: " & To_String (Internal_State));
+            end if;
+         end Get_Final_Prompt;
+         
+         Synth_Prompt : constant String := Get_Final_Prompt;
       begin
          Generate
            (Qwen_4B, Synth_Prompt, Current_Response, Images, Session_ID,
