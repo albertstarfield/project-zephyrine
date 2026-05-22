@@ -393,6 +393,7 @@ package body Model_Manager is
          B : constant Llama_Batch :=
            Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
       begin
+         Llama_Interface.Llama_KV_Cache_Clear (Models (Kind).Context);
          Llama_Set_Embeddings (Models (Kind).Context, True);
          if Llama_Decode (Models (Kind).Context, B) /= 0 then
             Priority_Model_Gate.Release_ELP1 (Kind);
@@ -720,6 +721,8 @@ package body Model_Manager is
          Current_Pos : int := 0;
          Tokens_Left : int := N_Toks;
       begin
+         Llama_Interface.Llama_KV_Cache_Clear (Models (Kind).Context);
+         
          while Tokens_Left > 0 loop
             if Level = ELP0 and then Should_Abort_ELP0 then
                Models (Kind).In_Use := False;
