@@ -141,12 +141,11 @@ package Llama_Interface is
    procedure Llama_Free (Context : Llama_Context);
    pragma Import (C, Llama_Free, "llama_free");
 
-   function Llama_Get_Memory (Context : Llama_Context) return System.Address;
-   pragma Import (C, Llama_Get_Memory, "llama_get_memory");
-
    procedure Llama_Memory_Clear (Mem : System.Address; Data : Boolean);
    pragma Import (C, Llama_Memory_Clear, "llama_memory_clear");
 
+   function Llama_Get_Memory (Context : Llama_Context) return System.Address;
+   pragma Import (C, Llama_Get_Memory, "llama_get_memory");
    function Llama_Batch_Init
      (N_Tokens : int; Embd : int; N_Seq_Max : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Init, "llama_batch_init");
