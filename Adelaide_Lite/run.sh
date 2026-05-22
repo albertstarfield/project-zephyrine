@@ -40,4 +40,4 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "[*] Booting Adelaide Intelligence Server..."
-alr run
+alr run adelaide_server
