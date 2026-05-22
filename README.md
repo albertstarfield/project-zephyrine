@@ -87,6 +87,7 @@ Adelaide Lite is designed to be highly portable but requires a specific set of t
 </sub>
 <h5 align="center">
 Made with Love, Dreams, and Disciplines.<br>
+<br>Snail Works</h5>
 Zephyrine Foundation 2023-2026
 </h5>
 <br>
