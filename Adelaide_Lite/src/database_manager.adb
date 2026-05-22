@@ -282,7 +282,7 @@ package body Database_Manager is
                Raw_Vec  : constant String := Column_Text (Stmt, 1);
                Raw_Resp : constant String := Column_Text (Stmt, 2);
                Row_Hits : constant Integer := Column_Int (Stmt, 3);
-               Elapsed  : constant Float := Column_Float (Stmt, 4);
+               Elapsed  : constant Float := Float (Column_Double (Stmt, 4));
                JSON_Vec : constant Read_Result := Read (Raw_Vec);
             begin
                if JSON_Vec.Success then

@@ -1,6 +1,7 @@
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Ada.Calendar; use type Ada.Calendar.Time;
 with Database_Manager;
 with Tool_Manager;
 with Llama_Interface; use Llama_Interface;
@@ -13,6 +14,17 @@ with Ada.Unchecked_Conversion;
 
 package body Model_Manager is
    use Streaming_Queue;
+
+   task type WCET_Printer;
+   task body WCET_Printer is
+   begin
+      loop
+         delay 30.0;
+         Ada.Text_IO.Put_Line ("[WCET] Current Pipeline WCET: " & Current_WCET'Img & " seconds");
+      end loop;
+   end WCET_Printer;
+
+   Printer_Task : WCET_Printer;
 
    type Model_Record is record
       Model       : Llama_Model := Null_Model;
@@ -837,7 +849,26 @@ package body Model_Manager is
       Internal_State : Unbounded_String := Null_Unbounded_String;
       Current_Response : Unbounded_String;
       Current_Hop : Positive := 1;
+      T0, T1      : Ada.Calendar.Time;
+      Emb_Vec     : Math_Utils.Vector (1 .. 1536) := (others => 0.0);
+      Emb_Len     : Natural;
    begin
+      T0 := Ada.Calendar.Clock;
+      Get_Embedding (Prompt, Emb_Vec, Emb_Len);
+
+      declare
+         Cached_Res : constant String := Database_Manager.Get_Cached_Response (Emb_Vec (1 .. Emb_Len), Current_WCET);
+      begin
+         if Cached_Res /= "" then
+            Put_Line ("[Hybrid] Cache HIT. Returning cached response.");
+            Result := To_Unbounded_String (Cached_Res);
+            if Stream /= null then
+               Stream.Push (Cached_Res);
+            end if;
+            return;
+         end if;
+      end;
+
       Put_Line ("[Hybrid] Starting reasoning chain...");
 
       if Stream /= null then
@@ -1016,7 +1047,18 @@ package body Model_Manager is
             4096, Stream, True, Level);
       end;
 
+      Result := Current_Response;
       Database_Manager.Remember (Prompt, To_String (Current_Response));
+      Database_Manager.Add_To_Cache (Prompt, Emb_Vec (1 .. Emb_Len), To_String (Current_Response));
+
+      T1 := Ada.Calendar.Clock;
+      declare
+         Dur : constant Duration := T1 - T0;
+      begin
+         if Dur > Current_WCET then
+            Current_WCET := Dur;
+         end if;
+      end;
 
       if Stream = null then
          --  Format non-streaming response with merged think block
