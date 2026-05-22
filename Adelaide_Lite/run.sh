@@ -26,5 +26,13 @@ deno run -A npm:playwright install chromium
 echo "[*] Resolving Ada dependencies and building project..."
 alr build
 
+echo "[*] Booting StellaIcarus Ada Daemon Manager..."
+python3 python/stellaicarus_daemon_runner.py &
+DAEMON_PID=$!
+
 echo "[*] Booting Adelaide Intelligence Server..."
 alr run
+
+# Cleanup daemon on exit
+kill $DAEMON_PID
+wait $DAEMON_PID 2>/dev/null
