@@ -439,11 +439,17 @@ package body Adelaide_Server_Pkg is
                                        Msg : constant GNATCOLL.JSON.JSON_Value :=
                                          GNATCOLL.JSON.Get (Msgs, I);
                                        Role : constant String :=
-                                         GNATCOLL.JSON.Get (Msg, "role");
-                                       Content : constant String :=
-                                         GNATCOLL.JSON.Get (Msg, "content");
+                                         (if GNATCOLL.JSON.Has_Field (Msg, "role") then String'(GNATCOLL.JSON.Get (Msg, "role")) else "");
+                                       Content_Str : Unbounded_String := Null_Unbounded_String;
                                     begin
-                                       Append (Built_Prompt, "<|im_start|>" & Role & ASCII.LF & Content & "<|im_end|>" & ASCII.LF);
+                                       if GNATCOLL.JSON.Has_Field (Msg, "content") then
+                                          begin
+                                             Content_Str := To_Unbounded_String (String'(GNATCOLL.JSON.Get (Msg, "content")));
+                                          exception
+                                             when others => null;
+                                          end;
+                                       end if;
+                                       Append (Built_Prompt, "<|im_start|>" & Role & ASCII.LF & To_String (Content_Str) & "<|im_end|>" & ASCII.LF);
                                     end;
                                  end loop;
                                  Append (Built_Prompt, "<|im_start|>assistant" & ASCII.LF);
