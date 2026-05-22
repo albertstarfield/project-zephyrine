@@ -1,3 +1,4 @@
+with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada_Sqlite3; use Ada_Sqlite3;
 with Ada.Exceptions;
@@ -77,7 +78,7 @@ package body Database_Manager is
                   "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
          Done := True;
-         Put_Line ("[DB] Semantic Memory and Literature Core initialized.");
+         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" & AnsiAda.Reset & " Semantic Memory and Literature Core initialized.");
       end Do_Init;
    end Init_Gate;
 
@@ -89,7 +90,7 @@ package body Database_Manager is
       Init_Gate.Do_Init;
    exception
       when E : others =>
-         Put_Line ("[DB] Critical Init Error: " &
+         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" & AnsiAda.Reset & " Critical Init Error: " &
            Ada.Exceptions.Exception_Message (E));
    end Initialize;
 
@@ -127,7 +128,7 @@ package body Database_Manager is
       end;
    exception
       when others =>
-         Put_Line ("[DB] Error adding literature chunk.");
+         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" & AnsiAda.Reset & " Error adding literature chunk.");
    end Add_Literature_Chunk;
 
    -----------------------
@@ -254,7 +255,7 @@ package body Database_Manager is
       end;
    exception
       when others =>
-         Put_Line ("[DB] Error updating response cache.");
+         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" & AnsiAda.Reset & " Error updating response cache.");
    end Add_To_Cache;
 
    -------------------------

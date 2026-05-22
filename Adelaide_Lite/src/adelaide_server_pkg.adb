@@ -1,3 +1,4 @@
+with AnsiAda;
 with AWS.Response.Set;
 with AWS.Messages;
 with GNATCOLL.JSON;
@@ -16,17 +17,17 @@ package body Adelaide_Server_Pkg is
    procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is
       pragma Unreferenced (Q);
    begin
-      Ada.Text_IO.Put_Line ("[Server] Registered: " & ID);
+      Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Server]" & AnsiAda.Reset & " Registered: " & ID);
    end Register;
 
    procedure Unregister (ID : String) is
    begin
-      Ada.Text_IO.Put_Line ("[Server] Unregistered: " & ID);
+      Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Server]" & AnsiAda.Reset & " Unregistered: " & ID);
    end Unregister;
 
    procedure Push_Log (ID : String; Log : String) is
    begin
-      Ada.Text_IO.Put_Line ("[Log] [" & ID & "] " & Log);
+      Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Light_Grey) & "[Log]" & AnsiAda.Reset & " [" & ID & "] " & Log);
    end Push_Log;
 
    --  CORS and Header Helper
@@ -40,7 +41,7 @@ package body Adelaide_Server_Pkg is
          Message_Body => Content,
          Status_Code  => Status);
    begin
-      Ada.Text_IO.Put_Line ("[Server] Status: " & AWS.Messages.Image (Status));
+      Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Server]" & AnsiAda.Reset & " Status: " & AWS.Messages.Image (Status));
 
       AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
       AWS.Response.Set.Add_Header
@@ -89,7 +90,7 @@ package body Adelaide_Server_Pkg is
          Local_Raw_Prompt := Raw_Prompt;
       end Start;
 
-      Ada.Text_IO.Put_Line ("[Async] Generator Task Started.");
+      Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Async]" & AnsiAda.Reset & " Generator Task Started.");
       Queue.Set_Format (Local_Format, To_String (Local_Model));
       Model_Manager.Hybrid_Generate
         (Prompt     => To_String (Local_Prompt),
@@ -99,10 +100,10 @@ package body Adelaide_Server_Pkg is
          Agentic    => Local_Agentic,
          Raw_Prompt => Local_Raw_Prompt);
       Queue.Close;
-      Ada.Text_IO.Put_Line ("[Async] Generator Task Finished.");
+      Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Async]" & AnsiAda.Reset & " Generator Task Finished.");
    exception
       when E : others =>
-         Ada.Text_IO.Put_Line ("[Async] Error: " &
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Async]" & AnsiAda.Reset & " Error: " &
                                Ada.Exceptions.Exception_Message (E));
          Queue.Close;
    end Generator_Task;
@@ -114,7 +115,7 @@ package body Adelaide_Server_Pkg is
       Raw_S  : constant String := AWS.Status.Payload (Request);
       Raw_B  : constant Unbounded_String := AWS.Status.Binary_Data (Request);
    begin
-      Ada.Text_IO.Put_Line ("[Server] >>> Incoming: " & Method & " " & URI);
+      Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Server]" & AnsiAda.Reset & " >>> Incoming: " & Method & " " & URI);
 
       if Method = "OPTIONS" then
          return Build_Response ("", AWS.Messages.S204);
@@ -469,10 +470,10 @@ package body Adelaide_Server_Pkg is
                return Build_Response ("{""error"": ""Invalid request: missing prompt or messages""}", AWS.Messages.S400);
             end if;
 
-            Ada.Text_IO.Put_Line ("[Server] Extracted Prompt: " & To_String (Prompt));
+            Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Server]" & AnsiAda.Reset & " Extracted Prompt: " & To_String (Prompt));
 
             if Length (Prompt) = 0 then
-               Ada.Text_IO.Put_Line ("[Server] Empty prompt detected, bypassing generation.");
+               Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Server]" & AnsiAda.Reset & " Empty prompt detected, bypassing generation.");
                if Is_Streaming then
                   declare
                      Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
@@ -727,7 +728,7 @@ package body Adelaide_Server_Pkg is
       end if;
    exception
       when E : others =>
-         Ada.Text_IO.Put_Line ("[Server] Error: " &
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Server]" & AnsiAda.Reset & " Error: " &
                                Ada.Exceptions.Exception_Message (E));
          return Build_Response ("{}", AWS.Messages.S500);
    end Dispatch;

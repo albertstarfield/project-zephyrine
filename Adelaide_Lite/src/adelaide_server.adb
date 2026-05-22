@@ -1,3 +1,4 @@
+with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Exceptions;
 with Ada.Command_Line;
@@ -16,14 +17,14 @@ procedure Adelaide_Server is
    Started     : Boolean := False;
 begin
    begin
-      Put_Line ("[Main] Initializing Adelaide Intelligence Backend...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Initializing Adelaide Intelligence Backend...");
       Model_Manager.Initialize;
       Knowledge_Manager.Initialize;
 
       AWS.Config.Set.Server_Port (Conf, 11420);
       AWS.Config.Set.Reuse_Address (Conf, True);
 
-      Put_Line ("[Main] Adelaide-Lite Server starting on port 11420...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Adelaide-Lite Server starting on port 11420...");
 
       while not Started and Retry_Count < Max_Retries loop
          begin
@@ -55,11 +56,10 @@ begin
          end;
       end loop;
 
-      Put_Line ("[Main] Initializing index crawl...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Initializing index crawl...");
       Knowledge_Manager.Start_Tasks;
 
-      Put_Line
-        ("[Main] Server is UP. Press Q to shutdown (or kill if background).");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Server is UP. Press Q to shutdown (or kill if background).");
 
       --  Avoid Get_Line failure in background
       loop
@@ -68,7 +68,7 @@ begin
 
    exception
       when E : others =>
-         Put_Line ("[FATAL] Server Error: " &
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" & AnsiAda.Reset & " Server Error: " &
                    Ada.Exceptions.Exception_Message (E));
          Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
    end;
