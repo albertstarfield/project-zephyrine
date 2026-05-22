@@ -247,7 +247,32 @@ class ValidationAPITester:
         gen_payload["stream"] = True
         self.test_endpoint("Ollama Generate Streaming", "POST", "/api/generate", gen_payload, is_streaming=True)
 
-        # 6. Aggressive: Stress Test
+        # 6. Agentic API
+        agentic_payload = {
+            "model": "adelaide-hybrid",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant with access to tools."},
+                {"role": "user", "content": "What is the current weather in Adelaide? Please use the search tool."}
+            ],
+            "tools": [{
+                "type": "function",
+                "function": {
+                    "name": "search",
+                    "description": "Search the web for information.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query"}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            }],
+            "stream": False
+        }
+        self.test_endpoint("OpenAI Agentic API", "POST", "/v1/chat/completions", agentic_payload, is_openai=True)
+
+        # 7. Aggressive: Stress Test
         self.log_info("\nStarting stress/edge-case tests...")
         
         # Large Input
