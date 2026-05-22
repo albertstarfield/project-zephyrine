@@ -722,6 +722,12 @@ package body Adelaide_Server_Pkg is
                                               (if URI = "/v1/completions" then "text_completion" else "chat.completion"));
                      GNATCOLL.JSON.Set_Field (Resp, "created",
                                               Long_Integer'(1686935002));
+                     GNATCOLL.JSON.Set_Field (Resp, "created_at", TS_Str & "Z");
+                     GNATCOLL.JSON.Set_Field (Resp, "eval_count", Integer'(0));
+                     GNATCOLL.JSON.Set_Field (Resp, "prompt_eval_count", Integer'(0));
+                     GNATCOLL.JSON.Set_Field (Resp, "total_duration", Integer'(0));
+                     GNATCOLL.JSON.Set_Field (Resp, "load_duration", Integer'(0));
+                     GNATCOLL.JSON.Set_Field (Resp, "prompt_eval_duration", Integer'(0));
                      GNATCOLL.JSON.Set_Field (Resp, "model",
                                               To_String (Req_Model));
                      GNATCOLL.JSON.Set_Field (Resp, "choices", Choices);
