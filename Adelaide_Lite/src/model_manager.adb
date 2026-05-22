@@ -840,6 +840,11 @@ package body Model_Manager is
    begin
       Put_Line ("[Hybrid] Starting reasoning chain...");
 
+      if Stream /= null then
+         Stream.Push
+           ("<think>" & ASCII.LF & "[Adelaide Core Orchestration]" & ASCII.LF);
+      end if;
+
       --  1. Factual checking
       if not Agentic
         and then
@@ -854,6 +859,9 @@ package body Model_Manager is
             Append
               (Internal_State,
                "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+            if Stream /= null then
+               Stream.Push ("[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+            end if;
          end;
       end if;
 
@@ -899,7 +907,7 @@ package body Model_Manager is
               (Qwen_0_8B,
                Get_Router_Prompt,
                Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 2048,
-               null, False, Level);
+               Stream, False, Level);
 
             declare
                Step : constant String :=
@@ -952,6 +960,11 @@ package body Model_Manager is
                                          (Internal_State,
                                           "[TOOL (" & T_Name & ")]: " &
                                           To_String (R.Output) & ASCII.LF);
+                                       if Stream /= null then
+                                          Stream.Push
+                                            (ASCII.LF & "[TOOL (" & T_Name & ")]: " &
+                                             To_String (R.Output) & ASCII.LF);
+                                       end if;
                                     end;
                                  else
                                     exit;
@@ -971,13 +984,6 @@ package body Model_Manager is
          Current_Hop := Current_Hop + 1;
          exit when Current_Hop > 5;
       end loop;
-
-      if Stream /= null then
-         --  Stream thinking prefix
-         Stream.Push
-           ("<think>" & ASCII.LF & "[Adelaide Core Orchestration]" & ASCII.LF &
-            To_String (Internal_State) & ASCII.LF);
-      end if;
 
       declare
          function Get_Final_Prompt return String is
