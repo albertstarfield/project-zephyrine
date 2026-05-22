@@ -1,9 +1,59 @@
+with GNATCOLL.JSON; use GNATCOLL.JSON;
+with Ada.Calendar;
+with Ada.Calendar.Formatting;
+with Ada.Strings.Unbounded;
+
 package body Streaming_Queue is
 
    protected body Queue is
-      entry Push (Item : String) when True is
+      procedure Set_Format (F : Format_Type; Model : String := "") is
       begin
-         Append (Buffer, Item);
+         Format := F;
+         Model_ID := To_Unbounded_String (Model);
+      end Set_Format;
+
+      entry Push (Item : String) when True is
+         Resp : constant JSON_Value := Create_Object;
+         Now  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+         TS   : String := Ada.Calendar.Formatting.Image (Now);
+      begin
+         if TS'Length >= 11 then
+            TS (11) := 'T';
+         end if;
+
+         case Format is
+            when Raw =>
+               Ada.Strings.Unbounded.Append (Buffer, Item);
+            when Ollama =>
+               declare
+                  Msg : constant JSON_Value := Create_Object;
+               begin
+                  Set_Field (Msg, "role", "assistant");
+                  Set_Field (Msg, "content", Item);
+                  Set_Field (Resp, "model", To_String (Model_ID));
+                  Set_Field (Resp, "created_at", TS & "Z");
+                  Set_Field (Resp, "message", Msg);
+                  Set_Field (Resp, "done", False);
+                  Ada.Strings.Unbounded.Append (Buffer, Write (Resp) & ASCII.LF);
+               end;
+            when OpenAI =>
+               declare
+                  Choice : constant JSON_Value := Create_Object;
+                  D_Val  : constant JSON_Value := Create_Object;
+                  Arr    : JSON_Array := Empty_Array;
+               begin
+                  Set_Field (D_Val, "content", Item);
+                  Set_Field (Choice, "delta", D_Val);
+                  Set_Field (Choice, "index", Integer'(0));
+                  Append (Arr, Choice);
+                  Set_Field (Resp, "id", "chatcmpl-adelaide-stream");
+                  Set_Field (Resp, "object", "chat.completion.chunk");
+                  Set_Field (Resp, "created", Long_Integer'(1686935002));
+                  Set_Field (Resp, "model", To_String (Model_ID));
+                  Set_Field (Resp, "choices", Arr);
+                  Ada.Strings.Unbounded.Append (Buffer, "data: " & Write (Resp) & ASCII.LF);
+               end;
+         end case;
       end Push;
 
       entry Pop (Item : out String; Last : out Natural; Is_Closed : out Boolean)
@@ -21,14 +71,30 @@ package body Streaming_Queue is
       end Pop;
 
       procedure Close is
+         Resp : constant JSON_Value := Create_Object;
+         Now  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+         TS   : String := Ada.Calendar.Formatting.Image (Now);
       begin
+         if TS'Length >= 11 then
+            TS (11) := 'T';
+         end if;
+
+         case Format is
+            when Raw => null;
+            when Ollama =>
+               Set_Field (Resp, "model", To_String (Model_ID));
+               Set_Field (Resp, "created_at", TS & "Z");
+               Set_Field (Resp, "done", True);
+               Ada.Strings.Unbounded.Append (Buffer, Write (Resp) & ASCII.LF);
+            when OpenAI =>
+               Ada.Strings.Unbounded.Append (Buffer, "data: [DONE]" & ASCII.LF);
+         end case;
          Closed := True;
       end Close;
    end Queue;
 
    overriding function End_Of_File (Resource : Response_Stream) return Boolean is
    begin
-      --  AWS uses Read to determine EOF. Returning False ensures Read is called.
       return False;
    end End_Of_File;
 
@@ -46,7 +112,6 @@ package body Streaming_Queue is
          return;
       end if;
       
-      --  Wait for data (blocks until data or closed)
       Resource.Q.Pop (Item, Actual_Len, Is_Closed);
       
       if Actual_Len > 0 then
@@ -58,9 +123,6 @@ package body Streaming_Queue is
                Last := Last + 1;
                Buffer (Last) := Stream_Element (Character'Pos (Item (Integer (I))));
             end loop;
-            --  Note: if Item had more data than Buffer could hold, 
-            --  those bytes are lost in this simplified impl. 
-            --  But AWS usually provides large enough buffers.
          end;
       end if;
    end Read;

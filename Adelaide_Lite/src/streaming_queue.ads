@@ -5,13 +5,18 @@ with AWS.Resources.Streams;
 package Streaming_Queue is
    pragma Spark_Mode (Off);
 
+   type Format_Type is (Raw, Ollama, OpenAI);
+
    protected type Queue is
       entry Push (Item : String);
       entry Pop (Item : out String; Last : out Natural; Is_Closed : out Boolean);
       procedure Close;
+      procedure Set_Format (F : Format_Type; Model : String := "");
    private
       Buffer    : Unbounded_String := Null_Unbounded_String;
       Closed    : Boolean := False;
+      Format    : Format_Type := Raw;
+      Model_ID  : Unbounded_String := Null_Unbounded_String;
    end Queue;
 
    type Queue_Access is access all Queue;
