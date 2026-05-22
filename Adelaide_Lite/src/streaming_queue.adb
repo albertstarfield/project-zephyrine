@@ -113,11 +113,19 @@ package body Streaming_Queue is
          end case;
          Closed := True;
       end Close;
+
+      function Is_Empty_And_Closed return Boolean is
+      begin
+         return Closed and then Ada.Strings.Unbounded.Length (Buffer) = 0;
+      end Is_Empty_And_Closed;
    end Queue;
 
    overriding function End_Of_File (Resource : Response_Stream) return Boolean is
    begin
-      return False;
+      if Resource.Q = null then
+         return True;
+      end if;
+      return Resource.Q.Is_Empty_And_Closed;
    end End_Of_File;
 
    overriding procedure Read

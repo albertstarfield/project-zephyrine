@@ -12,6 +12,7 @@ package Streaming_Queue is
       entry Pop
         (Item : out String; Last : out Natural; Is_Closed : out Boolean);
       procedure Close;
+      function Is_Empty_And_Closed return Boolean;
       procedure Set_Format (F : Format_Type; Model : String := "");
    private
       Buffer    : Unbounded_String := Null_Unbounded_String;
