@@ -22,7 +22,7 @@
 
 [![Hippocratic License HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV](https://img.shields.io/static/v1?label=Hippocratic%20License&message=HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV&labelColor=5e2751&color=bc8c3d)](https://firstdonoharm.dev/version/3/0/bds-bod-law-media-mil-soc-sup-sv.html)
 
-## Adelaide Lite: The Lightweight version Ada Core of Project Zephyrine
+## Adelaide Lite: The Lightweight version Core of Project Zephyrine
 
 ### A Glimpse Into the Aether: Abstract
 
