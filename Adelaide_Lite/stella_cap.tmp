@@ -1,11 +1,11 @@
-2026-05-22 22:47:19.099 | INFO     | stella_icarus_utils:load_hooks:73 - StellaIcarusHookManager: Loading hooks from '/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/StellaIcarus'...
+2026-05-22 22:48:31.355 | INFO     | stella_icarus_utils:load_hooks:73 - StellaIcarusHookManager: Loading hooks from '/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/StellaIcarus'...
 ✅ StellaMatrixHook: Active Engine -> GPU (Apple MPS)
-2026-05-22 22:47:20.472 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_matrix_math_hook' (Interpreted)
+2026-05-22 22:48:32.748 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_matrix_math_hook' (Interpreted)
 [*] Trickshot: Compiling optimized core...
 [-] Trickshot: Compilation failed (g++ missing?).
-2026-05-22 22:47:20.847 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_trickshot_stellaicarus_benchmark_simplearitmatic' (Interpreted)
-2026-05-22 22:47:20.855 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_hello_world_hook_example_dev_getstarted' (Interpreted)
+2026-05-22 22:48:33.136 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_trickshot_stellaicarus_benchmark_simplearitmatic' (Interpreted)
+2026-05-22 22:48:33.140 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_hello_world_hook_example_dev_getstarted' (Interpreted)
 FMC SERVO HOOK: Numba JIT init failed (No module named '<dynamic>'). This hook will use a Python fallback for calculations.
-2026-05-22 22:47:21.939 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_fmc_servo_manual_hook_test'
+2026-05-22 22:48:34.097 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_fmc_servo_manual_hook_test'
 ✅ StellaMath: C++ Engine Active (Tier 1)
-2026-05-22 22:47:21.950 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_math_hook' (Interpreted)
+2026-05-22 22:48:34.102 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_math_hook' (Interpreted)
