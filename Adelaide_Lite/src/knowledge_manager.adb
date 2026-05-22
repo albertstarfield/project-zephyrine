@@ -5,6 +5,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Model_Manager;
 with Database_Manager;
 with Math_Utils;
+with GNAT.OS_Lib;
 
 package body Knowledge_Manager is
 
@@ -16,6 +17,10 @@ package body Knowledge_Manager is
       entry Start;
    end Thought_Task;
 
+   task Recoll_Task is
+      entry Start;
+   end Recoll_Task;
+
    procedure Initialize is
    begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Initializing Knowledge Base...");
@@ -26,6 +31,7 @@ package body Knowledge_Manager is
    begin
       Indexing_Task.Start;
       Thought_Task.Start;
+      Recoll_Task.Start;
    end Start_Tasks;
 
    --  Helper to index references.bib
@@ -121,6 +127,27 @@ package body Knowledge_Manager is
          end if;
       end loop;
    end Indexing_Task;
+
+   task body Recoll_Task is
+      Args : GNAT.OS_Lib.Argument_List (1 .. 0);
+      Success : Boolean;
+   begin
+      accept Start;
+      loop
+         if Model_Manager.Should_Abort_ELP0 then
+            delay 1.0;
+         else
+            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Running Recoll system indexer...");
+            GNAT.OS_Lib.Spawn ("/Applications/Recoll.app/Contents/MacOS/recollindex", Args, Success);
+            if Success then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Recoll indexing completed successfully.");
+            else
+               Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" & AnsiAda.Reset & " Recoll indexing failed.");
+            end if;
+            delay 3600.0;
+         end if;
+      end loop;
+   end Recoll_Task;
 
    task body Thought_Task is
       Fallback_Text : constant String :=
