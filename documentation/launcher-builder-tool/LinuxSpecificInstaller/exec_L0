@@ -1,0 +1,44 @@
+#!/bin/bash
+appName = "adelaide-zephyrine-charllote"
+install_dependencies_linux() {
+    # Detect package manager
+    if command -v apt-get &> /dev/null; then
+        # Install required packages using apt-get
+        sudo apt-get update
+        sudo apt-get install -y git
+    elif command -v dnf &> /dev/null; then
+        # Install required packages using dnf (Fedora)
+        sudo dnf install -y git
+    elif command -v yum &> /dev/null; then
+        # Install required packages using yum (CentOS)
+        sudo yum install -y git
+    elif command -v zypper &> /dev/null; then
+        # Install required packages using zypper (openSUSE)
+        sudo zypper install -y git
+    elif command -v swupd &> /dev/null; then
+        sudo swupd bundle-add git
+    else
+        echo "Unsupported package manager or unable to install dependencies. Exiting."
+        exit 1
+    fi
+
+}
+
+install_dependencies_linux
+
+# Check if run.sh script exists, if not, clone the repository
+if [ ! -f "\$HOME/adelaide-zephyrine-charlotte-assistant/launchcontrol/run.sh" ]; then
+    echo "Cloning repository..."
+    git clone --depth=1 https://github.com/albertstarfield/alpaca-electron-zephyrine "\$HOME/adelaide-zephyrine-charlotte-assistant"
+fi
+
+# Launch terminal and execute run.sh script
+echo "Launching terminal..."
+bash $HOME/adelaide-zephyrine-charlotte-assistant/launchcontrol/run.sh
+echo "Copying to /usr/bin"
+content="$(cat ${0})"
+cat "${content}" > /usr/bin/${appName}
+chmod +x /usr/bin/${appName}
+
+echo "Your program is now installed you can execute it again on the shell"
+echo "$ ${appName}"

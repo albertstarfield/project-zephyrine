@@ -1,0 +1,5 @@
+# Troubleshooting
+### General
+- In the event that you encounter an error message stating "Invalid file path" when attempting to input the model file path, it is likely attributable to a typographical error. We recommend revisiting the path entry process or employing the file picker function for a more accurate input.
+- Should you encounter an error message reading "Couldn't load model," it is plausible that your model file is either corrupted, incompatible, or configured incorrectly for the chosen model mode. We suggest exploring alternative modes that are compatible with the downloaded model, or, if the issue persists, consulting the model repository's readme section for guidance on reacquiring the model.
+- For any other unforeseen challenges or issues not covered in the aforementioned scenarios, we kindly request that you create an issue within the "Issues" tab located at the top of this page. Please provide a comprehensive description of the issue, including accompanying screenshots for further assistance.
