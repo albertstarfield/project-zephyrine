@@ -817,7 +817,8 @@ package body Model_Manager is
       Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
       Session_ID : String := "";
       Stream     : Streaming_Queue.Queue_Access := null;
-      Level      : ELP_Level := ELP1)
+      Level      : ELP_Level := ELP1;
+      Agentic    : Boolean := False)
    is
       Whimsical_Adelaide : constant String :=
         "You are Adelaide Zephyrine Charlotte, a senior engineer. " &
@@ -903,6 +904,12 @@ package body Model_Manager is
                                       (To_String (Internal_State),
                                        T_Name & "(" & T_Pars & ")") = 0
                                  then
+                                    if Agentic then
+                                       Result := To_Unbounded_String
+                                         ("[TOOL_CALL: " & T_Name &
+                                          "(" & T_Pars & ")]");
+                                       return;
+                                    end if;
                                     declare
                                        R : constant Tool_Manager.Tool_Result :=
                                          Tool_Manager.Execute_Tool
