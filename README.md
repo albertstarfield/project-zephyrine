@@ -22,13 +22,13 @@
 
 [![Hippocratic License HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV](https://img.shields.io/static/v1?label=Hippocratic%20License&message=HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV&labelColor=5e2751&color=bc8c3d)](https://firstdonoharm.dev/version/3/0/bds-bod-law-media-mil-soc-sup-sv.html)
 
-## Adelaide Lite: The Lightweight Ada Core of Project Zephyrine
+## Adelaide Lite: The Lightweight version Ada Core of Project Zephyrine
 
 ### A Glimpse Into the Aether: Abstract
 
-Adelaide Lite is an uncompromisingly reliable, highly efficient iteration of Project Zephyrine's core architecture. Written entirely in **Ada** and built atop the robust `AWS` (Ada Web Server) framework, Adelaide Lite distills the conversational and adaptive nature of Zephyrine into an engine designed for minimal storage footprint, low runtime memory usage, and absolute stability.
+Adelaide Lite is an highly efficient iteration of Project Zephyrine's core architecture. Written Mostly in **Ada** and built atop the robust `AWS` (Ada Web Server) framework, Adelaide Lite distills the conversational and adaptive nature of Zephyrine into an engine designed for minimal storage footprint, low runtime memory usage, and absolute stability.
 
-This is just another LLM wrapper with determenistic response on certain question and query represents the integration of the **Stella-Icarus Deterministic Core** directly into the API routing layer. By utilizing an Elevated Level Privilege (ELP) priority thread scheduler and native OS tasking, we can ensure that deep cognitive reasoning (ELP0) never interrupts high-priority real-time responses or physical telemetry (ELP1/ELP2).
+This is just another Adaptive Agent wrapper with determenistic response on certain question and query represents the integration of the **Stella-Icarus Deterministic Core** directly into the API routing layer. By utilizing an Elevated Level Privilege (ELP) priority thread scheduler and native OS tasking, we can ensure that deep cognitive reasoning (ELP0) never interrupts high-priority real-time responses or physical telemetry (ELP1/ELP2).
 
 ### ⚙️ Core Architecture
 
@@ -87,7 +87,7 @@ Adelaide Lite is designed to be highly portable but requires a specific set of t
 </sub>
 <h5 align="center">
 Made with Love, Dreams, and Disciplines.<br>
-<br>Snail Works</h5>
+<br>Snail Works</h5> <br>
 Zephyrine Foundation 2023-2026
 </h5>
 <br>
