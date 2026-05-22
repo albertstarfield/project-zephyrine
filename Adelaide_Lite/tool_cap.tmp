@@ -11,3 +11,16 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 [Thought] Background thinker active. Processing...
+Traceback (most recent call last):
+  File "/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/python/searchglobalref.py", line 745, in <module>
+    main()
+    ~~~~^^
+  File "/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/python/searchglobalref.py", line 663, in main
+    results = engine_map[eng](*s_args)
+  File "/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/python/searchglobalref.py", line 356, in search_google
+    if not check_for_captcha(driver, timeout_seconds=timeout):
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/python/searchglobalref.py", line 265, in check_for_captcha
+    time.sleep(1)
+    ~~~~~~~~~~^^^
+KeyboardInterrupt

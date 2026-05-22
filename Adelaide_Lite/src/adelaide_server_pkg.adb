@@ -301,6 +301,39 @@ package body Adelaide_Server_Pkg is
 
             Ada.Text_IO.Put_Line ("[Server] Extracted Prompt: " & To_String (Prompt));
 
+            if Length (Prompt) = 0 then
+               Ada.Text_IO.Put_Line ("[Server] Empty prompt detected, bypassing generation.");
+               if Is_Streaming then
+                  declare
+                     Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
+                     S : constant Streaming_Queue.Response_Stream_Access := new Streaming_Queue.Response_Stream;
+                  begin
+                     S.Q := Q;
+                     Q.Set_Format ((if URI = "/v1/chat/completions" then Streaming_Queue.OpenAI else Streaming_Queue.Ollama), To_String (Req_Model));
+                     Q.Close;
+                     declare
+                        Resp : AWS.Response.Data := AWS.Response.Stream
+                          (Content_Type => (if URI = "/v1/chat/completions" then "text/event-stream" else "application/x-ndjson"),
+                           Handle => S);
+                     begin
+                        AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
+                        AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                        AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Headers", "Content-Type, Authorization");
+                        return Resp;
+                     end;
+                  end;
+               else
+                  declare
+                     R : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
+                  begin
+                     GNATCOLL.JSON.Set_Field (R, "model", To_String (Req_Model));
+                     GNATCOLL.JSON.Set_Field (R, "response", "");
+                     GNATCOLL.JSON.Set_Field (R, "done", True);
+                     return Build_Response (GNATCOLL.JSON.Write (R));
+                  end;
+               end if;
+            end if;
+
             if Is_Streaming then
                declare
                   Q : constant Streaming_Queue.Queue_Access :=
