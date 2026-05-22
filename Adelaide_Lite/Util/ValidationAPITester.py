@@ -240,7 +240,7 @@ class ValidationAPITester:
         # 5. Generate
         gen_payload = {
             "model": "adelaide-hybrid",
-            "prompt": "Write a single line of Python to validate a JSON string.",
+            "prompt": "Respond with exactly one word: Hello.",
             "stream": False
         }
         self.test_endpoint("Ollama Generate Non-Streaming", "POST", "/api/generate", gen_payload)
