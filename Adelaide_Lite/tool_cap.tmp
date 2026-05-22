@@ -1,0 +1,13 @@
+[*] Invoked: /Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/pyvenv/bin/python python/searchglobalref.py "tool" --ollamaHost localhost:11420
+[Server] >>> Incoming: GET /
+[Server] Status: 200
+✅ Ollama reachable at http://localhost:11420
+[*] Searching DDG...
+[*] Searching DuckDuckGo for '"tool"'...
+[*] Searching GOOGLE...
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+[!!!] BOT DETECTION TRIGGERED (CAPTCHA SOLVER NEEDED)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+[Thought] Background thinker active. Processing...
