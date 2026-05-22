@@ -11,6 +11,7 @@ with Math_Utils;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;
 with Ada.Strings.Fixed;
+with GNAT.OS_Lib;
 
 package body Adelaide_Server_Pkg is
 
@@ -504,6 +505,95 @@ package body Adelaide_Server_Pkg is
                   end;
                end if;
             end if;
+
+            -- StellaIcarus Hook Check --
+            declare
+               use GNAT.OS_Lib;
+               Temp_File   : constant String := "stella_cap.tmp";
+               Python_Path : GNAT.OS_Lib.String_Access := GNAT.OS_Lib.Locate_Exec_On_Path ("python3");
+               Args        : Argument_List (1 .. 2);
+               Success     : Boolean;
+               Ret_Code    : Integer;
+               Hook_Result : Unbounded_String := Null_Unbounded_String;
+            begin
+               if Python_Path /= null then
+                  Args (1) := new String'("python/stellaicarus_bridge.py");
+                  Args (2) := new String'(To_String (Prompt));
+                  Spawn (Python_Path.all, Args, Temp_File, Success, Ret_Code);
+                  Free (Python_Path);
+                  for I in Args'Range loop Free (Args (I)); end loop;
+                  
+                  if Success then
+                     declare
+                        File : Ada.Text_IO.File_Type;
+                        Line : Unbounded_String;
+                        Is_Match : Boolean := False;
+                     begin
+                        Ada.Text_IO.Open (File, Ada.Text_IO.In_File, Temp_File);
+                        while not Ada.Text_IO.End_Of_File (File) loop
+                           Line := To_Unbounded_String (Ada.Text_IO.Get_Line (File));
+                           if Line = "__STELLA_MATCH__" then
+                              Is_Match := True;
+                           elsif Is_Match then
+                              Append (Hook_Result, Line & ASCII.LF);
+                           end if;
+                        end loop;
+                        Ada.Text_IO.Close (File);
+                     exception
+                        when others => null;
+                     end;
+                  end if;
+                  
+                  if Length (Hook_Result) > 0 then
+                     Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[StellaIcarus]" & AnsiAda.Reset & " Hook intercepted generation!");
+                     if Is_Streaming then
+                        -- For streaming, we need to send the entire string as a chunk
+                        declare
+                           Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
+                           S : constant Streaming_Queue.Response_Stream_Access := new Streaming_Queue.Response_Stream;
+                        begin
+                           S.Q := Q;
+                           Q.Set_Format ((if URI = "/v1/chat/completions" or else URI = "/v1/completions" then Streaming_Queue.OpenAI else Streaming_Queue.Ollama), To_String (Req_Model));
+                           Q.Push (To_String (Hook_Result));
+                           Q.Close;
+                           declare
+                              Resp : AWS.Response.Data := AWS.Response.Stream
+                                (Content_Type => (if URI = "/v1/chat/completions" or else URI = "/v1/completions" then "text/event-stream" else "application/x-ndjson"),
+                                 Handle => S);
+                           begin
+                              AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
+                              AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                              AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Headers", "Content-Type, Authorization");
+                              return Resp;
+                           end;
+                        end;
+                     else
+                        declare
+                           R : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
+                        begin
+                           GNATCOLL.JSON.Set_Field (R, "model", To_String (Req_Model));
+                           if URI = "/v1/chat/completions" then
+                              declare
+                                 Choices : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+                                 Choice  : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
+                                 Msg     : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
+                              begin
+                                 GNATCOLL.JSON.Set_Field (Msg, "role", "assistant");
+                                 GNATCOLL.JSON.Set_Field (Msg, "content", To_String (Hook_Result));
+                                 GNATCOLL.JSON.Set_Field (Choice, "message", Msg);
+                                 GNATCOLL.JSON.Append (Choices, Choice);
+                                 GNATCOLL.JSON.Set_Field (R, "choices", Choices);
+                              end;
+                           else
+                              GNATCOLL.JSON.Set_Field (R, "response", To_String (Hook_Result));
+                           end if;
+                           GNATCOLL.JSON.Set_Field (R, "done", True);
+                           return Build_Response (GNATCOLL.JSON.Write (R));
+                        end;
+                     end if;
+                  end if;
+               end if;
+            end;
 
             if Is_Streaming then
                declare
