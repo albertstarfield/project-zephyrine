@@ -22,6 +22,7 @@ begin
       Knowledge_Manager.Initialize;
 
       AWS.Config.Set.Server_Port (Conf, 11420);
+      AWS.Config.Set.Server_Host (Conf, "0.0.0.0");
       AWS.Config.Set.Reuse_Address (Conf, True);
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Adelaide-Lite Server starting on port 11420...");
