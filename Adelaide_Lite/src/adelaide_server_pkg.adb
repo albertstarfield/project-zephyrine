@@ -3,6 +3,7 @@ with AWS.Messages;
 with GNATCOLL.JSON;
 with Ada.Text_IO;
 with Model_Manager;
+with Database_Manager;
 with Ada.Strings.Unbounded;
 with Ada.Exceptions;
 with Math_Utils;
@@ -148,10 +149,10 @@ package body Adelaide_Server_Pkg is
       if URI = "/v1/files" and then Method = "POST" then
          declare
             use GNATCOLL.JSON;
-            Req_CT : constant String := AWS.Status.Content_Type (Req);
+            Req_CT : constant String := AWS.Status.Content_Type (Request);
             B_Idx  : constant Natural := Ada.Strings.Fixed.Index (Req_CT, "boundary=");
             Boundary : Unbounded_String;
-            Raw    : constant String := AWS.Status.Payload (Req);
+            Raw    : constant String := AWS.Status.Payload (Request);
             Content : Unbounded_String;
             Resp   : constant JSON_Value := Create_Object;
          begin
@@ -182,6 +183,7 @@ package body Adelaide_Server_Pkg is
             end;
             
             declare
+               TS_Str  : constant String := "123456";
                File_ID : constant String := "file-" & TS_Str;
                Emb_Vec : Math_Utils.Vector (1 .. 1536) := (others => 0.0);
                Emb_Len : Natural := 1536;
@@ -209,6 +211,7 @@ package body Adelaide_Server_Pkg is
       elsif URI = "/v1/fine_tuning/jobs" or else URI = "/v1/batches" then
          declare
             use GNATCOLL.JSON;
+            TS_Str : constant String := "123456";
             Resp : constant JSON_Value := Create_Object;
             Job_ID : constant String := (if URI = "/v1/batches" then "batch-" else "ftjob-") & TS_Str;
          begin
@@ -220,6 +223,66 @@ package body Adelaide_Server_Pkg is
             Set_Field (Resp, "created_at", Long_Integer'(1686935002));
             
             return Build_Response (Write (Resp));
+         end;
+
+      elsif URI = "/v1/assistants" and then Method = "POST" then
+         declare
+            use GNATCOLL.JSON;
+            TS_Str : constant String := "123456";
+            Resp : constant JSON_Value := Create_Object;
+         begin
+            Set_Field (Resp, "id", "asst-" & TS_Str);
+            Set_Field (Resp, "object", "assistant");
+            Set_Field (Resp, "created_at", Long_Integer'(1686935002));
+            Set_Field (Resp, "name", "Zephyrine");
+            Set_Field (Resp, "model", "Project-Zephyrine-0.27");
+            return Build_Response (Write (Resp));
+         end;
+
+      elsif URI = "/v1/threads" and then Method = "POST" then
+         declare
+            use GNATCOLL.JSON;
+            TS_Str : constant String := "123456";
+            Resp : constant JSON_Value := Create_Object;
+         begin
+            Set_Field (Resp, "id", "thread-" & TS_Str);
+            Set_Field (Resp, "object", "thread");
+            Set_Field (Resp, "created_at", Long_Integer'(1686935002));
+            return Build_Response (Write (Resp));
+         end;
+
+      elsif URI'Length > 12 and then URI (1 .. 12) = "/v1/threads/" then
+         declare
+            Rest  : constant String := URI (13 .. URI'Last);
+            S_Idx : constant Natural := Ada.Strings.Fixed.Index (Rest, "/");
+            use GNATCOLL.JSON;
+         begin
+            if S_Idx > 0 then
+               declare
+                  Thread_ID : constant String := Rest (Rest'First .. S_Idx - 1);
+                  Action    : constant String := Rest (S_Idx + 1 .. Rest'Last);
+                  TS_Str    : constant String := "123456";
+                  Resp      : constant JSON_Value := Create_Object;
+               begin
+                  if Action = "messages" then
+                     Set_Field (Resp, "id", "msg-" & TS_Str);
+                     Set_Field (Resp, "object", "thread.message");
+                     Set_Field (Resp, "created_at", Long_Integer'(1686935002));
+                     Set_Field (Resp, "thread_id", Thread_ID);
+                     Set_Field (Resp, "role", "user");
+                     return Build_Response (Write (Resp));
+                  elsif Action = "runs" then
+                     Set_Field (Resp, "id", "run-" & TS_Str);
+                     Set_Field (Resp, "object", "thread.run");
+                     Set_Field (Resp, "created_at", Long_Integer'(1686935002));
+                     Set_Field (Resp, "thread_id", Thread_ID);
+                     Set_Field (Resp, "status", "completed");
+                     return Build_Response (Write (Resp));
+                  end if;
+                  return Build_Response ("{""status"": ""not_implemented""}", AWS.Messages.S404);
+               end;
+            end if;
+            return Build_Response ("{""status"": ""not_found""}", AWS.Messages.S404);
          end;
 
       elsif URI = "/v1/models" or else URI = "/api/tags" then
