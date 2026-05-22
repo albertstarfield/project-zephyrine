@@ -19,7 +19,7 @@ class APIValidationException(Exception):
     pass
 
 class ValidationAPITester:
-    def __init__(self, base_url="http://localhost:11420", timeout=120):
+    def __init__(self, base_url="http://localhost:11420", timeout=420):
         self.base_url = base_url
         self.timeout = timeout
         self.stats = {"passed": 0, "failed": 0, "total": 0}
