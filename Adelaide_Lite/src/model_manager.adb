@@ -825,7 +825,7 @@ package body Model_Manager is
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
          end if;
-         raise;
+         Result := To_Unbounded_String ("ERROR: Decode failed");
    end Generate;
 
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
