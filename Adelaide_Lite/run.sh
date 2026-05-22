@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 set -e
 
-echo "[*] Setting up Adelaide-Lite environment..."
+BASE_DIR=$(pwd)
+echo "[*] Setting up Adelaide-Lite environment in $BASE_DIR..."
 
 # Check and clone llama.cpp
-if [ ! -d "../llama.cpp" ]; then
+if [ ! -d "$BASE_DIR/../llama.cpp" ]; then
     echo "[*] Cloning llama.cpp..."
-    git clone https://github.com/ggerganov/llama.cpp.git ../llama.cpp
+    git clone https://github.com/ggerganov/llama.cpp.git "$BASE_DIR/../llama.cpp"
 else
     echo "[*] llama.cpp already exists, skipping clone."
 fi
 
 # Check and clone supertonic
-if [ ! -d "../supertonic" ]; then
+if [ ! -d "$BASE_DIR/../supertonic" ]; then
     echo "[*] Cloning supertonic..."
-    git clone https://github.com/supertone-inc/supertonic.git ../supertonic
+    git clone https://github.com/supertone-inc/supertonic.git "$BASE_DIR/../supertonic"
 else
     echo "[*] supertonic already exists, skipping clone."
 fi
@@ -24,6 +25,7 @@ echo "[*] Installing Playwright Chromium binary for Deno crawler..."
 deno run -A npm:playwright install chromium
 
 echo "[*] Resolving Ada dependencies and building project..."
+cd "$BASE_DIR"
 alr build
 
 echo "[*] Booting StellaIcarus Ada Daemon Manager..."
