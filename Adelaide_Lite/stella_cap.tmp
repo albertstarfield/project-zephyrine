@@ -1,11 +1,51 @@
-2026-05-22 22:48:31.355 | INFO     | stella_icarus_utils:load_hooks:73 - StellaIcarusHookManager: Loading hooks from '/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/StellaIcarus'...
+2026-05-22 22:52:11.829 | INFO     | stella_icarus_utils:load_hooks:73 - StellaIcarusHookManager: Loading hooks from '/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/StellaIcarus'...
 ✅ StellaMatrixHook: Active Engine -> GPU (Apple MPS)
-2026-05-22 22:48:32.748 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_matrix_math_hook' (Interpreted)
+2026-05-22 22:52:12.831 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_matrix_math_hook' (Interpreted)
 [*] Trickshot: Compiling optimized core...
 [-] Trickshot: Compilation failed (g++ missing?).
-2026-05-22 22:48:33.136 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_trickshot_stellaicarus_benchmark_simplearitmatic' (Interpreted)
-2026-05-22 22:48:33.140 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_hello_world_hook_example_dev_getstarted' (Interpreted)
+2026-05-22 22:52:13.139 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_trickshot_stellaicarus_benchmark_simplearitmatic' (Interpreted)
+2026-05-22 22:52:13.142 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_hello_world_hook_example_dev_getstarted' (Interpreted)
 FMC SERVO HOOK: Numba JIT init failed (No module named '<dynamic>'). This hook will use a Python fallback for calculations.
-2026-05-22 22:48:34.097 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_fmc_servo_manual_hook_test'
+2026-05-22 22:52:13.815 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_fmc_servo_manual_hook_test'
 ✅ StellaMath: C++ Engine Active (Tier 1)
-2026-05-22 22:48:34.102 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_math_hook' (Interpreted)
+2026-05-22 22:52:13.818 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_math_hook' (Interpreted)
+[93m[Thought][0m Background thinker active. Processing...
+[+] Loading QWEN_0_8B (N_CTX= 4096)
+llama_model_loader: loaded meta data with 46 key-value pairs and 320 tensors from ../llama.cpp/models/qwen3.5/Qwen3.5-0.8B-Q4_K_S.gguf (version GGUF V3 (latest))
+llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+llama_model_loader: - kv   0:                       general.architecture str              = qwen35
+llama_model_loader: - kv   1:                               general.type str              = model
+llama_model_loader: - kv   2:                               general.name str              = Qwen3.5-0.8B
+llama_model_loader: - kv   3:                           general.basename str              = Qwen3.5-0.8B
+llama_model_loader: - kv   4:                       general.quantized_by str              = Unsloth
+llama_model_loader: - kv   5:                         general.size_label str              = 0.8B
+llama_model_loader: - kv   6:                            general.license str              = apache-2.0
+llama_model_loader: - kv   7:                       general.license.link str              = https://huggingface.co/Qwen/Qwen3.5-0...
+llama_model_loader: - kv   8:                           general.repo_url str              = https://huggingface.co/unsloth
+llama_model_loader: - kv   9:                   general.base_model.count u32              = 1
+llama_model_loader: - kv  10:                  general.base_model.0.name str              = Qwen3.5 0.8B
+llama_model_loader: - kv  11:          general.base_model.0.organization str              = Qwen
+llama_model_loader: - kv  12:              general.base_model.0.repo_url str              = https://huggingface.co/Qwen/Qwen3.5-0.8B
+llama_model_loader: - kv  13:                               general.tags arr[str,1]       = ["image-text-to-text"]
+llama_model_loader: - kv  14:                         qwen35.block_count u32              = 24
+llama_model_loader: - kv  15:                      qwen35.context_length u32              = 262144
+llama_model_loader: - kv  16:                    qwen35.embedding_length u32              = 1024
+llama_model_loader: - kv  17:                 qwen35.feed_forward_length u32              = 3584
+llama_model_loader: - kv  18:                qwen35.attention.head_count u32              = 8
+llama_model_loader: - kv  19:             qwen35.attention.head_count_kv u32              = 2
+llama_model_loader: - kv  20:             qwen35.rope.dimension_sections arr[i32,4]       = [11, 11, 10, 0]
+llama_model_loader: - kv  21:                      qwen35.rope.freq_base f32              = 10000000.000000
+llama_model_loader: - kv  22:    qwen35.attention.layer_norm_rms_epsilon f32              = 0.000001
+llama_model_loader: - kv  23:                qwen35.attention.key_length u32              = 256
+llama_model_loader: - kv  24:              qwen35.attention.value_length u32              = 256
+llama_model_loader: - kv  25:                     qwen35.ssm.conv_kernel u32              = 4
+llama_model_loader: - kv  26:                      qwen35.ssm.state_size u32              = 128
+llama_model_loader: - kv  27:                     qwen35.ssm.group_count u32              = 16
+llama_model_loader: - kv  28:                  qwen35.ssm.time_step_rank u32              = 16
+llama_model_loader: - kv  29:                      qwen35.ssm.inner_size u32              = 2048
+llama_model_loader: - kv  30:             qwen35.full_attention_interval u32              = 4
+llama_model_loader: - kv  31:                qwen35.rope.dimension_count u32              = 64
+llama_model_loader: - kv  32:                       tokenizer.ggml.model str              = gpt2
+llama_model_loader: - kv  33:                         tokenizer.ggml.pre str              = qwen35
+llama_model_loader: - kv  34:                      tokenizer.ggml.tokens arr[str,248320]  = ["!", "\"", "#", "$", "%", "&", "'", ...
+llama_model_loader: - kv  35:                  tokenizer.ggml.token_type arr[i32,248320]  = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ...
