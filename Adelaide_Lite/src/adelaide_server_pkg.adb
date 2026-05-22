@@ -8,6 +8,7 @@ with Ada.Exceptions;
 with Math_Utils;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;
+with Ada.Strings.Fixed;
 
 package body Adelaide_Server_Pkg is
 
@@ -328,19 +329,22 @@ package body Adelaide_Server_Pkg is
                      then
                         declare
                            E_Pos  : constant Natural :=
-                             Index (Res_Str, "]", Res_Str'First + 12);
+                             Ada.Strings.Fixed.Index
+                               (Res_Str, "]", Res_Str'First + 12);
                            A_Full : constant String :=
                              Res_Str (Res_Str'First + 12 .. E_Pos - 1);
                            P_Pos  : constant Natural :=
-                             Index (A_Full, "(");
+                             Ada.Strings.Fixed.Index (A_Full, "(");
                            EP_Pos : constant Natural :=
-                             Index (A_Full, ")", P_Pos);
+                             Ada.Strings.Fixed.Index (A_Full, ")", P_Pos);
                            T_Name : constant String :=
-                             Trim (A_Full (A_Full'First .. P_Pos - 1),
-                                   Ada.Strings.Both);
+                             Ada.Strings.Fixed.Trim
+                               (A_Full (A_Full'First .. P_Pos - 1),
+                                Ada.Strings.Both);
                            T_Pars : constant String :=
-                             Trim (A_Full (P_Pos + 1 .. EP_Pos - 1),
-                                   Ada.Strings.Both);
+                             Ada.Strings.Fixed.Trim
+                               (A_Full (P_Pos + 1 .. EP_Pos - 1),
+                                Ada.Strings.Both);
                            
                            Tool_Call  : constant GNATCOLL.JSON.JSON_Value :=
                              GNATCOLL.JSON.Create_Object;
