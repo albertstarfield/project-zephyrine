@@ -120,7 +120,11 @@ package body Adelaide_Server_Pkg is
       end if;
 
       if URI = "/" then
-         return Build_Response ("Ollama is running");
+         if Method = "HEAD" then
+            return AWS.Response.Build ("text/plain", "");
+         else
+            return Build_Response ("Ollama is running");
+         end if;
       end if;
 
       if URI = "/v1/models" or else URI = "/api/tags" then
