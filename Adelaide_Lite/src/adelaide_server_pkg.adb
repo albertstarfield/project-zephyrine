@@ -55,7 +55,9 @@ package body Adelaide_Server_Pkg is
         (Prompt     : String;
          Model_Name : String;
          Format     : Streaming_Queue.Format_Type;
-         Q          : Streaming_Queue.Queue_Access);
+         Q          : Streaming_Queue.Queue_Access;
+         Agentic    : Boolean;
+         Raw_Prompt : Boolean);
    end Generator_Task;
 
    type Generator_Task_Access is access Generator_Task;
@@ -66,25 +68,35 @@ package body Adelaide_Server_Pkg is
       Local_Model  : Unbounded_String;
       Local_Format : Streaming_Queue.Format_Type;
       Queue        : Streaming_Queue.Queue_Access;
+      Local_Agentic : Boolean;
+      Local_Raw_Prompt : Boolean;
       Result       : Unbounded_String;
    begin
       accept Start
         (Prompt     : String;
          Model_Name : String;
          Format     : Streaming_Queue.Format_Type;
-         Q          : Streaming_Queue.Queue_Access)
+         Q          : Streaming_Queue.Queue_Access;
+         Agentic    : Boolean;
+         Raw_Prompt : Boolean)
       do
          Local_Prompt := To_Unbounded_String (Prompt);
          Local_Model := To_Unbounded_String (Model_Name);
          Local_Format := Format;
          Queue := Q;
+         Local_Agentic := Agentic;
+         Local_Raw_Prompt := Raw_Prompt;
       end Start;
 
       Ada.Text_IO.Put_Line ("[Async] Generator Task Started.");
       Queue.Set_Format (Local_Format, To_String (Local_Model));
       Model_Manager.Hybrid_Generate
-        (To_String (Local_Prompt), Result, Stream => Queue,
-         Session_ID => "async-stream");
+        (Prompt     => To_String (Local_Prompt),
+         Result     => Result,
+         Stream     => Queue,
+         Session_ID => "async-stream",
+         Agentic    => Local_Agentic,
+         Raw_Prompt => Local_Raw_Prompt);
       Queue.Close;
       Ada.Text_IO.Put_Line ("[Async] Generator Task Finished.");
    exception
@@ -212,6 +224,7 @@ package body Adelaide_Server_Pkg is
               To_Unbounded_String ("adelaide-hybrid");
             Is_Streaming : Boolean := False;
             Is_Agentic   : Boolean := False;
+            Is_Raw_Prompt : Boolean := False;
             Now      : constant Ada.Calendar.Time := Ada.Calendar.Clock;
             TS_Str   : String := Ada.Calendar.Formatting.Image (Now);
          begin
@@ -240,22 +253,24 @@ package body Adelaide_Server_Pkg is
                            declare
                               Msgs : constant GNATCOLL.JSON.JSON_Array :=
                                 GNATCOLL.JSON.Get (Val, "messages");
+                              Built_Prompt : Unbounded_String := Null_Unbounded_String;
                            begin
                               if GNATCOLL.JSON.Length (Msgs) > 0 then
-                                 declare
-                                    Last : constant GNATCOLL.JSON.JSON_Value :=
-                                      GNATCOLL.JSON.Get (Msgs, GNATCOLL.JSON.Length (Msgs));
-                                 begin
-                                    if GNATCOLL.JSON.Has_Field (Last, "content") then
-                                       begin
-                                          Prompt := To_Unbounded_String
-                                            (String'(GNATCOLL.JSON.Get
-                                               (Last, "content")));
-                                       exception
-                                          when others => null;
-                                       end;
-                                    end if;
-                                 end;
+                                 for I in 1 .. GNATCOLL.JSON.Length (Msgs) loop
+                                    declare
+                                       Msg : constant GNATCOLL.JSON.JSON_Value :=
+                                         GNATCOLL.JSON.Get (Msgs, I);
+                                       Role : constant String :=
+                                         GNATCOLL.JSON.Get (Msg, "role");
+                                       Content : constant String :=
+                                         GNATCOLL.JSON.Get (Msg, "content");
+                                    begin
+                                       Append (Built_Prompt, "<|im_start|>" & Role & ASCII.LF & Content & "<|im_end|>" & ASCII.LF);
+                                    end;
+                                 end loop;
+                                 Append (Built_Prompt, "<|im_start|>assistant" & ASCII.LF);
+                                 Prompt := Built_Prompt;
+                                 Is_Raw_Prompt := True;
                               end if;
                            end;
                         elsif GNATCOLL.JSON.Has_Field (Val, "prompt") then
@@ -288,7 +303,8 @@ package body Adelaide_Server_Pkg is
                   T.Start (To_String (Prompt), To_String (Req_Model),
                            (if URI = "/v1/chat/completions"
                             then Streaming_Queue.OpenAI
-                            else Streaming_Queue.Ollama), Q);
+                            else Streaming_Queue.Ollama), Q,
+                           Is_Agentic, Is_Raw_Prompt);
                   declare
                      Resp : AWS.Response.Data := AWS.Response.Stream
                        (Content_Type => (if URI = "/v1/chat/completions"
@@ -304,8 +320,12 @@ package body Adelaide_Server_Pkg is
                end;
             else
                Model_Manager.Hybrid_Generate
-                 (To_String (Prompt), Result, Stream => null,
-                  Session_ID => "web-api", Agentic => Is_Agentic);
+                 (Prompt     => To_String (Prompt),
+                  Result     => Result,
+                  Session_ID => "server-sync",
+                  Agentic    => Is_Agentic,
+                  Raw_Prompt => Is_Raw_Prompt);
+               
                if URI = "/api/generate" then
                   GNATCOLL.JSON.Set_Field (Resp, "model", To_String (Req_Model));
                   GNATCOLL.JSON.Set_Field
