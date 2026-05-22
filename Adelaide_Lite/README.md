@@ -22,17 +22,17 @@
 
 [![Hippocratic License HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV](https://img.shields.io/static/v1?label=Hippocratic%20License&message=HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV&labelColor=5e2751&color=bc8c3d)](https://firstdonoharm.dev/version/3/0/bds-bod-law-media-mil-soc-sup-sv.html)
 
-## Adelaide Lite: The High-Integrity Ada Core of Project Zephyrine
+## Adelaide Lite: The Lightweight Ada Core of Project Zephyrine
 
 ### A Glimpse Into the Aether: Abstract
 
-Adelaide Lite is an uncompromisingly reliable, highly deterministic iteration of Project Zephyrine's core architecture. Written entirely in **Ada** and built atop the robust `AWS` (Ada Web Server) framework, Adelaide Lite distills the conversational and adaptive nature of Zephyrine into an engine designed for microsecond-precision guarantees, minimal footprint, and absolute stability.
+Adelaide Lite is an uncompromisingly reliable, highly efficient iteration of Project Zephyrine's core architecture. Written entirely in **Ada** and built atop the robust `AWS` (Ada Web Server) framework, Adelaide Lite distills the conversational and adaptive nature of Zephyrine into an engine designed for minimal storage footprint, low runtime memory usage, and absolute stability.
 
 This is not just another LLM wrapper. Adelaide Lite represents the integration of the **Stella-Icarus Deterministic Core** directly into the API routing layer. By utilizing an Elevated Level Privilege (ELP) priority thread scheduler and native OS tasking, we can ensure that deep cognitive reasoning (ELP0) never interrupts high-priority real-time responses or physical telemetry (ELP1/ELP2).
 
-### ⚙️ Core Architecture & Determinism
+### ⚙️ Core Architecture
 
-Adelaide Lite is specifically tailored for environments adhering to an **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)**.
+Adelaide Lite is specifically tailored for environments with lower storage and constrained runtime memory capacity.
 
 1.  **Ada/SPARK Foundation:** The entire networking, caching, and task-scheduling layer is written in Ada, providing mathematically verifiable safety against buffer overflows, race conditions, and memory leaks.
 2.  **WCET Enforcements:** The Worst-Case Execution Time (WCET) manager actively monitors and terminates non-deterministic AI generation if it breaches strict latency budgets, falling back to cached or deterministic responses.
@@ -40,14 +40,14 @@ Adelaide Lite is specifically tailored for environments adhering to an **Ongoing
 
 ### 🎭 API Interfaces
 
-Adelaide Lite maintains compatibility with standard communication dialects to ease integration, despite its rigorous internal architecture.
+Adelaide Lite maintains compatibility with standard communication dialects to ease integration.
 
 *   **The OpenAI Mask (`/v1/*`):** Full compatibility layer for `/v1/chat/completions` and `/v1/models`. Future implementations will expand this to full stateful Assistant APIs routed directly into the local SQLite memory graph.
 *   **The Ollama Mask (`/api/*`):** Direct proxy and multiplexing for local inference endpoints (`/api/chat`, `/api/generate`), allowing Zephy to wrap and manage local models seamlessly.
 
 ### 🚀 Prerequisites and Quick Start
 
-Adelaide Lite is designed to be highly portable but requires a strict set of deterministic tools.
+Adelaide Lite is designed to be highly portable but requires a specific set of tools to minimize bloat.
 
 #### Requirements
 *   **Alire (Ada LIbrary REpository):** Required to resolve Ada dependencies and build the core executable.
@@ -76,9 +76,9 @@ Adelaide Lite is designed to be highly portable but requires a strict set of det
 > 
 > **(Please Read Carefully)**
 > 
-> This is a highly experimental platform combining rigid aerospace software paradigms with generative AI. It is **NOT** a plug-and-play ChatGPT clone. The system expects you to actively monitor WCET bounds, configure ELP priority schedulers, and manage the SQLite knowledge graph.
+> This is a highly experimental platform combining efficient aerospace software paradigms with generative AI. It is **NOT** a plug-and-play ChatGPT clone. The system expects you to actively monitor CPU bounds, configure ELP priority schedulers, and manage the SQLite knowledge graph.
 >
-> If you are expecting a system that sacrifices deterministic reliability for instant "magic" answers, **Look somewhere else. You have been warned.**
+> If you are expecting a system that sacrifices reliability for instant "magic" answers, **Look somewhere else. You have been warned.**
 
 ---
 <h1 align="center">

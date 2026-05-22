@@ -7,33 +7,7 @@ import stealth from "npm:puppeteer-extra-plugin-stealth";
 const chromium = addExtra(playwright.chromium);
 chromium.use(stealth());
 
-const OLLAMA_BASE_URL = Deno.env.get("OLLAMA_PROXY_URL") || "http://localhost:11435";
-const OLLAMA_EMBED_ENDPOINT = `${OLLAMA_BASE_URL}/api/embed`;
-const OLLAMA_MODEL = "qwen3-embedding:0.6b";
 
-async function getEmbedding(text: string): Promise<number[] | null> {
-  if (!text) return null;
-  try {
-    const res = await fetch(OLLAMA_EMBED_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: OLLAMA_MODEL, input: text }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.embeddings && data.embeddings.length > 0) return data.embeddings[0];
-    if (data.embedding) return data.embedding;
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function generateApa7Reference(title: string, url: string): string {
-  const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  const cleanTitle = title.trim().replace(/\.$/, "");
-  return `${cleanTitle}. (Fetched: ${date}). ${url}`;
-}
 
 async function searchDuckDuckGo(page: any, query: string, numResults: number) {
   const results = [];
@@ -138,14 +112,13 @@ async function capturePageData(page: any, result: any) {
 
 async function main() {
   const args = parseArgs(Deno.args, {
-    boolean: ["jsonIO"],
-    string: ["ollamaExternal", "ollamaHost", "engines", "num", "timeout", "pages"],
-    default: { num: "5", timeout: "60", engines: "all", pages: "1" }
+    string: ["engines", "num", "timeout"],
+    default: { num: "5", timeout: "60", engines: "all" }
   });
 
   const query = args._[0] as string;
   if (!query) {
-    console.error("Usage: deno run -A searchglobalref.ts <query>");
+    console.error("Usage: deno run -A python/playwright_scraper.ts <query> [--engines=ddg,google,scholar] [--num=5]");
     Deno.exit(1);
   }
 
@@ -167,75 +140,22 @@ async function main() {
 
     res.forEach(r => {
       r.source_engine = eng;
-      r.apa7_reference = generateApa7Reference(r.title, r.url);
       allFlat.push(r);
     });
   }
 
-  // Visit pages
+  // Visit pages to get deeper snippets
   for (const r of allFlat) {
     await capturePageData(page, r);
   }
 
   await browser.close();
 
-  // Semantic ranking
-  const qEmb = await getEmbedding(query);
-  let finalResults = allFlat;
-
-  if (qEmb && allFlat.length > 0) {
-    const ranked = [];
-    for (const r of allFlat) {
-      const textToEmbed = `${r.title} ${r.snippet || ""}`;
-      const rEmb = await getEmbedding(textToEmbed);
-      let score = 0;
-      if (rEmb) {
-        let dot = 0, norm1 = 0, norm2 = 0;
-        for (let i = 0; i < qEmb.length; i++) {
-          dot += qEmb[i] * rEmb[i];
-          norm1 += qEmb[i] * qEmb[i];
-          norm2 += rEmb[i] * rEmb[i];
-        }
-        score = dot / (Math.sqrt(norm1) * Math.sqrt(norm2));
-      }
-      ranked.push({ score, r });
-    }
-    ranked.sort((a, b) => b.score - a.score);
-    finalResults = ranked.slice(0, 7).map((x, i) => {
-      x.r.semantic_rank = i + 1;
-      x.r.semantic_score = x.score;
-      return x.r;
-    });
-  } else {
-    finalResults = allFlat.slice(0, 7);
-  }
-
-  if (args.jsonIO) {
-    console.log(JSON.stringify({ phase: 2, status: "complete", results: finalResults }));
-  } else {
-    console.log("# Global Search Results");
-    console.log(`*Query: ${query}*\n`);
-    for (let i = 0; i < finalResults.length; i++) {
-      const r = finalResults[i];
-      console.log(`## ${i + 1}. ${r.title}`);
-      console.log(`- **URL:** ${r.url}`);
-      console.log(`- **Engine:** ${r.source_engine || "unknown"}`);
-      if (r.semantic_rank) console.log(`- **Semantic Rank:** ${r.semantic_rank}`);
-      console.log(`- **Reference:** ${r.apa7_reference}\n`);
-      console.log(`### Snippet\n${r.snippet || "No snippet available."}\n`);
-      if (r.screenshot_base64) console.log(`### Visual Evidence (Page Snapshot)\n![Page Snapshot](${r.screenshot_base64})\n`);
-      console.log(`---\n`);
-    }
-  }
-
-  // Fire off memorythoughts.py
-  for (const r of finalResults) {
-    const mem = `Source: ${r.url}\nReference: ${r.apa7_reference}\nSnippet: ${r.snippet || ""}`;
-    const cmd = new Deno.Command("python3", {
-      args: ["python/memorythoughts.py", "--string", mem]
-    });
-    cmd.spawn();
-  }
+  // Print plain JSON to standard output so Python can parse it
+  console.log(JSON.stringify(allFlat));
 }
 
-main().catch(console.error);
+main().catch((e) => {
+  console.error("Scraper Error:", e);
+  Deno.exit(1);
+});
