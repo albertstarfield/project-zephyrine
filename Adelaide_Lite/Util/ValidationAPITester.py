@@ -140,7 +140,13 @@ class ValidationAPITester:
                 self.assert_field(data, "created", int)
                 self.assert_field(data, "choices", list)
                 self.assert_field(data["choices"][0], "message", dict)
-                self.assert_field(data["choices"][0]["message"], "content", str)
+                msg = data["choices"][0]["message"]
+                if data["choices"][0].get("finish_reason") == "tool_calls":
+                    if msg.get("content") is not None:
+                        raise APIValidationException(f"Field content should be None for tool_calls, got {type(msg.get('content'))}")
+                    self.assert_field(msg, "tool_calls", list)
+                else:
+                    self.assert_field(msg, "content", str)
                 self.assert_field(data, "usage", dict)
             else:
                 self.assert_field(data, "model", str)

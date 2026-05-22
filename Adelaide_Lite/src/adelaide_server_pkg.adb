@@ -210,6 +210,7 @@ package body Adelaide_Server_Pkg is
             Req_Model : Unbounded_String :=
               To_Unbounded_String ("adelaide-hybrid");
             Is_Streaming : Boolean := False;
+            Is_Agentic   : Boolean := False;
             Now      : constant Ada.Calendar.Time := Ada.Calendar.Clock;
             TS_Str   : String := Ada.Calendar.Formatting.Image (Now);
          begin
@@ -230,6 +231,9 @@ package body Adelaide_Server_Pkg is
                         end if;
                         if GNATCOLL.JSON.Has_Field (Val, "stream") then
                            Is_Streaming := GNATCOLL.JSON.Get (Val, "stream");
+                        end if;
+                        if GNATCOLL.JSON.Has_Field (Val, "tools") then
+                           Is_Agentic := True;
                         end if;
                         if GNATCOLL.JSON.Has_Field (Val, "messages") then
                            declare
@@ -300,7 +304,7 @@ package body Adelaide_Server_Pkg is
             else
                Model_Manager.Hybrid_Generate
                  (To_String (Prompt), Result, Stream => null,
-                  Session_ID => "web-api");
+                  Session_ID => "web-api", Agentic => Is_Agentic);
                if URI = "/api/generate" then
                   GNATCOLL.JSON.Set_Field (Resp, "model", To_String (Req_Model));
                   GNATCOLL.JSON.Set_Field
@@ -316,10 +320,68 @@ package body Adelaide_Server_Pkg is
                        GNATCOLL.JSON.Empty_Array;
                      Usage   : constant GNATCOLL.JSON.JSON_Value :=
                        GNATCOLL.JSON.Create_Object;
+                     Res_Str : constant String := To_String (Result);
                   begin
-                     GNATCOLL.JSON.Set_Field (Msg_Out, "role", "assistant");
-                     GNATCOLL.JSON.Set_Field
-                       (Msg_Out, "content", To_String (Result));
+                     if Is_Agentic and then Res_Str'Length > 12 and then
+                        Res_Str (Res_Str'First .. Res_Str'First + 11) =
+                          "[TOOL_CALL: "
+                     then
+                        declare
+                           E_Pos  : constant Natural :=
+                             Index (Res_Str, "]", Res_Str'First + 12);
+                           A_Full : constant String :=
+                             Res_Str (Res_Str'First + 12 .. E_Pos - 1);
+                           P_Pos  : constant Natural :=
+                             Index (A_Full, "(");
+                           EP_Pos : constant Natural :=
+                             Index (A_Full, ")", P_Pos);
+                           T_Name : constant String :=
+                             Trim (A_Full (A_Full'First .. P_Pos - 1),
+                                   Ada.Strings.Both);
+                           T_Pars : constant String :=
+                             Trim (A_Full (P_Pos + 1 .. EP_Pos - 1),
+                                   Ada.Strings.Both);
+                           
+                           Tool_Call  : constant GNATCOLL.JSON.JSON_Value :=
+                             GNATCOLL.JSON.Create_Object;
+                           Func_Obj   : constant GNATCOLL.JSON.JSON_Value :=
+                             GNATCOLL.JSON.Create_Object;
+                           Tool_Calls : GNATCOLL.JSON.JSON_Array :=
+                             GNATCOLL.JSON.Empty_Array;
+                        begin
+                           GNATCOLL.JSON.Set_Field (Func_Obj, "name", T_Name);
+                           GNATCOLL.JSON.Set_Field
+                             (Func_Obj, "arguments",
+                              "{""query"": """ & T_Pars & """}");
+                           
+                           GNATCOLL.JSON.Set_Field
+                             (Tool_Call, "id", "call_" & TS_Str);
+                           GNATCOLL.JSON.Set_Field
+                             (Tool_Call, "type", "function");
+                           GNATCOLL.JSON.Set_Field
+                             (Tool_Call, "function", Func_Obj);
+                           
+                           GNATCOLL.JSON.Append (Tool_Calls, Tool_Call);
+                           
+                           GNATCOLL.JSON.Set_Field
+                             (Msg_Out, "role", "assistant");
+                           GNATCOLL.JSON.Set_Field
+                             (Msg_Out, "content", GNATCOLL.JSON.JSON_Null);
+                           GNATCOLL.JSON.Set_Field
+                             (Msg_Out, "tool_calls", Tool_Calls);
+                           
+                           GNATCOLL.JSON.Set_Field
+                             (Choice, "finish_reason", "tool_calls");
+                        end;
+                     else
+                        GNATCOLL.JSON.Set_Field
+                          (Msg_Out, "role", "assistant");
+                        GNATCOLL.JSON.Set_Field
+                          (Msg_Out, "content", Res_Str);
+                        GNATCOLL.JSON.Set_Field
+                          (Choice, "finish_reason", "stop");
+                     end if;
+                     
                      GNATCOLL.JSON.Set_Field (Choice, "message", Msg_Out);
                      GNATCOLL.JSON.Append (Choices, Choice);
                      GNATCOLL.JSON.Set_Field

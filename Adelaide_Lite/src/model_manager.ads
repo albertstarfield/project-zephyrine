@@ -50,7 +50,8 @@ package Model_Manager is
       Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
       Session_ID : String := "";
       Stream     : Streaming_Queue.Queue_Access := null;
-      Level      : ELP_Level := ELP1);
+      Level      : ELP_Level := ELP1;
+      Agentic    : Boolean := False);
 
    procedure Get_Embedding
      (Prompt : String;
