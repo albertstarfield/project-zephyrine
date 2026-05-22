@@ -8,7 +8,7 @@ global.fetch = async (...args) => {
     const res = await originalFetch(...args);
     return res;
   } catch (err) {
-    console.log('>>> GLOBAL FETCH ERROR:', err.message);
+    console.log('>>> GLOBAL FETCH ERROR:', err.message, 'CAUSE:', err.cause);
     throw err;
   }
 };

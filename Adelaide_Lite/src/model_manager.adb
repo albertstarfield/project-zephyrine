@@ -850,6 +850,12 @@ package body Model_Manager is
       Emb_Len     : Natural;
    begin
       T0 := Ada.Calendar.Clock;
+
+      if Stream /= null then
+         Stream.Push
+           ("<think>" & ASCII.LF & "[Adelaide Core Orchestration]" & ASCII.LF);
+      end if;
+
       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
 
       declare
@@ -866,11 +872,6 @@ package body Model_Manager is
       end;
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) & "[Hybrid]" & AnsiAda.Reset & " Starting reasoning chain...");
-
-      if Stream /= null then
-         Stream.Push
-           ("<think>" & ASCII.LF & "[Adelaide Core Orchestration]" & ASCII.LF);
-      end if;
 
       --  1. Factual checking
       if not Agentic
