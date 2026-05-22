@@ -42,7 +42,16 @@ package body Database_Manager is
                   "prompt TEXT," &
                   "embedding TEXT," &
                   "response TEXT," &
-                  "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+                  "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP," &
+                  "hit_count INTEGER DEFAULT 1," &
+                  "last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP)");
+
+         begin
+            Execute (Main_DB_Ptr.all, "ALTER TABLE response_cache ADD COLUMN hit_count INTEGER DEFAULT 1");
+            Execute (Main_DB_Ptr.all, "ALTER TABLE response_cache ADD COLUMN last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP");
+         exception
+            when others => null; -- Columns already exist
+         end;
 
          Lit_DB_Ptr := new Ada_Sqlite3.Database'(Open (Lit_DB_File));
 
@@ -235,8 +244,8 @@ package body Database_Manager is
       declare
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all,
-            "INSERT INTO response_cache (prompt, embedding, response) " &
-            "VALUES (?, ?, ?)");
+            "INSERT INTO response_cache (prompt, embedding, response, hit_count, last_hit_time) " &
+            "VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)");
       begin
          Bind_Text (Stmt, 1, Prompt);
          Bind_Text (Stmt, 2, Write (Create (Vec_Obj)));
@@ -251,10 +260,13 @@ package body Database_Manager is
    -------------------------
    -- Get_Cached_Response --
    -------------------------
-   function Get_Cached_Response (Embedding : Math_Utils.Vector) return String is
+   function Get_Cached_Response (Embedding : Math_Utils.Vector; WCET : Duration) return String is
       use GNATCOLL.JSON;
       Max_Sim  : Float := -2.0;
       Best_Res : Unbounded_String;
+      Best_Id  : Integer := -1;
+      Best_Hits : Integer := 1;
+      Best_Elapsed : Float := 0.0;
    begin
       if Main_DB_Ptr = null then
          return "";
@@ -262,12 +274,15 @@ package body Database_Manager is
 
       declare
          Stmt : Statement := Prepare
-           (Main_DB_Ptr.all, "SELECT embedding, response FROM response_cache");
+           (Main_DB_Ptr.all, "SELECT id, embedding, response, hit_count, (julianday(CURRENT_TIMESTAMP) - julianday(last_hit_time)) * 86400.0 as elapsed FROM response_cache");
       begin
          while Step (Stmt) = ROW loop
             declare
-               Raw_Vec  : constant String := Column_Text (Stmt, 0);
-               Raw_Resp : constant String := Column_Text (Stmt, 1);
+               Row_Id   : constant Integer := Column_Int (Stmt, 0);
+               Raw_Vec  : constant String := Column_Text (Stmt, 1);
+               Raw_Resp : constant String := Column_Text (Stmt, 2);
+               Row_Hits : constant Integer := Column_Int (Stmt, 3);
+               Elapsed  : constant Float := Column_Float (Stmt, 4);
                JSON_Vec : constant Read_Result := Read (Raw_Vec);
             begin
                if JSON_Vec.Success then
@@ -290,6 +305,9 @@ package body Database_Manager is
                               Max_Sim := Sim;
                               if Sim >= 0.85 and then Sim < 0.98 then
                                  Best_Res := To_Unbounded_String (Raw_Resp);
+                                 Best_Id := Row_Id;
+                                 Best_Hits := Row_Hits;
+                                 Best_Elapsed := Elapsed;
                               end if;
                            end if;
                         end;
@@ -300,7 +318,26 @@ package body Database_Manager is
          end loop;
       end;
 
-      return To_String (Best_Res);
+      if Best_Id /= -1 then
+         if Best_Elapsed <= Float (2.0 * WCET) then
+            if Best_Hits >= 2 then
+               --  Hit 2x within short amount of time! Bypass cache.
+               --  Delete the entry so we don't hit it again, we will generate a new one.
+               Execute (Main_DB_Ptr.all, "DELETE FROM response_cache WHERE id = " & Best_Id'Img);
+               return "";
+            else
+               --  Increment hit count
+               Execute (Main_DB_Ptr.all, "UPDATE response_cache SET hit_count = hit_count + 1, last_hit_time = CURRENT_TIMESTAMP WHERE id = " & Best_Id'Img);
+               return To_String (Best_Res);
+            end if;
+         else
+            --  Reset hit count as it has been a long time
+            Execute (Main_DB_Ptr.all, "UPDATE response_cache SET hit_count = 1, last_hit_time = CURRENT_TIMESTAMP WHERE id = " & Best_Id'Img);
+            return To_String (Best_Res);
+         end if;
+      end if;
+
+      return "";
    exception
       when others =>
          return "";
