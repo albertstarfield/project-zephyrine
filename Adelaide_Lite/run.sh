@@ -19,6 +19,10 @@ else
     echo "[*] supertonic already exists, skipping clone."
 fi
 
+# Ensure Deno Playwright Chromium is installed
+echo "[*] Installing Playwright Chromium binary for Deno crawler..."
+deno run -A npm:playwright install chromium
+
 echo "[*] Resolving Ada dependencies and building project..."
 alr build
 
