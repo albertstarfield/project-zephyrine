@@ -267,6 +267,10 @@ package body Adelaide_Server_Pkg is
                end;
             end if;
 
+            if Prompt = "No payload" then
+               return Build_Response ("{""error"": ""Invalid request: missing prompt or messages""}", AWS.Messages.S400);
+            end if;
+
             if Is_Streaming then
                declare
                   Q : constant Streaming_Queue.Queue_Access :=
