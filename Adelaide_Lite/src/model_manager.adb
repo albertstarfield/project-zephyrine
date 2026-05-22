@@ -969,11 +969,19 @@ package body Model_Manager is
                end if;
             end Get_Router_Prompt;
          begin
-            Generate
-              (Qwen_0_8B,
-               Get_Router_Prompt,
-               Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 2048,
-               Stream, False, Level);
+            declare
+               Ctx : Positive := 2048;
+            begin
+               loop
+                  Generate
+                    (Qwen_0_8B,
+                     Get_Router_Prompt,
+                     Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, Ctx,
+                     Stream, False, Level);
+                  exit when To_String (Step_Raw) /= "ERROR: Decode failed" or else Ctx >= 16384;
+                  Ctx := Ctx * 2;
+               end loop;
+            end;
 
             declare
                Step : constant String :=
@@ -1077,9 +1085,17 @@ package body Model_Manager is
          
          Synth_Prompt : constant String := Get_Final_Prompt;
       begin
-         Generate
-           (Qwen_4B, Synth_Prompt, Current_Response, Images, Session_ID,
-            4096, Stream, True, Level);
+         declare
+            Ctx : Positive := 4096;
+         begin
+            loop
+               Generate
+                 (Qwen_4B, Synth_Prompt, Current_Response, Images, Session_ID,
+                  Ctx, Stream, True, Level);
+               exit when To_String (Current_Response) /= "ERROR: Decode failed" or else Ctx >= 32768;
+               Ctx := Ctx * 2;
+            end loop;
+         end;
       end;
 
       Result := Current_Response;
