@@ -141,6 +141,9 @@ package Llama_Interface is
    procedure Llama_Free (Context : Llama_Context);
    pragma Import (C, Llama_Free, "llama_free");
 
+   procedure Llama_KV_Cache_Clear (Context : Llama_Context);
+   pragma Import (C, Llama_KV_Cache_Clear, "llama_kv_cache_clear");
+
    function Llama_Batch_Init
      (N_Tokens : int; Embd : int; N_Seq_Max : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Init, "llama_batch_init");
