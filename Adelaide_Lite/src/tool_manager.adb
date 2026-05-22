@@ -77,7 +77,7 @@ package body Tool_Manager is
             return Res;
          end if;
          Res.Output := To_Unbounded_String
-           (Run_External ("deno run -A python/searchglobalref.ts", Params));
+           (Run_External ("python/searchglobalref.py", Params));
       elsif Name = "searchlocalref" then
          Res.Output := To_Unbounded_String
            (Run_External ("python/searchlocalref.py", Params));
