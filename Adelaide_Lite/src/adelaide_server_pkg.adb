@@ -217,42 +217,53 @@ package body Adelaide_Server_Pkg is
                TS_Str (11) := 'T';
             end if;
             if Length (Payload) > 0 then
-               declare
-                  Parser_Result : constant GNATCOLL.JSON.Read_Result :=
-                    GNATCOLL.JSON.Read (To_String (Payload));
                begin
-                  if Parser_Result.Success then
-                     Val := Parser_Result.Value;
-                     if GNATCOLL.JSON.Has_Field (Val, "model") then
-                        Req_Model := To_Unbounded_String
-                          (String'(GNATCOLL.JSON.Get (Val, "model")));
+                  declare
+                     Parser_Result : constant GNATCOLL.JSON.Read_Result :=
+                       GNATCOLL.JSON.Read (To_String (Payload));
+                  begin
+                     if Parser_Result.Success then
+                        Val := Parser_Result.Value;
+                        if GNATCOLL.JSON.Has_Field (Val, "model") then
+                           Req_Model := To_Unbounded_String
+                             (String'(GNATCOLL.JSON.Get (Val, "model")));
+                        end if;
+                        if GNATCOLL.JSON.Has_Field (Val, "stream") then
+                           Is_Streaming := GNATCOLL.JSON.Get (Val, "stream");
+                        end if;
+                        if GNATCOLL.JSON.Has_Field (Val, "messages") then
+                           declare
+                              Msgs : constant GNATCOLL.JSON.JSON_Array :=
+                                GNATCOLL.JSON.Get (Val, "messages");
+                           begin
+                              if GNATCOLL.JSON.Length (Msgs) > 0 then
+                                 declare
+                                    Last : constant GNATCOLL.JSON.JSON_Value :=
+                                      GNATCOLL.JSON.Get (Msgs, GNATCOLL.JSON.Length (Msgs));
+                                 begin
+                                    if GNATCOLL.JSON.Has_Field (Last, "content") then
+                                       begin
+                                          Prompt := To_Unbounded_String
+                                            (String'(GNATCOLL.JSON.Get
+                                               (Last, "content")));
+                                       exception
+                                          when others => null;
+                                       end;
+                                    end if;
+                                 end;
+                              end if;
+                           end;
+                        elsif GNATCOLL.JSON.Has_Field (Val, "prompt") then
+                           Prompt := To_Unbounded_String
+                             (String'(GNATCOLL.JSON.Get (Val, "prompt")));
+                        end if;
+                     else
+                        return Build_Response ("{""error"": ""Malformed JSON""}", AWS.Messages.S400);
                      end if;
-                     if GNATCOLL.JSON.Has_Field (Val, "stream") then
-                        Is_Streaming := GNATCOLL.JSON.Get (Val, "stream");
-                     end if;
-                     if GNATCOLL.JSON.Has_Field (Val, "messages") then
-                        declare
-                           Msgs : constant GNATCOLL.JSON.JSON_Array :=
-                             GNATCOLL.JSON.Get (Val, "messages");
-                           Last : constant GNATCOLL.JSON.JSON_Value :=
-                             GNATCOLL.JSON.Get (Msgs,
-                               GNATCOLL.JSON.Length (Msgs));
-                        begin
-                           if GNATCOLL.JSON.Has_Field (Last, "content") then
-                              begin
-                                 Prompt := To_Unbounded_String
-                                   (String'(GNATCOLL.JSON.Get
-                                      (Last, "content")));
-                              exception
-                                 when others => null;
-                              end;
-                           end if;
-                        end;
-                     elsif GNATCOLL.JSON.Has_Field (Val, "prompt") then
-                        Prompt := To_Unbounded_String
-                          (String'(GNATCOLL.JSON.Get (Val, "prompt")));
-                     end if;
-                  end if;
+                  end;
+               exception
+                  when others =>
+                     return Build_Response ("{""error"": ""Payload processing error""}", AWS.Messages.S400);
                end;
             end if;
 
@@ -269,11 +280,18 @@ package body Adelaide_Server_Pkg is
                            (if URI = "/v1/chat/completions"
                             then Streaming_Queue.OpenAI
                             else Streaming_Queue.Ollama), Q);
-                  return AWS.Response.Stream
-                    (Content_Type => (if URI = "/v1/chat/completions"
-                                      then "text/event-stream"
-                                      else "application/x-ndjson"),
-                     Handle => S);
+                  declare
+                     Resp : AWS.Response.Data := AWS.Response.Stream
+                       (Content_Type => (if URI = "/v1/chat/completions"
+                                         then "text/event-stream"
+                                         else "application/x-ndjson"),
+                        Handle => S);
+                  begin
+                     AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
+                     AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                     AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Headers", "Content-Type, Authorization");
+                     return Resp;
+                  end;
                end;
             else
                Model_Manager.Hybrid_Generate
