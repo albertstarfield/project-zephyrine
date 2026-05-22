@@ -26,15 +26,15 @@
 
 ### A Glimpse Into the Aether: Abstract
 
-Adelaide Lite is an highly efficient iteration of Project Zephyrine's core architecture. Written Mostly in **Ada** and built atop the robust `AWS` (Ada Web Server) framework, Adelaide Lite distills the conversational and adaptive nature of Zephyrine into an engine designed for minimal storage footprint, low runtime memory usage, and absolute stability.
+Adelaide Lite is an more efficient iteration of Project Zephyrine's core architecture, Adelaide Lite distills the conversational and adaptive nature of Zephyrine into an engine designed for minimal storage footprint, lower runtime memory usage.
 
-This is just another Adaptive Agent wrapper with determenistic response on certain question and query represents the integration of the **Stella-Icarus Deterministic Core** directly into the API routing layer. By utilizing an Elevated Level Privilege (ELP) priority thread scheduler and native OS tasking, we can ensure that deep cognitive reasoning (ELP0) never interrupts high-priority real-time responses or physical telemetry (ELP1/ELP2).
+This is just another Adaptive Agent wrapper with determenistic response on certain question and query represents the integration of the **Stella-Icarus Deterministic Core** directly into the API routing layer. By utilizing an Elevated Level Privilege (ELP) priority thread scheduler and native OS tasking, we can ensure that deep cognitive reasoning (ELP0) never interrupts high-priority real-time responses on client response (ELP1), and finally ELP2 (StellaIcarus Determenistic API response)
 
 ### ⚙️ Core Architecture
 
 Adelaide Lite is specifically tailored for environments with lower storage and constrained runtime memory capacity.
 
-1.  **Ada/SPARK Foundation:** Inspired by the rigorous high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C), the entire networking, caching, and task-scheduling layer is written in Ada, providing mathematically verifiable safety against buffer overflows, race conditions, and memory leaks.
+1.  **Ada/SPARK Foundation:** Inspired by some paradigms, specifically (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C). the entire networking, caching, and task-scheduling layer is written in Ada, providing mathematically verifiable safety against buffer overflows, race conditions, and memory leaks.
 2.  **WCET Enforcements:** The Worst-Case Execution Time (WCET) manager actively monitors and terminates non-deterministic AI generation if it breaches strict latency budgets, falling back to cached or deterministic responses.
 3.  **Hybrid Deno Global Internet Reference Hooks:** Instead of embedding fragile web drivers, Adelaide Lite securely spawns isolated Deno/TypeScript subprocesses (`playwright_scraper.ts`) that utilize stealth-plugin techniques to breach bot-detection challenges and retrieve factual data for the generative core without compromising the stability of the Ada parent process.
 
