@@ -119,6 +119,10 @@ package body Adelaide_Server_Pkg is
          return Build_Response ("", AWS.Messages.S204);
       end if;
 
+      if URI = "/" then
+         return Build_Response ("Ollama is running");
+      end if;
+
       if URI = "/v1/models" or else URI = "/api/tags" then
          declare
             Resp   : constant GNATCOLL.JSON.JSON_Value :=
