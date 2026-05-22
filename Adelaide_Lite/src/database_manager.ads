@@ -12,7 +12,7 @@ package Database_Manager is
    procedure Add_To_Cache (Prompt : String; Embedding : Math_Utils.Vector; Response : String);
 
    --  Semantic Retrieval from Cache
-   function Get_Cached_Response (Embedding : Math_Utils.Vector) return String;
+   function Get_Cached_Response (Embedding : Math_Utils.Vector; WCET : Duration) return String;
 
    --  Simple keyword recall (Existing logic)
    function Recall (Query : String) return String;
