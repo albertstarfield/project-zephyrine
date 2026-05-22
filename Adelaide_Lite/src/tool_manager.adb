@@ -72,6 +72,10 @@ package body Tool_Manager is
       Res.Success := True;
 
       if Name = "searchglobalref" or else Name = "search" then
+         if Params = "query" then
+            Res.Output := To_Unbounded_String ("No search results available.");
+            return Res;
+         end if;
          Res.Output := To_Unbounded_String
            (Run_External ("python/searchglobalref.py", Params));
       elsif Name = "searchlocalref" then
