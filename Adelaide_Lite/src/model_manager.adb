@@ -830,9 +830,11 @@ package body Model_Manager is
       Put_Line ("[Hybrid] Starting reasoning chain...");
 
       --  1. Factual checking
-      if Index (Prompt, "What is") > 0
-        or else Index (Prompt, "Who is") > 0
-        or else Index (Prompt, "tell me about") > 0
+      if not Agentic
+        and then
+        (Index (Prompt, "What is") > 0
+         or else Index (Prompt, "Who is") > 0
+         or else Index (Prompt, "tell me about") > 0)
       then
          declare
             R : constant Tool_Manager.Tool_Result :=
