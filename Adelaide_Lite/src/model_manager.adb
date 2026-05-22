@@ -993,7 +993,7 @@ package body Model_Manager is
                            P_Pos  : constant Natural :=
                              Index (A_Full, "(");
                            EP_Pos : constant Natural :=
-                             Index (A_Full, ")", P_Pos);
+                             (if P_Pos > 0 then Index (A_Full, ")", P_Pos) else 0);
                         begin
                            if P_Pos > 0 and then EP_Pos > P_Pos then
                               declare
