@@ -34,7 +34,7 @@ package body Streaming_Queue is
                   GNATCOLL.JSON.Set_Field (Resp, "created_at", TS & "Z");
                   GNATCOLL.JSON.Set_Field (Resp, "message", Msg);
                   GNATCOLL.JSON.Set_Field (Resp, "done", False);
-                  Ada.Strings.Unbounded.Append (Buffer, GNATCOLL.JSON.Write (Resp) & ASCII.LF);
+                  Ada.Strings.Unbounded.Append (Buffer, String'(GNATCOLL.JSON.Write (Resp) & ASCII.LF));
                end;
             when OpenAI =>
                declare
@@ -51,7 +51,7 @@ package body Streaming_Queue is
                   GNATCOLL.JSON.Set_Field (Resp, "created", Long_Integer'(1686935002));
                   GNATCOLL.JSON.Set_Field (Resp, "model", Ada.Strings.Unbounded.To_String (Model_ID));
                   GNATCOLL.JSON.Set_Field (Resp, "choices", Arr);
-                  Ada.Strings.Unbounded.Append (Buffer, "data: " & GNATCOLL.JSON.Write (Resp) & ASCII.LF);
+                  Ada.Strings.Unbounded.Append (Buffer, String'("data: " & GNATCOLL.JSON.Write (Resp) & ASCII.LF));
                end;
          end case;
       end Push;
@@ -85,9 +85,9 @@ package body Streaming_Queue is
                GNATCOLL.JSON.Set_Field (Resp, "model", Ada.Strings.Unbounded.To_String (Model_ID));
                GNATCOLL.JSON.Set_Field (Resp, "created_at", TS & "Z");
                GNATCOLL.JSON.Set_Field (Resp, "done", True);
-               Ada.Strings.Unbounded.Append (Buffer, GNATCOLL.JSON.Write (Resp) & ASCII.LF);
+               Ada.Strings.Unbounded.Append (Buffer, String'(GNATCOLL.JSON.Write (Resp) & ASCII.LF));
             when OpenAI =>
-               Ada.Strings.Unbounded.Append (Buffer, "data: [DONE]" & ASCII.LF);
+               Ada.Strings.Unbounded.Append (Buffer, String'("data: [DONE]" & ASCII.LF));
          end case;
          Closed := True;
       end Close;
