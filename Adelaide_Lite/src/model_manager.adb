@@ -669,6 +669,13 @@ package body Model_Manager is
          return;
       end if;
 
+      declare
+         procedure Llama_KV_Cache_Clear (Ctx : Llama_Context);
+         pragma Import (C, Llama_KV_Cache_Clear, "llama_kv_cache_clear");
+      begin
+         Llama_KV_Cache_Clear (Models (Kind).Context);
+      end;
+
       Models (Kind).In_Use := True;
       Models (Kind).Last_Used := Clock;
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
