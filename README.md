@@ -28,7 +28,7 @@
 
 Adelaide Lite is an uncompromisingly reliable, highly efficient iteration of Project Zephyrine's core architecture. Written entirely in **Ada** and built atop the robust `AWS` (Ada Web Server) framework, Adelaide Lite distills the conversational and adaptive nature of Zephyrine into an engine designed for minimal storage footprint, low runtime memory usage, and absolute stability.
 
-This is not just another LLM wrapper. Adelaide Lite represents the integration of the **Stella-Icarus Deterministic Core** directly into the API routing layer. By utilizing an Elevated Level Privilege (ELP) priority thread scheduler and native OS tasking, we can ensure that deep cognitive reasoning (ELP0) never interrupts high-priority real-time responses or physical telemetry (ELP1/ELP2).
+This is just another LLM wrapper with determenistic response on certain question and query represents the integration of the **Stella-Icarus Deterministic Core** directly into the API routing layer. By utilizing an Elevated Level Privilege (ELP) priority thread scheduler and native OS tasking, we can ensure that deep cognitive reasoning (ELP0) never interrupts high-priority real-time responses or physical telemetry (ELP1/ELP2).
 
 ### ⚙️ Core Architecture
 
@@ -36,7 +36,7 @@ Adelaide Lite is specifically tailored for environments with lower storage and c
 
 1.  **Ada/SPARK Foundation:** Inspired by the rigorous high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C), the entire networking, caching, and task-scheduling layer is written in Ada, providing mathematically verifiable safety against buffer overflows, race conditions, and memory leaks.
 2.  **WCET Enforcements:** The Worst-Case Execution Time (WCET) manager actively monitors and terminates non-deterministic AI generation if it breaches strict latency budgets, falling back to cached or deterministic responses.
-3.  **Hybrid Deno Web-Scraping Hooks:** Instead of embedding fragile web drivers, Adelaide Lite securely spawns isolated Deno/TypeScript subprocesses (`playwright_scraper.ts`) that utilize stealth-plugin techniques to breach bot-detection challenges and retrieve factual data for the generative core without compromising the stability of the Ada parent process.
+3.  **Hybrid Deno Global Internet Reference Hooks:** Instead of embedding fragile web drivers, Adelaide Lite securely spawns isolated Deno/TypeScript subprocesses (`playwright_scraper.ts`) that utilize stealth-plugin techniques to breach bot-detection challenges and retrieve factual data for the generative core without compromising the stability of the Ada parent process.
 
 ### 🎭 API Interfaces
 
