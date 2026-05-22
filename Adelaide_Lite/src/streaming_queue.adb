@@ -65,7 +65,7 @@ package body Streaming_Queue is
                   GNATCOLL.JSON.Set_Field (Resp, "choices", Arr);
                   Ada.Strings.Unbounded.Append
                     (Buffer, String'("data: " & GNATCOLL.JSON.Write (Resp) &
-                     ASCII.LF));
+                     ASCII.LF & ASCII.LF));
                end;
          end case;
       end Push;
@@ -108,8 +108,34 @@ package body Streaming_Queue is
                Ada.Strings.Unbounded.Append
                  (Buffer, String'(GNATCOLL.JSON.Write (Resp) & ASCII.LF));
             when OpenAI =>
-               Ada.Strings.Unbounded.Append
-                 (Buffer, String'("data: [DONE]" & ASCII.LF));
+               declare
+                  Choice : constant GNATCOLL.JSON.JSON_Value :=
+                    GNATCOLL.JSON.Create_Object;
+                  D_Val  : constant GNATCOLL.JSON.JSON_Value :=
+                    GNATCOLL.JSON.Create_Object;
+                  Arr    : GNATCOLL.JSON.JSON_Array :=
+                    GNATCOLL.JSON.Empty_Array;
+               begin
+                  GNATCOLL.JSON.Set_Field (Choice, "delta", D_Val);
+                  GNATCOLL.JSON.Set_Field (Choice, "index", Integer'(0));
+                  GNATCOLL.JSON.Set_Field (Choice, "finish_reason", "stop");
+                  GNATCOLL.JSON.Append (Arr, Choice);
+                  GNATCOLL.JSON.Set_Field (Resp, "id",
+                                           "chatcmpl-adelaide-stream");
+                  GNATCOLL.JSON.Set_Field (Resp, "object",
+                                           "chat.completion.chunk");
+                  GNATCOLL.JSON.Set_Field (Resp, "created",
+                                           Long_Integer'(1686935002));
+                  GNATCOLL.JSON.Set_Field
+                    (Resp, "model",
+                     Ada.Strings.Unbounded.To_String (Model_ID));
+                  GNATCOLL.JSON.Set_Field (Resp, "choices", Arr);
+                  Ada.Strings.Unbounded.Append
+                    (Buffer, String'("data: " & GNATCOLL.JSON.Write (Resp) &
+                     ASCII.LF & ASCII.LF));
+                  Ada.Strings.Unbounded.Append
+                    (Buffer, String'("data: [DONE]" & ASCII.LF & ASCII.LF));
+               end;
          end case;
          Closed := True;
       end Close;
