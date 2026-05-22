@@ -5,7 +5,8 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Model_Manager;
 with Database_Manager;
 with Math_Utils;
-with GNAT.OS_Lib;
+with Ada.Directories;
+with Ada.Environment_Variables;
 
 package body Knowledge_Manager is
 
@@ -17,9 +18,9 @@ package body Knowledge_Manager is
       entry Start;
    end Thought_Task;
 
-   task Recoll_Task is
+   task Native_Crawl_Task is
       entry Start;
-   end Recoll_Task;
+   end Native_Crawl_Task;
 
    procedure Initialize is
    begin
@@ -31,7 +32,7 @@ package body Knowledge_Manager is
    begin
       Indexing_Task.Start;
       Thought_Task.Start;
-      Recoll_Task.Start;
+      Native_Crawl_Task.Start;
    end Start_Tasks;
 
    --  Helper to index references.bib
@@ -128,26 +129,100 @@ package body Knowledge_Manager is
       end loop;
    end Indexing_Task;
 
-   task body Recoll_Task is
-      Args : GNAT.OS_Lib.Argument_List (1 .. 0);
-      Success : Boolean;
+   task body Native_Crawl_Task is
+      procedure Index_File (Path : String) is
+         File    : File_Type;
+         Content : Unbounded_String;
+         Line    : Unbounded_String;
+         Vec     : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
+         Len     : Natural := 0;
+         use type Ada.Directories.File_Size;
+      begin
+         if Ada.Directories.Size (Path) > 5_000_000 then
+            return;
+         end if;
+         Open (File, In_File, Path);
+         while not End_Of_File (File) loop
+            Line := To_Unbounded_String (Get_Line (File));
+            Append (Content, To_String (Line) & ASCII.LF);
+            if Length (Content) > 1000 then
+               Model_Manager.Get_Embedding (To_String (Content), Vec, Len);
+               if Len > 0 then
+                  Database_Manager.Add_Literature_Chunk
+                    (Path, To_String (Content), Vec (1 .. Len), "hash");
+               end if;
+               Content := Null_Unbounded_String;
+            end if;
+         end loop;
+         if Length (Content) > 0 then
+            Model_Manager.Get_Embedding (To_String (Content), Vec, Len);
+            if Len > 0 then
+               Database_Manager.Add_Literature_Chunk
+                 (Path, To_String (Content), Vec (1 .. Len), "hash");
+            end if;
+         end if;
+         Close (File);
+      exception
+         when others =>
+            if Is_Open (File) then
+               Close (File);
+            end if;
+      end Index_File;
+
+      procedure Walk_Directory (Dir : String) is
+         Search : Ada.Directories.Search_Type;
+         Ent    : Ada.Directories.Directory_Entry_Type;
+         use Ada.Directories;
+      begin
+         Start_Search (Search, Dir, "");
+         while More_Entries (Search) loop
+            if Model_Manager.Should_Abort_ELP0 then
+               return;
+            end if;
+            Get_Next_Entry (Search, Ent);
+            declare
+               N : constant String := Simple_Name (Ent);
+               P : constant String := Full_Name (Ent);
+            begin
+               if N /= "." and then N /= ".." then
+                  if Kind (Ent) = Directory then
+                     Walk_Directory (P);
+                  elsif Kind (Ent) = Ordinary_File then
+                     if Index (N, ".txt") > 0 or else 
+                        Index (N, ".md") > 0 or else
+                        Index (N, ".adb") > 0 or else 
+                        Index (N, ".ads") > 0 or else
+                        Index (N, ".py") > 0 
+                     then
+                        Index_File (P);
+                     end if;
+                  end if;
+               end if;
+            end;
+         end loop;
+      exception
+         when others => null;
+      end Walk_Directory;
+      
+      Home_Dir : constant String :=
+        (if Ada.Environment_Variables.Exists ("HOME")
+         then Ada.Environment_Variables.Value ("HOME")
+         else ".");
    begin
       accept Start;
       loop
          if Model_Manager.Should_Abort_ELP0 then
             delay 1.0;
          else
-            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Running Recoll system indexer...");
-            GNAT.OS_Lib.Spawn ("/Applications/Recoll.app/Contents/MacOS/recollindex", Args, Success);
-            if Success then
-               Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Recoll indexing completed successfully.");
-            else
-               Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" & AnsiAda.Reset & " Recoll indexing failed.");
-            end if;
+            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & 
+                      AnsiAda.Reset & " Starting native Ada filesystem crawl...");
+            Walk_Directory (Home_Dir);
+            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & 
+                      AnsiAda.Reset & " Native crawl finished.");
             delay 3600.0;
          end if;
       end loop;
-   end Recoll_Task;
+   end Native_Crawl_Task;
 
    task body Thought_Task is
       Fallback_Text : constant String :=
