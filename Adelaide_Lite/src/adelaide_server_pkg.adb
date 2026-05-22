@@ -143,22 +143,21 @@ package body Adelaide_Server_Pkg is
          declare
             Resp   : constant GNATCOLL.JSON.JSON_Value :=
               GNATCOLL.JSON.Create_Object;
-            Models : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-            procedure Add_Model (Id, Family : String) is
+            Models : GNATCOLL.JSON.JSON_Array :=
+              GNATCOLL.JSON.Empty_Array;
+            procedure Add_Model (Id : String; Family : String) is
                M : constant GNATCOLL.JSON.JSON_Value :=
                  GNATCOLL.JSON.Create_Object;
                D : constant GNATCOLL.JSON.JSON_Value :=
                  GNATCOLL.JSON.Create_Object;
             begin
-               GNATCOLL.JSON.Set_Field (M, "id", Id);
-               GNATCOLL.JSON.Set_Field (M, "object", "model");
-               GNATCOLL.JSON.Set_Field (M, "created",
-                                        Long_Integer'(1686935002));
-               GNATCOLL.JSON.Set_Field (M, "owned_by", "adelaide");
                GNATCOLL.JSON.Set_Field (M, "name", Id);
                GNATCOLL.JSON.Set_Field (M, "model", Id);
-               GNATCOLL.JSON.Set_Field (M, "modified_at",
-                                        "2024-05-21T15:00:00Z");
+               GNATCOLL.JSON.Set_Field (M, "id", Id);
+               GNATCOLL.JSON.Set_Field (M, "object", "model");
+               GNATCOLL.JSON.Set_Field (M, "created", Long_Integer'(1686935002));
+               GNATCOLL.JSON.Set_Field (M, "owned_by", "adelaide");
+               GNATCOLL.JSON.Set_Field (M, "modified_at", "2026-05-22T00:00:00Z");
                GNATCOLL.JSON.Set_Field (M, "size", Long_Integer'(4000000000));
                GNATCOLL.JSON.Set_Field (M, "digest", "sha256:adelaide" & Id);
                GNATCOLL.JSON.Set_Field (D, "format", "gguf");
@@ -175,6 +174,19 @@ package body Adelaide_Server_Pkg is
             GNATCOLL.JSON.Set_Field (Resp, "data", Models);
             GNATCOLL.JSON.Set_Field (Resp, "models", Models);
             return Build_Response (GNATCOLL.JSON.Write (Resp));
+         end;
+
+      elsif URI'Length > 11 and then URI (1 .. 11) = "/v1/models/" then
+         declare
+            Model_Id : constant String := URI (12 .. URI'Last);
+            M : constant GNATCOLL.JSON.JSON_Value :=
+              GNATCOLL.JSON.Create_Object;
+         begin
+            GNATCOLL.JSON.Set_Field (M, "id", Model_Id);
+            GNATCOLL.JSON.Set_Field (M, "object", "model");
+            GNATCOLL.JSON.Set_Field (M, "created", Long_Integer'(1686935002));
+            GNATCOLL.JSON.Set_Field (M, "owned_by", "adelaide");
+            return Build_Response (GNATCOLL.JSON.Write (M));
          end;
 
       elsif URI = "/api/show" then
@@ -230,7 +242,7 @@ package body Adelaide_Server_Pkg is
          end;
 
       elsif URI = "/api/chat" or else URI = "/v1/chat/completions" or else
-        URI = "/api/generate"
+        URI = "/v1/completions" or else URI = "/api/generate"
       then
          declare
             Payload : Unbounded_String :=
@@ -321,11 +333,11 @@ package body Adelaide_Server_Pkg is
                      S : constant Streaming_Queue.Response_Stream_Access := new Streaming_Queue.Response_Stream;
                   begin
                      S.Q := Q;
-                     Q.Set_Format ((if URI = "/v1/chat/completions" then Streaming_Queue.OpenAI else Streaming_Queue.Ollama), To_String (Req_Model));
+                     Q.Set_Format ((if URI = "/v1/chat/completions" or else URI = "/v1/completions" then Streaming_Queue.OpenAI else Streaming_Queue.Ollama), To_String (Req_Model));
                      Q.Close;
                      declare
                         Resp : AWS.Response.Data := AWS.Response.Stream
-                          (Content_Type => (if URI = "/v1/chat/completions" then "text/event-stream" else "application/x-ndjson"),
+                          (Content_Type => (if URI = "/v1/chat/completions" or else URI = "/v1/completions" then "text/event-stream" else "application/x-ndjson"),
                            Handle => S);
                      begin
                         AWS.Response.Set.Add_Header (Resp, "Access-Control-Allow-Origin", "*");
@@ -356,13 +368,13 @@ package body Adelaide_Server_Pkg is
                begin
                   S.Q := Q;
                   T.Start (To_String (Prompt), To_String (Req_Model),
-                           (if URI = "/v1/chat/completions"
+                           (if URI = "/v1/chat/completions" or else URI = "/v1/completions"
                             then Streaming_Queue.OpenAI
                             else Streaming_Queue.Ollama), Q,
                            Is_Agentic, Is_Raw_Prompt);
                   declare
                      Resp : AWS.Response.Data := AWS.Response.Stream
-                       (Content_Type => (if URI = "/v1/chat/completions"
+                       (Content_Type => (if URI = "/v1/chat/completions" or else URI = "/v1/completions"
                                          then "text/event-stream"
                                          else "application/x-ndjson"),
                         Handle => S);
@@ -461,12 +473,16 @@ package body Adelaide_Server_Pkg is
                           (Choice, "finish_reason", "stop");
                      end if;
                      
-                     GNATCOLL.JSON.Set_Field (Choice, "message", Msg_Out);
+                     if URI = "/v1/completions" then
+                        GNATCOLL.JSON.Set_Field (Choice, "text", Res_Str);
+                     else
+                        GNATCOLL.JSON.Set_Field (Choice, "message", Msg_Out);
+                     end if;
                      GNATCOLL.JSON.Append (Choices, Choice);
                      GNATCOLL.JSON.Set_Field
                        (Resp, "id", "chatcmpl-adelaide-" & TS_Str);
                      GNATCOLL.JSON.Set_Field (Resp, "object",
-                                              "chat.completion");
+                                              (if URI = "/v1/completions" then "text_completion" else "chat.completion"));
                      GNATCOLL.JSON.Set_Field (Resp, "created",
                                               Long_Integer'(1686935002));
                      GNATCOLL.JSON.Set_Field (Resp, "model",
