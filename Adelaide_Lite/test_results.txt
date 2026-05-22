@@ -411,7 +411,7 @@
   "model": "adelaide-embedding",
   "object": "list"
 }
-[32m[PASS][0m Validated in 0.01s
+[32m[PASS][0m Validated in 0.00s
 
 [1m--- Ollama Embeddings ---[0m
 [36m[INFO][0m Target: POST /api/embeddings
@@ -548,7 +548,7 @@
     0.1
   ]
 }
-[32m[PASS][0m Validated in 0.01s
+[32m[PASS][0m Validated in 0.00s
 
 [1m--- OpenAI Chat Non-Streaming ---[0m
 [36m[INFO][0m Target: POST /v1/chat/completions
@@ -564,7 +564,7 @@
   ],
   "created": 1686935002,
   "done": true,
-  "id": "chatcmpl-adelaide-2026-05-22T06:12:52",
+  "id": "chatcmpl-adelaide-2026-05-22T06:15:25",
   "message": {
     "content": "<think>\n[Adelaide Core Orchestration]\n\n\n\n</think>\n\n\nHello. As an engineer, I can tell you that validation is the critical bridge between theoretical design and real-world reliability. It ensures that a product actually performs its intended function under specific operating conditions before it reaches production or deployment. Without rigorous validation, we risk deploying systems with latent flaws that could compromise safety, efficiency, and user trust\u2014risks no amount of simulation can fully eliminate.\n\nHere is why validation is non-negotiable in engineering:\n\n*   **Safety Assurance:** In high-stakes environments like aerospace, medical devices, or infrastructure, a failure during the testing phase prevents human injury or system collapse that might occur later if bugs were missed.\n*   **Requirement Verification:** It confirms that what we *built* matches exactly what was *required*. We don't just build; we validate that our output solves the specific problem it was designed for.\n*   **Cost Reduction:** The cost of fixing a defect is exponentially higher once it enters the production line or reaches the customer. Validation catches issues early when the \"cost of change\" is minimal compared to field recalls or warranty claims.\n*   **Compliance & Standards:** Most industries have strict regulatory frameworks (e.g., ISO, FDA, FAA). Rigorous validation provides the necessary documentation and data to prove compliance with these standards.\n\nIn short, validation transforms a hypothesis into a verified reality. It is the discipline that separates engineering from guesswork.",
     "role": "assistant"
@@ -577,7 +577,7 @@
     "total_tokens": 0
   }
 }
-[32m[PASS][0m Validated in 11.58s
+[32m[PASS][0m Validated in 12.04s
 
 [1m--- Ollama Chat Non-Streaming ---[0m
 [36m[INFO][0m Target: POST /api/chat
@@ -593,7 +593,7 @@
   ],
   "created": 1686935002,
   "done": true,
-  "id": "chatcmpl-adelaide-2026-05-22T06:13:04",
+  "id": "chatcmpl-adelaide-2026-05-22T06:15:37",
   "message": {
     "content": "<think>\n[Adelaide Core Orchestration]\n\n\n\n</think>\n\n\nHello. As an engineer, I can tell you that validation is the critical bridge between theoretical design and real-world reliability. It ensures that a product actually performs its intended function under specific operating conditions before it reaches production or deployment. Without rigorous validation, we risk deploying systems with latent flaws that could compromise safety, efficiency, and user trust\u2014risks no amount of simulation can fully eliminate.\n\nHere is why validation is non-negotiable in engineering:\n\n*   **Safety Assurance:** In high-stakes environments like aerospace, medical devices, or infrastructure, a failure during the testing phase prevents human injury or system collapse that might occur later if bugs were missed.\n*   **Requirement Verification:** It confirms that what we *built* matches exactly what was *required*. We don't just build; we validate that our output solves the specific problem it was designed for.\n*   **Cost Reduction:** The cost of fixing a defect is exponentially higher once it enters the production line or reaches the customer. Validation catches issues early when the \"cost of change\" is minimal compared to field recalls or warranty claims.\n*   **Compliance & Standards:** Most industries have strict regulatory frameworks (e.g., ISO, FDA, FAA). Rigorous validation provides the necessary documentation and data to prove compliance with these standards.\n\nIn short, validation transforms a hypothesis into a verified reality. It is the discipline that separates engineering from guesswork.",
     "role": "assistant"
@@ -606,19 +606,19 @@
     "total_tokens": 0
   }
 }
-[32m[PASS][0m Validated in 9.45s
+[32m[PASS][0m Validated in 10.22s
 
 [1m--- OpenAI Chat Streaming ---[0m
 [36m[INFO][0m Target: POST /v1/chat/completions
 [36m[INFO][0m       Time to first chunk: 0.01s
 [35m[RAW CHUNK][0m {"choices": [{"delta": {"content": "<think>\n[Adelaide Core Orchestration]\n\n"}, "index": 0}], "created": 1686935002, "id": "chatcmpl-adelaide-stream", "model": "adelaide-hybrid", "object": "chat.completion.chunk"}
 [36m[INFO][0m       Chunks: 1, Total length: 39
-[32m[PASS][0m Validated in 0.02s
+[32m[PASS][0m Validated in 0.01s
 
 [1m--- Ollama Chat Streaming ---[0m
 [36m[INFO][0m Target: POST /api/chat
 [36m[INFO][0m       Time to first chunk: 0.00s
-[35m[RAW CHUNK][0m {"created_at": "2026-05-22T06:13:13Z", "done": false, "message": {"content": "<think>\n[Adelaide Core Orchestration]\n\n", "role": "assistant"}, "model": "adelaide-hybrid"}
+[35m[RAW CHUNK][0m {"created_at": "2026-05-22T06:15:48Z", "done": false, "message": {"content": "<think>\n[Adelaide Core Orchestration]\n\n", "role": "assistant"}, "model": "adelaide-hybrid"}
 [36m[INFO][0m       Chunks: 1, Total length: 39
 [32m[PASS][0m Validated in 0.01s
 
@@ -630,14 +630,58 @@
   "model": "adelaide-hybrid",
   "response": "<think>\n[Adelaide Core Orchestration]\n\n\n\n</think>\n\nHello."
 }
-[32m[PASS][0m Validated in 20.20s
+[32m[PASS][0m Validated in 21.16s
 
 [1m--- Ollama Generate Streaming ---[0m
 [36m[INFO][0m Target: POST /api/generate
-[36m[INFO][0m       Time to first chunk: 0.00s
-[35m[RAW CHUNK][0m {"created_at": "2026-05-22T06:13:33Z", "done": false, "message": {"content": "<think>\n[Adelaide Core Orchestration]\n\n", "role": "assistant"}, "model": "adelaide-hybrid"}
+[36m[INFO][0m       Time to first chunk: 0.01s
+[35m[RAW CHUNK][0m {"created_at": "2026-05-22T06:16:09Z", "done": false, "message": {"content": "<think>\n[Adelaide Core Orchestration]\n\n", "role": "assistant"}, "model": "adelaide-hybrid"}
 [36m[INFO][0m       Chunks: 1, Total length: 39
-[32m[PASS][0m Validated in 0.01s
+[32m[PASS][0m Validated in 0.02s
 
 [1m--- OpenAI Agentic API ---[0m
 [36m[INFO][0m Target: POST /v1/chat/completions
+[31m[FAIL][0m Timeout after 420s
+[36m[INFO][0m 
+Starting stress/edge-case tests...
+
+[1m--- Large Payload Test ---[0m
+[36m[INFO][0m Target: POST /api/chat
+[35m[RAW JSON RESPONSE][0m
+{
+  "choices": [
+    {
+      "message": {
+        "content": "<think>\n[Adelaide Core Orchestration]\n\n\n\n</think>\n\nThe provided text contains only the repeated word \"Validation.\" There is no factual content, context, or claim to verify. Therefore, a fact-check cannot be performed as there is nothing to evaluate against established facts.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1686935002,
+  "done": true,
+  "id": "chatcmpl-adelaide-2026-05-22T06:16:38",
+  "message": {
+    "content": "<think>\n[Adelaide Core Orchestration]\n\n\n\n</think>\n\nThe provided text contains only the repeated word \"Validation.\" There is no factual content, context, or claim to verify. Therefore, a fact-check cannot be performed as there is nothing to evaluate against established facts.",
+    "role": "assistant"
+  },
+  "model": "adelaide-hybrid",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 0,
+    "prompt_tokens": 0,
+    "total_tokens": 0
+  }
+}
+[32m[PASS][0m Validated in 2.84s
+
+[1m--- Malformed JSON Test ---[0m
+[32m[PASS][0m Malformed JSON correctly rejected
+
+[1m[35m==================================================[0m
+   Validation Summary
+[35m==================================================[0m
+Total Tests: 13
+Passed:      [32m12[0m
+Failed:      [31m1[0m
+
+[31mValidation failed with 1 errors.[0m
