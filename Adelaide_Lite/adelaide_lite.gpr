@@ -32,7 +32,6 @@ project Adelaide_Lite is
          "-L/opt/homebrew/opt/sqlite/lib",
          "-lsqlite3",
          "-mmacosx-version-min=15.0",
-         "-Wl,-syslibroot,/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk",
          "-framework", "Accelerate",
          "-framework", "Metal",
          "-framework", "Foundation",
