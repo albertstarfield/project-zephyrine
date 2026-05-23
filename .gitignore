@@ -9,5 +9,6 @@
 **.graphml**
 **__pycache__**
 **__**
+**node_modules**
 
 **cinst.txt**
