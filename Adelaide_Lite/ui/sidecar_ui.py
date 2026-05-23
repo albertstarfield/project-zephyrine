@@ -483,6 +483,15 @@ if __name__ == "__main__":
             
     threading.Thread(target=poll_ada_telemetry, daemon=True).start()
 
+    def run_benchmark():
+        time.sleep(2)  # Allow server to fully start
+        try:
+            httpx.post(f"http://127.0.0.1:{ui_port}/api/chat", json={"message": "test"}, timeout=30.0)
+        except Exception:
+            pass
+            
+    threading.Thread(target=run_benchmark, daemon=True).start()
+
     # Start FastAPI in a background thread
     server_thread = threading.Thread(target=run_server, args=(ui_port,), daemon=True)
     server_thread.start()

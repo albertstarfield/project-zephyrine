@@ -88,7 +88,7 @@ package Model_Manager is
    function Generator_Callback (Prompt : String) return String;
 
    Current_WCET : Duration := 300.0;
-   Current_WCET_ELP0 : Duration := 300.0;
-   Current_WCET_ELP1 : Duration := 300.0;
+   Current_WCET_ELP0 : Duration := 0.0;
+   Current_WCET_ELP1 : Duration := 0.0;
 
 end Model_Manager;
