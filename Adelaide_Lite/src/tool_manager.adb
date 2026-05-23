@@ -8,12 +8,12 @@ package body Tool_Manager is
 
    function Execute_Tool (Name : String; Params : String) return Tool_Result is
       use GNAT.OS_Lib;
-      Path : String_Access;
+      Path : GNAT.OS_Lib.String_Access;
       Full_Cmd : Unbounded_String;
       Result : Tool_Result := (Success => False,
                                Output  => Null_Unbounded_String);
    begin
-      Path := Locate_Exec_On_Path ("python3");
+      Path := GNAT.OS_Lib.Locate_Exec_On_Path ("python3");
       if Path = null then
          Result.Output := To_Unbounded_String ("Error: python3 not found");
          return Result;

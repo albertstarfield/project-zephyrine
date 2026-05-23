@@ -1,6 +1,7 @@
 with AnsiAda;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Exceptions;
 with Model_Manager;
 with Streaming_Queue;
@@ -18,11 +19,16 @@ package body Adelaide_Server_Pkg is
    --  Pace timing for main loop
    WCET_Main_Loop : Duration := 0.0;
 
+   function Equivalent (Left, Right : String) return Boolean is
+   begin
+      return Left = Right;
+   end Equivalent;
+
    package Session_Maps is new Ada.Containers.Indefinite_Hashed_Maps
      (Key_Type        => String,
       Element_Type    => Streaming_Queue.Queue_Access,
       Hash            => Ada.Strings.Hash,
-      Equivalent_Keys => "=");
+      Equivalent_Keys => Ada.Strings.Fixed."=");
 
    Active_Sessions : Session_Maps.Map;
 
@@ -37,6 +43,7 @@ package body Adelaide_Server_Pkg is
    end Unregister;
 
    procedure Push_Log (ID : String; Log : String) is
+      use type Streaming_Queue.Queue_Access;
    begin
       if Active_Sessions.Contains (ID) then
          Active_Sessions.Element (ID).Push (Log);
@@ -83,6 +90,7 @@ package body Adelaide_Server_Pkg is
       Res : Unbounded_String;
       Is_Ag : Boolean;
       Is_Raw : Boolean;
+      use type Streaming_Queue.Queue_Access;
    begin
       accept Start
         (Prompt : String; Model_Name : String;
