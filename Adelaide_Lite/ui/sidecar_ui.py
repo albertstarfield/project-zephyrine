@@ -142,7 +142,8 @@ def get_stats(queue_len: int = 0):
         "Total_Tokens_Processed": engine_stats.total_tokens,
         "Current_Uptime": uptime,
         "Current_Queue": queue_len,
-        "History_1m": engine_stats.history_1m
+        "History_1m": engine_stats.history_1m,
+        "WCEL_History_1m": engine_stats.wcel_history_1m
     }
 
 @app.post("/api/chat")
