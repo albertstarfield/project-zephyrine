@@ -25,51 +25,49 @@ body, html {
 /* --- DYNAMIC GLOWING BACKGROUND & STARS --- */
 #bg {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1;
-  background: #050a0a; /* Very deep dark teal/turquoise base */
+  background: #0b0c0f; /* Very deep dark base */
   overflow: hidden;
 }
 
 /* Glowing Blooms */
 .orb {
   position: absolute; border-radius: 50%;
-  filter: blur(80px); opacity: 0.5;
+  filter: blur(100px); opacity: 0.6;
 }
-.orb1 {
-  top: -10%; left: -10%; width: 50vw; height: 50vw;
-  background: radial-gradient(circle, rgba(0, 180, 216, 0.25) 0%, rgba(0, 0, 0, 0) 70%);
-  animation: floatOrb1 20s ease-in-out infinite alternate;
+.orb-center {
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 90vw; height: 90vw;
+  background: radial-gradient(circle at center, rgba(30, 60, 150, 0.4) 0%, rgba(20, 30, 80, 0.15) 30%, transparent 65%);
+  animation: pulseOrb 12s ease-in-out infinite alternate;
 }
-.orb2 {
-  bottom: -10%; right: -10%; width: 60vw; height: 60vw;
-  background: radial-gradient(circle, rgba(72, 61, 139, 0.2) 0%, rgba(0, 0, 0, 0) 70%);
-  animation: floatOrb2 25s ease-in-out infinite alternate;
+@keyframes pulseOrb { 
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; } 
+  100% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; } 
 }
-@keyframes floatOrb1 { 0% { transform: translate(0, 0); } 100% { transform: translate(15vw, 15vh); } }
-@keyframes floatOrb2 { 0% { transform: translate(0, 0); } 100% { transform: translate(-10vw, -10vh); } }
 
 /* Sparkling Cross Stars */
 .stars {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-  /* Very small 16x16 star inside a large transparent box */
-  background-image: url('data:image/svg+xml;utf8,<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><path d="M100 92 Q100 100 108 100 Q100 100 100 108 Q100 100 92 100 Q100 100 100 92 Z" fill="rgba(64,224,208,0.8)"/></svg>');
+  /* An irregular pattern of differently sized cross stars to break the grid */
+  background-image: url('data:image/svg+xml;utf8,<svg width="500" height="500" xmlns="http://www.w3.org/2000/svg" fill="rgba(64,224,208,0.9)"><path d="M 50 20 Q 50 45 75 45 Q 50 45 50 70 Q 50 45 25 45 Q 50 45 50 20 Z" /><path d="M 300 100 Q 300 115 315 115 Q 300 115 300 130 Q 300 115 285 115 Q 300 115 300 100 Z" /><path d="M 150 400 Q 150 410 160 410 Q 150 410 150 420 Q 150 410 140 410 Q 150 410 150 400 Z" /><path d="M 420 320 Q 420 340 440 340 Q 420 340 420 360 Q 420 340 400 340 Q 420 340 420 320 Z" /><path d="M 220 220 Q 220 230 230 230 Q 220 230 220 240 Q 220 230 210 230 Q 220 230 220 220 Z" /></svg>');
 }
 .stars1 {
-  background-size: 250px 250px; background-position: 10px 10px;
+  background-size: 400px 400px; background-position: 0 0;
   animation: twinkle 5s infinite alternate ease-in-out;
 }
 .stars2 {
-  background-size: 350px 400px; background-position: 150px 80px;
-  opacity: 0.6; transform: scale(0.6);
+  background-size: 650px 750px; background-position: 150px 80px;
+  opacity: 0.7; transform: rotate(15deg) scale(0.6);
   animation: twinkle 7s infinite alternate-reverse ease-in-out;
 }
 .stars3 {
-  background-size: 450px 300px; background-position: -50px -100px;
-  opacity: 0.3; transform: scale(0.4);
+  background-size: 900px 600px; background-position: -50px -100px;
+  opacity: 0.4; transform: rotate(-25deg) scale(0.4);
   animation: twinkle 4s infinite alternate ease-in-out 2s;
 }
 @keyframes twinkle {
   0% { opacity: 0.1; }
-  100% { opacity: 0.9; filter: drop-shadow(0 0 4px rgba(64,224,208,0.8)); }
+  100% { opacity: 0.9; filter: drop-shadow(0 0 6px rgba(64,224,208,1)); }
 }
 
 #gl { display: none !important; }
@@ -162,7 +160,7 @@ body, html {
 }
 
 .center-logo {
-  height: 150px; margin-bottom: 2rem;
+  height: 280px; margin-bottom: 3rem;
   filter: drop-shadow(0 8px 20px rgba(0,0,0,0.6));
   animation: floatLogo 6s ease-in-out infinite;
 }
@@ -173,12 +171,12 @@ body, html {
 }
 
 .avatar-ring {
-  width: 100px; height: 100px; border-radius: 50%;
+  width: 160px; height: 160px; border-radius: 50%;
   background: linear-gradient(135deg, #4285f4, #9b72cb, #d96570, #4285f4);
   background-size: 300% 300%;
-  padding: 3px; 
+  padding: 4px; 
   box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
   animation: spinGradient 4s ease infinite;
 }
 @keyframes spinGradient {
