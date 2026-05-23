@@ -8,6 +8,7 @@ import uvicorn
 import psutil
 import tiktoken
 import gc
+from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -200,8 +201,9 @@ def duplicate_session(session_id: int):
     conn.close()
     return {"id": new_session_id, "title": new_title}
 
+
 @app.get("/api/messages")
-def get_messages(session_id: int = None):
+def get_messages(session_id: Optional[int] = None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     if session_id:
