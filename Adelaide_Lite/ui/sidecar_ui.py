@@ -334,8 +334,11 @@ def init_knowledge_db():
 _embedding_model = None
 def init_model():
     global _embedding_model
-    from sentence_transformers import SentenceTransformer
-    _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    try:
+        from sentence_transformers import SentenceTransformer
+        _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    except ImportError:
+        _embedding_model = None
 
 init_knowledge_db()
 
@@ -379,6 +382,7 @@ from fastapi.responses import StreamingResponse
 @app.post("/api/knowledgestackfrontend/upload")
 async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Form(...)):
     if _embedding_model is None: init_model()
+    if _embedding_model is None: return JSONResponse({"error": "Embedding model not available"}, status_code=500)
     
     files_data = []
     for file in files:
@@ -431,6 +435,7 @@ async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Fo
 def search_literature(q: str):
     if not q: return {"results": []}
     if _embedding_model is None: init_model()
+    if _embedding_model is None: return {"results": [], "error": "Embedding model not available"}
     
     query_emb = _embedding_model.encode([q])[0]
     conn = sqlite3.connect(LITERATURE_DB_PATH)
@@ -452,6 +457,7 @@ def search_literature(q: str):
 @app.post("/api/knowledgestackfrontend/memory/upload")
 async def upload_memory(session: str = Form(...), topic: str = Form(...), content: str = Form(...)):
     if _embedding_model is None: init_model()
+    if _embedding_model is None: return {"status": "error", "message": "Embedding model not available"}
         
     chunks = [content[i:i+500] for i in range(0, len(content), 500)]
     for chunk in chunks:
@@ -472,6 +478,7 @@ async def upload_memory(session: str = Form(...), topic: str = Form(...), conten
 def search_memory(q: str):
     if not q: return {"results": []}
     if _embedding_model is None: init_model()
+    if _embedding_model is None: return {"results": [], "error": "Embedding model not available"}
     
     query_emb = _embedding_model.encode([q])[0]
     conn = sqlite3.connect(MEMORY_DB_PATH)
@@ -536,7 +543,40 @@ def get_free_port():
 def run_server(port):
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
+def perform_pyrefly_integrity_check():
+    """
+    High-Integrity Static Check: Verify sidecar_ui.py using pyrefly.
+    Exits if any errors or warnings are detected to prevent unsafe execution.
+    """
+    import subprocess
+    import shutil
+    
+    pyrefly_cmd = shutil.which("pyrefly")
+    if not pyrefly_cmd:
+        # If pyrefly is missing, we consider it a safety violation in this mode
+        print("[!] Safety Violation: pyrefly tool not found in PATH.")
+        sys.exit(1)
+        
+    print(f"[*] Running Pyrefly Integrity Check on {os.path.basename(__file__)}...")
+    try:
+        # Run pyrefly check. Assuming non-zero return on error/warning.
+        result = subprocess.run([pyrefly_cmd, "check", __file__], 
+                                capture_output=True, text=True)
+        if result.returncode != 0:
+            print("[!] Pyrefly Integrity Check FAILED.")
+            print(result.stdout)
+            print(result.stderr)
+            print("[*] Emergency Shutdown: Integrity violations detected.")
+            sys.exit(1)
+        print("[+] Pyrefly Integrity Check PASSED.")
+    except Exception as e:
+        print(f"[!] Error executing Pyrefly: {str(e)}")
+        sys.exit(1)
+
 if __name__ == "__main__":
+    # Perform mandatory safety check before starting any services
+    perform_pyrefly_integrity_check()
+    
     ui_port = get_free_port()
     port_file = os.path.join(os.path.dirname(DB_PATH), ".sidecar_port")
     with open(port_file, "w") as f:
