@@ -54,12 +54,21 @@ vec3 sampleBg(vec2 uv) {
   float glow = exp(-dist * 1.8) * 0.4;
   color += vec3(0.12, 0.24, 0.6) * glow;
   
-  // Procedural stars
-  float n = hash(floor(uv * 800.0));
-  if(n > 0.995) {
-      float brightness = (n - 0.995) * 200.0;
-      float twinkle = 0.5 + 0.5 * sin(uTime * 3.0 + n * 100.0);
-      color += vec3(brightness * twinkle);
+  // Procedural cross stars
+  vec2 gridUV = p * 60.0;
+  vec2 id = floor(gridUV);
+  vec2 localUV = fract(gridUV) - 0.5;
+  
+  float n = hash(id);
+  if (n > 0.98) {
+      float size = (n - 0.98) * 50.0; // scale to 0-1
+      float d = length(localUV);
+      float cross = 0.0015 / (abs(localUV.x * localUV.y) + 0.005);
+      float glow = 0.015 / (d + 0.005);
+      float star = (cross + glow) * smoothstep(0.5, 0.1, d) * size;
+      
+      float twinkle = 0.6 + 0.4 * sin(uTime * 0.8 + n * 246.8);
+      color += vec3(max(0.0, star * twinkle * 1.5));
   }
   
   return color;
@@ -171,8 +180,12 @@ void main() {
   float innerShadow = 1.0 - smoothstep(0.0, minBezel * 0.6, distFromEdge);
   color *= mix(1.0, 0.7, innerShadow * 0.3);
 
-  float innerRim = smoothstep(0.0, 2.0, distFromEdge) * (1.0 - smoothstep(2.0, 5.0, distFromEdge));
-  color += vec3(innerRim * 0.15 * uSpecular);
+  // Frame / rim at 0.1 opacity as requested
+  float innerRim = smoothstep(0.0, 1.0, distFromEdge) * (1.0 - smoothstep(1.0, 2.0, distFromEdge));
+  color += vec3(innerRim * 0.1);
+
+  // Apply glass pane opacity of 0.1 (white tint overlay)
+  color = mix(color, vec3(1.0), 0.1);
 
   // Apply dark tint specific to Adelaide Lite design
   vec3 tintColor = vec3(0.0, 0.05, 0.02); // slight dark greenish tint

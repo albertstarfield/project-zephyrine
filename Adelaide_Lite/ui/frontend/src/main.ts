@@ -1200,12 +1200,7 @@ if (glCanvas) {
       rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 24 }); // Make sidebar roundy
     }
     
-    // Input Container
-    const inputContainer = document.querySelector('.input-container');
-    if (inputContainer && !inputContainer.classList.contains('hidden') && (inputContainer as HTMLElement).offsetParent !== null) {
-      const b = inputContainer.getBoundingClientRect();
-      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 24 }); // Make input container roundy
-    }
+    // Input Container (Excluded by user request)
     
     // Chat Bubbles
     const bubbles = document.querySelectorAll('.bubble');
