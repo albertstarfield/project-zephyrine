@@ -86,7 +86,11 @@ if [ "$LAUNCH_GUI" = true ]; then
     ./bin/adelaide_server &
     SERVER_PID=$!
     echo "[*] Booting Python Sidecar UI..."
-    cd ui && python3 sidecar_ui.py
+    if [ -f "pyvenv/bin/python" ]; then
+        cd ui && ../pyvenv/bin/python sidecar_ui.py
+    else
+        cd ui && python3 sidecar_ui.py
+    fi
 else
     ./bin/adelaide_server
 fi
