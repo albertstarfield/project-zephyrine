@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zephyrine Assistant</title>
+  </head>
+  <body>
+    <!-- WebGL Background -->
+    <div id="bg"></div>
+    <canvas id="gl"></canvas>
+    
+    <!-- Chat Interface Overlay -->
+    <div id="app">
+      <header>
+        <img src="/ProjectZephy023LogoRenewal.png" alt="Zephyrine Logo" class="logo" />
+        <div class="header-text">
+          <h1>Zephyrine Assistant</h1>
+          <span class="status">● Online</span>
+        </div>
+      </header>
+
+      <main id="chat-container">
+        <div class="messages" id="messages">
+          <!-- Messages will be injected here via TS -->
+        </div>
+      </main>
+
+      <footer>
+        <form id="chat-form">
+          <input type="text" id="chat-input" placeholder="Ask Zephy anything..." autocomplete="off" />
+          <button type="submit" id="send-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </form>
+      </footer>
+    </div>
+    
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
