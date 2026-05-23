@@ -24,7 +24,9 @@ body, html {
 
 /* --- DYNAMIC GLOWING BACKGROUND & STARS --- */
 #bg {
-  display: none; /* Replaced by WebGL Liquid Glass background */
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1;
+  background: #0b0c0f; /* Very deep dark base */
+  overflow: hidden;
 }
 
 /* Glowing Blooms */
@@ -68,7 +70,7 @@ body, html {
   100% { opacity: 1; filter: drop-shadow(0 0 5px rgba(64,224,208,1)); }
 }
 
-/* #gl { display: none !important; } removed so WebGL canvas is visible */
+#gl { display: none !important; }
 
 /* Main Layout - Gemini Style Edge-to-Edge */
 #app {
@@ -80,7 +82,8 @@ body, html {
 /* --- SIDEBAR --- */
 #sidebar {
   width: 260px;
-  background: transparent;
+  background: rgba(10, 20, 15, 0.25); /* High transparency for glass effect */
+  backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
   display: flex; flex-direction: column;
   justify-content: space-between;
   padding: 5rem 1.25rem 2rem 1.25rem;
@@ -247,7 +250,7 @@ body, html {
   max-width: 70%; padding: 1rem 1.5rem; font-size: 1rem; line-height: 1.6;
 }
 .message.user .bubble {
-  background: transparent;
+  background: rgba(40, 42, 44, 0.8); backdrop-filter: blur(10px);
   border-radius: 30px; border-bottom-right-radius: 8px;
   color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
   border: 1px solid rgba(255,255,255,0.05);
@@ -260,7 +263,8 @@ body, html {
 #about-container {
   flex: 1; display: flex; flex-direction: column;
   overflow: hidden; padding: 2rem;
-  background: transparent;
+  background: rgba(10, 15, 12, 0.6);
+  backdrop-filter: blur(10px);
 }
 .about-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -314,7 +318,8 @@ body, html {
 #knowledge-container {
   flex: 1; display: flex; flex-direction: column;
   overflow: hidden; padding: 2rem;
-  background: transparent;
+  background: rgba(10, 15, 12, 0.6);
+  backdrop-filter: blur(10px);
 }
 .knowledge-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -369,12 +374,14 @@ body, html {
 .input-container {
   position: absolute; bottom: 0; left: 0; right: 0;
   display: flex; flex-direction: column; align-items: center;
+  background: linear-gradient(to top, #0b0c0e 30%, rgba(11, 12, 14, 0) 100%);
   padding: 1.5rem 3rem 2.5rem 3rem;
   width: 100%; box-sizing: border-box;
 }
 #chat-form {
   display: flex; align-items: center; gap: 0.8rem;
-  background: transparent;
+  background: rgba(30, 31, 33, 0.85); 
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   padding: 0.6rem 0.8rem 0.6rem 1.2rem;
   border-radius: 9999px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -383,7 +390,7 @@ body, html {
   width: 100%; max-width: 600px;
 }
 #chat-form:focus-within {
-  background: transparent;
+  background: rgba(35, 36, 40, 0.95);
   border-color: rgba(0, 168, 89, 0.5);
   box-shadow: 0 12px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(0, 168, 89, 0.3);
   max-width: 900px;
