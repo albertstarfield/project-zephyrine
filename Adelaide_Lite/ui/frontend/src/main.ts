@@ -352,16 +352,33 @@ mermaid.initialize({ startOnLoad: false, theme: 'dark' });
 
 let currentAboutContent = '';
 
+// View transition helper
+async function switchView(hideEls: HTMLElement[], showEls: HTMLElement[]) {
+  // Fade out
+  hideEls.forEach(el => el.classList.add('fade-out'));
+  if (hideEls.length > 0) {
+    await new Promise(r => setTimeout(r, 250));
+    hideEls.forEach(el => el.classList.add('hidden'));
+  }
+  
+  // Fade in
+  showEls.forEach(el => {
+    el.classList.remove('hidden');
+    // Force reflow to ensure transition runs
+    void el.offsetWidth;
+    el.classList.remove('fade-out');
+  });
+}
+
 if (navMain) {
-  navMain.addEventListener('click', (e) => {
+  navMain.addEventListener('click', async (e) => {
     e.preventDefault();
-    aboutContainer?.classList.add('hidden');
-    inputContainer.classList.remove('hidden');
-    // Decide whether to show empty state or chat container based on messages
-    if (messagesContainer.children.length === 0) {
-      emptyState.classList.remove('hidden');
-    } else {
-      chatContainerWrapper.classList.remove('hidden');
+    if (!aboutContainer?.classList.contains('hidden')) {
+      const showEls = [inputContainer];
+      if (messagesContainer.children.length === 0) showEls.push(emptyState);
+      else showEls.push(chatContainerWrapper);
+      
+      await switchView([aboutContainer!], showEls);
     }
   });
 }
@@ -369,13 +386,17 @@ if (navMain) {
 if (navAbout) {
   navAbout.addEventListener('click', async (e) => {
     e.preventDefault();
-    emptyState.classList.add('hidden');
-    chatContainerWrapper.classList.add('hidden');
-    inputContainer.classList.add('hidden');
-    aboutContainer?.classList.remove('hidden');
-    await loadAboutContent('/api/docs/readme');
-    tabReadme?.classList.add('active');
-    tabLicense?.classList.remove('active');
+    if (aboutContainer?.classList.contains('hidden')) {
+      const hideEls = [inputContainer];
+      if (!emptyState.classList.contains('hidden')) hideEls.push(emptyState);
+      if (!chatContainerWrapper.classList.contains('hidden')) hideEls.push(chatContainerWrapper);
+      
+      await switchView(hideEls, [aboutContainer!]);
+      
+      await loadAboutContent('/api/docs/readme');
+      tabReadme?.classList.add('active');
+      tabLicense?.classList.remove('active');
+    }
   });
 }
 
