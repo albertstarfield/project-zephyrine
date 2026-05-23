@@ -44,9 +44,10 @@ package body Zenith_Orion with SPARK_Mode => On is
       Now := Clock;
       declare
          Actual_Interval : constant Time_Span := Now - Start_Time;
-         Jitter : constant Duration := (if Actual_Interval > Target_Interval 
-                                        then To_Duration (Actual_Interval - Target_Interval)
-                                        else To_Duration (Target_Interval - Actual_Interval));
+         Jitter : constant Duration :=
+           (if Actual_Interval > Target_Interval 
+            then To_Duration (Actual_Interval - Target_Interval)
+            else To_Duration (Target_Interval - Actual_Interval));
       begin
          if Jitter > Max_J then Max_J := Jitter; end if;
          if Jitter < Min_J then Min_J := Jitter; end if;
