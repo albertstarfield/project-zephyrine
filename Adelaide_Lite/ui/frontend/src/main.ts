@@ -85,6 +85,13 @@ chatForm.addEventListener('submit', async (e) => {
 // Load history on startup
 loadHistory();
 
+const sidebarToggle = document.getElementById('sidebar-toggle') as HTMLButtonElement;
+const sidebar = document.getElementById('sidebar') as HTMLElement;
+if (sidebarToggle && sidebar) {
+  sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+  });
+}
 
 // --------------------------------------------------------
 // WebGL Glassmorphism Shader (adapted from LiquidGlass example)
