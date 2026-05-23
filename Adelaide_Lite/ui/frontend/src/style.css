@@ -68,7 +68,7 @@ body, html {
   100% { opacity: 1; filter: drop-shadow(0 0 5px rgba(64,224,208,1)); }
 }
 
-#gl { display: none !important; }
+/* #gl { display: none !important; } removed so WebGL canvas is visible */
 
 /* Main Layout - Gemini Style Edge-to-Edge */
 #app {
