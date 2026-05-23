@@ -1,7 +1,6 @@
 with Ada.Real_Time; use Ada.Real_Time;
-with Ada.Text_IO;
 
-package body Zenith_Orion with SPARK_Mode is
+package body Zenith_Orion with SPARK_Mode => On is
 
    Target_Interval : constant Time_Span := Milliseconds (1);
    
@@ -28,7 +27,7 @@ package body Zenith_Orion with SPARK_Mode is
       Start_Time := Clock;
       
       --  Critical Deterministic Routine (ELP3)
-      --  Place critical logic here
+      --  Place SPARK-verified logic here
       
       End_Time := Clock;
       Elapsed := End_Time - Start_Time;
@@ -45,12 +44,16 @@ package body Zenith_Orion with SPARK_Mode is
       Now := Clock;
       declare
          Actual_Interval : constant Time_Span := Now - Start_Time;
-         Jitter : constant Duration := abs (To_Duration (Actual_Interval - Target_Interval));
+         Jitter : constant Duration := (if Actual_Interval > Target_Interval 
+                                        then To_Duration (Actual_Interval - Target_Interval)
+                                        else To_Duration (Target_Interval - Actual_Interval));
       begin
          if Jitter > Max_J then Max_J := Jitter; end if;
          if Jitter < Min_J then Min_J := Jitter; end if;
          Sum_J := Sum_J + Jitter;
-         J_Count := J_Count + 1;
+         if J_Count < Natural'Last then
+            J_Count := J_Count + 1;
+         end if;
       end;
    end Paced_Loop;
 
