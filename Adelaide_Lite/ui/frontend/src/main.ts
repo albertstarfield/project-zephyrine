@@ -972,6 +972,8 @@ ADELAIDE_LITE ENGINE
 WCET_ELP0 : ${stats.WCET_ELP0.toFixed(3)}s
 WCET_ELP1 : ${stats.WCET_ELP1.toFixed(3)}s
 WCET_ELP2 : ${stats.WCET_ELP2.toFixed(3)}s
+WCET_WtDog: ${stats.WCET_WatchdogLoop_uS.toFixed(1)} us
+WCET_mLoop: ${stats.WCET_mainLoop_uS.toFixed(1)} us
 Memory    : ${stats.MemoryConsumption_MB.toFixed(1)} MB
 CPU       : ${stats.CPU_Consumption.toFixed(1)} %
 Tokens/s  : ${stats.WCETR.toFixed(2)}
