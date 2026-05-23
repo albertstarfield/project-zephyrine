@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "dev": "NODE_OPTIONS='--nouse-idle-notification --expose-gc' vite",
+    "build": "NODE_OPTIONS='--nouse-idle-notification --expose-gc' tsc && NODE_OPTIONS='--nouse-idle-notification --expose-gc' vite build",
+    "preview": "NODE_OPTIONS='--nouse-idle-notification --expose-gc' vite preview"
   },
   "devDependencies": {
     "@types/cytoscape": "^3.21.9",

@@ -7,10 +7,14 @@ import httpx
 import uvicorn
 import psutil
 import tiktoken
+import gc
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 import webview
+
+# Global Performance Tuning: Disable Garbage Collection
+gc.disable()
 
 app = FastAPI()
 
