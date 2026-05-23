@@ -34,7 +34,16 @@ package body Database_Manager is
                   "id INTEGER PRIMARY KEY AUTOINCREMENT," &
                   "input TEXT," &
                   "response TEXT," &
-                  "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+                  "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP," &
+                  "hit_count INTEGER DEFAULT 1," &
+                  "last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP)");
+
+         begin
+            Execute (Main_DB_Ptr.all, "ALTER TABLE memories ADD COLUMN hit_count INTEGER DEFAULT 1");
+            Execute (Main_DB_Ptr.all, "ALTER TABLE memories ADD COLUMN last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP");
+         exception
+            when others => null; -- Columns already exist
+         end;
 
          --  Response Cache table (Semantic)
          Execute (Main_DB_Ptr.all,
@@ -371,6 +380,7 @@ package body Database_Manager is
    ------------
    function Recall (Query : String) return String is
       Result : Unbounded_String;
+      Best_Id : Integer := -1;
    begin
       if Main_DB_Ptr = null then
          return "";
@@ -378,18 +388,66 @@ package body Database_Manager is
       declare
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all,
-            "SELECT response FROM memories WHERE input LIKE ? LIMIT 1");
+            "SELECT id, response FROM memories WHERE input LIKE ? LIMIT 1");
       begin
          Bind_Text (Stmt, 1, "%" & Query & "%");
          if Step (Stmt) = ROW then
-            Result := To_Unbounded_String (Column_Text (Stmt, 0));
+            Best_Id := Integer (Column_Int (Stmt, 0));
+            Result := To_Unbounded_String (Column_Text (Stmt, 1));
          end if;
       end;
+      
+      if Best_Id /= -1 then
+         Execute (Main_DB_Ptr.all, "UPDATE memories SET hit_count = hit_count + 1, last_hit_time = CURRENT_TIMESTAMP WHERE id = " & Best_Id'Img);
+      end if;
+
       return To_String (Result);
    exception
       when others =>
          return "";
    end Recall;
+
+   -------------------------
+   -- Evict_Low_Salience --
+   -------------------------
+   procedure Evict_Low_Salience (Chunk_Size : Positive) is
+      Alpha_Str : constant String := Alpha'Img;
+   begin
+      if Main_DB_Ptr = null then return; end if;
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Salience]" & AnsiAda.Reset & " Latency threshold exceeded. Evicting " & Chunk_Size'Img & " rows...");
+
+      --  Evict from response_cache
+      declare
+         --  Formula: S = hit_count / (1 + Alpha * DeltaT)
+         --  Sorting by S ascending (lowest salience first)
+         SQL : constant String :=
+           "DELETE FROM response_cache WHERE id IN (" &
+           "SELECT id FROM (" &
+           "SELECT id, (hit_count / (1.0 + " & Alpha_Str & " * (strftime('%s','now') - strftime('%s', timestamp)))) as salience " &
+           "FROM response_cache " &
+           "ORDER BY salience ASC " &
+           "LIMIT " & Chunk_Size'Img & "))";
+      begin
+         Execute (Main_DB_Ptr.all, SQL);
+      end;
+
+      --  Evict from memories
+      declare
+         SQL : constant String :=
+           "DELETE FROM memories WHERE id IN (" &
+           "SELECT id FROM (" &
+           "SELECT id, (hit_count / (1.0 + " & Alpha_Str & " * (strftime('%s','now') - strftime('%s', timestamp)))) as salience " &
+           "FROM memories " &
+           "ORDER BY salience ASC " &
+           "LIMIT " & Chunk_Size'Img & "))";
+      begin
+         Execute (Main_DB_Ptr.all, SQL);
+      end;
+   exception
+      when E : others =>
+         Put_Line ("Error in Evict_Low_Salience: " & Ada.Exceptions.Exception_Message (E));
+   end Evict_Low_Salience;
 
    ----------------
    -- Escape_XML --

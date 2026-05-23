@@ -11,6 +11,9 @@ package Database_Manager is
 
    procedure Remember (User_Input : String; Assistant_Response : String);
 
+   --  Prune memory based on Least Salience Mathematical Framework
+   procedure Evict_Low_Salience (Chunk_Size : Positive);
+
    --  Native Response Cache storage
    procedure Add_To_Cache (Prompt : String; Embedding : Math_Utils.Vector; Response : String);
 
