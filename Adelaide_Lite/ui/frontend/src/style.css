@@ -82,19 +82,22 @@ body, html {
 /* --- SIDEBAR --- */
 #sidebar {
   width: 260px;
-  background: rgba(10, 20, 20, 0.85); 
+  background: rgba(10, 20, 15, 0.85); /* Dark greenish hue */
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   display: flex; flex-direction: column;
   justify-content: space-between;
   padding: 5rem 1.25rem 2rem 1.25rem;
-  border-right: 1px solid rgba(64, 224, 208, 0.05);
-  box-shadow: 5px 0 30px rgba(0,0,0,0.3);
+  border: 1px solid rgba(0, 168, 89, 0.1);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.4);
   z-index: 20;
   transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
   overflow: hidden;
+  border-radius: 24px;
+  margin: 16px;
+  height: calc(100vh - 32px);
 }
 #sidebar.collapsed {
-  margin-left: -260px;
+  margin-left: -280px;
   opacity: 0;
 }
 
@@ -144,7 +147,7 @@ body, html {
 }
 .nav-item svg { width: 18px; height: 18px; opacity: 0.7; transition: 0.2s; }
 .nav-item:hover { background: rgba(255, 255, 255, 0.05); color: #fff; transform: translateX(4px); }
-.nav-item:hover svg { opacity: 1; transform: scale(1.1); color: #4285f4; }
+.nav-item:hover svg { opacity: 1; transform: scale(1.1); color: #00a859; }
 
 /* --- MAIN AREA --- */
 #main-area {
@@ -172,7 +175,7 @@ body, html {
 
 .avatar-ring {
   width: 130px; height: 130px; border-radius: 50%;
-  background: linear-gradient(135deg, #4285f4, #9b72cb, #d96570, #4285f4);
+  background: linear-gradient(135deg, #00a859, #ff9a00, #ffcc00, #00a859);
   background-size: 300% 300%;
   padding: 3px; 
   box-shadow: 0 10px 30px rgba(0,0,0,0.4);
@@ -188,7 +191,7 @@ body, html {
 .greeting-title {
   font-size: 2.2rem;
   font-weight: 500;
-  background: linear-gradient(90deg, #4285f4, #9b72cb, #d96570);
+  background: linear-gradient(90deg, #00a859, #ff9a00, #ffcc00);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 0.5rem;
