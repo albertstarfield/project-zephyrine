@@ -56,8 +56,12 @@ def main():
     logger.info("Initializing StellaIcarus Ada Daemon Manager...")
     manager = StellaIcarusAdaDaemonManager()
     
-    # We will build and start all daemons.
-    manager.build_all()
+    skip_build = "--skip-build" in sys.argv
+    if not skip_build:
+        manager.build_all()
+    else:
+        logger.info("Skipping daemon build phase (--skip-build flag detected).")
+        
     manager.start_all()
     
     try:
