@@ -80,13 +80,11 @@ def main():
                 # In Adelaide Lite we could route this data elsewhere, 
                 # but for now we just log it.
                 logger.info(f"Data from daemon: {data}")
-            else:
-                time.sleep(1)
                 
             t1 = time.perf_counter_ns()
             wcet_watchdog_us = (t1 - t0) / 1000.0
             
-            # Read sidecar port
+            # Read sidecar port and ping
             if os.path.exists(port_file):
                 try:
                     with open(port_file, "r") as f:
@@ -100,6 +98,9 @@ def main():
                         urllib.request.urlopen(req, timeout=0.5)
                 except Exception:
                     pass # Ignore errors if sidecar is busy or down
+                    
+            if not data:
+                time.sleep(1)
 
     except KeyboardInterrupt:
         logger.info("Interrupt received. Shutting down StellaIcarus Daemons...")
