@@ -1040,6 +1040,7 @@ ADELAIDE_JAVASHIT_ENGINE
 WCEL      : ${(stats.WCEL / 1000).toFixed(2)} ms
 WCEL \u0394 1m: ${(stats.WCEL_delta_1m / 1000).toFixed(2)} ms
 JS Loop   : ${jsLoopTime} ms
+Memory    : ${(performance as any).memory ? ((performance as any).memory.usedJSHeapSize / (1024 * 1024)).toFixed(1) + ' MB' : 'N/A'}
 `;
       
       // Draw Ada Graph (Tokens/s and WCET History)
