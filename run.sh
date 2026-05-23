@@ -140,11 +140,11 @@ find "$HOME/.local/share/alire/builds" -name "*.a" -exec chmod +w {} \; 2>/dev/n
 find "$HOME/.local/share/alire/builds" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
 find "llama.cpp/build" -name "*.a" -exec /usr/bin/ranlib {} \; 2>/dev/null || true
 
-# 14. Run Server
+# 14. Launch Adelaide-Lite GUI & Daemon
 cd Adelaide_Lite
 if [ -f "./bin/adelaide_server" ]; then
-    echo "[*] Starting Adelaide-Lite Server on port 11420..."
-    nice -n -20 ./bin/adelaide_server || ./bin/adelaide_server
+    echo "[*] Starting Adelaide-Lite Subsystem (Daemon, Server, UI)..."
+    ./run.sh "$@"
 else
     echo "[!] Build failed."
     exit 1
