@@ -274,7 +274,6 @@ window.addEventListener('resize', () => {
 // --------------------------------------------------------
 const navVoice = document.getElementById('nav-voice');
 const navImage = document.getElementById('nav-image');
-const navTuning = document.getElementById('nav-tuning');
 const navSettings = document.getElementById('nav-settings');
 const navExit = document.getElementById('nav-exit');
 const userEmailText = document.getElementById('user-email-text');
@@ -300,13 +299,6 @@ if (navVoice) {
 
 if (navImage) {
   navImage.addEventListener('click', (e) => {
-    e.preventDefault();
-    alert("INOP");
-  });
-}
-
-if (navTuning) {
-  navTuning.addEventListener('click', (e) => {
     e.preventDefault();
     alert("INOP");
   });
@@ -555,12 +547,40 @@ async function loadGraph() {
           selector: 'node',
           style: {
             'background-color': '#00d4ff',
-            'label': 'data(id)',
+            'label': 'data(label)',
             'color': '#fff',
             'text-valign': 'center',
             'text-outline-width': 2,
             'text-outline-color': '#000',
             'font-size': '10px'
+          }
+        },
+        {
+          selector: 'node[type="domain"]',
+          style: {
+            'background-color': '#ff4d4d',
+            'width': 60,
+            'height': 60,
+            'font-size': '16px',
+            'font-weight': 'bold'
+          }
+        },
+        {
+          selector: 'node[type="document"]',
+          style: {
+            'background-color': '#ffb347',
+            'width': 40,
+            'height': 40,
+            'font-size': '12px'
+          }
+        },
+        {
+          selector: 'node[type="chunk"]',
+          style: {
+            'background-color': '#00d4ff',
+            'width': 20,
+            'height': 20,
+            'font-size': '8px'
           }
         },
         {
