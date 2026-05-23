@@ -391,6 +391,7 @@ async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Fo
         
     async def process_and_stream():
         for filename, content_bytes in files_data:
+            if not filename: continue
             content = ""
             ext = filename.split('.')[-1].lower()
             if ext == 'txt':
@@ -398,7 +399,9 @@ async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Fo
             elif ext == 'pdf':
                 doc = fitz.open(stream=content_bytes, filetype="pdf")
                 for page in doc:
-                    content += page.get_text() + "\n"
+                    txt = page.get_text()
+                    if isinstance(txt, str):
+                        content += txt + "\n"
             
             if not content.strip(): continue
             paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
@@ -414,19 +417,20 @@ async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Fo
             
             doc_id = str(uuid.uuid4())
             for i, chunk in enumerate(chunks):
-                emb = _embedding_model.encode([chunk])[0]
-                emb_blob = emb.astype(np.float32).tobytes()
-                chunk_id = str(uuid.uuid4())
-                
-                conn = sqlite3.connect(LITERATURE_DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO documents (id, filename, domain, content, embedding) VALUES (?, ?, ?, ?, ?)",
-                              (chunk_id, filename, domain, chunk, emb_blob))
-                conn.commit()
-                conn.close()
-                
-                update_literature_graph(domain, filename, doc_id, chunk_id, chunk[:30] + "...")
-                yield json.dumps({"progress": int(((i+1)/len(chunks))*100)}) + "\n"
+                if _embedding_model:
+                    emb = _embedding_model.encode([chunk])[0]
+                    emb_blob = emb.astype(np.float32).tobytes()
+                    chunk_id = str(uuid.uuid4())
+                    
+                    conn = sqlite3.connect(LITERATURE_DB_PATH)
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT INTO documents (id, filename, domain, content, embedding) VALUES (?, ?, ?, ?, ?)",
+                                  (chunk_id, filename, domain, chunk, emb_blob))
+                    conn.commit()
+                    conn.close()
+                    
+                    update_literature_graph(domain, filename, doc_id, chunk_id, chunk[:30] + "...")
+                    yield json.dumps({"progress": int(((i+1)/len(chunks))*100)}) + "\n"
         yield json.dumps({"progress": 100, "status": "success"}) + "\n"
 
     return StreamingResponse(process_and_stream(), media_type="application/x-ndjson")
@@ -559,9 +563,29 @@ def perform_pyrefly_integrity_check():
         
     print(f"[*] Running Pyrefly Integrity Check on {os.path.basename(__file__)}...")
     try:
-        # Run pyrefly check. Assuming non-zero return on error/warning.
+        # Setup environment to include project's site-packages for import resolution
+        env = os.environ.copy()
+        venv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pyvenv")
+        # Auto-detect lib/python3.x/site-packages
+        site_pkgs = None
+        lib_dir = os.path.join(venv_path, "lib")
+        if os.path.exists(lib_dir):
+            for entry in os.listdir(lib_dir):
+                if entry.startswith("python"):
+                    potential_path = os.path.join(lib_dir, entry, "site-packages")
+                    if os.path.exists(potential_path):
+                        site_pkgs = potential_path
+                        break
+        
+        if os.name == 'nt':
+            site_pkgs = os.path.join(venv_path, "Lib", "site-packages")
+            
+        if site_pkgs and os.path.exists(site_pkgs):
+            env["PYTHONPATH"] = site_pkgs + os.pathsep + env.get("PYTHONPATH", "")
+
+        # Run pyrefly check.
         result = subprocess.run([pyrefly_cmd, "check", __file__], 
-                                capture_output=True, text=True)
+                                capture_output=True, text=True, env=env)
         if result.returncode != 0:
             print("[!] Pyrefly Integrity Check FAILED.")
             print(result.stdout)
