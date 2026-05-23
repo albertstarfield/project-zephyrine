@@ -17,6 +17,12 @@ procedure Adelaide_Server is
    Started     : Boolean := False;
 begin
    begin
+      Put_Line ("    ___       __     __      _     __ ");
+      Put_Line ("   /   | ____/ /__  / /___ _(_)___/ /__ ");
+      Put_Line ("  / /| |/ __  / _ \/ / __ `/ / __  / _ \ ");
+      Put_Line (" / ___ / /_/ /  __/ / /_/ / / /_/ /  __/ ");
+      Put_Line ("/_/  |_\__,_/\___/_/\__,_/_/\__,_/\___/ ");
+      Put_Line ("");
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Initializing Adelaide Intelligence Backend...");
       Model_Manager.Initialize;
       Knowledge_Manager.Initialize;
