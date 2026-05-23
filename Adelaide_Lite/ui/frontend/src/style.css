@@ -264,8 +264,8 @@ body, html {
 }
 #chat-form:focus-within {
   background: rgba(35, 36, 40, 0.95);
-  border-color: rgba(66, 133, 244, 0.5);
-  box-shadow: 0 12px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(66, 133, 244, 0.3);
+  border-color: rgba(0, 168, 89, 0.5);
+  box-shadow: 0 12px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(0, 168, 89, 0.3);
 }
 #chat-input {
   flex: 1; background: transparent; border: none;
@@ -289,9 +289,9 @@ body, html {
   border-radius: 50%;
 }
 #send-btn:hover {
-  background: #4285f4; color: #fff;
+  background: #00a859; color: #fff;
   transform: scale(1.08);
-  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 168, 89, 0.4);
 }
 #send-btn:disabled { opacity: 0.3; pointer-events: none; }
 
