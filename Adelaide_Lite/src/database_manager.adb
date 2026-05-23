@@ -39,8 +39,12 @@ package body Database_Manager is
                   "last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
          begin
-            Execute (Main_DB_Ptr.all, "ALTER TABLE memories ADD COLUMN hit_count INTEGER DEFAULT 1");
-            Execute (Main_DB_Ptr.all, "ALTER TABLE memories ADD COLUMN last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP");
+            Execute (Main_DB_Ptr.all,
+                    "ALTER TABLE memories ADD COLUMN hit_count " &
+                    "INTEGER DEFAULT 1");
+            Execute (Main_DB_Ptr.all,
+                    "ALTER TABLE memories ADD COLUMN last_hit_time " &
+                    "DATETIME DEFAULT CURRENT_TIMESTAMP");
          exception
             when others => null; -- Columns already exist
          end;
@@ -57,8 +61,12 @@ package body Database_Manager is
                   "last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
          begin
-            Execute (Main_DB_Ptr.all, "ALTER TABLE response_cache ADD COLUMN hit_count INTEGER DEFAULT 1");
-            Execute (Main_DB_Ptr.all, "ALTER TABLE response_cache ADD COLUMN last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP");
+            Execute (Main_DB_Ptr.all,
+                    "ALTER TABLE response_cache ADD COLUMN hit_count " &
+                    "INTEGER DEFAULT 1");
+            Execute (Main_DB_Ptr.all,
+                    "ALTER TABLE response_cache ADD COLUMN last_hit_time " &
+                    "DATETIME DEFAULT CURRENT_TIMESTAMP");
          exception
             when others => null; -- Columns already exist
          end;
@@ -87,7 +95,8 @@ package body Database_Manager is
                   "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
          Done := True;
-         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" & AnsiAda.Reset & " Semantic Memory and Literature Core initialized.");
+         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" &
+           AnsiAda.Reset & " Core initialized.");
       end Do_Init;
    end Init_Gate;
 
@@ -99,7 +108,8 @@ package body Database_Manager is
       Init_Gate.Do_Init;
    exception
       when E : others =>
-         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" & AnsiAda.Reset & " Critical Init Error: " &
+         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" &
+           AnsiAda.Reset & " Critical Init Error: " &
            Ada.Exceptions.Exception_Message (E));
    end Initialize;
 
@@ -115,9 +125,7 @@ package body Database_Manager is
       use GNATCOLL.JSON;
       Vec_Obj : JSON_Array := Empty_Array;
    begin
-      if Lit_DB_Ptr = null then
-         return;
-      end if;
+      if Lit_DB_Ptr = null then return; end if;
 
       for I in Embedding'Range loop
          Append (Vec_Obj, Create (Embedding (I)));
@@ -136,8 +144,7 @@ package body Database_Manager is
          Step (Stmt);
       end;
    exception
-      when others =>
-         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" & AnsiAda.Reset & " Error adding literature chunk.");
+      when others => null;
    end Add_Literature_Chunk;
 
    -----------------------
@@ -152,9 +159,7 @@ package body Database_Manager is
       Idx : Positive := Results'First;
    begin
       Count := 0;
-      if Lit_DB_Ptr = null then
-         return;
-      end if;
+      if Lit_DB_Ptr = null then return; end if;
 
       declare
          Stmt : Statement := Prepare
@@ -180,8 +185,7 @@ package body Database_Manager is
 
                         declare
                            Sim : constant Float :=
-                             Math_Utils.Cosine_Similarity
-                               (Embedding, Entry_Vec);
+                             Math_Utils.Cosine_Similarity (Embedding, Entry_Vec);
                         begin
                            if Sim >= 0.65 then
                               Results (Idx).File_Path := 
@@ -200,8 +204,7 @@ package body Database_Manager is
          end loop;
       end;
    exception
-      when others =>
-         null;
+      when others => null;
    end Search_Literature;
 
    ------------------------
@@ -214,9 +217,7 @@ package body Database_Manager is
       Weight   : Float := 1.0)
    is
    begin
-      if Lit_DB_Ptr = null then
-         return;
-      end if;
+      if Lit_DB_Ptr = null then return; end if;
       declare
          Stmt : Statement := Prepare
            (Lit_DB_Ptr.all,
@@ -226,26 +227,24 @@ package body Database_Manager is
          Bind_Text (Stmt, 1, Source);
          Bind_Text (Stmt, 2, Relation);
          Bind_Text (Stmt, 3, Target);
-         Bind_Text (Stmt, 4, Weight'Img);
+         Bind_Double (Stmt, 4, Long_Float (Weight));
          Step (Stmt);
       end;
    exception
-      when others =>
-         null;
+      when others => null;
    end Add_Graph_Relation;
 
    ------------------
    -- Add_To_Cache --
    ------------------
-   procedure Add_To_Cache
-     (Prompt : String; Embedding : Math_Utils.Vector; Response : String)
+   procedure Add_To_Cache (Prompt : String;
+                           Embedding : Math_Utils.Vector;
+                           Response : String)
    is
       use GNATCOLL.JSON;
       Vec_Obj : JSON_Array := Empty_Array;
    begin
-      if Main_DB_Ptr = null then
-         return;
-      end if;
+      if Main_DB_Ptr = null then return; end if;
 
       for I in Embedding'Range loop
          Append (Vec_Obj, Create (Embedding (I)));
@@ -254,8 +253,8 @@ package body Database_Manager is
       declare
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all,
-            "INSERT INTO response_cache (prompt, embedding, response, hit_count, last_hit_time) " &
-            "VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)");
+            "INSERT INTO response_cache (prompt, embedding, response) " &
+            "VALUES (?, ?, ?)");
       begin
          Bind_Text (Stmt, 1, Prompt);
          Bind_Text (Stmt, 2, Write (Create (Vec_Obj)));
@@ -263,35 +262,37 @@ package body Database_Manager is
          Step (Stmt);
       end;
    exception
-      when others =>
-         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" & AnsiAda.Reset & " Error updating response cache.");
+      when others => null;
    end Add_To_Cache;
 
    -------------------------
    -- Get_Cached_Response --
    -------------------------
-   function Get_Cached_Response (Embedding : Math_Utils.Vector; WCET : Duration) return String is
+   function Get_Cached_Response (Embedding : Math_Utils.Vector;
+                                 WCET : Duration) return String
+   is
       use GNATCOLL.JSON;
-      Max_Sim  : Float := -2.0;
+      Max_Sim : Float := -1.0;
       Best_Res : Unbounded_String;
-      Best_Id  : Integer := -1;
-      Best_Hits : Integer := 1;
+      Best_Id : Integer := -1;
+      Best_Hits : Integer := 0;
       Best_Elapsed : Float := 0.0;
    begin
-      if Main_DB_Ptr = null then
-         return "";
-      end if;
+      if Main_DB_Ptr = null then return ""; end if;
 
       declare
          Stmt : Statement := Prepare
-           (Main_DB_Ptr.all, "SELECT id, embedding, response, hit_count, (julianday(CURRENT_TIMESTAMP) - julianday(last_hit_time)) * 86400.0 as elapsed FROM response_cache");
+           (Main_DB_Ptr.all,
+            "SELECT id, response, embedding, hit_count, " &
+            "(strftime('%s','now') - strftime('%s', last_hit_time)) as elapsed " &
+            "FROM response_cache");
       begin
          while Step (Stmt) = ROW loop
             declare
-               Row_Id   : constant Integer := Column_Int (Stmt, 0);
-               Raw_Vec  : constant String := Column_Text (Stmt, 1);
-               Raw_Resp : constant String := Column_Text (Stmt, 2);
-               Row_Hits : constant Integer := Column_Int (Stmt, 3);
+               Row_Id   : constant Integer := Integer (Column_Int (Stmt, 0));
+               Raw_Resp : constant String := Column_Text (Stmt, 1);
+               Raw_Vec  : constant String := Column_Text (Stmt, 2);
+               Row_Hits : constant Integer := Integer (Column_Int (Stmt, 3));
                Elapsed  : constant Float := Float (Column_Double (Stmt, 4));
                JSON_Vec : constant Read_Result := Read (Raw_Vec);
             begin
@@ -308,8 +309,7 @@ package body Database_Manager is
 
                         declare
                            Sim : constant Float :=
-                             Math_Utils.Cosine_Similarity
-                               (Embedding, Entry_Vec);
+                             Math_Utils.Cosine_Similarity (Embedding, Entry_Vec);
                         begin
                            if Sim > Max_Sim then
                               Max_Sim := Sim;
@@ -331,26 +331,28 @@ package body Database_Manager is
       if Best_Id /= -1 then
          if Best_Elapsed <= Float (2.0 * WCET) then
             if Best_Hits >= 2 then
-               --  Hit 2x within short amount of time! Bypass cache.
-               --  Delete the entry so we don't hit it again, we will generate a new one.
-               Execute (Main_DB_Ptr.all, "DELETE FROM response_cache WHERE id = " & Best_Id'Img);
+               Execute (Main_DB_Ptr.all,
+                       "DELETE FROM response_cache WHERE id = " & Best_Id'Img);
                return "";
             else
-               --  Increment hit count
-               Execute (Main_DB_Ptr.all, "UPDATE response_cache SET hit_count = hit_count + 1, last_hit_time = CURRENT_TIMESTAMP WHERE id = " & Best_Id'Img);
+               Execute (Main_DB_Ptr.all,
+                       "UPDATE response_cache SET hit_count = hit_count + 1, " &
+                       "last_hit_time = CURRENT_TIMESTAMP WHERE id = " &
+                       Best_Id'Img);
                return To_String (Best_Res);
             end if;
          else
-            --  Reset hit count as it has been a long time
-            Execute (Main_DB_Ptr.all, "UPDATE response_cache SET hit_count = 1, last_hit_time = CURRENT_TIMESTAMP WHERE id = " & Best_Id'Img);
+            Execute (Main_DB_Ptr.all,
+                    "UPDATE response_cache SET hit_count = 1, " &
+                    "last_hit_time = CURRENT_TIMESTAMP WHERE id = " &
+                    Best_Id'Img);
             return To_String (Best_Res);
          end if;
       end if;
 
       return "";
    exception
-      when others =>
-         return "";
+      when others => return "";
    end Get_Cached_Response;
 
    --------------
@@ -358,9 +360,7 @@ package body Database_Manager is
    --------------
    procedure Remember (User_Input : String; Assistant_Response : String) is
    begin
-      if Main_DB_Ptr = null then
-         return;
-      end if;
+      if Main_DB_Ptr = null then return; end if;
       declare
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all,
@@ -371,8 +371,7 @@ package body Database_Manager is
          Step (Stmt);
       end;
    exception
-      when others =>
-         null;
+      when others => null;
    end Remember;
 
    ------------
@@ -382,9 +381,7 @@ package body Database_Manager is
       Result : Unbounded_String;
       Best_Id : Integer := -1;
    begin
-      if Main_DB_Ptr = null then
-         return "";
-      end if;
+      if Main_DB_Ptr = null then return ""; end if;
       declare
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all,
@@ -398,13 +395,14 @@ package body Database_Manager is
       end;
       
       if Best_Id /= -1 then
-         Execute (Main_DB_Ptr.all, "UPDATE memories SET hit_count = hit_count + 1, last_hit_time = CURRENT_TIMESTAMP WHERE id = " & Best_Id'Img);
+         Execute (Main_DB_Ptr.all,
+                 "UPDATE memories SET hit_count = hit_count + 1, " &
+                 "last_hit_time = CURRENT_TIMESTAMP WHERE id = " & Best_Id'Img);
       end if;
 
       return To_String (Result);
    exception
-      when others =>
-         return "";
+      when others => return "";
    end Recall;
 
    -------------------------
@@ -415,38 +413,32 @@ package body Database_Manager is
    begin
       if Main_DB_Ptr = null then return; end if;
 
-      Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Salience]" & AnsiAda.Reset & " Latency threshold exceeded. Evicting " & Chunk_Size'Img & " rows...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Salience]" &
+                AnsiAda.Reset & " Evicting " & Chunk_Size'Img & " rows...");
 
-      --  Evict from response_cache
       declare
-         --  Formula: S = hit_count / (1 + Alpha * DeltaT)
-         --  Sorting by S ascending (lowest salience first)
          SQL : constant String :=
            "DELETE FROM response_cache WHERE id IN (" &
            "SELECT id FROM (" &
-           "SELECT id, (hit_count / (1.0 + " & Alpha_Str & " * (strftime('%s','now') - strftime('%s', timestamp)))) as salience " &
-           "FROM response_cache " &
-           "ORDER BY salience ASC " &
-           "LIMIT " & Chunk_Size'Img & "))";
+           "SELECT id, (hit_count / (1.0 + " & Alpha_Str & 
+           " * (strftime('%s','now') - strftime('%s', timestamp)))) as s " &
+           "FROM response_cache ORDER BY s ASC LIMIT " & Chunk_Size'Img & "))";
       begin
          Execute (Main_DB_Ptr.all, SQL);
       end;
 
-      --  Evict from memories
       declare
          SQL : constant String :=
            "DELETE FROM memories WHERE id IN (" &
            "SELECT id FROM (" &
-           "SELECT id, (hit_count / (1.0 + " & Alpha_Str & " * (strftime('%s','now') - strftime('%s', timestamp)))) as salience " &
-           "FROM memories " &
-           "ORDER BY salience ASC " &
-           "LIMIT " & Chunk_Size'Img & "))";
+           "SELECT id, (hit_count / (1.0 + " & Alpha_Str & 
+           " * (strftime('%s','now') - strftime('%s', timestamp)))) as s " &
+           "FROM memories ORDER BY s ASC LIMIT " & Chunk_Size'Img & "))";
       begin
          Execute (Main_DB_Ptr.all, SQL);
       end;
    exception
-      when E : others =>
-         Put_Line ("Error in Evict_Low_Salience: " & Ada.Exceptions.Exception_Message (E));
+      when others => null;
    end Evict_Low_Salience;
 
    ----------------
@@ -457,11 +449,10 @@ package body Database_Manager is
    begin
       for I in S'Range loop
          case S (I) is
-            when '&' => Append (Res, "&amp;");
             when '<' => Append (Res, "&lt;");
             when '>' => Append (Res, "&gt;");
+            when '&' => Append (Res, "&amp;");
             when '"' => Append (Res, "&quot;");
-            when ''' => Append (Res, "&apos;");
             when others => Append (Res, S (I));
          end case;
       end loop;
@@ -474,34 +465,14 @@ package body Database_Manager is
    procedure Export_GraphML (Filename : String) is
       File : File_Type;
    begin
-      if Lit_DB_Ptr = null then
-         return;
-      end if;
-
+      if Lit_DB_Ptr = null then return; end if;
       Create (File, Out_File, Filename);
       Put_Line (File, "<?xml version=""1.0"" encoding=""UTF-8""?>");
-      Put_Line
-        (File,
-         "<graphml xmlns=""http://graphml.graphdrawing.org/xmlns""");
-      Put_Line
-        (File,
-         "    xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance""");
-      Put_Line
-        (File,
-         "    xsi:schemaLocation=" &
-         """http://graphml.graphdrawing.org/xmlns " &
-         "http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"">");
-      Put_Line
-        (File,
-         "  <key id=""d0"" for=""edge"" " &
-         "attr.name=""relation"" attr.type=""string""/>");
-      Put_Line
-        (File,
-         "  <key id=""d1"" for=""edge"" " &
-         "attr.name=""weight"" attr.type=""double""/>");
+      Put_Line (File, "<graphml xmlns=""http://graphml.graphdrawing.org/xmlns"">");
+      Put_Line (File, "  <key id=""d0"" for=""edge"" attr.name=""relation"" attr.type=""string""/>");
+      Put_Line (File, "  <key id=""d1"" for=""edge"" attr.name=""weight"" attr.type=""double""/>");
       Put_Line (File, "  <graph id=""G"" edgedefault=""directed"">");
 
-      --  First write all unique nodes
       declare
          Node_Stmt : Statement := Prepare
            (Lit_DB_Ptr.all,
@@ -511,24 +482,15 @@ package body Database_Manager is
             "SELECT target AS node FROM knowledge_graph)");
       begin
          while Step (Node_Stmt) = ROW loop
-            declare
-               Node_Name : constant String := Column_Text (Node_Stmt, 0);
-            begin
-               Put_Line
-                 (File,
-                  "    <node id=""" & Escape_XML (Node_Name) & """/>");
-            end;
+            Put_Line (File, "    <node id=""" & 
+              Escape_XML (Column_Text (Node_Stmt, 0)) & """/>");
          end loop;
-      exception
-         when others => null;
       end;
 
-      --  Now write edges
       declare
          Edge_Stmt : Statement := Prepare
            (Lit_DB_Ptr.all,
-            "SELECT id, source, target, relation, weight " &
-            "FROM knowledge_graph");
+            "SELECT id, source, target, relation, weight FROM knowledge_graph");
       begin
          while Step (Edge_Stmt) = ROW loop
             declare
@@ -538,33 +500,22 @@ package body Database_Manager is
                Rel    : constant String := Column_Text (Edge_Stmt, 3);
                Wgt    : constant String := Column_Text (Edge_Stmt, 4);
             begin
-               Put_Line
-                 (File,
-                  "    <edge id=""e" & Id_Val &
-                  """ source=""" & Escape_XML (Src) &
-                  """ target=""" & Escape_XML (Tgt) & """>");
-               Put_Line
-                 (File,
-                  "      <data key=""d0"">" & Escape_XML (Rel) &
-                  "</data>");
-               Put_Line
-                 (File,
-                  "      <data key=""d1"">" & Wgt & "</data>");
+               Put_Line (File, "    <edge id=""e" & Id_Val &
+                         """ source=""" & Escape_XML (Src) &
+                         """ target=""" & Escape_XML (Tgt) & """>");
+               Put_Line (File, "      <data key=""d0"">" & 
+                         Escape_XML (Rel) & "</data>");
+               Put_Line (File, "      <data key=""d1"">" & Wgt & "</data>");
                Put_Line (File, "    </edge>");
             end;
          end loop;
-      exception
-         when others => null;
       end;
 
       Put_Line (File, "  </graph>");
       Put_Line (File, "</graphml>");
       Close (File);
    exception
-      when others =>
-         if Is_Open (File) then
-            Close (File);
-         end if;
+      when others => if Is_Open (File) then Close (File); end if;
    end Export_GraphML;
 
    ---------------------------------
@@ -577,9 +528,7 @@ package body Database_Manager is
    begin
       Success := False;
       Content := Null_Unbounded_String;
-      if Lit_DB_Ptr = null then
-         return;
-      end if;
+      if Lit_DB_Ptr = null then return; end if;
 
       declare
          Stmt : Statement := Prepare
@@ -592,13 +541,9 @@ package body Database_Manager is
          end if;
       end;
    exception
-      when others =>
-         null;
+      when others => null;
    end Get_Random_Literature_Chunk;
 
-   -----------
-   -- Close --
-   -----------
    procedure Close is
    begin
       null;

@@ -11,7 +11,6 @@ with Ada.Environment_Variables;
 with Ada.Exceptions;
 with GNAT.Expect;
 with GNAT.OS_Lib;
-with Ada.Calendar;
 
 package body Knowledge_Manager is
 
@@ -60,6 +59,7 @@ package body Knowledge_Manager is
       Salience_Maintenance_Task.Start;
       Zenith_Manager.Zenith_Orion_Task.Start;
       Telemetry_Sync_Task.Start;
+      Zenith_Prover_Task.Start;
    end Start_Tasks;
 
    --  Helper to index references.bib
@@ -339,5 +339,41 @@ package body Knowledge_Manager is
          delay 1.0;
       end loop;
    end Telemetry_Sync_Task;
+
+   task body Zenith_Prover_Task is
+   begin
+      accept Start;
+      loop
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[ZenithOrion]" &
+                   AnsiAda.Reset & " Auto-scanning and Proving SPARK core...");
+         
+         declare
+            use GNAT.OS_Lib;
+            Ret     : Integer;
+            Cmd     : constant String := "gnatprove";
+            Args    : constant Argument_List := (
+               1 => new String'("-P"),
+               2 => new String'("ZenithOrion/zenith_orion.gpr"),
+               3 => new String'("--level=2"),
+               4 => new String'("--report=all"),
+               5 => new String'("-j0")
+            );
+         begin
+            Ret := Spawn (Cmd, Args);
+            for I in Args'Range loop Free (Args (I)); end loop;
+            
+            if Ret = 0 then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[ZenithOrion]" &
+                         AnsiAda.Reset & " SPARK Proof Level 2: SUCCESS");
+            else
+               Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[ZenithOrion]" &
+                         AnsiAda.Reset & " SPARK Proof FAILED (Ret:" & 
+                         Ret'Img & ")");
+            end if;
+         end;
+         
+         delay 3600.0;
+      end loop;
+   end Zenith_Prover_Task;
 
 end Knowledge_Manager;
