@@ -82,8 +82,17 @@ async def chat(request: Request):
 
 @app.post("/api/exit")
 def exit_app():
-    # Attempt to gracefully exit the entire application
-    os._exit(0)
+    import webview
+    import threading
+    
+    def close_window():
+        if webview.windows:
+            webview.windows[0].destroy()
+        else:
+            os._exit(0)
+            
+    # Run in a separate thread to allow the HTTP response to return
+    threading.Timer(0.5, close_window).start()
     return {"status": "exiting"}
 
 @app.get("/api/docs/readme")
