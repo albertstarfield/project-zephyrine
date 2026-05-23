@@ -25,6 +25,8 @@ class EngineStats:
         self.wcet_main_loop_us = 0.0
         self.wcetr = 0.0
         self.history_1m = []
+        self.wcel = 0.0
+        self.wcel_history_1m = []
 
 engine_stats = EngineStats()
 
@@ -84,11 +86,20 @@ def get_stats(queue_len: int = 0):
     
     # Cleanup history older than 60 seconds
     engine_stats.history_1m = [h for h in engine_stats.history_1m if now - h['ts'] <= 60]
+    engine_stats.wcel_history_1m = [h for h in engine_stats.wcel_history_1m if now - h['ts'] <= 60]
+    
+    delta_1m_wcel = 0.0
+    if len(engine_stats.wcel_history_1m) > 0:
+        oldest = engine_stats.wcel_history_1m[0]['val']
+        latest = engine_stats.wcel_history_1m[-1]['val']
+        delta_1m_wcel = latest - oldest
     
     return {
         "WCET_ELP0": engine_stats.wcet_elp0,
         "WCET_ELP1": engine_stats.wcet_elp1,
         "WCET_ELP2": engine_stats.wcet_elp2,
+        "WCEL": engine_stats.wcel,
+        "WCEL_delta_1m": delta_1m_wcel,
         "WCET_WatchdogLoop_uS": engine_stats.wcet_watchdog_loop_us,
         "WCET_mainLoop_uS": engine_stats.wcet_main_loop_us,
         "MemoryConsumption_MB": psutil.Process().memory_info().rss / (1024*1024),
@@ -471,7 +482,13 @@ if __name__ == "__main__":
     def poll_ada_telemetry():
         while True:
             try:
+                t0 = time.perf_counter_ns()
                 resp = httpx.get("http://127.0.0.1:11420/api/telemetry", timeout=1.0)
+                t1 = time.perf_counter_ns()
+                wcel_us = (t1 - t0) / 1000.0
+                engine_stats.wcel = wcel_us
+                engine_stats.wcel_history_1m.append({"ts": time.time(), "val": wcel_us})
+                
                 if resp.status_code == 200:
                     data = resp.json()
                     engine_stats.wcet_elp0 = data.get("WCET_ELP0", engine_stats.wcet_elp0)

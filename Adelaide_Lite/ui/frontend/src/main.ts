@@ -988,6 +988,8 @@ async function updateMangoHUD() {
       mangoText.textContent = `
 ADELAIDE_ADA_ENGINE
 --------------------
+WCEL      : ${stats.WCEL.toFixed(1)} us
+WCEL \u0394 1m: ${stats.WCEL_delta_1m.toFixed(1)} us
 WCET_ELP0 : ${stats.WCET_ELP0.toFixed(3)}s
 WCET_ELP1 : ${stats.WCET_ELP1.toFixed(3)}s
 WCET_ELP2 : ${stats.WCET_ELP2.toFixed(3)}s
