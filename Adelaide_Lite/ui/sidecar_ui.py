@@ -66,6 +66,29 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # Check for sessions table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Check if session_id column exists in messages
+    cursor.execute("PRAGMA table_info(messages)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "session_id" not in columns:
+        print("Migrating database to support sessions...")
+        # Create a default session for legacy messages
+        cursor.execute("INSERT INTO sessions (title) VALUES (?)", ("Legacy Session",))
+        default_session_id = cursor.lastrowid
+        # Add column
+        cursor.execute("ALTER TABLE messages ADD COLUMN session_id INTEGER")
+        # Update existing messages
+        cursor.execute("UPDATE messages SET session_id = ?", (default_session_id,))
+        
     conn.commit()
     conn.close()
 
@@ -113,11 +136,78 @@ async def post_telemetry(req: Request):
 
     return JSONResponse({"status": "ok"})
 
-@app.get("/api/messages")
-def get_messages():
+@app.get("/api/sessions")
+def get_sessions():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT role, content, timestamp FROM messages ORDER BY id ASC")
+    cursor.execute("SELECT id, title, created_at FROM sessions ORDER BY created_at DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "title": r[1], "created_at": r[2]} for r in rows]
+
+@app.post("/api/sessions")
+async def create_session(request: Request):
+    data = await request.json()
+    title = data.get("title", "New Session")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
+    session_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return {"id": session_id, "title": title}
+
+@app.put("/api/sessions/{session_id}")
+async def rename_session(session_id: int, request: Request):
+    data = await request.json()
+    title = data.get("title", "")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE sessions SET title = ? WHERE id = ?", (title, session_id))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+@app.delete("/api/sessions/{session_id}")
+def delete_session(session_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+    cursor.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+@app.post("/api/sessions/{session_id}/duplicate")
+def duplicate_session(session_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT title FROM sessions WHERE id = ?", (session_id,))
+    row = cursor.fetchone()
+    if not row:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    new_title = row[0] + " (Copy)"
+    cursor.execute("INSERT INTO sessions (title) VALUES (?)", (new_title,))
+    new_session_id = cursor.lastrowid
+    
+    # Copy messages
+    cursor.execute("SELECT role, content FROM messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
+    messages = cursor.fetchall()
+    for m in messages:
+        cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", (m[0], m[1], new_session_id))
+    
+    conn.commit()
+    conn.close()
+    return {"id": new_session_id, "title": new_title}
+
+@app.get("/api/messages")
+def get_messages(session_id: int = None):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    if session_id:
+        cursor.execute("SELECT role, content, timestamp FROM messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
+    else:
+        cursor.execute("SELECT role, content, timestamp FROM messages ORDER BY id ASC")
     rows = cursor.fetchall()
     conn.close()
     return [{"role": r[0], "content": r[1], "timestamp": r[2]} for r in rows]
@@ -180,11 +270,18 @@ def get_stats(queue_len: int = 0):
 async def chat(request: Request):
     data = await request.json()
     user_message = data.get("message", "")
+    session_id = data.get("session_id")
     
-    # Save User message to DB
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO messages (role, content) VALUES (?, ?)", ("user", user_message))
+
+    if not session_id:
+        title = user_message[:20] + "..." if len(user_message) > 20 else user_message
+        cursor.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
+        session_id = cursor.lastrowid
+    
+    # Save User message to DB
+    cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", ("user", user_message, session_id))
     conn.commit()
 
     # Proxy to Ada Backend (assuming Ollama compatible endpoint or custom endpoint)
@@ -222,11 +319,11 @@ async def chat(request: Request):
         bot_reply = f"Could not connect to Ada backend: {str(e)}"
         
     # Save Bot reply to DB
-    cursor.execute("INSERT INTO messages (role, content) VALUES (?, ?)", ("assistant", bot_reply))
+    cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", ("assistant", bot_reply, session_id))
     conn.commit()
     conn.close()
     
-    return {"reply": bot_reply}
+    return {"reply": bot_reply, "session_id": session_id}
 
 @app.post("/api/exit")
 def exit_app():
