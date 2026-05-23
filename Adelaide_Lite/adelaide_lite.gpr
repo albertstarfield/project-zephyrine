@@ -31,6 +31,8 @@ project Adelaide_Lite is
          "-lggml-blas",
          "-L/opt/homebrew/opt/sqlite/lib",
          "-lsqlite3",
+         "-- Patch Note: Removed hardcoded -Wl,-syslibroot,/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk because",
+         "-- it was causing linker failures by forcing an invalid, non-existent macOS SDK version. SDK path is resolved dynamically.",
          "-mmacosx-version-min=15.0",
          "-framework", "Accelerate",
          "-framework", "Metal",
