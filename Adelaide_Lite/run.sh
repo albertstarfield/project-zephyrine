@@ -10,6 +10,8 @@ START_TIME=$(python3 -c 'import time; print(int(time.time() * 1000))')
 # Generate MD5 of the Ada sources, config, and UI
 CURRENT_HASH=$(find src config adelaide_lite.gpr ui/frontend/src ui/frontend/index.html ui/frontend/package.json -type f 2>/dev/null | sort | xargs md5 -q | md5 -q)
 
+DAEMON_BUILD_FLAG=""
+
 if [ ! -f .build_hash ] || [ "$CURRENT_HASH" != "$(cat .build_hash)" ]; then
     echo "[*] Changes detected, checking downloads and rebuilding..."
     
@@ -52,6 +54,7 @@ if [ ! -f .build_hash ] || [ "$CURRENT_HASH" != "$(cat .build_hash)" ]; then
     echo "$CURRENT_HASH" > .build_hash
 else
     echo "[*] No changes detected, skipping build."
+    DAEMON_BUILD_FLAG="--skip-build"
 fi
 
 # Parse arguments
@@ -63,7 +66,7 @@ for arg in "$@"; do
 done
 
 echo "[*] Booting StellaIcarus Ada Daemon Manager..."
-python3 python/stellaicarus_daemon_runner.py &
+python3 python/stellaicarus_daemon_runner.py $DAEMON_BUILD_FLAG &
 DAEMON_PID=$!
 
 cleanup() {
