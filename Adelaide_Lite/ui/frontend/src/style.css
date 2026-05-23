@@ -185,6 +185,25 @@ body, html {
   100% { background-position: 0% 50%; }
 }
 
+.greeting-title {
+  font-size: 2.2rem;
+  font-weight: 500;
+  background: linear-gradient(90deg, #4285f4, #9b72cb, #d96570);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.5px;
+}
+
+.greeting-subtitle {
+  font-size: 1.1rem;
+  color: #a0a0a0;
+  font-weight: 400;
+  max-width: 600px;
+  line-height: 1.5;
+  margin-bottom: 2rem;
+}
+
 .avatar-inner {
   width: 100%; height: 100%; border-radius: 50%;
   background: #131314; overflow: hidden;
