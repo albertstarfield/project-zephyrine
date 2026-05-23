@@ -21,6 +21,8 @@ class EngineStats:
         self.wcet_elp0 = 0.0
         self.wcet_elp1 = 0.0
         self.wcet_elp2 = 0.0
+        self.wcet_watchdog_loop_us = 0.0
+        self.wcet_main_loop_us = 0.0
         self.wcetr = 0.0
         self.history_1m = []
 
@@ -74,6 +76,8 @@ def get_stats(queue_len: int = 0):
         "WCET_ELP0": engine_stats.wcet_elp0,
         "WCET_ELP1": engine_stats.wcet_elp1,
         "WCET_ELP2": engine_stats.wcet_elp2,
+        "WCET_WatchdogLoop_uS": engine_stats.wcet_watchdog_loop_us,
+        "WCET_mainLoop_uS": engine_stats.wcet_main_loop_us,
         "MemoryConsumption_MB": psutil.Process().memory_info().rss / (1024*1024),
         "CPU_Consumption": psutil.Process().cpu_percent(interval=None),
         "sidecarProcessSpawned": engine_stats.boot_time,
