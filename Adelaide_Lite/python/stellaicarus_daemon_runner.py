@@ -96,8 +96,8 @@ def main():
                             headers={'Content-Type': 'application/json'}
                         )
                         urllib.request.urlopen(req, timeout=0.5)
-                except Exception:
-                    pass # Ignore errors if sidecar is busy or down
+                except Exception as e:
+                    logger.error(f"Telemetry ping failed: {e}")
                     
             if not data:
                 time.sleep(1)
