@@ -391,7 +391,7 @@ package body Knowledge_Manager is
    end Thought_Task;
 
    task body Salience_Maintenance_Task is
-      Latency_Threshold : constant Duration := 7.0;
+      Latency_Threshold : constant Duration := 300.0;
       Check_Interval    : constant Duration := 300.0; -- 5 Minutes
       Chunk_Size        : constant Positive := 100;
    begin
@@ -400,14 +400,8 @@ package body Knowledge_Manager is
          if Model_Manager.Current_WCET > Latency_Threshold then
             --  Perform eviction
             Database_Manager.Evict_Low_Salience (Chunk_Size);
-            
-            --  Optional: wait a bit for system to stabilize before next chunk
-            --  or just let the 5-min interval handle the next check.
-            --  The user said "until tau < 7s", implying multiple chunks if needed.
-            delay 2.0; 
-         else
-            delay Check_Interval;
          end if;
+         delay Check_Interval;
       end loop;
    exception
       when E : others =>
