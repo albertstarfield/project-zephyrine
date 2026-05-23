@@ -171,21 +171,25 @@ void main() {
 
   vec3 color = sampleBgBlurred(refractedUV, uBlur);
 
-  vec2 lightDir = normalize(vec2(0.5, -0.7));
-  float rimDot = abs(dot(grad, lightDir));
-  float rimFalloff = 1.0 - smoothstep(0.0, minBezel * 0.4, distFromEdge);
-  float specHighlight = pow(rimDot * rimFalloff, 1.5);
+  // Directional lighting from top-left (negative x, positive y since vUv.y is 0 at bottom)
+  vec2 lightDir = normalize(vec2(-1.0, 1.0));
+  float rimDot = dot(grad, lightDir);
+  
+  // Highlight on the edges facing the light
+  float rimFalloff = 1.0 - smoothstep(0.0, minBezel * 0.9, distFromEdge);
+  float specHighlight = pow(max(0.0, rimDot) * rimFalloff, 1.5);
   color += vec3(specHighlight * uSpecular);
 
-  float innerShadow = 1.0 - smoothstep(0.0, minBezel * 0.6, distFromEdge);
-  color *= mix(1.0, 0.7, innerShadow * 0.3);
+  // Shadow on the edges facing away from the light
+  float innerShadowFalloff = 1.0 - smoothstep(0.0, minBezel * 0.9, distFromEdge);
+  float shadowIntensity = max(0.0, -rimDot) * innerShadowFalloff;
+  color *= mix(1.0, 0.2, shadowIntensity * 0.8);
 
-  // Frame / rim at 0.1 opacity as requested
-  float innerRim = smoothstep(0.0, 1.0, distFromEdge) * (1.0 - smoothstep(1.0, 2.0, distFromEdge));
-  color += vec3(innerRim * 0.1);
+  // Very thin, faint frame rim around the entire shape
+  float innerRim = smoothstep(0.0, 1.5, distFromEdge) * (1.0 - smoothstep(1.5, 3.0, distFromEdge));
+  color += vec3(innerRim * 0.05);
 
-  // Apply glass pane opacity of 0.1 (white tint overlay)
-  color = mix(color, vec3(1.0), 0.1);
+  // Clear center (remove the white overlay completely to keep it perfectly transparent)
 
   // Apply dark tint specific to Adelaide Lite design
   vec3 tintColor = vec3(0.0, 0.05, 0.02); // slight dark greenish tint
@@ -219,13 +223,13 @@ export class LiquidGlassSystem {
         uNumRects: { value: 0 },
         uRects: { value: Array(50).fill(new THREE.Vector4()) },
         uRadii: { value: Array(50).fill(0) },
-        uBezel: { value: 2.0 },
-        uThickness: { value: 1.5 },
+        uBezel: { value: 35.0 },
+        uThickness: { value: 20.0 },
         uIOR: { value: 1.5 },
-        uBlur: { value: 4.0 },
-        uSpecular: { value: 1.2 },
-        uTint: { value: 0.1 },
-        uShadow: { value: 0.4 },
+        uBlur: { value: 5.0 },
+        uSpecular: { value: 1.5 },
+        uTint: { value: 0.05 },
+        uShadow: { value: 0.6 },
         uTime: { value: 0.0 },
       },
       depthTest: false,

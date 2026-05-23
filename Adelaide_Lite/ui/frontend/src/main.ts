@@ -1202,6 +1202,13 @@ if (glCanvas) {
     
     // Input Container (Excluded by user request)
     
+    // Chat Form (The Pill)
+    const chatForm = document.getElementById('chat-form');
+    if (chatForm && !chatForm.classList.contains('hidden') && chatForm.offsetParent !== null) {
+      const b = chatForm.getBoundingClientRect();
+      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: b.height / 2.0 });
+    }
+    
     // Chat Bubbles
     const bubbles = document.querySelectorAll('.bubble');
     bubbles.forEach(bubble => {
