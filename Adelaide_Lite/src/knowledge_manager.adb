@@ -7,6 +7,7 @@ with Database_Manager;
 with Math_Utils;
 with Ada.Directories;
 with Ada.Environment_Variables;
+with Ada.Exceptions;
 with GNAT.Expect;
 with GNAT.OS_Lib;
 
@@ -24,6 +25,10 @@ package body Knowledge_Manager is
       entry Start;
    end Native_Crawl_Task;
 
+   task Salience_Maintenance_Task is
+      entry Start;
+   end Salience_Maintenance_Task;
+
    procedure Initialize is
    begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Initializing Knowledge Base...");
@@ -35,6 +40,7 @@ package body Knowledge_Manager is
       Indexing_Task.Start;
       Thought_Task.Start;
       Native_Crawl_Task.Start;
+      Salience_Maintenance_Task.Start;
    end Start_Tasks;
 
    --  Helper to index references.bib
@@ -383,5 +389,30 @@ package body Knowledge_Manager is
          end if;
       end loop;
    end Thought_Task;
+
+   task body Salience_Maintenance_Task is
+      Latency_Threshold : constant Duration := 7.0;
+      Check_Interval    : constant Duration := 300.0; -- 5 Minutes
+      Chunk_Size        : constant Positive := 100;
+   begin
+      accept Start;
+      loop
+         if Model_Manager.Current_WCET > Latency_Threshold then
+            --  Perform eviction
+            Database_Manager.Evict_Low_Salience (Chunk_Size);
+            
+            --  Optional: wait a bit for system to stabilize before next chunk
+            --  or just let the 5-min interval handle the next check.
+            --  The user said "until tau < 7s", implying multiple chunks if needed.
+            delay 2.0; 
+         else
+            delay Check_Interval;
+         end if;
+      end loop;
+   exception
+      when E : others =>
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Salience]" & AnsiAda.Reset & " Task Error: " &
+           Ada.Exceptions.Exception_Message (E));
+   end Salience_Maintenance_Task;
 
 end Knowledge_Manager;
