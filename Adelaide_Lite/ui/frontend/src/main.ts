@@ -78,34 +78,129 @@ function addMessageToUI(msg: Message) {
   chatContainerWrapper.scrollTop = chatContainerWrapper.scrollHeight;
 }
 
+let currentSessionId: number | null = null;
+
 async function loadHistory() {
   try {
-    const res = await fetch('/api/messages');
+    const res = await fetch('/api/sessions');
     if (res.ok) {
-      const msgs: Message[] = await res.json();
-      if (msgs.length > 0) {
-          msgs.forEach(addMessageToUI);
+      const sessions = await res.json();
+      const historySection = document.querySelector('.history-section');
+      if (historySection) {
+        const existingTopics = historySection.querySelectorAll('.history-topic');
+        existingTopics.forEach(t => t.remove());
+
+        if (sessions.length > 0 && currentSessionId === null) {
+          // If no session active, but we have sessions, load the first one
+          currentSessionId = sessions[0].id;
+          await loadMessagesForSession(currentSessionId);
+        }
+
+        sessions.forEach((s: any) => {
+          const topicEl = document.createElement('div');
+          topicEl.className = `history-topic ${s.id === currentSessionId ? 'active' : ''}`;
           
-          // Populate the sidebar history topic
-          const historySection = document.querySelector('.history-section');
-          if (historySection) {
-            const firstUserMsg = msgs.find(m => m.role === 'user');
-            const topicName = firstUserMsg ? (firstUserMsg.content.substring(0, 20) + '...') : 'Current Session';
-            
-            const topicEl = document.createElement('div');
-            topicEl.className = 'history-topic active';
-            topicEl.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> ${topicName}`;
-            
-            // Remove any existing topics
-            const existingTopics = historySection.querySelectorAll('.history-topic');
-            existingTopics.forEach(t => t.remove());
-            
-            historySection.appendChild(topicEl);
-          }
+          topicEl.innerHTML = `
+            <div class="history-topic-label" title="${s.title}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> 
+              ${s.title}
+            </div>
+            <div class="history-actions">
+              <button class="history-action-btn edit" title="Rename" data-id="${s.id}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              </button>
+              <button class="history-action-btn duplicate" title="Duplicate" data-id="${s.id}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              </button>
+              <button class="history-action-btn delete" title="Delete" data-id="${s.id}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
+          `;
+          
+          topicEl.addEventListener('click', async (e) => {
+            if ((e.target as HTMLElement).closest('.history-action-btn')) return;
+            currentSessionId = s.id;
+            await loadMessagesForSession(s.id);
+            await loadHistory();
+          });
+          
+          const editBtn = topicEl.querySelector('.edit');
+          editBtn?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const newTitle = prompt("Enter new title:", s.title);
+            if (newTitle && newTitle !== s.title) {
+              await fetch(`/api/sessions/${s.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newTitle })
+              });
+              await loadHistory();
+            }
+          });
+
+          const dupBtn = topicEl.querySelector('.duplicate');
+          dupBtn?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const res = await fetch(`/api/sessions/${s.id}/duplicate`, { method: 'POST' });
+            if (res.ok) {
+              const newSess = await res.json();
+              currentSessionId = newSess.id;
+              await loadMessagesForSession(currentSessionId);
+              await loadHistory();
+            }
+          });
+
+          const delBtn = topicEl.querySelector('.delete');
+          delBtn?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm("Are you sure you want to delete this chat?")) {
+              await fetch(`/api/sessions/${s.id}`, { method: 'DELETE' });
+              if (currentSessionId === s.id) {
+                currentSessionId = null;
+                messagesContainer.innerHTML = '';
+                // Since emptyState isn't exported as easily to here, we'll just reload
+                await loadHistory();
+                if (!currentSessionId) {
+                  // No sessions left or didn't load a new one
+                  const emptyState = document.getElementById('empty-state');
+                  const chatContainerWrapper = document.getElementById('chat-container');
+                  emptyState?.classList.remove('hidden');
+                  chatContainerWrapper?.classList.add('hidden');
+                }
+              } else {
+                await loadHistory();
+              }
+            }
+          });
+
+          historySection.appendChild(topicEl);
+        });
       }
     }
   } catch (err) {
     console.error("Failed to load history:", err);
+  }
+}
+
+async function loadMessagesForSession(sessionId: number | null) {
+  if (!sessionId) return;
+  messagesContainer.innerHTML = '';
+  try {
+    const res = await fetch(`/api/messages?session_id=${sessionId}`);
+    if (res.ok) {
+      const msgs = await res.json();
+      if (msgs.length > 0) {
+        msgs.forEach(addMessageToUI);
+      } else {
+        const emptyState = document.getElementById('empty-state');
+        const chatContainerWrapper = document.getElementById('chat-container');
+        emptyState?.classList.remove('hidden');
+        chatContainerWrapper?.classList.add('hidden');
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load messages:", e);
   }
 }
 
@@ -138,11 +233,15 @@ async function processQueue() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ message: text, session_id: currentSessionId })
       });
       
       if (res.ok) {
         const data = await res.json();
+        if (!currentSessionId && data.session_id) {
+            currentSessionId = data.session_id;
+            await loadHistory();
+        }
         addMessageToUI({ role: 'assistant', content: data.reply });
       } else {
         addMessageToUI({ role: 'assistant', content: "Error: " + res.statusText });
@@ -469,6 +568,7 @@ let cyMemoryInstance: any = null;
 if (navMain) {
   navMain.addEventListener('click', async (e) => {
     e.preventDefault();
+    currentSessionId = null;
     
     // Clear chat history to go to home default page
     messagesContainer.innerHTML = '';
@@ -480,6 +580,10 @@ if (navMain) {
     
     const showEls = [inputContainer, emptyState];
     await switchView(hideEls, showEls);
+    
+    // Refresh history UI to remove active class
+    const historyTopics = document.querySelectorAll('.history-topic');
+    historyTopics.forEach(t => t.classList.remove('active'));
   });
 }
 
@@ -487,6 +591,7 @@ const newChatBtn = document.querySelector('.new-chat-btn');
 if (newChatBtn) {
   newChatBtn.addEventListener('click', async (e) => {
     e.preventDefault();
+    currentSessionId = null;
     
     // Clear chat history to go to home default page
     messagesContainer.innerHTML = '';
@@ -498,6 +603,10 @@ if (newChatBtn) {
     
     const showEls = [inputContainer, emptyState];
     await switchView(hideEls, showEls);
+    
+    // Refresh history UI to remove active class
+    const historyTopics = document.querySelectorAll('.history-topic');
+    historyTopics.forEach(t => t.classList.remove('active'));
   });
 }
 
