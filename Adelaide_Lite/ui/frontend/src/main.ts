@@ -452,16 +452,35 @@ let cyMemoryInstance: any = null;
 if (navMain) {
   navMain.addEventListener('click', async (e) => {
     e.preventDefault();
+    
+    // Clear chat history to go to home default page
+    messagesContainer.innerHTML = '';
+    
     const hideEls = [];
     if (!aboutContainer?.classList.contains('hidden')) hideEls.push(aboutContainer!);
     if (!knowledgeContainer?.classList.contains('hidden')) hideEls.push(knowledgeContainer!);
+    if (!chatContainerWrapper?.classList.contains('hidden')) hideEls.push(chatContainerWrapper!);
     
-    if (hideEls.length > 0) {
-      const showEls = [inputContainer];
-      if (messagesContainer.children.length === 0) showEls.push(emptyState);
-      else showEls.push(chatContainerWrapper);
-      await switchView(hideEls, showEls);
-    }
+    const showEls = [inputContainer, emptyState];
+    await switchView(hideEls, showEls);
+  });
+}
+
+const newChatBtn = document.querySelector('.new-chat-btn');
+if (newChatBtn) {
+  newChatBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    
+    // Clear chat history to go to home default page
+    messagesContainer.innerHTML = '';
+    
+    const hideEls = [];
+    if (!aboutContainer?.classList.contains('hidden')) hideEls.push(aboutContainer!);
+    if (!knowledgeContainer?.classList.contains('hidden')) hideEls.push(knowledgeContainer!);
+    if (!chatContainerWrapper?.classList.contains('hidden')) hideEls.push(chatContainerWrapper!);
+    
+    const showEls = [inputContainer, emptyState];
+    await switchView(hideEls, showEls);
   });
 }
 
