@@ -22,6 +22,7 @@ class EngineStats:
     def __init__(self):
         self.boot_time = time.time()
         self.total_tokens = 0
+        self.wcet_elp0 = 0.0
         self.wcet_elp1 = 0.0
         self.wcet_elp2 = 0.0
         self.wcet_elp3 = 0.0
@@ -32,7 +33,6 @@ class EngineStats:
         self.wcet_main_loop_us = 0.0
         self.wcetr = 0.0
         self.history_1m = []
-        self.wcel = 0.0
         self.wcel_history_1m = []
         
         # Histories for deltas
