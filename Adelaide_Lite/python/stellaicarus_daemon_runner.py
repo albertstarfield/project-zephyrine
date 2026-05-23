@@ -37,6 +37,11 @@ sys.path.insert(0, STELLA_ICARUS_DIR) # for any internal imports
 
 # Mock configuration
 import types
+import gc
+
+# Global Performance Tuning: Disable Garbage Collection
+gc.disable()
+
 mock_config = types.ModuleType("CortexConfiguration")
 mock_config.ENABLE_STELLA_ICARUS_HOOKS = False
 mock_config.STELLA_ICARUS_HOOK_DIR = STELLA_ICARUS_DIR

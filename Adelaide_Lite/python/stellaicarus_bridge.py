@@ -4,6 +4,10 @@ import sys
 import os
 import json
 import subprocess
+import gc
+
+# Global Performance Tuning: Disable Garbage Collection
+gc.disable()
 
 # --- Bootstrap Virtual Environment ---
 VENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyvenv")
