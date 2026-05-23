@@ -1,15 +1,35 @@
 import os
 import sys
+import time
 import threading
 import sqlite3
 import httpx
 import uvicorn
+import psutil
+import tiktoken
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 import webview
 
 app = FastAPI()
+
+class EngineStats:
+    def __init__(self):
+        self.boot_time = time.time()
+        self.total_tokens = 0
+        self.wcet_elp0 = 0.0
+        self.wcet_elp1 = 0.0
+        self.wcet_elp2 = 0.0
+        self.wcetr = 0.0
+        self.history_1m = []
+
+engine_stats = EngineStats()
+
+try:
+    enc = tiktoken.get_encoding("cl100k_base")
+except Exception:
+    enc = None
 
 # Configuration
 ADA_BACKEND_URL = "http://localhost:11420"
@@ -42,6 +62,29 @@ def get_messages():
     conn.close()
     return [{"role": r[0], "content": r[1], "timestamp": r[2]} for r in rows]
 
+@app.get("/api/adelaideenginestats")
+def get_stats(queue_len: int = 0):
+    now = time.time()
+    uptime = now - engine_stats.boot_time
+    
+    # Cleanup history older than 60 seconds
+    engine_stats.history_1m = [h for h in engine_stats.history_1m if now - h['ts'] <= 60]
+    
+    return {
+        "WCET_ELP0": engine_stats.wcet_elp0,
+        "WCET_ELP1": engine_stats.wcet_elp1,
+        "WCET_ELP2": engine_stats.wcet_elp2,
+        "MemoryConsumption_MB": psutil.Process().memory_info().rss / (1024*1024),
+        "CPU_Consumption": psutil.Process().cpu_percent(interval=None),
+        "sidecarProcessSpawned": engine_stats.boot_time,
+        "sidecarProcessRunning": True,
+        "WCETR": engine_stats.wcetr,
+        "Total_Tokens_Processed": engine_stats.total_tokens,
+        "Current_Uptime": uptime,
+        "Current_Queue": queue_len,
+        "History_1m": engine_stats.history_1m
+    }
+
 @app.post("/api/chat")
 async def chat(request: Request):
     data = await request.json()
@@ -62,14 +105,28 @@ async def chat(request: Request):
     }
     
     try:
+        t_start = time.time()
         async with httpx.AsyncClient() as client:
             # We send to the Ada backend
             response = await client.post(f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=60.0)
+            t_end = time.time()
+            elapsed = t_end - t_start
+            engine_stats.wcet_elp2 = elapsed
+            
             if response.status_code == 200:
                 resp_json = response.json()
                 bot_reply = resp_json.get("message", {}).get("content", "Empty response")
+                
+                # Calculate tokens and update stats
+                if enc:
+                    tokens = len(enc.encode(bot_reply))
+                    engine_stats.total_tokens += tokens
+                    if elapsed > 0:
+                        engine_stats.wcetr = tokens / elapsed
+                        engine_stats.history_1m.append({"ts": t_end, "val": engine_stats.wcetr})
             else:
                 bot_reply = f"Backend returned error: {response.status_code} - {response.text}"
+                engine_stats.wcet_elp1 = elapsed
     except Exception as e:
         bot_reply = f"Could not connect to Ada backend: {str(e)}"
         
