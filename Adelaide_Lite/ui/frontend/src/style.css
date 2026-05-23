@@ -444,3 +444,21 @@ body, html {
 .disclaimer {
   pointer-events: auto; font-size: 0.7rem; color: #555; margin-top: 1rem; text-align: center; font-weight: 400;
 }
+
+#untested-warning-overlay {
+  position: fixed;
+  bottom: 15px;
+  right: 15px;
+  background: rgba(255, 0, 0, 0.15);
+  border: 1px solid rgba(255, 50, 50, 0.3);
+  color: #ffbaba;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-family: monospace;
+  z-index: 10000;
+  pointer-events: none;
+  max-width: 300px;
+  text-align: right;
+  line-height: 1.3;
+}
