@@ -53,7 +53,7 @@ interface Message {
 const messagesContainer = document.getElementById('messages') as HTMLDivElement;
 const chatForm = document.getElementById('chat-form') as HTMLFormElement;
 const chatInput = document.getElementById('chat-input') as HTMLInputElement;
-const sendBtn = document.getElementById('send-btn') as HTMLButtonElement;
+
 
 const emptyState = document.getElementById('empty-state') as HTMLDivElement;
 const chatContainerWrapper = document.getElementById('chat-container') as HTMLDivElement;
@@ -92,6 +92,9 @@ async function loadHistory() {
   }
 }
 
+const messageQueue: string[] = [];
+let isProcessingQueue = false;
+
 chatForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
@@ -100,28 +103,41 @@ chatForm.addEventListener('submit', async (e) => {
   // Optimistically add user message
   addMessageToUI({ role: 'user', content: text });
   chatInput.value = '';
-  sendBtn.disabled = true;
 
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text })
-    });
-    
-    if (res.ok) {
-      const data = await res.json();
-      addMessageToUI({ role: 'assistant', content: data.reply });
-    } else {
-      addMessageToUI({ role: 'assistant', content: "Error: " + res.statusText });
-    }
-  } catch (err) {
-    addMessageToUI({ role: 'assistant', content: "Network error trying to reach the sidecar." });
-  } finally {
-    sendBtn.disabled = false;
-    chatInput.focus();
+  messageQueue.push(text);
+  if (!isProcessingQueue) {
+    processQueue();
   }
 });
+
+async function processQueue() {
+  isProcessingQueue = true;
+  
+  while (messageQueue.length > 0) {
+    const text = messageQueue.shift();
+    if (!text) continue;
+    
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        addMessageToUI({ role: 'assistant', content: data.reply });
+      } else {
+        addMessageToUI({ role: 'assistant', content: "Error: " + res.statusText });
+      }
+    } catch (err) {
+      addMessageToUI({ role: 'assistant', content: "Network error trying to reach the sidecar." });
+    }
+  }
+  
+  isProcessingQueue = false;
+  chatInput.focus();
+}
 
 // Load history on startup
 loadHistory();
