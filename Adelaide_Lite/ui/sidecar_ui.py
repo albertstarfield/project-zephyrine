@@ -55,6 +55,19 @@ def init_db():
 
 init_db()
 
+@app.post("/api/telemetry")
+async def post_telemetry(req: Request):
+    data = await req.json()
+    if "WCET_WatchdogLoop_uS" in data:
+        engine_stats.wcet_watchdog_loop_us = float(data["WCET_WatchdogLoop_uS"])
+    if "WCET_mainLoop_uS" in data:
+        engine_stats.wcet_main_loop_us = float(data["WCET_mainLoop_uS"])
+    if "WCET_ELP0" in data:
+        engine_stats.wcet_elp0 = float(data["WCET_ELP0"])
+    if "WCET_ELP1" in data:
+        engine_stats.wcet_elp1 = float(data["WCET_ELP1"])
+    return JSONResponse({"status": "ok"})
+
 @app.get("/api/messages")
 def get_messages():
     conn = sqlite3.connect(DB_PATH)
@@ -451,6 +464,25 @@ def run_server(port):
 
 if __name__ == "__main__":
     ui_port = get_free_port()
+    port_file = os.path.join(os.path.dirname(DB_PATH), ".sidecar_port")
+    with open(port_file, "w") as f:
+        f.write(str(ui_port))
+        
+    def poll_ada_telemetry():
+        while True:
+            try:
+                resp = httpx.get("http://127.0.0.1:11420/api/telemetry", timeout=1.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    engine_stats.wcet_elp0 = data.get("WCET_ELP0", engine_stats.wcet_elp0)
+                    engine_stats.wcet_elp1 = data.get("WCET_ELP1", engine_stats.wcet_elp1)
+                    engine_stats.wcet_main_loop_us = data.get("WCET_mainLoop_uS", engine_stats.wcet_main_loop_us)
+            except Exception:
+                pass
+            time.sleep(1)
+            
+    threading.Thread(target=poll_ada_telemetry, daemon=True).start()
+
     # Start FastAPI in a background thread
     server_thread = threading.Thread(target=run_server, args=(ui_port,), daemon=True)
     server_thread.start()

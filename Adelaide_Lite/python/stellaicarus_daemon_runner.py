@@ -3,6 +3,9 @@
 import sys
 import os
 import time
+import json
+import urllib.request
+import urllib.error
 
 # --- Bootstrap Virtual Environment ---
 VENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyvenv")
@@ -64,9 +67,14 @@ def main():
         
     manager.start_all()
     
+    
+    port_file = os.path.join(PROJECT_ROOT, "UI_Database", ".sidecar_port")
+    
     try:
         # Keep the main thread alive so daemon threads can run
+        # -- ELP 2
         while True:
+            t0 = time.perf_counter_ns()
             data = manager.get_data_from_queue()
             if data:
                 # In Adelaide Lite we could route this data elsewhere, 
@@ -74,6 +82,25 @@ def main():
                 logger.info(f"Data from daemon: {data}")
             else:
                 time.sleep(1)
+                
+            t1 = time.perf_counter_ns()
+            wcet_watchdog_us = (t1 - t0) / 1000.0
+            
+            # Read sidecar port
+            if os.path.exists(port_file):
+                try:
+                    with open(port_file, "r") as f:
+                        ui_port = f.read().strip()
+                    if ui_port.isdigit():
+                        req = urllib.request.Request(
+                            f"http://127.0.0.1:{ui_port}/api/telemetry",
+                            data=json.dumps({"WCET_WatchdogLoop_uS": wcet_watchdog_us}).encode('utf-8'),
+                            headers={'Content-Type': 'application/json'}
+                        )
+                        urllib.request.urlopen(req, timeout=0.5)
+                except Exception:
+                    pass # Ignore errors if sidecar is busy or down
+
     except KeyboardInterrupt:
         logger.info("Interrupt received. Shutting down StellaIcarus Daemons...")
         manager.stop_all()

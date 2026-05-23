@@ -1110,6 +1110,15 @@ package body Model_Manager is
          if Dur > Current_WCET then
             Current_WCET := Dur;
          end if;
+         if Level = ELP0 then
+            if Dur > Current_WCET_ELP0 then
+               Current_WCET_ELP0 := Dur;
+            end if;
+         else
+            if Dur > Current_WCET_ELP1 then
+               Current_WCET_ELP1 := Dur;
+            end if;
+         end if;
       end;
 
       if Stream = null then

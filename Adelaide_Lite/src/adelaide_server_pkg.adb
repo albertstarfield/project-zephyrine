@@ -109,12 +109,25 @@ package body Adelaide_Server_Pkg is
          Queue.Close;
    end Generator_Task;
 
+   WCET_Main_Loop : Duration := 0.0;
+
    function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
       use Ada.Strings.Unbounded;
+      use type Ada.Calendar.Time;
+      T0     : constant Ada.Calendar.Time := Ada.Calendar.Clock;
       URI    : constant String := AWS.Status.URI (Request);
       Method : constant String := AWS.Status.Method (Request);
       Raw_S  : constant String := AWS.Status.Payload (Request);
       Raw_B  : constant Unbounded_String := AWS.Status.Binary_Data (Request);
+      
+      function Wrap_Response (Resp : AWS.Response.Data) return AWS.Response.Data is
+         Dur : constant Duration := Ada.Calendar.Clock - T0;
+      begin
+         if Dur > WCET_Main_Loop then
+            WCET_Main_Loop := Dur;
+         end if;
+         return Resp;
+      end Wrap_Response;
    begin
       Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Server]" & AnsiAda.Reset & " >>> Incoming: " & Method & " " & URI);
 
@@ -144,8 +157,18 @@ package body Adelaide_Server_Pkg is
          return Build_Response ("{""models"": [{""name"": ""metamodel-ELP0"", ""size"": 0, ""size_vram"": 0}, {""name"": ""metamodel-ELP1"", ""size"": 0, ""size_vram"": 0}]}");
       end if;
 
+      if URI = "/api/telemetry" then
+         declare
+            Main_US : constant Float := Float (WCET_Main_Loop) * 1_000_000.0;
+         begin
+            return Wrap_Response (Build_Response ("{""WCET_ELP0"": " & Model_Manager.Current_WCET_ELP0'Img & 
+                                                  ", ""WCET_ELP1"": " & Model_Manager.Current_WCET_ELP1'Img & 
+                                                  ", ""WCET_mainLoop_uS"": " & Main_US'Img & "}"));
+         end;
+      end if;
+
       if URI = "/api/pull" or else URI = "/api/create" or else URI = "/api/push" or else URI = "/api/copy" or else URI = "/api/delete" then
-         return Build_Response ("{""status"": ""success""}");
+         return Wrap_Response (Build_Response ("{""status"": ""success""}"));
       end if;
 
       if URI = "/v1/files" and then Method = "POST" then
