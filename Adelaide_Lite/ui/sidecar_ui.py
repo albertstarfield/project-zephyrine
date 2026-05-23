@@ -203,8 +203,7 @@ async def chat(request: Request):
             t_end = time.time()
             elapsed = t_end - t_start
             engine_stats.wcet_elp2 = elapsed
-            engine_stats.wcet_elp2_hist.append({"ts": now, "val": elapsed})
-            
+            engine_stats.wcet_elp2_hist.append({"ts": t_end, "val": elapsed})            
             if response.status_code == 200:
                 resp_json = response.json()
                 bot_reply = resp_json.get("message", {}).get("content", "Empty response")
