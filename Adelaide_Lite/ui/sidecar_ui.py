@@ -113,6 +113,179 @@ def get_user_info():
         username = "User"
     return {"username": username}
 
+# --- Knowledge Stack Backend ---
+from fastapi import UploadFile, File, Form
+import fitz  # PyMuPDF
+import networkx as nx
+import numpy as np
+import json
+import uuid
+
+LITERATURE_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "literatureRefIndex.db")
+GRAPH_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "literature.graphml")
+
+# Ensure dir
+os.makedirs(os.path.dirname(LITERATURE_DB_PATH), exist_ok=True)
+
+def init_knowledge_db():
+    conn = sqlite3.connect(LITERATURE_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS documents (
+            id TEXT PRIMARY KEY,
+            filename TEXT,
+            domain TEXT,
+            content TEXT,
+            embedding BLOB
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_knowledge_db()
+
+embedding_model = None
+def get_embedding_model():
+    global embedding_model
+    if embedding_model is None:
+        from sentence_transformers import SentenceTransformer
+        embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+    return embedding_model
+
+@app.post("/api/knowledgestackfrontend/upload")
+async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Form(...)):
+    conn = sqlite3.connect(LITERATURE_DB_PATH)
+    cursor = conn.cursor()
+    model = get_embedding_model()
+    
+    # Load or create graph
+    if os.path.exists(GRAPH_PATH):
+        try:
+            G = nx.read_graphml(GRAPH_PATH)
+        except Exception:
+            G = nx.Graph()
+    else:
+        G = nx.Graph()
+
+    for file in files:
+        content = ""
+        ext = file.filename.split('.')[-1].lower()
+        content_bytes = await file.read()
+        
+        if ext == 'txt':
+            content = content_bytes.decode('utf-8', errors='ignore')
+        elif ext == 'pdf':
+            doc = fitz.open(stream=content_bytes, filetype="pdf")
+            for page in doc:
+                content += page.get_text() + "\n"
+        else:
+            continue
+            
+        if not content.strip(): continue
+        
+        # Add Domain and Document to Graph
+        doc_node = f"doc_{file.filename}"
+        G.add_node(domain, label=domain, type="domain")
+        G.add_node(doc_node, label=file.filename, domain=domain, type="document")
+        G.add_edge(domain, doc_node)
+        
+        # Split content into chunks (approx 500 chars)
+        paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
+        chunks = []
+        current_chunk = ""
+        for p in paragraphs:
+            if len(current_chunk) + len(p) > 500:
+                if current_chunk: chunks.append(current_chunk)
+                current_chunk = p
+            else:
+                current_chunk += "\n\n" + p if current_chunk else p
+        if current_chunk:
+            chunks.append(current_chunk)
+            
+        # Fallback if no paragraphs
+        if not chunks:
+            chunks = [content[i:i+500] for i in range(0, len(content), 500)]
+        
+        for i, chunk_text in enumerate(chunks):
+            # Calculate ELP1 embedding
+            emb = model.encode(chunk_text)
+            emb_blob = emb.astype(np.float32).tobytes()
+            chunk_id = str(uuid.uuid4())
+            
+            cursor.execute("INSERT INTO documents (id, filename, domain, content, embedding) VALUES (?, ?, ?, ?, ?)",
+                           (chunk_id, file.filename, domain, chunk_text, emb_blob))
+            
+            # Update GraphML for chunk
+            G.add_node(chunk_id, label=f"Chunk {i+1}", type="chunk")
+            G.add_edge(doc_node, chunk_id)
+
+    conn.commit()
+    conn.close()
+    
+    nx.write_graphml(G, GRAPH_PATH)
+    return {"status": "success"}
+
+@app.get("/api/knowledgestackfrontend/documents")
+def get_documents():
+    conn = sqlite3.connect(LITERATURE_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT filename, domain FROM documents")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    result = {}
+    for filename, domain in rows:
+        if domain not in result:
+            result[domain] = []
+        result[domain].append(filename)
+    return result
+
+@app.get("/api/knowledgestackfrontend/search")
+def search_knowledge(q: str):
+    conn = sqlite3.connect(LITERATURE_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT filename, domain, content, embedding FROM documents")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    if not rows:
+        return {"results": []}
+        
+    model = get_embedding_model()
+    q_emb = model.encode(q)
+    
+    results = []
+    for filename, domain, content, emb_blob in rows:
+        doc_emb = np.frombuffer(emb_blob, dtype=np.float32)
+        # Cosine similarity
+        score = np.dot(q_emb, doc_emb) / (np.linalg.norm(q_emb) * np.linalg.norm(doc_emb))
+        if score > 0.1:  # Simple threshold
+            snippet = content[:200].replace('\n', ' ') + "..."
+            results.append({
+                "filename": filename,
+                "domain": domain,
+                "score": float(score),
+                "snippet": snippet
+            })
+            
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return {"results": results[:5]}
+
+@app.get("/api/knowledgestackfrontend/graph")
+def get_graph():
+    if not os.path.exists(GRAPH_PATH):
+        return []
+    try:
+        G = nx.read_graphml(GRAPH_PATH)
+        elements = []
+        for n, d in G.nodes(data=True):
+            elements.append({"data": {"id": n, "label": d.get("label", n), "type": d.get("type", "unknown")}})
+        for u, v in G.edges():
+            elements.append({"data": {"source": u, "target": v}})
+        return elements
+    except Exception:
+        return []
+
 # Mount static files
 if os.path.exists(DIST_DIR):
     app.mount("/", StaticFiles(directory=DIST_DIR, html=True), name="static")
