@@ -7,6 +7,7 @@ import mermaid from 'mermaid';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import cytoscape from 'cytoscape';
+import { LiquidGlassSystem } from './liquidGlass';
 
 // --------------------------------------------------------
 // Chat Logic
@@ -1180,3 +1181,72 @@ Memory    : ${(performance as any).memory ? ((performance as any).memory.usedJSH
 }
 
 setInterval(updateMangoHUD, 1000);
+
+// --------------------------------------------------------
+// Liquid Glass Background Initialization
+// --------------------------------------------------------
+const glCanvas = document.getElementById('gl') as HTMLCanvasElement | null;
+if (glCanvas) {
+  const liquidGlass = new LiquidGlassSystem(glCanvas);
+  
+  // Create an observer to track elements that should get the glass effect
+  const updateGlassRects = () => {
+    const rects: {x:number, y:number, w:number, h:number, r:number}[] = [];
+    
+    // Sidebar
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar && !sidebar.classList.contains('hidden') && sidebar.offsetParent !== null) {
+      const b = sidebar.getBoundingClientRect();
+      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 0 }); // Sidebar has no rounding on right
+    }
+    
+    // Input Container
+    const inputContainer = document.querySelector('.input-container');
+    if (inputContainer && !inputContainer.classList.contains('hidden') && (inputContainer as HTMLElement).offsetParent !== null) {
+      const b = inputContainer.getBoundingClientRect();
+      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 0 });
+    }
+    
+    // Chat Bubbles
+    const bubbles = document.querySelectorAll('.bubble');
+    bubbles.forEach(bubble => {
+      if ((bubble as HTMLElement).offsetParent !== null) {
+        const b = bubble.getBoundingClientRect();
+        rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 16 });
+      }
+    });
+    
+    // Mango HUD (Excluded by user request - kept flat)
+
+    // About Container
+    const aboutContainer = document.getElementById('about-container');
+    if (aboutContainer && !aboutContainer.classList.contains('hidden') && aboutContainer.offsetParent !== null) {
+      const b = aboutContainer.getBoundingClientRect();
+      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 16 });
+    }
+    
+    // Knowledge Container
+    const knowledgeContainer = document.getElementById('knowledge-container');
+    if (knowledgeContainer && !knowledgeContainer.classList.contains('hidden') && knowledgeContainer.offsetParent !== null) {
+      const b = knowledgeContainer.getBoundingClientRect();
+      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 16 });
+    }
+
+    liquidGlass.updateRects(rects);
+  };
+
+  // Observe DOM changes
+  const observer = new MutationObserver(() => {
+    updateGlassRects();
+  });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+
+  // Update on resize or scroll
+  window.addEventListener('resize', updateGlassRects);
+  const scrollArea = document.getElementById('chat-container-wrapper');
+  if (scrollArea) scrollArea.addEventListener('scroll', updateGlassRects);
+  
+  // Initial update
+  setTimeout(updateGlassRects, 100);
+}
+
