@@ -85,6 +85,23 @@ async function loadHistory() {
       const msgs: Message[] = await res.json();
       if (msgs.length > 0) {
           msgs.forEach(addMessageToUI);
+          
+          // Populate the sidebar history topic
+          const historySection = document.querySelector('.history-section');
+          if (historySection) {
+            const firstUserMsg = msgs.find(m => m.role === 'user');
+            const topicName = firstUserMsg ? (firstUserMsg.content.substring(0, 20) + '...') : 'Current Session';
+            
+            const topicEl = document.createElement('div');
+            topicEl.className = 'history-topic active';
+            topicEl.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> ${topicName}`;
+            
+            // Remove any existing topics
+            const existingTopics = historySection.querySelectorAll('.history-topic');
+            existingTopics.forEach(t => t.remove());
+            
+            historySection.appendChild(topicEl);
+          }
       }
     }
   } catch (err) {
@@ -990,11 +1007,11 @@ ADELAIDE_ADA_ENGINE
 --------------------
 WCEL      : ${stats.WCEL.toFixed(1)} us
 WCEL \u0394 1m: ${stats.WCEL_delta_1m.toFixed(1)} us
-WCET_ELP0 : ${stats.WCET_ELP0.toFixed(3)}s
-WCET_ELP1 : ${stats.WCET_ELP1.toFixed(3)}s
-WCET_ELP2 : ${stats.WCET_ELP2.toFixed(3)}s
-WCET_WtDog: ${stats.WCET_WatchdogLoop_uS.toFixed(1)} us
-WCET_mLoop: ${stats.WCET_mainLoop_uS.toFixed(1)} us
+WCET_ELP0 : ${stats.WCET_ELP0.toFixed(3)}s (\u0394 ${(stats.WCET_ELP0_delta).toFixed(3)}s)
+WCET_ELP1 : ${stats.WCET_ELP1.toFixed(3)}s (\u0394 ${(stats.WCET_ELP1_delta).toFixed(3)}s)
+WCET_ELP2 : ${stats.WCET_ELP2.toFixed(3)}s (\u0394 ${(stats.WCET_ELP2_delta).toFixed(3)}s)
+WCET_WtDog: ${stats.WCET_WatchdogLoop_uS.toFixed(1)} us (\u0394 ${(stats.WCET_WatchdogLoop_uS_delta).toFixed(1)}us)
+WCET_mLoop: ${stats.WCET_mainLoop_uS.toFixed(1)} us (\u0394 ${(stats.WCET_mainLoop_uS_delta).toFixed(1)}us)
 Memory    : ${stats.MemoryConsumption_MB.toFixed(1)} MB
 CPU       : ${stats.CPU_Consumption.toFixed(1)} %
 Tokens/s  : ${stats.WCETR.toFixed(2)}

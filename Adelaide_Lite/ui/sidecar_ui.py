@@ -27,6 +27,13 @@ class EngineStats:
         self.history_1m = []
         self.wcel = 0.0
         self.wcel_history_1m = []
+        
+        # Histories for deltas
+        self.wcet_elp0_hist = []
+        self.wcet_elp1_hist = []
+        self.wcet_elp2_hist = []
+        self.wcet_wtdog_hist = []
+        self.wcet_mloop_hist = []
 
 engine_stats = EngineStats()
 
@@ -60,14 +67,28 @@ init_db()
 @app.post("/api/telemetry")
 async def post_telemetry(req: Request):
     data = await req.json()
+    now_ts = time.time()
+    
     if "WCET_WatchdogLoop_uS" in data:
-        engine_stats.wcet_watchdog_loop_us = float(data["WCET_WatchdogLoop_uS"])
+        val = float(data["WCET_WatchdogLoop_uS"])
+        engine_stats.wcet_watchdog_loop_us = val
+        engine_stats.wcet_wtdog_hist.append({"ts": now_ts, "val": val})
+        
     if "WCET_mainLoop_uS" in data:
-        engine_stats.wcet_main_loop_us = float(data["WCET_mainLoop_uS"])
+        val = float(data["WCET_mainLoop_uS"])
+        engine_stats.wcet_main_loop_us = val
+        engine_stats.wcet_mloop_hist.append({"ts": now_ts, "val": val})
+        
     if "WCET_ELP0" in data:
-        engine_stats.wcet_elp0 = float(data["WCET_ELP0"])
+        val = float(data["WCET_ELP0"])
+        engine_stats.wcet_elp0 = val
+        engine_stats.wcet_elp0_hist.append({"ts": now_ts, "val": val})
+        
     if "WCET_ELP1" in data:
-        engine_stats.wcet_elp1 = float(data["WCET_ELP1"])
+        val = float(data["WCET_ELP1"])
+        engine_stats.wcet_elp1 = val
+        engine_stats.wcet_elp1_hist.append({"ts": now_ts, "val": val})
+
     return JSONResponse({"status": "ok"})
 
 @app.get("/api/messages")
@@ -87,21 +108,32 @@ def get_stats(queue_len: int = 0):
     # Cleanup history older than 60 seconds
     engine_stats.history_1m = [h for h in engine_stats.history_1m if now - h['ts'] <= 60]
     engine_stats.wcel_history_1m = [h for h in engine_stats.wcel_history_1m if now - h['ts'] <= 60]
+    engine_stats.wcet_elp0_hist = [h for h in engine_stats.wcet_elp0_hist if now - h['ts'] <= 60]
+    engine_stats.wcet_elp1_hist = [h for h in engine_stats.wcet_elp1_hist if now - h['ts'] <= 60]
+    engine_stats.wcet_elp2_hist = [h for h in engine_stats.wcet_elp2_hist if now - h['ts'] <= 60]
+    engine_stats.wcet_wtdog_hist = [h for h in engine_stats.wcet_wtdog_hist if now - h['ts'] <= 60]
+    engine_stats.wcet_mloop_hist = [h for h in engine_stats.wcet_mloop_hist if now - h['ts'] <= 60]
     
-    delta_1m_wcel = 0.0
-    if len(engine_stats.wcel_history_1m) > 0:
-        oldest = engine_stats.wcel_history_1m[0]['val']
-        latest = engine_stats.wcel_history_1m[-1]['val']
-        delta_1m_wcel = latest - oldest
+    avg_1m_wcel = sum(h['val'] for h in engine_stats.wcel_history_1m) / len(engine_stats.wcel_history_1m) if engine_stats.wcel_history_1m else engine_stats.wcel
+    
+    def get_delta(hist):
+        if not hist: return 0.0
+        vals = [h['val'] for h in hist]
+        return max(vals) - min(vals)
     
     return {
         "WCET_ELP0": engine_stats.wcet_elp0,
+        "WCET_ELP0_delta": get_delta(engine_stats.wcet_elp0_hist),
         "WCET_ELP1": engine_stats.wcet_elp1,
+        "WCET_ELP1_delta": get_delta(engine_stats.wcet_elp1_hist),
         "WCET_ELP2": engine_stats.wcet_elp2,
+        "WCET_ELP2_delta": get_delta(engine_stats.wcet_elp2_hist),
         "WCEL": engine_stats.wcel,
-        "WCEL_delta_1m": delta_1m_wcel,
+        "WCEL_delta_1m": avg_1m_wcel,  # Sending the average as requested
         "WCET_WatchdogLoop_uS": engine_stats.wcet_watchdog_loop_us,
+        "WCET_WatchdogLoop_uS_delta": get_delta(engine_stats.wcet_wtdog_hist),
         "WCET_mainLoop_uS": engine_stats.wcet_main_loop_us,
+        "WCET_mainLoop_uS_delta": get_delta(engine_stats.wcet_mloop_hist),
         "MemoryConsumption_MB": psutil.Process().memory_info().rss / (1024*1024),
         "CPU_Consumption": psutil.Process().cpu_percent(interval=None),
         "sidecarProcessSpawned": engine_stats.boot_time,
@@ -140,6 +172,7 @@ async def chat(request: Request):
             t_end = time.time()
             elapsed = t_end - t_start
             engine_stats.wcet_elp2 = elapsed
+            engine_stats.wcet_elp2_hist.append({"ts": now, "val": elapsed})
             
             if response.status_code == 200:
                 resp_json = response.json()
@@ -485,15 +518,23 @@ if __name__ == "__main__":
                 t0 = time.perf_counter_ns()
                 resp = httpx.get("http://127.0.0.1:11420/api/telemetry", timeout=1.0)
                 t1 = time.perf_counter_ns()
+                now_ts = time.time()
+                
                 wcel_us = (t1 - t0) / 1000.0
                 engine_stats.wcel = wcel_us
-                engine_stats.wcel_history_1m.append({"ts": time.time(), "val": wcel_us})
+                engine_stats.wcel_history_1m.append({"ts": now_ts, "val": wcel_us})
                 
                 if resp.status_code == 200:
                     data = resp.json()
                     engine_stats.wcet_elp0 = data.get("WCET_ELP0", engine_stats.wcet_elp0)
+                    engine_stats.wcet_elp0_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp0})
+                    
                     engine_stats.wcet_elp1 = data.get("WCET_ELP1", engine_stats.wcet_elp1)
+                    engine_stats.wcet_elp1_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp1})
+                    
                     engine_stats.wcet_main_loop_us = data.get("WCET_mainLoop_uS", engine_stats.wcet_main_loop_us)
+                    engine_stats.wcet_mloop_hist.append({"ts": now_ts, "val": engine_stats.wcet_main_loop_us})
+                    
             except Exception:
                 pass
             time.sleep(1)
