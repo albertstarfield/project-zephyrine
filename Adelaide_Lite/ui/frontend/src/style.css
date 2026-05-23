@@ -137,6 +137,19 @@ body, html {
   font-size: 0.7rem; color: #666; font-weight: 700;
   letter-spacing: 1.5px; padding-left: 0.5rem; text-transform: uppercase;
 }
+.history-topic {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.7rem 0.85rem; color: #a0a0a0; text-decoration: none;
+  border-radius: 12px; font-size: 0.9rem; font-weight: 500;
+  transition: all 0.2s ease; margin-top: 0.5rem; cursor: pointer;
+}
+.history-topic:hover {
+  background: rgba(255, 255, 255, 0.05); color: #fff;
+}
+.history-topic.active {
+  background: rgba(255, 255, 255, 0.08); color: #fff;
+}
+.history-topic svg { width: 14px; height: 14px; opacity: 0.7; }
 
 .sidebar-bottom { padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); }
 .sidebar-bottom nav { display: flex; flex-direction: column; gap: 0.2rem; }
