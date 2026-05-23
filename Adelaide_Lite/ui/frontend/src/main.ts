@@ -1042,26 +1042,30 @@ WCEL \u0394 1m: ${(stats.WCEL_delta_1m / 1000).toFixed(2)} ms
 JS Loop   : ${jsLoopTime} ms
 `;
       
-      // Draw Ada Graph (Tokens/s History)
+      // Draw Ada Graph (Tokens/s and WCET History)
       const width = mangoCanvas.width;
       const height = mangoCanvas.height;
       mangoCtx.clearRect(0, 0, width, height);
       
       const history: {ts: number, val: number}[] = stats.History_1m;
+      const elp0Hist: {ts: number, val: number}[] = stats.WCET_ELP0_Hist || [];
+      const elp1Hist: {ts: number, val: number}[] = stats.WCET_ELP1_Hist || [];
+      const elp2Hist: {ts: number, val: number}[] = stats.WCET_ELP2_Hist || [];
+      const wtdogHist: {ts: number, val: number}[] = stats.WCET_WtDog_Hist || [];
+      const mloopHist: {ts: number, val: number}[] = stats.WCET_mLoop_Hist || [];
+      
+      const minTime = Date.now() / 1000 - 60;
+
+      // Draw Tokens/s in Bright Green
       if (history.length > 0) {
         const maxVal = Math.max(...history.map(h => h.val), 10);
-        const minTime = Date.now() / 1000 - 60;
-        
-        // Draw Axis Labels
         mangoCtx.fillStyle = 'rgba(0, 255, 0, 0.5)';
         mangoCtx.font = '9px monospace';
         mangoCtx.fillText(`${maxVal.toFixed(1)} t/s`, 2, 10);
-        mangoCtx.fillText('0', 2, height - 2);
-
+        
         mangoCtx.beginPath();
         mangoCtx.strokeStyle = '#0f0';
-        mangoCtx.lineWidth = 1;
-        
+        mangoCtx.lineWidth = 1.5;
         for (let i = 0; i < history.length; i++) {
           const pt = history[i];
           const x = ((pt.ts - minTime) / 60) * width;
@@ -1071,6 +1075,48 @@ JS Loop   : ${jsLoopTime} ms
         }
         mangoCtx.stroke();
       }
+
+      // Draw Timing Histories (WCET) on a shared 1s (ELP) or max scaled axis
+      // We'll use a helper to plot these
+      const plotHist = (hist: {ts: number, val: number}[], color: string, maxScale: number) => {
+        if (hist.length === 0) return;
+        mangoCtx.beginPath();
+        mangoCtx.strokeStyle = color;
+        mangoCtx.lineWidth = 1;
+        for (let i = 0; i < hist.length; i++) {
+          const pt = hist[i];
+          const x = ((pt.ts - minTime) / 60) * width;
+          const y = height - ((pt.val / maxScale) * height);
+          if (i === 0) mangoCtx.moveTo(x, y);
+          else mangoCtx.lineTo(x, y);
+        }
+        mangoCtx.stroke();
+      };
+
+      // For ELP (seconds)
+      const maxELP = Math.max(
+        ...elp0Hist.map(h => h.val), 
+        ...elp1Hist.map(h => h.val), 
+        ...elp2Hist.map(h => h.val), 
+        1.0
+      );
+      plotHist(elp0Hist, '#55f', maxELP); // Blue
+      plotHist(elp1Hist, '#a5f', maxELP); // Purple
+      plotHist(elp2Hist, '#f5f', maxELP); // Pink
+      
+      // For Microseconds (scaled down to fit)
+      const maxUS = Math.max(
+        ...wtdogHist.map(h => h.val),
+        ...mloopHist.map(h => h.val),
+        100000 // 100ms in us
+      );
+      plotHist(wtdogHist, '#ff0', maxUS); // Yellow
+      plotHist(mloopHist, '#f90', maxUS); // Orange
+
+      mangoCtx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      mangoCtx.fillText(`0`, 2, height - 2);
+      mangoCtx.fillText(`${maxELP.toFixed(1)}s`, width - 25, 10);
+
 
       // Draw JS Graph (WCEL and JS Loop)
       const jsWidth = mangoJSCanvas.width;

@@ -143,7 +143,12 @@ def get_stats(queue_len: int = 0):
         "Current_Uptime": uptime,
         "Current_Queue": queue_len,
         "History_1m": engine_stats.history_1m,
-        "WCEL_History_1m": engine_stats.wcel_history_1m
+        "WCEL_History_1m": engine_stats.wcel_history_1m,
+        "WCET_ELP0_Hist": engine_stats.wcet_elp0_hist,
+        "WCET_ELP1_Hist": engine_stats.wcet_elp1_hist,
+        "WCET_ELP2_Hist": engine_stats.wcet_elp2_hist,
+        "WCET_WtDog_Hist": engine_stats.wcet_wtdog_hist,
+        "WCET_mLoop_Hist": engine_stats.wcet_mloop_hist
     }
 
 @app.post("/api/chat")
