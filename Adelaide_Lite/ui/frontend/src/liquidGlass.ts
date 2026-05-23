@@ -106,7 +106,7 @@ void main() {
     float d = sdRoundedRect(p, halfSize, r);
     if (d < sd) {
       sd = d;
-      minBezel = min(uBezel, min(r, min(halfSize.x, halfSize.y)) - 1.0);
+      minBezel = max(2.0, min(uBezel, min(halfSize.x, halfSize.y) - 1.0));
     }
   }
 
@@ -206,13 +206,13 @@ export class LiquidGlassSystem {
         uNumRects: { value: 0 },
         uRects: { value: Array(50).fill(new THREE.Vector4()) },
         uRadii: { value: Array(50).fill(0) },
-        uBezel: { value: 40.0 },
-        uThickness: { value: 30.0 },
-        uIOR: { value: 2.0 },
-        uBlur: { value: 2.5 },
-        uSpecular: { value: 0.6 },
-        uTint: { value: 0.2 }, // slight tint over procedural
-        uShadow: { value: 0.8 },
+        uBezel: { value: 2.0 },
+        uThickness: { value: 1.5 },
+        uIOR: { value: 1.5 },
+        uBlur: { value: 4.0 },
+        uSpecular: { value: 1.2 },
+        uTint: { value: 0.1 },
+        uShadow: { value: 0.4 },
         uTime: { value: 0.0 },
       },
       depthTest: false,

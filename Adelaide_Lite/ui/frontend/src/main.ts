@@ -1197,14 +1197,14 @@ if (glCanvas) {
     const sidebar = document.getElementById('sidebar');
     if (sidebar && !sidebar.classList.contains('hidden') && sidebar.offsetParent !== null) {
       const b = sidebar.getBoundingClientRect();
-      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 0 }); // Sidebar has no rounding on right
+      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 24 }); // Make sidebar roundy
     }
     
     // Input Container
     const inputContainer = document.querySelector('.input-container');
     if (inputContainer && !inputContainer.classList.contains('hidden') && (inputContainer as HTMLElement).offsetParent !== null) {
       const b = inputContainer.getBoundingClientRect();
-      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 0 });
+      rects.push({ x: b.left, y: b.top, w: b.width, h: b.height, r: 24 }); // Make input container roundy
     }
     
     // Chat Bubbles
