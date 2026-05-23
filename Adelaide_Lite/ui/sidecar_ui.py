@@ -563,6 +563,17 @@ if __name__ == "__main__":
                     engine_stats.wcet_elp1 = data.get("WCET_ELP1", engine_stats.wcet_elp1)
                     engine_stats.wcet_elp1_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp1})
                     
+                    engine_stats.wcet_elp2 = data.get("WCET_ELP2", engine_stats.wcet_elp2)
+                    engine_stats.wcet_elp2_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp2})
+                    
+                    engine_stats.wcet_elp3 = data.get("WCET_ELP3", engine_stats.wcet_elp3)
+                    
+                    engine_stats.jitter_avg_us = data.get("Jitter_Avg_uS", engine_stats.jitter_avg_us)
+                    engine_stats.jitter_max_us = data.get("Jitter_Max_uS", engine_stats.jitter_max_us)
+
+                    engine_stats.wcet_watchdog_loop_us = data.get("WCET_WatchdogLoop_uS", engine_stats.wcet_watchdog_loop_us)
+                    engine_stats.wcet_wtdog_hist.append({"ts": now_ts, "val": engine_stats.wcet_watchdog_loop_us})
+
                     engine_stats.wcet_main_loop_us = data.get("WCET_mainLoop_uS", engine_stats.wcet_main_loop_us)
                     engine_stats.wcet_mloop_hist.append({"ts": now_ts, "val": engine_stats.wcet_main_loop_us})
                     
