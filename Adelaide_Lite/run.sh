@@ -7,8 +7,8 @@ echo "[*] Setting up Adelaide-Lite environment in $BASE_DIR..."
 # Record start time for WCET
 START_TIME=$(python3 -c 'import time; print(int(time.time() * 1000))')
 
-# Generate MD5 of the Ada sources and config
-CURRENT_HASH=$(find src config adelaide_lite.gpr -type f -exec md5 -q {} + | md5 -q)
+# Generate MD5 of the Ada sources, config, and UI
+CURRENT_HASH=$(find src config adelaide_lite.gpr ui/frontend/src ui/frontend/index.html ui/frontend/package.json -type f 2>/dev/null | sort | xargs md5 -q | md5 -q)
 
 if [ ! -f .build_hash ] || [ "$CURRENT_HASH" != "$(cat .build_hash)" ]; then
     echo "[*] Changes detected, checking downloads and rebuilding..."
@@ -44,19 +44,34 @@ if [ ! -f .build_hash ] || [ "$CURRENT_HASH" != "$(cat .build_hash)" ]; then
     # We can enforce this in the future by setting XDG_DATA_HOME or similar ALIRE env vars.
     alr build
     
+    echo "[*] Building Vite Frontend for Sidecar UI..."
+    if [ -d "ui/frontend" ]; then
+        (cd ui/frontend && npm install && npm run build)
+    fi
+    
     echo "$CURRENT_HASH" > .build_hash
 else
     echo "[*] No changes detected, skipping build."
 fi
+
+# Parse arguments
+LAUNCH_GUI=true
+for arg in "$@"; do
+    if [ "$arg" == "--no-gui" ]; then
+        LAUNCH_GUI=false
+    fi
+done
 
 echo "[*] Booting StellaIcarus Ada Daemon Manager..."
 python3 python/stellaicarus_daemon_runner.py &
 DAEMON_PID=$!
 
 cleanup() {
-    echo "[*] Shutting down daemon..."
+    echo "[*] Shutting down background processes..."
     kill $DAEMON_PID 2>/dev/null || true
-    wait $DAEMON_PID 2>/dev/null || true
+    if [ -n "$SERVER_PID" ]; then
+        kill $SERVER_PID 2>/dev/null || true
+    fi
 }
 trap cleanup EXIT INT TERM
 
@@ -64,4 +79,11 @@ echo "[*] Booting Adelaide Intelligence Server..."
 END_TIME=$(python3 -c 'import time; print(int(time.time() * 1000))')
 echo "[*] Startup completed in $((END_TIME - START_TIME))ms (WCET)"
 
-./bin/adelaide_server
+if [ "$LAUNCH_GUI" = true ]; then
+    ./bin/adelaide_server &
+    SERVER_PID=$!
+    echo "[*] Booting Python Sidecar UI..."
+    cd ui && python3 sidecar_ui.py
+else
+    ./bin/adelaide_server
+fi
