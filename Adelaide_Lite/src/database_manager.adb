@@ -227,7 +227,7 @@ package body Database_Manager is
          Bind_Text (Stmt, 1, Source);
          Bind_Text (Stmt, 2, Relation);
          Bind_Text (Stmt, 3, Target);
-         Bind_Double (Stmt, 4, Long_Float (Weight));
+         Bind_Double (Stmt, 4, Weight);
          Step (Stmt);
       end;
    exception

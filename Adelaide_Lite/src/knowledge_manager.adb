@@ -351,7 +351,7 @@ package body Knowledge_Manager is
             use GNAT.OS_Lib;
             Ret     : Integer;
             Cmd     : constant String := "gnatprove";
-            Args    : constant Argument_List := (
+            Args    : Argument_List := (
                1 => new String'("-P"),
                2 => new String'("ZenithOrion/zenith_orion.gpr"),
                3 => new String'("--level=2"),
