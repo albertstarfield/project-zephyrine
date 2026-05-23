@@ -75,7 +75,8 @@ body, html {
 /* Main Layout - Gemini Style Edge-to-Edge */
 #app {
   position: relative; z-index: 10;
-  display: flex; width: 100vw; height: 100vh;
+  display: flex; width: 100vw; height: 80vh;
+  margin: 10vh 0;
   box-sizing: border-box;
 }
 
@@ -94,7 +95,7 @@ body, html {
   overflow: hidden;
   border-radius: 24px;
   margin: 16px;
-  height: calc(100vh - 32px);
+  height: calc(80vh - 32px);
   box-sizing: border-box;
 }
 #sidebar.collapsed {
