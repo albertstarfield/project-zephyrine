@@ -663,6 +663,8 @@ async function loadGraph() {
     cyInstance = cytoscape({
       container: cyContainer,
       elements: elements,
+      minZoom: 0.1,
+      maxZoom: 1.5,
       style: [
         {
           selector: 'node',
@@ -736,6 +738,8 @@ async function loadMemoryGraph() {
     cyMemoryInstance = cytoscape({
       container: cyMemoryContainer,
       elements: elements,
+      minZoom: 0.1,
+      maxZoom: 1.5,
       style: [
         {
           selector: 'node',
