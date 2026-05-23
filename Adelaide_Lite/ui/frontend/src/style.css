@@ -48,26 +48,26 @@ body, html {
 /* Sparkling Cross Stars */
 .stars {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-  /* An irregular pattern of differently sized cross stars to break the grid */
-  background-image: url('data:image/svg+xml;utf8,<svg width="500" height="500" xmlns="http://www.w3.org/2000/svg" fill="rgba(64,224,208,0.9)"><path d="M 50 20 Q 50 45 75 45 Q 50 45 50 70 Q 50 45 25 45 Q 50 45 50 20 Z" /><path d="M 300 100 Q 300 115 315 115 Q 300 115 300 130 Q 300 115 285 115 Q 300 115 300 100 Z" /><path d="M 150 400 Q 150 410 160 410 Q 150 410 150 420 Q 150 410 140 410 Q 150 410 150 400 Z" /><path d="M 420 320 Q 420 340 440 340 Q 420 340 420 360 Q 420 340 400 340 Q 420 340 420 320 Z" /><path d="M 220 220 Q 220 230 230 230 Q 220 230 220 240 Q 220 230 210 230 Q 220 230 220 220 Z" /></svg>');
+  /* Tiny blinky cross stars and dots */
+  background-image: url('data:image/svg+xml;utf8,<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg" fill="rgba(64,224,208,0.9)"><path d="M 50 46 Q 50 50 54 50 Q 50 50 50 54 Q 50 50 46 50 Q 50 50 50 46 Z"/><circle cx="200" cy="150" r="1.5"/><path d="M 350 77 Q 350 80 353 80 Q 350 80 350 83 Q 350 80 347 80 Q 350 80 350 77 Z"/><circle cx="100" cy="300" r="2"/><circle cx="300" cy="350" r="1"/><path d="M 180 248 Q 180 250 182 250 Q 180 250 180 252 Q 180 250 178 250 Q 180 250 180 248 Z"/><circle cx="380" cy="280" r="1.5"/></svg>');
 }
 .stars1 {
-  background-size: 400px 400px; background-position: 0 0;
-  animation: twinkle 5s infinite alternate ease-in-out;
+  background-size: 250px 250px; background-position: 0 0;
+  animation: twinkle 3s infinite alternate ease-in-out;
 }
 .stars2 {
-  background-size: 650px 750px; background-position: 150px 80px;
-  opacity: 0.7; transform: rotate(15deg) scale(0.6);
-  animation: twinkle 7s infinite alternate-reverse ease-in-out;
+  background-size: 350px 350px; background-position: 100px 50px;
+  opacity: 0.7; transform: rotate(15deg);
+  animation: twinkle 4s infinite alternate-reverse ease-in-out;
 }
 .stars3 {
-  background-size: 900px 600px; background-position: -50px -100px;
-  opacity: 0.4; transform: rotate(-25deg) scale(0.4);
-  animation: twinkle 4s infinite alternate ease-in-out 2s;
+  background-size: 450px 450px; background-position: -50px -100px;
+  opacity: 0.4; transform: rotate(-25deg);
+  animation: twinkle 5s infinite alternate ease-in-out 2s;
 }
 @keyframes twinkle {
-  0% { opacity: 0.1; }
-  100% { opacity: 0.9; filter: drop-shadow(0 0 6px rgba(64,224,208,1)); }
+  0% { opacity: 0.1; filter: drop-shadow(0 0 1px rgba(64,224,208,0.5)); }
+  100% { opacity: 1; filter: drop-shadow(0 0 5px rgba(64,224,208,1)); }
 }
 
 #gl { display: none !important; }
@@ -160,7 +160,7 @@ body, html {
 }
 
 .center-logo {
-  height: 280px; margin-bottom: 3rem;
+  height: 200px; margin-bottom: 2.5rem;
   filter: drop-shadow(0 8px 20px rgba(0,0,0,0.6));
   animation: floatLogo 6s ease-in-out infinite;
 }
@@ -171,12 +171,12 @@ body, html {
 }
 
 .avatar-ring {
-  width: 160px; height: 160px; border-radius: 50%;
+  width: 130px; height: 130px; border-radius: 50%;
   background: linear-gradient(135deg, #4285f4, #9b72cb, #d96570, #4285f4);
   background-size: 300% 300%;
-  padding: 4px; 
+  padding: 3px; 
   box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-  margin-bottom: 2.5rem;
+  margin-bottom: 2rem;
   animation: spinGradient 4s ease infinite;
 }
 @keyframes spinGradient {
