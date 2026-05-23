@@ -152,78 +152,95 @@ def get_embedding_model():
         embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
     return embedding_model
 
+from fastapi.responses import StreamingResponse
+
 @app.post("/api/knowledgestackfrontend/upload")
 async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Form(...)):
-    conn = sqlite3.connect(LITERATURE_DB_PATH)
-    cursor = conn.cursor()
-    model = get_embedding_model()
-    
-    # Load or create graph
-    if os.path.exists(GRAPH_PATH):
-        try:
-            G = nx.read_graphml(GRAPH_PATH)
-        except Exception:
-            G = nx.Graph()
-    else:
-        G = nx.Graph()
-
+    # Read files into memory first to avoid closure issues
+    files_data = []
     for file in files:
-        content = ""
-        ext = file.filename.split('.')[-1].lower()
         content_bytes = await file.read()
+        files_data.append((file.filename, content_bytes))
         
-        if ext == 'txt':
-            content = content_bytes.decode('utf-8', errors='ignore')
-        elif ext == 'pdf':
-            doc = fitz.open(stream=content_bytes, filetype="pdf")
-            for page in doc:
-                content += page.get_text() + "\n"
+    async def process_and_stream():
+        conn = sqlite3.connect(LITERATURE_DB_PATH)
+        cursor = conn.cursor()
+        model = get_embedding_model()
+        
+        if os.path.exists(GRAPH_PATH):
+            try:
+                G = nx.read_graphml(GRAPH_PATH)
+            except Exception:
+                G = nx.Graph()
         else:
-            continue
+            G = nx.Graph()
+
+        all_chunks = []
+        # Pre-process and chunk all files
+        for filename, content_bytes in files_data:
+            content = ""
+            ext = filename.split('.')[-1].lower()
             
-        if not content.strip(): continue
-        
-        # Add Domain and Document to Graph
-        doc_node = f"doc_{file.filename}"
-        G.add_node(domain, label=domain, type="domain")
-        G.add_node(doc_node, label=file.filename, domain=domain, type="document")
-        G.add_edge(domain, doc_node)
-        
-        # Split content into chunks (approx 500 chars)
-        paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
-        chunks = []
-        current_chunk = ""
-        for p in paragraphs:
-            if len(current_chunk) + len(p) > 500:
-                if current_chunk: chunks.append(current_chunk)
-                current_chunk = p
+            if ext == 'txt':
+                content = content_bytes.decode('utf-8', errors='ignore')
+            elif ext == 'pdf':
+                doc = fitz.open(stream=content_bytes, filetype="pdf")
+                for page in doc:
+                    content += page.get_text() + "\n"
             else:
-                current_chunk += "\n\n" + p if current_chunk else p
-        if current_chunk:
-            chunks.append(current_chunk)
+                continue
+                
+            if not content.strip(): continue
             
-        # Fallback if no paragraphs
-        if not chunks:
-            chunks = [content[i:i+500] for i in range(0, len(content), 500)]
-        
-        for i, chunk_text in enumerate(chunks):
-            # Calculate ELP1 embedding
+            doc_node = f"doc_{filename}"
+            G.add_node(domain, label=domain, type="domain")
+            G.add_node(doc_node, label=filename, domain=domain, type="document")
+            G.add_edge(domain, doc_node)
+            
+            paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
+            chunks = []
+            current_chunk = ""
+            for p in paragraphs:
+                if len(current_chunk) + len(p) > 500:
+                    if current_chunk: chunks.append(current_chunk)
+                    current_chunk = p
+                else:
+                    current_chunk += "\n\n" + p if current_chunk else p
+            if current_chunk:
+                chunks.append(current_chunk)
+                
+            if not chunks:
+                chunks = [content[i:i+500] for i in range(0, len(content), 500)]
+                
+            for chunk in chunks:
+                all_chunks.append((filename, doc_node, chunk))
+
+        total_chunks = len(all_chunks)
+        if total_chunks == 0:
+            yield json.dumps({"progress": 100, "status": "success"}) + "\n"
+            return
+
+        for i, (filename, doc_node, chunk_text) in enumerate(all_chunks):
             emb = model.encode(chunk_text)
             emb_blob = emb.astype(np.float32).tobytes()
             chunk_id = str(uuid.uuid4())
             
             cursor.execute("INSERT INTO documents (id, filename, domain, content, embedding) VALUES (?, ?, ?, ?, ?)",
-                           (chunk_id, file.filename, domain, chunk_text, emb_blob))
+                           (chunk_id, filename, domain, chunk_text, emb_blob))
             
-            # Update GraphML for chunk
             G.add_node(chunk_id, label=f"Chunk {i+1}", type="chunk")
             G.add_edge(doc_node, chunk_id)
+            
+            # Yield progress every chunk or periodically
+            progress = int(((i + 1) / total_chunks) * 100)
+            yield json.dumps({"progress": progress}) + "\n"
 
-    conn.commit()
-    conn.close()
-    
-    nx.write_graphml(G, GRAPH_PATH)
-    return {"status": "success"}
+        conn.commit()
+        conn.close()
+        nx.write_graphml(G, GRAPH_PATH)
+        yield json.dumps({"progress": 100, "status": "success"}) + "\n"
+
+    return StreamingResponse(process_and_stream(), media_type="application/x-ndjson")
 
 @app.get("/api/knowledgestackfrontend/documents")
 def get_documents():

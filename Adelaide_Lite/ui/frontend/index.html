@@ -134,6 +134,12 @@
                   <option value="Literature">Literature</option>
                 </select>
                 <button id="knowledge-upload-btn">Upload to Database</button>
+                <div id="upload-progress-container" class="hidden" style="margin-top: 1rem;">
+                  <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 10px; overflow: hidden;">
+                    <div id="upload-progress-bar" style="background: var(--primary); width: 0%; height: 100%; transition: width 0.2s;"></div>
+                  </div>
+                  <p id="upload-progress-text" style="font-size: 0.8rem; margin-top: 0.5rem; color: #ccc;">0%</p>
+                </div>
               </div>
               <div class="knowledge-file-list" id="knowledge-file-list">
                 <!-- Grouped list of files goes here -->

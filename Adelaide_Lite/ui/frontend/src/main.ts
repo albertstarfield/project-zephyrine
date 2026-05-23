@@ -447,6 +447,10 @@ if (tabGraph && tabSearch) {
 }
 
 // Knowledge Upload
+const progressContainer = document.getElementById('upload-progress-container');
+const progressBar = document.getElementById('upload-progress-bar');
+const progressText = document.getElementById('upload-progress-text');
+
 if (uploadBtn && uploadInput) {
   uploadBtn.addEventListener('click', async () => {
     if (!uploadInput.files || uploadInput.files.length === 0) return;
@@ -457,15 +461,47 @@ if (uploadBtn && uploadInput) {
     formData.append('domain', domainSelect.value);
 
     uploadBtn.textContent = 'Uploading...';
+    if (uploadBtn instanceof HTMLButtonElement) uploadBtn.disabled = true;
+    if (progressContainer) progressContainer.classList.remove('hidden');
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressText) progressText.textContent = '0%';
+
     try {
       const res = await fetch('/api/knowledgestackfrontend/upload', {
         method: 'POST',
         body: formData
       });
-      if (res.ok) {
-        uploadInput.value = '';
-        loadKnowledgeFiles();
-        loadGraph();
+      if (res.ok && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let done = false;
+
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: !done });
+            const lines = chunk.split('\\n');
+            for (const line of lines) {
+              if (line.trim()) {
+                try {
+                  const data = JSON.parse(line);
+                  if (data.progress !== undefined) {
+                    if (progressBar) progressBar.style.width = `${data.progress}%`;
+                    if (progressText) progressText.textContent = `Embedding... ${data.progress}%`;
+                  }
+                  if (data.status === 'success') {
+                    uploadInput.value = '';
+                    loadKnowledgeFiles();
+                    loadGraph();
+                  }
+                } catch (e) {
+                  // Partial JSON chunk, ignore and continue
+                }
+              }
+            }
+          }
+        }
       } else {
         alert('Upload failed.');
       }
@@ -473,6 +509,10 @@ if (uploadBtn && uploadInput) {
       alert('Error uploading files.');
     } finally {
       uploadBtn.textContent = 'Upload to Database';
+      if (uploadBtn instanceof HTMLButtonElement) uploadBtn.disabled = false;
+      setTimeout(() => {
+        if (progressContainer) progressContainer.classList.add('hidden');
+      }, 2000);
     }
   });
 }
