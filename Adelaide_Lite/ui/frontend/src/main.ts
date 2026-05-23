@@ -1024,6 +1024,8 @@ ADELAIDE_ADA_ENGINE
 WCET_ELP0 : ${stats.WCET_ELP0.toFixed(3)}s (\u0394 ${(stats.WCET_ELP0_delta).toFixed(3)}s)
 WCET_ELP1 : ${stats.WCET_ELP1.toFixed(3)}s (\u0394 ${(stats.WCET_ELP1_delta).toFixed(3)}s)
 WCET_ELP2 : ${stats.WCET_ELP2.toFixed(3)}s (\u0394 ${(stats.WCET_ELP2_delta).toFixed(3)}s)
+WCET_ELP3 : ${(stats.WCET_ELP3 * 1000).toFixed(2)}ms (1ms Paced)
+Jitter    : Avg ${stats.Jitter_Avg_uS.toFixed(1)}us (Max ${stats.Jitter_Max_uS.toFixed(1)}us)
 WCET_WtDog: ${stats.WCET_WatchdogLoop_uS.toFixed(1)} us (\u0394 ${(stats.WCET_WatchdogLoop_uS_delta).toFixed(1)}us)
 WCET_mLoop: ${stats.WCET_mainLoop_uS.toFixed(1)} us (\u0394 ${(stats.WCET_mainLoop_uS_delta).toFixed(1)}us)
 Memory    : ${stats.MemoryConsumption_MB.toFixed(1)} MB
