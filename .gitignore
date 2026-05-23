@@ -7,5 +7,6 @@
 **/*.log
 **.db**
 **.graphml**
+**__pycache__**
 
 **cinst.txt**
