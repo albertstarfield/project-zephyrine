@@ -11,24 +11,18 @@ with AWS.Response.Set;
 with AWS.Messages;
 with GNATCOLL.JSON;
 with Math_Utils;
-with Ada.Containers.Indefinite_Hashed_Maps;
-with Ada.Strings.Hash;
+with Ada.Containers.Indefinite_Ordered_Maps;
 
 package body Adelaide_Server_Pkg is
 
    --  Pace timing for main loop
    WCET_Main_Loop : Duration := 0.0;
 
-   function Equivalent (Left, Right : String) return Boolean is
-   begin
-      return Left = Right;
-   end Equivalent;
+   use type Streaming_Queue.Queue_Access;
 
-   package Session_Maps is new Ada.Containers.Indefinite_Hashed_Maps
-     (Key_Type        => String,
-      Element_Type    => Streaming_Queue.Queue_Access,
-      Hash            => Ada.Strings.Hash,
-      Equivalent_Keys => Ada.Strings.Fixed."=");
+   package Session_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+     (Key_Type     => String,
+      Element_Type => Streaming_Queue.Queue_Access);
 
    Active_Sessions : Session_Maps.Map;
 
