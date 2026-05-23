@@ -8,7 +8,7 @@ void main() {
 }`;
 
 const fragmentShader = `
-precision highp float;
+
 varying vec2 vUv;
 
 uniform vec2 uResolution;
@@ -27,6 +27,7 @@ uniform float uShadow;
 uniform float uTime;
 
 float sdRoundedRect(vec2 p, vec2 halfSize, float r) {
+  r = min(r, min(halfSize.x, halfSize.y));
   vec2 q = abs(p) - halfSize + r;
   return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
 }
