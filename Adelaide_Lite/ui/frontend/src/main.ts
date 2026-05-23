@@ -379,7 +379,23 @@ const contentGraph = document.getElementById('k-content-graph');
 const contentSearch = document.getElementById('k-content-search');
 const cyContainer = document.getElementById('cy-container');
 
+// Memory DOM Elements
+const segmentLiterature = document.getElementById('segment-literature');
+const segmentMemory = document.getElementById('segment-memory');
+const wrapperLiterature = document.getElementById('knowledge-literature-wrapper');
+const wrapperMemory = document.getElementById('knowledge-memory-wrapper');
+
+const memSessionInput = document.getElementById('memory-session-input') as HTMLInputElement;
+const memTopicInput = document.getElementById('memory-topic-input') as HTMLInputElement;
+const memContentInput = document.getElementById('memory-content-input') as HTMLTextAreaElement;
+const memUploadBtn = document.getElementById('memory-upload-btn');
+const memProgressContainer = document.getElementById('memory-progress-container');
+const memProgressBar = document.getElementById('memory-progress-bar');
+const memProgressText = document.getElementById('memory-progress-text');
+const cyMemoryContainer = document.getElementById('cy-memory-container');
+
 let cyInstance: any = null;
+let cyMemoryInstance: any = null;
 
 if (navMain) {
   navMain.addEventListener('click', async (e) => {
@@ -424,9 +440,36 @@ if (navTuning) {
       if (!aboutContainer?.classList.contains('hidden')) hideEls.push(aboutContainer!);
       
       await switchView(hideEls, [knowledgeContainer!]);
-      loadKnowledgeFiles();
-      loadGraph();
+      if (wrapperLiterature && !wrapperLiterature.classList.contains('hidden')) {
+        loadKnowledgeFiles();
+        loadGraph();
+      } else {
+        loadMemoryGraph();
+      }
     }
+  });
+}
+
+// Segment Toggles
+if (segmentLiterature && segmentMemory) {
+  segmentLiterature.addEventListener('click', () => {
+    segmentLiterature.style.background = 'var(--primary)';
+    segmentLiterature.style.color = '#fff';
+    segmentMemory.style.background = 'transparent';
+    segmentMemory.style.color = '#a0a0a0';
+    wrapperLiterature?.classList.remove('hidden');
+    wrapperMemory?.classList.add('hidden');
+    loadKnowledgeFiles();
+    loadGraph();
+  });
+  segmentMemory.addEventListener('click', () => {
+    segmentMemory.style.background = 'var(--primary)';
+    segmentMemory.style.color = '#fff';
+    segmentLiterature.style.background = 'transparent';
+    segmentLiterature.style.color = '#a0a0a0';
+    wrapperMemory?.classList.remove('hidden');
+    wrapperLiterature?.classList.add('hidden');
+    loadMemoryGraph();
   });
 }
 
@@ -506,13 +549,51 @@ if (uploadBtn && uploadInput) {
         alert('Upload failed.');
       }
     } catch (e) {
-      alert('Error uploading files.');
+      if (progressText) progressText.innerText = 'Error parsing stream';
     } finally {
       uploadBtn.textContent = 'Upload to Database';
       if (uploadBtn instanceof HTMLButtonElement) uploadBtn.disabled = false;
+    }
+  });
+}
+
+// Memory Upload
+if (memUploadBtn) {
+  memUploadBtn.addEventListener('click', async () => {
+    const session = memSessionInput.value.trim();
+    const topic = memTopicInput.value.trim();
+    const content = memContentInput.value.trim();
+    if (!session || !topic || !content) {
+      alert('Please fill out all memory fields');
+      return;
+    }
+    
+    if (memProgressContainer) memProgressContainer.classList.remove('hidden');
+    if (memProgressBar) memProgressBar.style.width = '50%';
+    if (memProgressText) memProgressText.innerText = 'Embedding memory...';
+    
+    const formData = new FormData();
+    formData.append('session', session);
+    formData.append('topic', topic);
+    formData.append('content', content);
+    
+    try {
+      await fetch('/api/knowledgestackfrontend/memory/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (memProgressBar) memProgressBar.style.width = '100%';
+      if (memProgressText) memProgressText.innerText = 'Memory embedded successfully!';
+      
       setTimeout(() => {
-        if (progressContainer) progressContainer.classList.add('hidden');
+        if (memProgressContainer) memProgressContainer.classList.add('hidden');
+        memSessionInput.value = '';
+        memTopicInput.value = '';
+        memContentInput.value = '';
+        loadMemoryGraph();
       }, 2000);
+    } catch (e) {
+      if (memProgressText) memProgressText.innerText = 'Error embedding memory';
     }
   });
 }
@@ -569,9 +650,9 @@ if (searchBtnK && searchInputK) {
   });
 }
 
-// Load Graph
+// Load Literature Graph
 async function loadGraph() {
-  if (!cyContainer) return;
+  if (!cyContainer || (wrapperLiterature && wrapperLiterature.classList.contains('hidden'))) return;
   try {
     const res = await fetch('/api/knowledgestackfrontend/graph');
     if (!res.ok) return;
@@ -629,6 +710,79 @@ async function loadGraph() {
             'width': 2,
             'line-color': '#444',
             'target-arrow-color': '#444',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier'
+          }
+        }
+      ],
+      layout: {
+        name: 'cose',
+        padding: 10
+      }
+    });
+  } catch (e) {}
+}
+
+// Load Memory Graph
+async function loadMemoryGraph() {
+  if (!cyMemoryContainer || (wrapperMemory && wrapperMemory.classList.contains('hidden'))) return;
+  try {
+    const res = await fetch('/api/knowledgestackfrontend/memory/graph');
+    if (!res.ok) return;
+    const elements = await res.json();
+    
+    if (cyMemoryInstance) cyMemoryInstance.destroy();
+    
+    cyMemoryInstance = cytoscape({
+      container: cyMemoryContainer,
+      elements: elements,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'background-color': '#e056fd',
+            'label': 'data(label)',
+            'color': '#fff',
+            'text-valign': 'center',
+            'text-outline-width': 2,
+            'text-outline-color': '#000',
+            'font-size': '10px'
+          }
+        },
+        {
+          selector: 'node[type="session"]',
+          style: {
+            'background-color': '#686de0',
+            'width': 60,
+            'height': 60,
+            'font-size': '16px',
+            'font-weight': 'bold'
+          }
+        },
+        {
+          selector: 'node[type="topic"]',
+          style: {
+            'background-color': '#f0932b',
+            'width': 40,
+            'height': 40,
+            'font-size': '12px'
+          }
+        },
+        {
+          selector: 'node[type="memory"]',
+          style: {
+            'background-color': '#e056fd',
+            'width': 20,
+            'height': 20,
+            'font-size': '8px'
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 2,
+            'line-color': '#666',
+            'target-arrow-color': '#666',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier'
           }
