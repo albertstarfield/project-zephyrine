@@ -1,0 +1,15 @@
+with "adelaide_lite.gpr";
+
+project Zenith_Orion is
+   for Source_Dirs use ("src");
+   for Object_Dir use "obj";
+   for Main use ();
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2012", "-gnata", "-gnatwa", "-gnatyg");
+   end Compiler;
+
+   package Prove is
+      for Switches use ("--level=2", "--report=all");
+   end Prove;
+end Zenith_Orion;
