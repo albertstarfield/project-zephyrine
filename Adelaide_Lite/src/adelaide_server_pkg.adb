@@ -1,7 +1,6 @@
 with AnsiAda;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
-with Ada.Strings.Fixed;
 with Ada.Exceptions;
 with Model_Manager;
 with Streaming_Queue;
@@ -11,12 +10,38 @@ with AWS.Response.Set;
 with AWS.Messages;
 with GNATCOLL.JSON;
 with Math_Utils;
-with GNAT.OS_Lib;
+with Ada.Containers.Indefinite_Hashed_Maps;
+with Ada.Strings.Hash;
 
 package body Adelaide_Server_Pkg is
 
    --  Pace timing for main loop
    WCET_Main_Loop : Duration := 0.0;
+
+   package Session_Maps is new Ada.Containers.Indefinite_Hashed_Maps
+     (Key_Type        => String,
+      Element_Type    => Streaming_Queue.Queue_Access,
+      Hash            => Ada.Strings.Hash,
+      Equivalent_Keys => "=");
+
+   Active_Sessions : Session_Maps.Map;
+
+   procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is
+   begin
+      Active_Sessions.Include (ID, Q);
+   end Register;
+
+   procedure Unregister (ID : String) is
+   begin
+      Active_Sessions.Exclude (ID);
+   end Unregister;
+
+   procedure Push_Log (ID : String; Log : String) is
+   begin
+      if Active_Sessions.Contains (ID) then
+         Active_Sessions.Element (ID).Push (Log);
+      end if;
+   end Push_Log;
 
    function Build_Response
      (Content : String;
@@ -43,7 +68,7 @@ package body Adelaide_Server_Pkg is
    task type Generator_Task is
       entry Start
         (Prompt : String; Model_Name : String;
-         Format : Streaming_Queue.Response_Format;
+         Format : Streaming_Queue.Format_Type;
          Q : Streaming_Queue.Queue_Access;
          Agentic : Boolean := False; Raw_Prompt : Boolean := False);
    end Generator_Task;
@@ -53,7 +78,7 @@ package body Adelaide_Server_Pkg is
    task body Generator_Task is
       P : Unbounded_String;
       M : Unbounded_String;
-      F : Streaming_Queue.Response_Format;
+      F : Streaming_Queue.Format_Type;
       QA : Streaming_Queue.Queue_Access;
       Res : Unbounded_String;
       Is_Ag : Boolean;
@@ -61,7 +86,7 @@ package body Adelaide_Server_Pkg is
    begin
       accept Start
         (Prompt : String; Model_Name : String;
-         Format : Streaming_Queue.Response_Format;
+         Format : Streaming_Queue.Format_Type;
          Q : Streaming_Queue.Queue_Access;
          Agentic : Boolean := False; Raw_Prompt : Boolean := False)
       do
@@ -103,8 +128,6 @@ package body Adelaide_Server_Pkg is
       Raw_B  : constant Unbounded_String :=
         To_Unbounded_String (AWS.Status.Payload (Request));
       Result : Unbounded_String;
-      TS_Str : constant String := "2026-05-23T12:00:00";
-      Resp   : constant GNATCOLL.JSON.JSON_Value := GNATCOLL.JSON.Create_Object;
    begin
       if Method = "OPTIONS" then
          return Wrap_Response (Build_Response (""));
@@ -179,7 +202,7 @@ package body Adelaide_Server_Pkg is
                      begin
                         if GNATCOLL.JSON.Has_Field (Val, "model") then
                            Req_Model := To_Unbounded_String
-                             (GNATCOLL.JSON.Get (Val, "model"));
+                             (String'(GNATCOLL.JSON.Get (Val, "model")));
                         end if;
                         if GNATCOLL.JSON.Has_Field (Val, "stream") then
                            Is_Streaming := GNATCOLL.JSON.Get (Val, "stream");
@@ -202,14 +225,14 @@ package body Adelaide_Server_Pkg is
                                    GNATCOLL.JSON.Get (Msgs,
                                      GNATCOLL.JSON.Length (Msgs));
                               begin
-                                 Prompt := To_Unbounded_String
-                                   (GNATCOLL.JSON.Get (Last_Msg, "content"));
+                                 Prompt := Ada.Strings.Unbounded.To_Unbounded_String
+                                   (String'(GNATCOLL.JSON.Get (Last_Msg, "content")));
                               end;
                            end if;
                         else
                            if GNATCOLL.JSON.Has_Field (Val, "prompt") then
-                              Prompt := To_Unbounded_String
-                                (GNATCOLL.JSON.Get (Val, "prompt"));
+                              Prompt := Ada.Strings.Unbounded.To_Unbounded_String
+                                (String'(GNATCOLL.JSON.Get (Val, "prompt")));
                            end if;
                         end if;
                      end;
@@ -224,6 +247,7 @@ package body Adelaide_Server_Pkg is
 
             if Is_Streaming then
                declare
+                  use type Streaming_Queue.Queue_Access;
                   Q : constant Streaming_Queue.Queue_Access :=
                     new Streaming_Queue.Queue;
                   T : constant Generator_Task_Access := new Generator_Task;
