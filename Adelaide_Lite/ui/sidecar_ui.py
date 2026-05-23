@@ -88,7 +88,7 @@ def exit_app():
 
 @app.get("/api/docs/readme")
 def get_readme():
-    readme_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "stellaicarus", "readme.md")
+    readme_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "README.md")
     try:
         with open(readme_path, "r", encoding="utf-8") as f:
             return {"content": f.read()}
@@ -103,6 +103,15 @@ def get_license():
             return {"content": f.read()}
     except Exception as e:
         return {"error": str(e)}, 500
+
+@app.get("/api/user_info")
+def get_user_info():
+    import getpass
+    try:
+        username = getpass.getuser()
+    except Exception:
+        username = "User"
+    return {"username": username}
 
 # Mount static files
 if os.path.exists(DIST_DIR):

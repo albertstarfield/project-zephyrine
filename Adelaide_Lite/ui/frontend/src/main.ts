@@ -274,8 +274,22 @@ window.addEventListener('resize', () => {
 // --------------------------------------------------------
 const navVoice = document.getElementById('nav-voice');
 const navImage = document.getElementById('nav-image');
+const navTuning = document.getElementById('nav-tuning');
 const navSettings = document.getElementById('nav-settings');
 const navExit = document.getElementById('nav-exit');
+const userEmailText = document.getElementById('user-email-text');
+const greetingTitleText = document.getElementById('greeting-title-text');
+
+// Fetch user info
+fetch('/api/user_info')
+  .then(res => res.json())
+  .then(data => {
+    if (data.username && userEmailText && greetingTitleText) {
+      userEmailText.textContent = data.username;
+      greetingTitleText.textContent = `Greetings, ${data.username}`;
+    }
+  })
+  .catch(err => console.error("Error fetching user info:", err));
 
 if (navVoice) {
   navVoice.addEventListener('click', (e) => {
@@ -286,6 +300,13 @@ if (navVoice) {
 
 if (navImage) {
   navImage.addEventListener('click', (e) => {
+    e.preventDefault();
+    alert("INOP");
+  });
+}
+
+if (navTuning) {
+  navTuning.addEventListener('click', (e) => {
     e.preventDefault();
     alert("INOP");
   });
