@@ -1052,6 +1052,12 @@ JS Loop   : ${jsLoopTime} ms
         const maxVal = Math.max(...history.map(h => h.val), 10);
         const minTime = Date.now() / 1000 - 60;
         
+        // Draw Axis Labels
+        mangoCtx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+        mangoCtx.font = '9px monospace';
+        mangoCtx.fillText(`${maxVal.toFixed(1)} t/s`, 2, 10);
+        mangoCtx.fillText('0', 2, height - 2);
+
         mangoCtx.beginPath();
         mangoCtx.strokeStyle = '#0f0';
         mangoCtx.lineWidth = 1;
@@ -1077,6 +1083,12 @@ JS Loop   : ${jsLoopTime} ms
       // Plot JS Loop Time in Cyan
       if (jsLoopHistory.length > 0) {
         const maxLoop = Math.max(...jsLoopHistory.map(h => h.val), 2000); // Max 2s
+        
+        // Draw Axis Labels for JS Loop (Cyan)
+        mangoJSCtx.fillStyle = 'rgba(0, 255, 255, 0.5)';
+        mangoJSCtx.font = '9px monospace';
+        mangoJSCtx.fillText(`${maxLoop}ms`, 2, 10);
+
         mangoJSCtx.beginPath();
         mangoJSCtx.strokeStyle = '#0ff';
         mangoJSCtx.lineWidth = 1;
@@ -1093,6 +1105,12 @@ JS Loop   : ${jsLoopTime} ms
       // Plot WCEL in Red/Orange for contrast
       if (wcelHistory.length > 0) {
         const maxWCEL = Math.max(...wcelHistory.map(h => h.val), 1000000); // 1s in us
+        
+        // Draw Axis Labels for WCEL (Orange)
+        mangoJSCtx.fillStyle = 'rgba(255, 85, 0, 0.5)';
+        mangoJSCtx.font = '9px monospace';
+        mangoJSCtx.fillText(`${(maxWCEL/1000).toFixed(0)}ms (WCEL)`, jsWidth - 60, 10);
+
         mangoJSCtx.beginPath();
         mangoJSCtx.strokeStyle = '#f50';
         mangoJSCtx.lineWidth = 1;
