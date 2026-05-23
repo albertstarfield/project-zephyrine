@@ -88,18 +88,26 @@ else:
     def no_dist():
         return HTMLResponse("<h1>Please run `npm run build` inside frontend/</h1>")
 
-def run_server():
-    uvicorn.run(app, host="127.0.0.1", port=8080, log_level="warning")
+import socket
+
+def get_free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
+
+def run_server(port):
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 if __name__ == "__main__":
+    ui_port = get_free_port()
     # Start FastAPI in a background thread
-    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread = threading.Thread(target=run_server, args=(ui_port,), daemon=True)
     server_thread.start()
     
     # Launch PyWebview native window
     window = webview.create_window(
         "Adelaide Zephyrine Assistant",
-        "http://127.0.0.1:8080",
+        f"http://127.0.0.1:{ui_port}",
         width=1000,
         height=800,
         frameless=False, # Set to True if we want fully custom window frame

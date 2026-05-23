@@ -10,30 +10,82 @@
     <div id="bg"></div>
     <canvas id="gl"></canvas>
     
-    <!-- Chat Interface Overlay -->
+    <!-- Chat App Overlay -->
     <div id="app">
-      <header>
-        <img src="/ProjectZephy023LogoRenewal.png" alt="Zephyrine Logo" class="logo" />
-        <div class="header-text">
-          <h1>Zephyrine Assistant</h1>
-          <span class="status">● Online</span>
-        </div>
-      </header>
-
-      <main id="chat-container">
-        <div class="messages" id="messages">
-          <!-- Messages will be injected here via TS -->
-        </div>
-      </main>
-
-      <footer>
-        <form id="chat-form">
-          <input type="text" id="chat-input" placeholder="Ask Zephy anything..." autocomplete="off" />
-          <button type="submit" id="send-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      
+      <!-- Sidebar -->
+      <aside id="sidebar">
+        <div class="sidebar-top">
+          <button class="new-chat-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            New Chat
           </button>
-        </form>
-      </footer>
+          
+          <div class="model-select">
+            <select>
+              <option>Zephyrine Unified Model</option>
+            </select>
+          </div>
+          
+          <div class="history-section">
+            <span class="history-title">HISTORY</span>
+            <!-- History list goes here -->
+          </div>
+        </div>
+        
+        <div class="sidebar-bottom">
+          <nav>
+            <a href="#" class="nav-item"><span>🏠</span> Main Page</a>
+            <a href="#" class="nav-item"><span>🎙️</span> Voice Assistant</a>
+            <a href="#" class="nav-item"><span>🖼️</span> Image Generation</a>
+            <a href="#" class="nav-item"><span>📚</span> Knowledge Tuning</a>
+            <a href="#" class="nav-item"><span>👤</span> local@example.com</a>
+            <a href="#" class="nav-item"><span>⚙️</span> Settings</a>
+            <a href="#" class="nav-item"><span>🚪</span> Logout</a>
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main id="main-area">
+        
+        <div id="empty-state">
+          <img src="/ProjectZephy023LogoRenewal.png" alt="Zephy Logo" class="center-logo" />
+          <div class="avatar-ring">
+            <div class="avatar-inner">
+               <img src="/ProjectZephy023LogoRenewal.png" alt="Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />
+            </div>
+          </div>
+          <p class="greeting-text">
+            Greetings! I am Zephyrine. Delighted to make your acquaintance and wishing you a splendid day ahead.<br>
+            While I may possess greater capabilities, please bear in mind that my role is to assist you. You remain the<br>
+            driving force, the orchestrator of your own journey. Shall we embark on our interaction together?
+          </p>
+        </div>
+
+        <div id="chat-container" class="hidden">
+          <div class="messages" id="messages"></div>
+        </div>
+
+        <div class="input-container">
+          <form id="chat-form">
+            <button type="button" class="icon-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+            </button>
+            <button type="button" class="icon-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </button>
+            <input type="text" id="chat-input" placeholder="Enter a message here...                                      Scroll down for usage examples" autocomplete="off" />
+            <button type="submit" id="send-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+            </button>
+          </form>
+          <div class="disclaimer">
+            Pre-Alpha Developmental Version: Instabilities, Repeating, Unexpected Behaviour, or Self-awareness Incident may occur! Use it with caution!
+          </div>
+        </div>
+
+      </main>
     </div>
     
     <script type="module" src="/src/main.ts"></script>

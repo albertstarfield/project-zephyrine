@@ -15,9 +15,14 @@ const messagesContainer = document.getElementById('messages') as HTMLDivElement;
 const chatForm = document.getElementById('chat-form') as HTMLFormElement;
 const chatInput = document.getElementById('chat-input') as HTMLInputElement;
 const sendBtn = document.getElementById('send-btn') as HTMLButtonElement;
-const chatScrollArea = document.getElementById('chat-container') as HTMLDivElement;
+
+const emptyState = document.getElementById('empty-state') as HTMLDivElement;
+const chatContainerWrapper = document.getElementById('chat-container') as HTMLDivElement;
 
 function addMessageToUI(msg: Message) {
+  emptyState.classList.add('hidden');
+  chatContainerWrapper.classList.remove('hidden');
+
   const msgEl = document.createElement('div');
   msgEl.className = `message ${msg.role}`;
   
@@ -29,7 +34,7 @@ function addMessageToUI(msg: Message) {
   messagesContainer.appendChild(msgEl);
   
   // Auto-scroll to bottom
-  chatScrollArea.scrollTop = chatScrollArea.scrollHeight;
+  chatContainerWrapper.scrollTop = chatContainerWrapper.scrollHeight;
 }
 
 async function loadHistory() {
@@ -37,7 +42,9 @@ async function loadHistory() {
     const res = await fetch('/api/messages');
     if (res.ok) {
       const msgs: Message[] = await res.json();
-      msgs.forEach(addMessageToUI);
+      if (msgs.length > 0) {
+          msgs.forEach(addMessageToUI);
+      }
     }
   } catch (err) {
     console.error("Failed to load history:", err);
