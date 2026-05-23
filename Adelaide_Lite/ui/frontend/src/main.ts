@@ -986,14 +986,29 @@ if (searchInput) {
 const mangoText = document.getElementById('mango-text') as HTMLDivElement;
 const mangoJSText = document.getElementById('mango-js-text') as HTMLDivElement;
 const mangoCanvas = document.getElementById('mango-canvas') as HTMLCanvasElement;
+const mangoJSCanvas = document.getElementById('mango-js-canvas') as HTMLCanvasElement;
+
 let mangoCtx: CanvasRenderingContext2D | null = null;
 if (mangoCanvas) {
   mangoCtx = mangoCanvas.getContext('2d');
 }
+let mangoJSCtx: CanvasRenderingContext2D | null = null;
+if (mangoJSCanvas) {
+  mangoJSCtx = mangoJSCanvas.getContext('2d');
+}
+
+let lastHUDUpdate = Date.now();
+const jsLoopHistory: {ts: number, val: number}[] = [];
 
 async function updateMangoHUD() {
-  if (!mangoText || !mangoJSText || !mangoCtx) return;
+  if (!mangoText || !mangoJSText || !mangoCtx || !mangoJSCtx) return;
   
+  const now = Date.now();
+  const jsLoopTime = now - lastHUDUpdate;
+  lastHUDUpdate = now;
+  jsLoopHistory.push({ts: now / 1000, val: jsLoopTime});
+  if (jsLoopHistory.length > 60) jsLoopHistory.shift();
+
   try {
     const res = await fetch(`/api/adelaideenginestats?queue_len=${messageQueue.length}`);
     if (res.ok) {
@@ -1022,18 +1037,19 @@ Queue     : ${stats.Current_Queue}
       mangoJSText.textContent = `
 ADELAIDE_JAVASHIT_ENGINE
 --------------------
-WCEL      : ${stats.WCEL.toFixed(1)} us
-WCEL \u0394 1m: ${stats.WCEL_delta_1m.toFixed(1)} us
+WCEL      : ${(stats.WCEL / 1000).toFixed(2)} ms
+WCEL \u0394 1m: ${(stats.WCEL_delta_1m / 1000).toFixed(2)} ms
+JS Loop   : ${jsLoopTime} ms
 `;
       
-      // Draw Graph (Tokens/s History)
+      // Draw Ada Graph (Tokens/s History)
       const width = mangoCanvas.width;
       const height = mangoCanvas.height;
       mangoCtx.clearRect(0, 0, width, height);
       
       const history: {ts: number, val: number}[] = stats.History_1m;
       if (history.length > 0) {
-        const maxVal = Math.max(...history.map(h => h.val), 10); // min max of 10
+        const maxVal = Math.max(...history.map(h => h.val), 10);
         const minTime = Date.now() / 1000 - 60;
         
         mangoCtx.beginPath();
@@ -1044,11 +1060,50 @@ WCEL \u0394 1m: ${stats.WCEL_delta_1m.toFixed(1)} us
           const pt = history[i];
           const x = ((pt.ts - minTime) / 60) * width;
           const y = height - ((pt.val / maxVal) * height);
-          
           if (i === 0) mangoCtx.moveTo(x, y);
           else mangoCtx.lineTo(x, y);
         }
         mangoCtx.stroke();
+      }
+
+      // Draw JS Graph (WCEL and JS Loop)
+      const jsWidth = mangoJSCanvas.width;
+      const jsHeight = mangoJSCanvas.height;
+      mangoJSCtx.clearRect(0, 0, jsWidth, jsHeight);
+
+      const wcelHistory: {ts: number, val: number}[] = stats.WCEL_History_1m || [];
+      const minTimeJS = Date.now() / 1000 - 60;
+
+      // Plot JS Loop Time in Cyan
+      if (jsLoopHistory.length > 0) {
+        const maxLoop = Math.max(...jsLoopHistory.map(h => h.val), 2000); // Max 2s
+        mangoJSCtx.beginPath();
+        mangoJSCtx.strokeStyle = '#0ff';
+        mangoJSCtx.lineWidth = 1;
+        for (let i = 0; i < jsLoopHistory.length; i++) {
+          const pt = jsLoopHistory[i];
+          const x = ((pt.ts - minTimeJS) / 60) * jsWidth;
+          const y = jsHeight - ((pt.val / maxLoop) * jsHeight);
+          if (i === 0) mangoJSCtx.moveTo(x, y);
+          else mangoJSCtx.lineTo(x, y);
+        }
+        mangoJSCtx.stroke();
+      }
+
+      // Plot WCEL in Red/Orange for contrast
+      if (wcelHistory.length > 0) {
+        const maxWCEL = Math.max(...wcelHistory.map(h => h.val), 1000000); // 1s in us
+        mangoJSCtx.beginPath();
+        mangoJSCtx.strokeStyle = '#f50';
+        mangoJSCtx.lineWidth = 1;
+        for (let i = 0; i < wcelHistory.length; i++) {
+          const pt = wcelHistory[i];
+          const x = ((pt.ts - minTimeJS) / 60) * jsWidth;
+          const y = jsHeight - ((pt.val / maxWCEL) * jsHeight);
+          if (i === 0) mangoJSCtx.moveTo(x, y);
+          else mangoJSCtx.lineTo(x, y);
+        }
+        mangoJSCtx.stroke();
       }
     }
   } catch (err) {
