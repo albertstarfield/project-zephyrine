@@ -7,6 +7,7 @@
   </head>
   <body>
     <!-- Background -->
+    <canvas id="gl" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:-1; pointer-events:none;"></canvas>
     <div id="bg">
       <div class="orb orb-center"></div>
       <div class="stars stars1"></div>
@@ -47,13 +48,13 @@
         
         <div class="sidebar-bottom">
           <nav>
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" id="nav-main">
               <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></span> Main Page
             </a>
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" id="nav-voice">
               <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg></span> Voice Assistant
             </a>
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" id="nav-image">
               <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></span> Image Generation
             </a>
             <a href="#" class="nav-item">
@@ -62,11 +63,14 @@
             <a href="#" class="nav-item">
               <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span> local@example.com
             </a>
-            <a href="#" class="nav-item">
+            <a href="#" class="nav-item" id="nav-settings">
               <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span> Settings
             </a>
-            <a href="#" class="nav-item">
-              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></span> Logout
+            <a href="#" class="nav-item" id="nav-about">
+              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></span> About
+            </a>
+            <a href="#" class="nav-item" id="nav-exit">
+              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></span> Exit
             </a>
           </nav>
         </div>
@@ -90,6 +94,27 @@
           <div class="messages" id="messages"></div>
         </div>
 
+        <div id="about-container" class="hidden">
+          <div class="about-header">
+            <h2>About & Documentation</h2>
+            <div class="about-tabs">
+              <button class="about-tab active" id="tab-readme">README</button>
+              <button class="about-tab" id="tab-license">License</button>
+            </div>
+            <div class="about-search">
+              <input type="text" id="about-search-input" placeholder="Search snippet..." />
+            </div>
+          </div>
+          <div class="about-content-wrapper">
+            <div class="about-toc" id="about-toc">
+              <!-- Table of Contents Auto-generated here -->
+            </div>
+            <div class="about-markdown" id="about-markdown">
+              <!-- Rendered Markdown goes here -->
+            </div>
+          </div>
+        </div>
+
         <div class="input-container">
           <form id="chat-form">
             <button type="button" class="icon-btn">
@@ -98,7 +123,7 @@
             <button type="button" class="icon-btn">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
             </button>
-            <input type="text" id="chat-input" placeholder="Enter a message here...                                      Scroll down for usage examples" autocomplete="off" />
+            <input type="text" id="chat-input" placeholder="Ask Zephyrine..." autocomplete="off" />
             <button type="submit" id="send-btn">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
             </button>

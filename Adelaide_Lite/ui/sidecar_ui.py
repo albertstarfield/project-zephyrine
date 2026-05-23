@@ -80,6 +80,30 @@ async def chat(request: Request):
     
     return {"reply": bot_reply}
 
+@app.post("/api/exit")
+def exit_app():
+    # Attempt to gracefully exit the entire application
+    os._exit(0)
+    return {"status": "exiting"}
+
+@app.get("/api/docs/readme")
+def get_readme():
+    readme_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "stellaicarus", "readme.md")
+    try:
+        with open(readme_path, "r", encoding="utf-8") as f:
+            return {"content": f.read()}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.get("/api/docs/license")
+def get_license():
+    license_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "license.md")
+    try:
+        with open(license_path, "r", encoding="utf-8") as f:
+            return {"content": f.read()}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 # Mount static files
 if os.path.exists(DIST_DIR):
     app.mount("/", StaticFiles(directory=DIST_DIR, html=True), name="static")
