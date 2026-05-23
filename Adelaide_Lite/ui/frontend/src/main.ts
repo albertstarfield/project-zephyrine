@@ -268,3 +268,212 @@ render();
 window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// --------------------------------------------------------
+// Navigation Handlers
+// --------------------------------------------------------
+const navVoice = document.getElementById('nav-voice');
+const navImage = document.getElementById('nav-image');
+const navSettings = document.getElementById('nav-settings');
+const navExit = document.getElementById('nav-exit');
+
+if (navVoice) {
+  navVoice.addEventListener('click', (e) => {
+    e.preventDefault();
+    alert("INOP");
+  });
+}
+
+if (navImage) {
+  navImage.addEventListener('click', (e) => {
+    e.preventDefault();
+    alert("INOP");
+  });
+}
+
+if (navSettings) {
+  navSettings.addEventListener('click', (e) => {
+    e.preventDefault();
+    alert("Not implemented yet but things are being settings automatically for now");
+  });
+}
+
+if (navExit) {
+  navExit.addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      await fetch('/api/exit', { method: 'POST' });
+    } catch (err) {}
+    window.close(); // Fallback in case fetch fails
+  });
+}
+
+// --------------------------------------------------------
+// About Section Logic
+// --------------------------------------------------------
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import mermaid from 'mermaid';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
+
+const navMain = document.getElementById('nav-main');
+const navAbout = document.getElementById('nav-about');
+const aboutContainer = document.getElementById('about-container');
+const inputContainer = document.querySelector('.input-container') as HTMLElement;
+const tabReadme = document.getElementById('tab-readme');
+const tabLicense = document.getElementById('tab-license');
+const aboutMarkdown = document.getElementById('about-markdown');
+const aboutToc = document.getElementById('about-toc');
+const searchInput = document.getElementById('about-search-input') as HTMLInputElement;
+
+mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+
+let currentAboutContent = '';
+
+if (navMain) {
+  navMain.addEventListener('click', (e) => {
+    e.preventDefault();
+    aboutContainer?.classList.add('hidden');
+    inputContainer.classList.remove('hidden');
+    // Decide whether to show empty state or chat container based on messages
+    if (messagesContainer.children.length === 0) {
+      emptyState.classList.remove('hidden');
+    } else {
+      chatContainerWrapper.classList.remove('hidden');
+    }
+  });
+}
+
+if (navAbout) {
+  navAbout.addEventListener('click', async (e) => {
+    e.preventDefault();
+    emptyState.classList.add('hidden');
+    chatContainerWrapper.classList.add('hidden');
+    inputContainer.classList.add('hidden');
+    aboutContainer?.classList.remove('hidden');
+    await loadAboutContent('/api/docs/readme');
+    tabReadme?.classList.add('active');
+    tabLicense?.classList.remove('active');
+  });
+}
+
+if (tabReadme) {
+  tabReadme.addEventListener('click', async () => {
+    tabReadme.classList.add('active');
+    tabLicense?.classList.remove('active');
+    await loadAboutContent('/api/docs/readme');
+  });
+}
+
+if (tabLicense) {
+  tabLicense.addEventListener('click', async () => {
+    tabLicense.classList.add('active');
+    tabReadme?.classList.remove('active');
+    await loadAboutContent('/api/docs/license');
+  });
+}
+
+async function loadAboutContent(url: string) {
+  if (!aboutMarkdown) return;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    currentAboutContent = data.content || data.error || 'Empty';
+    renderMarkdown(currentAboutContent);
+  } catch (err) {
+    aboutMarkdown.innerHTML = 'Error loading content.';
+  }
+}
+
+function renderMarkdown(mdText: string) {
+  if (!aboutMarkdown || !aboutToc) return;
+
+  // Custom regex to handle KaTeX before marked parsing
+  let preProcessed = mdText.replace(/\$\$(.*?)\$\$/gs, (match, math) => {
+    try { return katex.renderToString(math, { displayMode: true }); } 
+    catch(e) { return match; }
+  });
+  preProcessed = preProcessed.replace(/\$(.*?)\$/g, (match, math) => {
+    try { return katex.renderToString(math, { displayMode: false }); } 
+    catch(e) { return match; }
+  });
+
+  const rawHtml = marked.parse(preProcessed) as string;
+  const cleanHtml = DOMPurify.sanitize(rawHtml, { ADD_TAGS: ['math', 'mrow', 'mi', 'mn', 'mo', 'ms', 'mspace', 'mtext', 'menclose', 'merror', 'mphantom', 'mpadded', 'mroot', 'mfrac', 'msqrt', 'mstyle', 'msub', 'msup', 'msubsup', 'munder', 'mover', 'munderover', 'mtable', 'mtr', 'mtd', 'annotation', 'semantics']});
+  aboutMarkdown.innerHTML = cleanHtml;
+
+  // Render Mermaid diagrams
+  const codeBlocks = aboutMarkdown.querySelectorAll('pre code.language-mermaid');
+  codeBlocks.forEach(async (block, index) => {
+    const id = `mermaid-${Date.now()}-${index}`;
+    const pre = block.parentElement;
+    if (pre) {
+      pre.outerHTML = `<div class="mermaid" id="${id}">${block.textContent}</div>`;
+      try {
+        const { svg } = await mermaid.render(`${id}-svg`, block.textContent || '');
+        document.getElementById(id)!.innerHTML = svg;
+      } catch (err) {
+        console.error('Mermaid render error', err);
+      }
+    }
+  });
+
+  // Generate TOC
+  aboutToc.innerHTML = '';
+  const headers = aboutMarkdown.querySelectorAll('h1, h2, h3');
+  headers.forEach((h, i) => {
+    const id = `heading-${i}`;
+    h.id = id;
+    const a = document.createElement('a');
+    a.href = `#${id}`;
+    a.textContent = h.textContent;
+    a.className = `toc-${h.tagName.toLowerCase()}`;
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      h.scrollIntoView({ behavior: 'smooth' });
+    });
+    aboutToc.appendChild(a);
+  });
+}
+
+// Simple text search / highlight
+if (searchInput) {
+  searchInput.addEventListener('input', () => {
+    const term = searchInput.value.trim().toLowerCase();
+    // Reset view first
+    renderMarkdown(currentAboutContent);
+    if (!term || !aboutMarkdown) return;
+
+    // Simple traverse and highlight text nodes (primitive approach)
+    const walker = document.createTreeWalker(aboutMarkdown, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) nodes.push(node);
+
+    nodes.forEach(textNode => {
+      if (textNode.nodeValue && textNode.parentElement && !['SCRIPT','STYLE'].includes(textNode.parentElement.tagName)) {
+        const text = textNode.nodeValue;
+        const lower = text.toLowerCase();
+        const index = lower.indexOf(term);
+        if (index >= 0) {
+          const before = text.substring(0, index);
+          const match = text.substring(index, index + term.length);
+          const after = text.substring(index + term.length);
+          
+          const span = document.createElement('span');
+          span.style.backgroundColor = 'rgba(255, 165, 0, 0.5)';
+          span.textContent = match;
+          
+          const parent = textNode.parentElement;
+          if (before) parent.insertBefore(document.createTextNode(before), textNode);
+          parent.insertBefore(span, textNode);
+          if (after) parent.insertBefore(document.createTextNode(after), textNode);
+          parent.removeChild(textNode);
+          
+          span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    });
+  });
+}
