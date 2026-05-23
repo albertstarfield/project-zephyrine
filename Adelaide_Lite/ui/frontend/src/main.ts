@@ -398,7 +398,7 @@ async function switchView(hideEls: HTMLElement[], showEls: HTMLElement[]) {
   });
 }
 
-import cytoscape from 'cytoscape';
+
 
 const navTuning = document.getElementById('nav-tuning');
 const knowledgeContainer = document.getElementById('knowledge-container');
