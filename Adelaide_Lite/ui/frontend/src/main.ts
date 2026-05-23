@@ -1,9 +1,48 @@
 import './style.css';
 import * as THREE from 'three';
 
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import mermaid from 'mermaid';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
+import cytoscape from 'cytoscape';
+
 // --------------------------------------------------------
 // Chat Logic
 // --------------------------------------------------------
+
+async function renderMarkdownToElement(el: HTMLElement, mdText: string) {
+  // Custom regex to handle KaTeX before marked parsing
+  let preProcessed = mdText.replace(/\$\$(.*?)\$\$/gs, (match, math) => {
+    try { return katex.renderToString(math, { displayMode: true }); } 
+    catch(e) { return match; }
+  });
+  preProcessed = preProcessed.replace(/\$(.*?)\$/g, (match, math) => {
+    try { return katex.renderToString(math, { displayMode: false }); } 
+    catch(e) { return match; }
+  });
+
+  const rawHtml = marked.parse(preProcessed) as string;
+  const cleanHtml = DOMPurify.sanitize(rawHtml, { ADD_TAGS: ['math', 'mrow', 'mi', 'mn', 'mo', 'ms', 'mspace', 'mtext', 'menclose', 'merror', 'mphantom', 'mpadded', 'mroot', 'mfrac', 'msqrt', 'mstyle', 'msub', 'msup', 'msubsup', 'munder', 'mover', 'munderover', 'mtable', 'mtr', 'mtd', 'annotation', 'semantics']});
+  el.innerHTML = cleanHtml;
+
+  // Render Mermaid diagrams
+  const codeBlocks = el.querySelectorAll('pre code.language-mermaid');
+  codeBlocks.forEach(async (block, index) => {
+    const id = `mermaid-${Date.now()}-${index}`;
+    const pre = block.parentElement;
+    if (pre) {
+      pre.outerHTML = `<div class="mermaid" id="${id}">${block.textContent}</div>`;
+      try {
+        const { svg } = await mermaid.render(`${id}-svg`, block.textContent || '');
+        document.getElementById(id)!.innerHTML = svg;
+      } catch (err) {
+        console.error('Mermaid render error', err);
+      }
+    }
+  });
+}
 
 interface Message {
   role: 'user' | 'assistant';
@@ -28,7 +67,9 @@ function addMessageToUI(msg: Message) {
   
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.textContent = msg.content;
+  
+  // Render Markdown, LaTeX, and Mermaid directly into the bubble
+  renderMarkdownToElement(bubble, msg.content);
   
   msgEl.appendChild(bubble);
   messagesContainer.appendChild(msgEl);
@@ -324,11 +365,6 @@ if (navExit) {
 // --------------------------------------------------------
 // About Section Logic
 // --------------------------------------------------------
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
-import mermaid from 'mermaid';
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
 
 const navMain = document.getElementById('nav-main');
 const navAbout = document.getElementById('nav-about');
@@ -828,38 +864,10 @@ async function loadAboutContent(url: string) {
   }
 }
 
-function renderMarkdown(mdText: string) {
+async function renderMarkdown(mdText: string) {
   if (!aboutMarkdown || !aboutToc) return;
 
-  // Custom regex to handle KaTeX before marked parsing
-  let preProcessed = mdText.replace(/\$\$(.*?)\$\$/gs, (match, math) => {
-    try { return katex.renderToString(math, { displayMode: true }); } 
-    catch(e) { return match; }
-  });
-  preProcessed = preProcessed.replace(/\$(.*?)\$/g, (match, math) => {
-    try { return katex.renderToString(math, { displayMode: false }); } 
-    catch(e) { return match; }
-  });
-
-  const rawHtml = marked.parse(preProcessed) as string;
-  const cleanHtml = DOMPurify.sanitize(rawHtml, { ADD_TAGS: ['math', 'mrow', 'mi', 'mn', 'mo', 'ms', 'mspace', 'mtext', 'menclose', 'merror', 'mphantom', 'mpadded', 'mroot', 'mfrac', 'msqrt', 'mstyle', 'msub', 'msup', 'msubsup', 'munder', 'mover', 'munderover', 'mtable', 'mtr', 'mtd', 'annotation', 'semantics']});
-  aboutMarkdown.innerHTML = cleanHtml;
-
-  // Render Mermaid diagrams
-  const codeBlocks = aboutMarkdown.querySelectorAll('pre code.language-mermaid');
-  codeBlocks.forEach(async (block, index) => {
-    const id = `mermaid-${Date.now()}-${index}`;
-    const pre = block.parentElement;
-    if (pre) {
-      pre.outerHTML = `<div class="mermaid" id="${id}">${block.textContent}</div>`;
-      try {
-        const { svg } = await mermaid.render(`${id}-svg`, block.textContent || '');
-        document.getElementById(id)!.innerHTML = svg;
-      } catch (err) {
-        console.error('Mermaid render error', err);
-      }
-    }
-  });
+  await renderMarkdownToElement(aboutMarkdown, mdText);
 
   // Generate TOC
   aboutToc.innerHTML = '';
