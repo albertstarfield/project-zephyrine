@@ -1,17 +1,17 @@
 [32m[Server][0m >>> Incoming: GET /api/telemetry
 [32m[Server][0m Status: 200
-2026-05-23 22:32:53.642 | INFO     | stella_icarus_utils:load_hooks:73 - StellaIcarusHookManager: Loading hooks from '/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/StellaIcarus'...
+2026-05-23 22:36:44.948 | INFO     | stella_icarus_utils:load_hooks:73 - StellaIcarusHookManager: Loading hooks from '/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/StellaIcarus'...
+✅ StellaMatrixHook: Active Engine -> GPU (Apple MPS)
+2026-05-23 22:36:45.860 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_matrix_math_hook' (Interpreted)
+[*] Trickshot: Compiling optimized core...
 [32m[Server][0m >>> Incoming: GET /api/telemetry
 [32m[Server][0m Status: 200
-✅ StellaMatrixHook: Active Engine -> GPU (Apple MPS)
-2026-05-23 22:32:54.553 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_matrix_math_hook' (Interpreted)
-[*] Trickshot: Compiling optimized core...
 [-] Trickshot: Compilation failed (g++ missing?).
-2026-05-23 22:32:55.037 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_trickshot_stellaicarus_benchmark_simplearitmatic' (Interpreted)
-2026-05-23 22:32:55.040 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_hello_world_hook_example_dev_getstarted' (Interpreted)
+2026-05-23 22:36:46.334 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_trickshot_stellaicarus_benchmark_simplearitmatic' (Interpreted)
+2026-05-23 22:36:46.336 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_hello_world_hook_example_dev_getstarted' (Interpreted)
 [32m[Server][0m >>> Incoming: GET /api/telemetry
 [32m[Server][0m Status: 200
 FMC SERVO HOOK: Numba JIT init failed (No module named '<dynamic>'). This hook will use a Python fallback for calculations.
-2026-05-23 22:32:55.736 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_fmc_servo_manual_hook_test'
+2026-05-23 22:36:47.014 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_fmc_servo_manual_hook_test'
 ✅ StellaMath: C++ Engine Active (Tier 1)
-2026-05-23 22:32:55.739 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_math_hook' (Interpreted)
+2026-05-23 22:36:47.017 | INFO     | stella_icarus_utils:_scan_and_load_directory:133 -   Loaded Hook: 'stella_hook_basic_math_hook' (Interpreted)
