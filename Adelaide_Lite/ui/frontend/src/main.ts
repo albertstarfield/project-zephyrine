@@ -943,3 +943,71 @@ if (searchInput) {
     });
   });
 }
+
+// --------------------------------------------------------
+// MangoHUD Engine Stats Overlay Logic
+// --------------------------------------------------------
+const mangoText = document.getElementById('mango-text') as HTMLDivElement;
+const mangoCanvas = document.getElementById('mango-canvas') as HTMLCanvasElement;
+let mangoCtx: CanvasRenderingContext2D | null = null;
+if (mangoCanvas) {
+  mangoCtx = mangoCanvas.getContext('2d');
+}
+
+async function updateMangoHUD() {
+  if (!mangoText || !mangoCtx) return;
+  
+  try {
+    const res = await fetch(`/api/adelaideenginestats?queue_len=${messageQueue.length}`);
+    if (res.ok) {
+      const stats = await res.json();
+      
+      const uptimeH = Math.floor(stats.Current_Uptime / 3600);
+      const uptimeM = Math.floor((stats.Current_Uptime % 3600) / 60);
+      const uptimeS = Math.floor(stats.Current_Uptime % 60);
+      
+      mangoText.textContent = `
+ADELAIDE_LITE ENGINE
+--------------------
+WCET_ELP0 : ${stats.WCET_ELP0.toFixed(3)}s
+WCET_ELP1 : ${stats.WCET_ELP1.toFixed(3)}s
+WCET_ELP2 : ${stats.WCET_ELP2.toFixed(3)}s
+Memory    : ${stats.MemoryConsumption_MB.toFixed(1)} MB
+CPU       : ${stats.CPU_Consumption.toFixed(1)} %
+Tokens/s  : ${stats.WCETR.toFixed(2)}
+Total Tok : ${stats.Total_Tokens_Processed}
+Uptime    : ${uptimeH}h ${uptimeM}m ${uptimeS}s
+Queue     : ${stats.Current_Queue}
+`;
+      
+      // Draw Graph (Tokens/s History)
+      const width = mangoCanvas.width;
+      const height = mangoCanvas.height;
+      mangoCtx.clearRect(0, 0, width, height);
+      
+      const history: {ts: number, val: number}[] = stats.History_1m;
+      if (history.length > 0) {
+        const maxVal = Math.max(...history.map(h => h.val), 10); // min max of 10
+        const minTime = Date.now() / 1000 - 60;
+        
+        mangoCtx.beginPath();
+        mangoCtx.strokeStyle = '#0f0';
+        mangoCtx.lineWidth = 1;
+        
+        for (let i = 0; i < history.length; i++) {
+          const pt = history[i];
+          const x = ((pt.ts - minTime) / 60) * width;
+          const y = height - ((pt.val / maxVal) * height);
+          
+          if (i === 0) mangoCtx.moveTo(x, y);
+          else mangoCtx.lineTo(x, y);
+        }
+        mangoCtx.stroke();
+      }
+    }
+  } catch (err) {
+    mangoText.textContent = "Engine Offline";
+  }
+}
+
+setInterval(updateMangoHUD, 1000);
