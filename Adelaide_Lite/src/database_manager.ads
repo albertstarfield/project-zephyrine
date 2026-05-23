@@ -6,6 +6,9 @@ package Database_Manager is
 
    procedure Initialize;
 
+   --  Scaling parameter for Salience (S = HitFrequency / (1 + Alpha * DeltaT))
+   Alpha : constant Float := 0.0001;
+
    procedure Remember (User_Input : String; Assistant_Response : String);
 
    --  Native Response Cache storage
