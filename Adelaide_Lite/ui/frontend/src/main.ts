@@ -967,7 +967,7 @@ async function updateMangoHUD() {
       const uptimeS = Math.floor(stats.Current_Uptime % 60);
       
       mangoText.textContent = `
-ADELAIDE_LITE ENGINE
+ADELAIDE_ADA_ENGINE
 --------------------
 WCET_ELP0 : ${stats.WCET_ELP0.toFixed(3)}s
 WCET_ELP1 : ${stats.WCET_ELP1.toFixed(3)}s
