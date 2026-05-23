@@ -370,15 +370,37 @@ async function switchView(hideEls: HTMLElement[], showEls: HTMLElement[]) {
   });
 }
 
+import cytoscape from 'cytoscape';
+
+const navTuning = document.getElementById('nav-tuning');
+const knowledgeContainer = document.getElementById('knowledge-container');
+const uploadInput = document.getElementById('knowledge-file-input') as HTMLInputElement;
+const uploadBtn = document.getElementById('knowledge-upload-btn');
+const domainSelect = document.getElementById('knowledge-domain-select') as HTMLSelectElement;
+const fileListContainer = document.getElementById('knowledge-file-list');
+const searchInputK = document.getElementById('knowledge-search-input') as HTMLInputElement;
+const searchBtnK = document.getElementById('knowledge-search-btn');
+const searchResultsContainer = document.getElementById('knowledge-search-results');
+const tabGraph = document.getElementById('k-tab-graph');
+const tabSearch = document.getElementById('k-tab-search');
+const contentGraph = document.getElementById('k-content-graph');
+const contentSearch = document.getElementById('k-content-search');
+const cyContainer = document.getElementById('cy-container');
+
+let cyInstance: any = null;
+
 if (navMain) {
   navMain.addEventListener('click', async (e) => {
     e.preventDefault();
-    if (!aboutContainer?.classList.contains('hidden')) {
+    const hideEls = [];
+    if (!aboutContainer?.classList.contains('hidden')) hideEls.push(aboutContainer!);
+    if (!knowledgeContainer?.classList.contains('hidden')) hideEls.push(knowledgeContainer!);
+    
+    if (hideEls.length > 0) {
       const showEls = [inputContainer];
       if (messagesContainer.children.length === 0) showEls.push(emptyState);
       else showEls.push(chatContainerWrapper);
-      
-      await switchView([aboutContainer!], showEls);
+      await switchView(hideEls, showEls);
     }
   });
 }
@@ -390,14 +412,174 @@ if (navAbout) {
       const hideEls = [inputContainer];
       if (!emptyState.classList.contains('hidden')) hideEls.push(emptyState);
       if (!chatContainerWrapper.classList.contains('hidden')) hideEls.push(chatContainerWrapper);
+      if (!knowledgeContainer?.classList.contains('hidden')) hideEls.push(knowledgeContainer!);
       
       await switchView(hideEls, [aboutContainer!]);
-      
       await loadAboutContent('/api/docs/readme');
       tabReadme?.classList.add('active');
       tabLicense?.classList.remove('active');
     }
   });
+}
+
+if (navTuning) {
+  navTuning.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (knowledgeContainer?.classList.contains('hidden')) {
+      const hideEls = [inputContainer];
+      if (!emptyState.classList.contains('hidden')) hideEls.push(emptyState);
+      if (!chatContainerWrapper.classList.contains('hidden')) hideEls.push(chatContainerWrapper);
+      if (!aboutContainer?.classList.contains('hidden')) hideEls.push(aboutContainer!);
+      
+      await switchView(hideEls, [knowledgeContainer!]);
+      loadKnowledgeFiles();
+      loadGraph();
+    }
+  });
+}
+
+// Knowledge Stack Tabs
+if (tabGraph && tabSearch) {
+  tabGraph.addEventListener('click', () => {
+    tabGraph.classList.add('active');
+    tabSearch.classList.remove('active');
+    contentGraph?.classList.add('active');
+    contentSearch?.classList.remove('active');
+  });
+  tabSearch.addEventListener('click', () => {
+    tabSearch.classList.add('active');
+    tabGraph.classList.remove('active');
+    contentSearch?.classList.add('active');
+    contentGraph?.classList.remove('active');
+  });
+}
+
+// Knowledge Upload
+if (uploadBtn && uploadInput) {
+  uploadBtn.addEventListener('click', async () => {
+    if (!uploadInput.files || uploadInput.files.length === 0) return;
+    const formData = new FormData();
+    for (let i = 0; i < uploadInput.files.length; i++) {
+      formData.append('files', uploadInput.files[i]);
+    }
+    formData.append('domain', domainSelect.value);
+
+    uploadBtn.textContent = 'Uploading...';
+    try {
+      const res = await fetch('/api/knowledgestackfrontend/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        uploadInput.value = '';
+        loadKnowledgeFiles();
+        loadGraph();
+      } else {
+        alert('Upload failed.');
+      }
+    } catch (e) {
+      alert('Error uploading files.');
+    } finally {
+      uploadBtn.textContent = 'Upload to Database';
+    }
+  });
+}
+
+// Load Files
+async function loadKnowledgeFiles() {
+  if (!fileListContainer) return;
+  try {
+    const res = await fetch('/api/knowledgestackfrontend/documents');
+    const data = await res.json();
+    fileListContainer.innerHTML = '';
+    
+    for (const [domain, files] of Object.entries(data)) {
+      const group = document.createElement('div');
+      group.className = 'domain-group';
+      group.innerHTML = `<h4>${domain}</h4>`;
+      (files as any[]).forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.textContent = f;
+        group.appendChild(item);
+      });
+      fileListContainer.appendChild(group);
+    }
+  } catch (e) {}
+}
+
+// Search
+if (searchBtnK && searchInputK) {
+  searchBtnK.addEventListener('click', async () => {
+    const q = searchInputK.value.trim();
+    if (!q) return;
+    
+    // Switch to search tab
+    tabSearch?.click();
+    if (searchResultsContainer) searchResultsContainer.innerHTML = '<p>Searching embeddings...</p>';
+    
+    try {
+      const res = await fetch(`/api/knowledgestackfrontend/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (!searchResultsContainer) return;
+      searchResultsContainer.innerHTML = '';
+      if (data.results && data.results.length > 0) {
+        data.results.forEach((r: any) => {
+          const div = document.createElement('div');
+          div.className = 'search-result';
+          div.innerHTML = `<h4>${r.filename} (${r.domain})</h4><p>Score: ${r.score.toFixed(3)}</p><p>${r.snippet}</p>`;
+          searchResultsContainer.appendChild(div);
+        });
+      } else {
+        searchResultsContainer.innerHTML = '<p>No matching knowledge found.</p>';
+      }
+    } catch (e) {}
+  });
+}
+
+// Load Graph
+async function loadGraph() {
+  if (!cyContainer) return;
+  try {
+    const res = await fetch('/api/knowledgestackfrontend/graph');
+    if (!res.ok) return;
+    const elements = await res.json();
+    
+    if (cyInstance) cyInstance.destroy();
+    
+    cyInstance = cytoscape({
+      container: cyContainer,
+      elements: elements,
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'background-color': '#00d4ff',
+            'label': 'data(id)',
+            'color': '#fff',
+            'text-valign': 'center',
+            'text-outline-width': 2,
+            'text-outline-color': '#000',
+            'font-size': '10px'
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 2,
+            'line-color': '#444',
+            'target-arrow-color': '#444',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier'
+          }
+        }
+      ],
+      layout: {
+        name: 'cose',
+        padding: 10
+      }
+    });
+  } catch (e) {}
 }
 
 if (tabReadme) {

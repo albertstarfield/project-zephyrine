@@ -93,7 +93,7 @@ cd ..
 echo "[*] Running Adelaide_Lite Unit Tests..."
 if [ -f "Adelaide_Lite/pyvenv/bin/python" ]; then
     echo "[*] Ensuring test dependencies (numpy, requests) are installed..."
-    Adelaide_Lite/pyvenv/bin/pip install -q requests numpy
+    Adelaide_Lite/pyvenv/bin/pip install -q requests numpy sentence-transformers PyMuPDF networkx python-multipart
     Adelaide_Lite/pyvenv/bin/python Adelaide_Lite/python/test_adelaide.py
 else
     python3 Adelaide_Lite/python/test_adelaide.py

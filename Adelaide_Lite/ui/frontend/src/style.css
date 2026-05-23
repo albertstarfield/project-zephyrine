@@ -301,6 +301,62 @@ body, html {
 .about-markdown img { max-width: 100%; border-radius: 8px; }
 .about-markdown .katex-display { overflow-x: auto; overflow-y: hidden; }
 
+/* --- KNOWLEDGE STACK SECTION --- */
+#knowledge-container {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; padding: 2rem;
+  background: rgba(10, 15, 12, 0.6);
+  backdrop-filter: blur(10px);
+}
+.knowledge-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 1rem;
+}
+.knowledge-search {
+  display: flex; gap: 0.5rem;
+}
+.knowledge-search input {
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 1rem; color: #fff; border-radius: 20px; outline: none; width: 300px;
+}
+.knowledge-content-wrapper {
+  flex: 1; display: flex; gap: 2rem; overflow: hidden;
+}
+.knowledge-panel-left {
+  flex: 1; display: flex; flex-direction: column; gap: 1rem;
+  border-right: 1px solid rgba(255,255,255,0.1); padding-right: 1rem;
+  overflow-y: auto;
+}
+.knowledge-panel-right {
+  flex: 2; display: flex; flex-direction: column; overflow: hidden;
+}
+.upload-area {
+  border: 2px dashed rgba(255, 255, 255, 0.2); border-radius: 8px;
+  padding: 2rem; text-align: center; background: rgba(0,0,0,0.2);
+  transition: border-color 0.3s;
+}
+.upload-area:hover, .upload-area.dragover { border-color: var(--primary); }
+.upload-area select {
+  margin-top: 1rem; padding: 0.5rem; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; outline:none;
+}
+.upload-area button {
+  margin-top: 1rem; display: block; width: 100%; padding: 0.5rem;
+  background: var(--primary); color: #fff; border: none; border-radius: 4px; cursor: pointer;
+}
+.knowledge-file-list { flex: 1; }
+.domain-group { margin-bottom: 1rem; }
+.domain-group h4 { margin: 0 0 0.5rem 0; color: var(--primary); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;}
+.file-item { background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 4px; margin-bottom: 0.25rem; font-size: 0.85rem;}
+.knowledge-tabs { display: flex; gap: 1rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+.k-tab { background: none; border: none; color: #a0a0a0; padding: 0.5rem 0; cursor: pointer; border-bottom: 2px solid transparent; font-size: 1rem; }
+.k-tab.active { color: #fff; border-bottom-color: var(--primary); }
+.k-tab-content { display: none; flex: 1; overflow-y: auto; }
+.k-tab-content.active { display: block; }
+#knowledge-search-results .search-result { background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
+#knowledge-search-results .search-result h4 { margin: 0 0 0.5rem 0; color: var(--primary); }
+#knowledge-search-results .search-result p { margin: 0; font-size: 0.9rem; color: #ccc; }
+
 /* Input Area - Sleek Floating Pill */
 .input-container {
   position: absolute; bottom: 0; left: 0; right: 0;
