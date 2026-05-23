@@ -984,6 +984,7 @@ if (searchInput) {
 // MangoHUD Engine Stats Overlay Logic
 // --------------------------------------------------------
 const mangoText = document.getElementById('mango-text') as HTMLDivElement;
+const mangoJSText = document.getElementById('mango-js-text') as HTMLDivElement;
 const mangoCanvas = document.getElementById('mango-canvas') as HTMLCanvasElement;
 let mangoCtx: CanvasRenderingContext2D | null = null;
 if (mangoCanvas) {
@@ -991,7 +992,7 @@ if (mangoCanvas) {
 }
 
 async function updateMangoHUD() {
-  if (!mangoText || !mangoCtx) return;
+  if (!mangoText || !mangoJSText || !mangoCtx) return;
   
   try {
     const res = await fetch(`/api/adelaideenginestats?queue_len=${messageQueue.length}`);
@@ -1005,8 +1006,6 @@ async function updateMangoHUD() {
       mangoText.textContent = `
 ADELAIDE_ADA_ENGINE
 --------------------
-WCEL      : ${stats.WCEL.toFixed(1)} us
-WCEL \u0394 1m: ${stats.WCEL_delta_1m.toFixed(1)} us
 WCET_ELP0 : ${stats.WCET_ELP0.toFixed(3)}s (\u0394 ${(stats.WCET_ELP0_delta).toFixed(3)}s)
 WCET_ELP1 : ${stats.WCET_ELP1.toFixed(3)}s (\u0394 ${(stats.WCET_ELP1_delta).toFixed(3)}s)
 WCET_ELP2 : ${stats.WCET_ELP2.toFixed(3)}s (\u0394 ${(stats.WCET_ELP2_delta).toFixed(3)}s)
@@ -1018,6 +1017,13 @@ Tokens/s  : ${stats.WCETR.toFixed(2)}
 Total Tok : ${stats.Total_Tokens_Processed}
 Uptime    : ${uptimeH}h ${uptimeM}m ${uptimeS}s
 Queue     : ${stats.Current_Queue}
+`;
+
+      mangoJSText.textContent = `
+ADELAIDE_JAVASHIT_ENGINE
+--------------------
+WCEL      : ${stats.WCEL.toFixed(1)} us
+WCEL \u0394 1m: ${stats.WCEL_delta_1m.toFixed(1)} us
 `;
       
       // Draw Graph (Tokens/s History)
@@ -1047,6 +1053,7 @@ Queue     : ${stats.Current_Queue}
     }
   } catch (err) {
     mangoText.textContent = "Engine Offline";
+    mangoJSText.textContent = "Engine Offline";
   }
 }
 
