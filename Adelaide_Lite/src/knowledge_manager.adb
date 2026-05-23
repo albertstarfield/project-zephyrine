@@ -5,6 +5,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Model_Manager;
 with Database_Manager;
 with Math_Utils;
+with Zenith_Orion;
 with Ada.Directories;
 with Ada.Environment_Variables;
 with Ada.Exceptions;
@@ -29,6 +30,10 @@ package body Knowledge_Manager is
       entry Start;
    end Salience_Maintenance_Task;
 
+   task Zenith_Orion_Task is
+      entry Start;
+   end Zenith_Orion_Task;
+
    procedure Initialize is
    begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & AnsiAda.Reset & " Initializing Knowledge Base...");
@@ -41,6 +46,7 @@ package body Knowledge_Manager is
       Thought_Task.Start;
       Native_Crawl_Task.Start;
       Salience_Maintenance_Task.Start;
+      Zenith_Orion_Task.Start;
    end Start_Tasks;
 
    --  Helper to index references.bib
@@ -408,5 +414,34 @@ package body Knowledge_Manager is
          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Salience]" & AnsiAda.Reset & " Task Error: " &
            Ada.Exceptions.Exception_Message (E));
    end Salience_Maintenance_Task;
+
+   task body Zenith_Orion_Task is
+      use type Ada.Calendar.Time;
+      Last_Jitter_Reset : Ada.Calendar.Time := Ada.Calendar.Clock;
+   begin
+      accept Start;
+      Zenith_Orion.Initialize;
+      loop
+         Zenith_Orion.Paced_Loop;
+         
+         -- Update global telemetry
+         Model_Manager.Current_WCET_ELP3 := Zenith_Orion.Get_Current_Timing;
+         
+         -- Update jitter profile every 30 seconds
+         if Ada.Calendar.Clock - Last_Jitter_Reset >= 30.0 then
+            declare
+               J : constant Zenith_Orion.Jitter_Data := Zenith_Orion.Get_Jitter_Profile;
+            begin
+               Model_Manager.Current_Jitter_Max := J.Max_Jitter;
+               Model_Manager.Current_Jitter_Avg := J.Avg_Jitter;
+            end;
+            Last_Jitter_Reset := Ada.Calendar.Clock;
+         end if;
+      end loop;
+   exception
+      when E : others =>
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[ZenithOrion]" & AnsiAda.Reset & " Task Error: " &
+           Ada.Exceptions.Exception_Message (E));
+   end Zenith_Orion_Task;
 
 end Knowledge_Manager;

@@ -22,9 +22,12 @@ class EngineStats:
     def __init__(self):
         self.boot_time = time.time()
         self.total_tokens = 0
-        self.wcet_elp0 = 0.0
         self.wcet_elp1 = 0.0
         self.wcet_elp2 = 0.0
+        self.wcet_elp3 = 0.0
+        self.jitter_avg_us = 0.0
+        self.jitter_max_us = 0.0
+        self.wcel = 0.0
         self.wcet_watchdog_loop_us = 0.0
         self.wcet_main_loop_us = 0.0
         self.wcetr = 0.0
@@ -93,6 +96,21 @@ async def post_telemetry(req: Request):
         engine_stats.wcet_elp1 = val
         engine_stats.wcet_elp1_hist.append({"ts": now_ts, "val": val})
 
+    if "WCET_ELP2" in data:
+        val = float(data["WCET_ELP2"])
+        engine_stats.wcet_elp2 = val
+        engine_stats.wcet_elp2_hist.append({"ts": now_ts, "val": val})
+
+    if "WCET_ELP3" in data:
+        val = float(data["WCET_ELP3"])
+        engine_stats.wcet_elp3 = val
+        # For ELP3 (1ms), we don't store 1000pts/s in history, we'll just track current
+    
+    if "Jitter_Avg_uS" in data:
+        engine_stats.jitter_avg_us = float(data["Jitter_Avg_uS"])
+    if "Jitter_Max_uS" in data:
+        engine_stats.jitter_max_us = float(data["Jitter_Max_uS"])
+
     return JSONResponse({"status": "ok"})
 
 @app.get("/api/messages")
@@ -132,6 +150,9 @@ def get_stats(queue_len: int = 0):
         "WCET_ELP1_delta": get_delta(engine_stats.wcet_elp1_hist),
         "WCET_ELP2": engine_stats.wcet_elp2,
         "WCET_ELP2_delta": get_delta(engine_stats.wcet_elp2_hist),
+        "WCET_ELP3": engine_stats.wcet_elp3,
+        "Jitter_Avg_uS": engine_stats.jitter_avg_us,
+        "Jitter_Max_uS": engine_stats.jitter_max_us,
         "WCEL": engine_stats.wcel,
         "WCEL_delta_1m": avg_1m_wcel,  # Sending the average as requested
         "WCET_WatchdogLoop_uS": engine_stats.wcet_watchdog_loop_us,

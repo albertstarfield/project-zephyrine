@@ -9,7 +9,12 @@ package Model_Manager is
    pragma Spark_Mode (Off);
 
    type Model_Type is (Qwen_0_8B, Qwen_4B, Qwen_Embedding, MMProj);
-   type ELP_Level is (ELP0, ELP1);
+   --  ELP levels hierarchy:
+   --  ELP0: Background Literature Indexing (Lowest Priority)
+   --  ELP1: Active RAG / Memory Retrieval (User Interaction)
+   --  ELP2: StellaIcarus Hooks (Deterministic API Logic)
+   --  ELP3: ZenithOrion (Deterministic 1ms Pacing Lock - Highest Frequency)
+   type ELP_Level is (ELP0, ELP1, ELP2, ELP3);
 
    procedure Initialize;
 
@@ -90,5 +95,11 @@ package Model_Manager is
    Current_WCET : Duration := 300.0;
    Current_WCET_ELP0 : Duration := 0.0;
    Current_WCET_ELP1 : Duration := 0.0;
+   Current_WCET_ELP2 : Duration := 0.0;
+   Current_WCET_ELP3 : Duration := 0.0;
+   
+   --  ELP3 Timing Correction / Jitter Profile
+   Current_Jitter_Max : Duration := 0.0;
+   Current_Jitter_Avg : Duration := 0.0;
 
 end Model_Manager;
