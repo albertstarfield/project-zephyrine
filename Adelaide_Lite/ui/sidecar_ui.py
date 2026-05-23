@@ -131,12 +131,16 @@ import json
 import uuid
 
 LITERATURE_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "literatureRefIndex.db")
-GRAPH_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "literature.graphml")
+LITERATURE_GRAPH_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "literature.graphml")
+
+MEMORY_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "memoryRefIndex.db")
+MEMORY_GRAPH_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "memory.graphml")
 
 # Ensure dir
 os.makedirs(os.path.dirname(LITERATURE_DB_PATH), exist_ok=True)
 
 def init_knowledge_db():
+    # Initialize Literature DB
     conn = sqlite3.connect(LITERATURE_DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -151,61 +155,100 @@ def init_knowledge_db():
     conn.commit()
     conn.close()
 
+    # Initialize Memory DB
+    conn = sqlite3.connect(MEMORY_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS memories (
+            id TEXT PRIMARY KEY,
+            session TEXT,
+            topic TEXT,
+            content TEXT,
+            embedding BLOB,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+    # Init GraphML for literature
+    if not os.path.exists(LITERATURE_GRAPH_PATH):
+        G = nx.DiGraph()
+        G.add_node("ROOT", type="system")
+        nx.write_graphml(G, LITERATURE_GRAPH_PATH)
+
+    # Init GraphML for memory
+    if not os.path.exists(MEMORY_GRAPH_PATH):
+        G = nx.DiGraph()
+        G.add_node("MEMORY_ROOT", type="system")
+        nx.write_graphml(G, MEMORY_GRAPH_PATH)
+
+_embedding_model = None
+def init_model():
+    global _embedding_model
+    from sentence_transformers import SentenceTransformer
+    _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
 init_knowledge_db()
 
-embedding_model = None
-def get_embedding_model():
-    global embedding_model
-    if embedding_model is None:
-        from sentence_transformers import SentenceTransformer
-        embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-    return embedding_model
+def update_literature_graph(domain: str, filename: str, doc_id: str, chunk_id: str, content_preview: str):
+    G = nx.read_graphml(LITERATURE_GRAPH_PATH)
+    
+    if not G.has_node(domain):
+        G.add_node(domain, type="domain")
+        G.add_edge("ROOT", domain)
+        
+    doc_node_id = f"doc_{filename}"
+    if not G.has_node(doc_node_id):
+        G.add_node(doc_node_id, type="document", label=filename)
+        G.add_edge(domain, doc_node_id)
+        
+    G.add_node(chunk_id, type="chunk", label=content_preview)
+    G.add_edge(doc_node_id, chunk_id)
+    
+    nx.write_graphml(G, LITERATURE_GRAPH_PATH)
+
+def update_memory_graph(session: str, topic: str, memory_id: str, content_preview: str):
+    G = nx.read_graphml(MEMORY_GRAPH_PATH)
+    
+    session_node_id = f"session_{session}"
+    if not G.has_node(session_node_id):
+        G.add_node(session_node_id, type="session", label=session)
+        G.add_edge("MEMORY_ROOT", session_node_id)
+        
+    topic_node_id = f"topic_{session}_{topic}"
+    if not G.has_node(topic_node_id):
+        G.add_node(topic_node_id, type="topic", label=topic)
+        G.add_edge(session_node_id, topic_node_id)
+        
+    G.add_node(memory_id, type="memory", label=content_preview)
+    G.add_edge(topic_node_id, memory_id)
+    
+    nx.write_graphml(G, MEMORY_GRAPH_PATH)
 
 from fastapi.responses import StreamingResponse
 
 @app.post("/api/knowledgestackfrontend/upload")
 async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Form(...)):
-    # Read files into memory first to avoid closure issues
+    if _embedding_model is None: init_model()
+    
     files_data = []
     for file in files:
         content_bytes = await file.read()
         files_data.append((file.filename, content_bytes))
         
     async def process_and_stream():
-        conn = sqlite3.connect(LITERATURE_DB_PATH)
-        cursor = conn.cursor()
-        model = get_embedding_model()
-        
-        if os.path.exists(GRAPH_PATH):
-            try:
-                G = nx.read_graphml(GRAPH_PATH)
-            except Exception:
-                G = nx.Graph()
-        else:
-            G = nx.Graph()
-
-        all_chunks = []
-        # Pre-process and chunk all files
         for filename, content_bytes in files_data:
             content = ""
             ext = filename.split('.')[-1].lower()
-            
             if ext == 'txt':
                 content = content_bytes.decode('utf-8', errors='ignore')
             elif ext == 'pdf':
                 doc = fitz.open(stream=content_bytes, filetype="pdf")
                 for page in doc:
                     content += page.get_text() + "\n"
-            else:
-                continue
-                
+            
             if not content.strip(): continue
-            
-            doc_node = f"doc_{filename}"
-            G.add_node(domain, label=domain, type="domain")
-            G.add_node(doc_node, label=filename, domain=domain, type="document")
-            G.add_edge(domain, doc_node)
-            
             paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
             chunks = []
             current_chunk = ""
@@ -215,94 +258,109 @@ async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Fo
                     current_chunk = p
                 else:
                     current_chunk += "\n\n" + p if current_chunk else p
-            if current_chunk:
-                chunks.append(current_chunk)
+            if current_chunk: chunks.append(current_chunk)
+            
+            doc_id = str(uuid.uuid4())
+            for i, chunk in enumerate(chunks):
+                emb = _embedding_model.encode([chunk])[0]
+                emb_blob = emb.astype(np.float32).tobytes()
+                chunk_id = str(uuid.uuid4())
                 
-            if not chunks:
-                chunks = [content[i:i+500] for i in range(0, len(content), 500)]
+                conn = sqlite3.connect(LITERATURE_DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("INSERT INTO documents (id, filename, domain, content, embedding) VALUES (?, ?, ?, ?, ?)",
+                              (chunk_id, filename, domain, chunk, emb_blob))
+                conn.commit()
+                conn.close()
                 
-            for chunk in chunks:
-                all_chunks.append((filename, doc_node, chunk))
-
-        total_chunks = len(all_chunks)
-        if total_chunks == 0:
-            yield json.dumps({"progress": 100, "status": "success"}) + "\n"
-            return
-
-        for i, (filename, doc_node, chunk_text) in enumerate(all_chunks):
-            emb = model.encode(chunk_text)
-            emb_blob = emb.astype(np.float32).tobytes()
-            chunk_id = str(uuid.uuid4())
-            
-            cursor.execute("INSERT INTO documents (id, filename, domain, content, embedding) VALUES (?, ?, ?, ?, ?)",
-                           (chunk_id, filename, domain, chunk_text, emb_blob))
-            
-            G.add_node(chunk_id, label=f"Chunk {i+1}", type="chunk")
-            G.add_edge(doc_node, chunk_id)
-            
-            # Yield progress every chunk or periodically
-            progress = int(((i + 1) / total_chunks) * 100)
-            yield json.dumps({"progress": progress}) + "\n"
-
-        conn.commit()
-        conn.close()
-        nx.write_graphml(G, GRAPH_PATH)
+                update_literature_graph(domain, filename, doc_id, chunk_id, chunk[:30] + "...")
+                yield json.dumps({"progress": int(((i+1)/len(chunks))*100)}) + "\n"
         yield json.dumps({"progress": 100, "status": "success"}) + "\n"
 
     return StreamingResponse(process_and_stream(), media_type="application/x-ndjson")
 
-@app.get("/api/knowledgestackfrontend/documents")
-def get_documents():
-    conn = sqlite3.connect(LITERATURE_DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT filename, domain FROM documents")
-    rows = cursor.fetchall()
-    conn.close()
-    
-    result = {}
-    for filename, domain in rows:
-        if domain not in result:
-            result[domain] = []
-        result[domain].append(filename)
-    return result
-
 @app.get("/api/knowledgestackfrontend/search")
-def search_knowledge(q: str):
+def search_literature(q: str):
+    if not q: return {"results": []}
+    if _embedding_model is None: init_model()
+    
+    query_emb = _embedding_model.encode([q])[0]
     conn = sqlite3.connect(LITERATURE_DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT filename, domain, content, embedding FROM documents")
+    cursor.execute("SELECT id, filename, domain, content, embedding FROM documents")
     rows = cursor.fetchall()
     conn.close()
-    
-    if not rows:
-        return {"results": []}
-        
-    model = get_embedding_model()
-    q_emb = model.encode(q)
     
     results = []
-    for filename, domain, content, emb_blob in rows:
-        doc_emb = np.frombuffer(emb_blob, dtype=np.float32)
-        # Cosine similarity
-        score = np.dot(q_emb, doc_emb) / (np.linalg.norm(q_emb) * np.linalg.norm(doc_emb))
-        if score > 0.1:  # Simple threshold
-            snippet = content[:200].replace('\n', ' ') + "..."
-            results.append({
-                "filename": filename,
-                "domain": domain,
-                "score": float(score),
-                "snippet": snippet
-            })
+    for row in rows:
+        emb = np.frombuffer(row[4], dtype=np.float32)
+        sim = np.dot(query_emb, emb) / (np.linalg.norm(query_emb) * np.linalg.norm(emb))
+        if sim > 0.3:
+            results.append({"id": row[0], "filename": row[1], "domain": row[2], "content": row[3], "similarity": float(sim)})
             
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return {"results": results[:5]}
+    results.sort(key=lambda x: x["similarity"], reverse=True)
+    return {"results": results[:10]}
+
+@app.post("/api/knowledgestackfrontend/memory/upload")
+async def upload_memory(session: str = Form(...), topic: str = Form(...), content: str = Form(...)):
+    if _embedding_model is None: init_model()
+        
+    chunks = [content[i:i+500] for i in range(0, len(content), 500)]
+    for chunk in chunks:
+        emb = _embedding_model.encode([chunk])[0]
+        emb_blob = emb.astype(np.float32).tobytes()
+        memory_id = str(uuid.uuid4())
+        
+        conn = sqlite3.connect(MEMORY_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO memories (id, session, topic, content, embedding) VALUES (?, ?, ?, ?, ?)",
+                      (memory_id, session, topic, chunk, emb_blob))
+        conn.commit()
+        conn.close()
+        update_memory_graph(session, topic, memory_id, chunk[:30] + "...")
+    return {"status": "success"}
+
+@app.get("/api/knowledgestackfrontend/memory/search")
+def search_memory(q: str):
+    if not q: return {"results": []}
+    if _embedding_model is None: init_model()
+    
+    query_emb = _embedding_model.encode([q])[0]
+    conn = sqlite3.connect(MEMORY_DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, session, topic, content, embedding, timestamp FROM memories")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    results = []
+    for row in rows:
+        emb = np.frombuffer(row[4], dtype=np.float32)
+        sim = np.dot(query_emb, emb) / (np.linalg.norm(query_emb) * np.linalg.norm(emb))
+        if sim > 0.3:
+            results.append({"id": row[0], "session": row[1], "topic": row[2], "content": row[3], "timestamp": row[5], "similarity": float(sim)})
+            
+    results.sort(key=lambda x: x["similarity"], reverse=True)
+    return {"results": results[:10]}
 
 @app.get("/api/knowledgestackfrontend/graph")
-def get_graph():
-    if not os.path.exists(GRAPH_PATH):
-        return []
+def get_literature_graph():
+    if not os.path.exists(LITERATURE_GRAPH_PATH): return []
     try:
-        G = nx.read_graphml(GRAPH_PATH)
+        G = nx.read_graphml(LITERATURE_GRAPH_PATH)
+        elements = []
+        for n, d in G.nodes(data=True):
+            elements.append({"data": {"id": n, "label": d.get("label", n), "type": d.get("type", "unknown")}})
+        for u, v in G.edges():
+            elements.append({"data": {"source": u, "target": v}})
+        return elements
+    except Exception:
+        return []
+
+@app.get("/api/knowledgestackfrontend/memory/graph")
+def get_memory_graph():
+    if not os.path.exists(MEMORY_GRAPH_PATH): return []
+    try:
+        G = nx.read_graphml(MEMORY_GRAPH_PATH)
         elements = []
         for n, d in G.nodes(data=True):
             elements.append({"data": {"id": n, "label": d.get("label", n), "type": d.get("type", "unknown")}})
