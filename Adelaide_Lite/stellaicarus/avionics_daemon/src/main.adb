@@ -3,12 +3,11 @@ with Ada.Strings.Unbounded;
 with Ada.Calendar;
 use Ada.Calendar;
 with Avionics_Types;
-
---  JSON Libraries (VSS)
-with VSS.JSON;
+with GNATCOLL.JSON;
 
 procedure Main is
    package U_Strings renames Ada.Strings.Unbounded;
+   use GNATCOLL.JSON;
 
    --  SHARED STATE (Thread Safe via Protected Object)
    --  This allows the Physics Loop and the Input Listener to talk safely.
@@ -104,17 +103,21 @@ procedure Main is
    Period    : constant Duration := 0.02; --  50Hz (Real-time Standard)
    Next_Time : Ada.Calendar.Time := Ada.Calendar.Clock;
 
-   --  JSON Helper (Stubbed out to avoid missing types in VSS.JSON)
-   --  function To_Json
-   --    (Item : Avionics_Types.Instrument_Data_Record)
-   --     return VSS.JSON.JSON_Object_SPtr
-   --  is
-   --     Result : VSS.JSON.JSON_Object_SPtr := VSS.JSON.Create_Object;
-   --  begin
-   --     return Result;
-   --  end To_Json;
+   --  JSON Helper
+   function To_Json
+     (Item : Avionics_Types.Instrument_Data_Record) return JSON_Value
+   is
+      Result : JSON_Value := Create_Object;
+      Att    : JSON_Value := Create_Object;
+   begin
+      Set_Field (Att, "pitch", Float (Item.Attitude.Pitch));
+      Set_Field (Att, "roll", Float (Item.Attitude.Roll));
+      Set_Field (Result, "attitude", Att);
+      Set_Field (Result, "timestamp", Item.Timestamp);
+      return Result;
+   end To_Json;
 
-   --  JSON_String : U_Strings.Unbounded_String;
+   Snapshot : Avionics_Types.Instrument_Data_Record;
 
 begin
    Ada.Text_IO.Put_Line
@@ -125,10 +128,9 @@ begin
       Flight_Computer.Update_Physics (Period);
 
       --  2. OUTPUT STEP (Stream to Python)
-      --  Snapshot := Flight_Computer.Get_Snapshot;
-      --  JSON_String := VSS.JSON.Serialization.To_String (To_Json (Snapshot));
-      --  Ada.Text_IO.Put_Line (U_Strings.To_String (JSON_String));
-      --  Ada.Text_IO.Flush; --  CRITICAL for Pipe communication!
+      Snapshot := Flight_Computer.Get_Snapshot;
+      Ada.Text_IO.Put_Line (Write (To_Json (Snapshot)));
+      Ada.Text_IO.Flush; --  CRITICAL for Pipe communication!
 
       --  3. TIMING STEP
       Next_Time := Next_Time + Period;

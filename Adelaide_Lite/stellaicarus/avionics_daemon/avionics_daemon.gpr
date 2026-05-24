@@ -1,6 +1,5 @@
 with "config/avionics_daemon_config.gpr";
-with "vss_json";
-with "vss_text";
+with "gnatcoll";
 
 project Avionics_Daemon is
 
@@ -17,6 +16,13 @@ project Avionics_Daemon is
    package Binder is
       for Switches ("Ada") use ("-Es"); --  Symbolic traceback
    end Binder;
+
+   package Linker is
+      for Switches ("Ada") use (
+          "-Wl,-syslibroot," & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
+          "-F" & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk") & "/System/Library/Frameworks"
+      );
+   end Linker;
 
    package Install is
       for Artifacts (".") use ("share");

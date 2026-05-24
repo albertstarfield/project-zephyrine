@@ -1,4 +1,4 @@
-dependency:vss=23.0.0=c6c45e680b001058e2c114059d304cf73c806c50afdbd9f1a936f68661dbc0bf
+dependency:gnatcoll=25.0.0=3bd2421bb7c911f71ab1f16358761c180be8eefadbfd46c0dd4e37f9dd8e7e1c
 external:AVIONICS_DAEMON_LIBRARY_TYPE=default
 external:LIBRARY_TYPE=default
 profile:avionics_daemon=DEVELOPMENT
