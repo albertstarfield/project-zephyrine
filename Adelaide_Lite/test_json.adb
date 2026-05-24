@@ -1,12 +1,15 @@
 with Ada.Text_IO; use Ada.Text_IO;
-with GNATCOLL.JSON;
-
+with GNATCOLL.JSON; use GNATCOLL.JSON;
 procedure Test_JSON is
-   Result : GNATCOLL.JSON.Read_Result := GNATCOLL.JSON.Read ("{ 'missing_quotes': val }");
+   Result : Read_Result := Read ("{""stream"": false}");
 begin
    if Result.Success then
-      Put_Line ("SUCCESS");
-   else
-      Put_Line ("FAIL: " & Result.Error);
+      declare
+         Val : JSON_Value := Result.Value;
+         B   : Boolean;
+      begin
+         B := Get (Val, "stream");
+         Put_Line ("OK: " & Boolean'Image(B));
+      end;
    end if;
 end Test_JSON;
