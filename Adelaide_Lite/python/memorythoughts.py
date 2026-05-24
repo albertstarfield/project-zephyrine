@@ -47,7 +47,10 @@ def bootstrap_venv():
         import requests
         import numpy
     except ImportError:
-        print(f"[*] Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...", file=sys.stderr)
+        print(
+            f"[*] Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...",
+            file=sys.stderr
+        )
         if os.name == 'nt':
             pip_exe = os.path.join(VENV_DIR, "Scripts", "pip.exe")
         else:
@@ -75,7 +78,10 @@ OLD_DB_PATH = os.path.expanduser("~/memory_thoughts.db")
 def migrate_db():
     """Migrate database from home directory to project directory if needed."""
     if os.path.exists(OLD_DB_PATH) and not os.path.exists(DB_PATH):
-        print(f"[*] Migrating database from {OLD_DB_PATH} to {DB_PATH}...", file=sys.stderr)
+        print(
+            f"[*] Migrating database from {OLD_DB_PATH} to {DB_PATH}...",
+            file=sys.stderr
+        )
         try:
             import shutil
             shutil.move(OLD_DB_PATH, DB_PATH)
@@ -92,8 +98,11 @@ def ensure_ollama_running():
     try:
         requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
         return True
-    except:
-        print(f"⚠️ Ollama not reachable at {OLLAMA_BASE_URL}. Attempting to start...", file=sys.stderr)
+    except Exception:
+        print(
+            f"⚠️ Ollama not reachable at {OLLAMA_BASE_URL}. Attempting to start...",
+            file=sys.stderr
+        )
         subprocess.run(["launchctl", "setenv", "OLLAMA_HOST", "0.0.0.0:1234"], check=False)
         subprocess.run(["brew", "services", "restart", "ollama"], check=False)
         time.sleep(3)
@@ -101,15 +110,20 @@ def ensure_ollama_running():
             requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
             print("✅ Ollama started.", file=sys.stderr)
             return True
-        except:
+        except Exception:
             print("❌ Failed to start Ollama.", file=sys.stderr)
             return False
 
 def get_embedding(text: str):
     """Get embedding from Ollama."""
-    if not text: return None
+    if not text:
+        return None
     try:
-        resp = requests.post(OLLAMA_EMBED_ENDPOINT, json={"model": OLLAMA_MODEL, "input": text}, timeout=30)
+        resp = requests.post(
+            OLLAMA_EMBED_ENDPOINT,
+            json={"model": OLLAMA_MODEL, "input": text},
+            timeout=30
+        )
         resp.raise_for_status()
         data = resp.json()
         if "embeddings" in data and len(data["embeddings"]) > 0:
@@ -153,7 +167,11 @@ def store_memory(conn, content, json_io=False):
     """Chunks and stores a new memory in the database."""
     chunks = chunk_text(content)
     if not json_io and len(chunks) > 1:
-        print(f"[*] Content large ({len(content)} chars). Splitting into {len(chunks)} chunks...", file=sys.stderr)
+        print(
+            f"[*] Content large ({len(content)} chars). "
+            f"Splitting into {len(chunks)} chunks...",
+            file=sys.stderr
+        )
     
     success_count = 0
     for chunk in chunks:
@@ -163,12 +181,22 @@ def store_memory(conn, content, json_io=False):
 
         embedding_blob = embedding.tobytes()
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO memories (content, embedding) VALUES (?, ?)', (chunk, embedding_blob))
+        cursor.execute(
+            'INSERT INTO memories (content, embedding) VALUES (?, ?)',
+            (chunk, embedding_blob)
+        )
         success_count += 1
     
     conn.commit()
     if json_io:
-        print(json.dumps({"type": "store", "status": "complete", "chunks": success_count}), flush=True)
+        print(
+            json.dumps({
+                "type": "store",
+                "status": "complete",
+                "chunks": success_count
+            }),
+            flush=True
+        )
     elif success_count > 0:
         print(f"✅ Stored {success_count} chunks in memory.", file=sys.stderr)
     else:
@@ -194,14 +222,29 @@ def cosine_similarity(v1, v2):
 def retrieve_memories(conn, query, top_k=5, json_io=False):
     """Retrieve top-k memories similar to the query."""
     if json_io:
-        print(json.dumps({"type": "retrieve", "phase": 1, "status": "start", "query": query}), flush=True)
+        print(
+            json.dumps({
+                "type": "retrieve",
+                "phase": 1,
+                "status": "start",
+                "query": query
+            }),
+            flush=True
+        )
     else:
         print(f"[*] Searching for: \"{query}\"...", file=sys.stderr)
 
     query_embedding = get_embedding(query)
     if query_embedding is None:
         if json_io:
-            print(json.dumps({"type": "retrieve", "status": "error", "message": "Failed to generate embedding"}), flush=True)
+            print(
+                json.dumps({
+                    "type": "retrieve",
+                    "status": "error",
+                    "message": "Failed to generate embedding"
+                }),
+                flush=True
+            )
         else:
             print("❌ Failed to generate embedding for query.", file=sys.stderr)
         return
@@ -216,7 +259,7 @@ def retrieve_memories(conn, query, top_k=5, json_io=False):
         if embedding.shape != query_embedding.shape:
              try:
                  embedding = embedding.reshape(query_embedding.shape)
-             except:
+             except Exception:
                  continue
         
         similarity = cosine_similarity(query_embedding, embedding)

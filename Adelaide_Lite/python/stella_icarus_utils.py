@@ -19,7 +19,8 @@ from loguru import logger
 try:
     from CortexConfiguration import (
         ENABLE_STELLA_ICARUS_HOOKS, STELLA_ICARUS_HOOK_DIR, STELLA_ICARUS_CACHE_DIR,
-        ENABLE_STELLA_ICARUS_DAEMON, STELLA_ICARUS_ADA_DIR, ALR_DEFAULT_EXECUTABLE_NAME, STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR,
+        ENABLE_STELLA_ICARUS_DAEMON, STELLA_ICARUS_ADA_DIR, ALR_DEFAULT_EXECUTABLE_NAME,
+        STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR,
         ADA_DAEMON_RETRY_DELAY_SECONDS # NEW: Import retry delay
     )
 except ImportError:
@@ -228,7 +229,8 @@ class StellaIcarusAdaDaemonManager:
 
     def build_all(self):
         """Builds all discovered Ada projects using 'alr build' with verbose error logging."""
-        if not self.is_enabled: return
+        if not self.is_enabled:
+            return
 
         logger.info("--- Building all discovered StellaIcarus Ada projects... ---")
         build_command = ["alr.exe", "build"] if os.name == "nt" else ["alr", "build"]
@@ -257,7 +259,8 @@ class StellaIcarusAdaDaemonManager:
                     
                     for line in output_stream.splitlines():
                         line = line.strip()
-                        if not line: continue
+                        if not line:
+                            continue
                         
                         # Make errors pop out in red (Critical)
                         if "error:" in line.lower() or "exception" in line.lower():
@@ -274,8 +277,10 @@ class StellaIcarusAdaDaemonManager:
             except subprocess.TimeoutExpired as e:
                 logger.error(f"  ❌ Build timed out for '{project['name']}'.")
                 # Try to print what happened before it froze
-                if e.stdout: logger.error(f"Last Output:\n{e.stdout.decode()}")
-                if e.stderr: logger.error(f"Last Errors:\n{e.stderr.decode()}")
+                if e.stdout:
+                    logger.error(f"Last Output:\n{e.stdout.decode()}")
+                if e.stderr:
+                    logger.error(f"Last Errors:\n{e.stderr.decode()}")
             except Exception as e:
                 logger.error(f"  ❌ Unexpected error building '{project['name']}': {e}")
         
@@ -334,7 +339,8 @@ class StellaIcarusAdaDaemonManager:
 
                 if process.stdout:
                     for line in iter(process.stdout.readline, ''):
-                        if stop_event.is_set(): break
+                        if stop_event.is_set():
+                            break
                         line = line.strip()
                         if line:
                             try:
@@ -400,7 +406,8 @@ class StellaIcarusAdaDaemonManager:
 
     def stop_all(self):
         """Stops all running Ada daemon threads and processes."""
-        if not self.is_enabled: return
+        if not self.is_enabled:
+            return
 
         logger.info("Stopping all StellaIcarus Ada daemons...")
         for project in self.ada_projects:
