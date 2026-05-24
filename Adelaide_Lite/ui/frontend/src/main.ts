@@ -623,6 +623,16 @@ if (navExit) {
   });
 }
 
+const navBrowser = document.getElementById('nav-browser');
+if (navBrowser) {
+  navBrowser.addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      await fetch('/api/detach_webview', { method: 'POST' });
+    } catch (err) {}
+  });
+}
+
 // --------------------------------------------------------
 // About Section Logic
 // --------------------------------------------------------
