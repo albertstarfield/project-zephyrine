@@ -187,11 +187,16 @@ package body Model_Manager is
       Path_C     : chars_ptr := New_String (To_String (Models (Kind).Path));
       Actual_Ctx : unsigned;
    begin
-      Actual_Ctx := (if Requested_Ctx <= 4096 then 4096
-                     else (if Requested_Ctx <= 16384 then 16384 else 32768));
+      Actual_Ctx := unsigned (Requested_Ctx);
+      --  Round up to power of 2 for efficiency if desired, or just use Requested_Ctx
+      --  Let's at least ensure we don't go below a sensible minimum for this project's models.
+      if Actual_Ctx < 4096 then
+         Actual_Ctx := 4096;
+      end if;
+      
       Success := False;
       if Models (Kind).Loaded then
-         if unsigned (Requested_Ctx) <= Models (Kind).Current_Ctx then
+         if Actual_Ctx <= Models (Kind).Current_Ctx then
             Models (Kind).Last_Used := Clock;
             Success := True;
             return;
@@ -264,6 +269,9 @@ package body Model_Manager is
       return Models (Kind).Model;
    end Get_Model;
 
+   function Llama_Abort_Callback (Data : System.Address) return Boolean;
+   pragma Convention (C, Llama_Abort_Callback);
+
    function Llama_Abort_Callback (Data : System.Address) return Boolean is
       use System;
       type Model_Type_Ptr is access all Model_Type;
@@ -275,6 +283,8 @@ package body Model_Manager is
          return False;
       end if;
       Ptr := To_Ptr (Data);
+      
+      --  Only abort if we are an ELP0 task and an ELP1 task is pending or active.
       return Priority_Model_Gate.Is_ELP0_Owner (Ptr.all)
         and then Priority_Model_Gate.Should_Abort;
    end Llama_Abort_Callback;
@@ -373,6 +383,7 @@ package body Model_Manager is
       N_Toks   : int;
       Prompt_C : chars_ptr := New_String (Prompt);
    begin
+      Priority_Model_Gate.Request_ELP1;
       Priority_Model_Gate.Acquire_ELP1 (Kind);
       Load_Model (Kind, Success);
       if not Success then
@@ -736,16 +747,20 @@ package body Model_Manager is
                  Llama_Batch_Get_One
                    (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
             begin
-               if Llama_Decode (Models (Kind).Context, B) /= 0 then
-                  Models (Kind).In_Use := False;
-                  if Level = ELP0 then
-                     Priority_Model_Gate.Release_ELP0 (Kind);
-                  else
-                     Priority_Model_Gate.Release_ELP1 (Kind);
+               declare
+                  Ret : constant int := Llama_Decode (Models (Kind).Context, B);
+               begin
+                  if Ret /= 0 then
+                     Models (Kind).In_Use := False;
+                     if Level = ELP0 then
+                        Priority_Model_Gate.Release_ELP0 (Kind);
+                     else
+                        Priority_Model_Gate.Release_ELP1 (Kind);
+                     end if;
+                     Result := To_Unbounded_String ("ERROR: Decode failed (" & Ret'Img & ")");
+                     return;
                   end if;
-                  Result := To_Unbounded_String ("ERROR: Decode failed");
-                  return;
-               end if;
+               end;
                Tokens_Left := Tokens_Left - To_Decode;
                Current_Pos := Current_Pos + To_Decode;
             end;
@@ -798,8 +813,10 @@ package body Model_Manager is
             declare
                B : constant Llama_Batch :=
                  Llama_Batch_Get_One (Token'Address, 1);
+               Ret : constant int := Llama_Decode (Models (Kind).Context, B);
             begin
-               if Llama_Decode (Models (Kind).Context, B) /= 0 then
+               if Ret /= 0 then
+                  Result := To_Unbounded_String (To_String (Result) & " [ABORTED:" & Ret'Img & "]");
                   exit;
                end if;
             end;
