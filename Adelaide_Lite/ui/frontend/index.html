@@ -1,253 +1,921 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Zephyrine Assistant</title>
-  </head>
-  <body>
-    <!-- Background -->
-    <canvas id="gl" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:-1; pointer-events:none;"></canvas>
-    <div id="bg">
-      <div class="orb orb-center"></div>
-      <div class="stars stars1"></div>
-      <div class="stars stars2"></div>
-      <div class="stars stars3"></div>
-    </div>
-    <!-- MangoHUD Overlay -->
-    <div id="mango-hud" style="position: fixed; top: 10px; right: 10px; z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: flex-end; font-family: monospace; opacity: 0.327; transform: scale(0.65); transform-origin: top right;">
-      <div id="mango-text" style=" color: #0f0; padding: 10px; border-radius: 4px; font-size: 11px; white-space: pre; line-height: 1.3; margin-bottom: 5px;">
-        Loading Engine Stats...
-      </div>
-      <div id="mango-js-text" style=" color: #0ff; padding: 10px; border-radius: 4px; font-size: 11px; white-space: pre; line-height: 1.3; margin-bottom: 5px;">
-        Loading JS Engine Stats...
-      </div>
-      <canvas id="mango-js-canvas" width="200" height="60" style=" border-radius: 4px; margin-bottom: 5px;"></canvas>
-      <canvas id="mango-canvas" width="200" height="60" style=" border-radius: 4px;"></canvas>
-      <div id="mango-legend" style=" color: #fff; padding: 5px 10px; border-radius: 4px; font-size: 9px; margin-top: 5px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 200px; box-sizing: border-box;">
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#0f0; display:inline-block;"></span> Tok/s</div>
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#55f; display:inline-block;"></span> ELP0</div>
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#a5f; display:inline-block;"></span> ELP1</div>
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#f5f; display:inline-block;"></span> ELP2</div>
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#fff; display:inline-block;"></span> ELP3</div>
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#f00; display:inline-block;"></span> Jitter</div>
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#ff0; display:inline-block;"></span> WtDog</div>
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#f90; display:inline-block;"></span> mLoop</div>
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#0ff; display:inline-block;"></span> JS L</div>
-        <div style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:2px; background:#f50; display:inline-block;"></span> WCEL</div>
-      </div>
-    </div>
-    
-    <!-- Chat App Overlay -->
-    <div id="app">
-      
-      <button id="sidebar-toggle" class="icon-btn" style="position:absolute; top: 1.5rem; left: 1.25rem; z-index: 50; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; cursor: pointer; color: #a0a0a0; border-radius: 50%; transition: 0.2s;">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="4" ry="4"></rect>
-          <line x1="9" y1="8" x2="9" y2="16"></line>
-          <polyline points="15 8 11 12 15 16"></polyline>
-        </svg>
-      </button>
-
-      <!-- Sidebar -->
-      <aside id="sidebar">
-        <div class="sidebar-top">
-          <button class="new-chat-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            New Chat
-          </button>
-          
-          <div class="model-select">
-            <select>
-              <option>Snowball-Enaga Model</option>
-            </select>
-          </div>
-          
-          <div class="history-section">
-            <span class="history-title">HISTORY</span>
-            <!-- History list goes here -->
-          </div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Zephyrine Assistant</title>
+    </head>
+    <body>
+        <!-- Background -->
+        <canvas
+            id="gl"
+            style="
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                z-index: -1;
+                pointer-events: none;
+            "
+        ></canvas>
+        <div id="bg">
+            <div class="orb orb-center"></div>
+            <div class="stars stars1"></div>
+            <div class="stars stars2"></div>
+            <div class="stars stars3"></div>
         </div>
-        
-        <div class="sidebar-bottom">
-          <nav>
-            <a href="#" class="nav-item" id="nav-main">
-              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></span> Main Page
-            </a>
-            <a href="#" class="nav-item" id="nav-voice">
-              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg></span> Voice Assistant
-            </a>
-            <a href="#" class="nav-item" id="nav-image">
-              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></span> Image Generation
-            </a>
-            <a href="#" class="nav-item" id="nav-tuning">
-              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></span> Knowledge Stack
-            </a>
-            <a href="#" class="nav-item" id="nav-user">
-              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span> <span id="user-email-text">local@example.com</span>
-            </a>
-            <a href="#" class="nav-item" id="nav-settings">
-              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span> Settings
-            </a>
-            <a href="#" class="nav-item" id="nav-about">
-              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></span> About
-            </a>
-            <a href="#" class="nav-item" id="nav-exit">
-              <span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></span> Exit
-            </a>
-          </nav>
-        </div>
-      </aside>
-
-      <!-- Main Content -->
-      <main id="main-area">
-        
-        <div id="empty-state" class="view-panel">
-          <img src="/ProjectZephy023LogoRenewal.png" alt="Zephy Logo" class="center-logo" />
-          <div class="avatar-ring">
-            <div class="avatar-inner">
-               <img src="/Project Zephyrine Logo.png" alt="Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />
+        <!-- MangoHUD Overlay -->
+        <div
+            id="mango-hud"
+            style="
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                z-index: 9999;
+                pointer-events: none;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                font-family: monospace;
+                opacity: 0.327;
+                transform: scale(0.65);
+                transform-origin: top right;
+            "
+        >
+            <div
+                id="mango-text"
+                style="
+                    color: #0f0;
+                    padding: 10px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    white-space: pre;
+                    line-height: 1.3;
+                    margin-bottom: 5px;
+                "
+            >
+                Loading Engine Stats...
             </div>
-          </div>
-          <h1 class="greeting-title" id="greeting-title-text">Greetings, User</h1>
-          <p class="greeting-subtitle">I am Zephyrine. Shall we embark on our journey together?</p>
-        </div>
-
-        <div id="chat-container" class="hidden view-panel">
-          <div class="messages" id="messages"></div>
-        </div>
-
-        <div id="about-container" class="hidden view-panel">
-          <div class="about-header">
-            <h2>About & Documentation</h2>
-            <div class="about-tabs">
-              <button class="about-tab active" id="tab-readme">README</button>
-              <button class="about-tab" id="tab-license">License</button>
+            <div
+                id="mango-js-text"
+                style="
+                    color: #0ff;
+                    padding: 10px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    white-space: pre;
+                    line-height: 1.3;
+                    margin-bottom: 5px;
+                "
+            >
+                Loading JS Engine Stats...
             </div>
-            <div class="about-search">
-              <input type="text" id="about-search-input" placeholder="Search snippet..." />
-            </div>
-          </div>
-          <div class="about-content-wrapper">
-            <div class="about-toc" id="about-toc">
-              <!-- Table of Contents Auto-generated here -->
-            </div>
-            <div class="about-markdown" id="about-markdown">
-              <!-- Rendered Markdown goes here -->
-            </div>
-          </div>
-        </div>
-        
-        <div id="knowledge-container" class="hidden view-panel">
-          <div class="knowledge-header">
-            <div class="knowledge-header-top" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-              <h2>Knowledge Stack</h2>
-              <div class="knowledge-segment-control" style="display: flex; background: rgba(0,0,0,0.3); border-radius: 20px; padding: 4px;">
-                <button class="k-segment-btn active" id="segment-literature" style="background: var(--primary); color: #fff; border: none; padding: 0.25rem 1rem; border-radius: 16px; cursor: pointer; transition: 0.3s; margin-right: 4px;">Literature</button>
-                <button class="k-segment-btn" id="segment-memory" style="background: transparent; color: #a0a0a0; border: none; padding: 0.25rem 1rem; border-radius: 16px; cursor: pointer; transition: 0.3s;">Memory Zephy</button>
-              </div>
-            </div>
-            <div class="knowledge-search" style="margin-top: 1rem;">
-              <input type="text" id="knowledge-search-input" placeholder="Search knowledge base to test embedding coverage..." />
-              <button id="knowledge-search-btn" class="icon-btn">🔍</button>
-            </div>
-          </div>
-          
-          <!-- LITERATURE WRAPPER -->
-          <div class="knowledge-content-wrapper" id="knowledge-literature-wrapper">
-            <!-- Left panel: File list and Upload -->
-            <div class="knowledge-panel-left">
-              <div class="upload-area" id="knowledge-upload-area">
-                <p>Drag & Drop .txt or .pdf files here</p>
-                <input type="file" id="knowledge-file-input" accept=".txt,.pdf" multiple />
-                <select id="knowledge-domain-select">
-                  <option value="General">General</option>
-                  <option value="Science">Science</option>
-                  <option value="Technology">Technology</option>
-                  <option value="Literature">Literature</option>
-                </select>
-                <button id="knowledge-upload-btn">Upload to Database</button>
-                <div id="upload-progress-container" class="hidden" style="margin-top: 1rem;">
-                  <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 10px; overflow: hidden;">
-                    <div id="upload-progress-bar" style="background: var(--primary); width: 0%; height: 100%; transition: width 0.2s;"></div>
-                  </div>
-                  <p id="upload-progress-text" style="font-size: 0.8rem; margin-top: 0.5rem; color: #ccc;">0%</p>
+            <canvas
+                id="mango-js-canvas"
+                width="200"
+                height="60"
+                style="border-radius: 4px; margin-bottom: 5px"
+            ></canvas>
+            <canvas
+                id="mango-canvas"
+                width="200"
+                height="60"
+                style="border-radius: 4px"
+            ></canvas>
+            <div
+                id="mango-legend"
+                style="
+                    color: #fff;
+                    padding: 5px 10px;
+                    border-radius: 4px;
+                    font-size: 9px;
+                    margin-top: 5px;
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 2px;
+                    width: 200px;
+                    box-sizing: border-box;
+                "
+            >
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #0f0;
+                            display: inline-block;
+                        "
+                    ></span>
+                    Tok/s
                 </div>
-              </div>
-              <div class="knowledge-file-list" id="knowledge-file-list">
-                <!-- Grouped list of files goes here -->
-              </div>
-            </div>
-            <!-- Right panel: Graph/Search Results -->
-            <div class="knowledge-panel-right">
-              <div class="knowledge-tabs">
-                <button class="k-tab active" id="k-tab-graph">GraphML View</button>
-                <button class="k-tab" id="k-tab-search">Search Results</button>
-              </div>
-              <div class="k-tab-content active" id="k-content-graph">
-                <!-- Cytoscape container -->
-                <div id="cy-container" style="width:100%; height:100%;"></div>
-              </div>
-              <div class="k-tab-content" id="k-content-search">
-                <div id="knowledge-search-results"></div>
-              </div>
-            </div>
-          </div> <!-- End Literature Wrapper -->
-
-          <!-- MEMORY WRAPPER -->
-          <div class="knowledge-content-wrapper hidden" id="knowledge-memory-wrapper">
-            <!-- Left panel: Inject Memory Form -->
-            <div class="knowledge-panel-left">
-              <div class="upload-area" id="memory-upload-area" style="border-radius: 24px;">
-                <p>Inject Interaction Memory</p>
-                <input type="text" id="memory-session-input" placeholder="Session ID (e.g. Session-001)" style="width: 100%; margin-top: 0.5rem; padding: 0.5rem; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white;" />
-                <input type="text" id="memory-topic-input" placeholder="Topic (e.g. User Prefs)" style="width: 100%; margin-top: 0.5rem; padding: 0.5rem; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white;" />
-                <textarea id="memory-content-input" placeholder="Memory text... e.g. The user likes rounded corners." style="width: 100%; margin-top: 0.5rem; padding: 0.5rem; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white; resize: vertical; min-height: 80px;"></textarea>
-                <button id="memory-upload-btn" style="margin-top: 1rem; display: block; width: 100%; padding: 0.5rem; background: var(--primary); color: #fff; border: none; border-radius: 4px; cursor: pointer;">Embed Memory</button>
-                <div id="memory-progress-container" class="hidden" style="margin-top: 1rem;">
-                  <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 10px; overflow: hidden;">
-                    <div id="memory-progress-bar" style="background: var(--primary); width: 0%; height: 100%; transition: width 0.2s;"></div>
-                  </div>
-                  <p id="memory-progress-text" style="font-size: 0.8rem; margin-top: 0.5rem; color: #ccc;">0%</p>
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #55f;
+                            display: inline-block;
+                        "
+                    ></span>
+                    ELP0
                 </div>
-              </div>
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #a5f;
+                            display: inline-block;
+                        "
+                    ></span>
+                    ELP1
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #f5f;
+                            display: inline-block;
+                        "
+                    ></span>
+                    ELP2
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #fff;
+                            display: inline-block;
+                        "
+                    ></span>
+                    ELP3
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #f00;
+                            display: inline-block;
+                        "
+                    ></span>
+                    Jitter
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #ff0;
+                            display: inline-block;
+                        "
+                    ></span>
+                    WtDog
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #f90;
+                            display: inline-block;
+                        "
+                    ></span>
+                    mLoop
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #0ff;
+                            display: inline-block;
+                        "
+                    ></span>
+                    JS L
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px">
+                    <span
+                        style="
+                            width: 8px;
+                            height: 2px;
+                            background: #f50;
+                            display: inline-block;
+                        "
+                    ></span>
+                    WCEL
+                </div>
             </div>
-            <!-- Right panel: Memory Graph -->
-            <div class="knowledge-panel-right">
-              <div class="knowledge-tabs">
-                <button class="k-tab active" style="pointer-events: none;">Interaction GraphML</button>
-              </div>
-              <div class="k-tab-content active" id="k-content-memory-graph">
-                <!-- Cytoscape container for memory -->
-                <div id="cy-memory-container" style="width:100%; height:100%;"></div>
-              </div>
-            </div>
-          </div> <!-- End Memory Wrapper -->
-          
         </div>
 
-        <div class="input-container view-panel">
-          <form id="chat-form">
-            <button type="button" class="icon-btn">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+        <!-- Chat App Overlay -->
+        <div id="app">
+            <button
+                id="sidebar-toggle"
+                class="icon-btn"
+                style="
+                    position: absolute;
+                    top: 1.5rem;
+                    left: 1.25rem;
+                    z-index: 50;
+                    width: 44px;
+                    height: 44px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: transparent;
+                    border: none;
+                    cursor: pointer;
+                    color: #a0a0a0;
+                    border-radius: 50%;
+                    transition: 0.2s;
+                "
+            >
+                <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <rect
+                        x="3"
+                        y="3"
+                        width="18"
+                        height="18"
+                        rx="4"
+                        ry="4"
+                    ></rect>
+                    <line x1="9" y1="8" x2="9" y2="16"></line>
+                    <polyline points="15 8 11 12 15 16"></polyline>
+                </svg>
             </button>
-            <button type="button" class="icon-btn">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-            </button>
-            <input type="text" id="chat-input" placeholder="Ask Zephyrine..." autocomplete="off" />
-            <button type="submit" id="send-btn">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-            </button>
-          </form>
+
+            <!-- Sidebar -->
+            <aside id="sidebar">
+                <div class="sidebar-top">
+                    <button class="new-chat-btn">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        New Chat
+                    </button>
+
+                    <div class="model-select">
+                        <select>
+                            <option>Snowball-Enaga Model</option>
+                        </select>
+                    </div>
+
+                    <div class="history-section">
+                        <span class="history-title">HISTORY</span>
+                        <!-- History list goes here -->
+                    </div>
+                </div>
+
+                <div class="sidebar-bottom">
+                    <nav>
+                        <a href="#" class="nav-item" id="nav-main">
+                            <span
+                                ><svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                                    ></path>
+                                    <polyline
+                                        points="9 22 9 12 15 12 15 22"
+                                    ></polyline></svg
+                            ></span>
+                            Main Page
+                        </a>
+                        <a href="#" class="nav-item" id="nav-voice">
+                            <span
+                                ><svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"
+                                    ></path>
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                    <line
+                                        x1="12"
+                                        y1="19"
+                                        x2="12"
+                                        y2="23"
+                                    ></line></svg
+                            ></span>
+                            Voice Assistant
+                        </a>
+                        <a href="#" class="nav-item" id="nav-image">
+                            <span
+                                ><svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <rect
+                                        x="3"
+                                        y="3"
+                                        width="18"
+                                        height="18"
+                                        rx="2"
+                                        ry="2"
+                                    ></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline
+                                        points="21 15 16 10 5 21"
+                                    ></polyline></svg
+                            ></span>
+                            Image Generation
+                        </a>
+                        <a href="#" class="nav-item" id="nav-tuning">
+                            <span
+                                ><svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"
+                                    ></path>
+                                    <path
+                                        d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+                                    ></path></svg
+                            ></span>
+                            Knowledge Stack
+                        </a>
+                        <a href="#" class="nav-item" id="nav-user">
+                            <span
+                                ><svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                                    ></path>
+                                    <circle cx="12" cy="7" r="4"></circle></svg
+                            ></span>
+                            <span id="user-email-text">local@example.com</span>
+                        </a>
+                        <a href="#" class="nav-item" id="nav-settings">
+                            <span
+                                ><svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path
+                                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                                    ></path></svg
+                            ></span>
+                            Settings
+                        </a>
+                        <a href="#" class="nav-item" id="nav-about">
+                            <span
+                                ><svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line
+                                        x1="12"
+                                        y1="16"
+                                        x2="12"
+                                        y2="12"
+                                    ></line>
+                                    <line
+                                        x1="12"
+                                        y1="8"
+                                        x2="12.01"
+                                        y2="8"
+                                    ></line></svg
+                            ></span>
+                            About
+                        </a>
+                        <a href="#" class="nav-item" id="nav-exit">
+                            <span
+                                ><svg
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+                                    ></path>
+                                    <polyline
+                                        points="16 17 21 12 16 7"
+                                    ></polyline>
+                                    <line
+                                        x1="21"
+                                        y1="12"
+                                        x2="9"
+                                        y2="12"
+                                    ></line></svg
+                            ></span>
+                            Exit
+                        </a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main id="main-area">
+                <div id="empty-state" class="view-panel">
+                    <img
+                        src="/ProjectZephy023LogoRenewal.png"
+                        alt="Zephy Logo"
+                        class="center-logo"
+                    />
+                    <div class="avatar-ring">
+                        <div class="avatar-inner">
+                            <img
+                                src="/Project Zephyrine Logo.png"
+                                alt="Avatar"
+                                style="
+                                    width: 100%;
+                                    height: 100%;
+                                    object-fit: cover;
+                                    border-radius: 50%;
+                                "
+                            />
+                        </div>
+                    </div>
+                    <h1 class="greeting-title" id="greeting-title-text">
+                        Greetings, User
+                    </h1>
+                    <p class="greeting-subtitle">
+                        I am Zephyrine. Shall we embark on our journey together?
+                    </p>
+                </div>
+
+                <div id="chat-container" class="hidden view-panel">
+                    <div class="messages" id="messages"></div>
+                </div>
+
+                <div id="about-container" class="hidden view-panel">
+                    <div class="about-header">
+                        <h2>About & Documentation</h2>
+                        <div class="about-tabs">
+                            <button class="about-tab active" id="tab-readme">
+                                README
+                            </button>
+                            <button class="about-tab" id="tab-license">
+                                License
+                            </button>
+                        </div>
+                        <div class="about-search">
+                            <input
+                                type="text"
+                                id="about-search-input"
+                                placeholder="Search snippet..."
+                            />
+                        </div>
+                    </div>
+                    <div class="about-content-wrapper">
+                        <div class="about-toc" id="about-toc">
+                            <!-- Table of Contents Auto-generated here -->
+                        </div>
+                        <div class="about-markdown" id="about-markdown">
+                            <!-- Rendered Markdown goes here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div id="knowledge-container" class="hidden view-panel">
+                    <div class="knowledge-header">
+                        <div
+                            class="knowledge-header-top"
+                            style="
+                                display: flex;
+                                align-items: center;
+                                justify-content: space-between;
+                                width: 100%;
+                            "
+                        >
+                            <h2>Knowledge Stack</h2>
+                            <div
+                                class="knowledge-segment-control"
+                                style="
+                                    display: flex;
+                                    background: rgba(0, 0, 0, 0.3);
+                                    border-radius: 20px;
+                                    padding: 4px;
+                                "
+                            >
+                                <button
+                                    class="k-segment-btn active"
+                                    id="segment-literature"
+                                    style="
+                                        background: var(--primary);
+                                        color: #fff;
+                                        border: none;
+                                        padding: 0.25rem 1rem;
+                                        border-radius: 16px;
+                                        cursor: pointer;
+                                        transition: 0.3s;
+                                        margin-right: 4px;
+                                    "
+                                >
+                                    Literature
+                                </button>
+                                <button
+                                    class="k-segment-btn"
+                                    id="segment-memory"
+                                    style="
+                                        background: transparent;
+                                        color: #a0a0a0;
+                                        border: none;
+                                        padding: 0.25rem 1rem;
+                                        border-radius: 16px;
+                                        cursor: pointer;
+                                        transition: 0.3s;
+                                    "
+                                >
+                                    Memory Zephy
+                                </button>
+                            </div>
+                        </div>
+                        <div class="knowledge-search" style="margin-top: 1rem">
+                            <input
+                                type="text"
+                                id="knowledge-search-input"
+                                placeholder="Search knowledge base to test embedding coverage..."
+                            />
+                            <button id="knowledge-search-btn" class="icon-btn">
+                                🔍
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- LITERATURE WRAPPER -->
+                    <div
+                        class="knowledge-content-wrapper"
+                        id="knowledge-literature-wrapper"
+                    >
+                        <!-- Left panel: File list and Upload -->
+                        <div class="knowledge-panel-left">
+                            <div class="upload-area" id="knowledge-upload-area">
+                                <p>Drag & Drop .txt or .pdf files here</p>
+                                <input
+                                    type="file"
+                                    id="knowledge-file-input"
+                                    accept=".txt,.pdf"
+                                    multiple
+                                />
+                                <select id="knowledge-domain-select">
+                                    <option value="General">General</option>
+                                    <option value="Science">Science</option>
+                                    <option value="Technology">
+                                        Technology
+                                    </option>
+                                    <option value="Literature">
+                                        Literature
+                                    </option>
+                                </select>
+                                <button id="knowledge-upload-btn">
+                                    Upload to Database
+                                </button>
+                                <div
+                                    id="upload-progress-container"
+                                    class="hidden"
+                                    style="margin-top: 1rem"
+                                >
+                                    <div
+                                        style="
+                                            background: rgba(
+                                                255,
+                                                255,
+                                                255,
+                                                0.1
+                                            );
+                                            border-radius: 4px;
+                                            height: 10px;
+                                            overflow: hidden;
+                                        "
+                                    >
+                                        <div
+                                            id="upload-progress-bar"
+                                            style="
+                                                background: var(--primary);
+                                                width: 0%;
+                                                height: 100%;
+                                                transition: width 0.2s;
+                                            "
+                                        ></div>
+                                    </div>
+                                    <p
+                                        id="upload-progress-text"
+                                        style="
+                                            font-size: 0.8rem;
+                                            margin-top: 0.5rem;
+                                            color: #ccc;
+                                        "
+                                    >
+                                        0%
+                                    </p>
+                                </div>
+                            </div>
+                            <div
+                                class="knowledge-file-list"
+                                id="knowledge-file-list"
+                            >
+                                <!-- Grouped list of files goes here -->
+                            </div>
+                        </div>
+                        <!-- Right panel: Graph/Search Results -->
+                        <div class="knowledge-panel-right">
+                            <div class="knowledge-tabs">
+                                <button class="k-tab active" id="k-tab-graph">
+                                    GraphML View
+                                </button>
+                                <button class="k-tab" id="k-tab-search">
+                                    Search Results
+                                </button>
+                            </div>
+                            <div
+                                class="k-tab-content active"
+                                id="k-content-graph"
+                            >
+                                <!-- Cytoscape container -->
+                                <div
+                                    id="cy-container"
+                                    style="width: 100%; height: 100%"
+                                ></div>
+                            </div>
+                            <div class="k-tab-content" id="k-content-search">
+                                <div id="knowledge-search-results"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- End Literature Wrapper -->
+
+                    <!-- MEMORY WRAPPER -->
+                    <div
+                        class="knowledge-content-wrapper hidden"
+                        id="knowledge-memory-wrapper"
+                    >
+                        <!-- Left panel: Inject Memory Form -->
+                        <div class="knowledge-panel-left">
+                            <div
+                                class="upload-area"
+                                id="memory-upload-area"
+                                style="border-radius: 24px"
+                            >
+                                <p>Inject Interaction Memory</p>
+                                <input
+                                    type="text"
+                                    id="memory-session-input"
+                                    placeholder="Session ID (e.g. Session-001)"
+                                    style="
+                                        width: 100%;
+                                        margin-top: 0.5rem;
+                                        padding: 0.5rem;
+                                        border-radius: 4px;
+                                        border: 1px solid
+                                            rgba(255, 255, 255, 0.2);
+                                        background: rgba(0, 0, 0, 0.5);
+                                        color: white;
+                                    "
+                                />
+                                <input
+                                    type="text"
+                                    id="memory-topic-input"
+                                    placeholder="Topic (e.g. User Prefs)"
+                                    style="
+                                        width: 100%;
+                                        margin-top: 0.5rem;
+                                        padding: 0.5rem;
+                                        border-radius: 4px;
+                                        border: 1px solid
+                                            rgba(255, 255, 255, 0.2);
+                                        background: rgba(0, 0, 0, 0.5);
+                                        color: white;
+                                    "
+                                />
+                                <textarea
+                                    id="memory-content-input"
+                                    placeholder="Memory text... e.g. The user likes rounded corners."
+                                    style="
+                                        width: 100%;
+                                        margin-top: 0.5rem;
+                                        padding: 0.5rem;
+                                        border-radius: 4px;
+                                        border: 1px solid
+                                            rgba(255, 255, 255, 0.2);
+                                        background: rgba(0, 0, 0, 0.5);
+                                        color: white;
+                                        resize: vertical;
+                                        min-height: 80px;
+                                    "
+                                ></textarea>
+                                <button
+                                    id="memory-upload-btn"
+                                    style="
+                                        margin-top: 1rem;
+                                        display: block;
+                                        width: 100%;
+                                        padding: 0.5rem;
+                                        background: var(--primary);
+                                        color: #fff;
+                                        border: none;
+                                        border-radius: 4px;
+                                        cursor: pointer;
+                                    "
+                                >
+                                    Embed Memory
+                                </button>
+                                <div
+                                    id="memory-progress-container"
+                                    class="hidden"
+                                    style="margin-top: 1rem"
+                                >
+                                    <div
+                                        style="
+                                            background: rgba(
+                                                255,
+                                                255,
+                                                255,
+                                                0.1
+                                            );
+                                            border-radius: 4px;
+                                            height: 10px;
+                                            overflow: hidden;
+                                        "
+                                    >
+                                        <div
+                                            id="memory-progress-bar"
+                                            style="
+                                                background: var(--primary);
+                                                width: 0%;
+                                                height: 100%;
+                                                transition: width 0.2s;
+                                            "
+                                        ></div>
+                                    </div>
+                                    <p
+                                        id="memory-progress-text"
+                                        style="
+                                            font-size: 0.8rem;
+                                            margin-top: 0.5rem;
+                                            color: #ccc;
+                                        "
+                                    >
+                                        0%
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Right panel: Memory Graph -->
+                        <div class="knowledge-panel-right">
+                            <div class="knowledge-tabs">
+                                <button
+                                    class="k-tab active"
+                                    style="pointer-events: none"
+                                >
+                                    Interaction GraphML
+                                </button>
+                            </div>
+                            <div
+                                class="k-tab-content active"
+                                id="k-content-memory-graph"
+                            >
+                                <!-- Cytoscape container for memory -->
+                                <div
+                                    id="cy-memory-container"
+                                    style="width: 100%; height: 100%"
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- End Memory Wrapper -->
+                </div>
+
+                <div class="input-container view-panel">
+                    <form id="chat-form">
+                        <button type="button" class="icon-btn">
+                            <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <rect
+                                    x="3"
+                                    y="3"
+                                    width="18"
+                                    height="18"
+                                    rx="2"
+                                    ry="2"
+                                ></rect>
+                                <line x1="12" y1="8" x2="12" y2="16"></line>
+                                <line x1="8" y1="12" x2="16" y2="12"></line>
+                            </svg>
+                        </button>
+                        <button type="button" class="icon-btn">
+                            <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <path
+                                    d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"
+                                ></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                        </button>
+                        <input
+                            type="text"
+                            id="chat-input"
+                            placeholder="Ask Zephyrine..."
+                            autocomplete="off"
+                        />
+                        <button type="submit" id="send-btn">
+                            <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <polygon
+                                    points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+                                ></polygon>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </main>
+        </div>
+        <div id="untested-warning-overlay">
+            <img
+                src="/madeFromZephyFoundation.png"
+                alt="Made from Zephy Foundation"
+            />
+            <b>
+                Untested Version: (This version is not yet torture tested yet,
+                Response WILL be <b>S H I T!</b>) Always crosscheck and use your
+                cognitive and shout at it when its slopping make it traumatized,
+                <b>Ethical responsibility is on yours.</b>
+            </p>
         </div>
 
-      </main>
-    </div>
-    <div id="untested-warning-overlay">
-      <img src="/madeFromZephyFoundation.png" alt="Made from Zephy Foundation" />
-      <p>Untested Version: (This version is not yet torture tested yet, Response possibility <b>S H I T!</b>) Always crosscheck and use your cognitive and shout at it when its slopping make it traumatized</p>
-    </div>
-    
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+        <script type="module" src="/src/main.ts"></script>
+    </body>
 </html>
