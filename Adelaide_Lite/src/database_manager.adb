@@ -25,7 +25,7 @@ package body Database_Manager is
          if Done then
             return;
          end if;
-         
+
          Main_DB_Ptr := new Ada_Sqlite3.Database'(Open (DB_File));
 
          --  Memories table
@@ -121,8 +121,8 @@ package body Database_Manager is
    -- Add_Literature_Chunk --
    --------------------------
    procedure Add_Literature_Chunk
-     (File_Path : String; 
-      Content   : String; 
+     (File_Path : String;
+      Content   : String;
       Embedding : Math_Utils.Vector;
       Doc_Hash  : String)
    is
@@ -196,9 +196,9 @@ package body Database_Manager is
                              Math_Utils.Cosine_Similarity (Embedding, Entry_Vec);
                         begin
                            if Sim >= 0.65 then
-                              Results (Idx).File_Path := 
+                              Results (Idx).File_Path :=
                                 To_Unbounded_String (Path_Str);
-                              Results (Idx).Content   := 
+                              Results (Idx).Content   :=
                                 To_Unbounded_String (Text_Str);
                               Results (Idx).Score     := Sim;
                               Idx := Idx + 1;
@@ -412,7 +412,7 @@ package body Database_Manager is
             Result := To_Unbounded_String (Column_Text (Stmt, 1));
          end if;
       end;
-      
+
       if Best_Id /= -1 then
          Execute (Main_DB_Ptr.all,
                  "UPDATE memories SET hit_count = hit_count + 1, " &
@@ -441,7 +441,7 @@ package body Database_Manager is
          SQL : constant String :=
            "DELETE FROM response_cache WHERE id IN (" &
            "SELECT id FROM (" &
-           "SELECT id, (hit_count / (1.0 + " & Alpha_Str & 
+           "SELECT id, (hit_count / (1.0 + " & Alpha_Str &
            " * (strftime('%s','now') - strftime('%s', timestamp)))) as s " &
            "FROM response_cache ORDER BY s ASC LIMIT " & Chunk_Size'Img & "))";
       begin
@@ -452,7 +452,7 @@ package body Database_Manager is
          SQL : constant String :=
            "DELETE FROM memories WHERE id IN (" &
            "SELECT id FROM (" &
-           "SELECT id, (hit_count / (1.0 + " & Alpha_Str & 
+           "SELECT id, (hit_count / (1.0 + " & Alpha_Str &
            " * (strftime('%s','now') - strftime('%s', timestamp)))) as s " &
            "FROM memories ORDER BY s ASC LIMIT " & Chunk_Size'Img & "))";
       begin
@@ -505,7 +505,7 @@ package body Database_Manager is
             "SELECT target AS node FROM knowledge_graph)");
       begin
          while Step (Node_Stmt) = ROW loop
-            Put_Line (File, "    <node id=""" & 
+            Put_Line (File, "    <node id=""" &
               Escape_XML (Column_Text (Node_Stmt, 0)) & """/>");
          end loop;
       end;
@@ -526,7 +526,7 @@ package body Database_Manager is
                Put_Line (File, "    <edge id=""e" & Id_Val &
                          """ source=""" & Escape_XML (Src) &
                          """ target=""" & Escape_XML (Tgt) & """>");
-               Put_Line (File, "      <data key=""d0"">" & 
+               Put_Line (File, "      <data key=""d0"">" &
                          Escape_XML (Rel) & "</data>");
                Put_Line (File, "      <data key=""d1"">" & Wgt & "</data>");
                Put_Line (File, "    </edge>");

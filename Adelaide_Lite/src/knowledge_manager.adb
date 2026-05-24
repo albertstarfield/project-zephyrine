@@ -194,7 +194,7 @@ package body Knowledge_Manager is
          if Ada.Directories.Size (Path) > 5_000_000 then
             return;
          end if;
-         
+
          if Ada.Strings.Fixed.Index (Path, ".pdf") > 0 then
             declare
                Args : GNAT.OS_Lib.Argument_List (1 .. 1);
@@ -247,9 +247,9 @@ package body Knowledge_Manager is
                   if Kind (Ent) = Directory then
                      Walk_Directory (P);
                   elsif Kind (Ent) = Ordinary_File then
-                     if Index (N, ".txt") > 0 or else 
+                     if Index (N, ".txt") > 0 or else
                         Index (N, ".md") > 0 or else
-                        Index (N, ".adb") > 0 or else 
+                        Index (N, ".adb") > 0 or else
                         Index (N, ".ads") > 0 or else
                         Index (N, ".py") > 0 or else
                         Index (N, ".pdf") > 0
@@ -263,7 +263,7 @@ package body Knowledge_Manager is
       exception
          when others => null;
       end Walk_Directory;
-      
+
       Home_Dir : constant String :=
         (if Ada.Environment_Variables.Exists ("HOME")
          then Ada.Environment_Variables.Value ("HOME")
@@ -274,7 +274,7 @@ package body Knowledge_Manager is
          if Model_Manager.Should_Abort_ELP0 then
             delay 1.0;
          else
-            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" & 
+            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                       AnsiAda.Reset & " Starting filesystem crawl...");
             Walk_Directory (Home_Dir);
             delay 3600.0;
@@ -352,7 +352,7 @@ package body Knowledge_Manager is
       loop
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[ZenithOrion]" &
                    AnsiAda.Reset & " Auto-scanning and Proving SPARK core...");
-         
+
          declare
             use GNAT.OS_Lib;
             Ret     : Integer;
@@ -367,17 +367,17 @@ package body Knowledge_Manager is
          begin
             Ret := Spawn (Cmd, Args);
             for I in Args'Range loop Free (Args (I)); end loop;
-            
+
             if Ret = 0 then
                Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[ZenithOrion]" &
                          AnsiAda.Reset & " SPARK Proof Level 2: SUCCESS");
             else
                Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[ZenithOrion]" &
-                         AnsiAda.Reset & " SPARK Proof FAILED (Ret:" & 
+                         AnsiAda.Reset & " SPARK Proof FAILED (Ret:" &
                          Ret'Img & ")");
             end if;
          end;
-         
+
          delay 3600.0;
       end loop;
    end Zenith_Prover_Task;
