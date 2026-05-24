@@ -838,11 +838,31 @@
                     <!-- End Memory Wrapper -->
                 </div>
 
-                <div id="agentic-container" class="hidden view-panel">
-                    <canvas id="astral-canvas"></canvas>
-                    <div id="audio-visualizer-circle"></div>
-                    <div class="zephy-overlay">
-                        <img src="/ProjectZephy023LogoRenewal.png" alt="Project Zephy" class="zephy-logo-img" />
+                <div id="agentic-container" class="agentic-container hidden">
+                    <!-- New Stats Overlay (Top Right) -->
+                    <div id="handless-stats" class="handless-stats">
+                        <h4>Handless API Stats</h4>
+                        <div class="stat-row"><span>Status:</span> <span id="hl-status">Idle</span></div>
+                        <div class="stat-row"><span>Stage:</span> <span id="hl-stage">-</span></div>
+                        <div class="stat-row"><span>VAD:</span> <span id="hl-vad" style="color: #61dafb;">Listening</span></div>
+                        <div class="stat-row"><span>WCET:</span> <span id="hl-wcet">0 ms</span></div>
+                        <div class="stat-row text-block">
+                            <span style="color: #a8b2c1; font-size: 0.85em;">Transcribed:</span>
+                            <div id="hl-input" class="hl-text">-</div>
+                        </div>
+                        <div class="stat-row text-block">
+                            <span style="color: #a8b2c1; font-size: 0.85em;">Output:</span>
+                            <div id="hl-output" class="hl-text">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Central visualizer -->
+                    <div id="central-sphere" class="central-sphere">
+                        <canvas id="astral-canvas"></canvas>
+                        <div id="audio-visualizer-circle"></div>
+                        <div class="zephy-overlay">
+                            <img src="/ProjectZephy023LogoRenewal.png" alt="Project Zephy" class="zephy-logo-img" />
+                        </div>
                     </div>
                 </div>
 

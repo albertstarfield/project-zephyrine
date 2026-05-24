@@ -16,6 +16,7 @@ with AWS.Messages;
 with GNATCOLL.JSON;
 with Math_Utils;
 with Ada.Containers.Indefinite_Ordered_Maps;
+with Ada.Real_Time;
 
 package body Adelaide_Server_Pkg is
 
@@ -181,8 +182,7 @@ package body Adelaide_Server_Pkg is
             Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
             
             Transcript : Unbounded_String;
-            Generated_Response : Unbounded_String;
-            Audio_Response : Ada.Streams.Stream_Element_Array_Access;
+            LLM_Result : Unbounded_String;
             T_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
             use type Interfaces.Unsigned_64;
             use type Ada.Real_Time.Time;
@@ -196,10 +196,18 @@ package body Adelaide_Server_Pkg is
             else
                Transcript := To_Unbounded_String ("");
             end if;
+            
+            Handless_Input_Text := Transcript;
+            Handless_Stage := To_Unbounded_String("Generating...");
+            
+            if Length (Transcript) > 0 then
+               Model_Manager.Hybrid_Generate
+                 (Prompt     => To_String (Transcript),
+                  Result     => LLM_Result,
+                  Session_ID => "server-handless",
                   Agentic    => True,
                   Raw_Prompt => False);
             else
-               -- 2b. If interrupted or no audio provided, spontaneously ask a question
                Model_Manager.Hybrid_Generate
                  (Prompt     => "Proactively initiate the conversation. Ask a random, interesting, or highly agentic question to the user instead of waiting for a prompt.",
                   Result     => LLM_Result,
@@ -208,11 +216,16 @@ package body Adelaide_Server_Pkg is
                   Raw_Prompt => True);
             end if;
             
-            -- 3. Synthesize the LLM output into cloned voice audio
+            Handless_Output_Text := LLM_Result;
+            Handless_Stage := To_Unbounded_String("Synthesizing...");
+            
             declare
                PCM_Data : constant Ada.Streams.Stream_Element_Array :=
                  Kokoro_Interface.Synthesize_Speech (To_String (LLM_Result));
             begin
+               Handless_Stage := To_Unbounded_String("Idle");
+               Handless_WCET := Float(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - T_Start)) * 1000.0;
+               
                if PCM_Data'Length = 0 then
                   return Wrap_Response (AWS.Response.Build ("text/plain", "TTS Error"));
                else

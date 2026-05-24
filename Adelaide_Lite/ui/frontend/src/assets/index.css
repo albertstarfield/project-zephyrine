@@ -1,0 +1,48 @@
+
+.handless-stats {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(10, 15, 30, 0.85);
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+    padding: 15px;
+    min-width: 280px;
+    max-width: 350px;
+    color: #e2e8f0;
+    font-size: 0.9em;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    pointer-events: none;
+}
+
+.handless-stats h4 {
+    margin: 0 0 10px 0;
+    color: #4ade80;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    letter-spacing: 1px;
+}
+
+.handless-stats .stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.handless-stats .stat-row.text-block {
+    flex-direction: column;
+    margin-top: 10px;
+    border-top: 1px solid #333;
+    padding-top: 10px;
+}
+
+.hl-text {
+    color: #cbd5e1;
+    font-size: 0.9em;
+    margin-top: 5px;
+    max-height: 100px;
+    overflow-y: hidden;
+    font-style: italic;
+}

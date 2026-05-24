@@ -33,6 +33,11 @@ class EngineStats:
         self.wcet_watchdog_loop_us = 0.0
         self.wcet_main_loop_us = 0.0
         self.wcetr = 0.0
+        self.handless_stage = "Idle"
+        self.handless_wcet = 0.0
+        self.handless_input_text = ""
+        self.handless_output_text = ""
+        
         self.history_1m = []
         self.wcel_history_1m = []
         
@@ -265,7 +270,12 @@ def get_stats(queue_len: int = 0):
         "WCET_ELP1_Hist": engine_stats.wcet_elp1_hist,
         "WCET_ELP2_Hist": engine_stats.wcet_elp2_hist,
         "WCET_WtDog_Hist": engine_stats.wcet_wtdog_hist,
-        "WCET_mLoop_Hist": engine_stats.wcet_mloop_hist
+        "WCET_mLoop_Hist": engine_stats.wcet_mloop_hist,
+        
+        "Handless_Stage": engine_stats.handless_stage,
+        "Handless_WCET": engine_stats.handless_wcet,
+        "Handless_Input_Text": engine_stats.handless_input_text,
+        "Handless_Output_Text": engine_stats.handless_output_text
     }
 
 @app.post("/api/chat")
@@ -756,6 +766,11 @@ if __name__ == "__main__":
 
                     engine_stats.wcet_main_loop_us = data.get("WCET_mainLoop_uS", engine_stats.wcet_main_loop_us)
                     engine_stats.wcet_mloop_hist.append({"ts": now_ts, "val": engine_stats.wcet_main_loop_us})
+                    
+                    engine_stats.handless_stage = data.get("Handless_Stage", engine_stats.handless_stage)
+                    engine_stats.handless_wcet = data.get("Handless_WCET", engine_stats.handless_wcet)
+                    engine_stats.handless_input_text = data.get("Handless_Input_Text", engine_stats.handless_input_text)
+                    engine_stats.handless_output_text = data.get("Handless_Output_Text", engine_stats.handless_output_text)
                     
             except Exception:
                 pass
