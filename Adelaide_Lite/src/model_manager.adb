@@ -1104,7 +1104,7 @@ package body Model_Manager is
          B64_Str : Unbounded_String := To_Unbounded_String ("");
       begin
          if GNATCOLL.JSON.Length (Images) > 0 then
-            B64_Str := To_Unbounded_String (String'(GNATCOLL.JSON.Get (Images, 1)));
+            B64_Str := To_Unbounded_String (String'(GNATCOLL.JSON.Get (GNATCOLL.JSON.Get (Images, 1))));
          end if;
          Database_Manager.Remember (Prompt, To_String (Current_Response), To_String (B64_Str));
       end;
