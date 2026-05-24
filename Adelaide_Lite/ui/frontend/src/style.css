@@ -1121,19 +1121,8 @@ html {
     user-select: none;
 }
 
-.zephy-text {
-    font-size: 1.2rem;
-    font-weight: 700;
-    letter-spacing: 0.3em;
-    color: #fff;
-    font-family: 'Inter', sans-serif;
-}
-
-.zephy-subtext {
-    font-size: 0.65rem;
-    font-weight: 400;
-    letter-spacing: 0.4em;
-    color: rgba(255, 255, 255, 0.7);
-    font-family: 'Inter', sans-serif;
-    margin-top: 4px;
+.zephy-logo-img {
+    width: 250px;
+    height: auto;
+    filter: drop-shadow(0 0 10px rgba(64, 224, 208, 0.4));
 }
