@@ -1623,6 +1623,62 @@ function initAstralGeometry() {
 
     layers.forEach(layer => group.add(layer));
     
+    // Diagonal Light Leak / Lens Flare
+    const flareGeo = new THREE.PlaneGeometry(120, 120);
+    const flareMat = new THREE.ShaderMaterial({
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        uniforms: {
+            time: { value: 0 }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            varying vec2 vUv;
+            uniform float time;
+            void main() {
+                // Diagonal coordinate (bottom-left to top-right)
+                float d = (vUv.x - vUv.y); 
+                
+                // Chromatic split (rainbow leak) tighter
+                float r = exp(-abs(d - 0.01) * 150.0) * 0.6;
+                float g = exp(-abs(d) * 180.0) * 0.6;
+                float b = exp(-abs(d + 0.01) * 150.0) * 0.6;
+                
+                // Main bright beam (much tighter)
+                float beam = exp(-abs(d) * 300.0) * 0.8;
+                
+                // Wide soft glow (dimmer and tighter)
+                float wideGlow = exp(-abs(d) * 20.0) * 0.02;
+                
+                // Subtle secondary streak crossing it
+                float d2 = (vUv.x + vUv.y - 1.0);
+                float secondary = exp(-abs(d2) * 200.0) * 0.1;
+                
+                vec3 color = vec3(r, g, b) + vec3(beam) + vec3(wideGlow) + vec3(secondary);
+                
+                // Fade out smoothly towards the edges
+                float edgeFade = pow(sin(vUv.x * 3.14159) * sin(vUv.y * 3.14159), 1.5);
+                
+                // Add dynamic pulse based on time
+                float pulse = 0.8 + 0.2 * sin(time * 2.0);
+                
+                vec3 finalColor = color * edgeFade * pulse;
+                gl_FragColor = vec4(finalColor, max(finalColor.r, max(finalColor.g, finalColor.b)));
+            }
+        `
+    });
+    const flareMesh = new THREE.Mesh(flareGeo, flareMat);
+    // Position it statically in front of the camera
+    flareMesh.position.set(0, 0, 18);
+    scene.add(flareMesh);
+    
     // Scale group to fit
     group.scale.set(0.65, 0.65, 0.65);
 
@@ -1709,6 +1765,8 @@ function initAstralGeometry() {
         
         stars.rotation.z += 0.0005;
         group.rotation.z -= 0.0001;
+        
+        flareMat.uniforms.time.value += 0.01;
 
         composer.render();
     }
