@@ -1319,6 +1319,20 @@ Uptime    : ${uptimeH}h ${uptimeM}m ${uptimeS}s
 Queue     : ${stats.Current_Queue}
 `;
 
+      // Handless Stats Overlay Update
+      const hlStatus = document.getElementById('hl-status');
+      const hlStage = document.getElementById('hl-stage');
+      const hlWcet = document.getElementById('hl-wcet');
+      const hlInput = document.getElementById('hl-input');
+      const hlOutput = document.getElementById('hl-output');
+      
+      if (hlStatus) hlStatus.textContent = stats.Handless_Stage === "Idle" ? "Idle" : "Processing";
+      if (hlStage) hlStage.textContent = stats.Handless_Stage;
+      if (hlWcet) hlWcet.textContent = (stats.Handless_WCET || 0).toFixed(1) + " ms";
+      if (hlInput) hlInput.textContent = stats.Handless_Input_Text || "-";
+      if (hlOutput) hlOutput.textContent = stats.Handless_Output_Text || "-";
+
+
       mangoJSText.textContent = `
 ADELAIDE_JAVASHIT_ENGINE
 --------------------
@@ -1842,9 +1856,26 @@ async function stopAndSendAgenticVoice() {
     const totalLength = inputBuffer.reduce((acc, val) => acc + val.length, 0);
     const combinedFloats = new Float32Array(totalLength);
     let offset = 0;
+    let sumSquares = 0;
+    
     for (const chunk of inputBuffer) {
         combinedFloats.set(chunk, offset);
+        for (let i = 0; i < chunk.length; i++) {
+            sumSquares += chunk[i] * chunk[i];
+        }
         offset += chunk.length;
+    }
+    
+    const rms = Math.sqrt(sumSquares / totalLength);
+    const vadElem = document.getElementById('hl-vad');
+    
+    if (rms < 0.01) {
+        console.log("VAD: No speech detected (RMS: " + rms + ")");
+        if (vadElem) { vadElem.innerText = "No Speech Detected"; vadElem.style.color = "#ef4444"; }
+        inputBuffer = [];
+        return; // Skip sending to API
+    } else {
+        if (vadElem) { vadElem.innerText = "Speech Detected"; vadElem.style.color = "#4ade80"; }
     }
     
     inputBuffer = []; // Reset
