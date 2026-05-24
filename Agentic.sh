@@ -26,7 +26,16 @@ export OPENAI_MODEL="$MODEL"
 # Navigate to the target operation directory
 cd "$WORKSPACE"
 
+# Determine the instruction file path
+INSTRUCTION_FILE="${4:-./Instruction.md}"
+
+if [ ! -f "$INSTRUCTION_FILE" ]; then
+    echo "[!] Warning: Instruction file '$INSTRUCTION_FILE' not found. Using empty baseline."
+    INSTRUCTION_PROMPT="Start a new agentic session."
+else
+    echo "[*] Using Instruction: $INSTRUCTION_FILE"
+    INSTRUCTION_PROMPT="I want you to read $INSTRUCTION_FILE for this session. (Don't forget to use absolute_path to read this)"
+fi
+
 # Execute the agentic command
-# Note: Using the user-provided instruction path as the session baseline
-qwen -y --prompt-interactive \
-    "I want you to read @/Users/albertstarfield/Documents/JournalingNotebook/JournalingNotebook/midnighthelper/Instruction.md for this session. (Don't forget to use absolute_path to read this)"
+qwen -y --prompt-interactive "$INSTRUCTION_PROMPT"
