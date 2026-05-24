@@ -144,7 +144,6 @@ def main():
             moonshine_examples = os.path.join(moonshine_dir, "examples")
             if os.path.exists(moonshine_examples):
                 print("[*] Removing heavy moonshine/examples directory...")
-                import shutil
                 shutil.rmtree(moonshine_examples, ignore_errors=True)
         else:
             print("[*] moonshine already exists, skipping clone.")
@@ -218,9 +217,26 @@ def main():
         
         with open(hash_file, "w") as f:
             f.write(current_hash)
+            
+    # Self-Integrity Check using Ruff
+    ruff_cmd = "ruff.exe" if platform.system() == "Windows" else "ruff"
+    if shutil.which(ruff_cmd):
+        print("[*] Running Platform Self-Integrity Quality Check (Ruff)...")
+        # Run ruff check on the Adelaide_Lite directory
+        try:
+            result = subprocess.run([ruff_cmd, "check", BASE_DIR], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("[!] Self-Integrity Quality Check FAILED.")
+                print(result.stdout)
+                # In strict mode, we might want to exit, but for now just warn
+                # print("[*] Emergency Shutdown: Quality violations detected.")
+                # sys.exit(1)
+            else:
+                print("[+] Self-Integrity Quality Check PASSED.")
+        except Exception as e:
+            print(f"[!] Error executing Ruff integrity check: {e}")
     else:
-        print("[*] No changes detected, skipping build.")
-        daemon_build_flag = "--skip-build"
+        print("[!] Warning: ruff not found in PATH, skipping self-integrity quality check.")
 
     # Handle integrity check flag
     if "--test-build-integrity-check" in sys.argv:
