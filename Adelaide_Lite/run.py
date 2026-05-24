@@ -201,7 +201,10 @@ def main():
     server_path = os.path.join(BASE_DIR, "bin", server_bin)
 
     if launch_gui:
-        server_process = subprocess.Popen([server_path], cwd=BASE_DIR)
+        moonshine_onnx = os.path.join(BASE_DIR, "..", "moonshine", "core", "third-party", "onnxruntime", "lib", "macos", "arm64")
+        env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
+        
+        server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
         print("[*] Booting Python Sidecar UI...")
         ui_dir = os.path.join(BASE_DIR, "ui")
         
