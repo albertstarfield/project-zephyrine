@@ -1,5 +1,10 @@
 import './style.css';
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -1525,6 +1530,46 @@ function initAstralGeometry() {
     group.rotation.x = 0.15;
     group.rotation.y = 0.1;
 
+    // Post-processing setup
+    const ChromaticAberrationShader = {
+        uniforms: {
+            'tDiffuse': { value: null },
+            'amount': { value: 0.004 }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D tDiffuse;
+            uniform float amount;
+            varying vec2 vUv;
+            void main() {
+                vec2 dir = vUv - vec2( 0.5 );
+                float dist = length(dir);
+                vec2 offset = normalize(dir) * amount * dist;
+                vec4 cr = texture2D(tDiffuse, vUv + offset);
+                vec4 cga = texture2D(tDiffuse, vUv);
+                vec4 cb = texture2D(tDiffuse, vUv - offset);
+                gl_FragColor = vec4(cr.r, cga.g, cb.b, cga.a);
+            }
+        `
+    };
+
+    const renderPass = new RenderPass(scene, camera);
+    const composer = new EffectComposer(renderer);
+    composer.addPass(renderPass);
+
+    const fxaaPass = new ShaderPass(FXAAShader);
+    // resolution will be updated on resize
+    composer.addPass(fxaaPass);
+
+    const chromaticPass = new ShaderPass(ChromaticAberrationShader);
+    composer.addPass(chromaticPass);
+
     function animate() {
         requestAnimationFrame(animate);
 
@@ -1534,6 +1579,12 @@ function initAstralGeometry() {
         const needResize = canvas.width !== width * window.devicePixelRatio || canvas.height !== height * window.devicePixelRatio;
         if (needResize && width > 0) {
             renderer.setSize(width, height, false);
+            composer.setSize(width, height);
+            
+            const pixelRatio = renderer.getPixelRatio();
+            fxaaPass.material.uniforms['resolution'].value.x = 1 / (width * pixelRatio);
+            fxaaPass.material.uniforms['resolution'].value.y = 1 / (height * pixelRatio);
+
             camera.aspect = width / height;
             camera.updateProjectionMatrix();
         }
@@ -1552,7 +1603,7 @@ function initAstralGeometry() {
         
         group.rotation.z += 0.0003;
 
-        renderer.render(scene, camera);
+        composer.render();
     }
 
     animate();
