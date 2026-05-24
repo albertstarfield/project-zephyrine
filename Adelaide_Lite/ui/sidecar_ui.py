@@ -74,6 +74,7 @@ DIST_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 # Initialize SQLite Database
 def init_db():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
