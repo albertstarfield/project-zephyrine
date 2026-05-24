@@ -22,7 +22,7 @@ project Adelaide_Lite is
       for Switches ("Ada") use (
           "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/moonshine/build/core",
           "-lmoonshine",
-          "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/supertonic/cpp/build",
+          "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/src/c_bindings/supertonic/build",
           "-lsupertonic_c",
           "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/src",
           "-lllama",

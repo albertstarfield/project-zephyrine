@@ -101,7 +101,8 @@ def main():
             print("[*] supertonic already exists, skipping clone.")
             
         # Ensure Supertonic C API wrapper is built
-        supertonic_build_dir = os.path.join(supertonic_dir, "cpp", "build")
+        supertonic_wrapper_dir = os.path.join(BASE_DIR, "src", "c_bindings", "supertonic")
+        supertonic_build_dir = os.path.join(supertonic_wrapper_dir, "build")
         supertonic_c_lib = os.path.join(supertonic_build_dir, "libsupertonic_c.dylib") if platform.system() == "Darwin" else os.path.join(supertonic_build_dir, "libsupertonic_c.so")
         if not os.path.exists(supertonic_c_lib):
             print("[*] Building supertonic C API wrapper...")
