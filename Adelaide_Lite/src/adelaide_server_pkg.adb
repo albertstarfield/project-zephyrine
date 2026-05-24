@@ -387,17 +387,33 @@ package body Adelaide_Server_Pkg is
                           Parser_Result.Value;
                      begin
                         if GNATCOLL.JSON.Has_Field (Val, "model") then
-                           Req_Model := To_Unbounded_String
-                             (String'(GNATCOLL.JSON.Get (Val, "model")));
+                           begin
+                              Req_Model := To_Unbounded_String
+                                (String'(GNATCOLL.JSON.Get (Val, "model")));
+                           exception
+                              when others => null;
+                           end;
                         end if;
                         if GNATCOLL.JSON.Has_Field (Val, "stream") then
-                           Is_Streaming := GNATCOLL.JSON.Get (Val, "stream");
+                           begin
+                              Is_Streaming := GNATCOLL.JSON.Get (Val, "stream");
+                           exception
+                              when others => null;
+                           end;
                         end if;
                         if GNATCOLL.JSON.Has_Field (Val, "agentic") then
-                           Is_Agentic := GNATCOLL.JSON.Get (Val, "agentic");
+                           begin
+                              Is_Agentic := GNATCOLL.JSON.Get (Val, "agentic");
+                           exception
+                              when others => null;
+                           end;
                         end if;
                         if GNATCOLL.JSON.Has_Field (Val, "raw") then
-                           Is_Raw_Prompt := GNATCOLL.JSON.Get (Val, "raw");
+                           begin
+                              Is_Raw_Prompt := GNATCOLL.JSON.Get (Val, "raw");
+                           exception
+                              when others => null;
+                           end;
                         end if;
 
                         if URI = "/v1/chat/completions" or else
@@ -413,17 +429,31 @@ package body Adelaide_Server_Pkg is
                               begin
                                  Prompt := Ada.Strings.Unbounded.To_Unbounded_String
                                    (String'(GNATCOLL.JSON.Get (Last_Msg, "content")));
+                              exception
+                                 when others => null;
                               end;
                            end if;
                         else
                            if GNATCOLL.JSON.Has_Field (Val, "prompt") then
-                              Prompt := Ada.Strings.Unbounded.To_Unbounded_String
-                                (String'(GNATCOLL.JSON.Get (Val, "prompt")));
+                              begin
+                                 Prompt := Ada.Strings.Unbounded.To_Unbounded_String
+                                   (String'(GNATCOLL.JSON.Get (Val, "prompt")));
+                              exception
+                                 when others => null;
+                              end;
                            end if;
                         end if;
+                     exception
+                        when E : others =>
+                           Ada.Text_IO.Put_Line ("JSON Parse Exception: " &
+                             Ada.Exceptions.Exception_Message (E));
                      end;
                   end if;
                end;
+            end if;
+
+            if Length (Prompt) = 0 and then Length (Payload) > 0 then
+               Prompt := Payload; -- Fallback if parsing fails or fields missing
             end if;
 
             if Length (Prompt) = 0 then
