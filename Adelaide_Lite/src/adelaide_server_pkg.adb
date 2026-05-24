@@ -8,9 +8,7 @@ with Kokoro_Interface;
 with Moonshine_Interface;
 with Interfaces;
 with Model_Manager;
-with Streaming_Queue;
-with AWS.Status;
-with AWS.Response;
+use Streaming_Queue;
 with AWS.Response.Set;
 with AWS.Messages;
 with GNATCOLL.JSON;
@@ -22,7 +20,7 @@ package body Adelaide_Server_Pkg is
 
    --  Pace timing for main loop
    WCET_Main_Loop : Duration := 0.0;
-   
+
    -- Handless Mode Trackers
    Handless_Stage : Unbounded_String := To_Unbounded_String("Idle");
    Handless_Input_Text : Unbounded_String := To_Unbounded_String("");
@@ -155,16 +153,18 @@ package body Adelaide_Server_Pkg is
             Num_Floats : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
             type Float_Array is array (1 .. Natural(Num_Floats)) of aliased Float;
             Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
-            
+
             Transcript : Unbounded_String;
             use type Interfaces.Unsigned_64;
          begin
             if Num_Floats > 0 then
-               Transcript := To_Unbounded_String (Moonshine_Interface.Transcribe_Raw_PCM (Audio_Floats (1)'Access, Num_Floats));
+               Transcript := To_Unbounded_String
+                 (Moonshine_Interface.Transcribe_Raw_PCM
+                    (Audio_Floats (1)'Access, Num_Floats));
             else
                Transcript := To_Unbounded_String ("No audio data received");
             end if;
-            
+
             Set_Field (R, "text", To_String (Transcript));
             return Build_Response (Write (R));
          end;
@@ -173,11 +173,13 @@ package body Adelaide_Server_Pkg is
       if URI = "/api/uploadVisionContext" then
          declare
             use GNATCOLL.JSON;
-            Payload_Str : constant String := (if Raw_S /= "" then Raw_S else To_String (Raw_B));
+            Payload_Str : constant String :=
+              (if Raw_S /= "" then Raw_S else To_String (Raw_B));
             Parser_Result : constant Read_Result := Read (Payload_Str);
          begin
             if Parser_Result.Success then
-               Handless_Vision_Context := To_Unbounded_String (String'(Get (Parser_Result.Value, "image_b64")));
+               Handless_Vision_Context := To_Unbounded_String
+                 (String'(Get (Parser_Result.Value, "image_b64")));
             end if;
             return Wrap_Response (AWS.Response.Build ("text/plain", "OK"));
          end;
@@ -190,7 +192,7 @@ package body Adelaide_Server_Pkg is
             Num_Floats : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
             type Float_Array is array (1 .. Natural(Num_Floats)) of aliased Float;
             Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
-            
+
             Transcript : Unbounded_String;
             LLM_Result : Unbounded_String;
             T_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
@@ -200,25 +202,30 @@ package body Adelaide_Server_Pkg is
             Handless_Stage := To_Unbounded_String("Transcribing...");
             Handless_Input_Text := To_Unbounded_String("");
             Handless_Output_Text := To_Unbounded_String("");
-            
+
             if Num_Floats > 0 then
-               Transcript := To_Unbounded_String (Moonshine_Interface.Transcribe_Raw_PCM (Audio_Floats (1)'Access, Num_Floats));
+               Transcript := To_Unbounded_String
+                 (Moonshine_Interface.Transcribe_Raw_PCM
+                    (Audio_Floats (1)'Access, Num_Floats));
             else
                Transcript := To_Unbounded_String ("");
             end if;
-            
+
             Handless_Input_Text := Transcript;
             Handless_Stage := To_Unbounded_String("Generating...");
-            
+
             if Length (Transcript) > 0 then
                declare
-                  Vision_Arr : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+                  Vision_Arr : GNATCOLL.JSON.JSON_Array :=
+                    GNATCOLL.JSON.Empty_Array;
                begin
                   if Length (Handless_Vision_Context) > 0 then
-                     GNATCOLL.JSON.Append (Vision_Arr, Create (To_String (Handless_Vision_Context)));
-                     Handless_Vision_Context := To_Unbounded_String(""); -- Clear after use
+                     GNATCOLL.JSON.Append
+                       (Vision_Arr,
+                        Create (To_String (Handless_Vision_Context)));
+                     Handless_Vision_Context := To_Unbounded_String("");
                   end if;
-                  
+
                   Model_Manager.Hybrid_Generate
                     (Prompt     => To_String (Transcript),
                      Result     => LLM_Result,
@@ -229,23 +236,24 @@ package body Adelaide_Server_Pkg is
                end;
             else
                Model_Manager.Hybrid_Generate
-                 (Prompt     => "Proactively initiate the conversation. Ask a random, interesting, or highly agentic question to the user instead of waiting for a prompt.",
+                 (Prompt     => "Proactively initiate the conversation. " &
+                  "Ask a random, interesting, or highly agentic question " &
+                  "to the user instead of waiting for a prompt.",
                   Result     => LLM_Result,
                   Session_ID => "server-handless",
                   Agentic    => True,
                   Raw_Prompt => True);
             end if;
-            
             Handless_Output_Text := LLM_Result;
             Handless_Stage := To_Unbounded_String("Synthesizing...");
-            
+
             declare
                PCM_Data : constant Ada.Streams.Stream_Element_Array :=
                  Kokoro_Interface.Synthesize_Speech (To_String (LLM_Result));
             begin
                Handless_Stage := To_Unbounded_String("Idle");
                Handless_WCET := Float(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - T_Start)) * 1000.0;
-               
+
                if PCM_Data'Length = 0 then
                   return Wrap_Response (AWS.Response.Build ("text/plain", "TTS Error"));
                else
@@ -279,7 +287,7 @@ package body Adelaide_Server_Pkg is
                   end if;
                end;
             end if;
-            
+
             -- Actually call Kokoro
             declare
                PCM_Data : constant Ada.Streams.Stream_Element_Array :=
@@ -321,13 +329,13 @@ package body Adelaide_Server_Pkg is
             Set_Field (R, "Jitter_Avg_uS", Float (Model_Manager.Current_Jitter_Avg * 1_000_000.0));
             Set_Field (R, "Jitter_Max_uS", Float (Model_Manager.Current_Jitter_Max * 1_000_000.0));
             Set_Field (R, "WCET_mainLoop_uS", Main_US);
-            
+
             -- Handless Mode telemetry
             Set_Field (R, "Handless_Stage", To_String(Handless_Stage));
             Set_Field (R, "Handless_WCET", Handless_WCET);
             Set_Field (R, "Handless_Input_Text", To_String(Handless_Input_Text));
             Set_Field (R, "Handless_Output_Text", To_String(Handless_Output_Text));
-            
+
             return Wrap_Response (Build_Response (Write (R)));
          end;
       end if;
@@ -447,7 +455,7 @@ package body Adelaide_Server_Pkg is
                   Session_ID => "server-sync",
                   Agentic    => Is_Agentic,
                   Raw_Prompt => Is_Raw_Prompt);
-               
+
                declare
                   R : constant GNATCOLL.JSON.JSON_Value :=
                     GNATCOLL.JSON.Create_Object;

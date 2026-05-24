@@ -4,7 +4,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Calendar; use type Ada.Calendar.Time;
 with Database_Manager;
 with Tool_Manager;
-with Llama_Interface; use Llama_Interface;
+use Llama_Interface;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Real_Time; use Ada.Real_Time;
@@ -139,7 +139,9 @@ package body Model_Manager is
                not Models (Kind).In_Use and then
                (Now - Models (Kind).Last_Used) > Timeout
             then
-               Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Idle]" & AnsiAda.Reset & " Unloading " & Model_Type'Image (Kind));
+               Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Idle]" &
+                         AnsiAda.Reset & " Unloading " &
+                         Model_Type'Image (Kind));
                Unload_Model (Kind);
             end if;
          end loop;
@@ -179,7 +181,7 @@ package body Model_Manager is
       Path_C     : chars_ptr := New_String (To_String (Models (Kind).Path));
       Actual_Ctx : unsigned;
    begin
-      Actual_Ctx := (if Requested_Ctx <= 4096 then 4096 
+      Actual_Ctx := (if Requested_Ctx <= 4096 then 4096
                      else (if Requested_Ctx <= 16384 then 16384 else 32768));
       Success := False;
       if Models (Kind).Loaded then
@@ -392,7 +394,8 @@ package body Model_Manager is
          B : constant Llama_Batch :=
            Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
       begin
-         Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
+         Llama_Interface.Llama_Memory_Clear
+           (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
          Llama_Set_Embeddings (Models (Kind).Context, True);
          if Llama_Decode (Models (Kind).Context, B) /= 0 then
             Priority_Model_Gate.Release_ELP1 (Kind);
@@ -440,7 +443,7 @@ package body Model_Manager is
       else
          declare
             Num_Chunks : Natural := 0;
-            Sum_Vec    : Math_Utils.Vector (Result'Range) := (others => 0.0);
+            Sum_Vec    : Math_Utils.Vector (Result'Range) := [others => 0.0];
             Dim        : Natural := 0;
             Start_Idx  : Positive := Prompt'First;
             End_Idx    : Positive;
@@ -454,7 +457,7 @@ package body Model_Manager is
                   Sub_Prompt : constant String :=
                     Prompt (Start_Idx .. End_Idx);
                   Sub_Vec    : Math_Utils.Vector (Result'Range) :=
-                    (others => 0.0);
+                    [others => 0.0];
                   Sub_Len    : Natural := 0;
                begin
                   Get_Single_Embedding (Sub_Prompt, Sub_Vec, Sub_Len);
@@ -682,7 +685,8 @@ package body Model_Manager is
          return;
       end if;
 
-      Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
+      Llama_Interface.Llama_Memory_Clear
+        (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
 
       Models (Kind).In_Use := True;
       Models (Kind).Last_Used := Clock;
@@ -711,10 +715,12 @@ package body Model_Manager is
          Batch_Size  : constant int := 4096;
          Current_Pos : int := 0;
          Tokens_Left : int := N_Toks;
-      begin
-         Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
-         
+         begin
+         Llama_Interface.Llama_Memory_Clear
+           (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
+
          while Tokens_Left > 0 loop
+
             if Level = ELP0 and then Should_Abort_ELP0 then
                Models (Kind).In_Use := False;
                Priority_Model_Gate.Release_ELP0 (Kind);
@@ -858,10 +864,14 @@ package body Model_Manager is
       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
 
       declare
-         Cached_Res : constant String := Database_Manager.Get_Cached_Response (Emb_Vec (1 .. Emb_Len), Current_WCET);
+         Cached_Res : constant String :=
+           Database_Manager.Get_Cached_Response
+             (Emb_Vec (1 .. Emb_Len), Current_WCET);
       begin
          if Cached_Res /= "" then
-            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) & "[Hybrid]" & AnsiAda.Reset & " Cache HIT. Returning cached response.");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
+                      "[Hybrid]" & AnsiAda.Reset &
+                      " Cache HIT. Returning cached response.");
             Result := To_Unbounded_String (Cached_Res);
             if Stream /= null then
                Stream.Push (Cached_Res);
@@ -870,7 +880,9 @@ package body Model_Manager is
          end if;
       end;
 
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) & "[Hybrid]" & AnsiAda.Reset & " Starting reasoning chain...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
+                "[Hybrid]" & AnsiAda.Reset &
+                " Starting reasoning chain...");
 
       --  1. Factual checking
       if not Agentic
@@ -891,9 +903,11 @@ package body Model_Manager is
                S_Idx := S_Idx + Start_Tag'Length;
                E_Idx := Index (Prompt (S_Idx .. Prompt'Last), End_Tag);
                if E_Idx > 0 then
-                  Raw_Q := To_Unbounded_String (Trim (Prompt (S_Idx .. E_Idx - 1), Ada.Strings.Both));
+                  Raw_Q := To_Unbounded_String
+                    (Trim (Prompt (S_Idx .. E_Idx - 1), Ada.Strings.Both));
                else
-                  Raw_Q := To_Unbounded_String (Trim (Prompt (S_Idx .. Prompt'Last), Ada.Strings.Both));
+                  Raw_Q := To_Unbounded_String
+                    (Trim (Prompt (S_Idx .. Prompt'Last), Ada.Strings.Both));
                end if;
             else
                Raw_Q := To_Unbounded_String (Trim (Prompt, Ada.Strings.Both));
@@ -948,20 +962,24 @@ package body Model_Manager is
             Paging_Instr : constant String :=
               "Current Data: " & To_String (Internal_State);
             Step_Raw     : Unbounded_String;
-            
+
             function Get_Router_Prompt return String is
             begin
                if Raw_Prompt then
                   declare
-                     Sub_Str : constant String := "<|im_start|>assistant" & ASCII.LF;
-                     Idx     : constant Natural := Index (Prompt, Sub_Str, Going => Ada.Strings.Backward);
+                     Sub_Str : constant String :=
+                       "<|im_start|>assistant" & ASCII.LF;
+                     Idx     : constant Natural :=
+                       Index (Prompt, Sub_Str, Going => Ada.Strings.Backward);
                   begin
                      if Idx > 0 then
                         return Prompt (Prompt'First .. Idx - 1) &
                                "System Override: " & Router_Sys & ASCII.LF &
                                Paging_Instr & ASCII.LF & Sub_Str;
                      else
-                        return Prompt & ASCII.LF & "System Override: " & Router_Sys & ASCII.LF & Paging_Instr & ASCII.LF & Sub_Str;
+                        return Prompt & ASCII.LF & "System Override: " &
+                               Router_Sys & ASCII.LF & Paging_Instr &
+                               ASCII.LF & Sub_Str;
                      end if;
                   end;
                else
@@ -978,7 +996,8 @@ package body Model_Manager is
                      Get_Router_Prompt,
                      Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, Ctx,
                      Stream, False, Level);
-                  exit when To_String (Step_Raw) /= "ERROR: Decode failed" or else Ctx >= 16384;
+                  exit when To_String (Step_Raw) /= "ERROR: Decode failed"
+                    or else Ctx >= 16384;
                   Ctx := Ctx * 2;
                end loop;
             end;
@@ -1064,15 +1083,18 @@ package body Model_Manager is
          begin
             if Raw_Prompt then
                declare
-                  Sub_Str : constant String := "<|im_start|>assistant" & ASCII.LF;
-                  Idx     : constant Natural := Index (Prompt, Sub_Str, Going => Ada.Strings.Backward);
+                  Sub_Str : constant String :=
+                    "<|im_start|>assistant" & ASCII.LF;
+                  Idx     : constant Natural :=
+                    Index (Prompt, Sub_Str, Going => Ada.Strings.Backward);
                begin
                   if Idx > 0 then
                      return Prompt (Prompt'First .. Idx - 1) &
-                            "Fact-Check: " & To_String (Internal_State) & ASCII.LF &
-                            Sub_Str;
+                            "Fact-Check: " & To_String (Internal_State) &
+                            ASCII.LF & Sub_Str;
                   else
-                     return Prompt & ASCII.LF & "Fact-Check: " & To_String (Internal_State) & ASCII.LF & Sub_Str;
+                     return Prompt & ASCII.LF & "Fact-Check: " &
+                            To_String (Internal_State) & ASCII.LF & Sub_Str;
                   end if;
                end;
             else
@@ -1082,9 +1104,9 @@ package body Model_Manager is
                   "Fact-Check: " & To_String (Internal_State));
             end if;
          end Get_Final_Prompt;
-         
+
          Synth_Prompt : constant String := Get_Final_Prompt;
-      begin
+         begin
          declare
             Ctx : Positive := 4096;
          begin
@@ -1092,21 +1114,25 @@ package body Model_Manager is
                Generate
                  (Qwen_4B, Synth_Prompt, Current_Response, Images, Session_ID,
                   Ctx, Stream, True, Level);
-               exit when To_String (Current_Response) /= "ERROR: Decode failed" or else Ctx >= 32768;
+               exit when To_String (Current_Response) /= "ERROR: Decode failed"
+                 or else Ctx >= 32768;
                Ctx := Ctx * 2;
             end loop;
          end;
-      end;
+         end;
 
-      Result := Current_Response;
-      declare
+         Result := Current_Response;
+         declare
          B64_Str : Unbounded_String := To_Unbounded_String ("");
-      begin
+         begin
          if GNATCOLL.JSON.Length (Images) > 0 then
-            B64_Str := To_Unbounded_String (String'(GNATCOLL.JSON.Get (GNATCOLL.JSON.Get (Images, 1))));
+            B64_Str := To_Unbounded_String
+              (String'(GNATCOLL.JSON.Get
+                (GNATCOLL.JSON.Get (Images, 1))));
          end if;
          Database_Manager.Remember (Prompt, To_String (Current_Response), To_String (B64_Str));
-      end;
+         end;
+
       Database_Manager.Add_To_Cache (Prompt, Emb_Vec (1 .. Emb_Len), To_String (Current_Response));
 
       T1 := Ada.Calendar.Clock;
