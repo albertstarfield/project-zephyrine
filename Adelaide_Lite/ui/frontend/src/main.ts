@@ -1646,30 +1646,30 @@ function initAstralGeometry() {
                 // Diagonal coordinate (bottom-left to top-right)
                 float d = (vUv.x - vUv.y); 
                 
-                // Chromatic split (rainbow leak) tighter
-                float r = exp(-abs(d - 0.01) * 150.0) * 0.6;
-                float g = exp(-abs(d) * 180.0) * 0.6;
-                float b = exp(-abs(d + 0.01) * 150.0) * 0.6;
+                // Chromatic split (rainbow leak) tighter and MUCH dimmer
+                float r = exp(-abs(d - 0.005) * 300.0) * 0.08;
+                float g = exp(-abs(d) * 350.0) * 0.08;
+                float b = exp(-abs(d + 0.005) * 300.0) * 0.08;
                 
-                // Main bright beam (much tighter)
-                float beam = exp(-abs(d) * 300.0) * 0.8;
+                // Main bright beam (razor thin, low intensity)
+                float beam = exp(-abs(d) * 600.0) * 0.15;
                 
-                // Wide soft glow (dimmer and tighter)
-                float wideGlow = exp(-abs(d) * 20.0) * 0.02;
+                // Wide soft glow (almost invisible base)
+                float wideGlow = exp(-abs(d) * 30.0) * 0.005;
                 
                 // Subtle secondary streak crossing it
                 float d2 = (vUv.x + vUv.y - 1.0);
-                float secondary = exp(-abs(d2) * 200.0) * 0.1;
+                float secondary = exp(-abs(d2) * 400.0) * 0.02;
                 
                 vec3 color = vec3(r, g, b) + vec3(beam) + vec3(wideGlow) + vec3(secondary);
                 
                 // Fade out smoothly towards the edges
-                float edgeFade = pow(sin(vUv.x * 3.14159) * sin(vUv.y * 3.14159), 1.5);
+                float edgeFade = pow(sin(vUv.x * 3.14159) * sin(vUv.y * 3.14159), 2.0);
                 
                 // Add dynamic pulse based on time
                 float pulse = 0.8 + 0.2 * sin(time * 2.0);
                 
-                vec3 finalColor = color * edgeFade * pulse;
+                vec3 finalColor = color * edgeFade * pulse * 0.4; // Global opacity multiplier
                 gl_FragColor = vec4(finalColor, max(finalColor.r, max(finalColor.g, finalColor.b)));
             }
         `
