@@ -8,8 +8,6 @@ import threading
 import sys
 import subprocess
 import json
-import random
-import math
 import queue
 from typing import List, Tuple, Callable, Optional, Any, Dict
 import datetime
@@ -76,8 +74,10 @@ class StellaIcarusHookManager:
 
         # --- 2. Load from PicoResponse Cache Directory ---
         # Use config or fallback
-        pico_cache_dir = getattr(sys.modules[__name__], 'STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR',
-                                 os.path.join(STELLA_ICARUS_HOOK_DIR, "picoResponseHookCache"))
+        try:
+            pico_cache_dir = STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR
+        except NameError:
+            pico_cache_dir = os.path.join(STELLA_ICARUS_HOOK_DIR, "picoResponseHookCache")
 
         if os.path.isdir(pico_cache_dir):
             logger.info(f"StellaIcarusHookManager: Scanning pico cache dir '{pico_cache_dir}'...")

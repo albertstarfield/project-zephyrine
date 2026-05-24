@@ -3,8 +3,6 @@ import requests
 import json
 import time
 import sys
-import traceback
-from datetime import datetime
 
 # ANSI Color Codes
 GREEN = "\033[32m"
@@ -84,7 +82,7 @@ class ValidationAPITester:
                 self.log_failure(f"Endpoint returned status code {resp.status_code}")
                 try:
                     print(f"{MAGENTA}[RAW ERROR BODY]{RESET}\n{resp.text}")
-                except:
+                except Exception:
                     pass
                 if resp.status_code == 404:
                     self.log_warn(f"Endpoint {path} not implemented on this server.")
@@ -104,7 +102,7 @@ class ValidationAPITester:
         except requests.exceptions.Timeout:
             self.log_failure(f"Timeout after {self.timeout}s")
         except Exception as e:
-            self.log_failure(f"Unexpected Exception", e)
+            self.log_failure("Unexpected Exception", e)
 
     def validate_headers(self, resp):
         # All Adelaide APIs should support CORS
@@ -302,7 +300,7 @@ class ValidationAPITester:
             self.log_failure("Exception during malformed JSON test", e)
 
         print(f"\n{BOLD}{MAGENTA}=================================================={RESET}")
-        print(f"   Validation Summary")
+        print("   Validation Summary")
         print(f"{MAGENTA}=================================================={RESET}")
         print(f"Total Tests: {self.stats['total']}")
         print(f"Passed:      {GREEN}{self.stats['passed']}{RESET}")

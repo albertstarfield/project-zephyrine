@@ -4,6 +4,18 @@ import os
 import subprocess
 import time
 import json
+import argparse
+import sqlite3
+
+# These may fail before bootstrap ensures they are in the venv
+try:
+    import requests
+    import numpy as np
+    from adelaide_bridge import AdelaideBridge
+except ImportError:
+    requests = None
+    np = None
+    AdelaideBridge = None
 
 # --- Environment Setup ---
 def apply_base_env():
@@ -43,12 +55,11 @@ def bootstrap_venv():
             os.execv(python_exe, [python_exe] + sys.argv)
 
     # Once inside the venv, verify requirements
-    try:
-        import requests
-        import numpy
-    except ImportError:
+    import importlib.util
+    missing = [req for req in REQUIREMENTS if importlib.util.find_spec(req) is None]
+    if missing:
         print(
-            f"[*] Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...",
+            f"[*] Missing dependencies. Installing: {', '.join(missing)}...",
             file=sys.stderr
         )
         if os.name == 'nt':
@@ -61,14 +72,6 @@ def bootstrap_venv():
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
 bootstrap_venv()
-
-# --- Post-Bootstrap Imports ---
-import argparse
-import sqlite3
-import requests
-import numpy as np
-from datetime import datetime
-from adelaide_bridge import AdelaideBridge
 
 # --- Configuration ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -205,10 +208,11 @@ def store_memory(conn, content, json_io=False):
 def cosine_similarity(v1, v2):
     """Compute cosine similarity between two vectors."""
     try:
-        bridge = AdelaideBridge.get_instance()
-        sim = bridge.cosine_similarity(v1, v2)
-        if sim is not None:
-            return sim
+        if AdelaideBridge:
+            bridge = AdelaideBridge.get_instance()
+            sim = bridge.cosine_similarity(v1, v2)
+            if sim is not None:
+                return sim
     except Exception:
         pass
 

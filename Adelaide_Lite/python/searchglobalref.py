@@ -7,6 +7,12 @@ import time
 import json
 from datetime import datetime
 
+# This may fail before bootstrap ensures it is in the venv
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
 # --- Environment Setup ---
 def apply_base_env():
     """Load core environment variables from config.json to ensure consistent execution."""
@@ -45,12 +51,11 @@ def bootstrap_venv():
             os.execv(python_exe, [python_exe] + sys.argv)
 
     # Once inside the venv, verify requirements
-    try:
-        import numpy
-        import requests
-    except ImportError:
+    import importlib.util
+    missing = [req for req in REQUIREMENTS if importlib.util.find_spec(req) is None]
+    if missing:
         print(
-            f"[*] Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...",
+            f"[*] Missing dependencies. Installing: {', '.join(missing)}...",
             file=sys.stderr
         )
         if os.name == 'nt':
@@ -63,9 +68,6 @@ def bootstrap_venv():
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
 bootstrap_venv()
-
-# --- Post-Bootstrap Imports ---
-import numpy as np
 
 # --- Ollama Configuration ---
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_PROXY_URL", "http://localhost:11435")

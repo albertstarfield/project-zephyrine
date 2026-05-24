@@ -9,6 +9,24 @@ import mimetypes
 import datetime
 import hashlib
 import pickle
+import argparse
+from urllib.parse import unquote
+from typing import List, Optional
+
+# External dependencies may fail before bootstrap ensures they are in the venv
+try:
+    import requests
+    import numpy as np
+    from adelaide_bridge import AdelaideBridge
+except ImportError:
+    requests = None
+    np = None
+    AdelaideBridge = None
+
+try:
+    import fitz # PyMuPDF
+except ImportError:
+    fitz = None
 
 # --- Environment Setup ---
 def apply_base_env():
@@ -46,16 +64,12 @@ def bootstrap_venv():
         if os.path.exists(python_exe):
             os.execv(python_exe, [python_exe] + sys.argv)
 
-    try:
-        import requests
-        import numpy
-        import PIL.Image
-        import fitz
-        import openpyxl
-        import docx
-        import pptx
-        import tinytag
-    except ImportError:
+    import importlib.util
+    # Note: Pillow is imported as PIL, PyMuPDF as fitz, python-docx as docx, python-pptx as pptx
+    CHECK_MODULES = ["requests", "numpy", "PIL", "fitz", "openpyxl", "docx", "pptx", "tinytag"]
+    missing = [mod for mod in CHECK_MODULES if importlib.util.find_spec(mod) is None]
+    
+    if missing:
         print(f"[*] Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...", file=sys.stderr)
         pip_exe = os.path.join(VENV_DIR, "bin", "pip") if os.name != 'nt' else os.path.join(VENV_DIR, "Scripts", "pip.exe")
         subprocess.run([pip_exe, "install", "--upgrade", "pip"], check=True)
@@ -67,21 +81,6 @@ bootstrap_venv()
 # --- Post-Bootstrap Environment Fixes ---
 if "RECOLL_CONFDIR" not in os.environ:
     os.environ["RECOLL_CONFDIR"] = os.path.expanduser("~/.recoll")
-
-# --- Post-Bootstrap Imports ---
-import argparse
-import requests
-import numpy as np
-import io
-import base64
-from PIL import Image
-try:
-    import fitz # PyMuPDF
-except ImportError:
-    fitz = None
-from urllib.parse import unquote
-from typing import List, Dict, Optional
-from adelaide_bridge import AdelaideBridge
 
 # ================= CONFIGURATION =================
 recoll_cmd = "/Applications/Recoll.app/Contents/MacOS/recollq"
@@ -182,10 +181,11 @@ def cosine_similarity(v1: np.ndarray, v2: np.ndarray) -> float:
     if v1 is None or v2 is None:
         return 0.0
     try:
-        bridge = AdelaideBridge.get_instance()
-        sim = bridge.cosine_similarity(v1, v2)
-        if sim is not None:
-            return sim
+        if AdelaideBridge:
+            bridge = AdelaideBridge.get_instance()
+            sim = bridge.cosine_similarity(v1, v2)
+            if sim is not None:
+                return sim
     except Exception:
         pass
 
