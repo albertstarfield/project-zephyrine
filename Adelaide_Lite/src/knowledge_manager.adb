@@ -357,13 +357,13 @@ package body Knowledge_Manager is
             use GNAT.OS_Lib;
             Ret     : Integer;
             Cmd     : constant String := "gnatprove";
-            Args    : Argument_List := (
+            Args    : Argument_List := [
                1 => new String'("-P"),
                2 => new String'("ZenithOrion/zenith_orion.gpr"),
                3 => new String'("--level=2"),
                4 => new String'("--report=all"),
                5 => new String'("-j0")
-            );
+            ];
          begin
             Ret := Spawn (Cmd, Args);
             for I in Args'Range loop Free (Args (I)); end loop;
