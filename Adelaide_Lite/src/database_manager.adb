@@ -2,6 +2,7 @@ with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada_Sqlite3; use Ada_Sqlite3;
 with Ada.Exceptions;
+with Ada.Directories;
 with GNATCOLL.JSON;
 
 package body Database_Manager is
@@ -24,6 +25,18 @@ package body Database_Manager is
       begin
          if Done then
             return;
+         end if;
+
+         if not Ada.Directories.Exists ("UI_Database") then
+            Ada.Directories.Create_Directory ("UI_Database");
+         end if;
+
+         if Ada.Directories.Exists ("adelaide_memory.db") and then not Ada.Directories.Exists ("UI_Database/adelaide_memory.db") then
+            Ada.Directories.Rename ("adelaide_memory.db", "UI_Database/adelaide_memory.db");
+         end if;
+
+         if Ada.Directories.Exists ("literatureRefIndex.db") and then not Ada.Directories.Exists ("UI_Database/literatureRefIndex.db") then
+            Ada.Directories.Rename ("literatureRefIndex.db", "UI_Database/literatureRefIndex.db");
          end if;
 
          Main_DB_Ptr := new Ada_Sqlite3.Database'(Open (DB_File));
