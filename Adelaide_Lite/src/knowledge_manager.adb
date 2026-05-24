@@ -9,8 +9,12 @@ with Zenith_Manager;
 with Ada.Directories;
 with Ada.Environment_Variables;
 with Ada.Exceptions;
+with Ada.Streams;
+with Ada.Streams.Stream_IO;
 with GNAT.Expect;
 with GNAT.OS_Lib;
+with Integrity_Utils;
+with Interfaces;
 
 package body Knowledge_Manager is
 
@@ -195,6 +199,40 @@ package body Knowledge_Manager is
             return;
          end if;
 
+         -- Binary detection check
+         declare
+            use Interfaces;
+            use Ada.Streams;
+            use Ada.Streams.Stream_IO;
+            Stream_File : Ada.Streams.Stream_IO.File_Type;
+            Header      : Stream_Element_Array (1 .. 1024);
+            Last        : Stream_Element_Offset;
+         begin
+            Open (Stream_File, In_File, Path);
+            Read (Stream_File, Header, Last);
+            Close (Stream_File);
+            
+            if Last > 0 then
+               declare
+                  Buffer : Integrity_Utils.Byte_Array (1 .. Positive (Last));
+               begin
+                  for I in Buffer'Range loop
+                     Buffer (I) := Unsigned_8 (Header (Stream_Element_Offset (I)));
+                  end loop;
+                  if Integrity_Utils.Is_Binary (Buffer) then
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Knowledge]" &
+                               AnsiAda.Reset & " Skipping binary file: " & Path);
+                     return;
+                  end if;
+               end;
+            end if;
+         exception
+            when others =>
+               if Is_Open (Stream_File) then
+                  Close (Stream_File);
+               end if;
+         end;
+
          if Ada.Strings.Fixed.Index (Path, ".pdf") > 0 then
             declare
                Args : GNAT.OS_Lib.Argument_List (1 .. 1);
@@ -272,7 +310,11 @@ package body Knowledge_Manager is
          when others => null;
       end Walk_Directory;
 
-      Home_Dir : constant String := ".";
+      Home_Dir : constant String :=
+        (if Ada.Environment_Variables.Exists ("HOME")
+         then Ada.Environment_Variables.Value ("HOME")
+         else ".");
+      Volumes_Dir : constant String := "/Volumes";
    begin
       accept Start;
       loop
@@ -282,6 +324,11 @@ package body Knowledge_Manager is
             Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                       AnsiAda.Reset & " Starting filesystem crawl...");
             Walk_Directory (Home_Dir);
+            
+            if Ada.Directories.Exists (Volumes_Dir) then
+               Walk_Directory (Volumes_Dir);
+            end if;
+            
             delay 3600.0;
          end if;
       end loop;
