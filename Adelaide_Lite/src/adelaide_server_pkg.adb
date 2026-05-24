@@ -438,12 +438,22 @@ package body Adelaide_Server_Pkg is
                               declare
                                  Msgs : constant GNATCOLL.JSON.JSON_Array :=
                                    GNATCOLL.JSON.Get (Val, "messages");
-                                 Last_Msg : constant GNATCOLL.JSON.JSON_Value :=
-                                   GNATCOLL.JSON.Get (Msgs,
-                                     GNATCOLL.JSON.Length (Msgs));
                               begin
-                                 Prompt := Ada.Strings.Unbounded.To_Unbounded_String
-                                   (String'(GNATCOLL.JSON.Get (Last_Msg, "content")));
+                                 for I in 1 .. GNATCOLL.JSON.Length (Msgs) loop
+                                    declare
+                                       M : constant GNATCOLL.JSON.JSON_Value :=
+                                         GNATCOLL.JSON.Get (Msgs, I);
+                                       Role : constant String :=
+                                         GNATCOLL.JSON.Get (M, "role");
+                                       Content : constant String :=
+                                         GNATCOLL.JSON.Get (M, "content");
+                                    begin
+                                       Append (Prompt, "<|im_start|>" & Role & ASCII.LF &
+                                               Content & "<|im_end|>" & ASCII.LF);
+                                    end;
+                                 end loop;
+                                 --  We've manually joined with ChatML tags, so use Raw mode.
+                                 Is_Raw_Prompt := True;
                               exception
                                  when others => null;
                               end;
