@@ -147,7 +147,7 @@ package body Adelaide_Server_Pkg is
          declare
             use GNATCOLL.JSON;
             R : constant JSON_Value := Create_Object;
-            Raw_Payload : constant String := AWS.Status.Payload (Request);
+            Raw_Payload : constant Ada.Streams.Stream_Element_Array := AWS.Status.Binary_Data (Request);
             Num_Floats : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
             type Float_Array is array (1 .. Natural(Num_Floats)) of aliased Float;
             Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;

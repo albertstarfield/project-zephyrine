@@ -200,12 +200,13 @@ def main():
     server_bin = "adelaide_server.exe" if platform.system() == "Windows" else "adelaide_server"
     server_path = os.path.join(BASE_DIR, "bin", server_bin)
 
+    env = os.environ.copy()
+    moonshine_onnx = os.path.join(BASE_DIR, "..", "moonshine", "core", "third-party", "onnxruntime", "lib", "macos", "arm64")
+    env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
+    
+    server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
+
     if launch_gui:
-        env = os.environ.copy()
-        moonshine_onnx = os.path.join(BASE_DIR, "..", "moonshine", "core", "third-party", "onnxruntime", "lib", "macos", "arm64")
-        env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
-        
-        server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
         print("[*] Booting Python Sidecar UI...")
         ui_dir = os.path.join(BASE_DIR, "ui")
         
@@ -222,7 +223,10 @@ def main():
             
         subprocess.run([sidecar_python, "sidecar_ui.py"], cwd=ui_dir)
     else:
-        subprocess.run([server_path], cwd=BASE_DIR)
+        try:
+            server_process.wait()
+        except KeyboardInterrupt:
+            pass
         
     # Wait for background processes to finish if main blocking process exits
     cleanup()

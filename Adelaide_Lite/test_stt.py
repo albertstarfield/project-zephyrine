@@ -29,7 +29,7 @@ def test_transcription():
     
     try:
         # We send raw payload instead of multipart for this simple test.
-        response = requests.post(url, data=float32_data, headers={'Content-Type': 'application/octet-stream'})
+        response = requests.post(url, data=float32_data, headers={'Content-Type': 'text/plain'})
         print(f"Response status: {response.status_code}")
         print(f"Response text: {response.text}")
     except Exception as e:
