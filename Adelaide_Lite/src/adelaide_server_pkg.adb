@@ -166,6 +166,58 @@ package body Adelaide_Server_Pkg is
          end;
       end if;
 
+      if URI = "/api/agenticZephyHandlessMode" then
+         declare
+            use GNATCOLL.JSON;
+            Raw_Payload : constant Ada.Streams.Stream_Element_Array := AWS.Status.Binary_Data (Request);
+            Num_Floats : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
+            type Float_Array is array (1 .. Natural(Num_Floats)) of aliased Float;
+            Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
+            
+            Transcript : Unbounded_String;
+            LLM_Result : Unbounded_String;
+            use type Interfaces.Unsigned_64;
+         begin
+            if Num_Floats > 0 then
+               -- 1. Transcribe the raw audio input using Moonshine ASR
+               Transcript := To_Unbounded_String (Moonshine_Interface.Transcribe_Raw_PCM (Audio_Floats (1)'Access, Num_Floats));
+            else
+               Transcript := To_Unbounded_String ("");
+            end if;
+
+            if Length (Transcript) > 0 then
+               -- 2. Process the text through the Agentic LLM generation
+               Model_Manager.Hybrid_Generate
+                 (Prompt     => To_String (Transcript),
+                  Result     => LLM_Result,
+                  Session_ID => "server-handless",
+                  Agentic    => True,
+                  Raw_Prompt => False);
+               
+               -- 3. Synthesize the LLM output into cloned voice audio
+               declare
+                  PCM_Data : constant Ada.Streams.Stream_Element_Array :=
+                    Kokoro_Interface.Synthesize_Speech (To_String (LLM_Result));
+               begin
+                  if PCM_Data'Length = 0 then
+                     return Wrap_Response (AWS.Response.Build ("text/plain", "TTS Error"));
+                  else
+                     declare
+                        Result_Str : String (1 .. Natural(PCM_Data'Length));
+                     begin
+                        for I in PCM_Data'Range loop
+                           Result_Str (Natural(I) - Natural(PCM_Data'First) + 1) := Character'Val (PCM_Data (I));
+                        end loop;
+                        return Wrap_Response (AWS.Response.Build ("audio/pcm", Result_Str));
+                     end;
+                  end if;
+               end;
+            else
+               return Wrap_Response (AWS.Response.Build ("text/plain", "ASR Error: No transcription"));
+            end if;
+         end;
+      end if;
+
       if URI = "/v1/audio/speech" then
          declare
             use GNATCOLL.JSON;
