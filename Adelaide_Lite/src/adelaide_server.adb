@@ -24,22 +24,27 @@ begin
       Put_Line (" / ___ / /_/ /  __/ / /_/ / / /_/ /  __/ ");
       Put_Line ("/_/  |_\__,_/\___/_/\__,_/_/\__,_/\___/ ");
       Put_Line ("");
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Initializing Adelaide Intelligence Backend...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+                AnsiAda.Reset & " Initializing Adelaide Intelligence Backend...");
       Model_Manager.Initialize;
       Knowledge_Manager.Initialize;
-      
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Connecting to Kokoro-ONNX sidecar (TTS)...");
-      -- Kokoro does not require C-level init in Ada since it runs on Python Sidecar
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Initializing Moonshine (STT)...");
-      Moonshine_Interface.Init_Moonshine ("../moonshine/models/download.moonshine.ai/model/medium-streaming-en/quantized");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+                AnsiAda.Reset & " Connecting to Kokoro-ONNX sidecar (TTS)...");
+      --  Kokoro does not require C-level init in Ada since it runs on Python Sidecar
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+                AnsiAda.Reset & " Initializing Moonshine (STT)...");
+      Moonshine_Interface.Init_Moonshine
+        ("../moonshine/models/download.moonshine.ai/model/medium-streaming-en/quantized");
 
       AWS.Config.Set.Server_Port (Conf, 11420);
       AWS.Config.Set.Server_Host (Conf, "0.0.0.0");
       AWS.Config.Set.Reuse_Address (Conf, True);
 
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Adelaide-Lite Server starting on port 11420...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+                AnsiAda.Reset & " Adelaide-Lite Server starting on port 11420...");
 
-      while not Started and Retry_Count < Max_Retries loop
+      while not Started and then Retry_Count < Max_Retries loop
          begin
             AWS.Server.Start
               (Web_Server => WS,
@@ -69,10 +74,12 @@ begin
          end;
       end loop;
 
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Initializing index crawl...");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+                AnsiAda.Reset & " Initializing index crawl...");
       Knowledge_Manager.Start_Tasks;
 
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Server is UP. Press Q to shutdown (or kill if background).");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+                AnsiAda.Reset & " Server is UP. Press Q to shutdown (or kill if background).");
 
       --  Avoid Get_Line failure in background
       loop
@@ -81,7 +88,8 @@ begin
 
    exception
       when E : others =>
-         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" & AnsiAda.Reset & " Server Error: " &
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" &
+                   AnsiAda.Reset & " Server Error: " &
                    Ada.Exceptions.Exception_Message (E));
          Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
    end;
