@@ -1623,7 +1623,7 @@ function initAstralGeometry() {
         starPoints.push(new THREE.Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, (Math.random() - 0.5) * 4));
     }
     starGeo.setFromPoints(starPoints);
-    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.25, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
     const stars = new THREE.Points(starGeo, starMat);
     // Move stars to separate scene
     const starScene = new THREE.Scene();
@@ -1732,7 +1732,11 @@ function initAstralGeometry() {
     composer.addPass(renderPass);
 
     const starRenderPass = new RenderPass(starScene, camera);
-    const starTarget = new THREE.WebGLRenderTarget(canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight);
+    starRenderPass.clearColor = new THREE.Color(0x000000);
+    starRenderPass.clearAlpha = 1.0;
+    const starTarget = new THREE.WebGLRenderTarget(canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight, {
+        type: THREE.HalfFloatType
+    });
     const starComposer = new EffectComposer(renderer, starTarget);
     starComposer.renderToScreen = false;
     starComposer.addPass(starRenderPass);
