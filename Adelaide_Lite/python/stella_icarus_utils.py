@@ -231,7 +231,7 @@ class StellaIcarusAdaDaemonManager:
         if not self.is_enabled: return
 
         logger.info("--- Building all discovered StellaIcarus Ada projects... ---")
-        build_command = ["alr_compile.bat"] if os.name == "nt" else ["alr_compile"]
+        build_command = ["alr.exe", "build"] if os.name == "nt" else ["alr", "build"]
 
         for project in self.ada_projects:
             logger.info(f"Building '{project['name']}' in '{project['path']}'...")

@@ -30,8 +30,8 @@ except ImportError:
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
 # Add the StellaIcarus directory to the python path so we can import stella_icarus_utils
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-STELLA_ICARUS_DIR = os.path.join(PROJECT_ROOT, "StellaIcarus")
+ADELAIDE_LITE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STELLA_ICARUS_DIR = os.path.join(ADELAIDE_LITE_DIR, "stellaicarus")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))) # for stella_icarus_utils
 sys.path.insert(0, STELLA_ICARUS_DIR) # for any internal imports
 
@@ -43,11 +43,11 @@ import gc
 gc.disable()
 
 mock_config = types.ModuleType("CortexConfiguration")
-mock_config.ENABLE_STELLA_ICARUS_HOOKS = False
+mock_config.ENABLE_STELLA_ICARUS_HOOKS = True
 mock_config.STELLA_ICARUS_HOOK_DIR = STELLA_ICARUS_DIR
 mock_config.STELLA_ICARUS_CACHE_DIR = os.path.join(STELLA_ICARUS_DIR, "StellaIcarus_Cache")
 mock_config.ENABLE_STELLA_ICARUS_DAEMON = True # Enable daemon manager
-mock_config.STELLA_ICARUS_ADA_DIR = os.path.join(STELLA_ICARUS_DIR, "StellaIcarus_Ada")
+mock_config.STELLA_ICARUS_ADA_DIR = STELLA_ICARUS_DIR
 mock_config.ALR_DEFAULT_EXECUTABLE_NAME = "stella_greeting"
 mock_config.STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR = os.path.join(STELLA_ICARUS_DIR, "picoResponseHookCache")
 mock_config.ADA_DAEMON_RETRY_DELAY_SECONDS = 30
@@ -73,7 +73,7 @@ def main():
     manager.start_all()
     
     
-    port_file = os.path.join(PROJECT_ROOT, "UI_Database", ".sidecar_port")
+    port_file = os.path.join(ADELAIDE_LITE_DIR, "UI_Database", ".sidecar_port")
     
     try:
         # Keep the main thread alive so daemon threads can run
