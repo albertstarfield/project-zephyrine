@@ -9,6 +9,42 @@ import 'katex/dist/katex.min.css';
 import cytoscape from 'cytoscape';
 
 // --------------------------------------------------------
+// Global Error Handler
+// --------------------------------------------------------
+function showErrorPopup(msg: string, stack?: string) {
+  const container = document.getElementById('error-popup-container');
+  if (!container) return;
+
+  const popup = document.createElement('div');
+  popup.className = 'js-error-popup';
+  
+  const title = document.createElement('h4');
+  title.textContent = 'JavaScript Error';
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'js-error-close';
+  closeBtn.innerHTML = '&times;';
+  closeBtn.onclick = () => popup.remove();
+  
+  const pre = document.createElement('pre');
+  pre.textContent = msg + (stack ? '\n\n' + stack : '');
+
+  popup.appendChild(title);
+  popup.appendChild(closeBtn);
+  popup.appendChild(pre);
+  
+  container.appendChild(popup);
+}
+
+window.addEventListener('error', (event) => {
+  showErrorPopup(event.message, event.error?.stack);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  showErrorPopup('Unhandled Promise Rejection: ' + (event.reason?.message || event.reason), event.reason?.stack);
+});
+
+// --------------------------------------------------------
 // Chat Logic
 // --------------------------------------------------------
 
