@@ -47,4 +47,7 @@ package Integrity_Utils is
             Expected_CRCs'Length = Data'Length / Block_Size and then
             Parity'Length = Block_Size;
 
+   --  Returns True if the data appears to be binary (contains NUL bytes or high non-printable ratio)
+   function Is_Binary (Data : Byte_Array) return Boolean;
+
 end Integrity_Utils;
