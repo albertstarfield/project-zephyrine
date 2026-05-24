@@ -1523,13 +1523,44 @@ function initAstralGeometry() {
     layers.push(createPolygon(1, 64, materialTeal, 0));
     layers.push(createPolygon(0.5, 64, materialDarkTeal, 0));
 
-    // Inner Polygons
-    layers.push(createPolygon(4, 3, materialGold, 0)); // Triangle inner
-    const hexReverse = createPolygon(4, 3, materialTeal, 0);
-    hexReverse.rotation.z = Math.PI;
-    layers.push(hexReverse);
+    // Hexagonal outward mesh (replacing the Star of David)
+    layers.push(createPolygon(2, 6, materialGold, 0));
+    layers.push(createPolygon(3, 6, materialTeal, 0));
+    layers.push(createPolygon(4, 6, materialDarkTeal, 0));
+    layers.push(createPolygon(5, 6, materialGold, 0));
+    layers.push(createPolygon(6, 6, materialTeal, 0));
+    layers.push(createPolygon(8, 6, materialDarkTeal, 0));
+    
+    // Reverse hexes for complexity
+    const hexRev1 = createPolygon(3.5, 6, materialGold, 0);
+    hexRev1.rotation.z = Math.PI / 6;
+    layers.push(hexRev1);
+    
+    const hexRev2 = createPolygon(5.5, 6, materialTeal, 0);
+    hexRev2.rotation.z = Math.PI / 6;
+    layers.push(hexRev2);
 
-    layers.push(createPolygon(2, 6, materialDarkTeal, 0)); // Hexagon inner
+    // Orbiting sub-circles
+    const orbitingCirclesGroup = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+        const theta = (i / 6) * Math.PI * 2;
+        const subCircle = createPolygon(1.5, 64, materialTeal, 0);
+        subCircle.position.set(Math.cos(theta) * 10, Math.sin(theta) * 10, 0);
+        
+        const innerSubCircle = createPolygon(0.5, 64, materialGold, 0);
+        innerSubCircle.position.set(Math.cos(theta) * 10, Math.sin(theta) * 10, 0);
+        
+        orbitingCirclesGroup.add(subCircle);
+        orbitingCirclesGroup.add(innerSubCircle);
+    }
+    
+    for (let i = 0; i < 12; i++) {
+        const theta = (i / 12) * Math.PI * 2;
+        const subCircle = createDottedCircle(0.8, materialDashed, 0);
+        subCircle.position.set(Math.cos(theta) * 14, Math.sin(theta) * 14, 0);
+        orbitingCirclesGroup.add(subCircle);
+    }
+    layers.push(orbitingCirclesGroup);
 
     // Sweeping curves (orbits)
     for (let i = 0; i < 12; i++) {
@@ -1562,12 +1593,12 @@ function initAstralGeometry() {
     // Scale group to fit
     group.scale.set(0.65, 0.65, 0.65);
 
-    // Tilt the whole group for deep dramatic perspective
-    group.rotation.x = 1.3;
+    // Flat, top-down perspective
+    group.rotation.x = 0;
     group.rotation.y = 0;
     
-    // Adjust camera for low-angle sweeping look
-    camera.position.set(0, -12, 12);
+    // Camera top-down
+    camera.position.set(0, 0, 20);
     camera.lookAt(0, 0, 0);
 
     // Post-processing setup
