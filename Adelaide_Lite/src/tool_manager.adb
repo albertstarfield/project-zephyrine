@@ -22,10 +22,16 @@ package body Tool_Manager is
       Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Tool]" & AnsiAda.Reset &
                 " Executing: " & Name & " with params: " & Params);
 
-      if Name = "web_search" then
+      if Name = "web_search" or else Name = "searchglobalref" or else Name = "search" then
          Full_Cmd := To_Unbounded_String ("python/searchglobalref.py");
       elsif Name = "local_search" then
          Full_Cmd := To_Unbounded_String ("python/searchlocalref.py");
+      elsif Name = "math" then
+         Full_Cmd := To_Unbounded_String ("python/math_tool.py");
+      elsif Name = "code" then
+         Full_Cmd := To_Unbounded_String ("python/code_tool.py");
+      elsif Name = "cat" then
+         Full_Cmd := To_Unbounded_String ("python/cat_tool.py");
       else
          Free (Path);
          Result.Output := To_Unbounded_String ("Error: Unknown tool " & Name);

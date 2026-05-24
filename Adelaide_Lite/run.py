@@ -273,7 +273,11 @@ def main():
     if platform.system() == "Darwin":
         env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
     
-    server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
+    # Start through ALIRE to ensure correct environment variables for Ada libraries
+    if shutil.which("alr"):
+        server_process = subprocess.Popen(["alr", "exec", "--", server_path], cwd=BASE_DIR, env=env)
+    else:
+        server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
 
     if launch_gui:
         print("[*] Booting Python Sidecar UI...")
