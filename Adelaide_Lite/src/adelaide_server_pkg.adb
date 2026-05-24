@@ -90,8 +90,6 @@ package body Adelaide_Server_Pkg is
 
    task body Generator_Task is
       P : Unbounded_String;
-      M : Unbounded_String;
-      F : Streaming_Queue.Format_Type;
       QA : Streaming_Queue.Queue_Access;
       Res : Unbounded_String;
       Is_Ag : Boolean;
@@ -105,8 +103,6 @@ package body Adelaide_Server_Pkg is
          Agentic : Boolean := False; Raw_Prompt : Boolean := False)
       do
          P := To_Unbounded_String (Prompt);
-         M := To_Unbounded_String (Model_Name);
-         F := Format;
          QA := Q;
          Is_Ag := Agentic;
          Is_Raw := Raw_Prompt;
@@ -134,7 +130,7 @@ package body Adelaide_Server_Pkg is
    -- Dispatch --
    --------------
    function Dispatch
-     (Request : in AWS.Status.Data) return AWS.Response.Data
+     (Request : AWS.Status.Data) return AWS.Response.Data
    is
       URI    : constant String := AWS.Status.URI (Request);
       Method : constant String := AWS.Status.Method (Request);
@@ -272,7 +268,6 @@ package body Adelaide_Server_Pkg is
             Payload_Str : constant String := (if Raw_S /= "" then Raw_S else To_String (Raw_B));
             Parser_Result : constant Read_Result := Read (Payload_Str);
             Text_To_Say : Unbounded_String := To_Unbounded_String ("Hello");
-            Audio_Data : Ada.Streams.Stream_Element_Array (1 .. 0);
          begin
             -- TODO: ELP1 Priority handling for Supertonic
             if Parser_Result.Success then

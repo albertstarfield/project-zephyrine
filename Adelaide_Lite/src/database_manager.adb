@@ -24,7 +24,9 @@ package body Database_Manager is
    protected body Init_Gate is
       procedure Do_Init is
       begin
-         if Done then return; end if;
+         if Done then
+            return;
+         end if;
          
          Main_DB_Ptr := new Ada_Sqlite3.Database'(Open (DB_File));
 
@@ -293,11 +295,11 @@ package body Database_Manager is
       begin
          while Step (Stmt) = ROW loop
             declare
-               Row_Id   : constant Integer := Integer (Column_Int (Stmt, 0));
+               Row_Id   : constant Integer := Column_Int (Stmt, 0);
                Raw_Resp : constant String := Column_Text (Stmt, 1);
                Raw_Vec  : constant String := Column_Text (Stmt, 2);
-               Row_Hits : constant Integer := Integer (Column_Int (Stmt, 3));
-               Elapsed  : constant Float := Float (Column_Double (Stmt, 4));
+               Row_Hits : constant Integer := Column_Int (Stmt, 3);
+               Elapsed  : constant Float := Column_Double (Stmt, 4);
                JSON_Vec : constant Read_Result := Read (Raw_Vec);
             begin
                if JSON_Vec.Success then

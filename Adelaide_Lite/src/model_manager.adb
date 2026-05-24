@@ -1,13 +1,10 @@
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Calendar; use type Ada.Calendar.Time;
 with Database_Manager;
 with Tool_Manager;
 with Llama_Interface; use Llama_Interface;
-with Math_Utils;
-with System;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Real_Time; use Ada.Real_Time;
@@ -21,7 +18,9 @@ package body Model_Manager is
    begin
       loop
          delay 30.0;
-         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red) & "[WCET]" & AnsiAda.Reset & " Current Pipeline WCET: " & Current_WCET'Img & " seconds");
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red) &
+                               "[WCET]" & AnsiAda.Reset &
+                               " Current Pipeline WCET: " & Current_WCET'Img & " seconds");
       end loop;
    end WCET_Printer;
 

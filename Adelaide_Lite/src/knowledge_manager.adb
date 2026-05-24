@@ -104,7 +104,7 @@ package body Knowledge_Manager is
             if Length (Current_Entry) > 0 then
                declare
                   Content : constant String := To_String (Current_Entry);
-                  Vec     : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
+                  Vec     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
                   Len     : Natural := 0;
                begin
                   Model_Manager.Get_Embedding (Content, Vec, Len);
@@ -122,7 +122,7 @@ package body Knowledge_Manager is
       if Length (Current_Entry) > 0 then
          declare
             Content : constant String := To_String (Current_Entry);
-            Vec     : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
+            Vec     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
             Len     : Natural := 0;
          begin
             Model_Manager.Get_Embedding (Content, Vec, Len);
@@ -136,7 +136,9 @@ package body Knowledge_Manager is
       Close (File);
    exception
       when others =>
-         if Is_Open (File) then Close (File); end if;
+         if Is_Open (File) then
+            Close (File);
+         end if;
    end Index_References;
 
    task body Indexing_Task is
@@ -160,7 +162,7 @@ package body Knowledge_Manager is
          File    : File_Type;
          Content : Unbounded_String;
          Line    : Unbounded_String;
-         Vec     : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
+         Vec     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
          Len     : Natural := 0;
          use type Ada.Directories.File_Size;
 
@@ -171,7 +173,7 @@ package body Knowledge_Manager is
          begin
             while Start_Idx <= Text'Last loop
                End_Idx := Ada.Strings.Fixed.Index
-                 (Text (Start_Idx .. Text'Last), (1 => ASCII.LF));
+                 (Text (Start_Idx .. Text'Last), [1 => ASCII.LF]);
                if End_Idx = 0 then
                   End_Idx := Text'Last + 1;
                end if;
@@ -221,7 +223,9 @@ package body Knowledge_Manager is
          Close (File);
       exception
          when others =>
-            if Is_Open (File) then Close (File); end if;
+            if Is_Open (File) then
+               Close (File);
+            end if;
       end Index_File;
 
       procedure Walk_Directory (Dir : String) is
@@ -231,7 +235,9 @@ package body Knowledge_Manager is
       begin
          Start_Search (Search, Dir, "");
          while More_Entries (Search) loop
-            if Model_Manager.Should_Abort_ELP0 then return; end if;
+            if Model_Manager.Should_Abort_ELP0 then
+               return;
+            end if;
             Get_Next_Entry (Search, Ent);
             declare
                N : constant String := Simple_Name (Ent);
