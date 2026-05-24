@@ -1475,66 +1475,70 @@ function initAstralGeometry() {
 
     // Materials
     const materialTeal = new THREE.LineBasicMaterial({ color: 0x40E0D0, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
-    const materialDarkTeal = new THREE.LineBasicMaterial({ color: 0x208080, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending });
-    const materialGold = new THREE.LineBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending });
+    const materialDarkTeal = new THREE.LineBasicMaterial({ color: 0x1e90ff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending });
+    const materialGold = new THREE.LineBasicMaterial({ color: 0x87cefa, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending }); // Changed gold to light sky blue for the reference look
     const materialDashed = new THREE.LineDashedMaterial({ color: 0x40E0D0, dashSize: 0.3, gapSize: 0.6, transparent: true, opacity: 0.5 });
     
     const layers: THREE.Object3D[] = [];
 
     // Outer intricate rings
-    layers.push(createPolygon(14, 128, materialTeal, -2)); 
-    layers.push(createDottedCircle(13.5, materialDashed, -1.8));
-    layers.push(createPolygon(12, 128, materialDarkTeal, -1.5)); 
+    layers.push(createPolygon(18, 128, materialDarkTeal, 0)); 
+    layers.push(createDottedCircle(17.5, materialDashed, 0));
+    layers.push(createPolygon(16, 128, materialTeal, 0)); 
     
     // Middle geometry
-    layers.push(createPolygon(12, 6, materialGold, -1.5)); // Outer Hexagon
-    layers.push(createPolygon(12, 12, materialDarkTeal, -1.5)); // Dodecagon
+    layers.push(createPolygon(16, 6, materialGold, 0)); // Outer Hexagon
+    layers.push(createPolygon(16, 12, materialDarkTeal, 0)); // Dodecagon
     
     // Mid rings
-    layers.push(createPolygon(8, 128, materialTeal, 0));
-    layers.push(createDottedCircle(7.5, materialDashed, 0.2));
+    layers.push(createPolygon(10, 128, materialTeal, 0));
+    layers.push(createDottedCircle(9.5, materialDashed, 0));
     
-    // Inner geometry
-    layers.push(createPolygon(8, 3, materialGold, 0)); // Triangle inner
-    const hexagramReverse = createPolygon(8, 3, materialTeal, 0);
-    hexagramReverse.rotation.z = Math.PI;
-    layers.push(hexagramReverse); 
-    
-    // Core rings
-    layers.push(createPolygon(5, 64, materialDarkTeal, 1));
-    layers.push(createPolygon(4, 64, materialTeal, 1.5));
+    // Inner rings
+    layers.push(createPolygon(5, 64, materialDarkTeal, 0));
+    layers.push(createPolygon(4, 64, materialTeal, 0));
 
-    // Intricate connection lines (Webs)
-    const webGeo = new THREE.BufferGeometry();
-    const webPoints = [];
-    for(let i=0; i<12; i++) {
-        const theta1 = (i/12)*Math.PI*2;
-        for(let j=i+1; j<12; j++) {
-            const theta2 = (j/12)*Math.PI*2;
-            webPoints.push(new THREE.Vector3(Math.cos(theta1)*14, Math.sin(theta1)*14, -2));
-            webPoints.push(new THREE.Vector3(Math.cos(theta2)*14, Math.sin(theta2)*14, -2));
-        }
+    // Sweeping curves (orbits)
+    for (let i = 0; i < 8; i++) {
+        const curve = new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(Math.cos(i * Math.PI / 4) * 4, Math.sin(i * Math.PI / 4) * 4, 0),
+            new THREE.Vector3(Math.cos(i * Math.PI / 4 + Math.PI/2) * 20, Math.sin(i * Math.PI / 4 + Math.PI/2) * 20, 2),
+            new THREE.Vector3(Math.cos(i * Math.PI / 4 + Math.PI) * 16, Math.sin(i * Math.PI / 4 + Math.PI) * 16, 0)
+        );
+        const points = curve.getPoints(50);
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const sweep = new THREE.Line(geometry, materialGold);
+        layers.push(sweep);
     }
-    webGeo.setFromPoints(webPoints);
-    const web = new THREE.LineSegments(webGeo, materialDarkTeal);
-    layers.push(web);
-    
-    // Central intersecting 3D core
-    const core = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.OctahedronGeometry(2, 0)), materialGold);
-    core.position.z = 2;
-    layers.push(core);
+
+    // Glowing Stars / Nodes
+    const starGeo = new THREE.BufferGeometry();
+    const starPoints = [];
+    for (let i = 0; i < 40; i++) {
+        const radius = 4 + Math.random() * 14;
+        const theta = Math.random() * Math.PI * 2;
+        starPoints.push(new THREE.Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, (Math.random() - 0.5) * 2));
+    }
+    starGeo.setFromPoints(starPoints);
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+    const stars = new THREE.Points(starGeo, starMat);
+    layers.push(stars);
 
     layers.forEach(layer => group.add(layer));
     
-    // Tilt the whole group slightly for depth perception
-    group.rotation.x = 0.15;
-    group.rotation.y = 0.1;
+    // Tilt the whole group for deep dramatic perspective
+    group.rotation.x = 1.3;
+    group.rotation.y = 0;
+    
+    // Adjust camera for low-angle sweeping look
+    camera.position.set(0, -12, 12);
+    camera.lookAt(0, 0, 0);
 
     // Post-processing setup
     const ChromaticAberrationShader = {
         uniforms: {
             'tDiffuse': { value: null },
-            'amount': { value: 0.004 }
+            'amount': { value: 0.003 }
         },
         vertexShader: `
             varying vec2 vUv;
@@ -1562,6 +1566,13 @@ function initAstralGeometry() {
     const renderPass = new RenderPass(scene, camera);
     const composer = new EffectComposer(renderer);
     composer.addPass(renderPass);
+
+    // Add Unreal Bloom Pass
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(canvas.clientWidth, canvas.clientHeight), 1.5, 0.4, 0.85);
+    bloomPass.threshold = 0.1;
+    bloomPass.strength = 1.8; // intense glow
+    bloomPass.radius = 0.8;
+    composer.addPass(bloomPass);
 
     const fxaaPass = new ShaderPass(FXAAShader);
     // resolution will be updated on resize
@@ -1591,17 +1602,13 @@ function initAstralGeometry() {
 
         // Slow intricate rotation for different layers
         layers.forEach((layer, index) => {
-            if (layer !== core && layer !== web) {
-                layer.rotation.z += 0.0005 * (index % 2 === 0 ? 1 : -1) * (1 + index * 0.1);
+            if (layer !== stars) {
+                layer.rotation.z -= 0.0003 * (index % 2 === 0 ? 1 : -1) * (1 + index * 0.05);
             }
         });
         
-        web.rotation.z -= 0.0002;
-        core.rotation.x += 0.004;
-        core.rotation.y += 0.005;
-        core.rotation.z -= 0.002;
-        
-        group.rotation.z += 0.0003;
+        stars.rotation.z += 0.0005;
+        group.rotation.z -= 0.0001;
 
         composer.render();
     }
