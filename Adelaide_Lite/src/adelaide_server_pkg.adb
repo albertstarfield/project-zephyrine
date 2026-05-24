@@ -193,28 +193,34 @@ package body Adelaide_Server_Pkg is
                   Session_ID => "server-handless",
                   Agentic    => True,
                   Raw_Prompt => False);
-               
-               -- 3. Synthesize the LLM output into cloned voice audio
-               declare
-                  PCM_Data : constant Ada.Streams.Stream_Element_Array :=
-                    Kokoro_Interface.Synthesize_Speech (To_String (LLM_Result));
-               begin
-                  if PCM_Data'Length = 0 then
-                     return Wrap_Response (AWS.Response.Build ("text/plain", "TTS Error"));
-                  else
-                     declare
-                        Result_Str : String (1 .. Natural(PCM_Data'Length));
-                     begin
-                        for I in PCM_Data'Range loop
-                           Result_Str (Natural(I) - Natural(PCM_Data'First) + 1) := Character'Val (PCM_Data (I));
-                        end loop;
-                        return Wrap_Response (AWS.Response.Build ("audio/pcm", Result_Str));
-                     end;
-                  end if;
-               end;
             else
-               return Wrap_Response (AWS.Response.Build ("text/plain", "ASR Error: No transcription"));
+               -- 2b. If interrupted or no audio provided, spontaneously ask a question
+               Model_Manager.Hybrid_Generate
+                 (Prompt     => "Proactively initiate the conversation. Ask a random, interesting, or highly agentic question to the user instead of waiting for a prompt.",
+                  Result     => LLM_Result,
+                  Session_ID => "server-handless",
+                  Agentic    => True,
+                  Raw_Prompt => True);
             end if;
+            
+            -- 3. Synthesize the LLM output into cloned voice audio
+            declare
+               PCM_Data : constant Ada.Streams.Stream_Element_Array :=
+                 Kokoro_Interface.Synthesize_Speech (To_String (LLM_Result));
+            begin
+               if PCM_Data'Length = 0 then
+                  return Wrap_Response (AWS.Response.Build ("text/plain", "TTS Error"));
+               else
+                  declare
+                     Result_Str : String (1 .. Natural(PCM_Data'Length));
+                  begin
+                     for I in PCM_Data'Range loop
+                        Result_Str (Natural(I) - Natural(PCM_Data'First) + 1) := Character'Val (PCM_Data (I));
+                     end loop;
+                     return Wrap_Response (AWS.Response.Build ("audio/pcm", Result_Str));
+                  end;
+               end if;
+            end;
          end;
       end if;
 
