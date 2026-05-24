@@ -420,18 +420,33 @@ package body Model_Manager is
          return;
       end if;
 
+      --  CHUNKED DECODING FOR EMBEDDINGS
       declare
-         B : constant Llama_Batch :=
-           Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
+         Batch_Size  : constant int := int'Min (512, int (Models (Kind).Current_Ctx));
+         Current_Pos : int := 0;
+         Tokens_Left : int := N_Toks;
       begin
          Llama_Interface.Llama_Memory_Clear
            (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
          Llama_Set_Embeddings (Models (Kind).Context, True);
-         if Llama_Decode (Models (Kind).Context, B) /= 0 then
-            Priority_Model_Gate.Release_ELP1 (Kind);
-            Length := 0;
-            return;
-         end if;
+         
+         while Tokens_Left > 0 loop
+            declare
+               To_Decode : constant int :=
+                 (if Tokens_Left > Batch_Size then Batch_Size else Tokens_Left);
+               B : constant Llama_Batch :=
+                 Llama_Batch_Get_One
+                   (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
+            begin
+               if Llama_Decode (Models (Kind).Context, B) /= 0 then
+                  Priority_Model_Gate.Release_ELP1 (Kind);
+                  Length := 0;
+                  return;
+               end if;
+               Tokens_Left := Tokens_Left - To_Decode;
+               Current_Pos := Current_Pos + To_Decode;
+            end;
+         end loop;
       end;
 
       declare
@@ -731,7 +746,13 @@ package body Model_Manager is
          Put_Line ("[!] Prompt size (" & N_Toks'Img & 
                    ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
                    "). Resizing...");
-         Load_Model (Kind, Success, Positive (N_Toks + 512)); -- Add generation margin
+         declare
+            --  Round up to next 2048 to avoid too frequent reloads
+            Rounded_Ctx : constant unsigned :=
+              ((unsigned (N_Toks) + 512 + 2047) / 2048) * 2048;
+         begin
+            Load_Model (Kind, Success, Positive (Rounded_Ctx));
+         end;
          if not Success then
             Models (Kind).In_Use := False;
             if Level = ELP0 then
