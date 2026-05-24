@@ -101,6 +101,13 @@ def main():
         if not os.path.exists(moonshine_dir):
             print("[*] Cloning moonshine...")
             subprocess.run(["git", "clone", "--depth=1", "https://github.com/moonshine-ai/moonshine.git", moonshine_dir], check=False)
+            
+            # Autoremove examples to save space
+            moonshine_examples = os.path.join(moonshine_dir, "examples")
+            if os.path.exists(moonshine_examples):
+                print("[*] Removing heavy moonshine/examples directory...")
+                import shutil
+                shutil.rmtree(moonshine_examples, ignore_errors=True)
         else:
             print("[*] moonshine already exists, skipping clone.")
 
