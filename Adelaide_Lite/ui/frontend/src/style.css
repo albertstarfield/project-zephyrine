@@ -889,7 +889,7 @@ html {
     gap: 8px;
     opacity: 0.3;
     color: #888;
-    font-size: 0.4rem;
+    font-size: 0.5rem;
     z-index: 10000;
     pointer-events: none;
 }
