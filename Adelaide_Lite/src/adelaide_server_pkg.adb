@@ -206,9 +206,9 @@ package body Adelaide_Server_Pkg is
             use type Interfaces.Unsigned_64;
             use type Ada.Real_Time.Time;
          begin
-            Handless_Stage := To_Unbounded_String("Transcribing...");
-            Handless_Input_Text := To_Unbounded_String("");
-            Handless_Output_Text := To_Unbounded_String("");
+            Handless_Stage := To_Unbounded_String ("Transcribing...");
+            Handless_Input_Text := To_Unbounded_String ("");
+            Handless_Output_Text := To_Unbounded_String ("");
 
             if Num_Floats > 0 then
                Transcript := To_Unbounded_String
@@ -219,7 +219,7 @@ package body Adelaide_Server_Pkg is
             end if;
 
             Handless_Input_Text := Transcript;
-            Handless_Stage := To_Unbounded_String("Generating...");
+            Handless_Stage := To_Unbounded_String ("Generating...");
 
             if Length (Transcript) > 0 then
                declare
