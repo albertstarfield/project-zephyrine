@@ -1498,7 +1498,39 @@ function initAstralGeometry() {
     
     const layers: THREE.Object3D[] = [];
 
-    // Outer intricate rings
+    // Giant off-canvas geometry (diamonds/squares)
+    const giantSquare1 = createPolygon(45, 4, materialDarkTeal, 0);
+    giantSquare1.rotation.z = Math.PI / 4;
+    layers.push(giantSquare1);
+
+    const giantSquare2 = createPolygon(38, 4, materialTeal, 0);
+    giantSquare2.rotation.z = Math.PI / 4 + 0.05;
+    giantSquare2.position.set(4, 4, 0);
+    layers.push(giantSquare2);
+    
+    const giantSquare3 = createPolygon(55, 4, materialGold, 0);
+    giantSquare3.rotation.z = Math.PI / 4 - 0.08;
+    giantSquare3.position.set(-5, -8, 0);
+    layers.push(giantSquare3);
+
+    // Asymmetric outer intersecting circles
+    const asyncCircle1 = createPolygon(28, 128, materialTeal, 0);
+    asyncCircle1.position.set(5, -4, 0);
+    layers.push(asyncCircle1);
+
+    const asyncCircle2 = createPolygon(34, 128, materialDarkTeal, 0);
+    asyncCircle2.position.set(-8, 6, 0);
+    layers.push(asyncCircle2);
+    
+    const asyncCircle3 = createPolygon(22, 128, materialGold, 0);
+    asyncCircle3.position.set(-2, -9, 0);
+    layers.push(asyncCircle3);
+
+    const asyncCircle4 = createDottedCircle(26, materialDashed, 0);
+    asyncCircle4.position.set(3, 7, 0);
+    layers.push(asyncCircle4);
+
+    // Regular outer bounds (kept but expanded)
     layers.push(createPolygon(18, 128, materialDarkTeal, 0)); 
     layers.push(createDottedCircle(17.5, materialDashed, 0));
     layers.push(createPolygon(16, 128, materialTeal, 0)); 
