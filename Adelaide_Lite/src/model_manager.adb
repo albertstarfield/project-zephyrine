@@ -1100,7 +1100,14 @@ package body Model_Manager is
       end;
 
       Result := Current_Response;
-      Database_Manager.Remember (Prompt, To_String (Current_Response));
+      declare
+         B64_Str : Unbounded_String := To_Unbounded_String ("");
+      begin
+         if GNATCOLL.JSON.Length (Images) > 0 then
+            B64_Str := To_Unbounded_String (String'(GNATCOLL.JSON.Get (Images, 1)));
+         end if;
+         Database_Manager.Remember (Prompt, To_String (Current_Response), To_String (B64_Str));
+      end;
       Database_Manager.Add_To_Cache (Prompt, Emb_Vec (1 .. Emb_Len), To_String (Current_Response));
 
       T1 := Ada.Calendar.Clock;

@@ -36,7 +36,8 @@ package body Database_Manager is
                   "response TEXT," &
                   "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP," &
                   "hit_count INTEGER DEFAULT 1," &
-                  "last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP)");
+                  "last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP," &
+                  "image_b64 TEXT)");
 
          begin
             Execute (Main_DB_Ptr.all,
@@ -45,6 +46,9 @@ package body Database_Manager is
             Execute (Main_DB_Ptr.all,
                     "ALTER TABLE memories ADD COLUMN last_hit_time " &
                     "DATETIME DEFAULT CURRENT_TIMESTAMP");
+            Execute (Main_DB_Ptr.all,
+                    "ALTER TABLE memories ADD COLUMN image_b64 " &
+                    "TEXT");
          exception
             when others => null; -- Columns already exist
          end;
@@ -358,16 +362,17 @@ package body Database_Manager is
    --------------
    -- Remember --
    --------------
-   procedure Remember (User_Input : String; Assistant_Response : String) is
+   procedure Remember (Prompt : String; Response : String; Image_B64 : String := "") is
    begin
       if Main_DB_Ptr = null then return; end if;
       declare
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all,
-            "INSERT INTO memories (input, response) VALUES (?, ?)");
+            "INSERT INTO memories (input, response, image_b64) VALUES (?, ?, ?)");
       begin
-         Bind_Text (Stmt, 1, User_Input);
-         Bind_Text (Stmt, 2, Assistant_Response);
+         Bind_Text (Stmt, 1, Prompt);
+         Bind_Text (Stmt, 2, Response);
+         Bind_Text (Stmt, 3, Image_B64);
          Step (Stmt);
       end;
    exception
