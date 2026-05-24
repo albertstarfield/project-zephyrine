@@ -2,9 +2,7 @@ with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada_Sqlite3; use Ada_Sqlite3;
 with Ada.Exceptions;
-with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNATCOLL.JSON;
-with Math_Utils;
 
 package body Database_Manager is
 
@@ -131,7 +129,9 @@ package body Database_Manager is
       use GNATCOLL.JSON;
       Vec_Obj : JSON_Array := Empty_Array;
    begin
-      if Lit_DB_Ptr = null then return; end if;
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
 
       for I in Embedding'Range loop
          Append (Vec_Obj, Create (Embedding (I)));
@@ -165,7 +165,9 @@ package body Database_Manager is
       Idx : Positive := Results'First;
    begin
       Count := 0;
-      if Lit_DB_Ptr = null then return; end if;
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
 
       declare
          Stmt : Statement := Prepare
@@ -223,7 +225,9 @@ package body Database_Manager is
       Weight   : Float := 1.0)
    is
    begin
-      if Lit_DB_Ptr = null then return; end if;
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
       declare
          Stmt : Statement := Prepare
            (Lit_DB_Ptr.all,
@@ -250,7 +254,9 @@ package body Database_Manager is
       use GNATCOLL.JSON;
       Vec_Obj : JSON_Array := Empty_Array;
    begin
-      if Main_DB_Ptr = null then return; end if;
+      if Main_DB_Ptr = null then
+         return;
+      end if;
 
       for I in Embedding'Range loop
          Append (Vec_Obj, Create (Embedding (I)));
@@ -284,7 +290,9 @@ package body Database_Manager is
       Best_Hits : Integer := 0;
       Best_Elapsed : Float := 0.0;
    begin
-      if Main_DB_Ptr = null then return ""; end if;
+      if Main_DB_Ptr = null then
+         return "";
+      end if;
 
       declare
          Stmt : Statement := Prepare
@@ -366,7 +374,9 @@ package body Database_Manager is
    --------------
    procedure Remember (Prompt : String; Response : String; Image_B64 : String := "") is
    begin
-      if Main_DB_Ptr = null then return; end if;
+      if Main_DB_Ptr = null then
+         return;
+      end if;
       declare
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all,
@@ -388,7 +398,9 @@ package body Database_Manager is
       Result : Unbounded_String;
       Best_Id : Integer := -1;
    begin
-      if Main_DB_Ptr = null then return ""; end if;
+      if Main_DB_Ptr = null then
+         return "";
+      end if;
       declare
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all,
@@ -396,7 +408,7 @@ package body Database_Manager is
       begin
          Bind_Text (Stmt, 1, "%" & Query & "%");
          if Step (Stmt) = ROW then
-            Best_Id := Integer (Column_Int (Stmt, 0));
+            Best_Id := Column_Int (Stmt, 0);
             Result := To_Unbounded_String (Column_Text (Stmt, 1));
          end if;
       end;
@@ -418,7 +430,9 @@ package body Database_Manager is
    procedure Evict_Low_Salience (Chunk_Size : Positive) is
       Alpha_Str : constant String := Alpha'Img;
    begin
-      if Main_DB_Ptr = null then return; end if;
+      if Main_DB_Ptr = null then
+         return;
+      end if;
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Salience]" &
                 AnsiAda.Reset & " Evicting " & Chunk_Size'Img & " rows...");
@@ -472,7 +486,9 @@ package body Database_Manager is
    procedure Export_GraphML (Filename : String) is
       File : File_Type;
    begin
-      if Lit_DB_Ptr = null then return; end if;
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
       Create (File, Out_File, Filename);
       Put_Line (File, "<?xml version=""1.0"" encoding=""UTF-8""?>");
       Put_Line (File, "<graphml xmlns=""http://graphml.graphdrawing.org/xmlns"">");
@@ -522,7 +538,10 @@ package body Database_Manager is
       Put_Line (File, "</graphml>");
       Close (File);
    exception
-      when others => if Is_Open (File) then Close (File); end if;
+      when others =>
+         if Is_Open (File) then
+            Close (File);
+         end if;
    end Export_GraphML;
 
    ---------------------------------
@@ -535,7 +554,9 @@ package body Database_Manager is
    begin
       Success := False;
       Content := Null_Unbounded_String;
-      if Lit_DB_Ptr = null then return; end if;
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
 
       declare
          Stmt : Statement := Prepare

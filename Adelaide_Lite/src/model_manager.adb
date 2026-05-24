@@ -40,10 +40,10 @@ package body Model_Manager is
 
    type Model_Type_Refs is array (Model_Type) of aliased Model_Type;
    Model_Refs : constant Model_Type_Refs :=
-     (Qwen_0_8B      => Qwen_0_8B,
+     [Qwen_0_8B      => Qwen_0_8B,
       Qwen_4B        => Qwen_4B,
       Qwen_Embedding => Qwen_Embedding,
-      MMProj         => MMProj);
+      MMProj         => MMProj];
 
    type Owner_Array is array (Model_Type) of ELP_Level;
    type Busy_Array is array (Model_Type) of Boolean;
@@ -62,8 +62,8 @@ package body Model_Manager is
    private
       ELP1_Pending      : Natural := 0;
       ELP1_Active_Count : Natural := 0;
-      Busy              : Busy_Array := (others => False);
-      Owner             : Owner_Array := (others => ELP0);
+      Busy              : Busy_Array := [others => False];
+      Owner             : Owner_Array := [others => ELP0];
    end Priority_Model_Gate;
 
    protected body Priority_Model_Gate is
@@ -91,10 +91,10 @@ package body Model_Manager is
 
       entry Acquire_ELP0 (for K in Model_Type) (Success : out Boolean)
          when not Busy (K)
-           or ELP1_Pending > 0
-           or ELP1_Active_Count > 0 is
+           or else ELP1_Pending > 0
+           or else ELP1_Active_Count > 0 is
       begin
-         if ELP1_Pending > 0 or ELP1_Active_Count > 0 then
+         if ELP1_Pending > 0 or else ELP1_Active_Count > 0 then
             Success := False;
          else
             Busy (K) := True;
@@ -845,7 +845,7 @@ package body Model_Manager is
       Current_Response : Unbounded_String;
       Current_Hop : Positive := 1;
       T0, T1      : Ada.Calendar.Time;
-      Emb_Vec     : Math_Utils.Vector (1 .. 1536) := (others => 0.0);
+      Emb_Vec     : Math_Utils.Vector (1 .. 1536) := [others => 0.0];
       Emb_Len     : Natural;
    begin
       T0 := Ada.Calendar.Clock;
