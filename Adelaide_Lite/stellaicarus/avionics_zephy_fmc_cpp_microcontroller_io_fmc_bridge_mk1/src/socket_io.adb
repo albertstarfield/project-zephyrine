@@ -70,7 +70,7 @@ package body Socket_IO is
       Result : Interfaces.C.int;
    begin
       -- Create socket
-      Socket_Fd := socket (AF_UNIX, SOCK_SEQPACKET or SOCK_NONBLOCK, 0);
+      Socket_Fd := socket (AF_UNIX, SOCK_SEQPACKET + SOCK_NONBLOCK, 0);
       if Socket_Fd = -1 then
          Interfaces.C.Strings.Free (Path_C);
          return Null_Socket;
@@ -85,7 +85,8 @@ package body Socket_IO is
       Addr.sun_path (Interfaces.C.ptrdiff_t (Socket_Path'Length)) := Interfaces.C.nul;
       
       -- Bind socket
-      Result := bind (Socket_Fd, Addr'Address, 2 + 1 + Socket_Path'Length);
+      Result := bind (Socket_Fd, Addr'Address, 
+                     Interfaces.C.size_t (2 + 1 + Socket_Path'Length));
       if Result = -1 then
          Result := close (Socket_Fd);
          Interfaces.C.Strings.Free (Path_C);
@@ -129,7 +130,8 @@ package body Socket_IO is
       Addr.sun_path (Interfaces.C.ptrdiff_t (Socket_Path'Length)) := Interfaces.C.nul;
       
       -- Connect to socket
-      Result := connect (Socket_Fd, Addr'Address, 2 + 1 + Socket_Path'Length);
+      Result := connect (Socket_Fd, Addr'Address, 
+                        Interfaces.C.size_t (2 + 1 + Socket_Path'Length));
       if Result = -1 then
          Result := close (Socket_Fd);
          Interfaces.C.Strings.Free (Path_C);
