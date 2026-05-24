@@ -4,6 +4,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Calendar; use type Ada.Calendar.Time;
 with Database_Manager;
 with Tool_Manager;
+with Scheduler_Manager;
 with Llama_Interface;
 use Llama_Interface;
 with Interfaces.C; use Interfaces.C;
@@ -952,6 +953,7 @@ package body Model_Manager is
               "If the user says hello or greets you, output [FINISH]. " &
               "If you need to search, use [ACTION: search(query)]. " &
               "If you need to read a file, use [ACTION: cat(filename)]. " &
+              "If you want to schedule a proactive thought for later, use [ACTION: schedule(seconds, query)]. " &
               "If you are done, output [FINISH]. " &
               "Output ONLY the tag.";
             Paging_Instr : constant String :=
@@ -1028,7 +1030,25 @@ package body Model_Manager is
                                      (A_Full (P_Pos + 1 .. EP_Pos - 1),
                                       Ada.Strings.Both);
                               begin
-                                 if T_Pars'Length < 256 and then
+                                 if T_Name = "schedule" then
+                                    declare
+                                       Comma_Idx : constant Natural := Index (T_Pars, ",");
+                                    begin
+                                       if Comma_Idx > 0 then
+                                          declare
+                                             Time_Str : constant String := Trim (T_Pars (T_Pars'First .. Comma_Idx - 1), Ada.Strings.Both);
+                                             Prompt_Str : constant String := Trim (T_Pars (Comma_Idx + 1 .. T_Pars'Last), Ada.Strings.Both);
+                                             Delay_Secs : Integer;
+                                          begin
+                                             Delay_Secs := Integer'Value (Time_Str);
+                                             Scheduler_Manager.Schedule (Delay_Secs, Prompt_Str);
+                                             Append (Internal_State, "[SCHEDULED]: " & Prompt_Str & ASCII.LF);
+                                          exception
+                                             when others => null;
+                                          end;
+                                       end if;
+                                    end;
+                                 elsif T_Pars'Length < 256 and then
                                     Index
                                       (To_String (Internal_State),
                                        T_Name & "(" & T_Pars & ")") = 0

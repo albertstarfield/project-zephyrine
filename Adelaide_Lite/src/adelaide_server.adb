@@ -5,6 +5,7 @@ with Ada.Command_Line;
 with Adelaide_Server_Pkg;
 with Model_Manager;
 with Knowledge_Manager;
+with Scheduler_Manager;
 with AWS.Config.Set;
 with AWS.Server;
 with Moonshine_Interface;
@@ -28,6 +29,7 @@ begin
                 AnsiAda.Reset & " Initializing Adelaide Intelligence Backend...");
       Model_Manager.Initialize;
       Knowledge_Manager.Initialize;
+      Scheduler_Manager.Initialize;
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Connecting to Kokoro-ONNX sidecar (TTS)...");
