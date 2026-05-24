@@ -1,0 +1,28 @@
+with "config/avionics_daemon_config.gpr";
+with "vss";
+
+project Avionics_Daemon is
+
+   for Source_Dirs use ("src/", "config/");
+   for Object_Dir use "obj/" & Avionics_Daemon_Config.Build_Profile;
+   for Create_Missing_Dirs use "True";
+   for Exec_Dir use "bin";
+   for Main use ("main.adb");
+
+   package Compiler is
+      for Default_Switches ("Ada") use Avionics_Daemon_Config.Ada_Compiler_Switches;
+   end Compiler;
+
+   package Binder is
+      for Switches ("Ada") use ("-Es"); --  Symbolic traceback
+   end Binder;
+
+   package Install is
+      for Artifacts (".") use ("share");
+   end Install;
+
+   package Builder is
+      for Executable ("main.adb") use "avionics_daemon_main";
+   end Builder;
+
+end Avionics_Daemon;

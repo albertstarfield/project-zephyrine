@@ -1,0 +1,104 @@
+# THIS FILE IS GENERATED. DO NOT EDIT.
+
+[solution]
+[solution.context]
+solved = true
+[[solution.state]]
+crate = "gnat"
+fulfilment = "solved"
+pinned = false
+transitivity = "indirect"
+versions = ">=12 & <=2000"
+[solution.state.release]
+auto-gpr-with = false
+description = "The GNAT Ada compiler - Native"
+licenses = "GPL-3.0-or-later AND GPL-3.0-or-later WITH GCC-exception-3.1"
+maintainers = [
+"Fabien Chouteau <chouteau@adacore.com>",
+"CÃ©sar Sagaert <sagaert@adacore.com>",
+]
+maintainers-logins = [
+"Fabien-Chouteau",
+"AldanTanneo",
+]
+name = "gnat_native"
+provides = [
+"gnat=15.1.2",
+]
+version = "15.1.2"
+website = "https://github.com/alire-project/GNAT-FSF-builds"
+[solution.state.release.configuration]
+auto_gpr_with = true
+disabled = true
+generate_ada = true
+generate_c = true
+generate_gpr = true
+output_dir = "config"
+[solution.state.release.environment]
+[solution.state.release.environment.LD_LIBRARY_PATH]
+prepend = "${CRATE_ROOT}/lib"
+[solution.state.release.environment.LD_RUN_PATH]
+prepend = "${CRATE_ROOT}/lib"
+[solution.state.release.environment.LIBRARY_PATH]
+prepend = "${CRATE_ROOT}/lib"
+[solution.state.release.environment.PATH]
+prepend = "${CRATE_ROOT}/bin"
+[solution.state.release.origin]
+binary = true
+hashes = [
+"sha256:60748c5436aba29243333ca1f26c1ef694749644d2f194ab3cbe9f58c53ca829",
+]
+url = "https://github.com/alire-project/GNAT-FSF-builds/releases/download/gnat-15.1.0-2/gnat-aarch64-darwin-15.1.0-2.tar.gz"
+[[solution.state]]
+crate = "vss"
+fulfilment = "solved"
+pinned = false
+transitivity = "direct"
+versions = "^23.0.0"
+[solution.state.release]
+authors = [
+"AdaCore",
+]
+description = "Advanced string and text manipulation with Unicode support"
+licenses = "Apache-2.0"
+maintainers = [
+"Vadim Godunko <vgodunko@gmail.com>",
+"Maxim Reznik <reznikmm@gmail.com>",
+]
+maintainers-logins = [
+"godunko",
+"reznikmm",
+]
+name = "vss"
+project-files = [
+"gnat/vss_text.gpr",
+"gnat/vss_json.gpr",
+"gnat/vss_regexp.gpr",
+"gnat/vss_xml.gpr",
+"gnat/vss_xml_templates.gpr",
+]
+tags = [
+"unicode",
+"json",
+"text",
+"xml",
+"template",
+]
+version = "23.0.0"
+website = "https://github.com/AdaCore/VSS"
+[solution.state.release.configuration]
+auto_gpr_with = true
+disabled = true
+generate_ada = true
+generate_c = true
+generate_gpr = true
+output_dir = "config"
+[solution.state.release.origin]
+archive-name = "vss-23.0.0.tar.gz"
+hashes = [
+"sha512:11e762a6ade7137acb32c0776db06244b40a137df90ee5d25855503deeba2a22e6e962ed56d991c71fd27a514edca22ff3d35b0f783855e2d670eb6b45aa4c03",
+]
+url = "https://github.com/AdaCore/VSS/archive/refs/tags/v23.0.0.tar.gz"
+[[solution.state.release.depends-on]]
+gnat = ">=12 & <=2000"
+
