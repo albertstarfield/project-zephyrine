@@ -4,11 +4,17 @@ import https from 'https';
 const originalFetch = global.fetch;
 global.fetch = async (...args) => {
   console.log('>>> GLOBAL FETCH URL:', args[0]);
+  
+  if (args[1] && args[1].dispatcher) {
+    console.log('>>> DELETING DISPATCHER FROM FETCH OPTIONS!');
+    delete args[1].dispatcher;
+  }
+
   try {
     const res = await originalFetch(...args);
     return res;
   } catch (err) {
-    console.log('>>> GLOBAL FETCH ERROR:', err.message, 'CAUSE:', err.cause);
+    console.log('>>> GLOBAL FETCH ERROR:', err.message);
     throw err;
   }
 };

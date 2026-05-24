@@ -10,15 +10,9 @@ package body Kokoro_Interface is
    function Synthesize_Speech (Text : String) return Ada.Streams.Stream_Element_Array is
       File_Name : constant String := "kokoro_temp.wav";
       
-      Args : GNAT.OS_Lib.Argument_List (1 .. 2);
       Success : Boolean;
       Empty_Array : Ada.Streams.Stream_Element_Array (1 .. 0);
    begin
-      -- We will just use 'python3' and assume it's in the environment if the virtualenv is active,
-      -- or just pass the absolute/relative paths.
-      Args (1) := new String'(Text);
-      Args (2) := new String'(File_Name);
-      
       GNAT.OS_Lib.Spawn (
          Program_Name => "../tts_kokoro_component/venv/bin/python",
          Args         => [new String'("../tts_kokoro_component/stereo_cloner.py"),
