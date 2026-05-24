@@ -9,7 +9,11 @@ import signal
 import shutil
 import glob
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Set HF_HOME so huggingface caches locally in the project directory
+os.environ["HF_HOME"] = os.path.join(BASE_DIR, ".hf_cache")
+os.makedirs(os.environ["HF_HOME"], exist_ok=True)
 
 # Globals to keep track of background processes
 daemon_process = None
@@ -95,6 +99,18 @@ def main():
             subprocess.run(["git", "clone", "--depth=1", "https://github.com/supertone-inc/supertonic.git", supertonic_dir], check=False)
         else:
             print("[*] supertonic already exists, skipping clone.")
+            
+        # Ensure Supertonic C API wrapper is built
+        supertonic_build_dir = os.path.join(supertonic_dir, "cpp", "build")
+        supertonic_c_lib = os.path.join(supertonic_build_dir, "libsupertonic_c.dylib") if platform.system() == "Darwin" else os.path.join(supertonic_build_dir, "libsupertonic_c.so")
+        if not os.path.exists(supertonic_c_lib):
+            print("[*] Building supertonic C API wrapper...")
+            os.makedirs(supertonic_build_dir, exist_ok=True)
+            subprocess.run(["cmake", ".."], cwd=supertonic_build_dir, check=False)
+            threads = str(os.cpu_count() or 4)
+            subprocess.run(["make", f"-j{threads}"], cwd=supertonic_build_dir, check=False)
+        else:
+            print("[*] supertonic C wrapper library exists, skipping cmake build.")
 
         # Check and clone moonshine
         moonshine_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "moonshine"))
