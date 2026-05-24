@@ -6,8 +6,8 @@ with GNATCOLL.JSON;
 
 package body Database_Manager is
 
-   DB_File : constant String := "adelaide_memory.db";
-   Lit_DB_File : constant String := "literatureRefIndex.db";
+   DB_File : constant String := "UI_Database/adelaide_memory.db";
+   Lit_DB_File : constant String := "UI_Database/literatureRefIndex.db";
 
    type DB_Access is access all Ada_Sqlite3.Database;
    Main_DB_Ptr : DB_Access := null;
@@ -366,7 +366,10 @@ package body Database_Manager is
 
       return "";
    exception
-      when others => return "";
+      when E : others =>
+         Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[DB]" & AnsiAda.Reset &
+                   " Cache Read Error: " & Ada.Exceptions.Exception_Message (E));
+         return "";
    end Get_Cached_Response;
 
    --------------
