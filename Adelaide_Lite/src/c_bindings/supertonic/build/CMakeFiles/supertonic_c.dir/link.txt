@@ -1,0 +1,1 @@
+/usr/bin/c++  -arch arm64 -dynamiclib -Wl,-headerpad_max_install_names -o libsupertonic_c.dylib -install_name @rpath/libsupertonic_c.dylib CMakeFiles/supertonic_c.dir/supertonic_c_api.cpp.o CMakeFiles/supertonic_c.dir/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/supertonic/cpp/helper.cpp.o  -Wl,-rpath,/opt/homebrew/lib /opt/homebrew/lib/libonnxruntime.1.25.1.dylib
