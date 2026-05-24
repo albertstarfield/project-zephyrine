@@ -54,6 +54,9 @@ package body Model_Manager is
    type Owner_Array is array (Model_Type) of ELP_Level;
    type Busy_Array is array (Model_Type) of Boolean;
 
+   --  PRIORITY MODEL GATE:
+   --  Manages access to the model contexts.
+   --  ELP1 requests (User Interactions) preempt running ELP0 requests (Background Tasks).
    protected Priority_Model_Gate is
       procedure Request_ELP1;
       entry Acquire_ELP1 (Model_Type);
@@ -134,6 +137,8 @@ package body Model_Manager is
       end Is_ELP0_Owner;
    end Priority_Model_Gate;
 
+   --  IDLE MONITOR:
+   --  Unloads models after 30 seconds of inactivity to free VRAM.
    task Idle_Monitor is
       pragma Storage_Size (1024 * 1024);
       entry Start;
@@ -718,8 +723,10 @@ package body Model_Manager is
          32768, True, True);
       Free (Prompt_C);
       
-      --  DYNAMIC CONTEXT RESIZE:
-      --  If the prompt tokens exceed current N_CTX, reload with more space.
+      --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
+      --  If the prompt tokens exceed the current N_CTX of the loaded model,
+      --  we perform an immediate reload with sufficient space. This ensures
+      --  that long-context follow-up questions work in a single pass.
       if N_Toks > int (Models (Kind).Current_Ctx) then
          Put_Line ("[!] Prompt size (" & N_Toks'Img & 
                    ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
@@ -1038,27 +1045,11 @@ package body Model_Manager is
                end if;
             end Get_Router_Prompt;
          begin
-            declare
-               Ctx : Positive := 2048;
-            begin
-               Ctx := 2048;
-               loop
-                  Generate
-                    (Qwen_0_8B,
-                     Get_Router_Prompt,
-                     Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, Ctx,
-                     Stream, False, Level);
-
-                  declare
-                     Resp_Str : constant String := To_String (Step_Raw);
-                  begin
-                     --  Only retry (and increase context) if it failed because of context size (ret=1)
-                     exit when Index (Resp_Str, "Decode failed ( 1)") = 0
-                       or else Ctx >= 16384;
-                  end;
-                  Ctx := Ctx * 2;
-               end loop;
-            end;
+            Generate
+              (Qwen_0_8B,
+               Get_Router_Prompt,
+               Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 2048,
+               Stream, False, Level);
 
             declare
                Step : constant String :=
@@ -1183,23 +1174,9 @@ package body Model_Manager is
 
          Synth_Prompt : constant String := Get_Final_Prompt;
       begin
-         declare
-            Ctx : Positive := 4096;
-         begin
-            loop
-               Generate
-                 (Qwen_4B, Synth_Prompt, Current_Response, Images, Session_ID,
-                  Ctx, Stream, True, Level);
-
-               declare
-                  Resp_Str : constant String := To_String (Current_Response);
-               begin
-                  exit when Index (Resp_Str, "Decode failed ( 1)") = 0
-                    or else Ctx >= 32768;
-               end;
-               Ctx := Ctx * 2;
-            end loop;
-         end;
+         Generate
+           (Qwen_4B, Synth_Prompt, Current_Response, Images, Session_ID,
+            4096, Stream, True, Level);
 
          Result := Current_Response;
          declare
