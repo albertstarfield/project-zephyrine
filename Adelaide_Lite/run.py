@@ -60,8 +60,6 @@ def cleanup(signum=None, frame=None):
         daemon_process.terminate()
     if server_process and server_process.poll() is None:
         server_process.terminate()
-    if kokoro_process and kokoro_process.poll() is None:
-        kokoro_process.terminate()
     sys.exit(0)
 
 signal.signal(signal.SIGINT, cleanup)
@@ -211,10 +209,6 @@ def main():
         daemon_args.append(daemon_build_flag)
         
     daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR)
-
-    print("[*] Booting Kokoro TTS Sidecar...")
-    kokoro_sidecar_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro_sidecar"))
-    kokoro_process = subprocess.Popen([sys.executable, "server.py"], cwd=kokoro_sidecar_dir)
 
     print("[*] Booting Adelaide Intelligence Server...")
     end_time = int(time.time() * 1000)
