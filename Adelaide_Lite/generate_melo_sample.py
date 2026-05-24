@@ -12,6 +12,7 @@ except ImportError as e:
 
 text = "The quick brown fox jumps over the lazy dog."
 output_path = "sampleAdeltts_blob.dat"
+output_path = "sampleAdeltts_blob.wav"
 
 print("Loading MeloTTS model...")
 model = TTS(language='EN', device='cpu')
@@ -23,4 +24,5 @@ if speaker not in speaker_ids:
 
 print(f"Generating audio with speaker {speaker}...")
 model.tts_to_file(text, speaker_ids[speaker], output_path, speed=1.0)
+os.rename("sampleAdeltts_blob.wav", "sampleAdeltts_blob.dat")
 print(f"Successfully generated {output_path}")
