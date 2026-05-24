@@ -5,7 +5,6 @@ import platform
 import re
 import subprocess
 import sys
-import time
 import hashlib
 from typing import Optional, Match
 
@@ -104,14 +103,14 @@ def _compile_and_load():
                 stored_hash = f.read().strip()
             if stored_hash != current_hash:
                 needs_compile = True
-                print(f"[*] Trickshot: Source code changed. Recompiling...", file=sys.stderr)
+                print("[*] Trickshot: Source code changed. Recompiling...", file=sys.stderr)
         except:
             needs_compile = True
 
     # 3. Compilation Block
     if needs_compile:
         try:
-            print(f"[*] Trickshot: Compiling optimized core...", file=sys.stderr)
+            print("[*] Trickshot: Compiling optimized core...", file=sys.stderr)
             
             # Write source file
             with open(src_path, "w") as f:
@@ -127,7 +126,7 @@ def _compile_and_load():
             with open(hash_path, "w") as f:
                 f.write(current_hash)
                 
-            print(f"[+] Trickshot: Compilation successful.", file=sys.stderr)
+            print("[+] Trickshot: Compilation successful.", file=sys.stderr)
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("[-] Trickshot: Compilation failed (g++ missing?).", file=sys.stderr)
             return

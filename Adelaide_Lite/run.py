@@ -7,7 +7,6 @@ import hashlib
 import platform
 import signal
 import shutil
-import glob
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
