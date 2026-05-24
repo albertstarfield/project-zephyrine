@@ -1625,7 +1625,9 @@ function initAstralGeometry() {
     starGeo.setFromPoints(starPoints);
     const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
     const stars = new THREE.Points(starGeo, starMat);
-    layers.push(stars);
+    // Move stars to separate scene
+    const starScene = new THREE.Scene();
+    starScene.add(stars);
 
     layers.forEach(layer => group.add(layer));
     
@@ -1729,10 +1731,42 @@ function initAstralGeometry() {
     const composer = new EffectComposer(renderer);
     composer.addPass(renderPass);
 
-    // Afterimage Pass for 30-second fading trails
+    const starRenderPass = new RenderPass(starScene, camera);
+    const starTarget = new THREE.WebGLRenderTarget(canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight);
+    const starComposer = new EffectComposer(renderer, starTarget);
+    starComposer.renderToScreen = false;
+    starComposer.addPass(starRenderPass);
     const afterimagePass = new AfterimagePass();
-    afterimagePass.uniforms['damp'].value = 0.98; // Very slow fade
-    composer.addPass(afterimagePass);
+    afterimagePass.uniforms['damp'].value = 0.99; // Much longer trails!
+    starComposer.addPass(afterimagePass);
+
+    // Blend starComposer over main composer
+    const additiveShader = {
+        uniforms: {
+            tDiffuse: { value: null },
+            tAdd: { value: null }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D tDiffuse;
+            uniform sampler2D tAdd;
+            varying vec2 vUv;
+            void main() {
+                vec4 texel = texture2D(tDiffuse, vUv);
+                vec4 texelAdd = texture2D(tAdd, vUv);
+                gl_FragColor = texel + texelAdd;
+            }
+        `
+    };
+    const blendPass = new ShaderPass(additiveShader);
+    blendPass.uniforms.tAdd.value = starComposer.readBuffer.texture;
+    composer.addPass(blendPass);
 
     // Add Unreal Bloom Pass
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(canvas.clientWidth, canvas.clientHeight), 1.5, 0.4, 0.85);
@@ -1758,6 +1792,7 @@ function initAstralGeometry() {
         if (needResize && width > 0) {
             renderer.setSize(width, height, false);
             composer.setSize(width, height);
+            starComposer.setSize(width, height);
             
             const pixelRatio = renderer.getPixelRatio();
             fxaaPass.material.uniforms['resolution'].value.x = 1 / (width * pixelRatio);
@@ -1779,6 +1814,7 @@ function initAstralGeometry() {
         
         flareMat.uniforms.time.value += 0.01;
 
+        starComposer.render();
         composer.render();
     }
 
