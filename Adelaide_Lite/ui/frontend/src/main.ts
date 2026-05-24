@@ -64,6 +64,11 @@ async function renderMarkdownToElement(el: HTMLElement, mdText: string) {
     catch(e) { return match; }
   });
 
+  // Collapse <think> tags into a details block
+  preProcessed = preProcessed.replace(/<think>([\s\S]*?)<\/think>/gi, (_, thinkContent) => {
+    return `<details class="think-block"><summary>Thought Process</summary>\n\n${thinkContent}\n\n</details>`;
+  });
+
   const rawHtml = marked.parse(preProcessed) as string;
   const cleanHtml = DOMPurify.sanitize(rawHtml, { ADD_TAGS: ['math', 'mrow', 'mi', 'mn', 'mo', 'ms', 'mspace', 'mtext', 'menclose', 'merror', 'mphantom', 'mpadded', 'mroot', 'mfrac', 'msqrt', 'mstyle', 'msub', 'msup', 'msubsup', 'munder', 'mover', 'munderover', 'mtable', 'mtr', 'mtd', 'annotation', 'semantics']});
   el.innerHTML = cleanHtml;

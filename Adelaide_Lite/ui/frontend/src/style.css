@@ -1198,3 +1198,22 @@ body.agentic-mode .stars {
     filter: drop-shadow(0 0 8px #0ff) drop-shadow(0 0 25px #ff00de);
     transition: filter 2s ease-in-out;
 }
+
+.think-block {
+  margin: 1rem 0;
+  padding: 0.8rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid #00a859;
+  border-radius: 4px;
+  color: #aaa;
+  font-size: 0.9em;
+}
+.think-block summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #ddd;
+  user-select: none;
+}
+.think-block summary:hover {
+  color: #fff;
+}
