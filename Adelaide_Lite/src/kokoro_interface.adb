@@ -21,8 +21,7 @@ package body Kokoro_Interface is
       
       GNAT.OS_Lib.Spawn (
          Program_Name => "../tts_kokoro_component/venv/bin/python",
-         Args         => [new String'("../kokoclone/cli.py"),
-                          new String'("--mode"), new String'("tts"),
+         Args         => [new String'("../tts_kokoro_component/stereo_cloner.py"),
                           new String'("--text"), new String'(Text),
                           new String'("--ref"), new String'("../Adelaide_Lite/sampleAdeltts_reference.wav"),
                           new String'("--out"), new String'(File_Name)],
