@@ -124,4 +124,35 @@ package body Integrity_Utils is
       --  If Corrupt_Count = 0, nothing to do, Success remains True
    end Self_Patch;
 
+   ---------------
+   -- Is_Binary --
+   ---------------
+   function Is_Binary (Data : Byte_Array) return Boolean is
+      Non_Printable : Natural := 0;
+   begin
+      if Data'Length = 0 then
+         return False;
+      end if;
+
+      for I in Data'Range loop
+         --  Check for NUL byte
+         if Data (I) = 0 then
+            return True;
+         end if;
+
+         --  Count non-printable characters (heuristic)
+         --  ASCII 32-126 are printable, plus CR, LF, TAB
+         if not (Data (I) in 32 .. 126 or else
+                 Data (I) = 9 or else
+                 Data (I) = 10 or else
+                 Data (I) = 13)
+         then
+            Non_Printable := Non_Printable + 1;
+         end if;
+      end loop;
+
+      --  If more than 30% are non-printable, consider it binary
+      return Float (Non_Printable) / Float (Data'Length) > 0.3;
+   end Is_Binary;
+
 end Integrity_Utils;
