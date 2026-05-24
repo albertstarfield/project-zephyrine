@@ -231,8 +231,8 @@ package body Model_Manager is
 
       if Models (Kind).Model /= Null_Model then
          C_Params.N_Ctx := Actual_Ctx;
-         C_Params.N_Batch := 4096;
-         C_Params.N_Ubatch := 1024;
+         C_Params.N_Batch := 512;
+         C_Params.N_Ubatch := 512;
          C_Params.N_Threads := 8;
          C_Params.N_Threads_Batch := 8;
          C_Params.Abort_Callback := Llama_Abort_Callback'Address;
@@ -767,13 +767,11 @@ package body Model_Manager is
 
       --  CHUNKED DECODING
       declare
-         Batch_Size  : constant int := 4096;
+         --  Cap batch size to context size to avoid engine assertions.
+         Batch_Size  : constant int := int'Min (512, int (Models (Kind).Current_Ctx));
          Current_Pos : int := 0;
          Tokens_Left : int := N_Toks;
       begin
-         Llama_Interface.Llama_Memory_Clear
-           (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
-
          while Tokens_Left > 0 loop
 
             if Level = ELP0 and then Should_Abort_ELP0 then
