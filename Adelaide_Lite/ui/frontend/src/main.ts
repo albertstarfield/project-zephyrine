@@ -569,7 +569,27 @@ fetch('/api/user_info')
 if (navVoice) {
   navVoice.addEventListener('click', (e) => {
     e.preventDefault();
-    alert("INOP");
+    const hideEls: HTMLElement[] = [];
+    const chatContainerWrapper = document.getElementById('chat-container');
+    const aboutContainer = document.getElementById('about-container');
+    const knowledgeContainer = document.getElementById('knowledge-container');
+    const emptyState = document.getElementById('empty-state');
+    const inputContainer = document.querySelector('.input-container') as HTMLElement;
+    
+    if (chatContainerWrapper && !chatContainerWrapper.classList.contains('hidden')) hideEls.push(chatContainerWrapper);
+    if (aboutContainer && !aboutContainer.classList.contains('hidden')) hideEls.push(aboutContainer);
+    if (knowledgeContainer && !knowledgeContainer.classList.contains('hidden')) hideEls.push(knowledgeContainer);
+    if (emptyState && !emptyState.classList.contains('hidden')) hideEls.push(emptyState);
+    if (inputContainer && !inputContainer.classList.contains('hidden')) hideEls.push(inputContainer);
+
+    const agenticContainer = document.getElementById('agentic-container');
+    if (agenticContainer) {
+      switchView(hideEls, [agenticContainer]);
+      if (!(window as any).astralInitialized) {
+        initAstralGeometry();
+        (window as any).astralInitialized = true;
+      }
+    }
   });
 }
 
@@ -1406,3 +1426,104 @@ Memory    : ${(performance as any).memory ? ((performance as any).memory.usedJSH
 }
 
 setInterval(updateMangoHUD, 1000);
+
+// --------------------------------------------------------
+// Astral Geometry WebGL (Agentic Assistant View)
+// --------------------------------------------------------
+function initAstralGeometry() {
+    const canvas = document.getElementById('astral-canvas') as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+    camera.position.z = 20;
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    // Cyan/Teal material
+    const material = new THREE.LineBasicMaterial({ 
+        color: 0x40E0D0, 
+        transparent: true, 
+        opacity: 0.6,
+        blending: THREE.AdditiveBlending 
+    });
+
+    const materialDark = new THREE.LineBasicMaterial({
+        color: 0x208080,
+        transparent: true,
+        opacity: 0.3,
+        blending: THREE.AdditiveBlending
+    });
+
+    // Create intricate geometry
+    // Ring 1
+    const ring1 = new THREE.LineLoop(new THREE.CircleGeometry(8, 64), material);
+    group.add(ring1);
+    
+    // Ring 2
+    const ring2 = new THREE.LineLoop(new THREE.CircleGeometry(12, 64), materialDark);
+    ring2.position.z = -5;
+    group.add(ring2);
+
+    // Icosahedron wireframe
+    const ico = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(5, 0)), material);
+    ico.position.z = 2;
+    group.add(ico);
+
+    // Octahedron wireframe
+    const octa = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.OctahedronGeometry(10, 0)), materialDark);
+    octa.position.z = -2;
+    group.add(octa);
+
+    // Torus wireframe
+    const torus = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.TorusGeometry(15, 0.5, 8, 30)), material);
+    torus.position.z = -10;
+    group.add(torus);
+
+    // Connecting lines
+    const lineGeo = new THREE.BufferGeometry();
+    const points = [];
+    for (let i = 0; i < 50; i++) {
+        points.push(
+            (Math.random() - 0.5) * 30,
+            (Math.random() - 0.5) * 30,
+            (Math.random() - 0.5) * 20
+        );
+    }
+    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+    const starLines = new THREE.LineSegments(lineGeo, materialDark);
+    group.add(starLines);
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // Rotate geometries
+        ring1.rotation.z -= 0.002;
+        ring2.rotation.z += 0.001;
+        ico.rotation.x += 0.003;
+        ico.rotation.y += 0.002;
+        octa.rotation.x -= 0.001;
+        octa.rotation.y -= 0.002;
+        torus.rotation.z -= 0.001;
+        torus.rotation.y += 0.001;
+        
+        group.rotation.z += 0.0005;
+
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+        if (!canvas.clientWidth) return; // Hide if 0
+        camera.aspect = canvas.clientWidth / canvas.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+    });
+}
+(window as any).astralInitialized = false;
