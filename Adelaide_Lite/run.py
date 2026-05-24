@@ -158,6 +158,10 @@ def main():
         if not os.path.exists(supertonic_tts_json):
             print("[*] Downloading Supertonic models...")
             subprocess.run([sys.executable, "-c", "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Supertone/supertonic-3', local_dir='../supertonic/models')"], cwd=BASE_DIR, check=False)
+            supertonic_config_json = os.path.join(supertonic_models_dir, "config.json")
+            if os.path.exists(supertonic_config_json):
+                import shutil
+                shutil.copy(supertonic_config_json, supertonic_tts_json)
         else:
             print("[*] Supertonic models already exist, skipping download.")
 
