@@ -491,6 +491,24 @@ html {
     color: #e3e3e3;
 }
 
+.typing-indicator .bubble {
+    font-size: 1.5rem;
+    line-height: 1;
+    letter-spacing: 2px;
+}
+.typing-indicator .dot {
+    animation: typingPulse 1.4s infinite both;
+}
+.typing-indicator .dot:nth-child(1) { animation-delay: 0s; }
+.typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingPulse {
+    0% { opacity: 0.2; transform: scale(1); }
+    20% { opacity: 1; transform: scale(1.2); }
+    100% { opacity: 0.2; transform: scale(1); }
+}
+
 /* --- ABOUT SECTION --- */
 #about-container {
     flex: 1;
