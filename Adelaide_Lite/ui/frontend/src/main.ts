@@ -5,6 +5,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { AfterimagePass } from 'three/examples/jsm/postprocessing/AfterimagePass.js';
 
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -1728,6 +1729,11 @@ function initAstralGeometry() {
     const composer = new EffectComposer(renderer);
     composer.addPass(renderPass);
 
+    // Afterimage Pass for 30-second fading trails
+    const afterimagePass = new AfterimagePass();
+    afterimagePass.uniforms['damp'].value = 0.98; // Very slow fade
+    composer.addPass(afterimagePass);
+
     // Add Unreal Bloom Pass
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(canvas.clientWidth, canvas.clientHeight), 1.5, 0.4, 0.85);
     bloomPass.threshold = 0.1;
@@ -1779,3 +1785,109 @@ function initAstralGeometry() {
     animate();
 }
 (window as any).astralInitialized = false;
+
+// Voice Recording & API Connection Logic
+let isRecording = false;
+let audioContext: AudioContext | null = null;
+let mediaStream: MediaStream | null = null;
+let processor: ScriptProcessorNode | null = null;
+let inputBuffer: Float32Array[] = [];
+
+async function startAgenticVoice() {
+    if (isRecording) return;
+    
+    try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+        const source = audioContext.createMediaStreamSource(mediaStream);
+        
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        
+        processor.onaudioprocess = (e) => {
+            const channelData = e.inputBuffer.getChannelData(0);
+            inputBuffer.push(new Float32Array(channelData));
+        };
+        
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+        isRecording = true;
+        console.log("Started recording raw PCM for Agentic Mode");
+        
+    } catch (err) {
+        console.error("Microphone permission denied or error:", err);
+        alert("Microphone permission is required for Handless Agentic Mode.");
+    }
+}
+
+async function stopAndSendAgenticVoice() {
+    if (!isRecording) return;
+    isRecording = false;
+    
+    if (processor) {
+        processor.disconnect();
+    }
+    
+    if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+    }
+    if (audioContext) {
+        audioContext.close();
+    }
+    
+    // Concatenate all float32 chunks
+    const totalLength = inputBuffer.reduce((acc, val) => acc + val.length, 0);
+    const combinedFloats = new Float32Array(totalLength);
+    let offset = 0;
+    for (const chunk of inputBuffer) {
+        combinedFloats.set(chunk, offset);
+        offset += chunk.length;
+    }
+    
+    inputBuffer = []; // Reset
+    
+    console.log("Sending PCM Floats to backend...", totalLength);
+    
+    try {
+        const portFileUrl = "http://127.0.0.1:11420/api/agenticZephyHandlessMode";
+        
+        const response = await fetch(portFileUrl, {
+            method: 'POST',
+            body: combinedFloats.buffer,
+            headers: { 'Content-Type': 'application/octet-stream' }
+        });
+        
+        if (response.ok && response.headers.get('content-type')?.includes('audio/pcm')) {
+            const arrayBuffer = await response.arrayBuffer();
+            playPCM(arrayBuffer);
+        } else {
+            console.error("Backend Error:", await response.text());
+        }
+        
+    } catch (err) {
+        console.error("Failed to connect to Ada daemon:", err);
+    }
+}
+
+async function playPCM(buffer: ArrayBuffer) {
+    const playCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    const floatArr = new Float32Array(buffer);
+    
+    const audioBuffer = playCtx.createBuffer(1, floatArr.length, 24000);
+    audioBuffer.copyToChannel(floatArr, 0);
+    
+    const source = playCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(playCtx.destination);
+    source.start();
+}
+
+// Hook up to visualizer click for Push-To-Talk
+const visualizer = document.getElementById('audio-visualizer-circle');
+if (visualizer) {
+    visualizer.addEventListener('mousedown', startAgenticVoice);
+    visualizer.addEventListener('mouseup', stopAndSendAgenticVoice);
+    
+    // Support touch devices
+    visualizer.addEventListener('touchstart', (e) => { e.preventDefault(); startAgenticVoice(); });
+    visualizer.addEventListener('touchend', (e) => { e.preventDefault(); stopAndSendAgenticVoice(); });
+}
