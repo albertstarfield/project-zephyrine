@@ -208,9 +208,9 @@ package body Model_Manager is
    begin
       Actual_Ctx := unsigned (Requested_Ctx);
       --  Round up to power of 2 for efficiency if desired, or just use Requested_Ctx
-      --  Let's at least ensure we don't go below a sensible minimum for this project's models.
-      if Actual_Ctx < 4096 then
-         Actual_Ctx := 4096;
+      --  Minimum context size is now 8192 for stability and headroom.
+      if Actual_Ctx < 8192 then
+         Actual_Ctx := 8192;
       end if;
       
       Success := False;
@@ -747,9 +747,9 @@ package body Model_Manager is
                    ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
                    "). Resizing...");
          declare
-            --  Round up to next 2048 to avoid too frequent reloads
+            --  Round up to next 8192 to avoid frequent reloads and ensure headroom.
             Rounded_Ctx : constant unsigned :=
-              ((unsigned (N_Toks) + 512 + 2047) / 2048) * 2048;
+              ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
          begin
             Load_Model (Kind, Success, Positive (Rounded_Ctx));
          end;
@@ -1067,7 +1067,7 @@ package body Model_Manager is
             Generate
               (Qwen_0_8B,
                Get_Router_Prompt,
-               Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 2048,
+               Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
                Stream, False, Level);
 
             declare
@@ -1195,7 +1195,7 @@ package body Model_Manager is
       begin
          Generate
            (Qwen_4B, Synth_Prompt, Current_Response, Images, Session_ID,
-            4096, Stream, True, Level);
+            8192, Stream, True, Level);
 
          Result := Current_Response;
          declare
