@@ -1610,10 +1610,11 @@ function initAstralGeometry() {
     // Glowing Stars / Nodes
     const starGeo = new THREE.BufferGeometry();
     const starPoints = [];
-    for (let i = 0; i < 200; i++) {
-        const radius = 1 + Math.random() * 17;
+    for (let i = 0; i < 600; i++) {
+        // Expand radius to fill the entire visible canvas area
+        const radius = Math.random() * 60;
         const theta = Math.random() * Math.PI * 2;
-        starPoints.push(new THREE.Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, (Math.random() - 0.5) * 2.5));
+        starPoints.push(new THREE.Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, (Math.random() - 0.5) * 4));
     }
     starGeo.setFromPoints(starPoints);
     const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
