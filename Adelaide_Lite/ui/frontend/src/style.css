@@ -37,6 +37,14 @@ html {
 }
 
 /* --- DYNAMIC GLOWING BACKGROUND & STARS --- */
+#bg, #gl {
+    transition: opacity 1s ease-in-out, visibility 1s ease-in-out;
+}
+#bg.dimmed, #gl.dimmed {
+    opacity: 0 !important;
+    visibility: hidden;
+}
+
 #bg {
     position: absolute;
     top: 0;

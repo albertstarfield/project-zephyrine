@@ -59,8 +59,17 @@ const emptyState = document.getElementById('empty-state') as HTMLDivElement;
 const chatContainerWrapper = document.getElementById('chat-container') as HTMLDivElement;
 
 function addMessageToUI(msg: Message) {
-  emptyState.classList.add('hidden');
-  chatContainerWrapper.classList.remove('hidden');
+  const emptyState = document.getElementById('empty-state');
+  const chatContainerWrapper = document.getElementById('chat-container');
+  const aboutContainer = document.getElementById('about-container');
+  const knowledgeContainer = document.getElementById('knowledge-container');
+
+  if (emptyState && !emptyState.classList.contains('hidden')) {
+    const hideEls = [emptyState];
+    if (aboutContainer && !aboutContainer.classList.contains('hidden')) hideEls.push(aboutContainer);
+    if (knowledgeContainer && !knowledgeContainer.classList.contains('hidden')) hideEls.push(knowledgeContainer);
+    switchView(hideEls, [chatContainerWrapper!]);
+  }
 
   const msgEl = document.createElement('div');
   msgEl.className = `message ${msg.role}`;
@@ -75,7 +84,9 @@ function addMessageToUI(msg: Message) {
   messagesContainer.appendChild(msgEl);
   
   // Auto-scroll to bottom
-  chatContainerWrapper.scrollTop = chatContainerWrapper.scrollHeight;
+  if (chatContainerWrapper) {
+    chatContainerWrapper.scrollTop = chatContainerWrapper.scrollHeight;
+  }
 }
 
 let currentSessionId: number | null = null;
@@ -190,13 +201,28 @@ async function loadMessagesForSession(sessionId: number | null) {
     const res = await fetch(`/api/messages?session_id=${sessionId}`);
     if (res.ok) {
       const msgs = await res.json();
+      
+      const hideEls = [];
+      const showEls = [inputContainer];
+      
+      if (!aboutContainer?.classList.contains('hidden')) hideEls.push(aboutContainer!);
+      if (!knowledgeContainer?.classList.contains('hidden')) hideEls.push(knowledgeContainer!);
+      
+      const emptyState = document.getElementById('empty-state');
+      const chatContainerWrapper = document.getElementById('chat-container');
+      
+      if (msgs.length > 0) {
+        if (emptyState && !emptyState.classList.contains('hidden')) hideEls.push(emptyState);
+        if (chatContainerWrapper) showEls.push(chatContainerWrapper);
+      } else {
+        if (chatContainerWrapper && !chatContainerWrapper.classList.contains('hidden')) hideEls.push(chatContainerWrapper);
+        if (emptyState) showEls.push(emptyState);
+      }
+      
+      await switchView(hideEls, showEls);
+      
       if (msgs.length > 0) {
         msgs.forEach(addMessageToUI);
-      } else {
-        const emptyState = document.getElementById('empty-state');
-        const chatContainerWrapper = document.getElementById('chat-container');
-        emptyState?.classList.remove('hidden');
-        chatContainerWrapper?.classList.add('hidden');
       }
     }
   } catch (e) {
@@ -514,6 +540,19 @@ let currentAboutContent = '';
 
 // View transition helper
 async function switchView(hideEls: HTMLElement[], showEls: HTMLElement[]) {
+  const bg = document.getElementById('bg');
+  const gl = document.getElementById('gl');
+  const emptyState = document.getElementById('empty-state');
+  
+  // Background dimming logic
+  if (showEls.includes(emptyState!)) {
+    bg?.classList.remove('dimmed');
+    gl?.classList.remove('dimmed');
+  } else {
+    bg?.classList.add('dimmed');
+    gl?.classList.add('dimmed');
+  }
+
   // Fade out
   hideEls.forEach(el => el.classList.add('fade-out'));
   if (hideEls.length > 0) {
@@ -523,6 +562,7 @@ async function switchView(hideEls: HTMLElement[], showEls: HTMLElement[]) {
   
   // Fade in
   showEls.forEach(el => {
+    el.classList.add('fade-out');
     el.classList.remove('hidden');
     // Force reflow to ensure transition runs
     void el.offsetWidth;
