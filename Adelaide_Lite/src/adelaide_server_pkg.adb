@@ -134,8 +134,10 @@ package body Adelaide_Server_Pkg is
       URI    : constant String := AWS.Status.URI (Request);
       Method : constant String := AWS.Status.Method (Request);
       Raw_S  : constant String := AWS.Status.Parameter (Request, "prompt");
-      Raw_B  : constant Unbounded_String :=
+      Raw_B   : constant Unbounded_String :=
         To_Unbounded_String (AWS.Status.Payload (Request));
+      Payload : Unbounded_String := (if Raw_S /= "" then
+        To_Unbounded_String (Raw_S) else Raw_B);
       Result : Unbounded_String;
    begin
       if Method = "OPTIONS" then
@@ -455,6 +457,8 @@ package body Adelaide_Server_Pkg is
             if Length (Prompt) = 0 and then Length (Payload) > 0 then
                Prompt := Payload; -- Fallback if parsing fails or fields missing
             end if;
+            Ada.Text_IO.Put_Line ("[DEBUG] Payload: " & To_String (Payload));
+            Ada.Text_IO.Put_Line ("[DEBUG] Parsed Prompt: " & To_String (Prompt));
 
             if Length (Prompt) = 0 then
                return Build_Response ("{""response"": """"}",
