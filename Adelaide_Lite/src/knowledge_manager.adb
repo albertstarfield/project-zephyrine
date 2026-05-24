@@ -243,19 +243,27 @@ package body Knowledge_Manager is
                N : constant String := Simple_Name (Ent);
                P : constant String := Full_Name (Ent);
             begin
-               if N /= "." and then N /= ".." then
+               if N /= "." and then N /= ".." and then N /= "node_modules" and then N /= ".git" then
                   if Kind (Ent) = Directory then
                      Walk_Directory (P);
                   elsif Kind (Ent) = Ordinary_File then
-                     if Index (N, ".txt") > 0 or else
-                        Index (N, ".md") > 0 or else
-                        Index (N, ".adb") > 0 or else
-                        Index (N, ".ads") > 0 or else
-                        Index (N, ".py") > 0 or else
-                        Index (N, ".pdf") > 0
-                     then
-                        Index_File (P);
-                     end if;
+                     declare
+                        function Ends_With (S, Ext : String) return Boolean is
+                        begin
+                           return S'Length >= Ext'Length and then
+                                  S (S'Last - Ext'Length + 1 .. S'Last) = Ext;
+                        end Ends_With;
+                     begin
+                        if Ends_With (N, ".txt") or else
+                           Ends_With (N, ".md") or else
+                           Ends_With (N, ".adb") or else
+                           Ends_With (N, ".ads") or else
+                           Ends_With (N, ".py") or else
+                           Ends_With (N, ".pdf")
+                        then
+                           Index_File (P);
+                        end if;
+                     end;
                   end if;
                end if;
             end;
@@ -264,10 +272,7 @@ package body Knowledge_Manager is
          when others => null;
       end Walk_Directory;
 
-      Home_Dir : constant String :=
-        (if Ada.Environment_Variables.Exists ("HOME")
-         then Ada.Environment_Variables.Value ("HOME")
-         else ".");
+      Home_Dir : constant String := ".";
    begin
       accept Start;
       loop
