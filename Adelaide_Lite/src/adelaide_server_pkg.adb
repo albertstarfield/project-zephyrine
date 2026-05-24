@@ -8,6 +8,7 @@ with Kokoro_Interface;
 with Moonshine_Interface;
 with Interfaces;
 with Model_Manager;
+with Streaming_Queue;
 use Streaming_Queue;
 with AWS.Response.Set;
 with AWS.Messages;
@@ -22,11 +23,11 @@ package body Adelaide_Server_Pkg is
    WCET_Main_Loop : Duration := 0.0;
 
    -- Handless Mode Trackers
-   Handless_Stage : Unbounded_String := To_Unbounded_String("Idle");
-   Handless_Input_Text : Unbounded_String := To_Unbounded_String("");
-   Handless_Output_Text : Unbounded_String := To_Unbounded_String("");
+   Handless_Stage : Unbounded_String := To_Unbounded_String ("Idle");
+   Handless_Input_Text : Unbounded_String := To_Unbounded_String ("");
+   Handless_Output_Text : Unbounded_String := To_Unbounded_String ("");
    Handless_WCET : Float := 0.0;
-   Handless_Vision_Context : Unbounded_String := To_Unbounded_String("");
+   Handless_Vision_Context : Unbounded_String := To_Unbounded_String ("");
 
    use type Streaming_Queue.Queue_Access;
 
@@ -149,9 +150,12 @@ package body Adelaide_Server_Pkg is
          declare
             use GNATCOLL.JSON;
             R : constant JSON_Value := Create_Object;
-            Raw_Payload : constant Ada.Streams.Stream_Element_Array := AWS.Status.Binary_Data (Request);
-            Num_Floats : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
-            type Float_Array is array (1 .. Natural(Num_Floats)) of aliased Float;
+            Raw_Payload : constant Ada.Streams.Stream_Element_Array :=
+              AWS.Status.Binary_Data (Request);
+            Num_Floats : constant Interfaces.Unsigned_64 :=
+              Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
+            type Float_Array is array (1 .. Natural (Num_Floats)) of
+              aliased Float;
             Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
 
             Transcript : Unbounded_String;
@@ -188,9 +192,12 @@ package body Adelaide_Server_Pkg is
       if URI = "/api/agenticZephyHandlessMode" then
          declare
             use GNATCOLL.JSON;
-            Raw_Payload : constant Ada.Streams.Stream_Element_Array := AWS.Status.Binary_Data (Request);
-            Num_Floats : constant Interfaces.Unsigned_64 := Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
-            type Float_Array is array (1 .. Natural(Num_Floats)) of aliased Float;
+            Raw_Payload : constant Ada.Streams.Stream_Element_Array :=
+              AWS.Status.Binary_Data (Request);
+            Num_Floats : constant Interfaces.Unsigned_64 :=
+              Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
+            type Float_Array is array (1 .. Natural (Num_Floats)) of
+              aliased Float;
             Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
 
             Transcript : Unbounded_String;
