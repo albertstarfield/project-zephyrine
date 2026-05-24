@@ -15,6 +15,13 @@ project Stella_Greeting is
       for Switches ("Ada") use ("-Es"); --  Symbolic traceback
    end Binder;
 
+   package Linker is
+      for Switches ("Ada") use (
+          "-Wl,-syslibroot," & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
+          "-F" & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk") & "/System/Library/Frameworks"
+      );
+   end Linker;
+
    package Install is
       for Artifacts (".") use ("share");
    end Install;

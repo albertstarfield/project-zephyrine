@@ -22,4 +22,11 @@ project Avionics_Zephy_Fmc_Cpp_Microcontroller_Io_Fmc_Bridge_Mk1 is
       for Artifacts (".") use ("share");
    end Install;
 
+   package Linker is
+      for Switches ("Ada") use (
+          "-Wl,-syslibroot," & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
+          "-F" & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk") & "/System/Library/Frameworks"
+      );
+   end Linker;
+
 end Avionics_Zephy_Fmc_Cpp_Microcontroller_Io_Fmc_Bridge_Mk1;
