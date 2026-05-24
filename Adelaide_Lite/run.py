@@ -84,7 +84,7 @@ def main():
         llama_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "llama.cpp"))
         if not os.path.exists(llama_dir):
             print("[*] Cloning llama.cpp...")
-            subprocess.run(["git", "clone", "https://github.com/ggerganov/llama.cpp.git", llama_dir], check=False)
+            subprocess.run(["git", "clone", "--depth=1", "https://github.com/ggerganov/llama.cpp.git", llama_dir], check=False)
         else:
             print("[*] llama.cpp already exists, skipping clone.")
 
@@ -92,9 +92,28 @@ def main():
         supertonic_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "supertonic"))
         if not os.path.exists(supertonic_dir):
             print("[*] Cloning supertonic...")
-            subprocess.run(["git", "clone", "https://github.com/supertone-inc/supertonic.git", supertonic_dir], check=False)
+            subprocess.run(["git", "clone", "--depth=1", "https://github.com/supertone-inc/supertonic.git", supertonic_dir], check=False)
         else:
             print("[*] supertonic already exists, skipping clone.")
+
+        # Check and clone moonshine
+        moonshine_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "moonshine"))
+        if not os.path.exists(moonshine_dir):
+            print("[*] Cloning moonshine...")
+            subprocess.run(["git", "clone", "--depth=1", "https://github.com/moonshine-ai/moonshine.git", moonshine_dir], check=False)
+        else:
+            print("[*] moonshine already exists, skipping clone.")
+
+        # Ensure Moonshine is built
+        moonshine_build_dir = os.path.join(moonshine_dir, "build")
+        moonshine_core_lib = os.path.join(moonshine_build_dir, "core", "libmoonshine.dylib") if platform.system() == "Darwin" else os.path.join(moonshine_build_dir, "core", "libmoonshine.so")
+        if not os.path.exists(moonshine_core_lib):
+            print("[*] Building moonshine C API...")
+            os.makedirs(moonshine_build_dir, exist_ok=True)
+            subprocess.run(["cmake", ".."], cwd=moonshine_build_dir, check=False)
+            subprocess.run(["make", "-j8"], cwd=moonshine_build_dir, check=False)
+        else:
+            print("[*] moonshine core library exists, skipping cmake build.")
 
         # Ensure Deno Playwright Chromium is installed
         print("[*] Installing Playwright Chromium binary for Deno crawler...")

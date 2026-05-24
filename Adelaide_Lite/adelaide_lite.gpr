@@ -20,6 +20,8 @@ project Adelaide_Lite is
    package Linker is
       -- Patch Note: SDK path is now resolved dynamically using the SDKROOT environment variable.
       for Switches ("Ada") use (
+          "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/moonshine/build/core",
+          "-lmoonshine",
           "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/src",
           "-lllama",
           "-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/ggml/src",
