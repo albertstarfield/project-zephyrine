@@ -101,12 +101,19 @@ def main():
         else:
             print("[*] kokoro-onnx already exists, skipping clone.")
             
+        kokoclone_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoclone"))
+        if not os.path.exists(kokoclone_dir):
+            print("[*] Cloning KokoClone Zero-Shot Repository...")
+            subprocess.run(["git", "clone", "https://github.com/Ashish-Patnaik/kokoclone.git", kokoclone_dir], check=True)
+        else:
+            print("[*] kokoclone already exists, skipping clone.")
+            
         # Ensure Kokoro TTS component dependencies are installed in an isolated venv
         kokoro_comp_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "tts_kokoro_component"))
         kokoro_venv_dir = os.path.join(kokoro_comp_dir, "venv")
         if not os.path.exists(kokoro_venv_dir):
-            print("[*] Creating dedicated virtual environment for Kokoro TTS...")
-            subprocess.run([sys.executable, "-m", "venv", kokoro_venv_dir], check=True)
+            print("[*] Creating dedicated virtual environment for Kokoro TTS (Python 3.12)...")
+            subprocess.run(["python3.12", "-m", "venv", kokoro_venv_dir], check=True)
             
         print("[*] Installing Kokoro TTS requirements...")
         kokoro_pip = os.path.join(kokoro_venv_dir, "bin", "pip") if platform.system() != "Windows" else os.path.join(kokoro_venv_dir, "Scripts", "pip.exe")
