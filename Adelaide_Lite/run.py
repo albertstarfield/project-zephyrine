@@ -93,6 +93,20 @@ def main():
         else:
             print("[*] llama.cpp already exists, skipping clone.")
 
+        # Ensure llama.cpp is built
+        llama_build_dir = os.path.join(llama_dir, "build")
+        llama_lib = os.path.join(llama_build_dir, "src", "libllama.a")
+        if not os.path.exists(llama_lib):
+            print("[*] Building llama.cpp...")
+            os.makedirs(llama_build_dir, exist_ok=True)
+            cmake_flags = ["cmake", "-B", "build", "-DGGML_NATIVE=ON"]
+            if platform.system() == "Darwin" and platform.machine() == "arm64":
+                cmake_flags.append("-DGGML_METAL=ON")
+            subprocess.run(cmake_flags, cwd=llama_dir, check=False)
+            subprocess.run(["cmake", "--build", "build", "--config", "Release", "-j"], cwd=llama_dir, check=False)
+        else:
+            print("[*] llama.cpp library exists, skipping build.")
+
         # Check and clone kokoro-onnx
         kokoro_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro-onnx"))
         if not os.path.exists(kokoro_dir):
