@@ -30,8 +30,8 @@ begin
       Knowledge_Manager.Initialize;
       
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Initializing Supertonic and Moonshine...");
-      Supertonic_Interface.Initialize ("../supertonic/models", False);
-      -- We will assume the voice style path exists or we load it on demand
+      Supertonic_Interface.Initialize ("../supertonic/models/onnx", False);
+      Supertonic_Interface.Load_Voice_Style ("../supertonic/models/voice_styles/M1.json");
       Moonshine_Interface.Init_Moonshine ("../moonshine/models/download.moonshine.ai/model/medium-streaming-en/quantized");
 
       AWS.Config.Set.Server_Port (Conf, 11420);
