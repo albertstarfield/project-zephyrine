@@ -758,7 +758,7 @@ if __name__ == "__main__":
         except Exception:
             pass
             
-    threading.Thread(target=run_benchmark, daemon=True).start()
+    # threading.Thread(target=run_benchmark, daemon=True).start()
 
     # Start FastAPI in a background thread
     server_thread = threading.Thread(target=run_server, args=(ui_port,), daemon=True)
