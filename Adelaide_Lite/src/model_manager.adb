@@ -953,6 +953,8 @@ package body Model_Manager is
               "If the user says hello or greets you, output [FINISH]. " &
               "If you need to search, use [ACTION: search(query)]. " &
               "If you need to read a file, use [ACTION: cat(filename)]. " &
+              "If you need to calculate math, use [ACTION: math(expression)]. " &
+              "If you need to execute code, use [ACTION: code(python_script)]. " &
               "If you want to schedule a proactive thought for later, use [ACTION: schedule(seconds, query)]. " &
               "If you are done, output [FINISH]. " &
               "Output ONLY the tag.";
