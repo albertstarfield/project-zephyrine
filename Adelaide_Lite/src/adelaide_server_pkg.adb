@@ -181,7 +181,7 @@ package body Adelaide_Server_Pkg is
             Parser_Result : constant Read_Result := Read (Payload_Str);
          begin
             if Parser_Result.Success then
-               Handless_Vision_Context := To_Unbounded_String (Get (Parser_Result.Item, "image_b64"));
+               Handless_Vision_Context := To_Unbounded_String (String'(Get (Parser_Result.Value, "image_b64")));
             end if;
             return Wrap_Response (AWS.Response.Build ("text/plain", "OK"));
          end;
@@ -219,7 +219,7 @@ package body Adelaide_Server_Pkg is
                   Vision_Arr : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
                begin
                   if Length (Handless_Vision_Context) > 0 then
-                     GNATCOLL.JSON.Append (Vision_Arr, To_String (Handless_Vision_Context));
+                     GNATCOLL.JSON.Append (Vision_Arr, Create (To_String (Handless_Vision_Context)));
                      Handless_Vision_Context := To_Unbounded_String(""); -- Clear after use
                   end if;
                   
