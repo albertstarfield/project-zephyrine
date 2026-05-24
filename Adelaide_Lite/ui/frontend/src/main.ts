@@ -655,11 +655,28 @@ async function switchView(hideEls: HTMLElement[], showEls: HTMLElement[]) {
     gl?.classList.add('dimmed');
   }
 
+  // Forcefully find all view-panels that should be hidden
+  const panels = document.querySelectorAll('.view-panel');
+  const allHideEls = new Set([...hideEls]);
+  panels.forEach(p => {
+    if (!showEls.includes(p as HTMLElement) && !p.classList.contains('hidden')) {
+      const isInputContainer = p.classList.contains('input-container');
+      const showingChatOrEmpty = showEls.some(el => el.id === 'empty-state' || el.id === 'chat-container');
+      if (isInputContainer && showingChatOrEmpty) {
+        // keep input container
+      } else {
+        allHideEls.add(p as HTMLElement);
+      }
+    }
+  });
+
+  const finalHideEls = Array.from(allHideEls);
+
   // Fade out
-  hideEls.forEach(el => el.classList.add('fade-out'));
-  if (hideEls.length > 0) {
+  finalHideEls.forEach(el => el.classList.add('fade-out'));
+  if (finalHideEls.length > 0) {
     await new Promise(r => setTimeout(r, 250));
-    hideEls.forEach(el => el.classList.add('hidden'));
+    finalHideEls.forEach(el => el.classList.add('hidden'));
   }
   
   // Fade in
@@ -1493,19 +1510,35 @@ function initAstralGeometry() {
     // Mid rings
     layers.push(createPolygon(10, 128, materialTeal, 0));
     layers.push(createDottedCircle(9.5, materialDashed, 0));
+    layers.push(createPolygon(9, 64, materialDarkTeal, 0));
     
-    // Inner rings
+    // Inner Rings (Density increase)
     layers.push(createPolygon(5, 64, materialDarkTeal, 0));
     layers.push(createPolygon(4, 64, materialTeal, 0));
+    layers.push(createPolygon(3.5, 64, materialGold, 0));
+    layers.push(createDottedCircle(3, materialDashed, 0));
+    layers.push(createPolygon(2.5, 64, materialTeal, 0));
+    layers.push(createPolygon(2, 64, materialDarkTeal, 0));
+    layers.push(createPolygon(1.5, 64, materialGold, 0));
+    layers.push(createPolygon(1, 64, materialTeal, 0));
+    layers.push(createPolygon(0.5, 64, materialDarkTeal, 0));
+
+    // Inner Polygons
+    layers.push(createPolygon(4, 3, materialGold, 0)); // Triangle inner
+    const hexReverse = createPolygon(4, 3, materialTeal, 0);
+    hexReverse.rotation.z = Math.PI;
+    layers.push(hexReverse);
+
+    layers.push(createPolygon(2, 6, materialDarkTeal, 0)); // Hexagon inner
 
     // Sweeping curves (orbits)
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
         const curve = new THREE.QuadraticBezierCurve3(
-            new THREE.Vector3(Math.cos(i * Math.PI / 4) * 4, Math.sin(i * Math.PI / 4) * 4, 0),
-            new THREE.Vector3(Math.cos(i * Math.PI / 4 + Math.PI/2) * 20, Math.sin(i * Math.PI / 4 + Math.PI/2) * 20, 2),
-            new THREE.Vector3(Math.cos(i * Math.PI / 4 + Math.PI) * 16, Math.sin(i * Math.PI / 4 + Math.PI) * 16, 0)
+            new THREE.Vector3(Math.cos(i * Math.PI / 6) * 1.5, Math.sin(i * Math.PI / 6) * 1.5, 0),
+            new THREE.Vector3(Math.cos(i * Math.PI / 6 + Math.PI/2) * 20, Math.sin(i * Math.PI / 6 + Math.PI/2) * 20, 2),
+            new THREE.Vector3(Math.cos(i * Math.PI / 6 + Math.PI) * 16, Math.sin(i * Math.PI / 6 + Math.PI) * 16, 0)
         );
-        const points = curve.getPoints(50);
+        const points = curve.getPoints(60);
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const sweep = new THREE.Line(geometry, materialGold);
         layers.push(sweep);
@@ -1514,18 +1547,21 @@ function initAstralGeometry() {
     // Glowing Stars / Nodes
     const starGeo = new THREE.BufferGeometry();
     const starPoints = [];
-    for (let i = 0; i < 40; i++) {
-        const radius = 4 + Math.random() * 14;
+    for (let i = 0; i < 200; i++) {
+        const radius = 1 + Math.random() * 17;
         const theta = Math.random() * Math.PI * 2;
-        starPoints.push(new THREE.Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, (Math.random() - 0.5) * 2));
+        starPoints.push(new THREE.Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, (Math.random() - 0.5) * 2.5));
     }
     starGeo.setFromPoints(starPoints);
-    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
     const stars = new THREE.Points(starGeo, starMat);
     layers.push(stars);
 
     layers.forEach(layer => group.add(layer));
     
+    // Scale group to fit
+    group.scale.set(0.65, 0.65, 0.65);
+
     // Tilt the whole group for deep dramatic perspective
     group.rotation.x = 1.3;
     group.rotation.y = 0;
