@@ -5,6 +5,9 @@ with Ada.Streams;
 with Ada.Exceptions;
 
 package body Socket_IO is
+   use all type Interfaces.C.int;
+   use all type Interfaces.C.size_t;
+
    -- C constants for socket types
    AF_UNIX  : constant Interfaces.C.int := 1;
    SOCK_SEQPACKET : constant Interfaces.C.int := 5;
@@ -64,14 +67,15 @@ package body Socket_IO is
    -- Create_Socket --
    ------------------
    function Create_Socket (Socket_Path : String) return Socket_FD is
-      Socket_Fd : Interfaces.C.int;
-      Addr : Sockaddr_Un;
-      Path_C : Interfaces.C.Strings.chars_ptr := Interfaces.C.Strings.New_String (Socket_Path);
+      Fd     : Interfaces.C.int;
+      Addr   : Sockaddr_Un;
+      Path_C : Interfaces.C.Strings.chars_ptr :=
+        Interfaces.C.Strings.New_String (Socket_Path);
       Result : Interfaces.C.int;
    begin
       -- Create socket
-      Socket_Fd := socket (AF_UNIX, SOCK_SEQPACKET + SOCK_NONBLOCK, 0);
-      if Socket_Fd = -1 then
+      Fd := socket (AF_UNIX, SOCK_SEQPACKET + SOCK_NONBLOCK, 0);
+      if Fd = -1 then
          Interfaces.C.Strings.Free (Path_C);
          return Null_Socket;
       end if;
@@ -79,44 +83,46 @@ package body Socket_IO is
       -- Set up address
       Addr.sun_family := 1; -- AF_UNIX
       for I in 0 .. Socket_Path'Length - 1 loop
-         Addr.sun_path (Interfaces.C.ptrdiff_t (I)) := 
+         Addr.sun_path (Interfaces.C.size_t (I)) := 
            Interfaces.C.To_C (Socket_Path (Socket_Path'First + I));
       end loop;
-      Addr.sun_path (Interfaces.C.ptrdiff_t (Socket_Path'Length)) := Interfaces.C.nul;
+      Addr.sun_path (Interfaces.C.size_t (Socket_Path'Length)) :=
+        Interfaces.C.nul;
       
       -- Bind socket
-      Result := bind (Socket_Fd, Addr'Address, 
+      Result := bind (Fd, Addr'Address, 
                      Interfaces.C.size_t (2 + 1 + Socket_Path'Length));
       if Result = -1 then
-         Result := close (Socket_Fd);
+         Result := close (Fd);
          Interfaces.C.Strings.Free (Path_C);
          return Null_Socket;
       end if;
       
       -- Listen for connections
-      Result := listen (Socket_Fd, 1);
+      Result := listen (Fd, 1);
       if Result = -1 then
-         Result := close (Socket_Fd);
+         Result := close (Fd);
          Interfaces.C.Strings.Free (Path_C);
          return Null_Socket;
       end if;
       
       Interfaces.C.Strings.Free (Path_C);
-      return Socket_FD (Socket_Fd);
+      return Socket_FD (Fd);
    end Create_Socket;
    
    -------------------
    -- Connect_Socket --
    -------------------
    function Connect_Socket (Socket_Path : String) return Socket_FD is
-      Socket_Fd : Interfaces.C.int;
-      Addr : Sockaddr_Un;
-      Path_C : Interfaces.C.Strings.chars_ptr := Interfaces.C.Strings.New_String (Socket_Path);
+      Fd     : Interfaces.C.int;
+      Addr   : Sockaddr_Un;
+      Path_C : Interfaces.C.Strings.chars_ptr :=
+        Interfaces.C.Strings.New_String (Socket_Path);
       Result : Interfaces.C.int;
    begin
       -- Create socket
-      Socket_Fd := socket (AF_UNIX, SOCK_SEQPACKET, 0);
-      if Socket_Fd = -1 then
+      Fd := socket (AF_UNIX, SOCK_SEQPACKET, 0);
+      if Fd = -1 then
          Interfaces.C.Strings.Free (Path_C);
          return Null_Socket;
       end if;
@@ -124,22 +130,23 @@ package body Socket_IO is
       -- Set up address
       Addr.sun_family := 1; -- AF_UNIX
       for I in 0 .. Socket_Path'Length - 1 loop
-         Addr.sun_path (Interfaces.C.ptrdiff_t (I)) := 
+         Addr.sun_path (Interfaces.C.size_t (I)) := 
            Interfaces.C.To_C (Socket_Path (Socket_Path'First + I));
       end loop;
-      Addr.sun_path (Interfaces.C.ptrdiff_t (Socket_Path'Length)) := Interfaces.C.nul;
+      Addr.sun_path (Interfaces.C.size_t (Socket_Path'Length)) :=
+        Interfaces.C.nul;
       
       -- Connect to socket
-      Result := connect (Socket_Fd, Addr'Address, 
+      Result := connect (Fd, Addr'Address, 
                         Interfaces.C.size_t (2 + 1 + Socket_Path'Length));
       if Result = -1 then
-         Result := close (Socket_Fd);
+         Result := close (Fd);
          Interfaces.C.Strings.Free (Path_C);
          return Null_Socket;
       end if;
       
       Interfaces.C.Strings.Free (Path_C);
-      return Socket_FD (Socket_Fd);
+      return Socket_FD (Fd);
    end Connect_Socket;
    
    -------------------
@@ -165,7 +172,7 @@ package body Socket_IO is
       end if;
       
       Bytes_Written := write (Interfaces.C.int (Socket),
-                             Data (Data'First)'Address,
+                             Data'Address,
                              Interfaces.C.size_t (Data'Length));
       return Integer (Bytes_Written);
    end Write;
@@ -181,7 +188,7 @@ package body Socket_IO is
       end if;
       
       Bytes_Read := read (Interfaces.C.int (Socket),
-                         Data (Data'First)'Address,
+                         Data'Address,
                          Interfaces.C.size_t (Data'Length));
       return Integer (Bytes_Read);
    end Read;
