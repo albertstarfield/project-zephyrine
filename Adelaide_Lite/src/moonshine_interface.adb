@@ -55,9 +55,22 @@ package body Moonshine_Interface is
       if Transcript_Ptr /= null then
          declare
             L_Count : constant Interfaces.Unsigned_64 := Transcript_Ptr.Line_Count;
+            type Line_Array is array (0 .. Natural (L_Count) - 1) of aliased Moonshine_Bindings.Transcript_Line;
+            Lines_Access : Line_Array with Import, Address => Transcript_Ptr.Lines.all'Address;
+            Full_Text : Ada.Strings.Unbounded.Unbounded_String;
          begin
             if L_Count > 0 then
-               return "Transcribed audio successfully (binding mockup)";
+               for I in 0 .. Natural (L_Count) - 1 loop
+                  declare
+                     Text_Str : constant String := Interfaces.C.Strings.Value (Lines_Access (I).Text);
+                  begin
+                     Ada.Strings.Unbounded.Append (Full_Text, Text_Str);
+                     if I < Natural (L_Count) - 1 then
+                        Ada.Strings.Unbounded.Append (Full_Text, " ");
+                     end if;
+                  end;
+               end loop;
+               return Ada.Strings.Unbounded.To_String (Full_Text);
             end if;
          end;
       end if;
