@@ -284,7 +284,6 @@ package body Adelaide_Server_Pkg is
             Parser_Result : constant Read_Result := Read (Payload_Str);
             Text_To_Say : Unbounded_String := To_Unbounded_String ("Hello");
          begin
-            -- TODO: ELP1 Priority handling for Supertonic
             if Parser_Result.Success then
                declare
                   Val : constant JSON_Value := Parser_Result.Value;

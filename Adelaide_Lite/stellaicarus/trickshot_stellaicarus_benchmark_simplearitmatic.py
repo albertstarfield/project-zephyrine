@@ -104,7 +104,7 @@ def _compile_and_load():
             if stored_hash != current_hash:
                 needs_compile = True
                 print("[*] Trickshot: Source code changed. Recompiling...", file=sys.stderr)
-        except:
+        except Exception:
             needs_compile = True
 
     # 3. Compilation Block

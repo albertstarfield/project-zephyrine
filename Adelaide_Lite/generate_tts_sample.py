@@ -1,5 +1,4 @@
 import os
-import sys
 
 def main():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
