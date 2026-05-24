@@ -4,6 +4,7 @@ import sys
 import os
 import subprocess
 import gc
+import types
 
 # Global Performance Tuning: Disable Garbage Collection
 gc.disable()
@@ -24,7 +25,7 @@ def bootstrap_venv():
         if os.path.exists(python_exe):
             os.execv(python_exe, [python_exe] + sys.argv)
     try:
-        import loguru
+        import loguru  # noqa: F401
     except ImportError:
         pip_exe = os.path.join(VENV_DIR, "Scripts", "pip.exe") if os.name == 'nt' else os.path.join(VENV_DIR, "bin", "pip")
         subprocess.run([pip_exe, "install", "--upgrade", "pip"], check=True)
@@ -40,7 +41,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))) # for stella_icar
 sys.path.insert(0, STELLA_ICARUS_DIR) # for any internal imports
 
 # We need to mock CortexConfiguration so stella_icarus_utils doesn't crash
-import types
 mock_config = types.ModuleType("CortexConfiguration")
 mock_config.ENABLE_STELLA_ICARUS_HOOKS = True
 mock_config.STELLA_ICARUS_HOOK_DIR = STELLA_ICARUS_DIR

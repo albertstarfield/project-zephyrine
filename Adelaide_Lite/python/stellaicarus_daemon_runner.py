@@ -6,6 +6,9 @@ import time
 import json
 import urllib.request
 import urllib.error
+import types
+import gc
+
 
 # --- Bootstrap Virtual Environment ---
 VENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyvenv")
@@ -20,7 +23,7 @@ if os.path.abspath(sys.prefix) != os.path.abspath(VENV_DIR):
         os.execv(python_exe, [python_exe] + sys.argv)
 
 try:
-    import loguru
+    import loguru  # noqa: F401
 except ImportError:
     import subprocess
     pip_exe = os.path.join(VENV_DIR, "bin", "pip")
@@ -36,8 +39,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))) # for stella_icar
 sys.path.insert(0, STELLA_ICARUS_DIR) # for any internal imports
 
 # Mock configuration
-import types
-import gc
 
 # Global Performance Tuning: Disable Garbage Collection
 gc.disable()
