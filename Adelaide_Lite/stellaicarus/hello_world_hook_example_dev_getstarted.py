@@ -107,7 +107,7 @@ def _compile_and_load():
             cmd = ["g++", "-O3", "-shared", "-fPIC", "-march=native", src_path, "-o", lib_path]
             
             subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(f"[+] Trickshot Dev: Compilation successful.", file=sys.stderr)
+            print("[+] Trickshot Dev: Compilation successful.", file=sys.stderr)
         except Exception as e:
             print(f"[-] Trickshot Dev: Compilation failed: {e}. Logic will fail.", file=sys.stderr)
             return

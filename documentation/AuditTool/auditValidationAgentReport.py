@@ -4,7 +4,6 @@ import datetime
 import json
 import os
 import re
-import subprocess
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
@@ -337,7 +336,7 @@ def analyze_code_chunk(file_path: str, chunk: str, chunk_num: int):
         import_match = re.match(r"^\s*from\s+([\w.]+)\s+import", line)
         if import_match:
             imported_module = import_match.group(1)
-            if "." not in imported_module and not imported_module in [
+            if "." not in imported_module and imported_module not in [
                 "sys",
                 "os",
                 "re",
@@ -696,7 +695,7 @@ def generate_pdf_report(md_path: str, pdf_path: str):
         )
         print(f"   ✅ PDF report successfully generated: {pdf_path}")
     except Exception as e:
-        print(f"   ❌ ERROR: Failed to generate PDF report.")
+        print("   ❌ ERROR: Failed to generate PDF report.")
         print(f"      Reason: {e}")
         print(
             "      This may be due to a missing Chromium installation. Try running `playwright install`."

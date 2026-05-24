@@ -4,7 +4,6 @@ import sys
 import time
 import glob
 import subprocess
-import importlib
 import threading
 from typing import Optional, Match, Tuple
 
@@ -271,11 +270,16 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
         command = command_str.lower()
 
         # --- Normalize commands (map synonyms to a base command) ---
-        if command in ["rudder"]: command = "yaw"
-        if command in ["elevator"]: command = "pitch"
-        if command in ["aileron"]: command = "roll"
-        if command in ["center", "zero"]: command = "reset"
-        if command in ["status", "query"]: command = "help"
+        if command in ["rudder"]:
+            command = "yaw"
+        if command in ["elevator"]:
+            command = "pitch"
+        if command in ["aileron"]:
+            command = "roll"
+        if command in ["center", "zero"]:
+            command = "reset"
+        if command in ["status", "query"]:
+            command = "help"
 
         # Handle help commands
         if command in ["help", "me"]:
@@ -286,8 +290,10 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
         # Handle reset command
         if command == "reset":
             success, message = _send_command_to_mcu("0.0,0.0\n")
-            if success: return f"{SUCCESS_PREFIX} FMC servos centered. {message}"
-            else: return f"{ERROR_PREFIX} Failed to center servos. {message}"
+            if success:
+                return f"{SUCCESS_PREFIX} FMC servos centered. {message}"
+            else:
+                return f"{ERROR_PREFIX} Failed to center servos. {message}"
 
         # For all other commands, a value is now required.
         if value_str is None:

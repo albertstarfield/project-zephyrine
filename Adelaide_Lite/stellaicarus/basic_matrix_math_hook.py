@@ -103,10 +103,14 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
         raw_op = (match.group("op") or "matmul").strip().lower()
         op_type = "matmul" # Default
         
-        if raw_op in ['+', 'plus', 'add']: op_type = "add"
-        elif raw_op in ['-', 'minus', 'subtract']: op_type = "sub"
-        elif raw_op in ['*', 'x', 'times', 'multiplied by']: op_type = "elementwise_mul"
-        elif raw_op in ['@', 'dot', 'matmul']: op_type = "matmul"
+        if raw_op in ['+', 'plus', 'add']:
+            op_type = "add"
+        elif raw_op in ['-', 'minus', 'subtract']:
+            op_type = "sub"
+        elif raw_op in ['*', 'x', 'times', 'multiplied by']:
+            op_type = "elementwise_mul"
+        elif raw_op in ['@', 'dot', 'matmul']:
+            op_type = "matmul"
 
         # 3. Tensor Creation
         # We start on CPU. Moving to GPU has overhead.

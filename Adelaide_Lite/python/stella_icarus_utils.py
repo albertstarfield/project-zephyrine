@@ -5,7 +5,6 @@ import re
 import time
 import importlib.util
 import threading
-import sys
 import subprocess
 import json
 import queue

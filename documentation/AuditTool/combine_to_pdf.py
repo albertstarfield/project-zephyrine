@@ -8,7 +8,6 @@ Requires : reportlab  (pip install reportlab)
 """
 
 import sys
-import os
 import time
 from pathlib import Path
 from datetime import datetime
@@ -104,7 +103,6 @@ def main(repo_root: Path | str = "."):
     width, height = LETTER
     margin = 0.75 * inch
     usable_width = width - 2*margin
-    usable_height = height - 2*margin
 
     # Title page (optional)
     c.setFont("Helvetica-Bold", 18)

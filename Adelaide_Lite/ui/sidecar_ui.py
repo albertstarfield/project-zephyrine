@@ -8,14 +8,25 @@ import uvicorn
 import psutil
 import tiktoken
 import gc
+import json
+import uuid
+import socket
+import networkx as nx
+import numpy as np
 from typing import Optional
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 import webview
 
 # Global Performance Tuning: Disable Garbage Collection
 gc.disable()
+
+# Optional dependency: fitz (PyMuPDF)
+try:
+    import fitz
+except ImportError:
+    fitz = None
 
 app = FastAPI()
 
@@ -402,13 +413,6 @@ def get_user_info():
     return {"username": username}
 
 # --- Knowledge Stack Backend ---
-from fastapi import UploadFile, File, Form
-import fitz  # PyMuPDF
-import networkx as nx
-import numpy as np
-import json
-import uuid
-
 LITERATURE_DB_PATH = os.path.join(base_dir, "UI_Database", "literatureRefIndex.db")
 LITERATURE_GRAPH_PATH = os.path.join(base_dir, "UI_Database", "literature.graphml")
 
@@ -508,12 +512,13 @@ def update_memory_graph(session: str, topic: str, memory_id: str, content_previe
 
     nx.write_graphml(G, MEMORY_GRAPH_PATH)
 
-from fastapi.responses import StreamingResponse
 
 @app.post("/api/knowledgestackfrontend/upload")
 async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Form(...)):
-    if _embedding_model is None: init_model()
-    if _embedding_model is None: return JSONResponse({"error": "Embedding model not available"}, status_code=500)
+    if _embedding_model is None:
+        init_model()
+    if _embedding_model is None:
+        return JSONResponse({"error": "Embedding model not available"}, status_code=500)
 
     files_data = []
     for file in files:
@@ -528,7 +533,7 @@ async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Fo
             ext = filename.split('.')[-1].lower()
             if ext == 'txt':
                 content = content_bytes.decode('utf-8', errors='ignore')
-            elif ext == 'pdf':
+            elif ext == 'pdf' and fitz:
                 doc = fitz.open(stream=content_bytes, filetype="pdf")
                 for page in doc:
                     txt = page.get_text()
@@ -711,7 +716,6 @@ else:
     def no_dist():
         return HTMLResponse("<h1>Please run `npm run build` inside frontend/</h1>")
 
-import socket
 
 def get_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

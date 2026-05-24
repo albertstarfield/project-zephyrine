@@ -157,7 +157,7 @@ def apply_history_rewrite():
     print("This script will call 'git filter-branch' to process each commit.")
 
     try:
-        answer = input(f"Are you sure you want to continue? (yes/no): ").lower()
+        answer = input("Are you sure you want to continue? (yes/no): ").lower()
         if answer != 'yes':
             print("Operation cancelled.")
             sys.exit(0)

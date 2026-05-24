@@ -45,7 +45,7 @@ def apply_base_env():
 # --- Bootstrap Virtual Environment ---
 VENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyvenv")
 REQUIREMENTS = [
-    "requests", "numpy", "Pillow", "PyMuPDF", 
+    "requests", "numpy", "Pillow", "PyMuPDF",
     "openpyxl", "python-docx", "python-pptx", "tinytag"
 ]
 
@@ -91,9 +91,9 @@ OLLAMA_MODEL = "qwen3-embedding:0.6b"
 TOP_FILES_TO_PROCESS = 10        # Aggressive Lexical Cutoff
 TOP_CHUNKS_TO_RETURN = 5         # Final chunks to present
 RANK_THRESHOLD = 0.55            # Minimum cosine similarity to display result
-CHUNK_SIZE = 512                 
-CHUNK_OVERLAP = 50               
-MAX_CHARS_PER_FILE = 100000      
+CHUNK_SIZE = 512
+CHUNK_OVERLAP = 50
+MAX_CHARS_PER_FILE = 100000
 
 CACHE_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "embed_cache.pkl")
 MAX_CACHE_ENTRIES = 120000       # Mathematically approximates 512 MiB limit

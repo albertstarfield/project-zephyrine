@@ -50,7 +50,8 @@ def _setup_cpp():
 
         # Compile if missing
         if not os.path.exists(lib_path):
-            with open(src_path, "w") as f: f.write(cpp_source)
+            with open(src_path, "w") as f:
+                f.write(cpp_source)
             flags = ["g++", "-O3", "-shared", "-fPIC", "-march=native", src_path, "-o", lib_path]
             subprocess.check_call(flags, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -80,11 +81,15 @@ def _setup_numba():
         @njit(cache=True, fastmath=True)
         def jit_calc(a, op, b):
             # Returns (result, error_code)
-            if op == 0: return a + b, 0
-            if op == 1: return a - b, 0
-            if op == 2: return a * b, 0
+            if op == 0:
+                return a + b, 0
+            if op == 1:
+                return a - b, 0
+            if op == 2:
+                return a * b, 0
             if op == 3:
-                if b == 0.0: return 0.0, 1
+                if b == 0.0:
+                    return 0.0, 1
                 return a / b, 0
             return 0.0, 2
 
@@ -115,11 +120,15 @@ if not _setup_cpp():
 # ==========================================
 def _calc_python(a, op, b):
     # 0=Add, 1=Sub, 2=Mul, 3=Div
-    if op == 0: return a + b, 0
-    if op == 1: return a - b, 0
-    if op == 2: return a * b, 0
+    if op == 0:
+        return a + b, 0
+    if op == 1:
+        return a - b, 0
+    if op == 2:
+        return a * b, 0
     if op == 3:
-        if b == 0.0: return 0.0, 1
+        if b == 0.0:
+            return 0.0, 1
         return a / b, 0
     return 0.0, 2
 
@@ -154,12 +163,17 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
         
         # Map everything to Integers [0,1,2,3] for C++/Numba compatibility
         op_code = -1
-        if raw_op in ['+', 'plus', 'add', 'added to']: op_code = 0
-        elif raw_op in ['-', 'minus', 'subtract', 'subtracted by']: op_code = 1
-        elif raw_op in ['*', 'x', 'times', 'multiplied by']: op_code = 2
-        elif raw_op in ['/', 'divided by']: op_code = 3
+        if raw_op in ['+', 'plus', 'add', 'added to']:
+            op_code = 0
+        elif raw_op in ['-', 'minus', 'subtract', 'subtracted by']:
+            op_code = 1
+        elif raw_op in ['*', 'x', 'times', 'multiplied by']:
+            op_code = 2
+        elif raw_op in ['/', 'divided by']:
+            op_code = 3
         
-        if op_code == -1: return None # Regex shouldn't allow this, but safety first
+        if op_code == -1:
+            return None # Regex shouldn't allow this, but safety first
 
     except ValueError:
         return "I couldn't parse those numbers."
@@ -181,8 +195,10 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
         res, err = _calc_python(n1, op_code, n2)
 
     # 3. Format
-    if err == 1: return "I can't divide by zero."
-    if err == 2: return "Unknown calculation error."
+    if err == 1:
+        return "I can't divide by zero."
+    if err == 2:
+        return "Unknown calculation error."
     
     # Clean output (5.0 -> 5)
     final_val = int(res) if res.is_integer() else res
