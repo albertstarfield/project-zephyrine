@@ -1436,94 +1436,125 @@ function initAstralGeometry() {
 
     const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-    camera.position.z = 20;
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+    camera.position.z = 22;
 
     const group = new THREE.Group();
     scene.add(group);
 
-    // Cyan/Teal material
-    const material = new THREE.LineBasicMaterial({ 
-        color: 0x40E0D0, 
-        transparent: true, 
-        opacity: 0.6,
-        blending: THREE.AdditiveBlending 
-    });
-
-    const materialDark = new THREE.LineBasicMaterial({
-        color: 0x208080,
-        transparent: true,
-        opacity: 0.3,
-        blending: THREE.AdditiveBlending
-    });
-
-    // Create intricate geometry
-    // Ring 1
-    const ring1 = new THREE.LineLoop(new THREE.CircleGeometry(8, 64), material);
-    group.add(ring1);
-    
-    // Ring 2
-    const ring2 = new THREE.LineLoop(new THREE.CircleGeometry(12, 64), materialDark);
-    ring2.position.z = -5;
-    group.add(ring2);
-
-    // Icosahedron wireframe
-    const ico = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(5, 0)), material);
-    ico.position.z = 2;
-    group.add(ico);
-
-    // Octahedron wireframe
-    const octa = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.OctahedronGeometry(10, 0)), materialDark);
-    octa.position.z = -2;
-    group.add(octa);
-
-    // Torus wireframe
-    const torus = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.TorusGeometry(15, 0.5, 8, 30)), material);
-    torus.position.z = -10;
-    group.add(torus);
-
-    // Connecting lines
-    const lineGeo = new THREE.BufferGeometry();
-    const points = [];
-    for (let i = 0; i < 50; i++) {
-        points.push(
-            (Math.random() - 0.5) * 30,
-            (Math.random() - 0.5) * 30,
-            (Math.random() - 0.5) * 20
-        );
+    // Helpers
+    function createPolygon(radius: number, segments: number, mat: THREE.Material, z: number = 0) {
+        const geo = new THREE.CircleGeometry(radius, segments);
+        const edges = new THREE.EdgesGeometry(geo);
+        const mesh = new THREE.LineSegments(edges, mat);
+        mesh.position.z = z;
+        return mesh;
     }
-    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-    const starLines = new THREE.LineSegments(lineGeo, materialDark);
-    group.add(starLines);
+
+    function createDottedCircle(radius: number, mat: THREE.LineDashedMaterial, z: number = 0) {
+        const geo = new THREE.BufferGeometry();
+        const points = [];
+        const segments = 128;
+        for (let i = 0; i <= segments; i++) {
+            const theta = (i / segments) * Math.PI * 2;
+            points.push(new THREE.Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, 0));
+        }
+        geo.setFromPoints(points);
+        const line = new THREE.Line(geo, mat);
+        line.computeLineDistances();
+        line.position.z = z;
+        return line;
+    }
+
+    // Materials
+    const materialTeal = new THREE.LineBasicMaterial({ color: 0x40E0D0, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+    const materialDarkTeal = new THREE.LineBasicMaterial({ color: 0x208080, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending });
+    const materialGold = new THREE.LineBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending });
+    const materialDashed = new THREE.LineDashedMaterial({ color: 0x40E0D0, dashSize: 0.3, gapSize: 0.6, transparent: true, opacity: 0.5 });
+    
+    const layers: THREE.Object3D[] = [];
+
+    // Outer intricate rings
+    layers.push(createPolygon(14, 128, materialTeal, -2)); 
+    layers.push(createDottedCircle(13.5, materialDashed, -1.8));
+    layers.push(createPolygon(12, 128, materialDarkTeal, -1.5)); 
+    
+    // Middle geometry
+    layers.push(createPolygon(12, 6, materialGold, -1.5)); // Outer Hexagon
+    layers.push(createPolygon(12, 12, materialDarkTeal, -1.5)); // Dodecagon
+    
+    // Mid rings
+    layers.push(createPolygon(8, 128, materialTeal, 0));
+    layers.push(createDottedCircle(7.5, materialDashed, 0.2));
+    
+    // Inner geometry
+    layers.push(createPolygon(8, 3, materialGold, 0)); // Triangle inner
+    const hexagramReverse = createPolygon(8, 3, materialTeal, 0);
+    hexagramReverse.rotation.z = Math.PI;
+    layers.push(hexagramReverse); 
+    
+    // Core rings
+    layers.push(createPolygon(5, 64, materialDarkTeal, 1));
+    layers.push(createPolygon(4, 64, materialTeal, 1.5));
+
+    // Intricate connection lines (Webs)
+    const webGeo = new THREE.BufferGeometry();
+    const webPoints = [];
+    for(let i=0; i<12; i++) {
+        const theta1 = (i/12)*Math.PI*2;
+        for(let j=i+1; j<12; j++) {
+            const theta2 = (j/12)*Math.PI*2;
+            webPoints.push(new THREE.Vector3(Math.cos(theta1)*14, Math.sin(theta1)*14, -2));
+            webPoints.push(new THREE.Vector3(Math.cos(theta2)*14, Math.sin(theta2)*14, -2));
+        }
+    }
+    webGeo.setFromPoints(webPoints);
+    const web = new THREE.LineSegments(webGeo, materialDarkTeal);
+    layers.push(web);
+    
+    // Central intersecting 3D core
+    const core = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.OctahedronGeometry(2, 0)), materialGold);
+    core.position.z = 2;
+    layers.push(core);
+
+    layers.forEach(layer => group.add(layer));
+    
+    // Tilt the whole group slightly for depth perception
+    group.rotation.x = 0.15;
+    group.rotation.y = 0.1;
 
     function animate() {
         requestAnimationFrame(animate);
 
-        // Rotate geometries
-        ring1.rotation.z -= 0.002;
-        ring2.rotation.z += 0.001;
-        ico.rotation.x += 0.003;
-        ico.rotation.y += 0.002;
-        octa.rotation.x -= 0.001;
-        octa.rotation.y -= 0.002;
-        torus.rotation.z -= 0.001;
-        torus.rotation.y += 0.001;
+        // Responsive resizing
+        const width = canvas.clientWidth || window.innerWidth;
+        const height = canvas.clientHeight || window.innerHeight;
+        const needResize = canvas.width !== width * window.devicePixelRatio || canvas.height !== height * window.devicePixelRatio;
+        if (needResize && width > 0) {
+            renderer.setSize(width, height, false);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        }
+
+        // Slow intricate rotation for different layers
+        layers.forEach((layer, index) => {
+            if (layer !== core && layer !== web) {
+                layer.rotation.z += 0.0005 * (index % 2 === 0 ? 1 : -1) * (1 + index * 0.1);
+            }
+        });
         
-        group.rotation.z += 0.0005;
+        web.rotation.z -= 0.0002;
+        core.rotation.x += 0.004;
+        core.rotation.y += 0.005;
+        core.rotation.z -= 0.002;
+        
+        group.rotation.z += 0.0003;
 
         renderer.render(scene, camera);
     }
 
     animate();
-
-    window.addEventListener('resize', () => {
-        if (!canvas.clientWidth) return; // Hide if 0
-        camera.aspect = canvas.clientWidth / canvas.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    });
 }
 (window as any).astralInitialized = false;
