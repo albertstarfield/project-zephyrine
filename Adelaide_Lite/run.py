@@ -84,6 +84,7 @@ def main():
 
     if current_hash != saved_hash:
         print("[*] Changes detected, checking downloads and rebuilding...")
+        threads = str(os.cpu_count() or 4)
         
         # Check and clone llama.cpp
         llama_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "llama.cpp"))
@@ -155,7 +156,6 @@ def main():
             print("[*] Building moonshine C API...")
             os.makedirs(moonshine_build_dir, exist_ok=True)
             subprocess.run(["cmake", ".."], cwd=moonshine_build_dir, check=False)
-            threads = str(os.cpu_count() or 4)
             subprocess.run(["make", f"-j{threads}"], cwd=moonshine_build_dir, check=False)
         else:
             print("[*] moonshine core library exists, skipping cmake build.")

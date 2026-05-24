@@ -22,8 +22,6 @@ project Adelaide_Lite is
       for Switches ("Ada") use (
           "-L" & project'Project_Dir & "../moonshine/build/core",
           "-lmoonshine",
-          "-L" & project'Project_Dir & "src/c_bindings/supertonic/build",
-          "-lsupertonic_c",
           "-L" & project'Project_Dir & "../llama.cpp/build/src",
           "-lllama",
           "-L" & project'Project_Dir & "../llama.cpp/build/ggml/src",
