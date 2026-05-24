@@ -10,7 +10,7 @@ except ImportError as e:
     print(f"Failed to import MeloTTS: {e}")
     sys.exit(1)
 
-text = "The quick brown fox jumps over the lazy dog."
+text = "Artificial intelligence has seen rapid advancements in recent years, transforming the way we interact with technology. From natural language processing algorithms that can understand and generate human-like text, to computer vision systems that identify complex patterns in images, the applications are seemingly endless. In the realm of speech synthesis, modern neural networks have enabled the creation of highly realistic voices that capture the nuances of emotion, intonation, and rhythm. As we continue to push the boundaries of what is possible, it is essential to consider the ethical implications and strive for responsible development. This journey of innovation is not just about building smarter machines, but also about augmenting human potential and creating a more connected, accessible world for everyone."
 output_path = "sampleAdeltts_blob.dat"
 output_path = "sampleAdeltts_blob.wav"
 
