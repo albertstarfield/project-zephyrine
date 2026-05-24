@@ -21,6 +21,12 @@ package body Adelaide_Server_Pkg is
 
    --  Pace timing for main loop
    WCET_Main_Loop : Duration := 0.0;
+   
+   -- Handless Mode Trackers
+   Handless_Stage : Unbounded_String := To_Unbounded_String("Idle");
+   Handless_Input_Text : Unbounded_String := To_Unbounded_String("");
+   Handless_Output_Text : Unbounded_String := To_Unbounded_String("");
+   Handless_WCET : Float := 0.0;
 
    use type Streaming_Queue.Queue_Access;
 
@@ -175,22 +181,21 @@ package body Adelaide_Server_Pkg is
             Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
             
             Transcript : Unbounded_String;
-            LLM_Result : Unbounded_String;
+            Generated_Response : Unbounded_String;
+            Audio_Response : Ada.Streams.Stream_Element_Array_Access;
+            T_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
             use type Interfaces.Unsigned_64;
+            use type Ada.Real_Time.Time;
          begin
+            Handless_Stage := To_Unbounded_String("Transcribing...");
+            Handless_Input_Text := To_Unbounded_String("");
+            Handless_Output_Text := To_Unbounded_String("");
+            
             if Num_Floats > 0 then
-               -- 1. Transcribe the raw audio input using Moonshine ASR
                Transcript := To_Unbounded_String (Moonshine_Interface.Transcribe_Raw_PCM (Audio_Floats (1)'Access, Num_Floats));
             else
                Transcript := To_Unbounded_String ("");
             end if;
-
-            if Length (Transcript) > 0 then
-               -- 2. Process the text through the Agentic LLM generation
-               Model_Manager.Hybrid_Generate
-                 (Prompt     => To_String (Transcript),
-                  Result     => LLM_Result,
-                  Session_ID => "server-handless",
                   Agentic    => True,
                   Raw_Prompt => False);
             else
@@ -273,18 +278,25 @@ package body Adelaide_Server_Pkg is
 
       if URI = "/api/telemetry" then
          declare
+            use GNATCOLL.JSON;
+            R : constant JSON_Value := Create_Object;
             Main_US : constant Float := Float (WCET_Main_Loop) * 1_000_000.0;
          begin
-            return Wrap_Response (Build_Response
-              ("{""WCET_ELP0"": " & Model_Manager.Current_WCET_ELP0'Img & 
-               ", ""WCET_ELP1"": " & Model_Manager.Current_WCET_ELP1'Img & 
-               ", ""WCET_ELP2"": " & Model_Manager.Current_WCET_ELP2'Img &
-               ", ""WCET_ELP3"": " & Model_Manager.Current_WCET_ELP3'Img &
-               ", ""Jitter_Avg_uS"": " &
-               Float (Model_Manager.Current_Jitter_Avg * 1_000_000.0)'Img &
-               ", ""Jitter_Max_uS"": " &
-               Float (Model_Manager.Current_Jitter_Max * 1_000_000.0)'Img &
-               ", ""WCET_mainLoop_uS"": " & Main_US'Img & "}"));
+            Set_Field (R, "WCET_ELP0", Float(Model_Manager.Current_WCET_ELP0));
+            Set_Field (R, "WCET_ELP1", Float(Model_Manager.Current_WCET_ELP1));
+            Set_Field (R, "WCET_ELP2", Float(Model_Manager.Current_WCET_ELP2));
+            Set_Field (R, "WCET_ELP3", Float(Model_Manager.Current_WCET_ELP3));
+            Set_Field (R, "Jitter_Avg_uS", Float (Model_Manager.Current_Jitter_Avg * 1_000_000.0));
+            Set_Field (R, "Jitter_Max_uS", Float (Model_Manager.Current_Jitter_Max * 1_000_000.0));
+            Set_Field (R, "WCET_mainLoop_uS", Main_US);
+            
+            -- Handless Mode telemetry
+            Set_Field (R, "Handless_Stage", To_String(Handless_Stage));
+            Set_Field (R, "Handless_WCET", Handless_WCET);
+            Set_Field (R, "Handless_Input_Text", To_String(Handless_Input_Text));
+            Set_Field (R, "Handless_Output_Text", To_String(Handless_Output_Text));
+            
+            return Wrap_Response (Build_Response (Write (R)));
          end;
       end if;
 
