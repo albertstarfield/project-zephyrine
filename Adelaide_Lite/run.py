@@ -101,10 +101,16 @@ def main():
         else:
             print("[*] kokoro-onnx already exists, skipping clone.")
             
-        # Ensure Kokoro sidecar dependencies are installed
-        kokoro_sidecar_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro_sidecar"))
-        print("[*] Installing Kokoro sidecar requirements...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "-r", os.path.join(kokoro_sidecar_dir, "requirements.txt")], check=False)
+        # Ensure Kokoro TTS component dependencies are installed in an isolated venv
+        kokoro_comp_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "tts_kokoro_component"))
+        kokoro_venv_dir = os.path.join(kokoro_comp_dir, "venv")
+        if not os.path.exists(kokoro_venv_dir):
+            print("[*] Creating dedicated virtual environment for Kokoro TTS...")
+            subprocess.run([sys.executable, "-m", "venv", kokoro_venv_dir], check=True)
+            
+        print("[*] Installing Kokoro TTS requirements...")
+        kokoro_pip = os.path.join(kokoro_venv_dir, "bin", "pip") if platform.system() != "Windows" else os.path.join(kokoro_venv_dir, "Scripts", "pip.exe")
+        subprocess.run([kokoro_pip, "install", "-r", os.path.join(kokoro_comp_dir, "requirements.txt")], check=False)
 
         # Check and clone moonshine
         moonshine_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "moonshine"))
