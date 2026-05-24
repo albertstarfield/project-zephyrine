@@ -553,6 +553,7 @@ html {
     letter-spacing: 2px;
 }
 .typing-indicator .dot {
+    display: inline-block;
     animation: typingPulse 1.4s infinite both;
 }
 .typing-indicator .dot:nth-child(1) { animation-delay: 0s; }
