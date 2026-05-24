@@ -140,6 +140,27 @@ def main():
         else:
             print("[*] moonshine core library exists, skipping cmake build.")
 
+        # Check and download Moonshine models
+        moonshine_models_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "moonshine", "models"))
+        if not os.path.exists(moonshine_models_dir) or not os.listdir(moonshine_models_dir):
+            print("[*] Downloading Moonshine models...")
+            os.makedirs(moonshine_models_dir, exist_ok=True)
+            env_for_download = os.environ.copy()
+            env_for_download["PYTHONPATH"] = os.path.join(moonshine_dir, "python", "src")
+            download_script = os.path.join(moonshine_dir, "python", "src", "moonshine_voice", "download.py")
+            subprocess.run([sys.executable, download_script, "--stt", "--language", "en", "--root", moonshine_models_dir], env=env_for_download, check=False)
+        else:
+            print("[*] Moonshine models already exist, skipping download.")
+
+        # Check and download Supertonic models
+        supertonic_models_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "supertonic", "models"))
+        supertonic_tts_json = os.path.join(supertonic_models_dir, "tts.json")
+        if not os.path.exists(supertonic_tts_json):
+            print("[*] Downloading Supertonic models...")
+            subprocess.run([sys.executable, "-c", "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Supertone/supertonic-3', local_dir='../supertonic/models')"], cwd=BASE_DIR, check=False)
+        else:
+            print("[*] Supertonic models already exist, skipping download.")
+
         # Ensure Deno Playwright Chromium is installed
         print("[*] Installing Playwright Chromium binary for Deno crawler...")
         # Cross platform deno invocation
