@@ -274,7 +274,15 @@ def retrieve_memories(conn, query, top_k=5, json_io=False):
     top_results = results[:top_k]
 
     if json_io:
-        print(json.dumps({"type": "retrieve", "phase": 2, "status": "complete", "results": top_results}), flush=True)
+        print(
+            json.dumps({
+                "type": "retrieve",
+                "phase": 2,
+                "status": "complete",
+                "results": top_results
+            }),
+            flush=True
+        )
     else:
         # Print top k
         print("# Memory Retrieval Results", flush=True)
@@ -294,7 +302,10 @@ def main():
     parser.add_argument("--string", type=str, help="The memory string to store.")
     parser.add_argument("--inputQuery", type=str, help="The query to search memories.")
     parser.add_argument("--jsonIO", action="store_true", help="Output results in JSON format.")
-    parser.add_argument("--ollamaExternal", type=str, default=None, help="Custom Ollama server address.")
+    parser.add_argument(
+        "--ollamaExternal", type=str, default=None,
+        help="Custom Ollama server address."
+    )
     parser.add_argument("--ollamaHost", type=str, default=None, help="Custom Ollama host address.")
     args = parser.parse_args()
 
