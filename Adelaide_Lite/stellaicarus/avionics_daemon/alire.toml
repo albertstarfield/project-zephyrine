@@ -12,4 +12,4 @@ tags = ["stella-icarus", "daemon", "avionics", "ipc"]
 executables = ["avionics_daemon_main"]
 
 [[depends-on]]
-vss = "^23.0.0"
+gnatcoll = "^25.0.0"
