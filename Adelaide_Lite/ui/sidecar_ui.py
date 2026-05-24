@@ -721,14 +721,17 @@ def get_free_port():
 def run_server(port):
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
-def perform_pyrefly_integrity_check():
+def perform_platform_integrity_check():
     """
-    High-Integrity Static Check: Verify sidecar_ui.py using pyrefly.
+    High-Integrity Static Check: Verify sidecar_ui.py using pyrefly and ruff.
     Exits if any errors or warnings are detected to prevent unsafe execution.
     """
     import subprocess
     import shutil
 
+    print("[*] Performing Platform Self-Integrity Check...")
+    
+    # 1. Pyrefly Check
     pyrefly_cmd = shutil.which("pyrefly")
     if not pyrefly_cmd:
         # If pyrefly is missing, we consider it a safety violation in this mode
@@ -771,9 +774,32 @@ def perform_pyrefly_integrity_check():
         print(f"[!] Error executing Pyrefly: {str(e)}")
         sys.exit(1)
 
+    # 2. Ruff Check
+    ruff_cmd = shutil.which("ruff")
+    if not ruff_cmd:
+        print("[!] Warning: ruff tool not found in PATH. Skipping secondary check.")
+    else:
+        try:
+            print("[*] Running Ruff Quality Check on platform components...")
+            # Run ruff check on the Adelaide_Lite directory
+            adelaide_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            result = subprocess.run([ruff_cmd, "check", adelaide_dir],
+                                    capture_output=True, text=True)
+            if result.returncode != 0:
+                print("[!] Ruff Integrity Check FAILED.")
+                print(result.stdout)
+                print("[*] Emergency Shutdown: Quality violations detected.")
+                sys.exit(1)
+            print("[+] Ruff Quality Check PASSED.")
+        except Exception as e:
+            print(f"[!] Error executing Ruff: {str(e)}")
+            sys.exit(1)
+
+    print("[*] Platform integrity verified.")
+
 if __name__ == "__main__":
     # Perform mandatory safety check before starting any services
-    perform_pyrefly_integrity_check()
+    perform_platform_integrity_check()
 
     ui_port = get_free_port()
     port_file = os.path.join(os.path.dirname(DB_PATH), ".sidecar_port")
