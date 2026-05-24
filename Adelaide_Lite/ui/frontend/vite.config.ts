@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'ProjectZephy023LogoRenewal.png'],
+      includeAssets: ['favicon.ico', 'Project Zephyrine Logo.png'],
       manifest: {
         name: 'Adelaide Zephyrine Assistant',
         short_name: 'Zephy',
@@ -15,12 +15,12 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: 'ProjectZephy023LogoRenewal.png',
+            src: 'Project Zephyrine Logo.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'ProjectZephy023LogoRenewal.png',
+            src: 'Project Zephyrine Logo.png',
             sizes: '512x512',
             type: 'image/png'
           }
