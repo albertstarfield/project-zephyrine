@@ -574,6 +574,7 @@ fetch('/api/user_info')
 if (navVoice) {
   navVoice.addEventListener('click', (e) => {
     e.preventDefault();
+    document.body.classList.add('agentic-mode'); // Enable agentic mode styling
     const hideEls: HTMLElement[] = [];
     const chatContainerWrapper = document.getElementById('chat-container');
     const aboutContainer = document.getElementById('about-container');
@@ -727,6 +728,7 @@ let cyMemoryInstance: any = null;
 if (navMain) {
   navMain.addEventListener('click', async (e) => {
     e.preventDefault();
+    document.body.classList.remove('agentic-mode');
     currentSessionId = null;
     
     // Clear chat history to go to home default page
@@ -750,6 +752,7 @@ const newChatBtn = document.querySelector('.new-chat-btn');
 if (newChatBtn) {
   newChatBtn.addEventListener('click', async (e) => {
     e.preventDefault();
+    document.body.classList.remove('agentic-mode');
     currentSessionId = null;
     
     // Clear chat history to go to home default page
@@ -772,6 +775,7 @@ if (newChatBtn) {
 if (navAbout) {
   navAbout.addEventListener('click', async (e) => {
     e.preventDefault();
+    document.body.classList.remove('agentic-mode');
     if (aboutContainer?.classList.contains('hidden')) {
       const hideEls = [inputContainer];
       if (!emptyState.classList.contains('hidden')) hideEls.push(emptyState);
@@ -789,6 +793,7 @@ if (navAbout) {
 if (navTuning) {
   navTuning.addEventListener('click', async (e) => {
     e.preventDefault();
+    document.body.classList.remove('agentic-mode');
     if (knowledgeContainer?.classList.contains('hidden')) {
       const hideEls = [inputContainer];
       if (!emptyState.classList.contains('hidden')) hideEls.push(emptyState);
