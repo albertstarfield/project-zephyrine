@@ -627,6 +627,30 @@ const navBrowser = document.getElementById('nav-browser');
 if (navBrowser) {
   navBrowser.addEventListener('click', async (e) => {
     e.preventDefault();
+    
+    // Create fade to black overlay
+    const fadeOverlay = document.createElement('div');
+    fadeOverlay.style.position = 'fixed';
+    fadeOverlay.style.top = '0';
+    fadeOverlay.style.left = '0';
+    fadeOverlay.style.width = '100vw';
+    fadeOverlay.style.height = '100vh';
+    fadeOverlay.style.backgroundColor = 'black';
+    fadeOverlay.style.zIndex = '999999';
+    fadeOverlay.style.opacity = '0';
+    fadeOverlay.style.transition = 'opacity 1s ease-in-out';
+    fadeOverlay.style.pointerEvents = 'none';
+    document.body.appendChild(fadeOverlay);
+    
+    // Trigger reflow
+    fadeOverlay.offsetHeight;
+    
+    // Start fade
+    fadeOverlay.style.opacity = '1';
+    
+    // Wait for transition to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     try {
       await fetch('/api/detach_webview', { method: 'POST' });
     } catch (err) {}
