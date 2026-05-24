@@ -1895,3 +1895,100 @@ if (visualizer) {
     visualizer.addEventListener('touchstart', (e) => { e.preventDefault(); startAgenticVoice(); });
     visualizer.addEventListener('touchend', (e) => { e.preventDefault(); stopAndSendAgenticVoice(); });
 }
+
+// --------------------------------------------------------
+// Standard Text Chat Transcription Logic
+// --------------------------------------------------------
+const transcribeBtn = document.getElementById('transcribe-btn');
+const chatInputBox = document.getElementById('chat-input') as HTMLInputElement;
+
+let isStandardRecording = false;
+let stdAudioContext: AudioContext | null = null;
+let stdMediaStream: MediaStream | null = null;
+let stdProcessor: ScriptProcessorNode | null = null;
+let stdInputBuffer: Float32Array[] = [];
+
+async function startStandardVoice() {
+    if (isStandardRecording) return;
+    
+    try {
+        stdMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stdAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+        const source = stdAudioContext.createMediaStreamSource(stdMediaStream);
+        
+        stdProcessor = stdAudioContext.createScriptProcessor(4096, 1, 1);
+        
+        stdProcessor.onaudioprocess = (e) => {
+            const channelData = e.inputBuffer.getChannelData(0);
+            stdInputBuffer.push(new Float32Array(channelData));
+        };
+        
+        source.connect(stdProcessor);
+        stdProcessor.connect(stdAudioContext.destination);
+        isStandardRecording = true;
+        
+        if (transcribeBtn) {
+            transcribeBtn.style.color = "red";
+        }
+    } catch (err) {
+        console.error("Microphone permission denied:", err);
+    }
+}
+
+async function stopAndSendStandardVoice() {
+    if (!isStandardRecording) return;
+    isStandardRecording = false;
+    
+    if (stdProcessor) {
+        stdProcessor.disconnect();
+    }
+    if (stdMediaStream) {
+        stdMediaStream.getTracks().forEach(t => t.stop());
+    }
+    if (stdAudioContext) {
+        stdAudioContext.close();
+    }
+    
+    if (transcribeBtn) {
+        transcribeBtn.style.color = "";
+    }
+    
+    chatInputBox.placeholder = "Transcribing...";
+    
+    const totalLength = stdInputBuffer.reduce((acc, val) => acc + val.length, 0);
+    const combinedFloats = new Float32Array(totalLength);
+    let offset = 0;
+    for (const chunk of stdInputBuffer) {
+        combinedFloats.set(chunk, offset);
+        offset += chunk.length;
+    }
+    
+    stdInputBuffer = [];
+    
+    try {
+        const response = await fetch("http://127.0.0.1:11420/v1/audio/transcriptions", {
+            method: 'POST',
+            body: combinedFloats.buffer,
+            headers: { 'Content-Type': 'application/octet-stream' }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.text) {
+                chatInputBox.value += (chatInputBox.value ? " " : "") + result.text;
+            }
+        }
+    } catch (err) {
+        console.error("Transcription failed:", err);
+    }
+    chatInputBox.placeholder = "Ask Zephyrine...";
+}
+
+if (transcribeBtn && chatInputBox) {
+    transcribeBtn.addEventListener('mousedown', startStandardVoice);
+    transcribeBtn.addEventListener('mouseup', stopAndSendStandardVoice);
+    
+    transcribeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startStandardVoice(); });
+    transcribeBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopAndSendStandardVoice(); });
+}
+
