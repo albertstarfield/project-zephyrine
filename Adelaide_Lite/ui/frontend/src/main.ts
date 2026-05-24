@@ -284,6 +284,42 @@ chatForm.addEventListener('submit', async (e) => {
   }
 });
 
+function addTypingIndicator(): string {
+  const emptyState = document.getElementById('empty-state');
+  const chatContainerWrapper = document.getElementById('chat-container');
+  const aboutContainer = document.getElementById('about-container');
+  const knowledgeContainer = document.getElementById('knowledge-container');
+
+  if (emptyState && !emptyState.classList.contains('hidden')) {
+    const hideEls = [emptyState];
+    if (aboutContainer && !aboutContainer.classList.contains('hidden')) hideEls.push(aboutContainer);
+    if (knowledgeContainer && !knowledgeContainer.classList.contains('hidden')) hideEls.push(knowledgeContainer);
+    switchView(hideEls, [chatContainerWrapper!]);
+  }
+
+  const id = 'typing-' + Date.now();
+  const msgEl = document.createElement('div');
+  msgEl.className = `message assistant typing-indicator`;
+  msgEl.id = id;
+  
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = '<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
+  
+  msgEl.appendChild(bubble);
+  messagesContainer.appendChild(msgEl);
+  
+  if (chatContainerWrapper) {
+    chatContainerWrapper.scrollTop = chatContainerWrapper.scrollHeight;
+  }
+  return id;
+}
+
+function removeTypingIndicator(id: string) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
 async function processQueue() {
   isProcessingQueue = true;
   
@@ -291,12 +327,16 @@ async function processQueue() {
     const text = messageQueue.shift();
     if (!text) continue;
     
+    const typingId = addTypingIndicator();
+    
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, session_id: currentSessionId })
       });
+      
+      removeTypingIndicator(typingId);
       
       if (res.ok) {
         const data = await res.json();
@@ -309,6 +349,7 @@ async function processQueue() {
         addMessageToUI({ role: 'assistant', content: "Error: " + res.statusText });
       }
     } catch (err) {
+      removeTypingIndicator(typingId);
       addMessageToUI({ role: 'assistant', content: "Network error trying to reach the sidecar." });
     }
   }
