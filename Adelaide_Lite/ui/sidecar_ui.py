@@ -335,18 +335,30 @@ async def chat(request: Request):
 
 @app.post("/api/exit")
 def exit_app():
+    import threading
+    def kill_process():
+        os._exit(0)
+    # Run in a separate thread to allow the HTTP response to return
+    threading.Timer(0.5, kill_process).start()
+    return {"status": "exiting"}
+
+@app.post("/api/detach_webview")
+def detach_webview():
     import webview
     import threading
-    
-    def close_window():
+    import webbrowser
+
+    def close_window_and_open_browser():
+        port_file = os.path.join(os.path.dirname(DB_PATH), ".sidecar_port")
+        with open(port_file, "r") as f:
+            port = f.read().strip()
+        webbrowser.open_new(f"http://127.0.0.1:{port}/")
+        
         if webview.windows:
             webview.windows[0].destroy()
-        else:
-            os._exit(0)
             
-    # Run in a separate thread to allow the HTTP response to return
-    threading.Timer(0.5, close_window).start()
-    return {"status": "exiting"}
+    threading.Timer(0.5, close_window_and_open_browser).start()
+    return {"status": "detaching"}
 
 @app.get("/api/docs/readme")
 def get_readme():
@@ -775,3 +787,6 @@ if __name__ == "__main__":
     )
     
     webview.start(debug=True)
+    
+    # Wait for the server thread to keep the FastAPI server running after webview detaches
+    server_thread.join()
