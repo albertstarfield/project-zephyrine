@@ -236,8 +236,13 @@ def main():
     server_path = os.path.join(BASE_DIR, "bin", server_bin)
 
     env = os.environ.copy()
-    moonshine_onnx = os.path.join(BASE_DIR, "..", "moonshine", "core", "third-party", "onnxruntime", "lib", "macos", "arm64")
-    env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
+    
+    # Architecture-aware Moonshine ONNX runtime path
+    arch = "arm64" if platform.machine() == "arm64" else "x86_64"
+    moonshine_onnx = os.path.join(BASE_DIR, "..", "moonshine", "core", "third-party", "onnxruntime", "lib", "macos", arch)
+    
+    if platform.system() == "Darwin":
+        env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
     
     server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
 
