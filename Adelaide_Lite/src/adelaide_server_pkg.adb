@@ -4,7 +4,7 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Exceptions;
 with Ada.Streams;
-with Supertonic_Interface;
+with Kokoro_Interface;
 with Moonshine_Interface;
 with Interfaces;
 with Model_Manager;
@@ -185,10 +185,10 @@ package body Adelaide_Server_Pkg is
                end;
             end if;
             
-            -- Actually call Supertonic
+            -- Actually call Kokoro
             declare
                PCM_Data : constant Ada.Streams.Stream_Element_Array :=
-                 Supertonic_Interface.Synthesize_Speech (To_String(Text_To_Say));
+                 Kokoro_Interface.Synthesize_Speech (To_String(Text_To_Say));
             begin
                if PCM_Data'Length = 0 then
                   return Wrap_Response (AWS.Response.Build ("text/plain", "TTS Error"));

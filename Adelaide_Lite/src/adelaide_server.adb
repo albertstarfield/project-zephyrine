@@ -7,7 +7,6 @@ with Model_Manager;
 with Knowledge_Manager;
 with AWS.Config.Set;
 with AWS.Server;
-with Supertonic_Interface;
 with Moonshine_Interface;
 
 procedure Adelaide_Server is
@@ -29,9 +28,9 @@ begin
       Model_Manager.Initialize;
       Knowledge_Manager.Initialize;
       
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Initializing Supertonic and Moonshine...");
-      Supertonic_Interface.Initialize ("../supertonic/models/onnx", False);
-      Supertonic_Interface.Load_Voice_Style ("../supertonic/models/voice_styles/M1.json");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Connecting to Kokoro-ONNX sidecar (TTS)...");
+      -- Kokoro does not require C-level init in Ada since it runs on Python Sidecar
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" & AnsiAda.Reset & " Initializing Moonshine (STT)...");
       Moonshine_Interface.Init_Moonshine ("../moonshine/models/download.moonshine.ai/model/medium-streaming-en/quantized");
 
       AWS.Config.Set.Server_Port (Conf, 11420);
