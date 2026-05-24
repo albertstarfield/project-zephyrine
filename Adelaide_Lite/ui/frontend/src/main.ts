@@ -122,6 +122,36 @@ function addMessageToUI(msg: Message) {
   renderMarkdownToElement(bubble, msg.content);
   
   msgEl.appendChild(bubble);
+  
+  // Add actions container
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+  
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const date = new Date().toLocaleDateString();
+  
+  let actionHtml = `<span class="msg-time">${date} ${time}</span>
+    <button class="msg-btn copy-btn" title="Copy text">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+    </button>`;
+    
+  if (msg.role === 'user') {
+    actionHtml += `<button class="msg-btn edit-btn" title="Edit message">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+      </button>`;
+  } else {
+    actionHtml += `<button class="msg-btn resubmit-btn" title="Regenerate">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+      </button>`;
+  }
+  actions.innerHTML = actionHtml;
+  
+  const copyBtn = actions.querySelector('.copy-btn');
+  copyBtn?.addEventListener('click', () => {
+    navigator.clipboard.writeText(msg.content);
+  });
+  
+  msgEl.appendChild(actions);
   messagesContainer.appendChild(msgEl);
   
   // Auto-scroll to bottom
