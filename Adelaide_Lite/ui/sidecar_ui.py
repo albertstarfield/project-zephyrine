@@ -37,10 +37,10 @@ class EngineStats:
         self.handless_wcet = 0.0
         self.handless_input_text = ""
         self.handless_output_text = ""
-        
+
         self.history_1m = []
         self.wcel_history_1m = []
-        
+
         # Histories for deltas
         self.wcet_elp0_hist = []
         self.wcet_elp1_hist = []
@@ -57,7 +57,8 @@ except Exception:
 
 # Configuration
 ADA_BACKEND_URL = "http://localhost:11420"
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "assistant_session.db")
+base_dir = os.path.dirname(os.path.dirname(__file__))
+DB_PATH = os.path.join(base_dir, "UI_Database", "assistant_session.db")
 DIST_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 # Initialize SQLite Database
@@ -72,7 +73,7 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
     # Check for sessions table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
@@ -81,7 +82,7 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
     # Check if session_id column exists in messages
     cursor.execute("PRAGMA table_info(messages)")
     columns = [col[1] for col in cursor.fetchall()]
@@ -94,7 +95,7 @@ def init_db():
         cursor.execute("ALTER TABLE messages ADD COLUMN session_id INTEGER")
         # Update existing messages
         cursor.execute("UPDATE messages SET session_id = ?", (default_session_id,))
-        
+
     conn.commit()
     conn.close()
 
@@ -104,22 +105,22 @@ init_db()
 async def post_telemetry(req: Request):
     data = await req.json()
     now_ts = time.time()
-    
+
     if "WCET_WatchdogLoop_uS" in data:
         val = float(data["WCET_WatchdogLoop_uS"])
         engine_stats.wcet_watchdog_loop_us = val
         engine_stats.wcet_wtdog_hist.append({"ts": now_ts, "val": val})
-        
+
     if "WCET_mainLoop_uS" in data:
         val = float(data["WCET_mainLoop_uS"])
         engine_stats.wcet_main_loop_us = val
         engine_stats.wcet_mloop_hist.append({"ts": now_ts, "val": val})
-        
+
     if "WCET_ELP0" in data:
         val = float(data["WCET_ELP0"])
         engine_stats.wcet_elp0 = val
         engine_stats.wcet_elp0_hist.append({"ts": now_ts, "val": val})
-        
+
     if "WCET_ELP1" in data:
         val = float(data["WCET_ELP1"])
         engine_stats.wcet_elp1 = val
@@ -134,7 +135,7 @@ async def post_telemetry(req: Request):
         val = float(data["WCET_ELP3"])
         engine_stats.wcet_elp3 = val
         # For ELP3 (1ms), we don't store 1000pts/s in history, we'll just track current
-    
+
     if "Jitter_Avg_uS" in data:
         engine_stats.jitter_avg_us = float(data["Jitter_Avg_uS"])
     if "Jitter_Max_uS" in data:
@@ -195,13 +196,13 @@ def duplicate_session(session_id: int):
     new_title = row[0] + " (Copy)"
     cursor.execute("INSERT INTO sessions (title) VALUES (?)", (new_title,))
     new_session_id = cursor.lastrowid
-    
+
     # Copy messages
     cursor.execute("SELECT role, content FROM messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
     messages = cursor.fetchall()
     for m in messages:
         cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", (m[0], m[1], new_session_id))
-    
+
     conn.commit()
     conn.close()
     return {"id": new_session_id, "title": new_title}
@@ -223,7 +224,7 @@ def get_messages(session_id: Optional[int] = None):
 def get_stats(queue_len: int = 0):
     now = time.time()
     uptime = now - engine_stats.boot_time
-    
+
     # Cleanup history older than 60 seconds
     engine_stats.history_1m = [h for h in engine_stats.history_1m if now - h['ts'] <= 60]
     engine_stats.wcel_history_1m = [h for h in engine_stats.wcel_history_1m if now - h['ts'] <= 60]
@@ -232,14 +233,16 @@ def get_stats(queue_len: int = 0):
     engine_stats.wcet_elp2_hist = [h for h in engine_stats.wcet_elp2_hist if now - h['ts'] <= 60]
     engine_stats.wcet_wtdog_hist = [h for h in engine_stats.wcet_wtdog_hist if now - h['ts'] <= 60]
     engine_stats.wcet_mloop_hist = [h for h in engine_stats.wcet_mloop_hist if now - h['ts'] <= 60]
-    
+
     avg_1m_wcel = sum(h['val'] for h in engine_stats.wcel_history_1m) / len(engine_stats.wcel_history_1m) if engine_stats.wcel_history_1m else engine_stats.wcel
-    
+
     def get_delta(hist):
-        if not hist: return 0.0
+        if not hist:
+            return 0.0
         vals = [h['val'] for h in hist]
         return max(vals) - min(vals)
-    
+
+    current_process = psutil.Process()
     return {
         "WCET_ELP0": engine_stats.wcet_elp0,
         "WCET_ELP0_delta": get_delta(engine_stats.wcet_elp0_hist),
@@ -256,8 +259,8 @@ def get_stats(queue_len: int = 0):
         "WCET_WatchdogLoop_uS_delta": get_delta(engine_stats.wcet_wtdog_hist),
         "WCET_mainLoop_uS": engine_stats.wcet_main_loop_us,
         "WCET_mainLoop_uS_delta": get_delta(engine_stats.wcet_mloop_hist),
-        "MemoryConsumption_MB": psutil.Process().memory_info().rss / (1024*1024),
-        "CPU_Consumption": psutil.Process().cpu_percent(interval=None),
+        "MemoryConsumption_MB": current_process.memory_info().rss / (1024 * 1024),
+        "CPU_Consumption": current_process.cpu_percent(interval=None),
         "sidecarProcessSpawned": engine_stats.boot_time,
         "sidecarProcessRunning": True,
         "WCETR": engine_stats.wcetr,
@@ -271,7 +274,7 @@ def get_stats(queue_len: int = 0):
         "WCET_ELP2_Hist": engine_stats.wcet_elp2_hist,
         "WCET_WtDog_Hist": engine_stats.wcet_wtdog_hist,
         "WCET_mLoop_Hist": engine_stats.wcet_mloop_hist,
-        
+
         "Handless_Stage": engine_stats.handless_stage,
         "Handless_WCET": engine_stats.handless_wcet,
         "Handless_Input_Text": engine_stats.handless_input_text,
@@ -283,7 +286,7 @@ async def chat(request: Request):
     data = await request.json()
     user_message = data.get("message", "")
     session_id = data.get("session_id")
-    
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -291,7 +294,7 @@ async def chat(request: Request):
         title = user_message[:20] + "..." if len(user_message) > 20 else user_message
         cursor.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
         session_id = cursor.lastrowid
-    
+
     # Save User message to DB
     cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", ("user", user_message, session_id))
     conn.commit()
@@ -303,7 +306,7 @@ async def chat(request: Request):
         "messages": [{"role": "user", "content": user_message}],
         "stream": False
     }
-    
+
     try:
         t_start = time.time()
         async with httpx.AsyncClient() as client:
@@ -312,17 +315,17 @@ async def chat(request: Request):
             t_end = time.time()
             elapsed = t_end - t_start
             engine_stats.wcet_elp2 = elapsed
-            engine_stats.wcet_elp2_hist.append({"ts": t_end, "val": elapsed})            
+            engine_stats.wcet_elp2_hist.append({"ts": t_end, "val": elapsed})
             if response.status_code == 200:
                 resp_json = response.json()
                 print(f"ADA BACKEND RESP: {resp_json}")
-                
+
                 # The backend might return {"response": "..."} or {"message": {"content": "..."}}
                 if "response" in resp_json:
                     bot_reply = resp_json.get("response", "Empty response")
                 else:
                     bot_reply = resp_json.get("message", {}).get("content", "Empty response")
-                
+
                 # Calculate tokens and update stats
                 if enc:
                     tokens = len(enc.encode(bot_reply))
@@ -335,12 +338,12 @@ async def chat(request: Request):
                 engine_stats.wcet_elp1 = elapsed
     except Exception as e:
         bot_reply = f"Could not connect to Ada backend: {str(e)}"
-        
+
     # Save Bot reply to DB
     cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", ("assistant", bot_reply, session_id))
     conn.commit()
     conn.close()
-    
+
     return {"reply": bot_reply, "session_id": session_id}
 
 @app.post("/api/exit")
@@ -363,21 +366,22 @@ def detach_webview():
         with open(port_file, "r") as f:
             port = f.read().strip()
         webbrowser.open_new(f"http://127.0.0.1:{port}/")
-        
+
         if webview.windows:
             webview.windows[0].destroy()
-            
+
     threading.Timer(0.5, close_window_and_open_browser).start()
     return {"status": "detaching"}
 
 @app.get("/api/docs/readme")
 def get_readme():
-    readme_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "README.md")
+    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    readme_path = os.path.join(root_dir, "README.md")
     try:
         with open(readme_path, "r", encoding="utf-8") as f:
             return {"content": f.read()}
     except Exception as e:
-        return {"error": str(e)}, 500
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/docs/license")
 def get_license():
@@ -386,7 +390,7 @@ def get_license():
         with open(license_path, "r", encoding="utf-8") as f:
             return {"content": f.read()}
     except Exception as e:
-        return {"error": str(e)}, 500
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/user_info")
 def get_user_info():
@@ -405,11 +409,11 @@ import numpy as np
 import json
 import uuid
 
-LITERATURE_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "literatureRefIndex.db")
-LITERATURE_GRAPH_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "literature.graphml")
+LITERATURE_DB_PATH = os.path.join(base_dir, "UI_Database", "literatureRefIndex.db")
+LITERATURE_GRAPH_PATH = os.path.join(base_dir, "UI_Database", "literature.graphml")
 
-MEMORY_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "memoryRefIndex.db")
-MEMORY_GRAPH_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "UI_Database", "memory.graphml")
+MEMORY_DB_PATH = os.path.join(base_dir, "UI_Database", "memoryRefIndex.db")
+MEMORY_GRAPH_PATH = os.path.join(base_dir, "UI_Database", "memory.graphml")
 
 # Ensure dir
 os.makedirs(os.path.dirname(LITERATURE_DB_PATH), exist_ok=True)
@@ -471,37 +475,37 @@ init_knowledge_db()
 
 def update_literature_graph(domain: str, filename: str, doc_id: str, chunk_id: str, content_preview: str):
     G = nx.read_graphml(LITERATURE_GRAPH_PATH)
-    
+
     if not G.has_node(domain):
         G.add_node(domain, type="domain")
         G.add_edge("ROOT", domain)
-        
+
     doc_node_id = f"doc_{filename}"
     if not G.has_node(doc_node_id):
         G.add_node(doc_node_id, type="document", label=filename)
         G.add_edge(domain, doc_node_id)
-        
+
     G.add_node(chunk_id, type="chunk", label=content_preview)
     G.add_edge(doc_node_id, chunk_id)
-    
+
     nx.write_graphml(G, LITERATURE_GRAPH_PATH)
 
 def update_memory_graph(session: str, topic: str, memory_id: str, content_preview: str):
     G = nx.read_graphml(MEMORY_GRAPH_PATH)
-    
+
     session_node_id = f"session_{session}"
     if not G.has_node(session_node_id):
         G.add_node(session_node_id, type="session", label=session)
         G.add_edge("MEMORY_ROOT", session_node_id)
-        
+
     topic_node_id = f"topic_{session}_{topic}"
     if not G.has_node(topic_node_id):
         G.add_node(topic_node_id, type="topic", label=topic)
         G.add_edge(session_node_id, topic_node_id)
-        
+
     G.add_node(memory_id, type="memory", label=content_preview)
     G.add_edge(topic_node_id, memory_id)
-    
+
     nx.write_graphml(G, MEMORY_GRAPH_PATH)
 
 from fastapi.responses import StreamingResponse
@@ -510,15 +514,16 @@ from fastapi.responses import StreamingResponse
 async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Form(...)):
     if _embedding_model is None: init_model()
     if _embedding_model is None: return JSONResponse({"error": "Embedding model not available"}, status_code=500)
-    
+
     files_data = []
     for file in files:
         content_bytes = await file.read()
         files_data.append((file.filename, content_bytes))
-        
+
     async def process_and_stream():
         for filename, content_bytes in files_data:
-            if not filename: continue
+            if not filename:
+                continue
             content = ""
             ext = filename.split('.')[-1].lower()
             if ext == 'txt':
@@ -529,33 +534,38 @@ async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Fo
                     txt = page.get_text()
                     if isinstance(txt, str):
                         content += txt + "\n"
-            
-            if not content.strip(): continue
+
+            if not content.strip():
+                continue
             paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
             chunks = []
             current_chunk = ""
             for p in paragraphs:
                 if len(current_chunk) + len(p) > 500:
-                    if current_chunk: chunks.append(current_chunk)
+                    if current_chunk:
+                        chunks.append(current_chunk)
                     current_chunk = p
                 else:
                     current_chunk += "\n\n" + p if current_chunk else p
-            if current_chunk: chunks.append(current_chunk)
-            
+            if current_chunk:
+                chunks.append(current_chunk)
+
             doc_id = str(uuid.uuid4())
             for i, chunk in enumerate(chunks):
                 if _embedding_model:
                     emb = _embedding_model.encode([chunk])[0]
                     emb_blob = emb.astype(np.float32).tobytes()
                     chunk_id = str(uuid.uuid4())
-                    
+
                     conn = sqlite3.connect(LITERATURE_DB_PATH)
                     cursor = conn.cursor()
-                    cursor.execute("INSERT INTO documents (id, filename, domain, content, embedding) VALUES (?, ?, ?, ?, ?)",
-                                  (chunk_id, filename, domain, chunk, emb_blob))
+                    cursor.execute(
+                        "INSERT INTO documents (id, filename, domain, content, embedding) VALUES (?, ?, ?, ?, ?)",
+                        (chunk_id, filename, domain, chunk, emb_blob)
+                    )
                     conn.commit()
                     conn.close()
-                    
+
                     update_literature_graph(domain, filename, doc_id, chunk_id, chunk[:30] + "...")
                     yield json.dumps({"progress": int(((i+1)/len(chunks))*100)}) + "\n"
         yield json.dumps({"progress": 100, "status": "success"}) + "\n"
@@ -564,42 +574,55 @@ async def upload_knowledge(files: list[UploadFile] = File(...), domain: str = Fo
 
 @app.get("/api/knowledgestackfrontend/search")
 def search_literature(q: str):
-    if not q: return {"results": []}
-    if _embedding_model is None: init_model()
-    if _embedding_model is None: return {"results": [], "error": "Embedding model not available"}
-    
+    if not q:
+        return {"results": []}
+    if _embedding_model is None:
+        init_model()
+    if _embedding_model is None:
+        return {"results": [], "error": "Embedding model not available"}
+
     query_emb = _embedding_model.encode([q])[0]
     conn = sqlite3.connect(LITERATURE_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, filename, domain, content, embedding FROM documents")
     rows = cursor.fetchall()
     conn.close()
-    
+
     results = []
     for row in rows:
         emb = np.frombuffer(row[4], dtype=np.float32)
         sim = np.dot(query_emb, emb) / (np.linalg.norm(query_emb) * np.linalg.norm(emb))
         if sim > 0.3:
-            results.append({"id": row[0], "filename": row[1], "domain": row[2], "content": row[3], "similarity": float(sim)})
-            
+            results.append({
+                "id": row[0],
+                "filename": row[1],
+                "domain": row[2],
+                "content": row[3],
+                "similarity": float(sim)
+            })
+
     results.sort(key=lambda x: x["similarity"], reverse=True)
     return {"results": results[:10]}
 
 @app.post("/api/knowledgestackfrontend/memory/upload")
 async def upload_memory(session: str = Form(...), topic: str = Form(...), content: str = Form(...)):
-    if _embedding_model is None: init_model()
-    if _embedding_model is None: return {"status": "error", "message": "Embedding model not available"}
-        
+    if _embedding_model is None:
+        init_model()
+    if _embedding_model is None:
+        return {"status": "error", "message": "Embedding model not available"}
+
     chunks = [content[i:i+500] for i in range(0, len(content), 500)]
     for chunk in chunks:
         emb = _embedding_model.encode([chunk])[0]
         emb_blob = emb.astype(np.float32).tobytes()
         memory_id = str(uuid.uuid4())
-        
+
         conn = sqlite3.connect(MEMORY_DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO memories (id, session, topic, content, embedding) VALUES (?, ?, ?, ?, ?)",
-                      (memory_id, session, topic, chunk, emb_blob))
+        cursor.execute(
+            "INSERT INTO memories (id, session, topic, content, embedding) VALUES (?, ?, ?, ?, ?)",
+            (memory_id, session, topic, chunk, emb_blob)
+        )
         conn.commit()
         conn.close()
         update_memory_graph(session, topic, memory_id, chunk[:30] + "...")
@@ -607,35 +630,52 @@ async def upload_memory(session: str = Form(...), topic: str = Form(...), conten
 
 @app.get("/api/knowledgestackfrontend/memory/search")
 def search_memory(q: str):
-    if not q: return {"results": []}
-    if _embedding_model is None: init_model()
-    if _embedding_model is None: return {"results": [], "error": "Embedding model not available"}
-    
+    if not q:
+        return {"results": []}
+    if _embedding_model is None:
+        init_model()
+    if _embedding_model is None:
+        return {"results": [], "error": "Embedding model not available"}
+
     query_emb = _embedding_model.encode([q])[0]
     conn = sqlite3.connect(MEMORY_DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, session, topic, content, embedding, timestamp FROM memories")
     rows = cursor.fetchall()
     conn.close()
-    
+
     results = []
     for row in rows:
         emb = np.frombuffer(row[4], dtype=np.float32)
         sim = np.dot(query_emb, emb) / (np.linalg.norm(query_emb) * np.linalg.norm(emb))
         if sim > 0.3:
-            results.append({"id": row[0], "session": row[1], "topic": row[2], "content": row[3], "timestamp": row[5], "similarity": float(sim)})
-            
+            results.append({
+                "id": row[0],
+                "session": row[1],
+                "topic": row[2],
+                "content": row[3],
+                "timestamp": row[5],
+                "similarity": float(sim)
+            })
+
     results.sort(key=lambda x: x["similarity"], reverse=True)
     return {"results": results[:10]}
 
 @app.get("/api/knowledgestackfrontend/graph")
 def get_literature_graph():
-    if not os.path.exists(LITERATURE_GRAPH_PATH): return []
+    if not os.path.exists(LITERATURE_GRAPH_PATH):
+        return []
     try:
         G = nx.read_graphml(LITERATURE_GRAPH_PATH)
         elements = []
         for n, d in G.nodes(data=True):
-            elements.append({"data": {"id": n, "label": d.get("label", n), "type": d.get("type", "unknown")}})
+            elements.append({
+                "data": {
+                    "id": n,
+                    "label": d.get("label", n),
+                    "type": d.get("type", "unknown")
+                }
+            })
         for u, v in G.edges():
             elements.append({"data": {"source": u, "target": v}})
         return elements
@@ -644,12 +684,19 @@ def get_literature_graph():
 
 @app.get("/api/knowledgestackfrontend/memory/graph")
 def get_memory_graph():
-    if not os.path.exists(MEMORY_GRAPH_PATH): return []
+    if not os.path.exists(MEMORY_GRAPH_PATH):
+        return []
     try:
         G = nx.read_graphml(MEMORY_GRAPH_PATH)
         elements = []
         for n, d in G.nodes(data=True):
-            elements.append({"data": {"id": n, "label": d.get("label", n), "type": d.get("type", "unknown")}})
+            elements.append({
+                "data": {
+                    "id": n,
+                    "label": d.get("label", n),
+                    "type": d.get("type", "unknown")
+                }
+            })
         for u, v in G.edges():
             elements.append({"data": {"source": u, "target": v}})
         return elements
@@ -681,13 +728,13 @@ def perform_pyrefly_integrity_check():
     """
     import subprocess
     import shutil
-    
+
     pyrefly_cmd = shutil.which("pyrefly")
     if not pyrefly_cmd:
         # If pyrefly is missing, we consider it a safety violation in this mode
         print("[!] Safety Violation: pyrefly tool not found in PATH.")
         sys.exit(1)
-        
+
     print(f"[*] Running Pyrefly Integrity Check on {os.path.basename(__file__)}...")
     try:
         # Setup environment to include project's site-packages for import resolution
@@ -703,15 +750,15 @@ def perform_pyrefly_integrity_check():
                     if os.path.exists(potential_path):
                         site_pkgs = potential_path
                         break
-        
+
         if os.name == 'nt':
             site_pkgs = os.path.join(venv_path, "Lib", "site-packages")
-            
+
         if site_pkgs and os.path.exists(site_pkgs):
             env["PYTHONPATH"] = site_pkgs + os.pathsep + env.get("PYTHONPATH", "")
 
         # Run pyrefly check.
-        result = subprocess.run([pyrefly_cmd, "check", __file__], 
+        result = subprocess.run([pyrefly_cmd, "check", __file__],
                                 capture_output=True, text=True, env=env)
         if result.returncode != 0:
             print("[!] Pyrefly Integrity Check FAILED.")
@@ -727,12 +774,12 @@ def perform_pyrefly_integrity_check():
 if __name__ == "__main__":
     # Perform mandatory safety check before starting any services
     perform_pyrefly_integrity_check()
-    
+
     ui_port = get_free_port()
     port_file = os.path.join(os.path.dirname(DB_PATH), ".sidecar_port")
     with open(port_file, "w") as f:
         f.write(str(ui_port))
-        
+
     def poll_ada_telemetry():
         while True:
             try:
@@ -740,42 +787,54 @@ if __name__ == "__main__":
                 resp = httpx.get("http://127.0.0.1:11420/api/telemetry", timeout=1.0)
                 t1 = time.perf_counter_ns()
                 now_ts = time.time()
-                
+
                 wcel_us = (t1 - t0) / 1000.0
                 engine_stats.wcel = wcel_us
                 engine_stats.wcel_history_1m.append({"ts": now_ts, "val": wcel_us})
-                
+
                 if resp.status_code == 200:
                     data = resp.json()
                     engine_stats.wcet_elp0 = data.get("WCET_ELP0", engine_stats.wcet_elp0)
                     engine_stats.wcet_elp0_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp0})
-                    
+
                     engine_stats.wcet_elp1 = data.get("WCET_ELP1", engine_stats.wcet_elp1)
                     engine_stats.wcet_elp1_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp1})
-                    
+
                     engine_stats.wcet_elp2 = data.get("WCET_ELP2", engine_stats.wcet_elp2)
                     engine_stats.wcet_elp2_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp2})
-                    
+
                     engine_stats.wcet_elp3 = data.get("WCET_ELP3", engine_stats.wcet_elp3)
-                    
+
                     engine_stats.jitter_avg_us = data.get("Jitter_Avg_uS", engine_stats.jitter_avg_us)
                     engine_stats.jitter_max_us = data.get("Jitter_Max_uS", engine_stats.jitter_max_us)
 
-                    engine_stats.wcet_watchdog_loop_us = data.get("WCET_WatchdogLoop_uS", engine_stats.wcet_watchdog_loop_us)
+                    engine_stats.wcet_watchdog_loop_us = data.get(
+                        "WCET_WatchdogLoop_uS", engine_stats.wcet_watchdog_loop_us
+                    )
                     engine_stats.wcet_wtdog_hist.append({"ts": now_ts, "val": engine_stats.wcet_watchdog_loop_us})
 
-                    engine_stats.wcet_main_loop_us = data.get("WCET_mainLoop_uS", engine_stats.wcet_main_loop_us)
+                    engine_stats.wcet_main_loop_us = data.get(
+                        "WCET_mainLoop_uS", engine_stats.wcet_main_loop_us
+                    )
                     engine_stats.wcet_mloop_hist.append({"ts": now_ts, "val": engine_stats.wcet_main_loop_us})
-                    
-                    engine_stats.handless_stage = data.get("Handless_Stage", engine_stats.handless_stage)
-                    engine_stats.handless_wcet = data.get("Handless_WCET", engine_stats.handless_wcet)
-                    engine_stats.handless_input_text = data.get("Handless_Input_Text", engine_stats.handless_input_text)
-                    engine_stats.handless_output_text = data.get("Handless_Output_Text", engine_stats.handless_output_text)
-                    
+
+                    engine_stats.handless_stage = data.get(
+                        "Handless_Stage", engine_stats.handless_stage
+                    )
+                    engine_stats.handless_wcet = data.get(
+                        "Handless_WCET", engine_stats.handless_wcet
+                    )
+                    engine_stats.handless_input_text = data.get(
+                        "Handless_Input_Text", engine_stats.handless_input_text
+                    )
+                    engine_stats.handless_output_text = data.get(
+                        "Handless_Output_Text", engine_stats.handless_output_text
+                    )
+
             except Exception:
                 pass
             time.sleep(1)
-            
+
     threading.Thread(target=poll_ada_telemetry, daemon=True).start()
 
     def run_benchmark():
@@ -784,13 +843,13 @@ if __name__ == "__main__":
             httpx.post(f"http://127.0.0.1:{ui_port}/api/chat", json={"message": "test"}, timeout=30.0)
         except Exception:
             pass
-            
+
     # threading.Thread(target=run_benchmark, daemon=True).start()
 
     # Start FastAPI in a background thread
     server_thread = threading.Thread(target=run_server, args=(ui_port,), daemon=True)
     server_thread.start()
-    
+
     # Launch PyWebview native window
     window = webview.create_window(
         "Adelaide Zephyrine Assistant",
@@ -800,8 +859,8 @@ if __name__ == "__main__":
         frameless=False, # Set to True if we want fully custom window frame
         easy_drag=True
     )
-    
+
     webview.start(debug=True)
-    
+
     # Wait for the server thread to keep the FastAPI server running after webview detaches
     server_thread.join()

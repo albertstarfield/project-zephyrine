@@ -130,7 +130,7 @@ def save_cache():
     try:
         with open(CACHE_FILE_PATH, 'wb') as f:
             pickle.dump(MEMORY_CACHE, f)
-        print(f"[*] Memory cache flushed to disk successfully.", file=sys.stderr)
+        print("[*] Memory cache flushed to disk successfully.", file=sys.stderr)
     except Exception as e:
         print(f"⚠️ Failed to write cache to disk: {e}", file=sys.stderr)
 

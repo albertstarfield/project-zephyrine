@@ -99,10 +99,10 @@ def ensure_ollama_running():
         time.sleep(3)
         try:
             requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
-            print(f"✅ Ollama started.", file=sys.stderr)
+            print("✅ Ollama started.", file=sys.stderr)
             return True
         except:
-            print(f"❌ Failed to start Ollama.", file=sys.stderr)
+            print("❌ Failed to start Ollama.", file=sys.stderr)
             return False
 
 def get_embedding(text: str):
@@ -172,7 +172,7 @@ def store_memory(conn, content, json_io=False):
     elif success_count > 0:
         print(f"✅ Stored {success_count} chunks in memory.", file=sys.stderr)
     else:
-        print(f"❌ Failed to store any memory chunks.", file=sys.stderr)
+        print("❌ Failed to store any memory chunks.", file=sys.stderr)
 
 def cosine_similarity(v1, v2):
     """Compute cosine similarity between two vectors."""

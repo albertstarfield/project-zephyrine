@@ -83,7 +83,7 @@ def ensure_ollama_running():
         print(f"✅ Ollama reachable at {OLLAMA_BASE_URL}", file=sys.stderr)
         return True
     except:
-        print(f"⚠️ Ollama not reachable. Attempting restart...", file=sys.stderr)
+        print("⚠️ Ollama not reachable. Attempting restart...", file=sys.stderr)
         subprocess.run(["launchctl", "setenv", "OLLAMA_HOST", "0.0.0.0:1234"], check=False)
         subprocess.run(["brew", "services", "restart", "ollama"], check=False)
         time.sleep(3)
@@ -220,7 +220,7 @@ def main():
                 print(f"### Visual Evidence (Page Snapshot)\n![Page Snapshot]({r['screenshot_base64']})\n", flush=True)
             
             if r.get('web_images'):
-                print(f"### Website Images\n", flush=True)
+                print("### Website Images\n", flush=True)
                 for img_b64 in r['web_images']:
                     print(f"![Web Image]({img_b64})\n", flush=True)
             

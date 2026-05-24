@@ -64,7 +64,7 @@ class AdelaideBridge:
             
             # Send command and data
             if self.process is not None and self.process.stdin is not None and self.process.stdout is not None:
-                self.process.stdin.write(f"similarity\n")
+                self.process.stdin.write("similarity\n")
                 self.process.stdin.write(f"{dim} {v1_str} {v2_str}\n")
                 self.process.stdin.flush()
                 
