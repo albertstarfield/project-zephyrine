@@ -911,11 +911,8 @@ package body Model_Manager is
 
             declare
                Actual_Prompt : constant String :=
-                 "You are an expert search query generator. Based on the user's " &
-                 "request: """ & To_String (Raw_Q) & """, generate a single, highly " &
-                 "optimized, short search query (keywords only) to find factual " &
-                 "information. Do not include quotes, explanations, or extra text. " &
-                 "Just the query.";
+                 "Generate ONLY a concise 2-4 keyword search query for the following request: """ &
+                 To_String (Raw_Q) & """. NO EXPLANATIONS. NO QUOTES. JUST KEYWORDS.";
             begin
                Model_Manager.Generate
                  (Kind            => Model_Manager.Qwen_0_8B,
