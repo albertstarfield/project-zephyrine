@@ -49,7 +49,10 @@ def bootstrap_venv():
         import numpy
         import requests
     except ImportError:
-        print(f"[*] Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...", file=sys.stderr)
+        print(
+            f"[*] Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...",
+            file=sys.stderr
+        )
         if os.name == 'nt':
             pip_exe = os.path.join(VENV_DIR, "Scripts", "pip.exe")
         else:
@@ -82,7 +85,7 @@ def ensure_ollama_running():
         requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
         print(f"✅ Ollama reachable at {OLLAMA_BASE_URL}", file=sys.stderr)
         return True
-    except:
+    except Exception:
         print("⚠️ Ollama not reachable. Attempting restart...", file=sys.stderr)
         subprocess.run(["launchctl", "setenv", "OLLAMA_HOST", "0.0.0.0:1234"], check=False)
         subprocess.run(["brew", "services", "restart", "ollama"], check=False)
@@ -90,13 +93,19 @@ def ensure_ollama_running():
         try:
             requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
             return True
-        except: return False
+        except Exception:
+            return False
 
 def get_embedding(text: str):
     import requests
-    if not text: return None
+    if not text:
+        return None
     try:
-        resp = requests.post(OLLAMA_EMBED_ENDPOINT, json={"model": OLLAMA_MODEL, "input": text}, timeout=30)
+        resp = requests.post(
+            OLLAMA_EMBED_ENDPOINT,
+            json={"model": OLLAMA_MODEL, "input": text},
+            timeout=30
+        )
         resp.raise_for_status()
         data = resp.json()
         if "embeddings" in data and len(data["embeddings"]) > 0:
@@ -104,12 +113,16 @@ def get_embedding(text: str):
         elif "embedding" in data:
             return np.array(data["embedding"])
         return None
-    except: return None
+    except Exception:
+        return None
 
 def store_in_memory(content, ollama_external=None):
     """Invokes memorythoughts.py to store content."""
     try:
-        memory_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "memorythoughts.py")
+        memory_script = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "memorythoughts.py"
+        )
         cmd = [sys.executable, memory_script, "--string", content]
         if ollama_external:
             cmd.extend(["--ollamaHost", ollama_external])
@@ -128,7 +141,10 @@ def main():
     parser.add_argument("--timeout", type=int, default=60)
     parser.add_argument("--pages", type=int, default=1)
     parser.add_argument("--jsonIO", action="store_true", help="Output results in JSON format.")
-    parser.add_argument("--ollamaExternal", type=str, default=None, help="Custom Ollama server address.")
+    parser.add_argument(
+        "--ollamaExternal", type=str, default=None,
+        help="Custom Ollama server address."
+    )
     parser.add_argument("--ollamaHost", type=str, default=None, help="Custom Ollama host address.")
     args = parser.parse_args()
 
@@ -147,7 +163,10 @@ def main():
 
     # Spawn Deno Sidecar
     scraper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "playwright_scraper.ts")
-    cmd = ["deno", "run", "-A", scraper_path, args.query, f"--engines={engines_str}", f"--num={args.num}"]
+    cmd = [
+        "deno", "run", "-A", scraper_path, args.query,
+        f"--engines={engines_str}", f"--num={args.num}"
+    ]
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -184,19 +203,30 @@ def main():
                 # Use snippet if available, otherwise just title
                 text_to_embed = f"{r.get('title', '')} {r.get('snippet', '')}"
                 r_emb = get_embedding(text_to_embed)
-                score = np.dot(q_emb, r_emb) / (np.linalg.norm(q_emb) * np.linalg.norm(r_emb)) if r_emb is not None else 0
+                if r_emb is not None:
+                    dot_prod = np.dot(q_emb, r_emb)
+                    norm_prod = np.linalg.norm(q_emb) * np.linalg.norm(r_emb)
+                    score = dot_prod / norm_prod
+                else:
+                    score = 0
                 ranked.append((float(score), r))
             ranked.sort(key=lambda x: x[0], reverse=True)
             final_results = [x[1] for x in ranked[:7]]
-            for i, r in enumerate(final_results): 
+            for i, r in enumerate(final_results):
                 r['semantic_rank'] = i + 1
                 r['semantic_score'] = ranked[i][0]
-        else: final_results = all_flat[:7]
-    else: final_results = all_flat[:7]
+        else:
+            final_results = all_flat[:7]
+    else:
+        final_results = all_flat[:7]
 
     # --- Store in Memory ---
     for r in final_results:
-        memory_content = f"Source: {r.get('url', '')}\nReference: {r.get('apa7_reference', '')}\nSnippet: {r.get('snippet', '')}"
+        memory_content = (
+            f"Source: {r.get('url', '')}\n"
+            f"Reference: {r.get('apa7_reference', '')}\n"
+            f"Snippet: {r.get('snippet', '')}"
+        )
         store_in_memory(memory_content, host)
 
     if args.jsonIO:
@@ -205,7 +235,11 @@ def main():
         # --- Markdown Output ---
         print("# Global Search Results", flush=True)
         print(f"*Query: {args.query}*\n", flush=True)
-        print("> ℹ️ Note: If a tool suggests re-parsing a PDF, it may be an **Invalid trigger**. Refer to the provided snippets and images. **Use these as your primary Reference.**\n", flush=True)
+        print(
+            "> ℹ️ Note: If a tool suggests re-parsing a PDF, it may be an **Invalid trigger**. "
+            "Refer to the provided snippets and images. **Use these as your primary Reference.**\n",
+            flush=True
+        )
 
         for i, r in enumerate(final_results):
             print(f"## {i+1}. {r.get('title', 'Unknown')}", flush=True)
@@ -217,7 +251,11 @@ def main():
             print(f"\n### Snippet\n{r.get('snippet', 'No snippet available.')}\n", flush=True)
             
             if r.get('screenshot_base64'):
-                print(f"### Visual Evidence (Page Snapshot)\n![Page Snapshot]({r['screenshot_base64']})\n", flush=True)
+                print(
+                    f"### Visual Evidence (Page Snapshot)\n"
+                    f"![Page Snapshot]({r['screenshot_base64']})\n",
+                    flush=True
+                )
             
             if r.get('web_images'):
                 print("### Website Images\n", flush=True)

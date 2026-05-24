@@ -136,7 +136,8 @@ def save_cache():
 
 def get_embedding(text: str) -> Optional[np.ndarray]:
     global MEMORY_CACHE, CACHE_MODIFIED
-    if not text or not text.strip(): return None
+    if not text or not text.strip():
+        return None
     
     text_hash = hashlib.sha256(text.encode('utf-8')).hexdigest()
     
@@ -173,12 +174,13 @@ def ensure_ollama_running():
     try:
         requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
         return True
-    except:
+    except Exception:
         print(f"⚠️ Proxy Ollama not reachable at {OLLAMA_BASE_URL}. Assuming it's managed externally or down.", file=sys.stderr)
         return False
 
 def cosine_similarity(v1: np.ndarray, v2: np.ndarray) -> float:
-    if v1 is None or v2 is None: return 0.0
+    if v1 is None or v2 is None:
+        return 0.0
     try:
         bridge = AdelaideBridge.get_instance()
         sim = bridge.cosine_similarity(v1, v2)
@@ -249,11 +251,16 @@ def extract_content_via_python(path: str) -> str:
             from tinytag import TinyTag
             tag = TinyTag.get(path)
             text = f"[Media Metadata]\nFile: {os.path.basename(path)}\n"
-            if tag.title: text += f"Title: {tag.title}\n"
-            if tag.artist: text += f"Artist: {tag.artist}\n"
-            if tag.album: text += f"Album: {tag.album}\n"
-            if tag.year: text += f"Year: {tag.year}\n"
-            if tag.duration: text += f"Duration: {int(tag.duration)} seconds\n"
+            if tag.title:
+                text += f"Title: {tag.title}\n"
+            if tag.artist:
+                text += f"Artist: {tag.artist}\n"
+            if tag.album:
+                text += f"Album: {tag.album}\n"
+            if tag.year:
+                text += f"Year: {tag.year}\n"
+            if tag.duration:
+                text += f"Duration: {int(tag.duration)} seconds\n"
         else:
             with open(path, 'r', encoding='utf-8', errors='ignore') as f:
                 text = f.read()
@@ -274,7 +281,7 @@ def generate_apa7_citation(filepath: str) -> str:
         mtime = os.path.getmtime(filepath)
         year = datetime.datetime.fromtimestamp(mtime).strftime('%Y')
         author = os.environ.get('USER', 'Author')
-    except:
+    except Exception:
         year = "n.d."
         author = "Unknown"
 
@@ -283,14 +290,22 @@ def generate_apa7_citation(filepath: str) -> str:
     
     fmt = "Document"
     if mime_type:
-        if 'pdf' in mime_type: fmt = "PDF document"
-        elif 'spreadsheet' in mime_type or 'excel' in mime_type: fmt = "Excel spreadsheet"
-        elif 'presentation' in mime_type or 'powerpoint' in mime_type: fmt = "PowerPoint presentation"
-        elif 'wordprocessing' in mime_type or 'word' in mime_type: fmt = "Word document"
-        elif 'audio' in mime_type: fmt = "Audio metadata"
-        elif 'video' in mime_type: fmt = "Video metadata"
-        elif 'text' in mime_type: fmt = "Text file"
-        elif 'image' in mime_type: fmt = "Image metadata"
+        if 'pdf' in mime_type:
+            fmt = "PDF document"
+        elif 'spreadsheet' in mime_type or 'excel' in mime_type:
+            fmt = "Excel spreadsheet"
+        elif 'presentation' in mime_type or 'powerpoint' in mime_type:
+            fmt = "PowerPoint presentation"
+        elif 'wordprocessing' in mime_type or 'word' in mime_type:
+            fmt = "Word document"
+        elif 'audio' in mime_type:
+            fmt = "Audio metadata"
+        elif 'video' in mime_type:
+            fmt = "Video metadata"
+        elif 'text' in mime_type:
+            fmt = "Text file"
+        elif 'image' in mime_type:
+            fmt = "Image metadata"
 
     return f"{author}. ({year}). *{filename}* [{fmt}]. Local File Index. Retrieved from file://{filepath}"
 
@@ -342,7 +357,8 @@ def main():
         print(f"[*] Lexical Filter isolated Top {len(top_10_files)} documents in {(t1_end - t1_start)*1000:.2f} ms.", file=sys.stderr)
 
     query_emb = get_embedding(args.query)
-    if query_emb is None: return
+    if query_emb is None:
+        return
 
     all_chunks = []
     if not args.jsonIO:
@@ -350,7 +366,8 @@ def main():
     
     for path in top_10_files:
         text = extract_content_via_python(path)[:MAX_CHARS_PER_FILE]
-        if not text.strip(): continue
+        if not text.strip():
+            continue
         
         chunks = chunk_text(text)
         for chunk in chunks:
