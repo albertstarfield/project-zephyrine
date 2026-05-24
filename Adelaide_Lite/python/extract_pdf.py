@@ -18,7 +18,7 @@ def main():
             text += page.get_text() + "\n"
         print(text)
     except ImportError:
-        print(f"⚠️ PyMuPDF (fitz) is required for PDF extraction.", file=sys.stderr)
+        print("⚠️ PyMuPDF (fitz) is required for PDF extraction.", file=sys.stderr)
     except Exception as e:
         print(f"⚠️ Error extracting PDF: {e}", file=sys.stderr)
 
