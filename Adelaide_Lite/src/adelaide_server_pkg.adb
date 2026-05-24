@@ -127,6 +127,15 @@ package body Adelaide_Server_Pkg is
 
    --------------
    -- Dispatch --
+   function Stream_To_String (Data : Ada.Streams.Stream_Element_Array) return String is
+      Result : String (1 .. Data'Length);
+   begin
+      for I in Data'Range loop
+         Result (Integer (I) - Integer (Data'First) + 1) := Character'Val (Data (I));
+      end loop;
+      return Result;
+   end Stream_To_String;
+
    --------------
    function Dispatch
      (Request : AWS.Status.Data) return AWS.Response.Data
@@ -137,7 +146,9 @@ package body Adelaide_Server_Pkg is
       Raw_B   : constant Unbounded_String :=
         To_Unbounded_String (AWS.Status.Payload (Request));
       Payload : Unbounded_String := (if Raw_S /= "" then
-        To_Unbounded_String (Raw_S) else Raw_B);
+        To_Unbounded_String (Raw_S) 
+        elsif Length (Raw_B) > 0 then Raw_B
+        else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
       Result : Unbounded_String;
    begin
       if Method = "OPTIONS" then
@@ -371,7 +382,9 @@ package body Adelaide_Server_Pkg is
       then
          declare
             Payload : Unbounded_String := (if Raw_S /= "" then
-              To_Unbounded_String (Raw_S) else Raw_B);
+              To_Unbounded_String (Raw_S) 
+              elsif Length (Raw_B) > 0 then Raw_B
+              else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
             Prompt  : Unbounded_String := Null_Unbounded_String;
             Req_Model : Unbounded_String := To_Unbounded_String ("qwen:0.8b");
             Is_Streaming : Boolean := False;

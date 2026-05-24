@@ -9,7 +9,7 @@ if __name__ == "__main__":
             # Using sympy for safe mathematical evaluation
             res = sympy.sympify(expr)
             print(float(res))
-        except Exception as e:
+        except Exception:
             try:
                 print(eval(expr, {"__builtins__": None}, math.__dict__))
             except Exception as e2:
