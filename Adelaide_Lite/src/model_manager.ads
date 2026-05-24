@@ -97,7 +97,7 @@ package Model_Manager is
    Current_WCET_ELP1 : Duration := 0.0;
    Current_WCET_ELP2 : Duration := 0.0;
    Current_WCET_ELP3 : Duration := 0.0;
-   
+
    --  ELP3 Timing Correction / Jitter Profile
    Current_Jitter_Max : Duration := 0.0;
    Current_Jitter_Avg : Duration := 0.0;

@@ -4,6 +4,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Calendar; use type Ada.Calendar.Time;
 with Database_Manager;
 with Tool_Manager;
+with Llama_Interface;
 use Llama_Interface;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
@@ -12,6 +13,10 @@ with Ada.Unchecked_Conversion;
 
 package body Model_Manager is
    use Streaming_Queue;
+
+   function Llama_Batch_Get_One
+     (T : System.Address; N : int) return Llama_Batch;
+   pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
 
    task type WCET_Printer;
    task body WCET_Printer is
@@ -388,9 +393,6 @@ package body Model_Manager is
       end if;
 
       declare
-         function Llama_Batch_Get_One
-           (T : System.Address; N : int) return Llama_Batch;
-         pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
          B : constant Llama_Batch :=
            Llama_Batch_Get_One (Tokens (1)'Address, N_Toks);
       begin
@@ -708,14 +710,10 @@ package body Model_Manager is
 
       --  CHUNKED DECODING
       declare
-         function Llama_Batch_Get_One
-           (T : System.Address; N : int) return Llama_Batch;
-         pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
-
          Batch_Size  : constant int := 4096;
          Current_Pos : int := 0;
          Tokens_Left : int := N_Toks;
-         begin
+      begin
          Llama_Interface.Llama_Memory_Clear
            (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
 
@@ -797,9 +795,6 @@ package body Model_Manager is
             end if;
 
             declare
-               function Llama_Batch_Get_One
-                 (T : System.Address; N : int) return Llama_Batch;
-               pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
                B : constant Llama_Batch :=
                  Llama_Batch_Get_One (Token'Address, 1);
             begin
@@ -1106,7 +1101,7 @@ package body Model_Manager is
          end Get_Final_Prompt;
 
          Synth_Prompt : constant String := Get_Final_Prompt;
-         begin
+      begin
          declare
             Ctx : Positive := 4096;
          begin
@@ -1119,19 +1114,20 @@ package body Model_Manager is
                Ctx := Ctx * 2;
             end loop;
          end;
-         end;
 
          Result := Current_Response;
          declare
-         B64_Str : Unbounded_String := To_Unbounded_String ("");
+            B64_Str : Unbounded_String := To_Unbounded_String ("");
          begin
-         if GNATCOLL.JSON.Length (Images) > 0 then
-            B64_Str := To_Unbounded_String
-              (String'(GNATCOLL.JSON.Get
-                (GNATCOLL.JSON.Get (Images, 1))));
-         end if;
-         Database_Manager.Remember (Prompt, To_String (Current_Response), To_String (B64_Str));
+            if GNATCOLL.JSON.Length (Images) > 0 then
+               B64_Str := To_Unbounded_String
+                 (String'(GNATCOLL.JSON.Get
+                   (GNATCOLL.JSON.Get (Images, 1))));
+            end if;
+            Database_Manager.Remember
+              (Prompt, To_String (Current_Response), To_String (B64_Str));
          end;
+      end;
 
       Database_Manager.Add_To_Cache (Prompt, Emb_Vec (1 .. Emb_Len), To_String (Current_Response));
 
