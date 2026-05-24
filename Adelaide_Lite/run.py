@@ -201,6 +201,7 @@ def main():
     server_path = os.path.join(BASE_DIR, "bin", server_bin)
 
     if launch_gui:
+        env = os.environ.copy()
         moonshine_onnx = os.path.join(BASE_DIR, "..", "moonshine", "core", "third-party", "onnxruntime", "lib", "macos", "arm64")
         env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
         
