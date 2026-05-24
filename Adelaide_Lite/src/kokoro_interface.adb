@@ -20,8 +20,8 @@ package body Kokoro_Interface is
       Args (2) := new String'(File_Name);
       
       GNAT.OS_Lib.Spawn (
-         Program_Name => "python3",
-         Args         => [new String'("../kokoro_sidecar/cli.py"),
+         Program_Name => "../tts_kokoro_component/venv/bin/python",
+         Args         => [new String'("../tts_kokoro_component/tts_kokoro_generate.py"),
                           new String'(Text),
                           new String'(File_Name)],
          Success      => Success
