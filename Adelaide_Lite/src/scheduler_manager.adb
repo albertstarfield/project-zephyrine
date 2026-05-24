@@ -43,7 +43,9 @@ package body Scheduler_Manager is
       end Get_Next;
    end Event_Queue;
 
-   task type Scheduler_Task_Type;
+   task type Scheduler_Task_Type is
+      pragma Storage_Size (8 * 1024 * 1024); -- 8MB Stack
+   end Scheduler_Task_Type;
    type Scheduler_Task_Access is access Scheduler_Task_Type;
    Worker : Scheduler_Task_Access := null;
 
