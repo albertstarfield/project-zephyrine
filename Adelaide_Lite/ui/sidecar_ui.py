@@ -305,6 +305,7 @@ async def chat(request: Request):
             engine_stats.wcet_elp2_hist.append({"ts": t_end, "val": elapsed})            
             if response.status_code == 200:
                 resp_json = response.json()
+                print(f"ADA BACKEND RESP: {resp_json}")
                 bot_reply = resp_json.get("message", {}).get("content", "Empty response")
                 
                 # Calculate tokens and update stats
