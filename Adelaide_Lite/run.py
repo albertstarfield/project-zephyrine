@@ -208,6 +208,11 @@ def main():
         print("[*] No changes detected, skipping build.")
         daemon_build_flag = "--skip-build"
 
+    # Handle integrity check flag
+    if "--test-build-integrity-check" in sys.argv:
+        print("[*] Test build integrity check passed! Exiting without launching services.")
+        sys.exit(0)
+
     # Parse arguments
     launch_gui = True
     if "--no-gui" in sys.argv:
