@@ -18,6 +18,7 @@ os.makedirs(os.environ["HF_HOME"], exist_ok=True)
 # Globals to keep track of background processes
 daemon_process = None
 server_process = None
+kokoro_process = None
 
 def get_files_to_hash():
     patterns = [
@@ -59,6 +60,8 @@ def cleanup(signum=None, frame=None):
         daemon_process.terminate()
     if server_process and server_process.poll() is None:
         server_process.terminate()
+    if kokoro_process and kokoro_process.poll() is None:
+        kokoro_process.terminate()
     sys.exit(0)
 
 signal.signal(signal.SIGINT, cleanup)
@@ -92,26 +95,18 @@ def main():
         else:
             print("[*] llama.cpp already exists, skipping clone.")
 
-        # Check and clone supertonic
-        supertonic_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "supertonic"))
-        if not os.path.exists(supertonic_dir):
-            print("[*] Cloning supertonic...")
-            subprocess.run(["git", "clone", "--depth=1", "https://github.com/supertone-inc/supertonic.git", supertonic_dir], check=False)
+        # Check and clone kokoro-onnx
+        kokoro_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro-onnx"))
+        if not os.path.exists(kokoro_dir):
+            print("[*] Cloning kokoro-onnx...")
+            subprocess.run(["git", "clone", "https://github.com/thewh1teagle/kokoro-onnx", kokoro_dir], check=False)
         else:
-            print("[*] supertonic already exists, skipping clone.")
+            print("[*] kokoro-onnx already exists, skipping clone.")
             
-        # Ensure Supertonic C API wrapper is built
-        supertonic_wrapper_dir = os.path.join(BASE_DIR, "src", "c_bindings", "supertonic")
-        supertonic_build_dir = os.path.join(supertonic_wrapper_dir, "build")
-        supertonic_c_lib = os.path.join(supertonic_build_dir, "libsupertonic_c.dylib") if platform.system() == "Darwin" else os.path.join(supertonic_build_dir, "libsupertonic_c.so")
-        if not os.path.exists(supertonic_c_lib):
-            print("[*] Building supertonic C API wrapper...")
-            os.makedirs(supertonic_build_dir, exist_ok=True)
-            subprocess.run(["cmake", ".."], cwd=supertonic_build_dir, check=False)
-            threads = str(os.cpu_count() or 4)
-            subprocess.run(["make", f"-j{threads}"], cwd=supertonic_build_dir, check=False)
-        else:
-            print("[*] supertonic C wrapper library exists, skipping cmake build.")
+        # Ensure Kokoro sidecar dependencies are installed
+        kokoro_sidecar_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro_sidecar"))
+        print("[*] Installing Kokoro sidecar requirements...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "-r", os.path.join(kokoro_sidecar_dir, "requirements.txt")], check=False)
 
         # Check and clone moonshine
         moonshine_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "moonshine"))
@@ -152,18 +147,17 @@ def main():
         else:
             print("[*] Moonshine models already exist, skipping download.")
 
-        # Check and download Supertonic models
-        supertonic_models_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "supertonic", "models"))
-        supertonic_tts_json = os.path.join(supertonic_models_dir, "tts.json")
-        if not os.path.exists(supertonic_tts_json):
-            print("[*] Downloading Supertonic models...")
-            subprocess.run([sys.executable, "-c", "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Supertone/supertonic-3', local_dir='../supertonic/models')"], cwd=BASE_DIR, check=False)
-            supertonic_config_json = os.path.join(supertonic_models_dir, "config.json")
-            if os.path.exists(supertonic_config_json):
-                import shutil
-                shutil.copy(supertonic_config_json, supertonic_tts_json)
-        else:
-            print("[*] Supertonic models already exist, skipping download.")
+        # Check and download Kokoro models
+        kokoro_models_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro_models"))
+        os.makedirs(kokoro_models_dir, exist_ok=True)
+        kokoro_onnx_model = os.path.join(kokoro_models_dir, "kokoro-v0_19.int8.onnx")
+        kokoro_voices = os.path.join(kokoro_models_dir, "voices-v1.0.bin")
+        if not os.path.exists(kokoro_onnx_model):
+            print("[*] Downloading Kokoro ONNX model...")
+            subprocess.run(["wget", "-q", "--show-progress", "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.int8.onnx"], cwd=kokoro_models_dir, check=False)
+        if not os.path.exists(kokoro_voices):
+            print("[*] Downloading Kokoro voices...")
+            subprocess.run(["wget", "-q", "--show-progress", "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"], cwd=kokoro_models_dir, check=False)
 
         # Ensure Deno Playwright Chromium is installed
         print("[*] Installing Playwright Chromium binary for Deno crawler...")
@@ -217,6 +211,10 @@ def main():
         daemon_args.append(daemon_build_flag)
         
     daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR)
+
+    print("[*] Booting Kokoro TTS Sidecar...")
+    kokoro_sidecar_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro_sidecar"))
+    kokoro_process = subprocess.Popen([sys.executable, "server.py"], cwd=kokoro_sidecar_dir)
 
     print("[*] Booting Adelaide Intelligence Server...")
     end_time = int(time.time() * 1000)
