@@ -1,5 +1,6 @@
 with "config/avionics_daemon_config.gpr";
-with "vss";
+with "vss_json";
+with "vss_text";
 
 project Avionics_Daemon is
 
