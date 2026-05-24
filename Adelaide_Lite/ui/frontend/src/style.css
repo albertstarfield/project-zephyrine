@@ -1108,3 +1108,32 @@ html {
     pointer-events: none;
     box-shadow: 0 0 10px rgba(255, 170, 0, 0.2);
 }
+
+.zephy-overlay {
+    position: absolute;
+    bottom: 30px;
+    left: 40px;
+    display: flex;
+    flex-direction: column;
+    z-index: 5;
+    opacity: 0.327;
+    pointer-events: none;
+    user-select: none;
+}
+
+.zephy-text {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+}
+
+.zephy-subtext {
+    font-size: 0.65rem;
+    font-weight: 400;
+    letter-spacing: 0.4em;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: 'Inter', sans-serif;
+    margin-top: 4px;
+}
