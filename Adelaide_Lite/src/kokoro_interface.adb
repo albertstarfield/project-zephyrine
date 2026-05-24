@@ -1,7 +1,6 @@
-with GNATCOLL.JSON; use GNATCOLL.JSON;
-with AWS.Client;
-with AWS.Response;
-with AWS.Messages; use AWS.Messages;
+with GNAT.OS_Lib;
+with Ada.Streams.Stream_IO;
+with Ada.Directories;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Exceptions;
 with AnsiAda;
@@ -9,39 +8,61 @@ with AnsiAda;
 package body Kokoro_Interface is
 
    function Synthesize_Speech (Text : String) return Ada.Streams.Stream_Element_Array is
-      Payload : constant JSON_Value := Create_Object;
-      Response : AWS.Response.Data;
+      File_Name : constant String := "kokoro_temp.wav";
+      
+      Args : GNAT.OS_Lib.Argument_List (1 .. 2);
+      Success : Boolean;
       Empty_Array : Ada.Streams.Stream_Element_Array (1 .. 0);
    begin
-      Set_Field (Payload, "text", Text);
-      Set_Field (Payload, "voice", "af_sarah");
-
+      -- We will just use 'python3' and assume it's in the environment if the virtualenv is active,
+      -- or just pass the absolute/relative paths.
+      Args (1) := new String'(Text);
+      Args (2) := new String'(File_Name);
+      
+      GNAT.OS_Lib.Spawn (
+         Program_Name => "python3",
+         Args         => [new String'("../kokoro_sidecar/cli.py"),
+                          new String'(Text),
+                          new String'(File_Name)],
+         Success      => Success
+      );
+      
+      if not Success then
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Kokoro] Failed to execute python sidecar CLI.");
+         return Empty_Array;
+      end if;
+      
+      if not Ada.Directories.Exists (File_Name) then
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Kokoro] TTS output file was not generated.");
+         return Empty_Array;
+      end if;
+      
+      -- Read File_Name into Stream_Element_Array
+      declare
+         File : Ada.Streams.Stream_IO.File_Type;
+         Size : Ada.Streams.Stream_Element_Offset;
       begin
-         Response := AWS.Client.Post (
-            URL          => "http://127.0.0.1:11421/tts",
-            Data         => Write (Payload),
-            Content_Type => "application/json"
-         );
+         Ada.Streams.Stream_IO.Open (File, Ada.Streams.Stream_IO.In_File, File_Name);
+         Size := Ada.Streams.Stream_Element_Offset (Ada.Streams.Stream_IO.Size (File));
          
-         if AWS.Response.Status_Code (Response) = AWS.Messages.S200 then
-            declare
-               Body_Str : constant String := AWS.Response.Message_Body (Response);
-               Stream_Arr : Ada.Streams.Stream_Element_Array (1 .. Body_Str'Length);
-            begin
-               for I in Body_Str'Range loop
-                  Stream_Arr (Ada.Streams.Stream_Element_Offset (I - Body_Str'First + 1)) := 
-                     Character'Pos (Body_Str (I));
-               end loop;
-               return Stream_Arr;
-            end;
-         else
-            Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Kokoro] TTS Sidecar returned status code " & 
-                      AWS.Messages.Status_Code'Image (AWS.Response.Status_Code (Response)));
-            return Empty_Array;
-         end if;
+         declare
+            Stream_Arr : Ada.Streams.Stream_Element_Array (1 .. Size);
+            Last       : Ada.Streams.Stream_Element_Offset;
+         begin
+            Ada.Streams.Stream_IO.Read (File, Stream_Arr, Last);
+            Ada.Streams.Stream_IO.Close (File);
+            
+            -- Clean up the temporary file
+            Ada.Directories.Delete_File (File_Name);
+            
+            return Stream_Arr (1 .. Last);
+         end;
       exception
          when E : others =>
-            Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Kokoro] Failed to reach TTS Sidecar: " & 
+            if Ada.Streams.Stream_IO.Is_Open (File) then
+               Ada.Streams.Stream_IO.Close (File);
+            end if;
+            Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Kokoro] Failed to read TTS file: " & 
                       Ada.Exceptions.Exception_Message (E));
             return Empty_Array;
       end;
