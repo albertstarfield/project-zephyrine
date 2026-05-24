@@ -1319,19 +1319,9 @@ Uptime    : ${uptimeH}h ${uptimeM}m ${uptimeS}s
 Queue     : ${stats.Current_Queue}
 `;
 
-      // Handless Stats Overlay Update
-      const hlStatus = document.getElementById('hl-status');
-      const hlStage = document.getElementById('hl-stage');
-      const hlWcet = document.getElementById('hl-wcet');
-      const hlInput = document.getElementById('hl-input');
-      const hlOutput = document.getElementById('hl-output');
-      
-      if (hlStatus) hlStatus.textContent = stats.Handless_Stage === "Idle" ? "Idle" : "Processing";
-      if (hlStage) hlStage.textContent = stats.Handless_Stage;
-      if (hlWcet) hlWcet.textContent = (stats.Handless_WCET || 0).toFixed(1) + " ms";
-      if (hlInput) hlInput.textContent = stats.Handless_Input_Text || "-";
-      if (hlOutput) hlOutput.textContent = stats.Handless_Output_Text || "-";
-
+      let hlVADStr = "Listening";
+      const vadElem = document.getElementById('hl-vad');
+      if (vadElem) hlVADStr = vadElem.innerText;
 
       mangoJSText.textContent = `
 ADELAIDE_JAVASHIT_ENGINE
@@ -1339,7 +1329,17 @@ ADELAIDE_JAVASHIT_ENGINE
 WCEL      : ${(stats.WCEL / 1000).toFixed(2)} ms
 WCEL \u0394 1m: ${(stats.WCEL_delta_1m / 1000).toFixed(2)} ms
 JS Loop   : ${jsLoopTime} ms
-Memory    : ${(performance as any).memory ? ((performance as any).memory.usedJSHeapSize / (1024 * 1024)).toFixed(1) + ' MB' : 'N/A'}
+Memory    : ${(performance as any).memory ? Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024 * 10) / 10 : 0} MB
+Perms     : Mic[${hasMicPerm ? 'Y' : 'N'}] Cam[${hasCamPerm ? 'Y' : 'N'}]
+
+ADELAIDE_HANDLESS_MODE
+--------------------
+Status    : ${stats.Handless_Stage === "Idle" ? "Idle" : "Processing"}
+Stage     : ${stats.Handless_Stage}
+VAD       : ${hlVADStr}
+WCET      : ${(stats.Handless_WCET || 0).toFixed(1)} ms
+In        : ${stats.Handless_Input_Text || "-"}
+Out       : ${stats.Handless_Output_Text || "-"}
 `;
       
       // Draw Ada Graph (Tokens/s and WCET History)
@@ -1804,18 +1804,38 @@ function initAstralGeometry() {
 }
 (window as any).astralInitialized = false;
 
-// Voice Recording & API Connection Logic
+// Voice & Vision Logic
 let isRecording = false;
 let audioContext: AudioContext | null = null;
 let mediaStream: MediaStream | null = null;
 let processor: ScriptProcessorNode | null = null;
 let inputBuffer: Float32Array[] = [];
+let hasMicPerm = false;
+let hasCamPerm = false;
+let hiddenVideo: HTMLVideoElement | null = null;
+let hiddenCanvas: HTMLCanvasElement | null = null;
 
 async function startAgenticVoice() {
     if (isRecording) return;
     
     try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        hasMicPerm = true;
+        hasCamPerm = true;
+        
+        if (!hiddenVideo) {
+            hiddenVideo = document.createElement('video');
+            hiddenVideo.style.display = 'none';
+            document.body.appendChild(hiddenVideo);
+        }
+        if (!hiddenCanvas) {
+            hiddenCanvas = document.createElement('canvas');
+            hiddenCanvas.style.display = 'none';
+            document.body.appendChild(hiddenCanvas);
+        }
+        hiddenVideo.srcObject = mediaStream;
+        await hiddenVideo.play();
+
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
         const source = audioContext.createMediaStreamSource(mediaStream);
         
@@ -1829,11 +1849,11 @@ async function startAgenticVoice() {
         source.connect(processor);
         processor.connect(audioContext.destination);
         isRecording = true;
-        console.log("Started recording raw PCM for Agentic Mode");
+        console.log("Started recording raw PCM & Camera for Agentic Mode");
         
     } catch (err) {
-        console.error("Microphone permission denied or error:", err);
-        alert("Microphone permission is required for Handless Agentic Mode.");
+        console.error("Permission denied or error:", err);
+        alert("Camera and Microphone permissions are required for Multimodal Handless Agentic Mode.");
     }
 }
 
@@ -1874,8 +1894,27 @@ async function stopAndSendAgenticVoice() {
         if (vadElem) { vadElem.innerText = "No Speech Detected"; vadElem.style.color = "#ef4444"; }
         inputBuffer = [];
         return; // Skip sending to API
-    } else {
-        if (vadElem) { vadElem.innerText = "Speech Detected"; vadElem.style.color = "#4ade80"; }
+    }
+    
+    // Capture visual context if camera is ready
+    if (hasCamPerm && hiddenVideo && hiddenCanvas) {
+        hiddenCanvas.width = hiddenVideo.videoWidth || 640;
+        hiddenCanvas.height = hiddenVideo.videoHeight || 480;
+        const ctx = hiddenCanvas.getContext('2d');
+        if (ctx) {
+            ctx.drawImage(hiddenVideo, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+            const dataUrl = hiddenCanvas.toDataURL('image/jpeg', 0.8);
+            try {
+                await fetch('/api/uploadVisionContext', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_b64: dataUrl })
+                });
+                console.log("Vision context uploaded successfully");
+            } catch (err) {
+                console.warn("Failed to upload vision context", err);
+            }
+        }
     }
     
     inputBuffer = []; // Reset
