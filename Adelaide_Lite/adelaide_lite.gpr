@@ -17,6 +17,10 @@ project Adelaide_Lite is
         ("-gnat2022", "-gnatX", "-mmacosx-version-min=15.0");
    end Compiler;
 
+   package Binder is
+      for Switches ("Ada") use ("-d8m");
+   end Binder;
+
    package Linker is
       -- Patch Note: SDK path is now resolved dynamically using the SDKROOT environment variable.
       for Switches ("Ada") use (
