@@ -4,6 +4,14 @@ with Ada.Unchecked_Conversion;
 use all type Ada.Streams.Stream_Element;
 
 package body MCU_Protocol is
+   use type Ada.Streams.Stream_Element_Offset;
+   use type Interfaces.Integer_16;
+
+   subtype Two_Bytes is Ada.Streams.Stream_Element_Array (1 .. 2);
+   function To_Int16 is new Ada.Unchecked_Conversion (
+      Source => Two_Bytes,
+      Target => Interfaces.Integer_16);
+
    -- Convert Message_Type to byte representation
    function To_Byte (MT : Message_Type) return Ada.Streams.Stream_Element is
    begin
@@ -77,18 +85,19 @@ package body MCU_Protocol is
                           return Sensor_Values is
       Result : Sensor_Values;
       Calculated_Checksum : Ada.Streams.Stream_Element;
+      F : constant Ada.Streams.Stream_Element_Offset := Buffer'First;
    begin
       Error := No_Error;
       
       -- Validate message type
-      if To_Message_Type (Buffer (0)) /= Sensor_Message then
+      if To_Message_Type (Buffer (F)) /= Sensor_Message then
          Error := Invalid_Message_Type;
          return (0, 0, 0, 0);
       end if;
       
       -- Validate checksum
-      Calculated_Checksum := Calculate_Checksum (Buffer (0 .. 8));
-      if Buffer (9) /= Calculated_Checksum then
+      Calculated_Checksum := Calculate_Checksum (Buffer (F .. F + 8));
+      if Buffer (F + 9) /= Calculated_Checksum then
          Error := Checksum_Error;
          return (0, 0, 0, 0);
       end if;
@@ -96,46 +105,30 @@ package body MCU_Protocol is
       -- Extract sensor values (16-bit values stored in big-endian format)
       -- Gyroscope (bytes 1-2)
       declare
-         function To_Integer is new Ada.Unchecked_Conversion (
-            Source => Ada.Streams.Stream_Element_Array (1 .. 2),
-            Target => Interfaces.Integer_16);
-         Gyro_Bytes : Ada.Streams.Stream_Element_Array (1 .. 2) := 
-            (Buffer (1), Buffer (2));
+         Gyro_Bytes : Two_Bytes := (Buffer (F + 1), Buffer (F + 2));
       begin
-         Result.Gyroscope := Integer (To_Integer (Gyro_Bytes));
+         Result.Gyroscope := Integer (To_Int16 (Gyro_Bytes));
       end;
       
       -- Accelerometer (bytes 3-4)
       declare
-         function To_Integer is new Ada.Unchecked_Conversion (
-            Source => Ada.Streams.Stream_Element_Array (1 .. 2),
-            Target => Interfaces.Integer_16);
-         Accel_Bytes : Ada.Streams.Stream_Element_Array (1 .. 2) := 
-            (Buffer (3), Buffer (4));
+         Accel_Bytes : Two_Bytes := (Buffer (F + 3), Buffer (F + 4));
       begin
-         Result.Accelerometer := Integer (To_Integer (Accel_Bytes));
+         Result.Accelerometer := Integer (To_Int16 (Accel_Bytes));
       end;
       
       -- Magnetometer (bytes 5-6)
       declare
-         function To_Integer is new Ada.Unchecked_Conversion (
-            Source => Ada.Streams.Stream_Element_Array (1 .. 2),
-            Target => Interfaces.Integer_16);
-         Mag_Bytes : Ada.Streams.Stream_Element_Array (1 .. 2) := 
-            (Buffer (5), Buffer (6));
+         Mag_Bytes : Two_Bytes := (Buffer (F + 5), Buffer (F + 6));
       begin
-         Result.Magnetometer := Integer (To_Integer (Mag_Bytes));
+         Result.Magnetometer := Integer (To_Int16 (Mag_Bytes));
       end;
       
       -- Barometer (bytes 7-8)
       declare
-         function To_Integer is new Ada.Unchecked_Conversion (
-            Source => Ada.Streams.Stream_Element_Array (1 .. 2),
-            Target => Interfaces.Integer_16);
-         Baro_Bytes : Ada.Streams.Stream_Element_Array (1 .. 2) := 
-            (Buffer (7), Buffer (8));
+         Baro_Bytes : Two_Bytes := (Buffer (F + 7), Buffer (F + 8));
       begin
-         Result.Barometer := Integer (To_Integer (Baro_Bytes));
+         Result.Barometer := Integer (To_Int16 (Baro_Bytes));
       end;
       
       return Result;
@@ -148,8 +141,9 @@ package body MCU_Protocol is
                             return Validation_Result is
       Msg_Type : Message_Type;
       Calculated_Checksum : Ada.Streams.Stream_Element;
-      Length : Natural;
+      Length : Ada.Streams.Stream_Element_Offset;
       Result : Validation_Result;
+      F : constant Ada.Streams.Stream_Element_Offset := Buffer'First;
    begin
       -- Check minimum message length
       if Buffer'Length < 2 then
@@ -159,7 +153,7 @@ package body MCU_Protocol is
       end if;
       
       -- Determine message type
-      Msg_Type := To_Message_Type (Buffer (0));
+      Msg_Type := To_Message_Type (Buffer (F));
       
       -- Determine expected length based on message type
       case Msg_Type is
@@ -175,8 +169,8 @@ package body MCU_Protocol is
       end if;
       
       -- Validate checksum
-      Calculated_Checksum := Calculate_Checksum (Buffer (0 .. Length-2));
-      if Buffer (Length-1) /= Calculated_Checksum then
+      Calculated_Checksum := Calculate_Checksum (Buffer (F .. F + Length - 2));
+      if Buffer (F + Length - 1) /= Calculated_Checksum then
          Result.Msg_Type := Msg_Type;
          Result.Error := Checksum_Error;
          return Result;
