@@ -28,6 +28,7 @@ package body Adelaide_Server_Pkg is
    Handless_Input_Text : Unbounded_String := To_Unbounded_String("");
    Handless_Output_Text : Unbounded_String := To_Unbounded_String("");
    Handless_WCET : Float := 0.0;
+   Handless_Vision_Context : Unbounded_String := To_Unbounded_String("");
 
    use type Streaming_Queue.Queue_Access;
 
@@ -173,6 +174,19 @@ package body Adelaide_Server_Pkg is
          end;
       end if;
 
+      if URI = "/api/uploadVisionContext" then
+         declare
+            use GNATCOLL.JSON;
+            Payload_Str : constant String := (if Raw_S /= "" then Raw_S else To_String (Raw_B));
+            Parser_Result : constant Read_Result := Read (Payload_Str);
+         begin
+            if Parser_Result.Success then
+               Handless_Vision_Context := To_Unbounded_String (Get (Parser_Result.Item, "image_b64"));
+            end if;
+            return Wrap_Response (AWS.Response.Build ("text/plain", "OK"));
+         end;
+      end if;
+
       if URI = "/api/agenticZephyHandlessMode" then
          declare
             use GNATCOLL.JSON;
@@ -201,12 +215,22 @@ package body Adelaide_Server_Pkg is
             Handless_Stage := To_Unbounded_String("Generating...");
             
             if Length (Transcript) > 0 then
-               Model_Manager.Hybrid_Generate
-                 (Prompt     => To_String (Transcript),
-                  Result     => LLM_Result,
-                  Session_ID => "server-handless",
-                  Agentic    => True,
-                  Raw_Prompt => False);
+               declare
+                  Vision_Arr : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+               begin
+                  if Length (Handless_Vision_Context) > 0 then
+                     GNATCOLL.JSON.Append (Vision_Arr, To_String (Handless_Vision_Context));
+                     Handless_Vision_Context := To_Unbounded_String(""); -- Clear after use
+                  end if;
+                  
+                  Model_Manager.Hybrid_Generate
+                    (Prompt     => To_String (Transcript),
+                     Result     => LLM_Result,
+                     Images     => Vision_Arr,
+                     Session_ID => "server-handless",
+                     Agentic    => True,
+                     Raw_Prompt => False);
+               end;
             else
                Model_Manager.Hybrid_Generate
                  (Prompt     => "Proactively initiate the conversation. Ask a random, interesting, or highly agentic question to the user instead of waiting for a prompt.",

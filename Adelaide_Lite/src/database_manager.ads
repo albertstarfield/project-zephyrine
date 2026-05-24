@@ -9,7 +9,10 @@ package Database_Manager is
    --  Scaling parameter for Salience (S = HitFrequency / (1 + Alpha * DeltaT))
    Alpha : constant Float := 0.0001;
 
-   procedure Remember (User_Input : String; Assistant_Response : String);
+   procedure Remember
+     (Prompt   : String;
+      Response : String;
+      Image_B64 : String := "");
 
    --  Prune memory based on Least Salience Mathematical Framework
    procedure Evict_Low_Salience (Chunk_Size : Positive);
