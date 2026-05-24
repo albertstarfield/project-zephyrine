@@ -54,15 +54,13 @@ package body Model_Manager is
    type Owner_Array is array (Model_Type) of ELP_Level;
    type Busy_Array is array (Model_Type) of Boolean;
 
-   --  PRIORITY MODEL GATE:
-   --  Manages access to the model contexts.
-   --  ELP1 requests preempt running ELP0 requests.
    protected Priority_Model_Gate is
       procedure Request_ELP1;
       entry Acquire_ELP1 (Model_Type);
       procedure Release_ELP1 (Kind : Model_Type);
       entry Acquire_ELP0 (Model_Type) (Success : out Boolean);
       procedure Release_ELP0 (Kind : Model_Type);
+      procedure Try_Acquire_For_Cleanup (Kind : Model_Type; Success : out Boolean);
       function Should_Abort return Boolean;
       function Is_ELP0_Owner (Kind : Model_Type) return Boolean;
    private
@@ -114,6 +112,17 @@ package body Model_Manager is
          Busy (Kind) := False;
       end Release_ELP0;
 
+      procedure Try_Acquire_For_Cleanup (Kind : Model_Type; Success : out Boolean) is
+      begin
+         if Busy (Kind) or else ELP1_Pending > 0 or else ELP1_Active_Count > 0 then
+            Success := False;
+         else
+            Busy (Kind) := True;
+            Owner (Kind) := ELP1; -- Treat cleanup as high priority/exclusive
+            Success := True;
+         end if;
+      end Try_Acquire_For_Cleanup;
+
       function Should_Abort return Boolean is
       begin
          return ELP1_Pending > 0 or else ELP1_Active_Count > 0;
@@ -135,6 +144,7 @@ package body Model_Manager is
       Interval   : constant Time_Span := Seconds (1);
       Timeout    : constant Time_Span := Seconds (30);
       Now        : Time;
+      Cleanup_OK : Boolean;
    begin
       accept Start;
       loop
@@ -145,10 +155,14 @@ package body Model_Manager is
                not Models (Kind).In_Use and then
                (Now - Models (Kind).Last_Used) > Timeout
             then
-               Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Idle]" &
-                         AnsiAda.Reset & " Unloading " &
-                         Model_Type'Image (Kind));
-               Unload_Model (Kind);
+               Priority_Model_Gate.Try_Acquire_For_Cleanup (Kind, Cleanup_OK);
+               if Cleanup_OK then
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Idle]" &
+                            AnsiAda.Reset & " Unloading " &
+                            Model_Type'Image (Kind));
+                  Unload_Model (Kind);
+                  Priority_Model_Gate.Release_ELP1 (Kind); -- Match Acquire_For_Cleanup
+               end if;
             end if;
          end loop;
          delay until Next_Check;
@@ -268,9 +282,6 @@ package body Model_Manager is
       end if;
       return Models (Kind).Model;
    end Get_Model;
-
-   function Llama_Abort_Callback (Data : System.Address) return Boolean;
-   pragma Convention (C, Llama_Abort_Callback);
 
    function Llama_Abort_Callback (Data : System.Address) return Boolean is
       use System;
@@ -699,9 +710,6 @@ package body Model_Manager is
          return;
       end if;
 
-      Llama_Interface.Llama_Memory_Clear
-        (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
-
       Models (Kind).In_Use := True;
       Models (Kind).Last_Used := Clock;
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
@@ -709,6 +717,33 @@ package body Model_Manager is
         (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address,
          32768, True, True);
       Free (Prompt_C);
+      
+      --  DYNAMIC CONTEXT RESIZE:
+      --  If the prompt tokens exceed current N_CTX, reload with more space.
+      if N_Toks > int (Models (Kind).Current_Ctx) then
+         Put_Line ("[!] Prompt size (" & N_Toks'Img & 
+                   ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
+                   "). Resizing...");
+         Load_Model (Kind, Success, Positive (N_Toks + 512)); -- Add generation margin
+         if not Success then
+            Models (Kind).In_Use := False;
+            if Level = ELP0 then
+               Priority_Model_Gate.Release_ELP0 (Kind);
+            else
+               Priority_Model_Gate.Release_ELP1 (Kind);
+            end if;
+            Result := To_Unbounded_String ("ERROR: Resize failed");
+            return;
+         end if;
+         --  Tokenize again since the model/vocab might have reloaded
+         Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
+         Prompt_C := New_String (Prompt);
+         N_Toks := Llama_Tokenize
+           (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address,
+            32768, True, True);
+         Free (Prompt_C);
+      end if;
+
       if N_Toks < 0 then
          Models (Kind).In_Use := False;
          if Level = ELP0 then
@@ -719,6 +754,9 @@ package body Model_Manager is
          Result := To_Unbounded_String ("ERROR: Tokenization failed");
          return;
       end if;
+
+      Llama_Interface.Llama_Memory_Clear
+        (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
 
       --  CHUNKED DECODING
       declare
@@ -1003,14 +1041,21 @@ package body Model_Manager is
             declare
                Ctx : Positive := 2048;
             begin
+               Ctx := 2048;
                loop
                   Generate
                     (Qwen_0_8B,
                      Get_Router_Prompt,
                      Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, Ctx,
                      Stream, False, Level);
-                  exit when To_String (Step_Raw) /= "ERROR: Decode failed"
-                    or else Ctx >= 16384;
+
+                  declare
+                     Resp_Str : constant String := To_String (Step_Raw);
+                  begin
+                     --  Only retry (and increase context) if it failed because of context size (ret=1)
+                     exit when Index (Resp_Str, "Decode failed ( 1)") = 0
+                       or else Ctx >= 16384;
+                  end;
                   Ctx := Ctx * 2;
                end loop;
             end;
@@ -1145,8 +1190,13 @@ package body Model_Manager is
                Generate
                  (Qwen_4B, Synth_Prompt, Current_Response, Images, Session_ID,
                   Ctx, Stream, True, Level);
-               exit when To_String (Current_Response) /= "ERROR: Decode failed"
-                 or else Ctx >= 32768;
+
+               declare
+                  Resp_Str : constant String := To_String (Current_Response);
+               begin
+                  exit when Index (Resp_Str, "Decode failed ( 1)") = 0
+                    or else Ctx >= 32768;
+               end;
                Ctx := Ctx * 2;
             end loop;
          end;
