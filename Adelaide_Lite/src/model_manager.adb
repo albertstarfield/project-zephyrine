@@ -399,6 +399,11 @@ package body Model_Manager is
       N_Toks   : int;
       Prompt_C : chars_ptr := New_String (Prompt);
    begin
+      Ada.Text_IO.Put_Line ("[Debug] Get_Embedding prompt length:" & Prompt'Length'Img);
+      if Prompt'Length > 0 then
+         Ada.Text_IO.Put_Line ("[Debug] First 20 chars: " & 
+           Prompt (Prompt'First .. Integer'Min (Prompt'First + 19, Prompt'Last)));
+      end if;
       Priority_Model_Gate.Request_ELP1;
       Priority_Model_Gate.Acquire_ELP1 (Kind);
       Load_Model (Kind, Success);
