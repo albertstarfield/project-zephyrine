@@ -1978,25 +1978,27 @@ async function stopAndSendAgenticVoice() {
      try {
          const portFileUrl = "http://127.0.0.1:11420/api/agenticZephyHandlessMode";
          
-         // Build request body with optional vision context
-         let requestBody;
+         let fetchOptions: RequestInit;
+         
          if (visionContextB64) {
-             // Include both PCM buffer and vision context as JSON
-             const jsonSuffix = '{"vision_context_b64":"' + visionContextB64 + '"}';
-             // Prepend JSON to PCM data - the server will parse from end or use separate handler for JSON-only payloads
-             requestBody = new Blob([combinedFloats.buffer, new TextEncoder().encode(jsonSuffix)], {
-                 type: 'application/octet-stream'
-             });
+             // Include vision context as query parameter alongside PCM audio
+             const urlWithVision = portFileUrl + "?vision_context_b64=" + encodeURIComponent(visionContextB64);
+             
+             fetchOptions = {
+                 method: 'POST',
+                 body: combinedFloats.buffer,
+                 headers: { 'Content-Type': 'application/octet-stream' }
+             };
          } else {
-             // Only PCM audio
-             requestBody = combinedFloats.buffer;
+             // Only PCM audio, no query parameters
+             fetchOptions = {
+                 method: 'POST',
+                 body: combinedFloats.buffer,
+                 headers: { 'Content-Type': 'application/octet-stream' }
+             };
          }
          
-         const response = await fetch(portFileUrl, {
-             method: 'POST',
-             body: requestBody,
-             headers: { 'Content-Type': 'application/octet-stream' }
-         });
+         const response = await fetch(portFileUrl + (visionContextB64 ? "?vision_context_b64=" + encodeURIComponent(visionContextB64) : ""), fetchOptions);
         
         if (response.ok && response.headers.get('content-type')?.includes('audio/pcm')) {
             const arrayBuffer = await response.arrayBuffer();
