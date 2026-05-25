@@ -233,34 +233,12 @@ package body Adelaide_Server_Pkg is
              Handless_Input_Text := Transcript;
              Handless_Stage := To_Unbounded_String ("Generating...");
 
-             -- Parse optional vision context from JSON payload if provided
-             declare
-               Payload_Str : constant String := (if Num_Floats > 0 then
-                 -- For PCM audio, we need to extract any JSON metadata that was prepended
-                 "" 
-                 else To_String (Raw_B)
-               end if);
-             
-               Parser_Result : constant Read_Result := Read (Payload_Str);
-             begin
-               if Parser_Result.Success then
-                 declare
-                   Val : constant JSON_Value := Parser_Result.Value;
-                 begin
-                   if Has_Field (Val, "vision_context_b64") then
-                     Vision_Context_B64 := String'(Get (Val, "vision_context_b64"));
-                   end if;
-                 end;
-               end if;
-             exception
-               when others => null;  -- Silently ignore JSON parse errors
-             end;
-
              if Length (Transcript) > 0 then
                 declare
                    Vision_Arr : GNATCOLL.JSON.JSON_Array :=
                      GNATCOLL.JSON.Empty_Array;
                 begin
+                   -- Use vision context from previous upload or current request param
                    if Length (Handless_Vision_Context) > 0 then
                       GNATCOLL.JSON.Append
                         (Vision_Arr,
@@ -268,10 +246,10 @@ package body Adelaide_Server_Pkg is
                       Handless_Vision_Context := To_Unbounded_String("");
                    end if;
                    
-                   -- Also add the new vision context from this request
-                   if Length (Vision_Context_B64) > 0 then
-                      GNATCOLL.JSON.Append(Vision_Arr, Create (Vision_Context_B64));
-                      Vision_Context_B64 := "";
+                   -- Also add the vision context from the request parameter
+                   if Length (Vision_Context_From_Param) > 0 then
+                      GNATCOLL.JSON.Append(Vision_Arr, Create (To_String (Vision_Context_From_Param)));
+                      Vision_Context_From_Param := "";
                    end if;
 
                    Model_Manager.Hybrid_Generate
