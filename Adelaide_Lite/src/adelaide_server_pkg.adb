@@ -189,23 +189,26 @@ package body Adelaide_Server_Pkg is
 
 
 
-      if URI = "/api/agenticZephyHandlessMode" then
-         declare
-            use GNATCOLL.JSON;
-            Raw_Payload : constant Ada.Streams.Stream_Element_Array :=
-              AWS.Status.Binary_Data (Request);
-            Num_Floats : constant Interfaces.Unsigned_64 :=
-              Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
-            type Float_Array is array (1 .. Natural (Num_Floats)) of
-              aliased Float;
-            Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
+       if URI = "/api/agenticZephyHandlessMode" then
+          declare
+             use GNATCOLL.JSON;
+             Raw_Payload : constant Ada.Streams.Stream_Element_Array :=
+               AWS.Status.Binary_Data (Request);
+             Num_Floats : constant Interfaces.Unsigned_64 :=
+               Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
+             type Float_Array is array (1 .. Natural (Num_Floats)) of
+               aliased Float;
+             Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
 
-            Transcript : Unbounded_String;
-            LLM_Result : Unbounded_String;
-            T_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
-            use type Interfaces.Unsigned_64;
-            use type Ada.Real_Time.Time;
-         begin
+             Transcript : Unbounded_String;
+             LLM_Result : Unbounded_String;
+             T_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+             use type Interfaces.Unsigned_64;
+             use type Ada.Real_Time.Time;
+             
+             -- Optional vision context from JSON payload
+             Vision_Context_B64 : String := "";
+          begin
             Handless_Stage := To_Unbounded_String ("Transcribing...");
             Handless_Input_Text := To_Unbounded_String ("");
             Handless_Output_Text := To_Unbounded_String ("");
@@ -218,30 +221,59 @@ package body Adelaide_Server_Pkg is
                Transcript := To_Unbounded_String ("");
             end if;
 
-            Handless_Input_Text := Transcript;
-            Handless_Stage := To_Unbounded_String ("Generating...");
+             Handless_Input_Text := Transcript;
+             Handless_Stage := To_Unbounded_String ("Generating...");
 
-            if Length (Transcript) > 0 then
-               declare
-                  Vision_Arr : GNATCOLL.JSON.JSON_Array :=
-                    GNATCOLL.JSON.Empty_Array;
-               begin
-                  if Length (Handless_Vision_Context) > 0 then
-                     GNATCOLL.JSON.Append
-                       (Vision_Arr,
-                        Create (To_String (Handless_Vision_Context)));
-                     Handless_Vision_Context := To_Unbounded_String("");
-                  end if;
+             -- Parse optional vision context from JSON payload if provided
+             declare
+               Payload_Str : constant String := (if Num_Floats > 0 then
+                 -- For PCM audio, we need to extract any JSON metadata that was prepended
+                 "" 
+                 else To_String (Raw_B)
+               end if);
+             
+               Parser_Result : constant Read_Result := Read (Payload_Str);
+             begin
+               if Parser_Result.Success then
+                 declare
+                   Val : constant JSON_Value := Parser_Result.Value;
+                 begin
+                   if Has_Field (Val, "vision_context_b64") then
+                     Vision_Context_B64 := String'(Get (Val, "vision_context_b64"));
+                   end if;
+                 end;
+               end if;
+             exception
+               when others => null;  -- Silently ignore JSON parse errors
+             end;
 
-                  Model_Manager.Hybrid_Generate
-                    (Prompt     => To_String (Transcript),
-                     Result     => LLM_Result,
-                     Images     => Vision_Arr,
-                     Session_ID => "server-handless",
-                     Agentic    => True,
-                     Raw_Prompt => False);
-               end;
-            else
+             if Length (Transcript) > 0 then
+                declare
+                   Vision_Arr : GNATCOLL.JSON.JSON_Array :=
+                     GNATCOLL.JSON.Empty_Array;
+                begin
+                   if Length (Handless_Vision_Context) > 0 then
+                      GNATCOLL.JSON.Append
+                        (Vision_Arr,
+                         Create (To_String (Handless_Vision_Context)));
+                      Handless_Vision_Context := To_Unbounded_String("");
+                   end if;
+                   
+                   -- Also add the new vision context from this request
+                   if Length (Vision_Context_B64) > 0 then
+                      GNATCOLL.JSON.Append(Vision_Arr, Create (Vision_Context_B64));
+                      Vision_Context_B64 := "";
+                   end if;
+
+                   Model_Manager.Hybrid_Generate
+                     (Prompt     => To_String (Transcript),
+                      Result     => LLM_Result,
+                      Images     => Vision_Arr,
+                      Session_ID => "server-handless",
+                      Agentic    => True,
+                      Raw_Prompt => False);
+                end;
+             else
                Model_Manager.Hybrid_Generate
                  (Prompt     => "Proactively initiate the conversation. " &
                   "Ask a random, interesting, or highly agentic question " &
