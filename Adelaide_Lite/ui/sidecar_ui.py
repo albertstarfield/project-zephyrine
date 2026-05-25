@@ -22,11 +22,89 @@ import webview
 # Global Performance Tuning: Disable Garbage Collection
 gc.disable()
 
-# Optional dependency: fitz (PyMuPDF)
-try:
-    import fitz
-except ImportError:
-    fitz = None
+# Zephyrine Engine Settings - Configuration dictionary for engine settings
+class EngineSettings:
+    def __init__(self):
+        # Load existing settings from DB or use defaults
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Create settings table if not exists
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS zephyrine_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
+        
+        # Default settings
+        defaults = {
+            "model_name": "stella-icarus",
+            "context_window": 32000,
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 40,
+            "repeat_penalty": 1.1,
+            "presence_penalty": 0.6,
+            "frequency_penalty": 0.6,
+            "n_predict": -1,  # -1 = unlimited
+            "streaming": True,
+            "system_prompt": "You are Zephyrine, an intelligent AI assistant.",
+            "enable_knowledge_search": True,
+            "enable_memory_search": True,
+            "max_concurrent_requests": 4,
+            "keep_alive_seconds": 3600,
+            "verbose": False
+        }
+        
+        # Insert defaults if table is empty
+        cursor.execute("SELECT COUNT(*) FROM zephyrine_settings")
+        if cursor.fetchone()[0] == 0:
+            for key, value in defaults.items():
+                cursor.execute("INSERT INTO zephyrine_settings (key, value) VALUES (?, ?)", (key, json.dumps(value)))
+        
+        conn.commit()
+        conn.close()
+
+engine_settings = EngineSettings()
+
+
+def get_engine_settings():
+    """Get all engine settings as a dictionary"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT key, value FROM zephyrine_settings")
+    settings = {row[0]: json.loads(row[1]) for row in cursor.fetchall()}
+    conn.close()
+    return settings
+
+
+def save_engine_setting(key: str, value):
+    """Save a single engine setting"""
+    try:
+        # Validate type
+        if not isinstance(value, (str, int, float, bool)):
+            raise ValueError(f"Invalid value type for {key}: must be str, int, float, or bool")
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO zephyrine_settings (key, value) VALUES (?, ?)", 
+                      (key, json.dumps(value)))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error saving setting {key}: {e}")
+        return False
+
+
+def delete_engine_setting(key: str):
+    """Delete an engine setting"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM zephyrine_settings WHERE key = ?", (key,))
+    conn.commit()
+    conn.close()
 
 app = FastAPI()
 
