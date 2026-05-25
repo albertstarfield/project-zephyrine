@@ -187,20 +187,7 @@ package body Adelaide_Server_Pkg is
          end;
       end if;
 
-      if URI = "/api/uploadVisionContext" then
-         declare
-            use GNATCOLL.JSON;
-            Payload_Str : constant String :=
-              (if Raw_S /= "" then Raw_S else To_String (Raw_B));
-            Parser_Result : constant Read_Result := Read (Payload_Str);
-         begin
-            if Parser_Result.Success then
-               Handless_Vision_Context := To_Unbounded_String
-                 (String'(Get (Parser_Result.Value, "image_b64")));
-            end if;
-            return Wrap_Response (AWS.Response.Build ("text/plain", "OK"));
-         end;
-      end if;
+
 
       if URI = "/api/agenticZephyHandlessMode" then
          declare
