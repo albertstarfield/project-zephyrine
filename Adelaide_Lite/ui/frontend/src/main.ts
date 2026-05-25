@@ -1948,46 +1948,53 @@ async function stopAndSendAgenticVoice() {
     const rms = Math.sqrt(sumSquares / totalLength);
     const vadElem = document.getElementById('hl-vad');
     
-    if (rms < 0.01) {
-        console.log("VAD: No speech detected (RMS: " + rms + ")");
-        if (vadElem) { vadElem.innerText = "No Speech Detected"; vadElem.style.color = "#ef4444"; }
-        inputBuffer = [];
-        return; // Skip sending to API
-    }
-    
-    // Capture visual context if camera is ready
-    if (hasCamPerm && hiddenVideo && hiddenCanvas) {
-        hiddenCanvas.width = hiddenVideo.videoWidth || 640;
-        hiddenCanvas.height = hiddenVideo.videoHeight || 480;
-        const ctx = hiddenCanvas.getContext('2d');
-        if (ctx) {
-            ctx.drawImage(hiddenVideo, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
-            const dataUrl = hiddenCanvas.toDataURL('image/jpeg', 0.8);
-            try {
-                await fetch('/api/uploadVisionContext', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image_b64: dataUrl })
-                });
-                console.log("Vision context uploaded successfully");
-            } catch (err) {
-                console.warn("Failed to upload vision context", err);
-            }
-        }
-    }
-    
-    inputBuffer = []; // Reset
-    
-    console.log("Sending PCM Floats to backend...", totalLength);
-    
-    try {
-        const portFileUrl = "http://127.0.0.1:11420/api/agenticZephyHandlessMode";
-        
-        const response = await fetch(portFileUrl, {
-            method: 'POST',
-            body: combinedFloats.buffer,
-            headers: { 'Content-Type': 'application/octet-stream' }
-        });
+     if (rms < 0.01) {
+         console.log("VAD: No speech detected (RMS: " + rms + ")");
+         if (vadElem) { vadElem.innerText = "No Speech Detected"; vadElem.style.color = "#ef4444"; }
+         inputBuffer = [];
+         return; // Skip sending to API
+     }
+     
+     let visionContextB64 = "";
+     
+     // Capture visual context if camera is ready and include it in the agentic request
+     if (hasCamPerm && hiddenVideo && hiddenCanvas) {
+         hiddenCanvas.width = hiddenVideo.videoWidth || 640;
+         hiddenCanvas.height = hiddenVideo.videoHeight || 480;
+         const ctx = hiddenCanvas.getContext('2d');
+         if (ctx) {
+             ctx.drawImage(hiddenVideo, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+             const dataUrl = hiddenCanvas.toDataURL('image/jpeg', 0.8);
+             visionContextB64 = dataUrl; // Store for inclusion in agentic request
+         }
+     }
+     
+     inputBuffer = []; // Reset
+     
+     console.log("Sending PCM Floats to backend...", totalLength);
+     
+     try {
+         const portFileUrl = "http://127.0.0.1:11420/api/agenticZephyHandlessMode";
+         
+         // Build request body with optional vision context
+         let requestBody;
+         if (visionContextB64) {
+             // Include both PCM buffer and vision context as JSON
+             requestBody = new Blob([combinedFloats.buffer, `
+{\"vision_context_b64\":\"${Buffer.from(visionContextB64).toString('base64')}\"}
+`.trim()], {
+                 type: 'application/octet-stream'
+             });
+         } else {
+             // Only PCM audio
+             requestBody = combinedFloats.buffer;
+         }
+         
+         const response = await fetch(portFileUrl, {
+             method: 'POST',
+             body: requestBody,
+             headers: { 'Content-Type': 'application/octet-stream' }
+         });
         
         if (response.ok && response.headers.get('content-type')?.includes('audio/pcm')) {
             const arrayBuffer = await response.arrayBuffer();
