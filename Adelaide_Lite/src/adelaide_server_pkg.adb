@@ -194,6 +194,11 @@ package body Adelaide_Server_Pkg is
              use GNATCOLL.JSON;
              Raw_Payload : constant Ada.Streams.Stream_Element_Array :=
                AWS.Status.Binary_Data (Request);
+             
+             -- Check request parameter for JSON metadata (vision context)
+             Vision_Context_Param : constant String :=
+               AWS.Status.Parameter (Request, "vision_context_b64");
+             
              Num_Floats : constant Interfaces.Unsigned_64 :=
                Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
              type Float_Array is array (1 .. Natural (Num_Floats)) of
@@ -203,11 +208,15 @@ package body Adelaide_Server_Pkg is
              Transcript : Unbounded_String;
              LLM_Result : Unbounded_String;
              T_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+             
+             -- Convert vision context param to unbounded string if provided
+             Vision_Context_From_Param : Unbounded_String := To_Unbounded_String("");
+             if Length (Vision_Context_Param) > 0 then
+                Vision_Context_From_Param := To_Unbounded_String (Vision_Context_Param);
+             end if;
+
              use type Interfaces.Unsigned_64;
              use type Ada.Real_Time.Time;
-             
-             -- Optional vision context from JSON payload
-             Vision_Context_B64 : String := "";
           begin
             Handless_Stage := To_Unbounded_String ("Transcribing...");
             Handless_Input_Text := To_Unbounded_String ("");

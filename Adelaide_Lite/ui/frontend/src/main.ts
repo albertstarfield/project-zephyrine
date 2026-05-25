@@ -1958,6 +1958,7 @@ async function stopAndSendAgenticVoice() {
      let visionContextB64 = "";
      
      // Capture visual context if camera is ready and include it in the agentic request
+     let visionContextB64 = "";
      if (hasCamPerm && hiddenVideo && hiddenCanvas) {
          hiddenCanvas.width = hiddenVideo.videoWidth || 640;
          hiddenCanvas.height = hiddenVideo.videoHeight || 480;
@@ -1965,7 +1966,8 @@ async function stopAndSendAgenticVoice() {
          if (ctx) {
              ctx.drawImage(hiddenVideo, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
              const dataUrl = hiddenCanvas.toDataURL('image/jpeg', 0.8);
-             visionContextB64 = dataUrl; // Store for inclusion in agentic request
+             // Extract base64 from data URL and strip header
+             visionContextB64 = dataUrl.split(',')[1]; 
          }
      }
      
@@ -1980,9 +1982,9 @@ async function stopAndSendAgenticVoice() {
          let requestBody;
          if (visionContextB64) {
              // Include both PCM buffer and vision context as JSON
-             requestBody = new Blob([combinedFloats.buffer, `
-{\"vision_context_b64\":\"${Buffer.from(visionContextB64).toString('base64')}\"}
-`.trim()], {
+             const jsonSuffix = '{"vision_context_b64":"' + visionContextB64 + '"}';
+             // Prepend JSON to PCM data - the server will parse from end or use separate handler for JSON-only payloads
+             requestBody = new Blob([combinedFloats.buffer, new TextEncoder().encode(jsonSuffix)], {
                  type: 'application/octet-stream'
              });
          } else {
