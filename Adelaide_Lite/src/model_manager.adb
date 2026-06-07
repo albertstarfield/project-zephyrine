@@ -664,12 +664,11 @@ package body Model_Manager is
          elsif S_Str = Close_Tag then
             Parser.Sanitize_Buffer := Null_Unbounded_String;
             Parser.In_Think_Block := False;
+            --  ALWAYS strip close tags from the stream.
+            --  The orchestration thinking is verbose status visible to the client;
+            --  the LLM thinking is internal reasoning. Neither tag should be sent raw.
             if Parser.Orch_Think_Open then
-               Push_Chunk (Stream, Session_ID, Close_Tag & ASCII.LF);
                Parser.Orch_Think_Open := False;
-            else
-               --  Standard close tag if orchestration didn't open it
-               Push_Chunk (Stream, Session_ID, Close_Tag);
             end if;
             return;
          end if;
@@ -725,7 +724,7 @@ package body Model_Manager is
          end if;
       end;
       if Parser.Orch_Think_Open then
-         Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
+         --  Silently close orchestration thinking; tag is stripped by parser
          Parser.Orch_Think_Open := False;
       end if;
    end Flush_Parser;
@@ -1384,7 +1383,7 @@ package body Model_Manager is
          Result := To_Unbounded_String
            (Sanitize_Think_Tags (To_String (Current_Response)));
       else
-         Push_Chunk (Stream, Session_ID, "</thinking>" & ASCII.LF);
+         --  Streaming path: close thinking silently, don't push raw tag
          Result := Current_Response;
       end if;
 
