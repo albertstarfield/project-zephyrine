@@ -336,7 +336,14 @@ package body Model_Manager is
       end if;
       Ptr := To_Ptr (Data);
       
-      --  Only abort if we are an ELP0 task and an ELP1 task is pending or active.
+      --  1. Abort if Watchdog has flagged a timeout for this model.
+      if Watchdog_Manager.Inference_Monitor.Is_Aborted and then
+         Watchdog_Manager.Inference_Monitor.Current_Inference_Model = Ptr.all
+      then
+         return True;
+      end if;
+
+      --  2. Only abort if we are an ELP0 task and an ELP1 task is pending or active.
       return Priority_Model_Gate.Is_ELP0_Owner (Ptr.all)
         and then Priority_Model_Gate.Should_Abort;
    end Llama_Abort_Callback;
@@ -1133,7 +1140,8 @@ package body Model_Manager is
                end if;
             end Get_Router_Prompt;
          begin
-            Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
+            Push_Chunk (Stream, Session_ID, "<think>" & ASCII.LF & "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
+            Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
             Generate
               (Qwen_0_8B,
                Get_Router_Prompt,
@@ -1353,7 +1361,11 @@ package body Model_Manager is
             Result := Merged;
          end;
       else
+         Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
          Result := Current_Response;
+         if Stream /= null then
+            Push_Chunk (Stream, Session_ID, To_String (Result));
+         end if;
       end if;
    end Hybrid_Generate;
 

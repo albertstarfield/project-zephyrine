@@ -30,6 +30,11 @@ package body Watchdog_Manager is
          return Aborted;
       end Is_Aborted;
 
+      function Current_Inference_Model return Model_Type is
+      begin
+         return Current_Model;
+      end Current_Inference_Model;
+
       procedure Check_Timeout
         (Limit       : Time_Span;
          Out_Aborted : out Boolean;

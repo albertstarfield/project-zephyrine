@@ -103,6 +103,7 @@ package body Adelaide_Server_Pkg is
         (Prompt : String; Model_Name : String;
          Format : Streaming_Queue.Format_Type;
          Q : Streaming_Queue.Queue_Access;
+         Session_ID : String;
          Agentic : Boolean := False; Raw_Prompt : Boolean := False);
    end Generator_Task;
 
@@ -110,6 +111,7 @@ package body Adelaide_Server_Pkg is
 
    task body Generator_Task is
       P : Unbounded_String;
+      S_ID : Unbounded_String;
       QA : Streaming_Queue.Queue_Access;
       Res : Unbounded_String;
       Is_Ag : Boolean;
@@ -120,9 +122,11 @@ package body Adelaide_Server_Pkg is
         (Prompt : String; Model_Name : String;
          Format : Streaming_Queue.Format_Type;
          Q : Streaming_Queue.Queue_Access;
+         Session_ID : String;
          Agentic : Boolean := False; Raw_Prompt : Boolean := False)
       do
          P := To_Unbounded_String (Prompt);
+         S_ID := To_Unbounded_String (Session_ID);
          QA := Q;
          QA.Set_Format (Format, Model_Name);
          QA.Push ("<think>" & ASCII.LF & "[Adelaide Core Orchestration]" & ASCII.LF);
@@ -134,7 +138,7 @@ package body Adelaide_Server_Pkg is
          Model_Manager.Hybrid_Generate
            (Prompt     => To_String (P),
             Result     => Res,
-            Session_ID => "server-stream",
+            Session_ID => To_String (S_ID),
             Stream     => QA,
             Agentic    => Is_Ag,
             Raw_Prompt => Is_Raw);
@@ -481,6 +485,7 @@ package body Adelaide_Server_Pkg is
               else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
             Prompt  : Unbounded_String := Null_Unbounded_String;
             Req_Model : Unbounded_String := To_Unbounded_String ("qwen:0.8b");
+            S_ID      : Unbounded_String := To_Unbounded_String ("server-stream");
             Is_Streaming : Boolean := False;
             Is_Agentic : Boolean := False;
             Is_Raw_Prompt : Boolean := False;
@@ -499,6 +504,14 @@ package body Adelaide_Server_Pkg is
                            begin
                               Req_Model := To_Unbounded_String
                                 (String'(GNATCOLL.JSON.Get (Val, "model")));
+                           exception
+                              when others => null;
+                           end;
+                        end if;
+                        if GNATCOLL.JSON.Has_Field (Val, "session_id") then
+                           begin
+                              S_ID := To_Unbounded_String
+                                (String'(GNATCOLL.JSON.Get (Val, "session_id")));
                            exception
                               when others => null;
                            end;
@@ -601,7 +614,7 @@ package body Adelaide_Server_Pkg is
                             then Streaming_Queue.OpenAI
                             elsif URI = "/api/generate"
                             then Streaming_Queue.Ollama_Generate
-                            else Streaming_Queue.Ollama_Chat), Q,
+                            else Streaming_Queue.Ollama_Chat), Q, To_String (S_ID),
                            Is_Agentic, Is_Raw_Prompt);
                   return Wrap_Response (AWS.Response.Stream
                     (Content_Type => (if URI = "/v1/chat/completions" or else
@@ -614,7 +627,7 @@ package body Adelaide_Server_Pkg is
                Model_Manager.Hybrid_Generate
                  (Prompt     => To_String (Prompt),
                   Result     => Result,
-                  Session_ID => "server-sync",
+                  Session_ID => To_String (S_ID),
                   Agentic    => Is_Agentic,
                   Raw_Prompt => Is_Raw_Prompt);
 

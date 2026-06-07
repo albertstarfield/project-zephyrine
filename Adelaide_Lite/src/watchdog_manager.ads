@@ -14,6 +14,7 @@ package Watchdog_Manager is
       procedure Stop_Inference;
       procedure Set_Aborted;
       function Is_Aborted return Boolean;
+      function Current_Inference_Model return Model_Type;
       procedure Check_Timeout
         (Limit       : Time_Span;
          Out_Aborted : out Boolean;
