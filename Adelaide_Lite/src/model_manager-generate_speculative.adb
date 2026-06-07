@@ -27,7 +27,9 @@ is
    Clean_P  : constant String := Sanitize_UTF8 (Prompt);
    Prompt_C : chars_ptr := New_String (Clean_P);
    Parser   : Stream_Parser_State;
+   T0, T1   : Time;
 begin
+   T0 := Clock;
    pragma Unreferenced (Images);
    Result := Null_Unbounded_String;
    Parser.Orch_Think_Open := Orch_Think_Open;
@@ -155,6 +157,33 @@ begin
    Llama_Sampler_Free (Sampler);
    Models (Target_Kind).In_Use := False;
    Priority_Model_Gate.Release_ELP1 (Target_Kind);
+
+   T1 := Clock;
+   declare
+      Dur : constant Duration := T1 - T0;
+   begin
+      if Dur > Current_WCET then
+         Current_WCET := Dur;
+      end if;
+      case Level is
+         when ELP0 =>
+            if Dur > Current_WCET_ELP0 then
+               Current_WCET_ELP0 := Dur;
+            end if;
+         when ELP1 =>
+            if Dur > Current_WCET_ELP1 then
+               Current_WCET_ELP1 := Dur;
+            end if;
+         when ELP2 =>
+            if Dur > Current_WCET_ELP2 then
+               Current_WCET_ELP2 := Dur;
+            end if;
+         when ELP3 =>
+            if Dur > Current_WCET_ELP3 then
+               Current_WCET_ELP3 := Dur;
+            end if;
+      end case;
+   end;
 exception
    when E : others =>
       Ada.Text_IO.Put_Line ("Generate_Speculative Error: " &
