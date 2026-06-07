@@ -19,6 +19,24 @@ with Ada.Real_Time;
 
 package body Adelaide_Server_Pkg is
 
+   --  API Alignment Details:
+   --   1. Ollama Compatibility:
+   --       * /api/chat: Correctly returns NDJSON (streaming) or JSON (non-streaming)
+   --         with the message object (role, content) and done flag.
+   --       * /api/generate: Correctly returns NDJSON/JSON with the response
+   --         field and done flag.
+   --       * /api/tags: Correctly reports the available models in the
+   --         expected Ollama format.
+   --       * /api/embeddings: Fully compatible with Ollama embedding requests.
+   --   2. OpenAI Compatibility:
+   --       * /v1/chat/completions: Fully aligned response structure
+   --         (non-streaming) and SSE format (streaming).
+   --       * /v1/models & /v1/embeddings: Standard parity for easier integration.
+   --   3. Unified Streaming Logic:
+   --       * The Streaming_Queue correctly handles NDJSON for Ollama and
+   --         SSE (data: ...) for OpenAI, including the standard completion
+   --         markers (done: true and [DONE]).
+
    --  Pace timing for main loop
    WCET_Main_Loop : Duration := 0.0;
 
