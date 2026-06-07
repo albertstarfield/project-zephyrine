@@ -48,7 +48,7 @@ class EngineSettings:
         
         # Default settings
         defaults = {
-            "model_name": "stella-icarus",
+            "model_name": "Snowball-Enaga",
             "context_window": 32000,
             "temperature": 0.7,
             "top_p": 0.9,
@@ -399,7 +399,7 @@ async def chat(request: Request):
 
     async def event_generator():
         payload = {
-            "model": "stella-icarus",
+            "model": "Snowball-Enaga",
             "messages": [{"role": "user", "content": user_message}],
             "stream": True
         }

@@ -420,9 +420,9 @@ package body Adelaide_Server_Pkg is
 
       if URI = "/api/tags" or else URI = "/v1/models" then
          if URI = "/api/tags" then
-            return Wrap_Response (Build_Response ("{""models"": [{""name"": ""qwen:0.8b""}]}"));
+            return Wrap_Response (Build_Response ("{""models"": [{""name"": ""Snowball-Enaga""}]}"));
          else
-            return Wrap_Response (Build_Response ("{""object"": ""list"", ""data"": [{""id"": ""qwen:0.8b"", ""object"": ""model"", ""created"": 1686935002, ""owned_by"": ""adelaide""}]}"));
+            return Wrap_Response (Build_Response ("{""object"": ""list"", ""data"": [{""id"": ""Snowball-Enaga"", ""object"": ""model"", ""created"": 1686935002, ""owned_by"": ""adelaide""}]}"));
          end if;
       end if;
 
@@ -467,7 +467,7 @@ package body Adelaide_Server_Pkg is
                Append (Data_Arr, Emb_Obj);
                Set_Field (Resp, "object", "list");
                Set_Field (Resp, "data", Data_Arr);
-               Set_Field (Resp, "model", "qwen:0.8b");
+               Set_Field (Resp, "model", "Snowball-Enaga");
             else
                Set_Field (Resp, "embedding", Emb_Arr);
             end if;
@@ -484,7 +484,7 @@ package body Adelaide_Server_Pkg is
               elsif Length (Raw_B) > 0 then Raw_B
               else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
             Prompt  : Unbounded_String := Null_Unbounded_String;
-            Req_Model : Unbounded_String := To_Unbounded_String ("qwen:0.8b");
+            Req_Model : Unbounded_String := To_Unbounded_String ("Snowball-Enaga");
             S_ID      : Unbounded_String := To_Unbounded_String ("server-stream");
             Is_Streaming : Boolean := False;
             Is_Agentic : Boolean := False;
