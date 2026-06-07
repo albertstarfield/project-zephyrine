@@ -395,53 +395,59 @@ async def chat(request: Request):
     # Save User message to DB
     cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", ("user", user_message, session_id))
     conn.commit()
-
-    # Proxy to Ada Backend (assuming Ollama compatible endpoint or custom endpoint)
-    # The Ada backend runs on 11420. If it expects /api/chat like ollama:
-    payload = {
-        "model": "stella-icarus",  # Or whatever model Ada routes
-        "messages": [{"role": "user", "content": user_message}],
-        "stream": False
-    }
-
-    try:
-        t_start = time.time()
-        async with httpx.AsyncClient() as client:
-            # We send to the Ada backend
-            response = await client.post(f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=60.0)
-            t_end = time.time()
-            elapsed = t_end - t_start
-            engine_stats.wcet_elp2 = elapsed
-            engine_stats.wcet_elp2_hist.append({"ts": t_end, "val": elapsed})
-            if response.status_code == 200:
-                resp_json = response.json()
-                print(f"ADA BACKEND RESP: {resp_json}")
-
-                # The backend might return {"response": "..."} or {"message": {"content": "..."}}
-                if "response" in resp_json:
-                    bot_reply = resp_json.get("response", "Empty response")
-                else:
-                    bot_reply = resp_json.get("message", {}).get("content", "Empty response")
-
-                # Calculate tokens and update stats
-                if enc:
-                    tokens = len(enc.encode(bot_reply))
-                    engine_stats.total_tokens += tokens
-                    if elapsed > 0:
-                        engine_stats.wcetr = tokens / elapsed
-                        engine_stats.history_1m.append({"ts": t_end, "val": engine_stats.wcetr})
-            else:
-                bot_reply = f"Backend returned error: {response.status_code} - {response.text}"
-                engine_stats.wcet_elp1 = elapsed
-    except Exception as e:
-        bot_reply = f"Could not connect to Ada backend: {str(e)}"
-
-    # Save Bot reply to DB
-    cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", ("assistant", bot_reply, session_id))
-    conn.commit()
     conn.close()
 
-    return {"reply": bot_reply, "session_id": session_id}
+    async def event_generator():
+        payload = {
+            "model": "stella-icarus",
+            "messages": [{"role": "user", "content": user_message}],
+            "stream": True
+        }
+        
+        full_reply = ""
+        try:
+            async with httpx.AsyncClient() as client:
+                async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=120.0) as response:
+                    if response.status_code != 200:
+                        yield json.dumps({"error": f"Backend returned error: {response.status_code}"}) + "\n"
+                        return
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        try:
+                            resp_json = json.loads(line)
+                            # Ada returns Ollama format: {"message": {"content": "..."}, "done": false}
+                            if "message" in resp_json:
+                                chunk = resp_json["message"].get("content", "")
+                                full_reply += chunk
+                                yield line + "\n"
+                            elif "response" in resp_json: # /api/generate format
+                                chunk = resp_json.get("response", "")
+                                full_reply += chunk
+                                yield line + "\n"
+                            
+                            if resp_json.get("done", False):
+                                break
+                        except json.JSONDecodeError:
+                            continue
+            
+            # Finalize and save to DB
+            conn_final = sqlite3.connect(DB_PATH)
+            cursor_final = conn_final.cursor()
+            cursor_final.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", 
+                                ("assistant", full_reply, session_id))
+            conn_final.commit()
+            conn_final.close()
+            
+            # Send a final chunk with the session_id so the frontend can update
+            yield json.dumps({"session_id": session_id, "done": True}) + "\n"
+
+        except Exception as e:
+            error_msg = f"Could not connect to Ada backend: {str(e)}"
+            yield json.dumps({"message": {"content": error_msg}, "done": True}) + "\n"
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 @app.post("/api/exit")
 def exit_app():

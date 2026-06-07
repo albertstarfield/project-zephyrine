@@ -104,7 +104,7 @@ const chatInput = document.getElementById('chat-input') as HTMLInputElement;
 const emptyState = document.getElementById('empty-state') as HTMLDivElement;
 const chatContainerWrapper = document.getElementById('chat-container') as HTMLDivElement;
 
-function addMessageToUI(msg: Message) {
+function addMessageToUI(msg: Message): string {
   const emptyState = document.getElementById('empty-state');
   const chatContainerWrapper = document.getElementById('chat-container');
   const aboutContainer = document.getElementById('about-container');
@@ -117,29 +117,32 @@ function addMessageToUI(msg: Message) {
     switchView(hideEls, [chatContainerWrapper!]);
   }
 
+  const msgId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
   const msgEl = document.createElement('div');
   msgEl.className = `message ${msg.role}`;
-  
+  msgEl.id = msgId;
+
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  
+  bubble.id = msgId + '-bubble';
+
   // Render Markdown, LaTeX, and Mermaid directly into the bubble
   renderMarkdownToElement(bubble, msg.content);
-  
+
   msgEl.appendChild(bubble);
-  
+
   // Add actions container
   const actions = document.createElement('div');
   actions.className = 'msg-actions';
-  
+
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const date = new Date().toLocaleDateString();
-  
+
   let actionHtml = `<span class="msg-time">${date} ${time}</span>
     <button class="msg-btn copy-btn" title="Copy text">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
     </button>`;
-    
+
   if (msg.role === 'user') {
     actionHtml += `<button class="msg-btn edit-btn" title="Edit message">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
@@ -150,19 +153,30 @@ function addMessageToUI(msg: Message) {
       </button>`;
   }
   actions.innerHTML = actionHtml;
-  
+
   const copyBtn = actions.querySelector('.copy-btn');
   copyBtn?.addEventListener('click', () => {
     navigator.clipboard.writeText(msg.content);
   });
-  
+
   msgEl.appendChild(actions);
   messagesContainer.appendChild(msgEl);
   
-  // Auto-scroll to bottom
   if (chatContainerWrapper) {
     chatContainerWrapper.scrollTop = chatContainerWrapper.scrollHeight;
   }
+  return msgId;
+}
+
+function updateMessageInUI(id: string, newContent: string) {
+    const bubble = document.getElementById(id + '-bubble');
+    if (bubble) {
+        renderMarkdownToElement(bubble, newContent);
+        const chatContainerWrapper = document.getElementById('chat-container');
+        if (chatContainerWrapper) {
+            chatContainerWrapper.scrollTop = chatContainerWrapper.scrollHeight;
+        }
+    }
 }
 
 let currentSessionId: number | null = null;
@@ -362,42 +376,86 @@ function removeTypingIndicator(id: string) {
 
 async function processQueue() {
   isProcessingQueue = true;
-  
+
   while (messageQueue.length > 0) {
     const text = messageQueue.shift();
     if (!text) continue;
-    
+
     const typingId = addTypingIndicator();
-    
+    let assistantMessageId = '';
+    let fullContent = '';
+
     try {
-      const res = await fetch('/api/chat', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, session_id: currentSessionId })
       });
-      
+
       removeTypingIndicator(typingId);
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (!currentSessionId && data.session_id) {
-            currentSessionId = data.session_id;
-            await loadHistory();
-        }
-        addMessageToUI({ role: 'assistant', content: data.reply });
-      } else {
-        addMessageToUI({ role: 'assistant', content: "Error: " + res.statusText });
+
+      if (!response.ok) {
+        addMessageToUI({ role: 'assistant', content: "Error: " + response.statusText });
+        continue;
       }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+          addMessageToUI({ role: 'assistant', content: "Error: No stream reader available." });
+          continue;
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+
+            if (data.session_id && !currentSessionId) {
+                currentSessionId = data.session_id;
+                loadHistory();
+            }
+
+            let content = '';
+            if (data.message && data.message.content) {
+                content = data.message.content;
+            } else if (data.response) {
+                content = data.response;
+            }
+
+            if (content) {
+                fullContent += content;
+                if (!assistantMessageId) {
+                    // First chunk: create message bubble
+                    assistantMessageId = addMessageToUI({ role: 'assistant', content: fullContent });
+                } else {
+                    // Subsequent chunks: update existing bubble
+                    updateMessageInUI(assistantMessageId, fullContent);
+                }
+            }
+          } catch (e) {
+            console.error("Error parsing stream chunk", e, line);
+          }
+        }
+      }
+
     } catch (err) {
       removeTypingIndicator(typingId);
       addMessageToUI({ role: 'assistant', content: "Network error trying to reach the sidecar." });
     }
   }
-  
+
   isProcessingQueue = false;
   chatInput.focus();
 }
-
 // Load history on startup
 loadHistory();
 
