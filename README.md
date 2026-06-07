@@ -34,8 +34,8 @@ This is just another Adaptive Agent wrapper with determenistic response on certa
 
 Adelaide Lite is specifically tailored for environments with lower storage and constrained runtime memory capacity.
 
-1.  **Ada/SPARK Foundation:** Inspired by some paradigms, specifically (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C). the entire networking, caching, and task-scheduling layer is written in Ada, providing mathematically verifiable safety against buffer overflows, race conditions, and memory leaks.
-2.  **WCET Enforcements:** The Worst-Case Execution Time (WCET) manager actively monitors and terminates non-deterministic AI generation if it breaches strict latency budgets, falling back to cached or deterministic responses.
+1.  **Ada/SPARK Foundation:** Inspired by some paradigms (Not really compliance completely but just inspired), specifically (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C). the entire networking, caching, and task-scheduling layer is written in Ada, providing structured guidance against buffer overflows, race conditions, and memory leaks.
+2.  **WCET Enforcements:** The Worst-Case Execution Time (WCET) manager actively monitors and terminates non-deterministic AI generation if it breaches strict latency budgets, falling back to cached or deterministic responses. for ELP0 ELP1 ELP2 and ELP 3
 3.  **Hybrid Deno Global Internet Reference Hooks:** Instead of embedding fragile web drivers, Adelaide Lite securely spawns isolated Deno/TypeScript subprocesses (`playwright_scraper.ts`) that utilize stealth-plugin techniques to breach bot-detection challenges and retrieve factual data for the generative core without compromising the stability of the Ada parent process.
 
 ### 🎭 API Interfaces
@@ -72,13 +72,19 @@ Adelaide Lite is designed to be highly portable but requires a specific set of t
     *The script will automatically fetch Ada Web Server (AWS) packages via Alire, install the Deno Playwright Chromium binaries, and start the local API listener on port `11420`.*
 
 ## Warning
-> A Warning to Adelaide Lite Users newcomers
+> A Warning to Adelaide Lite users newcomers
 > 
 > **(Please Read Carefully)**
 > 
-> This is a highly experimental platform combining efficient software paradigms with generative AI. It is **NOT** a plug-and-play ChatGPT clone. The system expects you to actively monitor CPU bounds, configure ELP priority schedulers, and manage the SQLite knowledge graph.
+> This is a highly experimental platform combining efficient software paradigms with generative AI. It is **NOT** a plug-and-play ChatGPT nor an Agents clone. The system expects you to actively monitor CPU bounds, configure ELP priority schedulers, and manage the SQLite knowledge graph.
 >
-> If you are expecting a system that sacrifices reliability for instant "magic" answers, **Look somewhere else. You have been warned.**
+> If you are expecting a system that follows the expectation and status quo of AI in general, This is not it. **Look somewhere else. You have been warned.**
+
+## Development Note
+> 1. For AWS API /v1/completion OpenAI API and Ollama API I/O use pragma profile Jorvik while Watchdog use Ravenscar seperate threading. We still use Ada 2012 SPARK 2014. Because I am goddamn outdated.
+> 2. For development QC (Not release) we use gnatprove level=4 for detecting potential issues not level=0 nor level=2. to match the Indonesian minimum costumer & consumer responsiveness and reliance expectation.
+> 3. For release builds we use gnatprove level=4 with Pragma profile ada 2012 SPARK 2014 and Pragma profile Jorvik for AWS API /v1/completion and Ollama API I/O. then test crosscompile with target Darwin XNU and Linux arm64 and Linux x86_64, with respective environment variables and toolchains. We exclude NT based system due to various of issue for now.
+
 
 ---
 <h1 align="center">
