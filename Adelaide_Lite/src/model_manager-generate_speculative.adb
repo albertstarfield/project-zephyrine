@@ -100,7 +100,11 @@ begin
    S_Params := Llama_Sampler_Chain_Default_Params;
    Sampler := Llama_Sampler_Chain_Init (S_Params);
    Llama_Sampler_Chain_Add
-     (Sampler, Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1));
+     (Sampler,
+      (if Target_Kind = Qwen_0_8B
+       then Llama_Sampler_Init_Penalties (128, 1.2, 0.5, 0.5)
+       else Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1)));
+
    Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_K (40));
    Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_P (0.9, 1));
    Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Temp (0.7));

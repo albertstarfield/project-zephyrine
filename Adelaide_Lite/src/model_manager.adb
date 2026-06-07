@@ -902,7 +902,11 @@ package body Model_Manager is
       S_Params := Llama_Sampler_Chain_Default_Params;
       Sampler := Llama_Sampler_Chain_Init (S_Params);
       Llama_Sampler_Chain_Add
-        (Sampler, Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1));
+        (Sampler,
+         (if Kind = Qwen_0_8B
+          then Llama_Sampler_Init_Penalties (128, 1.2, 0.5, 0.5)
+          else Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1)));
+
       Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_K (40));
       Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_P (0.9, 1));
       Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Temp (0.7));
@@ -1026,10 +1030,27 @@ package body Model_Manager is
                       " Cache HIT. Returning cached response.");
             Result := To_Unbounded_String (Cached_Res);
             if Stream /= null then
-               Stream.Push (Cached_Res);
+               Push_Chunk (Stream, Session_ID, Cached_Res);
             end if;
+
+            --  Score and Log the result (even for Cache HIT)
+            declare
+               Score : constant Natural := Grade_Response_Quality
+                 (Response_Text => To_String (Result),
+                  Prompt        => Prompt,
+                  Search_Used   => False, -- Cache hit implies we didn't use search this turn
+                  Has_Citations => Index (To_String (Result), "[") > 0,
+                  Session_ID    => Session_ID,
+                  Level         => Level);
+            begin
+               Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                                     "[Quality Score] " & AnsiAda.Reset &
+                                     "Score: " & Score'Img & "/10 | " &
+                                     "Session: " & Session_ID & " (From Cache)");
+            end;
             return;
          end if;
+
       end;
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
