@@ -1,5 +1,5 @@
 with Llama_Interface; use Llama_Interface;
-with Ada.Calendar; use Ada.Calendar;
+with Ada.Calendar;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Exceptions; use Ada.Exceptions;
@@ -17,6 +17,7 @@ procedure Generate_Speculative
    Orch_Think_Open : Boolean := False;
    Level           : ELP_Level := ELP1)
 is
+   pragma SPARK_Mode (Off);
    Success  : Boolean;
    Vocab    : Llama_Vocab;
    Tokens   : array (1 .. 32768) of Llama_Token;
@@ -27,9 +28,9 @@ is
    Clean_P  : constant String := Sanitize_UTF8 (Prompt);
    Prompt_C : chars_ptr := New_String (Clean_P);
    Parser   : Stream_Parser_State;
-   T0, T1   : Time;
+   T0, T1   : Ada.Calendar.Time;
 begin
-   T0 := Clock;
+   T0 := Ada.Calendar.Clock;
    pragma Unreferenced (Images);
    Result := Null_Unbounded_String;
    Parser.Orch_Think_Open := Orch_Think_Open;
@@ -158,7 +159,7 @@ begin
    Models (Target_Kind).In_Use := False;
    Priority_Model_Gate.Release_ELP1 (Target_Kind);
 
-   T1 := Clock;
+   T1 := Ada.Calendar.Clock;
    declare
       Dur : constant Duration := T1 - T0;
    begin
