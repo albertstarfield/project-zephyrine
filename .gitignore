@@ -5,10 +5,35 @@
 **/obj/
 **/ollama_data/
 **/*.log
+**/*.ndjson
+**/*.dat
 **.db**
 **.graphml**
 **__pycache__**
 **__**
 **node_modules**
+**dist**
+**out/
+**build/
 
-**cinst.txt**
+# Alire and Ada specific
+**/alire/
+**/alirevenv/
+**/obj/
+**/bin/
+**/config/
+
+# Python and Environment
+**/.venv**/
+**venv**
+**pyvenv**
+**/.ruff_cache/
+**/.cache/
+
+# Project specific volatile
+**/ollama_data/
+server_log.txt
+server_run_log.txt
+test_results.txt
+agenticinst.txt
+cinst.txt
