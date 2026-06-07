@@ -79,6 +79,7 @@ def main():
     try:
         # Keep the main thread alive so daemon threads can run
         # -- ELP 2
+        last_telemetry_err = 0.0
         while True:
             t0 = time.perf_counter_ns()
             data = manager.get_data_from_queue()
@@ -103,7 +104,10 @@ def main():
                         )
                         urllib.request.urlopen(req, timeout=0.5)
                 except Exception as e:
-                    logger.error(f"Telemetry ping failed: {e}")
+                    now = time.monotonic()
+                    if now - last_telemetry_err >= 1.0:
+                        logger.error(f"Telemetry ping failed: {e}")
+                        last_telemetry_err = now
                     
             if not data:
                 time.sleep(1)
