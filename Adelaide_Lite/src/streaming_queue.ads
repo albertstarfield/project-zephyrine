@@ -9,8 +9,7 @@ package Streaming_Queue is
 
    protected type Queue is
       entry Push (Item : String);
-      entry Pop
-        (Item : out String; Last : out Natural; Is_Closed : out Boolean);
+      entry Pop (Item : out String; Last : out Natural; Is_Closed : out Boolean; Max_Len : in Natural);
       procedure Close;
       function Is_Empty_And_Closed return Boolean;
       procedure Set_Format (F : Format_Type; Model : String := "");

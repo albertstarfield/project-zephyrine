@@ -409,6 +409,7 @@ package body Model_Manager is
       pragma Unreferenced (Session_ID);
    begin
       if Stream /= null then
+         Ada.Text_IO.Put_Line ("Push_Chunk called with: " & Str_Piece (Str_Piece'First .. Natural'Min(Str_Piece'Last, Str_Piece'First + 20)));
          Stream.Push (Str_Piece);
       end if;
    end Push_Chunk;
