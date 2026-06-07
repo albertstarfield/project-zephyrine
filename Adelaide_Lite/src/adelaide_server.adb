@@ -2,10 +2,12 @@ with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Exceptions;
 with Ada.Command_Line;
+with Ada.Real_Time; use Ada.Real_Time;
 with Adelaide_Server_Pkg;
 with Model_Manager;
 with Knowledge_Manager;
 with Scheduler_Manager;
+with Watchdog_Manager;
 with AWS.Config.Set;
 with AWS.Server;
 with Moonshine_Interface;
@@ -85,6 +87,7 @@ begin
 
       --  Avoid Get_Line failure in background
       loop
+         Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
          delay 10.0;
       end loop;
 

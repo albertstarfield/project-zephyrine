@@ -21,6 +21,13 @@ package Watchdog_Manager is
       Aborted       : Boolean := False;
    end Inference_Monitor;
 
+   protected AWS_Server_Monitor is
+      procedure Heartbeat (Now : Time);
+      procedure Check_Liveness (Now : Time; Limit : Time_Span; OK : out Boolean);
+   private
+      Last_Heartbeat : Time := Time_Of (0, Time_Span_Zero);
+   end AWS_Server_Monitor;
+
    task Watchdog_Task is
       pragma Storage_Size (1024 * 1024);
    end Watchdog_Task;
