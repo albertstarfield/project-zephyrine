@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Containers.Doubly_Linked_Lists;

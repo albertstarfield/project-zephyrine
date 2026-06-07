@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with GNATCOLL.JSON;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;
@@ -24,7 +25,7 @@ package body Streaming_Queue is
          case Format is
             when Raw =>
                Ada.Strings.Unbounded.Append (Buffer, Item);
-            when Ollama =>
+            when Ollama_Chat =>
                declare
                   Msg : constant GNATCOLL.JSON.JSON_Value :=
                     GNATCOLL.JSON.Create_Object;
@@ -40,6 +41,15 @@ package body Streaming_Queue is
                   Ada.Strings.Unbounded.Append
                     (Buffer, String'(GNATCOLL.JSON.Write (Resp) & ASCII.LF));
                end;
+            when Ollama_Generate =>
+               GNATCOLL.JSON.Set_Field
+                 (Resp, "model",
+                  Ada.Strings.Unbounded.To_String (Model_ID));
+               GNATCOLL.JSON.Set_Field (Resp, "created_at", TS & "Z");
+               GNATCOLL.JSON.Set_Field (Resp, "response", Item);
+               GNATCOLL.JSON.Set_Field (Resp, "done", False);
+               Ada.Strings.Unbounded.Append
+                 (Buffer, String'(GNATCOLL.JSON.Write (Resp) & ASCII.LF));
             when OpenAI =>
                declare
                   Choice : constant GNATCOLL.JSON.JSON_Value :=
@@ -100,7 +110,7 @@ package body Streaming_Queue is
 
          case Format is
             when Raw => null;
-            when Ollama =>
+            when Ollama_Chat | Ollama_Generate =>
                GNATCOLL.JSON.Set_Field
                  (Resp, "model", Ada.Strings.Unbounded.To_String (Model_ID));
                GNATCOLL.JSON.Set_Field (Resp, "created_at", TS & "Z");

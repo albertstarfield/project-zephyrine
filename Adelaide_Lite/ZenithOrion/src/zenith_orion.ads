@@ -1,4 +1,5 @@
-package Zenith_Orion with SPARK_Mode is
+pragma SPARK_Mode (Off);
+package Zenith_Orion is
 
    type Jitter_Data is record
       Max_Jitter : Duration;

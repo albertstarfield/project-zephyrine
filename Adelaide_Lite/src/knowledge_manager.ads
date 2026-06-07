@@ -1,5 +1,5 @@
+pragma SPARK_Mode (Off);
 package Knowledge_Manager is
-   pragma Spark_Mode (Off);
 
    --  Initialize databases and internal state
    procedure Initialize;

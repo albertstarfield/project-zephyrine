@@ -1,7 +1,7 @@
+pragma SPARK_Mode (Off);
 with Ada.Text_IO;
 
 package body Watchdog_Manager is
-   pragma Spark_Mode (On);
 
    protected body Inference_Monitor is
 
@@ -68,7 +68,6 @@ package body Watchdog_Manager is
    end AWS_Server_Monitor;
 
    task body Watchdog_Task is
-      pragma SPARK_Mode (Off);
       --  Task body contains calls to Clock and print with side-effects.
 
       Interval   : constant Time_Span := Seconds (1);

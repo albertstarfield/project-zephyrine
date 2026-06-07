@@ -1,9 +1,9 @@
+pragma SPARK_Mode (Off);
 with Interfaces.C;
 with Interfaces.C.Strings;
 with System;
 
 package Moonshine_Bindings is
-   pragma Spark_Mode (Off);
 
    use Interfaces.C;
    use Interfaces.C.Strings;

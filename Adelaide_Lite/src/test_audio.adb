@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Streams; use Ada.Streams;
 with Interfaces; use Interfaces;

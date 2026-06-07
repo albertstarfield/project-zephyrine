@@ -1,7 +1,7 @@
+pragma SPARK_Mode (On);
 with Ada.Numerics.Long_Elementary_Functions;
 
 package body Math_Utils is
-   pragma Spark_Mode (On);
 
    function Cosine_Similarity (V1 : Vector; V2 : Vector) return Float is
       pragma Annotate

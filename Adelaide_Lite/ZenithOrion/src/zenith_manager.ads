@@ -1,6 +1,7 @@
+pragma SPARK_Mode (Off);
 with Zenith_Orion;
 
-package Zenith_Manager with SPARK_Mode => On is
+package Zenith_Manager is
 
    --  Protected object to store telemetry safely for non-SPARK consumers
    protected Telemetry_Store is

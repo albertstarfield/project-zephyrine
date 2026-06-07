@@ -1,5 +1,8 @@
+pragma SPARK_Mode (Off);
 with AnsiAda;
 with Ada.Text_IO;
+with Ada.Calendar;
+with Ada.Calendar.Formatting;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Exceptions;
@@ -596,7 +599,9 @@ package body Adelaide_Server_Pkg is
                            (if URI = "/v1/chat/completions" or else
                                URI = "/v1/completions"
                             then Streaming_Queue.OpenAI
-                            else Streaming_Queue.Ollama), Q,
+                            elsif URI = "/api/generate"
+                            then Streaming_Queue.Ollama_Generate
+                            else Streaming_Queue.Ollama_Chat), Q,
                            Is_Agentic, Is_Raw_Prompt);
                   return Wrap_Response (AWS.Response.Stream
                     (Content_Type => (if URI = "/v1/chat/completions" or else
@@ -641,19 +646,29 @@ package body Adelaide_Server_Pkg is
                         Set_Field (Resp_Obj, "usage", Usage);
                      end;
                   else
-                     Set_Field (Resp_Obj, "model", To_String (Req_Model));
-                     if URI = "/api/chat" then
-                        declare
-                           Msg : constant JSON_Value := Create_Object;
-                        begin
-                           Set_Field (Msg, "role", "assistant");
-                           Set_Field (Msg, "content", To_String (Result));
-                           Set_Field (Resp_Obj, "message", Msg);
-                        end;
-                     else
-                        Set_Field (Resp_Obj, "response", To_String (Result));
-                     end if;
-                     Set_Field (Resp_Obj, "done", True);
+                     declare
+                        Now  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+                        TS   : String := Ada.Calendar.Formatting.Image (Now);
+                     begin
+                        if TS'Length >= 11 then
+                           TS (11) := 'T';
+                        end if;
+                        Set_Field (Resp_Obj, "model", To_String (Req_Model));
+                        Set_Field (Resp_Obj, "created_at", TS & "Z");
+                        
+                        if URI = "/api/chat" then
+                           declare
+                              Msg : constant JSON_Value := Create_Object;
+                           begin
+                              Set_Field (Msg, "role", "assistant");
+                              Set_Field (Msg, "content", To_String (Result));
+                              Set_Field (Resp_Obj, "message", Msg);
+                           end;
+                        else
+                           Set_Field (Resp_Obj, "response", To_String (Result));
+                        end if;
+                        Set_Field (Resp_Obj, "done", True);
+                     end;
                   end if;
                   return Wrap_Response (Build_Response (Write (Resp_Obj)));
                end;

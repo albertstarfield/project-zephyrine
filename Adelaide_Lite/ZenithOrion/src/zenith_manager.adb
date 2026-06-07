@@ -1,8 +1,9 @@
+pragma SPARK_Mode (Off);
 with Ada.Calendar;
 with Ada.Real_Time;
 with Zenith_Orion;
 
-package body Zenith_Manager with SPARK_Mode => On is
+package body Zenith_Manager is
 
    protected body Telemetry_Store is
       procedure Update

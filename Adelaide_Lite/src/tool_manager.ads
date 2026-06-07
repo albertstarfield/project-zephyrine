@@ -1,7 +1,7 @@
+pragma SPARK_Mode (Off);
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Tool_Manager is
-   pragma Spark_Mode (Off);
 
    type Tool_Result is record
       Success : Boolean;

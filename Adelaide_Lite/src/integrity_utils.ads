@@ -1,7 +1,7 @@
+pragma SPARK_Mode (On);
 with Interfaces; use Interfaces;
 
 package Integrity_Utils is
-   pragma Spark_Mode (On);
 
    type Byte_Array is array (Positive range <>) of Unsigned_8;
    type CRC_Array is array (Positive range <>) of Unsigned_32;

@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with Interfaces.C;
 with Interfaces.C.Strings;
 with Moonshine_Bindings;

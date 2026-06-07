@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;

@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with Llama_Interface;
 with Math_Utils;
 with Streaming_Queue;
@@ -6,9 +7,8 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNATCOLL.JSON;
 
 package Model_Manager is
-   pragma Spark_Mode (Off);
 
-   type Model_Type is (Qwen_0_8B, Qwen_4B, Qwen_Embedding, MMProj);
+   type Model_Type is (Qwen_0_8B, Qwen_9B, Qwen_Embedding, MMProj);
    --  ELP levels hierarchy:
    --  ELP0: Background Literature Indexing (Lowest Priority)
    --  ELP1: Active RAG / Memory Retrieval (User Interaction)
@@ -58,6 +58,18 @@ package Model_Manager is
       Level      : ELP_Level := ELP1;
       Agentic    : Boolean := False;
       Raw_Prompt : Boolean := False);
+
+   procedure Generate_Speculative
+     (Target_Kind     : Model_Type;
+      Draft_Kind      : Model_Type;
+      Prompt          : String;
+      Result          : out Unbounded_String;
+      Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+      Session_ID      : String := "";
+      Requested_Ctx   : Positive := 4096;
+      Stream          : Streaming_Queue.Queue_Access := null;
+      Orch_Think_Open : Boolean := False;
+      Level           : ELP_Level := ELP1);
 
    procedure Get_Embedding
      (Prompt : String;

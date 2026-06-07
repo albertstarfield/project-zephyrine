@@ -1,5 +1,5 @@
+pragma SPARK_Mode (Off);
 package Verification_Manager is
-   pragma Spark_Mode (Off);
 
    --  Callback type for running text generation during Dafny logic repair
    type Generator_Func is access function (Prompt : String) return String;

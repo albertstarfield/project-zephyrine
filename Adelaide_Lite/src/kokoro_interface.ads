@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with Ada.Streams;
 
 package Kokoro_Interface is
