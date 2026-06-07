@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;

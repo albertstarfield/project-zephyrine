@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with GNAT.OS_Lib;
 with Ada.Streams.Stream_IO;
 with Ada.Directories;

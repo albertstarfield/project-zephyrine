@@ -1,11 +1,11 @@
+pragma SPARK_Mode (Off);
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Streams; use Ada.Streams;
 with AWS.Resources.Streams;
 
 package Streaming_Queue is
-   pragma Spark_Mode (Off);
 
-   type Format_Type is (Raw, Ollama, OpenAI);
+   type Format_Type is (Raw, Ollama_Chat, Ollama_Generate, OpenAI);
 
    protected type Queue is
       entry Push (Item : String);

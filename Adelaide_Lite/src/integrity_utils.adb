@@ -1,5 +1,5 @@
+pragma SPARK_Mode (On);
 package body Integrity_Utils is
-   pragma Spark_Mode (On);
 
    ---------------------
    -- Calculate_CRC32 --
@@ -135,6 +135,8 @@ package body Integrity_Utils is
       end if;
 
       for I in Data'Range loop
+         pragma Loop_Invariant (Non_Printable <= I - Data'First);
+
          --  Check for NUL byte
          if Data (I) = 0 then
             return True;
@@ -152,7 +154,8 @@ package body Integrity_Utils is
       end loop;
 
       --  If more than 30% are non-printable, consider it binary
-      return Float (Non_Printable) / Float (Data'Length) > 0.3;
+      --  Uses Unsigned_64 to prevent integer overflow and avoid Float precision/overflow proofs
+      return Unsigned_64 (Non_Printable) * 10 > Unsigned_64 (Data'Length) * 3;
    end Is_Binary;
 
 end Integrity_Utils;

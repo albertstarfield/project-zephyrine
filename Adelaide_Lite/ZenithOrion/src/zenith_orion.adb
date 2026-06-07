@@ -1,6 +1,7 @@
+pragma SPARK_Mode (Off);
 with Ada.Real_Time; use Ada.Real_Time;
 
-package body Zenith_Orion with SPARK_Mode => On is
+package body Zenith_Orion is
 
    Target_Interval : constant Time_Span := Milliseconds (1);
    

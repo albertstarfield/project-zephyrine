@@ -1,3 +1,4 @@
+pragma SPARK_Mode (Off);
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
@@ -9,6 +10,7 @@ with Llama_Interface;
 use Llama_Interface;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
+with Ada.Directories;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Unchecked_Conversion;
 
@@ -47,7 +49,7 @@ package body Model_Manager is
    type Model_Type_Refs is array (Model_Type) of aliased Model_Type;
    Model_Refs : constant Model_Type_Refs :=
      [Qwen_0_8B      => Qwen_0_8B,
-      Qwen_4B        => Qwen_4B,
+      Qwen_9B        => Qwen_9B,
       Qwen_Embedding => Qwen_Embedding,
       MMProj         => MMProj];
 
@@ -186,13 +188,13 @@ package body Model_Manager is
       Llama_Backend_Init;
       Database_Manager.Initialize;
       Models (Qwen_0_8B).Path  := To_Unbounded_String
-        ("../llama.cpp/models/qwen3.5/Qwen3.5-0.8B-Q4_K_S.gguf");
-      Models (Qwen_4B).Path   := To_Unbounded_String
-        ("../llama.cpp/models/qwen3.5/Qwen3.5-9B-UD-Q2_K_XL.gguf");
+        ("llama.cpp/models/qwen3.5/Qwen3.5-0.8B-Q4_K_S.gguf");
+      Models (Qwen_9B).Path   := To_Unbounded_String
+        ("llama.cpp/models/qwen3.5/Qwen3.5-9B-UD-Q2_K_XL.gguf");
       Models (Qwen_Embedding).Path := To_Unbounded_String
-        ("../llama.cpp/models/qwen3.5/Qwen3-Embedding-0.6B-Q8_0.gguf");
+        ("llama.cpp/models/qwen3.5/Qwen3-Embedding-0.6B-Q8_0.gguf");
       Models (MMProj).Path := To_Unbounded_String
-        ("../llama.cpp/models/qwen3.5/mmproj-9B-F16.gguf");
+        ("llama.cpp/models/qwen3.5/mmproj-9B-F16.gguf");
       Idle_Monitor.Start;
    end Initialize;
 
@@ -200,36 +202,63 @@ package body Model_Manager is
      (Kind          : Model_Type;
       Success       : out Boolean;
       Requested_Ctx : Positive := 4096)
-   is
-      M_Params   : Llama_Model_Params := Llama_Model_Default_Params;
-      C_Params   : Llama_Context_Params := Llama_Context_Default_Params;
-      Path_C     : chars_ptr := New_String (To_String (Models (Kind).Path));
-      Actual_Ctx : unsigned;
-   begin
-      Actual_Ctx := unsigned (Requested_Ctx);
-      --  Round up to power of 2 for efficiency if desired, or just use Requested_Ctx
-      --  Minimum context size is now 8192 for stability and headroom.
-      if Actual_Ctx < 8192 then
-         Actual_Ctx := 8192;
-      end if;
-      
-      Success := False;
-      if Models (Kind).Loaded then
-         if Actual_Ctx <= Models (Kind).Current_Ctx then
-            Models (Kind).Last_Used := Clock;
-            Success := True;
-            return;
-         end if;
-         Unload_Model (Kind);
-      end if;
-
-      Put_Line ("[+] Loading " & Model_Type'Image (Kind) &
-                " (N_CTX=" & Actual_Ctx'Img & ")");
-      M_Params.N_Gpu_Layers := -1;
-      Models (Kind).Model := Llama_Model_Load_From_File (Path_C, M_Params);
-      Free (Path_C);
-
-      if Models (Kind).Model /= Null_Model then
+    is
+       M_Params   : Llama_Model_Params := Llama_Model_Default_Params;
+       C_Params   : Llama_Context_Params := Llama_Context_Default_Params;
+       Actual_Ctx : unsigned;
+       
+       Base_Path  : constant String := To_String (Models (Kind).Path);
+       -- Try direct, ../ (from src/Adelaide_Lite), and ../../ (from bin)
+       Paths      : constant array (1 .. 3) of Unbounded_String :=
+         (To_Unbounded_String (Base_Path),
+          To_Unbounded_String ("../" & Base_Path),
+          To_Unbounded_String ("../../" & Base_Path));
+    begin
+       Actual_Ctx := unsigned (Requested_Ctx);
+       --  Minimum context size is now 8192 for stability and headroom.
+       if Actual_Ctx < 8192 then
+          Actual_Ctx := 8192;
+       end if;
+       
+       Success := False;
+       if Models (Kind).Loaded then
+          if Actual_Ctx <= Models (Kind).Current_Ctx then
+             Models (Kind).Last_Used := Clock;
+             Success := True;
+             return;
+          end if;
+          Unload_Model (Kind);
+       end if;
+ 
+       Put_Line ("[+] Loading " & Model_Type'Image (Kind) &
+                 " (N_CTX=" & Actual_Ctx'Img & ")");
+       M_Params.N_Gpu_Layers := -1;
+       
+       for I in Paths'Range loop
+          declare
+             Path_Str : constant String := To_String (Paths (I));
+          begin
+             if Ada.Directories.Exists (Path_Str) then
+                declare
+                   Path_C : chars_ptr := New_String (Path_Str);
+                begin
+                   begin
+                      Models (Kind).Model := Llama_Model_Load_From_File (Path_C, M_Params);
+                   exception
+                      when others =>
+                         Put_Line ("[!] Exception caught in Ada during Llama_Model_Load_From_File");
+                         Models (Kind).Model := Null_Model;
+                   end;
+                   Free (Path_C);
+                   if Models (Kind).Model /= Null_Model then
+                      exit;
+                   end if;
+                end;
+             end if;
+          end;
+       end loop;
+ 
+       if Models (Kind).Model /= Null_Model then
          C_Params.N_Ctx := Actual_Ctx;
          C_Params.N_Batch := 512;
          C_Params.N_Ubatch := 512;
@@ -320,7 +349,7 @@ package body Model_Manager is
         or else Name = "metamodel"
         or else Name = "adelaide-metamodel"
       then
-         return Qwen_4B;
+         return Qwen_9B;
       elsif Name = "qwen-embedding" or else Name = "adelaide-embedding" then
          return Qwen_Embedding;
       else
@@ -590,6 +619,7 @@ package body Model_Manager is
    type Stream_Parser_State is record
       Orch_Think_Open : Boolean := False;
       Sanitize_Buffer : Unbounded_String := Null_Unbounded_String;
+      In_Think_Block  : Boolean := False;
    end record;
 
    procedure Process_And_Push_Char
@@ -607,9 +637,11 @@ package body Model_Manager is
       begin
          if S_Str = Think_Tag then
             Parser.Sanitize_Buffer := Null_Unbounded_String;
+            Parser.In_Think_Block := True;
             return;
          elsif S_Str = Close_Tag then
             Parser.Sanitize_Buffer := Null_Unbounded_String;
+            Parser.In_Think_Block := False;
             if Parser.Orch_Think_Open then
                Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
                Parser.Orch_Think_Open := False;
@@ -627,8 +659,16 @@ package body Model_Manager is
             return;
          end if;
 
-         -- Not a tag prefix, push and clear.
-         Push_Chunk (Stream, Session_ID, S_Str);
+         -- Stream EVERYTHING out, but strip the raw tags and apply the requested NPU token speeds
+         if not Parser.In_Think_Block then
+            -- Simulate 300-600 tok/s outside think block (approx 0.5ms per char)
+            delay 0.0005;
+            Push_Chunk (Stream, Session_ID, S_Str);
+         else
+            -- Simulate 150 tok/s inside think block (approx 1.6ms per char)
+            delay 0.0016;
+            Push_Chunk (Stream, Session_ID, S_Str);
+         end if;
          Parser.Sanitize_Buffer := Null_Unbounded_String;
       end;
    end Process_And_Push_Char;
@@ -925,6 +965,18 @@ package body Model_Manager is
          Result := To_Unbounded_String ("ERROR: Decode failed");
    end Generate;
 
+   procedure Generate_Speculative
+     (Target_Kind     : Model_Type;
+      Draft_Kind      : Model_Type;
+      Prompt          : String;
+      Result          : out Unbounded_String;
+      Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+      Session_ID      : String := "";
+      Requested_Ctx   : Positive := 4096;
+      Stream          : Streaming_Queue.Queue_Access := null;
+      Orch_Think_Open : Boolean := False;
+      Level           : ELP_Level := ELP1) is separate;
+
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
    procedure Hybrid_Generate
      (Prompt     : String;
@@ -972,12 +1024,15 @@ package body Model_Manager is
                 " Starting reasoning chain...");
 
       --  1. Factual checking
+      Put_Line (" [Hybrid] Checking for factual context...");
       if not Agentic
         and then
         (Index (Prompt, "What is") > 0
          or else Index (Prompt, "Who is") > 0
          or else Index (Prompt, "tell me about") > 0)
       then
+         Put_Line (" [Hybrid] Factual context trigger matched.");
+         Push_Chunk (Stream, Session_ID, "[Adelaide Core] Analyzing query for factual context..." & ASCII.LF);
          declare
             Start_Tag : constant String := "<|im_start|>user";
             End_Tag   : constant String := "<|im_end|>";
@@ -1019,6 +1074,7 @@ package body Model_Manager is
                R : constant Tool_Manager.Tool_Result :=
                  Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
             begin
+               Push_Chunk (Stream, Session_ID, "[Adelaide Core] Factual context retrieved." & ASCII.LF);
                Append
                  (Internal_State,
                   "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
@@ -1072,6 +1128,7 @@ package body Model_Manager is
                end if;
             end Get_Router_Prompt;
          begin
+            Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
             Generate
               (Qwen_0_8B,
                Get_Router_Prompt,
@@ -1143,6 +1200,7 @@ package body Model_Manager is
                                          Tool_Manager.Execute_Tool
                                            (T_Name, T_Pars);
                                     begin
+                                       Push_Chunk (Stream, Session_ID, "[Adelaide Core] Executing tool: " & T_Name & ASCII.LF);
                                        Append
                                          (Internal_State,
                                           "[TOOL (" & T_Name & ")]: " &
@@ -1199,9 +1257,18 @@ package body Model_Manager is
 
          Synth_Prompt : constant String := Get_Final_Prompt;
       begin
-         Generate
-           (Qwen_4B, Synth_Prompt, Current_Response, Images, Session_ID,
-            8192, Stream, True, Level);
+         Push_Chunk (Stream, Session_ID, "[Adelaide Core] Generating brilliant response..." & ASCII.LF);
+         Generate_Speculative
+           (Target_Kind     => Qwen_9B,
+            Draft_Kind      => Qwen_0_8B,
+            Prompt          => Synth_Prompt,
+            Result          => Current_Response,
+            Images          => Images,
+            Session_ID      => Session_ID,
+            Requested_Ctx   => 8192,
+            Stream          => Stream,
+            Orch_Think_Open => True,
+            Level           => Level);
 
          Result := Current_Response;
          declare

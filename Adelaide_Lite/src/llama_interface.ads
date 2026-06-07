@@ -1,9 +1,9 @@
+pragma SPARK_Mode (Off);
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
 
 package Llama_Interface is
-   pragma Spark_Mode (Off);
 
    type Llama_Model is new System.Address;
    type Llama_Context is new System.Address;
@@ -134,7 +134,7 @@ package Llama_Interface is
    function Llama_Model_Load_From_File
      (Path_Model : chars_ptr; Params : Llama_Model_Params) return Llama_Model;
    pragma Import
-     (C, Llama_Model_Load_From_File, "llama_model_load_from_file");
+     (C, Llama_Model_Load_From_File, "llama_model_load_from_file_safe");
 
    procedure Llama_Model_Free (Model : Llama_Model);
    pragma Import (C, Llama_Model_Free, "llama_model_free");
@@ -149,11 +149,22 @@ package Llama_Interface is
    procedure Llama_Memory_Clear (Mem : System.Address; Data : Boolean);
    pragma Import (C, Llama_Memory_Clear, "llama_memory_clear");
 
+   function Llama_Memory_Seq_Rm
+     (Mem : System.Address; Seq_Id : int; P0 : int; P1 : int) return Boolean;
+   pragma Import (C, Llama_Memory_Seq_Rm, "llama_memory_seq_rm");
+
    function Llama_Get_Memory (Context : Llama_Context) return System.Address;
    pragma Import (C, Llama_Get_Memory, "llama_get_memory");
    function Llama_Batch_Init
      (N_Tokens : int; Embd : int; N_Seq_Max : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Init, "llama_batch_init");
+
+   procedure Llama_Batch_Add_Safe
+     (Batch : System.Address; Token : Llama_Token; Pos : int; Seq_Id : int; Logits : Boolean);
+   pragma Import (C, Llama_Batch_Add_Safe, "llama_batch_add_safe");
+
+   procedure Llama_Batch_Clear_Safe (Batch : System.Address);
+   pragma Import (C, Llama_Batch_Clear_Safe, "llama_batch_clear_safe");
 
    procedure Llama_Batch_Free (Batch : Llama_Batch);
    pragma Import (C, Llama_Batch_Free, "llama_batch_free");

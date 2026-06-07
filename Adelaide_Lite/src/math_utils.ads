@@ -1,5 +1,5 @@
+pragma SPARK_Mode (On);
 package Math_Utils is
-   pragma Spark_Mode (On);
 
    type Vector is array (Positive range <>) of Float;
 
