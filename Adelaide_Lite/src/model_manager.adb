@@ -30,11 +30,11 @@ package body Model_Manager is
          delay 30.0;
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red) &
                                "[WCET]" & AnsiAda.Reset &
-                               " Pipeline: " & Current_WCET'Img & "s | " &
-                               "ELP0: " & Current_WCET_ELP0'Img & "s | " &
-                               "ELP1: " & Current_WCET_ELP1'Img & "s | " &
-                               "ELP2: " & Current_WCET_ELP2'Img & "s | " &
-                               "ELP3: " & Current_WCET_ELP3'Img & "s");
+                               " Pipeline: " & Duration'Image (Current_WCET * 1_000_000_000) & "ns | " &
+                               "ELP0: " & Duration'Image (Current_WCET_ELP0 * 1_000_000_000) & "ns | " &
+                               "ELP1: " & Duration'Image (Current_WCET_ELP1 * 1_000_000_000) & "ns | " &
+                               "ELP2: " & Duration'Image (Current_WCET_ELP2 * 1_000_000_000) & "ns | " &
+                               "ELP3: " & Duration'Image (Current_WCET_ELP3 * 1_000_000_000) & "ns");
       end loop;
    end WCET_Printer;
 
