@@ -1050,10 +1050,16 @@ package body Model_Manager is
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
                       "[Hybrid]" & AnsiAda.Reset &
                       " Cache HIT. Returning cached response.");
-            Result := To_Unbounded_String (Cached_Res);
-            if Stream /= null then
-               Push_Chunk (Stream, Session_ID, Cached_Res);
-            end if;
+            --  Sanitize cached response: strip thinking tags before sending to client
+            declare
+               Clean_Res : constant String :=
+                 Sanitize_Think_Tags (Cached_Res);
+            begin
+               Result := To_Unbounded_String (Clean_Res);
+               if Stream /= null then
+                  Push_Chunk (Stream, Session_ID, Clean_Res);
+               end if;
+            end;
 
             --  Score and Log the result (even for Cache HIT)
             declare
@@ -1393,7 +1399,19 @@ package body Model_Manager is
          end;
       end;
 
-      Database_Manager.Add_To_Cache (Prompt, Emb_Vec (1 .. Emb_Len), To_String (Current_Response));
+      --  Don't cache error responses or responses with thinking tags
+      declare
+         Resp_Str : constant String := To_String (Current_Response);
+         Is_Error : constant Boolean :=
+           Resp_Str'Length >= 6 and then Resp_Str (1 .. 6) = "ERROR:";
+         Has_Think : constant Boolean :=
+           Index (Resp_Str, "<thinking>") > 0;
+      begin
+         if not Is_Error and then not Has_Think then
+            Database_Manager.Add_To_Cache
+              (Prompt, Emb_Vec (1 .. Emb_Len), Resp_Str);
+         end if;
+      end;
 
       T1 := Ada.Calendar.Clock;
       declare
