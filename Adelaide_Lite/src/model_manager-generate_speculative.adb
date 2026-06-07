@@ -220,94 +220,20 @@ begin
 
    Parser.Orch_Think_Open := Orch_Think_Open;
 
-   --  SPECULATIVE DECODING LOOP
-   --  Draft model proposes K tokens, target model verifies and accepts/rejects
-   if Models (Draft_Kind).Loaded then
-      declare
-         Pos_In_Seq : int := N_Toks;  -- Current position in the sequence
-      begin
-         for I in 1 .. Max_Tokens loop
-            --  Step 1: Draft model generates K candidate tokens
-            N_Draft := 0;
-            for D in 1 .. Draft_Batch_K loop
-               declare
-                  Draft_Tok : constant Llama_Token :=
-                    Llama_Sampler_Sample (Draft_Sampler, Models (Draft_Kind).Context, -1);
-               begin
-                  if Llama_Vocab_Is_Eog (Draft_Vocab, Draft_Tok) then
-                     exit;
-                  end if;
-                  N_Draft := N_Draft + 1;
-                  Draft_Tokens (N_Draft) := Draft_Tok;
-                  --  Feed draft token back into draft model for next prediction
-                  Decode_Context (Models (Draft_Kind).Context, Draft_Tok);
-               end;
-            end loop;
-
-            exit when N_Draft = 0;
-
-            --  Step 2 & 3: Verify draft tokens against target model (sequential decode)
-            --  Decode each draft token one at a time on the target to verify
-            declare
-               Accepted : Integer := 0;
-            begin
-               for V in 1 .. N_Draft loop
-                  --  Decode draft token into target's KV cache
-                  Decode_Context (Models (Target_Kind).Context, Draft_Tokens (V));
-                  Pos_In_Seq := Pos_In_Seq + 1;
-
-                  --  Sample from target to see what it would have predicted
-                  declare
-                     Target_Tok : constant Llama_Token :=
-                       Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
-                  begin
-                     if Target_Tok = Draft_Tokens (V) then
-                        --  Token accepted
-                        Accepted := Accepted + 1;
-                        Emit_Token (Target_Tok, Vocab);
-                     else
-                        --  Token rejected: emit target's token, discard remaining draft tokens
-                        Emit_Token (Target_Tok, Vocab);
-                        Pos_In_Seq := Pos_In_Seq + 1;
-                        Decode_Context (Models (Target_Kind).Context, Target_Tok);
-                        exit;
-                     end if;
-                  end;
-               end loop;
-
-               --  If all draft tokens were accepted, sample one bonus token from target
-               if Accepted = N_Draft then
-                  declare
-                     Bonus_Tok : constant Llama_Token :=
-                       Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
-                  begin
-                     if not Llama_Vocab_Is_Eog (Vocab, Bonus_Tok) then
-                        Emit_Token (Bonus_Tok, Vocab);
-                        Pos_In_Seq := Pos_In_Seq + 1;
-                        Decode_Context (Models (Target_Kind).Context, Bonus_Tok);
-                     else
-                        exit;
-                     end if;
-                  end;
-               end if;
-            end;
-         end loop;
-      end;
-   else
-      --  FALLBACK: No draft model available, standard autoregressive generation
-      for I in 1 .. Max_Tokens loop
-         declare
-            Token : constant Llama_Token :=
-              Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
-         begin
-            if Llama_Vocab_Is_Eog (Vocab, Token) then
-               exit;
-            end if;
-            Emit_Token (Token, Vocab);
-            Decode_Context (Models (Target_Kind).Context, Token);
-         end;
-      end loop;
-   end if;
+    --  STANDARD AUTOREGRESSIVE GENERATION (target model only)
+    --  Draft model (0.8B) is too small to provide useful speculative tokens
+    for I in 1 .. Max_Tokens loop
+       declare
+          Token : constant Llama_Token :=
+            Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
+       begin
+          if Llama_Vocab_Is_Eog (Vocab, Token) then
+             exit;
+          end if;
+          Emit_Token (Token, Vocab);
+          Decode_Context (Models (Target_Kind).Context, Token);
+       end;
+    end loop;
 
    if Stream /= null then
       Flush_Parser (Stream, Session_ID, Parser);
