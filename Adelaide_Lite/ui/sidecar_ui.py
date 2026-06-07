@@ -203,40 +203,35 @@ async def post_telemetry(req: Request):
     data = await req.json()
     now_ts = time.time()
 
-    if "WCET_WatchdogLoop_uS" in data:
-        val = float(data["WCET_WatchdogLoop_uS"])
-        engine_stats.wcet_watchdog_loop_us = val
-        engine_stats.wcet_wtdog_hist.append({"ts": now_ts, "val": val})
-
-    if "WCET_mainLoop_uS" in data:
-        val = float(data["WCET_mainLoop_uS"])
-        engine_stats.wcet_main_loop_us = val
+    if "WCET_mainLoop_nS" in data:
+        val = float(data["WCET_mainLoop_nS"])
+        engine_stats.wcet_main_loop_us = val  # kept as 'us' in field name but now holds nS
         engine_stats.wcet_mloop_hist.append({"ts": now_ts, "val": val})
 
-    if "WCET_ELP0" in data:
-        val = float(data["WCET_ELP0"])
+    if "WCET_ELP0_nS" in data:
+        val = float(data["WCET_ELP0_nS"])
         engine_stats.wcet_elp0 = val
         engine_stats.wcet_elp0_hist.append({"ts": now_ts, "val": val})
 
-    if "WCET_ELP1" in data:
-        val = float(data["WCET_ELP1"])
+    if "WCET_ELP1_nS" in data:
+        val = float(data["WCET_ELP1_nS"])
         engine_stats.wcet_elp1 = val
         engine_stats.wcet_elp1_hist.append({"ts": now_ts, "val": val})
 
-    if "WCET_ELP2" in data:
-        val = float(data["WCET_ELP2"])
+    if "WCET_ELP2_nS" in data:
+        val = float(data["WCET_ELP2_nS"])
         engine_stats.wcet_elp2 = val
         engine_stats.wcet_elp2_hist.append({"ts": now_ts, "val": val})
 
-    if "WCET_ELP3" in data:
-        val = float(data["WCET_ELP3"])
+    if "WCET_ELP3_nS" in data:
+        val = float(data["WCET_ELP3_nS"])
         engine_stats.wcet_elp3 = val
-        # For ELP3 (1ms), we don't store 1000pts/s in history, we'll just track current
+        # For ELP3 (1ms paced), we don't store 1000pts/s in history
 
-    if "Jitter_Avg_uS" in data:
-        engine_stats.jitter_avg_us = float(data["Jitter_Avg_uS"])
-    if "Jitter_Max_uS" in data:
-        engine_stats.jitter_max_us = float(data["Jitter_Max_uS"])
+    if "Jitter_Avg_nS" in data:
+        engine_stats.jitter_avg_us = float(data["Jitter_Avg_nS"])
+    if "Jitter_Max_nS" in data:
+        engine_stats.jitter_max_us = float(data["Jitter_Max_nS"])
 
     return JSONResponse({"status": "ok"})
 
@@ -341,21 +336,19 @@ def get_stats(queue_len: int = 0):
 
     current_process = psutil.Process()
     return {
-        "WCET_ELP0": engine_stats.wcet_elp0,
-        "WCET_ELP0_delta": get_delta(engine_stats.wcet_elp0_hist),
-        "WCET_ELP1": engine_stats.wcet_elp1,
-        "WCET_ELP1_delta": get_delta(engine_stats.wcet_elp1_hist),
-        "WCET_ELP2": engine_stats.wcet_elp2,
-        "WCET_ELP2_delta": get_delta(engine_stats.wcet_elp2_hist),
-        "WCET_ELP3": engine_stats.wcet_elp3,
-        "Jitter_Avg_uS": engine_stats.jitter_avg_us,
-        "Jitter_Max_uS": engine_stats.jitter_max_us,
+        "WCET_ELP0_nS": engine_stats.wcet_elp0,
+        "WCET_ELP0_nS_delta": get_delta(engine_stats.wcet_elp0_hist),
+        "WCET_ELP1_nS": engine_stats.wcet_elp1,
+        "WCET_ELP1_nS_delta": get_delta(engine_stats.wcet_elp1_hist),
+        "WCET_ELP2_nS": engine_stats.wcet_elp2,
+        "WCET_ELP2_nS_delta": get_delta(engine_stats.wcet_elp2_hist),
+        "WCET_ELP3_nS": engine_stats.wcet_elp3,
+        "Jitter_Avg_nS": engine_stats.jitter_avg_us,
+        "Jitter_Max_nS": engine_stats.jitter_max_us,
         "WCEL": engine_stats.wcel,
-        "WCEL_delta_1m": avg_1m_wcel,  # Sending the average as requested
-        "WCET_WatchdogLoop_uS": engine_stats.wcet_watchdog_loop_us,
-        "WCET_WatchdogLoop_uS_delta": get_delta(engine_stats.wcet_wtdog_hist),
-        "WCET_mainLoop_uS": engine_stats.wcet_main_loop_us,
-        "WCET_mainLoop_uS_delta": get_delta(engine_stats.wcet_mloop_hist),
+        "WCEL_delta_1m": avg_1m_wcel,
+        "WCET_mainLoop_nS": engine_stats.wcet_main_loop_us,
+        "WCET_mainLoop_nS_delta": get_delta(engine_stats.wcet_mloop_hist),
         "MemoryConsumption_MB": current_process.memory_info().rss / (1024 * 1024),
         "CPU_Consumption": current_process.cpu_percent(interval=None),
         "sidecarProcessSpawned": engine_stats.boot_time,
@@ -916,27 +909,22 @@ if __name__ == "__main__":
 
                 if resp.status_code == 200:
                     data = resp.json()
-                    engine_stats.wcet_elp0 = data.get("WCET_ELP0", engine_stats.wcet_elp0)
+                    engine_stats.wcet_elp0 = data.get("WCET_ELP0_nS", engine_stats.wcet_elp0)
                     engine_stats.wcet_elp0_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp0})
 
-                    engine_stats.wcet_elp1 = data.get("WCET_ELP1", engine_stats.wcet_elp1)
+                    engine_stats.wcet_elp1 = data.get("WCET_ELP1_nS", engine_stats.wcet_elp1)
                     engine_stats.wcet_elp1_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp1})
 
-                    engine_stats.wcet_elp2 = data.get("WCET_ELP2", engine_stats.wcet_elp2)
+                    engine_stats.wcet_elp2 = data.get("WCET_ELP2_nS", engine_stats.wcet_elp2)
                     engine_stats.wcet_elp2_hist.append({"ts": now_ts, "val": engine_stats.wcet_elp2})
 
-                    engine_stats.wcet_elp3 = data.get("WCET_ELP3", engine_stats.wcet_elp3)
+                    engine_stats.wcet_elp3 = data.get("WCET_ELP3_nS", engine_stats.wcet_elp3)
 
-                    engine_stats.jitter_avg_us = data.get("Jitter_Avg_uS", engine_stats.jitter_avg_us)
-                    engine_stats.jitter_max_us = data.get("Jitter_Max_uS", engine_stats.jitter_max_us)
-
-                    engine_stats.wcet_watchdog_loop_us = data.get(
-                        "WCET_WatchdogLoop_uS", engine_stats.wcet_watchdog_loop_us
-                    )
-                    engine_stats.wcet_wtdog_hist.append({"ts": now_ts, "val": engine_stats.wcet_watchdog_loop_us})
+                    engine_stats.jitter_avg_us = data.get("Jitter_Avg_nS", engine_stats.jitter_avg_us)
+                    engine_stats.jitter_max_us = data.get("Jitter_Max_nS", engine_stats.jitter_max_us)
 
                     engine_stats.wcet_main_loop_us = data.get(
-                        "WCET_mainLoop_uS", engine_stats.wcet_main_loop_us
+                        "WCET_mainLoop_nS", engine_stats.wcet_main_loop_us
                     )
                     engine_stats.wcet_mloop_hist.append({"ts": now_ts, "val": engine_stats.wcet_main_loop_us})
 
@@ -944,7 +932,7 @@ if __name__ == "__main__":
                         "Handless_Stage", engine_stats.handless_stage
                     )
                     engine_stats.handless_wcet = data.get(
-                        "Handless_WCET", engine_stats.handless_wcet
+                        "Handless_WCET_nS", engine_stats.handless_wcet
                     )
                     engine_stats.handless_input_text = data.get(
                         "Handless_Input_Text", engine_stats.handless_input_text
