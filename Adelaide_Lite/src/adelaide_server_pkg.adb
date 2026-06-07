@@ -210,14 +210,12 @@ package body Adelaide_Server_Pkg is
              T_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
              
              -- Convert vision context param to unbounded string if provided
-             Vision_Context_From_Param : Unbounded_String := To_Unbounded_String("");
-             if Length (Vision_Context_Param) > 0 then
-                Vision_Context_From_Param := To_Unbounded_String (Vision_Context_Param);
-             end if;
+             Vision_Context_From_Param : Unbounded_String;
 
              use type Interfaces.Unsigned_64;
              use type Ada.Real_Time.Time;
           begin
+            Vision_Context_From_Param := To_Unbounded_String (Vision_Context_Param);
             Handless_Stage := To_Unbounded_String ("Transcribing...");
             Handless_Input_Text := To_Unbounded_String ("");
             Handless_Output_Text := To_Unbounded_String ("");
@@ -249,7 +247,7 @@ package body Adelaide_Server_Pkg is
                    -- Also add the vision context from the request parameter
                    if Length (Vision_Context_From_Param) > 0 then
                       GNATCOLL.JSON.Append(Vision_Arr, Create (To_String (Vision_Context_From_Param)));
-                      Vision_Context_From_Param := "";
+                      Vision_Context_From_Param := To_Unbounded_String ("");
                    end if;
 
                    Model_Manager.Hybrid_Generate
@@ -379,8 +377,61 @@ package body Adelaide_Server_Pkg is
          end;
       end if;
 
-      if URI = "/api/tags" then
-         return Build_Response ("{""models"": [{""name"": ""qwen:0.8b""}]}");
+      if URI = "/api/tags" or else URI = "/v1/models" then
+         if URI = "/api/tags" then
+            return Wrap_Response (Build_Response ("{""models"": [{""name"": ""qwen:0.8b""}]}"));
+         else
+            return Wrap_Response (Build_Response ("{""object"": ""list"", ""data"": [{""id"": ""qwen:0.8b"", ""object"": ""model"", ""created"": 1686935002, ""owned_by"": ""adelaide""}]}"));
+         end if;
+      end if;
+
+      if URI = "/v1/embeddings" or else URI = "/api/embeddings" or else URI = "/api/embed" then
+         declare
+            use GNATCOLL.JSON;
+            Payload_Str : constant String := (if Raw_S /= "" then Raw_S
+              elsif Length (Raw_B) > 0 then To_String (Raw_B)
+              else Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request))));
+            P_Res    : constant Read_Result := Read (Payload_Str);
+            Txt      : Unbounded_String := To_Unbounded_String (Payload_Str);
+            Vec      : Math_Utils.Vector (1 .. 16384);
+            Len      : Natural;
+            Resp     : constant JSON_Value := Create_Object;
+            Data_Arr : JSON_Array := Empty_Array;
+            Emb_Obj  : constant JSON_Value := Create_Object;
+            Emb_Arr  : JSON_Array := Empty_Array;
+         begin
+            if P_Res.Success then
+               declare
+                  Val : constant JSON_Value := P_Res.Value;
+               begin
+                  if Has_Field (Val, "input") then
+                     Txt := To_Unbounded_String (String'(Get (Val, "input")));
+                  elsif Has_Field (Val, "prompt") then
+                     Txt := To_Unbounded_String (String'(Get (Val, "prompt")));
+                  end if;
+               end;
+            end if;
+
+            if Length (Txt) > 0 then
+               Model_Manager.Get_Embedding (To_String (Txt), Vec, Len);
+               for I in 1 .. Len loop
+                  Append (Emb_Arr, Create (Long_Float (Vec (I))));
+               end loop;
+            end if;
+
+            if URI = "/v1/embeddings" then
+               Set_Field (Emb_Obj, "object", "embedding");
+               Set_Field (Emb_Obj, "index", Integer'(0));
+               Set_Field (Emb_Obj, "embedding", Emb_Arr);
+               Append (Data_Arr, Emb_Obj);
+               Set_Field (Resp, "object", "list");
+               Set_Field (Resp, "data", Data_Arr);
+               Set_Field (Resp, "model", "qwen:0.8b");
+            else
+               Set_Field (Resp, "embedding", Emb_Arr);
+            end if;
+            return Wrap_Response (Build_Response (Write (Resp)));
+         end;
       end if;
 
       if URI = "/api/chat" or else URI = "/api/generate" or else
@@ -458,6 +509,7 @@ package body Adelaide_Server_Pkg is
                                                Content & "<|im_end|>" & ASCII.LF);
                                     end;
                                  end loop;
+                                 Append (Prompt, "<|im_start|>assistant" & ASCII.LF);
                                  --  We've manually joined with ChatML tags, so use Raw mode.
                                  Is_Raw_Prompt := True;
                               exception
@@ -486,8 +538,6 @@ package body Adelaide_Server_Pkg is
             if Length (Prompt) = 0 and then Length (Payload) > 0 then
                Prompt := Payload; -- Fallback if parsing fails or fields missing
             end if;
-            Ada.Text_IO.Put_Line ("[DEBUG] Payload: " & To_String (Payload));
-            Ada.Text_IO.Put_Line ("[DEBUG] Parsed Prompt: " & To_String (Prompt));
 
             if Length (Prompt) = 0 then
                return Build_Response ("{""response"": """"}",
@@ -526,34 +576,50 @@ package body Adelaide_Server_Pkg is
                   Raw_Prompt => Is_Raw_Prompt);
 
                declare
-                  R : constant GNATCOLL.JSON.JSON_Value :=
-                    GNATCOLL.JSON.Create_Object;
+                  use GNATCOLL.JSON;
+                  Resp_Obj : constant JSON_Value := Create_Object;
                begin
-                  GNATCOLL.JSON.Set_Field (R, "model", To_String (Req_Model));
-                  GNATCOLL.JSON.Set_Field (R, "response", To_String (Result));
-                  GNATCOLL.JSON.Set_Field (R, "done", True);
-                  return Build_Response (GNATCOLL.JSON.Write (R));
+                  if URI = "/v1/chat/completions" or else URI = "/v1/completions" then
+                     declare
+                        Choices : JSON_Array := Empty_Array;
+                        Choice  : constant JSON_Value := Create_Object;
+                        Msg     : constant JSON_Value := Create_Object;
+                        Usage   : constant JSON_Value := Create_Object;
+                     begin
+                        Set_Field (Msg, "role", "assistant");
+                        Set_Field (Msg, "content", To_String (Result));
+                        Set_Field (Choice, "index", Integer'(0));
+                        Set_Field (Choice, "message", Msg);
+                        Set_Field (Choice, "finish_reason", "stop");
+                        Append (Choices, Choice);
+                        Set_Field (Resp_Obj, "id", "chatcmpl-zephy");
+                        Set_Field (Resp_Obj, "object", "chat.completion");
+                        Set_Field (Resp_Obj, "created", Integer'(1677652288));
+                        Set_Field (Resp_Obj, "model", To_String (Req_Model));
+                        Set_Field (Resp_Obj, "choices", Choices);
+                        Set_Field (Usage, "prompt_tokens", Integer'(0));
+                        Set_Field (Usage, "completion_tokens", Integer'(0));
+                        Set_Field (Usage, "total_tokens", Integer'(0));
+                        Set_Field (Resp_Obj, "usage", Usage);
+                     end;
+                  else
+                     Set_Field (Resp_Obj, "model", To_String (Req_Model));
+                     if URI = "/api/chat" then
+                        declare
+                           Msg : constant JSON_Value := Create_Object;
+                        begin
+                           Set_Field (Msg, "role", "assistant");
+                           Set_Field (Msg, "content", To_String (Result));
+                           Set_Field (Resp_Obj, "message", Msg);
+                        end;
+                     else
+                        Set_Field (Resp_Obj, "response", To_String (Result));
+                     end if;
+                     Set_Field (Resp_Obj, "done", True);
+                  end if;
+                  return Wrap_Response (Build_Response (Write (Resp_Obj)));
                end;
             end if;
-         end;
-
-      elsif URI = "/api/embeddings" or else URI = "/api/embed" then
-         declare
-            Payload : constant String := (if Raw_S /= "" then Raw_S
-              else To_String (Raw_B));
-            Vec     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
-            Len     : Natural := 0;
-            Emb_Arr : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-            R       : constant GNATCOLL.JSON.JSON_Value :=
-              GNATCOLL.JSON.Create_Object;
-         begin
-            Model_Manager.Get_Embedding (Payload, Vec, Len);
-            for I in 1 .. (if Len > 0 then Len else 128) loop
-               GNATCOLL.JSON.Append (Emb_Arr, GNATCOLL.JSON.Create
-                 (Long_Float (if Len > 0 then Vec (I) else 0.1)));
-            end loop;
-            GNATCOLL.JSON.Set_Field (R, "embedding", Emb_Arr);
-            return Build_Response (GNATCOLL.JSON.Write (R));
          end;
       else
          return Build_Response ("Adelaide API", AWS.Messages.S404, "text/plain");
