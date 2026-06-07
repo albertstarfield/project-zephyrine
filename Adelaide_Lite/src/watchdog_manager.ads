@@ -3,6 +3,18 @@
 --  and the need for multiple protected entries/procedures. Jorvik provides 
 --  the necessary flexibility while still allowing formal verification of 
 --  tasking properties in SPARK.
+--
+--  Architectural Rationale:
+--  "If an application cannot be reasonably expressed within the Ravenscar 
+--  subset, it isn’t a Ravenscar application... That maxim is true for the 
+--  Jorvik profile as well. If an application 'genuinely requires' requeue 
+--  statements, for example, maybe a larger subset is appropriate" 
+--  (Rogers, 2021).
+--
+--  Citation (APA 7):
+--  Rogers, P. (2021, May 26). An introduction to Jorvik, the new tasking 
+--  profile in Ada 2022. AdaCore. 
+--  https://www.adacore.com/blog/introduction-to-jorvik
 pragma Profile (Jorvik);
 pragma Partition_Elaboration_Policy (Sequential);
 pragma SPARK_Mode (On);
