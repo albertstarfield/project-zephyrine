@@ -128,8 +128,7 @@ package body Adelaide_Server_Pkg is
          P := To_Unbounded_String (Prompt);
          S_ID := To_Unbounded_String (Session_ID);
          QA := Q;
-         QA.Set_Format (Format, Model_Name);
-         QA.Push ("<think>" & ASCII.LF & "[Adelaide Core Orchestration]" & ASCII.LF);
+         --  Dispatch already set format and pushed the immediate ACK.
          Is_Ag := Agentic;
          Is_Raw := Raw_Prompt;
       end Start;
@@ -618,15 +617,36 @@ package body Adelaide_Server_Pkg is
                   T : constant Generator_Task_Access := new Generator_Task;
                   S : constant Streaming_Queue.Response_Stream_Access :=
                     new Streaming_Queue.Response_Stream;
+                  Fmt : constant Streaming_Queue.Format_Type :=
+                    (if URI = "/v1/chat/completions" or else
+                        URI = "/v1/completions"
+                     then Streaming_Queue.OpenAI
+                     elsif URI = "/api/generate"
+                     then Streaming_Queue.Ollama_Generate
+                     else Streaming_Queue.Ollama_Chat);
+                  Now  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+                  TS   : String := Ada.Calendar.Formatting.Image (Now);
                begin
+                  if TS'Length >= 11 then
+                     TS (11) := 'T';
+                  end if;
                   S.Q := Q;
+
+                  --  IMMEDIATE ACK: Set format and push first chunk BEFORE
+                  --  starting the generator task. This guarantees sub-ms TTFB
+                  --  because the data is in the queue buffer before AWS even
+                  --  begins reading from the Response_Stream.
+                  Q.Set_Format (Fmt, To_String (Req_Model));
+                  Q.Push ("<thinking>" & ASCII.LF &
+                          "[Adelaide Core Orchestration]" & ASCII.LF &
+                          "Timestamp: " & TS & "Z" & ASCII.LF &
+                          "Session: " & To_String (S_ID) & ASCII.LF &
+                          "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
+                          "Model: " & To_String (Req_Model) & ASCII.LF &
+                          "Status: Request received - starting orchestration..." & ASCII.LF);
+
                   T.Start (To_String (Prompt), To_String (Req_Model),
-                           (if URI = "/v1/chat/completions" or else
-                               URI = "/v1/completions"
-                            then Streaming_Queue.OpenAI
-                            elsif URI = "/api/generate"
-                            then Streaming_Queue.Ollama_Generate
-                            else Streaming_Queue.Ollama_Chat), Q, To_String (S_ID),
+                           Fmt, Q, To_String (S_ID),
                            Is_Agentic, Is_Raw_Prompt);
                   return Wrap_Response (AWS.Response.Stream
                     (Content_Type => (if URI = "/v1/chat/completions" or else

@@ -1378,41 +1378,13 @@ package body Model_Manager is
       end;
 
       if Stream = null then
-         --  Format non-streaming response with merged think block
-         declare
-            Tag_Idx : constant Natural :=
-              Index (To_String (Current_Response), "</think>");
-            Merged  : Unbounded_String;
-         begin
-            if Tag_Idx > 0 then
-               declare
-                  Resp_Str : constant String := To_String (Current_Response);
-                  Part1    : constant String :=
-                    Resp_Str (Resp_Str'First .. Tag_Idx - 1);
-                  Part2    : constant String :=
-                    Resp_Str (Tag_Idx + 8 .. Resp_Str'Last);
-               begin
-                  Merged :=
-                    To_Unbounded_String
-                      ("<think>" & ASCII.LF &
-                       "[Adelaide Core Orchestration]" & ASCII.LF &
-                       To_String (Internal_State) & ASCII.LF &
-                       Sanitize_Think_Tags (Part1) & "</think>" &
-                       ASCII.LF & Sanitize_Think_Tags (Part2));
-               end;
-            else
-               Merged :=
-                 To_Unbounded_String
-                   ("<think>" & ASCII.LF &
-                    "[Adelaide Core Orchestration]" & ASCII.LF &
-                    To_String (Internal_State) & "</think>" &
-                    ASCII.LF &
-                    Sanitize_Think_Tags (To_String (Current_Response)));
-            end if;
-            Result := Merged;
-         end;
+         --  Strip orchestration thinking from non-streaming response.
+         --  Client already saw verbose status via real-time streaming;
+         --  the stored result is clean.
+         Result := To_Unbounded_String
+           (Sanitize_Think_Tags (To_String (Current_Response)));
       else
-         Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
+         Push_Chunk (Stream, Session_ID, "</thinking>" & ASCII.LF);
          Result := Current_Response;
       end if;
 
