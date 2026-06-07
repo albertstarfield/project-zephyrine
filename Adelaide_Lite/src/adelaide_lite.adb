@@ -8,34 +8,49 @@ with Ada.Exceptions;
 
 procedure Adelaide_Lite is
 begin
+   -- Initialize core systems (fatal on failure)
    begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Initializing Adelaide Knowledge Core...");
       Model_Manager.Initialize;
       Knowledge_Manager.Initialize;
+   exception
+      when E : others =>
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" &
+                   AnsiAda.Reset & " Init Error: " &
+                   Ada.Exceptions.Exception_Message (E));
+         return;
+   end;
 
+   -- Start background tasks (non-fatal on failure)
+   begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Starting background tasks...");
       Knowledge_Manager.Start_Tasks;
+   exception
+      when E : others =>
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[WARN]" &
+                   AnsiAda.Reset & " Background task error: " &
+                   Ada.Exceptions.Exception_Message (E));
+   end;
 
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-                AnsiAda.Reset & " Adelaide Knowledge Core is active.");
-      Put_Line ("[+] Adelaide_Lite ready.");
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-                AnsiAda.Reset & " Press Q to shutdown.");
+   Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+             AnsiAda.Reset & " Adelaide Knowledge Core is active.");
+   Put_Line ("[+] Adelaide_Lite ready.");
+   Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+             AnsiAda.Reset & " Press Q to shutdown.");
 
-      loop
+   -- Main loop - continues listening even after errors
+   loop
+      begin
          declare
             Input : constant String := Get_Line;
          begin
             exit when Input = "q" or else Input = "Q";
          end;
-      end loop;
-
-   exception
-      when E : others =>
-         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" &
-                   AnsiAda.Reset & " Core Error: " &
-                   Ada.Exceptions.Exception_Message (E));
-   end;
+      exception
+         when others =>
+            null;
+      end;
+   end loop;
 end Adelaide_Lite;

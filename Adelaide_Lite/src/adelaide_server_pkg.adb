@@ -146,21 +146,33 @@ package body Adelaide_Server_Pkg is
          when E : others =>
             Ada.Text_IO.Put_Line ("Generator Task Error: " &
               Ada.Exceptions.Exception_Message (E));
-            if QA /= null then
-               QA.Push (ASCII.LF & "ERROR: Inference Task Failed." & ASCII.LF);
-            end if;
+            begin
+               if QA /= null then
+                  QA.Push (ASCII.LF & "ERROR: Inference Task Failed." & ASCII.LF);
+               end if;
+            exception
+               when others => null;
+            end;
       end;
 
-      if QA /= null then
-         QA.Close;
-      end if;
+      begin
+         if QA /= null then
+            QA.Close;
+         end if;
+      exception
+         when others => null;
+      end;
    exception
       when E : others =>
          Ada.Text_IO.Put_Line ("Error in Generator_Task: " &
                                Ada.Exceptions.Exception_Message (E));
-         if QA /= null then
-            QA.Close;
-         end if;
+         begin
+            if QA /= null then
+               QA.Close;
+            end if;
+         exception
+            when others => null;
+         end;
    end Generator_Task;
 
    --------------
