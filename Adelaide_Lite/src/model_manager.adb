@@ -13,6 +13,7 @@ with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Directories;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Unchecked_Conversion;
+with Watchdog_Manager;
 
 package body Model_Manager is
    use Streaming_Queue;
@@ -1367,6 +1368,22 @@ package body Model_Manager is
             Push_Chunk (Stream, Session_ID, To_String (Result));
          end if;
       end if;
+
+      --  Score and Log the result
+      declare
+         Score : constant Natural := Grade_Response_Quality
+           (Response_Text => To_String (Result),
+            Prompt        => Prompt,
+            Search_Used   => Index (To_String (Internal_State), "[FACTUAL_DATA]") > 0,
+            Has_Citations => Index (To_String (Result), "[") > 0 and then Index (To_String (Result), "]") > 0,
+            Session_ID    => Session_ID,
+            Level         => Level);
+      begin
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                               "[Quality Score] " & AnsiAda.Reset &
+                               "Score: " & Score'Img & "/10 | " &
+                               "Session: " & Session_ID);
+      end;
    end Hybrid_Generate;
 
 end Model_Manager;
