@@ -80,11 +80,12 @@ package body Streaming_Queue is
          end case;
       end Push;
 
-      entry Pop (Item : out String; Last : out Natural; Is_Closed : out Boolean)
+      entry Pop (Item : out String; Last : out Natural; Is_Closed : out Boolean; Max_Len : in Natural)
         when Ada.Strings.Unbounded.Length (Buffer) > 0 or else Closed
       is
          Len : constant Natural :=
-           Natural'Min (Ada.Strings.Unbounded.Length (Buffer), Item'Length);
+           Natural'Min (Ada.Strings.Unbounded.Length (Buffer),
+             Natural'Min (Item'Length, Max_Len));
       begin
          Last := Len;
          if Len > 0 then
@@ -172,27 +173,34 @@ package body Streaming_Queue is
       Item : String (1 .. 4096);
       Is_Closed : Boolean;
       Actual_Len : Natural;
+      Target_Last : constant Stream_Element_Offset := Buffer'Last;
+      Current_Last : Stream_Element_Offset := Buffer'First - 1;
    begin
-      Last := Buffer'First - 1;
       if Resource.Q = null then
+         Last := Current_Last;
          return;
       end if;
 
-      Resource.Q.Pop (Item, Actual_Len, Is_Closed);
+      loop
+         Resource.Q.Pop (Item, Actual_Len, Is_Closed, Natural (Target_Last - Current_Last));
 
-      if Actual_Len > 0 then
-         declare
-            To_Fill : constant Stream_Element_Offset :=
-              Stream_Element_Offset'Min
-                (Buffer'Length, Stream_Element_Offset (Actual_Len));
-         begin
-            for I in 1 .. To_Fill loop
-               Last := Last + 1;
-               Buffer (Last) :=
-                 Stream_Element (Character'Pos (Item (Integer (I))));
-            end loop;
-         end;
-      end if;
+         if Actual_Len > 0 then
+            declare
+               To_Fill : constant Stream_Element_Offset :=
+                 Stream_Element_Offset (Actual_Len);
+            begin
+               for I in 1 .. To_Fill loop
+                  Current_Last := Current_Last + 1;
+                  Buffer (Current_Last) :=
+                    Stream_Element (Character'Pos (Item (Integer (I))));
+               end loop;
+            end;
+         end if;
+
+         exit when Current_Last = Target_Last or else Is_Closed;
+      end loop;
+
+      Last := Current_Last;
    end Read;
 
 end Streaming_Queue;

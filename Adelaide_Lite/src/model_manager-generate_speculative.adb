@@ -2,6 +2,7 @@ with Llama_Interface; use Llama_Interface;
 with Ada.Calendar; use Ada.Calendar;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
+with Ada.Exceptions; use Ada.Exceptions;
 
 separate (Model_Manager)
 procedure Generate_Speculative
@@ -39,7 +40,7 @@ begin
    Load_Model (Target_Kind, Success, Requested_Ctx);
    if not Success then
       Priority_Model_Gate.Release_ELP1 (Target_Kind);
-      Result := To_Unbounded_String ("ERROR: Load failed");
+      Result := To_Unbounded_String ("ERROR: Load failed"); Ada.Text_IO.Put_Line("ERROR: Load failed");
       Free (Prompt_C);
       return;
    end if;
@@ -55,7 +56,7 @@ begin
    if N_Toks < 0 then
       Models (Target_Kind).In_Use := False;
       Priority_Model_Gate.Release_ELP1 (Target_Kind);
-      Result := To_Unbounded_String ("ERROR: Tokenization failed");
+      Result := To_Unbounded_String ("ERROR: Tokenization failed"); Ada.Text_IO.Put_Line("ERROR: Tokenization failed");
       return;
    end if;
 
@@ -83,7 +84,7 @@ begin
                if Ret /= 0 then
                   Models (Target_Kind).In_Use := False;
                   Priority_Model_Gate.Release_ELP1 (Target_Kind);
-                  Result := To_Unbounded_String ("ERROR: Decode failed (" & Ret'Img & ")");
+                  Ada.Text_IO.Put_Line("ERROR: Decode failed"); Result := To_Unbounded_String ("ERROR: Decode failed (" & Ret'Img & ")");
                   return;
                end if;
             end;
@@ -155,7 +156,9 @@ begin
    Models (Target_Kind).In_Use := False;
    Priority_Model_Gate.Release_ELP1 (Target_Kind);
 exception
-   when others =>
+   when E : others =>
+      Ada.Text_IO.Put_Line ("Generate_Speculative Error: " &
+        Ada.Exceptions.Exception_Information (E));
       Models (Target_Kind).In_Use := False;
       Priority_Model_Gate.Release_ELP1 (Target_Kind);
       Result := To_Unbounded_String ("ERROR: Speculative Decode failed");
