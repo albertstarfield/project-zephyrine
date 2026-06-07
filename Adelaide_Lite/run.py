@@ -170,6 +170,31 @@ def main():
         else:
             print("[*] Moonshine models already exist, skipping download.")
 
+        # Check and download Qwen models
+        qwen_models_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "llama.cpp", "models", "qwen3.5"))
+        os.makedirs(qwen_models_dir, exist_ok=True)
+        
+        models_to_download = [
+            {
+                "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-UD-Q2_K_XL.gguf?download=true",
+                "output": "Qwen3.5-9B-UD-Q2_K_XL.gguf"
+            },
+            {
+                "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/mmproj-F16.gguf?download=true",
+                "output": "mmproj-9B-F16.gguf"
+            }
+        ]
+        
+        aria2c_cmd = shutil.which("aria2c")
+        for model in models_to_download:
+            target_path = os.path.join(qwen_models_dir, model["output"])
+            if not os.path.exists(target_path):
+                print(f"[*] Downloading {model['output']}...")
+                if aria2c_cmd:
+                    subprocess.run([aria2c_cmd, "-x", "16", "-s", "16", "-k", "1M", model["url"], "-o", model["output"], "-d", qwen_models_dir], check=True)
+                else:
+                    subprocess.run(["wget", "-q", "--show-progress", model["url"], "-O", target_path], check=True)
+
         # Check and download Kokoro models
         kokoro_models_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro_models"))
         os.makedirs(kokoro_models_dir, exist_ok=True)

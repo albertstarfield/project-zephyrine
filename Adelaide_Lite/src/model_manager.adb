@@ -185,14 +185,14 @@ package body Model_Manager is
    begin
       Llama_Backend_Init;
       Database_Manager.Initialize;
-      Models (Qwen_0_8B).Path := To_Unbounded_String
+      Models (Qwen_0_8B).Path  := To_Unbounded_String
         ("../llama.cpp/models/qwen3.5/Qwen3.5-0.8B-Q4_K_S.gguf");
       Models (Qwen_4B).Path   := To_Unbounded_String
-        ("../llama.cpp/models/qwen3.5/Qwen3.5-4B-Q4_K_S.gguf");
+        ("../llama.cpp/models/qwen3.5/Qwen3.5-9B-UD-Q2_K_XL.gguf");
       Models (Qwen_Embedding).Path := To_Unbounded_String
         ("../llama.cpp/models/qwen3.5/Qwen3-Embedding-0.6B-Q8_0.gguf");
       Models (MMProj).Path := To_Unbounded_String
-        ("../llama.cpp/models/qwen3.5/mmproj-0.8B-F16.gguf");
+        ("../llama.cpp/models/qwen3.5/mmproj-9B-F16.gguf");
       Idle_Monitor.Start;
    end Initialize;
 
@@ -235,6 +235,9 @@ package body Model_Manager is
          C_Params.N_Ubatch := 512;
          C_Params.N_Threads := 8;
          C_Params.N_Threads_Batch := 8;
+         C_Params.Type_K := GGML_TYPE_Q4_1;
+         C_Params.Type_V := GGML_TYPE_Q4_1;
+         C_Params.Flash_Attn_Type := 1;
          C_Params.Abort_Callback := Llama_Abort_Callback'Address;
          C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;
          Models (Kind).Context :=
@@ -386,6 +389,53 @@ package body Model_Manager is
       return "Callback response to " & Prompt;
    end Generator_Callback;
 
+   function Sanitize_UTF8 (S : String) return String is
+      Res : Unbounded_String;
+      I   : Positive := S'First;
+      Val : Natural;
+   begin
+      while I <= S'Last loop
+         Val := Character'Pos (S (I));
+         if Val < 128 then
+            Append (Res, S (I));
+            I := I + 1;
+         elsif Val >= 192 and Val <= 223 then
+            if I + 1 <= S'Last and then
+               Character'Pos (S (I + 1)) >= 128 and then Character'Pos (S (I + 1)) <= 191
+            then
+               Append (Res, S (I .. I + 1));
+               I := I + 2;
+            else
+               I := I + 1;
+            end if;
+         elsif Val >= 224 and Val <= 239 then
+            if I + 2 <= S'Last and then
+               Character'Pos (S (I + 1)) >= 128 and then Character'Pos (S (I + 1)) <= 191 and then
+               Character'Pos (S (I + 2)) >= 128 and then Character'Pos (S (I + 2)) <= 191
+            then
+               Append (Res, S (I .. I + 2));
+               I := I + 3;
+            else
+               I := I + 1;
+            end if;
+         elsif Val >= 240 and Val <= 247 then
+            if I + 3 <= S'Last and then
+               Character'Pos (S (I + 1)) >= 128 and then Character'Pos (S (I + 1)) <= 191 and then
+               Character'Pos (S (I + 2)) >= 128 and then Character'Pos (S (I + 2)) <= 191 and then
+               Character'Pos (S (I + 3)) >= 128 and then Character'Pos (S (I + 3)) <= 191
+            then
+               Append (Res, S (I .. I + 3));
+               I := I + 4;
+            else
+               I := I + 1;
+            end if;
+         else
+            I := I + 1;
+         end if;
+      end loop;
+      return To_String (Res);
+   end Sanitize_UTF8;
+
    --  SINGLE EMBEDDING HELPER
    procedure Get_Single_Embedding
      (Prompt : String;
@@ -397,7 +447,8 @@ package body Model_Manager is
       Vocab    : Llama_Vocab;
       Tokens   : array (1 .. 32768) of Llama_Token;
       N_Toks   : int;
-      Prompt_C : chars_ptr := New_String (Prompt);
+      Clean_P  : constant String := Sanitize_UTF8 (Prompt);
+      Prompt_C : chars_ptr := New_String (Clean_P);
    begin
       Priority_Model_Gate.Request_ELP1;
       Priority_Model_Gate.Acquire_ELP1 (Kind);
@@ -405,13 +456,14 @@ package body Model_Manager is
       if not Success then
          Priority_Model_Gate.Release_ELP1 (Kind);
          Length := 0;
+         Free (Prompt_C);
          return;
       end if;
 
       Models (Kind).Last_Used := Clock;
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
       N_Toks := Llama_Tokenize
-        (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address,
+        (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
          32768, True, True);
       Free (Prompt_C);
       if N_Toks <= 0 then
@@ -535,14 +587,8 @@ package body Model_Manager is
    end Get_Embedding;
 
    --  STREAM PARSER HELPERS
-   type Think_State_Type is (State_Think, State_Answer);
-
    type Stream_Parser_State is record
       Orch_Think_Open : Boolean := False;
-      Header_Closed   : Boolean := False;
-      Think_State     : Think_State_Type := State_Think;
-      Buffer          : Unbounded_String := Null_Unbounded_String;
-      Closing_Buffer  : Unbounded_String := Null_Unbounded_String;
       Sanitize_Buffer : Unbounded_String := Null_Unbounded_String;
    end record;
 
@@ -552,68 +598,38 @@ package body Model_Manager is
       Parser     : in out Stream_Parser_State;
       C          : Character)
    is
+      Think_Tag : constant String := "<think>";
+      Close_Tag : constant String := "</think>";
    begin
-      if not Parser.Header_Closed then
-         Append (Parser.Buffer, C);
-         declare
-            Buf_Str : constant String := To_String (Parser.Buffer);
-         begin
-            if Buf_Str = "<think>" then
-               Parser.Header_Closed := True;
-               Parser.Think_State := State_Think;
-               Parser.Buffer := Null_Unbounded_String;
-            elsif Buf_Str'Length >= 7 then
-               Parser.Header_Closed := True;
-               if Parser.Orch_Think_Open then
-                  Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
-                  Parser.Orch_Think_Open := False;
-               end if;
-               Push_Chunk (Stream, Session_ID, Buf_Str);
-               Parser.Buffer := Null_Unbounded_String;
-               Parser.Think_State := State_Answer;
-            end if;
-         end;
-         return;
-      end if;
-
-      if Parser.Think_State = State_Think then
-         Append (Parser.Closing_Buffer, C);
-         declare
-            Cls_Str : constant String := To_String (Parser.Closing_Buffer);
-         begin
-            if Cls_Str = "</think>" then
-               if Parser.Orch_Think_Open then
-                  Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
-                  Parser.Orch_Think_Open := False;
-               else
-                  Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
-               end if;
-               Parser.Think_State := State_Answer;
-               Parser.Closing_Buffer := Null_Unbounded_String;
-            elsif Cls_Str'Length >= 8 then
-               Push_Chunk
-                 (Stream, Session_ID,
-                  Cls_Str (Cls_Str'First .. Cls_Str'First));
-               Parser.Closing_Buffer :=
-                 To_Unbounded_String
-                   (Cls_Str (Cls_Str'First + 1 .. Cls_Str'Last));
-            end if;
-         end;
-         return;
-      end if;
-
       Append (Parser.Sanitize_Buffer, C);
       declare
          S_Str : constant String := To_String (Parser.Sanitize_Buffer);
       begin
-         if S_Str = "<think>" or else S_Str = "</think>" then
+         if S_Str = Think_Tag then
             Parser.Sanitize_Buffer := Null_Unbounded_String;
-         elsif S_Str'Length >= 8 then
-            Push_Chunk
-              (Stream, Session_ID, S_Str (S_Str'First .. S_Str'First));
-            Parser.Sanitize_Buffer :=
-              To_Unbounded_String (S_Str (S_Str'First + 1 .. S_Str'Last));
+            return;
+         elsif S_Str = Close_Tag then
+            Parser.Sanitize_Buffer := Null_Unbounded_String;
+            if Parser.Orch_Think_Open then
+               Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
+               Parser.Orch_Think_Open := False;
+            end if;
+            return;
          end if;
+
+         -- If current buffer is a potential prefix of either tag, wait for more.
+         if (S_Str'Length < Think_Tag'Length and then
+             Think_Tag (Think_Tag'First .. Think_Tag'First + S_Str'Length - 1) = S_Str)
+            or else
+            (S_Str'Length < Close_Tag'Length and then
+             Close_Tag (Close_Tag'First .. Close_Tag'First + S_Str'Length - 1) = S_Str)
+         then
+            return;
+         end if;
+
+         -- Not a tag prefix, push and clear.
+         Push_Chunk (Stream, Session_ID, S_Str);
+         Parser.Sanitize_Buffer := Null_Unbounded_String;
       end;
    end Process_And_Push_Char;
 
@@ -635,31 +651,17 @@ package body Model_Manager is
       Parser     : in out Stream_Parser_State)
    is
    begin
-      if not Parser.Header_Closed then
-         declare
-            Buf_Str : constant String := To_String (Parser.Buffer);
-         begin
-            if Parser.Orch_Think_Open then
-               Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
-            end if;
-            Push_Chunk (Stream, Session_ID, Buf_Str);
-         end;
-      elsif Parser.Think_State = State_Think then
-         declare
-            Cls_Str : constant String := To_String (Parser.Closing_Buffer);
-         begin
-            if Parser.Orch_Think_Open then
-               Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
-            else
-               Push_Chunk (Stream, Session_ID, Cls_Str);
-            end if;
-         end;
-      else
-         declare
-            S_Str : constant String := To_String (Parser.Sanitize_Buffer);
-         begin
+      declare
+         S_Str : constant String := To_String (Parser.Sanitize_Buffer);
+      begin
+         if S_Str /= "" then
             Push_Chunk (Stream, Session_ID, S_Str);
-         end;
+            Parser.Sanitize_Buffer := Null_Unbounded_String;
+         end if;
+      end;
+      if Parser.Orch_Think_Open then
+         Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
+         Parser.Orch_Think_Open := False;
       end if;
    end Flush_Parser;
 
@@ -698,79 +700,92 @@ package body Model_Manager is
       N_Toks   : int;
       Sampler  : Llama_Sampler;
       S_Params : Llama_Sampler_Chain_Params;
-      Prompt_C : chars_ptr := New_String (Prompt);
+      
+      Clean_P  : constant String := Sanitize_UTF8 (Prompt);
+      Prompt_C : chars_ptr := New_String (Clean_P);
       Parser   : Stream_Parser_State;
    begin
       pragma Unreferenced (Images);
       Result := Null_Unbounded_String;
+      Parser.Orch_Think_Open := Orch_Think_Open;
 
-      if Level = ELP0 then
-         declare
-            Acq_OK : Boolean;
-         begin
-            Priority_Model_Gate.Acquire_ELP0 (Kind) (Acq_OK);
-            if not Acq_OK then
-               Result := To_Unbounded_String ("ERROR: Preempted");
-               return;
-            end if;
-         end;
-      else
-         Priority_Model_Gate.Request_ELP1;
-         Priority_Model_Gate.Acquire_ELP1 (Kind);
-      end if;
-
-      Load_Model (Kind, Success, Requested_Ctx);
-      if not Success then
+      begin
          if Level = ELP0 then
-            Priority_Model_Gate.Release_ELP0 (Kind);
+            declare
+               Acq_OK : Boolean;
+            begin
+               Priority_Model_Gate.Acquire_ELP0 (Kind) (Acq_OK);
+               if not Acq_OK then
+                  Result := To_Unbounded_String ("ERROR: Preempted");
+                  Free (Prompt_C);
+                  return;
+               end if;
+            end;
          else
-            Priority_Model_Gate.Release_ELP1 (Kind);
+            Priority_Model_Gate.Request_ELP1;
+            Priority_Model_Gate.Acquire_ELP1 (Kind);
          end if;
-         Result := To_Unbounded_String ("ERROR: Load failed");
-         return;
-      end if;
 
-      Models (Kind).In_Use := True;
-      Models (Kind).Last_Used := Clock;
-      Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-      N_Toks := Llama_Tokenize
-        (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address,
-         32768, True, True);
-      Free (Prompt_C);
-      
-      --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
-      --  If the prompt tokens exceed the current N_CTX of the loaded model,
-      --  we perform an immediate reload with sufficient space. This ensures
-      --  that long-context follow-up questions work in a single pass.
-      if N_Toks > int (Models (Kind).Current_Ctx) then
-         Put_Line ("[!] Prompt size (" & N_Toks'Img & 
-                   ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
-                   "). Resizing...");
-         declare
-            --  Round up to next 8192 to avoid frequent reloads and ensure headroom.
-            Rounded_Ctx : constant unsigned :=
-              ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
-         begin
-            Load_Model (Kind, Success, Positive (Rounded_Ctx));
-         end;
+         Load_Model (Kind, Success, Requested_Ctx);
          if not Success then
+            if Level = ELP0 then
+               Priority_Model_Gate.Release_ELP0 (Kind);
+            else
+               Priority_Model_Gate.Release_ELP1 (Kind);
+            end if;
+            Result := To_Unbounded_String ("ERROR: Load failed");
+            Free (Prompt_C);
+            return;
+         end if;
+
+         Models (Kind).In_Use := True;
+         Models (Kind).Last_Used := Clock;
+         Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
+         N_Toks := Llama_Tokenize
+           (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
+            32768, True, True);
+         Free (Prompt_C);
+         
+         --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
+         if N_Toks > int (Models (Kind).Current_Ctx) then
+            Put_Line ("[!] Prompt size (" & N_Toks'Img & 
+                      ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
+                      "). Resizing...");
+            declare
+               Rounded_Ctx : constant unsigned :=
+                 ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
+            begin
+               Load_Model (Kind, Success, Positive (Rounded_Ctx));
+               if not Success then
+                  Result := To_Unbounded_String ("ERROR: Resize failed");
+                  if Level = ELP0 then
+                     Priority_Model_Gate.Release_ELP0 (Kind);
+                  else
+                     Priority_Model_Gate.Release_ELP1 (Kind);
+                  end if;
+                  return;
+               end if;
+               
+               --  Tokenize again since the model/vocab might have reloaded
+               Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
+               Prompt_C := New_String (Clean_P);
+               N_Toks := Llama_Tokenize
+                 (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
+                  32768, True, True);
+               Free (Prompt_C);
+            end;
+         end if;
+      exception
+         when others =>
             Models (Kind).In_Use := False;
             if Level = ELP0 then
                Priority_Model_Gate.Release_ELP0 (Kind);
             else
                Priority_Model_Gate.Release_ELP1 (Kind);
             end if;
-            Result := To_Unbounded_String ("ERROR: Resize failed");
+            Result := To_Unbounded_String ("ERROR: Inference crashed");
             return;
-         end if;
-         --  Tokenize again since the model/vocab might have reloaded
-         Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-         Prompt_C := New_String (Prompt);
-         N_Toks := Llama_Tokenize
-           (Vocab, Prompt_C, int (Prompt'Length), Tokens (1)'Address,
-            32768, True, True);
-         Free (Prompt_C);
-      end if;
+      end;
 
       if N_Toks < 0 then
          Models (Kind).In_Use := False;
@@ -933,11 +948,6 @@ package body Model_Manager is
    begin
       T0 := Ada.Calendar.Clock;
 
-      if Stream /= null then
-         Stream.Push
-           ("<think>" & ASCII.LF & "[Adelaide Core Orchestration]" & ASCII.LF);
-      end if;
-
       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
 
       declare
@@ -1012,9 +1022,7 @@ package body Model_Manager is
                Append
                  (Internal_State,
                   "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
-               if Stream /= null then
-                  Stream.Push ("[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
-               end if;
+               Push_Chunk (Stream, Session_ID, "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
             end;
          end;
       end if;
@@ -1139,11 +1147,9 @@ package body Model_Manager is
                                          (Internal_State,
                                           "[TOOL (" & T_Name & ")]: " &
                                           To_String (R.Output) & ASCII.LF);
-                                       if Stream /= null then
-                                          Stream.Push
-                                            (ASCII.LF & "[TOOL (" & T_Name & ")]: " &
-                                             To_String (R.Output) & ASCII.LF);
-                                       end if;
+                                       Push_Chunk (Stream, Session_ID,
+                                                   ASCII.LF & "[TOOL (" & T_Name & ")]: " &
+                                                   To_String (R.Output) & ASCII.LF);
                                     end;
                                  else
                                     exit;

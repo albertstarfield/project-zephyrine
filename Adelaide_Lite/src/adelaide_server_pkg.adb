@@ -103,19 +103,32 @@ package body Adelaide_Server_Pkg is
       do
          P := To_Unbounded_String (Prompt);
          QA := Q;
+         QA.Set_Format (Format, Model_Name);
+         QA.Push ("<think>" & ASCII.LF & "[Adelaide Core Orchestration]" & ASCII.LF);
          Is_Ag := Agentic;
          Is_Raw := Raw_Prompt;
       end Start;
 
-      Model_Manager.Hybrid_Generate
-        (Prompt     => To_String (P),
-         Result     => Res,
-         Session_ID => "server-stream",
-         Stream     => QA,
-         Agentic    => Is_Ag,
-         Raw_Prompt => Is_Raw);
+      begin
+         Model_Manager.Hybrid_Generate
+           (Prompt     => To_String (P),
+            Result     => Res,
+            Session_ID => "server-stream",
+            Stream     => QA,
+            Agentic    => Is_Ag,
+            Raw_Prompt => Is_Raw);
+      exception
+         when E : others =>
+            Ada.Text_IO.Put_Line ("Generator Task Error: " &
+              Ada.Exceptions.Exception_Message (E));
+            if QA /= null then
+               QA.Push (ASCII.LF & "ERROR: Inference Task Failed." & ASCII.LF);
+            end if;
+      end;
 
-      QA.Close;
+      if QA /= null then
+         QA.Close;
+      end if;
    exception
       when E : others =>
          Ada.Text_IO.Put_Line ("Error in Generator_Task: " &
@@ -141,7 +154,10 @@ package body Adelaide_Server_Pkg is
      (Request : AWS.Status.Data) return AWS.Response.Data
    is
       URI    : constant String := AWS.Status.URI (Request);
-      Method : constant String := AWS.Status.Method (Request);
+   begin
+      Ada.Text_IO.Put_Line ("[API] Request: " & URI);
+      declare
+         Method : constant String := AWS.Status.Method (Request);
       Raw_S  : constant String := AWS.Status.Parameter (Request, "prompt");
       Raw_B   : constant Unbounded_String :=
         To_Unbounded_String (AWS.Status.Payload (Request));
@@ -544,6 +560,10 @@ package body Adelaide_Server_Pkg is
                                       AWS.Messages.S200);
             end if;
 
+            --  ENFORCEMENT: We ignore the client-requested model for the actual inference
+            --  and always route through Hybrid_Generate (Adelaide Core Orchestration).
+            --  The Req_Model is only kept to echo back in the response for compatibility
+            --   with OpenAI/Ollama clients.
             if Is_Streaming then
                declare
                   use type Streaming_Queue.Queue_Access;
@@ -626,9 +646,15 @@ package body Adelaide_Server_Pkg is
       end if;
    exception
       when E : others =>
-         Ada.Text_IO.Put_Line ("Server Error: " &
+         Ada.Text_IO.Put_Line ("Dispatch Error: " &
            Ada.Exceptions.Exception_Message (E));
          return Build_Response ("{}", AWS.Messages.S500);
+   end;
+   exception
+   when E : others =>
+      Ada.Text_IO.Put_Line ("Server Error: " &
+        Ada.Exceptions.Exception_Message (E));
+      return Build_Response ("{}", AWS.Messages.S500);
    end Dispatch;
 
 end Adelaide_Server_Pkg;
