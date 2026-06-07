@@ -210,6 +210,10 @@ package body Database_Manager is
                              Math_Utils.Cosine_Similarity (Embedding, Entry_Vec);
                         begin
                            if Sim >= 0.65 then
+                              Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                                                    "[Cache Match]" & AnsiAda.Reset &
+                                                    " Score: " & Sim'Img & " | " &
+                                                    "Source: " & Path_Str);
                               Results (Idx).File_Path :=
                                 To_Unbounded_String (Path_Str);
                               Results (Idx).Content   :=
@@ -431,11 +435,13 @@ package body Database_Manager is
       end;
 
       if Best_Id /= -1 then
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                               "[Recall]" & AnsiAda.Reset &
+                               " Memory hit: ID" & Best_Id'Img);
          Execute (Main_DB_Ptr.all,
                  "UPDATE memories SET hit_count = hit_count + 1, " &
                  "last_hit_time = CURRENT_TIMESTAMP WHERE id = " & Best_Id'Img);
       end if;
-
       return To_String (Result);
    exception
       when others => return "";
