@@ -395,19 +395,19 @@ package body Adelaide_Server_Pkg is
          declare
             use GNATCOLL.JSON;
             R : constant JSON_Value := Create_Object;
-            Main_US : constant Float := Float (WCET_Main_Loop) * 1_000_000.0;
+            Main_NS : constant Float := Float (WCET_Main_Loop) * 1_000_000_000.0;
          begin
-            Set_Field (R, "WCET_ELP0", Float(Model_Manager.Current_WCET_ELP0));
-            Set_Field (R, "WCET_ELP1", Float(Model_Manager.Current_WCET_ELP1));
-            Set_Field (R, "WCET_ELP2", Float(Model_Manager.Current_WCET_ELP2));
-            Set_Field (R, "WCET_ELP3", Float(Model_Manager.Current_WCET_ELP3));
-            Set_Field (R, "Jitter_Avg_uS", Float (Model_Manager.Current_Jitter_Avg * 1_000_000.0));
-            Set_Field (R, "Jitter_Max_uS", Float (Model_Manager.Current_Jitter_Max * 1_000_000.0));
-            Set_Field (R, "WCET_mainLoop_uS", Main_US);
+            Set_Field (R, "WCET_ELP0_nS", Float(Model_Manager.Current_WCET_ELP0) * 1_000_000_000.0);
+            Set_Field (R, "WCET_ELP1_nS", Float(Model_Manager.Current_WCET_ELP1) * 1_000_000_000.0);
+            Set_Field (R, "WCET_ELP2_nS", Float(Model_Manager.Current_WCET_ELP2) * 1_000_000_000.0);
+            Set_Field (R, "WCET_ELP3_nS", Float(Model_Manager.Current_WCET_ELP3) * 1_000_000_000.0);
+            Set_Field (R, "Jitter_Avg_nS", Float (Model_Manager.Current_Jitter_Avg * 1_000_000_000.0));
+            Set_Field (R, "Jitter_Max_nS", Float (Model_Manager.Current_Jitter_Max * 1_000_000_000.0));
+            Set_Field (R, "WCET_mainLoop_nS", Main_NS);
 
             -- Handless Mode telemetry
             Set_Field (R, "Handless_Stage", To_String(Handless_Stage));
-            Set_Field (R, "Handless_WCET", Handless_WCET);
+            Set_Field (R, "Handless_WCET_nS", Handless_WCET * 1_000_000.0);
             Set_Field (R, "Handless_Input_Text", To_String(Handless_Input_Text));
             Set_Field (R, "Handless_Output_Text", To_String(Handless_Output_Text));
 
