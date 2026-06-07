@@ -1066,7 +1066,7 @@ package body Model_Manager is
                  To_String (Raw_Q) & """. NO EXPLANATIONS. NO QUOTES. JUST KEYWORDS.";
             begin
                Model_Manager.Generate
-                 (Kind            => Model_Manager.Qwen_0_8B,
+                 (Kind            => Qwen_0_8B,
                   Prompt          => Actual_Prompt,
                   Result          => Gen_Q,
                   Level           => Level);
