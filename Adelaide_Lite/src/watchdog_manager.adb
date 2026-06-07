@@ -1,5 +1,6 @@
 pragma SPARK_Mode (On);
 with Ada.Text_IO;
+with Model_Manager;
 
 package body Watchdog_Manager is
 
