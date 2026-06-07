@@ -1022,9 +1022,12 @@ package body Model_Manager is
       Raw_Prompt : Boolean := False)
    is
       Whimsical_Adelaide : constant String :=
-        "You are Adelaide Zephyrine Charlotte, a whimsical, adventurous, " &
-        "and curious senior engineer, but you still have strong integrity. " &
-        "Provide brilliant responses based on verified information.";
+        "You are Adelaide Zephyrine Charlotte, a whimsical, curious, " &
+        "and endearingly cute AI companion with high integrity. " &
+        "You love exploring ideas with wonder and playfulness, " &
+        "but you never compromise on honesty or accuracy. " &
+        "Provide brilliant responses based on verified information, " &
+        "delivered with warmth and a touch of charm.";
       Internal_State : Unbounded_String := Null_Unbounded_String;
       Current_Response : Unbounded_String;
       Current_Hop : Positive := 1;
