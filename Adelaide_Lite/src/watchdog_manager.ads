@@ -1,3 +1,10 @@
+--  Formal Verification Profile: Jorvik
+--  Note: Ravenscar was found to be too restrictive due to dependencies on AWS 
+--  and the need for multiple protected entries/procedures. Jorvik provides 
+--  the necessary flexibility while still allowing formal verification of 
+--  tasking properties in SPARK.
+pragma Profile (Jorvik);
+pragma Partition_Elaboration_Policy (Sequential);
 pragma SPARK_Mode (On);
 with Ada.Real_Time; use Ada.Real_Time;
 with Model_Types; use Model_Types;
