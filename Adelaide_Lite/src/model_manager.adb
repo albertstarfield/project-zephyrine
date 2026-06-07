@@ -30,11 +30,16 @@ package body Model_Manager is
          delay 30.0;
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red) &
                                "[WCET]" & AnsiAda.Reset &
-                               " Pipeline: " & Duration'Image (Current_WCET * 1_000_000_000) & "ns | " &
-                               "ELP0: " & Duration'Image (Current_WCET_ELP0 * 1_000_000_000) & "ns | " &
-                               "ELP1: " & Duration'Image (Current_WCET_ELP1 * 1_000_000_000) & "ns | " &
-                               "ELP2: " & Duration'Image (Current_WCET_ELP2 * 1_000_000_000) & "ns | " &
-                               "ELP3: " & Duration'Image (Current_WCET_ELP3 * 1_000_000_000) & "ns");
+                               " Pipeline: " &
+                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET * 1_000_000_000)) & "ns | " &
+                               "ELP0: " &
+                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET_ELP0 * 1_000_000_000)) & "ns | " &
+                               "ELP1: " &
+                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET_ELP1 * 1_000_000_000)) & "ns | " &
+                               "ELP2: " &
+                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET_ELP2 * 1_000_000_000)) & "ns | " &
+                               "ELP3: " &
+                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET_ELP3 * 1_000_000_000)) & "ns");
       end loop;
    end WCET_Printer;
 
