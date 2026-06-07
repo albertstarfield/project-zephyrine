@@ -1421,13 +1421,12 @@ async function updateMangoHUD() {
       mangoText.textContent = `
 ADELAIDE_ADA_ENGINE
 --------------------
-WCET_ELP0 : ${stats.WCET_ELP0.toFixed(3)}s (\u0394 ${(stats.WCET_ELP0_delta).toFixed(3)}s)
-WCET_ELP1 : ${stats.WCET_ELP1.toFixed(3)}s (\u0394 ${(stats.WCET_ELP1_delta).toFixed(3)}s)
-WCET_ELP2 : ${stats.WCET_ELP2.toFixed(3)}s (\u0394 ${(stats.WCET_ELP2_delta).toFixed(3)}s)
-WCET_ELP3 : ${(stats.WCET_ELP3 * 1000).toFixed(2)}ms (1ms Paced)
-Jitter    : Avg ${stats.Jitter_Avg_uS.toFixed(1)}us (Max ${stats.Jitter_Max_uS.toFixed(1)}us)
-WCET_WtDog: ${stats.WCET_WatchdogLoop_uS.toFixed(1)} us (\u0394 ${(stats.WCET_WatchdogLoop_uS_delta).toFixed(1)}us)
-WCET_mLoop: ${stats.WCET_mainLoop_uS.toFixed(1)} us (\u0394 ${(stats.WCET_mainLoop_uS_delta).toFixed(1)}us)
+WCET_ELP0 : ${stats.WCET_ELP0_nS.toFixed(0)} nS (\u0394 ${(stats.WCET_ELP0_nS_delta).toFixed(0)} nS)
+WCET_ELP1 : ${stats.WCET_ELP1_nS.toFixed(0)} nS (\u0394 ${(stats.WCET_ELP1_nS_delta).toFixed(0)} nS)
+WCET_ELP2 : ${stats.WCET_ELP2_nS.toFixed(0)} nS (\u0394 ${(stats.WCET_ELP2_nS_delta).toFixed(0)} nS)
+WCET_ELP3 : ${stats.WCET_ELP3_nS.toFixed(0)} nS (1ms Paced)
+Jitter    : Avg ${stats.Jitter_Avg_nS.toFixed(0)} nS (Max ${stats.Jitter_Max_nS.toFixed(0)} nS)
+WCET_mLoop: ${stats.WCET_mainLoop_nS.toFixed(0)} nS (\u0394 ${(stats.WCET_mainLoop_nS_delta).toFixed(0)} nS)
 Memory    : ${stats.MemoryConsumption_MB.toFixed(1)} MB
 CPU       : ${stats.CPU_Consumption.toFixed(1)} %
 Tokens/s  : ${stats.WCETR.toFixed(2)}
@@ -1454,7 +1453,7 @@ ADELAIDE_HANDLESS_MODE
 Status    : ${stats.Handless_Stage === "Idle" ? "Idle" : "Processing"}
 Stage     : ${stats.Handless_Stage}
 VAD       : ${hlVADStr}
-WCET      : ${(stats.Handless_WCET || 0).toFixed(1)} ms
+WCET      : ${(stats.Handless_WCET_nS || 0).toFixed(0)} nS
 In        : ${stats.Handless_Input_Text || "-"}
 Out       : ${stats.Handless_Output_Text || "-"}
 `;
@@ -1468,7 +1467,6 @@ Out       : ${stats.Handless_Output_Text || "-"}
       const elp0Hist: {ts: number, val: number}[] = stats.WCET_ELP0_Hist || [];
       const elp1Hist: {ts: number, val: number}[] = stats.WCET_ELP1_Hist || [];
       const elp2Hist: {ts: number, val: number}[] = stats.WCET_ELP2_Hist || [];
-      const wtdogHist: {ts: number, val: number}[] = stats.WCET_WtDog_Hist || [];
       const mloopHist: {ts: number, val: number}[] = stats.WCET_mLoop_Hist || [];
       
       const minTime = Date.now() / 1000 - 60;
@@ -1510,29 +1508,27 @@ Out       : ${stats.Handless_Output_Text || "-"}
         mangoCtx.stroke();
       };
 
-      // For ELP (seconds)
+      // For ELP (nanoseconds)
       const maxELP = Math.max(
         ...elp0Hist.map(h => h.val), 
         ...elp1Hist.map(h => h.val), 
         ...elp2Hist.map(h => h.val), 
-        1.0
+        1_000_000 // 1ms in nS
       );
       plotHist(elp0Hist, '#55f', maxELP); // Blue
       plotHist(elp1Hist, '#a5f', maxELP); // Purple
       plotHist(elp2Hist, '#f5f', maxELP); // Pink
       
-      // For Microseconds (scaled down to fit)
-      const maxUS = Math.max(
-        ...wtdogHist.map(h => h.val),
+      // For Main Loop (nanoseconds)
+      const maxNS = Math.max(
         ...mloopHist.map(h => h.val),
-        100000 // 100ms in us
+        100_000_000 // 100ms in nS
       );
-      plotHist(wtdogHist, '#ff0', maxUS); // Yellow
-      plotHist(mloopHist, '#f90', maxUS); // Orange
+      plotHist(mloopHist, '#f90', maxNS); // Orange
 
       mangoCtx.fillStyle = 'rgba(255, 255, 255, 0.3)';
       mangoCtx.fillText(`0`, 2, height - 2);
-      mangoCtx.fillText(`${maxELP.toFixed(1)}s`, width - 25, 10);
+      mangoCtx.fillText(`${(maxELP / 1_000_000).toFixed(0)}ms`, width - 25, 10);
 
 
       // Draw JS Graph (WCEL and JS Loop)
