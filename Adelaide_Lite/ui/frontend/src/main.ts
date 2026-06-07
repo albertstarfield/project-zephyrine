@@ -1955,8 +1955,6 @@ async function stopAndSendAgenticVoice() {
          return; // Skip sending to API
      }
      
-     let visionContextB64 = "";
-     
      // Capture visual context if camera is ready and include it in the agentic request
      let visionContextB64 = "";
      if (hasCamPerm && hiddenVideo && hiddenCanvas) {
@@ -1982,7 +1980,6 @@ async function stopAndSendAgenticVoice() {
          
          if (visionContextB64) {
              // Include vision context as query parameter alongside PCM audio
-             const urlWithVision = portFileUrl + "?vision_context_b64=" + encodeURIComponent(visionContextB64);
              
              fetchOptions = {
                  method: 'POST',

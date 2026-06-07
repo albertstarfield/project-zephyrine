@@ -19,6 +19,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 import webview
 
+try:
+    import fitz # PyMuPDF
+except ImportError:
+    fitz = None
+
 # Global Performance Tuning: Disable Garbage Collection
 gc.disable()
 
