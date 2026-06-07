@@ -18,6 +18,11 @@ package Llama_Interface is
    Null_Context : constant Llama_Context :=
      Llama_Context (System.Null_Address);
 
+   GGML_TYPE_F32  : constant int := 0;
+   GGML_TYPE_F16  : constant int := 1;
+   GGML_TYPE_Q4_0 : constant int := 2;
+   GGML_TYPE_Q4_1 : constant int := 3;
+
    type Llama_Token_Data is record
       Id    : Llama_Token;
       Logit : Float;
