@@ -27,6 +27,10 @@ except ImportError:
 # Global Performance Tuning: Disable Garbage Collection
 gc.disable()
 
+# Configuration
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(base_dir, "UI_Database", "assistant_session.db")
+
 # Zephyrine Engine Settings - Configuration dictionary for engine settings
 class EngineSettings:
     def __init__(self):
@@ -151,8 +155,6 @@ except Exception:
 
 # Configuration
 ADA_BACKEND_URL = "http://localhost:11420"
-base_dir = os.path.dirname(os.path.dirname(__file__))
-DB_PATH = os.path.join(base_dir, "UI_Database", "assistant_session.db")
 DIST_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 # Initialize SQLite Database
