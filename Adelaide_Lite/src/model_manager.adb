@@ -651,14 +651,21 @@ package body Model_Manager is
       begin
          if S_Str = Think_Tag then
             Parser.Sanitize_Buffer := Null_Unbounded_String;
+            if not Parser.In_Think_Block and then not Parser.Orch_Think_Open then
+               --  Only push the opening tag if we are NOT already inside a thought block
+               Push_Chunk (Stream, Session_ID, Think_Tag);
+            end if;
             Parser.In_Think_Block := True;
             return;
          elsif S_Str = Close_Tag then
             Parser.Sanitize_Buffer := Null_Unbounded_String;
             Parser.In_Think_Block := False;
             if Parser.Orch_Think_Open then
-               Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
+               Push_Chunk (Stream, Session_ID, Close_Tag & ASCII.LF);
                Parser.Orch_Think_Open := False;
+            else
+               --  Standard close tag if orchestration didn't open it
+               Push_Chunk (Stream, Session_ID, Close_Tag);
             end if;
             return;
          end if;
