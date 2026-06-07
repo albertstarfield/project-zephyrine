@@ -3,6 +3,7 @@ with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Containers.Doubly_Linked_Lists;
 with Model_Manager;
+with Model_Types; use Model_Types;
 
 package body Scheduler_Manager is
 
@@ -64,7 +65,7 @@ package body Scheduler_Manager is
                Result     => LLM_Result,
                Session_ID => "server-scheduler",
                Agentic    => True,
-               Level      => Model_Manager.ELP0);
+               Level      => ELP0);
          else
             delay 1.0;
          end if;

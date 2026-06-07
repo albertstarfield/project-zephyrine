@@ -1,6 +1,7 @@
-pragma SPARK_Mode (Off);
+pragma SPARK_Mode (On);
 with Ada.Real_Time; use Ada.Real_Time;
-with Model_Manager; use Model_Manager;
+with Model_Types; use Model_Types;
+with Model_Manager;
 
 package Watchdog_Manager is
 
@@ -10,8 +11,7 @@ package Watchdog_Manager is
       procedure Set_Aborted;
       function Is_Aborted return Boolean;
       procedure Check_Timeout
-        (Now         : Time;
-         Limit       : Time_Span;
+        (Limit       : Time_Span;
          Out_Aborted : out Boolean;
          Out_Model   : out Model_Type);
    private
@@ -23,13 +23,13 @@ package Watchdog_Manager is
 
    protected AWS_Server_Monitor is
       procedure Heartbeat (Now : Time);
-      procedure Check_Liveness (Now : Time; Limit : Time_Span; OK : out Boolean);
+      procedure Check_Liveness (Limit : Time_Span; OK : out Boolean);
    private
       Last_Heartbeat : Time := Time_Of (0, Time_Span_Zero);
    end AWS_Server_Monitor;
 
-   task Watchdog_Task is
-      pragma Storage_Size (1024 * 1024);
-   end Watchdog_Task;
+   package Tasking with SPARK_Mode => Off is
+      task Watchdog_Task;
+   end Tasking;
 
 end Watchdog_Manager;

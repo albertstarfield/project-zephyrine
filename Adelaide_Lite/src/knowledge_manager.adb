@@ -4,6 +4,7 @@ with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Model_Manager;
+with Model_Types; use Model_Types;
 with Database_Manager;
 with Math_Utils;
 with Zenith_Manager;
@@ -360,8 +361,8 @@ package body Knowledge_Manager is
 
             begin
                Model_Manager.Generate
-                 (Kind => Model_Manager.Qwen_0_8B, Prompt => To_String (Prompt),
-                  Result => Res_Val, Level => Model_Manager.ELP0);
+                 (Kind => Qwen_0_8B, Prompt => To_String (Prompt),
+                  Result => Res_Val, Level => ELP0);
             exception
                when others => null;
             end;
