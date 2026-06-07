@@ -1003,7 +1003,8 @@ package body Model_Manager is
       Raw_Prompt : Boolean := False)
    is
       Whimsical_Adelaide : constant String :=
-        "You are Adelaide Zephyrine Charlotte, a senior engineer. " &
+        "You are Adelaide Zephyrine Charlotte, a whimsical, adventurous, " &
+        "and curious senior engineer, but you still have strong integrity. " &
         "Provide brilliant responses based on verified information.";
       Internal_State : Unbounded_String := Null_Unbounded_String;
       Current_Response : Unbounded_String;
@@ -1095,6 +1096,7 @@ package body Model_Manager is
                  (Kind            => Qwen_0_8B,
                   Prompt          => Actual_Prompt,
                   Result          => Gen_Q,
+                  Stream          => null,
                   Level           => Level);
             end;
 
@@ -1159,13 +1161,13 @@ package body Model_Manager is
                end if;
             end Get_Router_Prompt;
          begin
-            Push_Chunk (Stream, Session_ID, "<think>" & ASCII.LF & "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
+            Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
             Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
             Generate
               (Qwen_0_8B,
                Get_Router_Prompt,
                Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
-               Stream, False, Level);
+               null, False, Level);
 
             declare
                Step : constant String :=
@@ -1270,20 +1272,28 @@ package body Model_Manager is
                   Idx     : constant Natural :=
                     Index (Prompt, Sub_Str, Going => Ada.Strings.Backward);
                begin
-                  if Idx > 0 then
-                     return Prompt (Prompt'First .. Idx - 1) &
-                            "Fact-Check: " & To_String (Internal_State) &
-                            ASCII.LF & Sub_Str;
+                  if Length (Internal_State) > 0 then
+                     if Idx > 0 then
+                        return Prompt (Prompt'First .. Idx - 1) &
+                               "Fact-Check: " & To_String (Internal_State) &
+                               ASCII.LF & Sub_Str;
+                     else
+                        return Prompt & ASCII.LF & "Fact-Check: " &
+                               To_String (Internal_State) & ASCII.LF & Sub_Str;
+                     end if;
                   else
-                     return Prompt & ASCII.LF & "Fact-Check: " &
-                            To_String (Internal_State) & ASCII.LF & Sub_Str;
+                     return Prompt;
                   end if;
                end;
             else
-               return Wrap_ChatML
-                 (Whimsical_Adelaide,
-                  "User: " & Prompt & ASCII.LF &
-                  "Fact-Check: " & To_String (Internal_State));
+               if Length (Internal_State) > 0 then
+                  return Wrap_ChatML
+                    (Whimsical_Adelaide,
+                     "User: " & Prompt & ASCII.LF &
+                     "Fact-Check: " & To_String (Internal_State));
+               else
+                  return Wrap_ChatML (Whimsical_Adelaide, Prompt);
+               end if;
             end if;
          end Get_Final_Prompt;
 
@@ -1382,9 +1392,6 @@ package body Model_Manager is
       else
          Push_Chunk (Stream, Session_ID, "</think>" & ASCII.LF);
          Result := Current_Response;
-         if Stream /= null then
-            Push_Chunk (Stream, Session_ID, To_String (Result));
-         end if;
       end if;
 
       --  Score and Log the result
