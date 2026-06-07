@@ -345,7 +345,7 @@ package body Database_Manager is
                         begin
                            if Sim > Max_Sim then
                               Max_Sim := Sim;
-                              if Sim >= 0.85 and then Sim < 0.98 then
+                              if Sim >= 0.90 then
                                  Best_Res := To_Unbounded_String (Raw_Resp);
                                  Best_Id := Row_Id;
                                  Best_Hits := Row_Hits;
@@ -353,6 +353,7 @@ package body Database_Manager is
                               end if;
                            end if;
                         end;
+
                      end if;
                   end;
                end if;
@@ -361,6 +362,16 @@ package body Database_Manager is
       end;
 
       if Best_Id /= -1 then
+         if Max_Sim >= 0.92 then
+             Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                                   "[Cache]" & AnsiAda.Reset &
+                                   " Exact Match Hit ID" & Best_Id'Img);
+         else
+             Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                                   "[Cache]" & AnsiAda.Reset &
+                                   " Semantic Match (Sim: " & Max_Sim'Img & ") | ID" & Best_Id'Img);
+         end if;
+
          if Best_Elapsed <= Float (2.0 * WCET) then
             if Best_Hits >= 2 then
                Execute (Main_DB_Ptr.all,
