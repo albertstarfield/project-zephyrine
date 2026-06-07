@@ -28,7 +28,11 @@ package body Model_Manager is
          delay 30.0;
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red) &
                                "[WCET]" & AnsiAda.Reset &
-                               " Current Pipeline WCET: " & Current_WCET'Img & " seconds");
+                               " Pipeline: " & Current_WCET'Img & "s | " &
+                               "ELP0: " & Current_WCET_ELP0'Img & "s | " &
+                               "ELP1: " & Current_WCET_ELP1'Img & "s | " &
+                               "ELP2: " & Current_WCET_ELP2'Img & "s | " &
+                               "ELP3: " & Current_WCET_ELP3'Img & "s");
       end loop;
    end WCET_Printer;
 
@@ -1294,15 +1298,24 @@ package body Model_Manager is
          if Dur > Current_WCET then
             Current_WCET := Dur;
          end if;
-         if Level = ELP0 then
-            if Dur > Current_WCET_ELP0 then
-               Current_WCET_ELP0 := Dur;
-            end if;
-         else
-            if Dur > Current_WCET_ELP1 then
-               Current_WCET_ELP1 := Dur;
-            end if;
-         end if;
+         case Level is
+            when ELP0 =>
+               if Dur > Current_WCET_ELP0 then
+                  Current_WCET_ELP0 := Dur;
+               end if;
+            when ELP1 =>
+               if Dur > Current_WCET_ELP1 then
+                  Current_WCET_ELP1 := Dur;
+               end if;
+            when ELP2 =>
+               if Dur > Current_WCET_ELP2 then
+                  Current_WCET_ELP2 := Dur;
+               end if;
+            when ELP3 =>
+               if Dur > Current_WCET_ELP3 then
+                  Current_WCET_ELP3 := Dur;
+               end if;
+         end case;
       end;
 
       if Stream = null then
