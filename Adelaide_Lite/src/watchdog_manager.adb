@@ -73,7 +73,7 @@ package body Watchdog_Manager is
 
       Interval   : constant Time_Span := Seconds (1);
       Limit      : constant Time_Span := Seconds (45);
-      Server_Limit : constant Time_Span := Seconds (30);
+      Server_Limit : constant Time_Span := Seconds (3);
       Now        : Time;
       Next_Check : Time;
       Aborted    : Boolean;
@@ -106,7 +106,7 @@ package body Watchdog_Manager is
             Ada.Text_IO.Put_Line
               (ASCII.ESC & "[91m" &
                "[BUGCHECK] Main AWS server thread appears frozen " &
-               "(heartbeat timeout > 30s)!" &
+               "(heartbeat timeout > 3s)!" &
                ASCII.ESC & "[0m");
          end if;
       end loop;

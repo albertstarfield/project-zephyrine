@@ -88,7 +88,7 @@ begin
       --  Avoid Get_Line failure in background
       loop
          Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
-         delay 10.0;
+         delay 1.0;
       end loop;
 
    exception
