@@ -18,54 +18,140 @@ procedure Generate_Speculative
    Level           : ELP_Level := ELP1)
 is
    pragma SPARK_Mode (Off);
-   Success  : Boolean;
-   Vocab    : Llama_Vocab;
-   Tokens   : array (1 .. 32768) of Llama_Token;
-   N_Toks   : int;
-   Sampler  : Llama_Sampler;
-   S_Params : Llama_Sampler_Chain_Params;
-   
+   Success       : Boolean;
+   Vocab         : Llama_Vocab;
+   Draft_Vocab   : Llama_Vocab;
+   Tokens        : array (1 .. 32768) of Llama_Token;
+   N_Toks        : int;
+   Target_Sampler : Llama_Sampler;
+   Draft_Sampler  : Llama_Sampler;
+   S_Params       : Llama_Sampler_Chain_Params;
+
    Clean_P  : constant String := Sanitize_UTF8 (Prompt);
    Prompt_C : chars_ptr := New_String (Clean_P);
    Parser   : Stream_Parser_State;
    T0, T1   : Ada.Calendar.Time;
+
+   --  Speculative decoding parameters
+   Draft_Batch_K : constant Integer := 4;  -- Number of draft tokens to propose per step
+   Max_Tokens    : constant Integer := 2048;
+
+   --  Draft token buffer for speculative verification
+   type Draft_Token_Array is array (1 .. Draft_Batch_K) of Llama_Token;
+   Draft_Tokens  : Draft_Token_Array;
+   N_Draft       : Integer;
+
+   procedure Emit_Token (Tok : Llama_Token; V : Llama_Vocab) is
+      Piece : array (1 .. 256) of aliased Character;
+      Len   : int;
+   begin
+      if Llama_Vocab_Is_Eog (V, Tok) then
+         return;
+      end if;
+      Len := Llama_Token_To_Piece (V, Tok, Piece (1)'Address, 256, 0, True);
+      if Len > 0 then
+         declare
+            Str_Piece : String (1 .. Integer (Len));
+         begin
+            for J in 1 .. Integer (Len) loop
+               Str_Piece (J) := Piece (J);
+               Append (Result, Piece (J));
+            end loop;
+            if Stream /= null then
+               Process_And_Push_Chunk (Stream, Session_ID, Parser, Str_Piece);
+            end if;
+         end;
+      end if;
+   end Emit_Token;
+
+   procedure Decode_Context (Ctx : Llama_Context; Tok : Llama_Token) is
+      B   : constant Llama_Batch := Llama_Batch_Get_One (Tok'Address, 1);
+      Ret : constant int := Llama_Decode (Ctx, B);
+   begin
+      if Ret /= 0 then
+         raise Program_Error with "Decode failed (" & Ret'Img & ")";
+      end if;
+   end Decode_Context;
+
+   procedure Batch_Decode (Ctx : Llama_Context; Tks : Draft_Token_Array;
+                           Count : Integer; Start_Pos : int) is
+      B   : Llama_Batch;
+      Ret : int;
+   begin
+      B := Llama_Batch_Init (int (Count), 0, 1);
+      for I in 1 .. Count loop
+         Llama_Batch_Add_Safe (B'Address, Tks (I), Start_Pos + int (I - 1), 0, I = Count);
+      end loop;
+      Ret := Llama_Decode (Ctx, B);
+      Llama_Batch_Free (B);
+      if Ret /= 0 then
+         raise Program_Error with "Batch decode failed (" & Ret'Img & ")";
+      end if;
+   end Batch_Decode;
+
 begin
    T0 := Ada.Calendar.Clock;
    pragma Unreferenced (Images);
    Result := Null_Unbounded_String;
    Parser.Orch_Think_Open := Orch_Think_Open;
 
-   -- We acquire target only for now as a fallback implementation
-   -- Proper speculative requires dual acquisition
+   --  Acquire both models for speculative decoding
    Priority_Model_Gate.Request_ELP1;
    Priority_Model_Gate.Acquire_ELP1 (Target_Kind);
 
+   --  Try to acquire draft model; fall back to single-model if unavailable
+   Priority_Model_Gate.Request_ELP1;
+   Priority_Model_Gate.Acquire_ELP1 (Draft_Kind);
+
+   --  Load target model
    Load_Model (Target_Kind, Success, Requested_Ctx);
    if not Success then
+      Priority_Model_Gate.Release_ELP1 (Draft_Kind);
       Priority_Model_Gate.Release_ELP1 (Target_Kind);
-      Result := To_Unbounded_String ("ERROR: Load failed"); Ada.Text_IO.Put_Line("ERROR: Load failed");
+      Result := To_Unbounded_String ("ERROR: Target load failed");
+      Ada.Text_IO.Put_Line ("ERROR: Target load failed");
       Free (Prompt_C);
       return;
    end if;
 
+   --  Load draft model (smaller context is fine for draft)
+   Load_Model (Draft_Kind, Success, 4096);
+   if not Success then
+      Ada.Text_IO.Put_Line ("[!] Draft model load failed, falling back to target-only generation");
+      --  Continue without draft model (degraded to standard generation)
+   end if;
+
    Models (Target_Kind).In_Use := True;
    Models (Target_Kind).Last_Used := Clock;
+
    Vocab := Llama_Model_Get_Vocab (Models (Target_Kind).Model);
    N_Toks := Llama_Tokenize
      (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
       32768, True, True);
    Free (Prompt_C);
-   
+
    if N_Toks < 0 then
       Models (Target_Kind).In_Use := False;
+      if Models (Draft_Kind).Loaded then
+         Models (Draft_Kind).In_Use := False;
+         Priority_Model_Gate.Release_ELP1 (Draft_Kind);
+      end if;
       Priority_Model_Gate.Release_ELP1 (Target_Kind);
-      Result := To_Unbounded_String ("ERROR: Tokenization failed"); Ada.Text_IO.Put_Line("ERROR: Tokenization failed");
+      Result := To_Unbounded_String ("ERROR: Tokenization failed");
+      Ada.Text_IO.Put_Line ("ERROR: Tokenization failed");
       return;
    end if;
 
+   --  Clear both model memories
    Llama_Interface.Llama_Memory_Clear
      (Llama_Interface.Llama_Get_Memory (Models (Target_Kind).Context), False);
+   if Models (Draft_Kind).Loaded then
+      Draft_Vocab := Llama_Model_Get_Vocab (Models (Draft_Kind).Model);
+      Llama_Interface.Llama_Memory_Clear
+        (Llama_Interface.Llama_Get_Memory (Models (Draft_Kind).Context), False);
+   end if;
 
+   --  Prefill: feed prompt tokens into both models
    declare
       Batch_Size  : constant int := 512;
       Current_Pos : int := 0;
@@ -77,89 +163,163 @@ begin
               (if Tokens_Left > Batch_Size
                then Batch_Size
                else Tokens_Left);
-            B : constant Llama_Batch :=
-              Llama_Batch_Get_One
-                (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
          begin
+            --  Decode on target
             declare
+               B   : constant Llama_Batch :=
+                 Llama_Batch_Get_One (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
                Ret : constant int := Llama_Decode (Models (Target_Kind).Context, B);
             begin
                if Ret /= 0 then
                   Models (Target_Kind).In_Use := False;
+                  if Models (Draft_Kind).Loaded then
+                     Models (Draft_Kind).In_Use := False;
+                     Priority_Model_Gate.Release_ELP1 (Draft_Kind);
+                  end if;
                   Priority_Model_Gate.Release_ELP1 (Target_Kind);
-                  Ada.Text_IO.Put_Line("ERROR: Decode failed"); Result := To_Unbounded_String ("ERROR: Decode failed (" & Ret'Img & ")");
+                  Ada.Text_IO.Put_Line ("ERROR: Target decode failed");
+                  Result := To_Unbounded_String ("ERROR: Target decode failed (" & Ret'Img & ")");
                   return;
                end if;
             end;
+            --  Decode on draft
+            if Models (Draft_Kind).Loaded then
+               declare
+                  B   : constant Llama_Batch :=
+                    Llama_Batch_Get_One (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
+                  Ret : constant int := Llama_Decode (Models (Draft_Kind).Context, B);
+               begin
+                  if Ret /= 0 then
+                     Ada.Text_IO.Put_Line ("[!] Draft decode error during prefill, continuing target-only");
+                  end if;
+               end;
+            end if;
             Tokens_Left := Tokens_Left - To_Decode;
             Current_Pos := Current_Pos + To_Decode;
          end;
       end loop;
    end;
 
+   --  Create samplers
    S_Params := Llama_Sampler_Chain_Default_Params;
-   Sampler := Llama_Sampler_Chain_Init (S_Params);
-   Llama_Sampler_Chain_Add
-     (Sampler,
-      (if Target_Kind = Qwen_0_8B
-       then Llama_Sampler_Init_Penalties (128, 1.2, 0.5, 0.5)
-       else Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1)));
+   Target_Sampler := Llama_Sampler_Chain_Init (S_Params);
+   Llama_Sampler_Chain_Add (Target_Sampler, Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1));
+   Llama_Sampler_Chain_Add (Target_Sampler, Llama_Sampler_Init_Top_K (40));
+   Llama_Sampler_Chain_Add (Target_Sampler, Llama_Sampler_Init_Top_P (0.9, 1));
+   Llama_Sampler_Chain_Add (Target_Sampler, Llama_Sampler_Init_Temp (0.7));
+   Llama_Sampler_Chain_Add (Target_Sampler, Llama_Sampler_Init_Dist (1234));
 
-   Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_K (40));
-   Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_P (0.9, 1));
-   Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Temp (0.7));
-   Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Dist (1234));
+   if Models (Draft_Kind).Loaded then
+      Draft_Sampler := Llama_Sampler_Chain_Init (S_Params);
+      Llama_Sampler_Chain_Add (Draft_Sampler, Llama_Sampler_Init_Penalties (128, 1.2, 0.5, 0.5));
+      Llama_Sampler_Chain_Add (Draft_Sampler, Llama_Sampler_Init_Top_K (40));
+      Llama_Sampler_Chain_Add (Draft_Sampler, Llama_Sampler_Init_Top_P (0.9, 1));
+      Llama_Sampler_Chain_Add (Draft_Sampler, Llama_Sampler_Init_Temp (0.8));
+      Llama_Sampler_Chain_Add (Draft_Sampler, Llama_Sampler_Init_Dist (5678));
+   end if;
 
    Parser.Orch_Think_Open := Orch_Think_Open;
 
-   for I in 1 .. 2048 loop
+   --  SPECULATIVE DECODING LOOP
+   --  Draft model proposes K tokens, target model verifies and accepts/rejects
+   if Models (Draft_Kind).Loaded then
       declare
-         -- TODO: Insert draft model speculative loop here
-         Token : constant Llama_Token :=
-           Llama_Sampler_Sample (Sampler, Models (Target_Kind).Context, -1);
-         Piece : array (1 .. 256) of aliased Character;
-         Len   : int;
+         Pos_In_Seq : int := N_Toks;  -- Current position in the sequence
       begin
-         if Llama_Vocab_Is_Eog (Vocab, Token) then
-            exit;
-         end if;
-         Len := Llama_Token_To_Piece
-           (Vocab, Token, Piece (1)'Address, 256, 0, True);
-         if Len > 0 then
+         for I in 1 .. Max_Tokens loop
+            --  Step 1: Draft model generates K candidate tokens
+            N_Draft := 0;
+            for D in 1 .. Draft_Batch_K loop
+               declare
+                  Draft_Tok : constant Llama_Token :=
+                    Llama_Sampler_Sample (Draft_Sampler, Models (Draft_Kind).Context, -1);
+               begin
+                  if Llama_Vocab_Is_Eog (Draft_Vocab, Draft_Tok) then
+                     exit;
+                  end if;
+                  N_Draft := N_Draft + 1;
+                  Draft_Tokens (N_Draft) := Draft_Tok;
+                  --  Feed draft token back into draft model for next prediction
+                  Decode_Context (Models (Draft_Kind).Context, Draft_Tok);
+               end;
+            end loop;
+
+            exit when N_Draft = 0;
+
+            --  Step 2 & 3: Verify draft tokens against target model (sequential decode)
+            --  Decode each draft token one at a time on the target to verify
             declare
-               Str_Piece : String (1 .. Integer (Len));
+               Accepted : Integer := 0;
             begin
-               for J in 1 .. Integer (Len) loop
-                  Str_Piece (J) := Piece (J);
-                  Append (Result, Piece (J));
+               for V in 1 .. N_Draft loop
+                  --  Decode draft token into target's KV cache
+                  Decode_Context (Models (Target_Kind).Context, Draft_Tokens (V));
+                  Pos_In_Seq := Pos_In_Seq + 1;
+
+                  --  Sample from target to see what it would have predicted
+                  declare
+                     Target_Tok : constant Llama_Token :=
+                       Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
+                  begin
+                     if Target_Tok = Draft_Tokens (V) then
+                        --  Token accepted
+                        Accepted := Accepted + 1;
+                        Emit_Token (Target_Tok, Vocab);
+                     else
+                        --  Token rejected: emit target's token, discard remaining draft tokens
+                        Emit_Token (Target_Tok, Vocab);
+                        Pos_In_Seq := Pos_In_Seq + 1;
+                        Decode_Context (Models (Target_Kind).Context, Target_Tok);
+                        exit;
+                     end if;
+                  end;
                end loop;
 
-               if Stream /= null then
-                  -- Artificial streaming delays to prevent Javascript client overload
-                  Process_And_Push_Chunk
-                    (Stream, Session_ID, Parser, Str_Piece);
+               --  If all draft tokens were accepted, sample one bonus token from target
+               if Accepted = N_Draft then
+                  declare
+                     Bonus_Tok : constant Llama_Token :=
+                       Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
+                  begin
+                     if not Llama_Vocab_Is_Eog (Vocab, Bonus_Tok) then
+                        Emit_Token (Bonus_Tok, Vocab);
+                        Pos_In_Seq := Pos_In_Seq + 1;
+                        Decode_Context (Models (Target_Kind).Context, Bonus_Tok);
+                     else
+                        exit;
+                     end if;
+                  end;
                end if;
             end;
-         end if;
-
+         end loop;
+      end;
+   else
+      --  FALLBACK: No draft model available, standard autoregressive generation
+      for I in 1 .. Max_Tokens loop
          declare
-            B : constant Llama_Batch :=
-              Llama_Batch_Get_One (Token'Address, 1);
-            Ret : constant int := Llama_Decode (Models (Target_Kind).Context, B);
+            Token : constant Llama_Token :=
+              Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
          begin
-            if Ret /= 0 then
-               Result := To_Unbounded_String (To_String (Result) & " [ABORTED]");
+            if Llama_Vocab_Is_Eog (Vocab, Token) then
                exit;
             end if;
+            Emit_Token (Token, Vocab);
+            Decode_Context (Models (Target_Kind).Context, Token);
          end;
-      end;
-   end loop;
+      end loop;
+   end if;
 
    if Stream /= null then
       Flush_Parser (Stream, Session_ID, Parser);
    end if;
 
-   Llama_Sampler_Free (Sampler);
+   --  Cleanup
+   Llama_Sampler_Free (Target_Sampler);
+   if Models (Draft_Kind).Loaded then
+      Llama_Sampler_Free (Draft_Sampler);
+      Models (Draft_Kind).In_Use := False;
+      Priority_Model_Gate.Release_ELP1 (Draft_Kind);
+   end if;
    Models (Target_Kind).In_Use := False;
    Priority_Model_Gate.Release_ELP1 (Target_Kind);
 
@@ -194,6 +354,10 @@ exception
       Ada.Text_IO.Put_Line ("Generate_Speculative Error: " &
         Ada.Exceptions.Exception_Information (E));
       Models (Target_Kind).In_Use := False;
+      if Models (Draft_Kind).Loaded then
+         Models (Draft_Kind).In_Use := False;
+         Priority_Model_Gate.Release_ELP1 (Draft_Kind);
+      end if;
       Priority_Model_Gate.Release_ELP1 (Target_Kind);
       Result := To_Unbounded_String ("ERROR: Speculative Decode failed");
 end Generate_Speculative;

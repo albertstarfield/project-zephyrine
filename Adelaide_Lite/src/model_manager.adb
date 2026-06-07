@@ -13,6 +13,7 @@ with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Directories;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Unchecked_Conversion;
+with Ada.Exceptions;
 with Watchdog_Manager;
 
 package body Model_Manager is
@@ -505,10 +506,13 @@ package body Model_Manager is
 
       Models (Kind).Last_Used := Clock;
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-      N_Toks := Llama_Tokenize
-        (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
-         32768, True, True);
-      Free (Prompt_C);
+          N_Toks := Llama_Tokenize
+            (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
+             32768, True, True);
+          Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
+                    " Prompt_Len:" & Clean_P'Length'Img &
+                    " N_Toks:" & N_Toks'Img);
+          Free (Prompt_C);
       if N_Toks <= 0 then
          Priority_Model_Gate.Release_ELP1 (Kind);
          Length := 0;
@@ -802,10 +806,13 @@ package body Model_Manager is
          Models (Kind).In_Use := True;
          Models (Kind).Last_Used := Clock;
          Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-         N_Toks := Llama_Tokenize
-           (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
-            32768, True, True);
-         Free (Prompt_C);
+          N_Toks := Llama_Tokenize
+            (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
+             32768, True, True);
+          Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
+                    " Prompt_Len:" & Clean_P'Length'Img &
+                    " N_Toks:" & N_Toks'Img);
+          Free (Prompt_C);
          
          --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
          if N_Toks > int (Models (Kind).Current_Ctx) then
@@ -846,9 +853,14 @@ package body Model_Manager is
             end if;
             Result := To_Unbounded_String ("ERROR: Inference crashed");
             return;
-      end;
+       end;
 
-      if N_Toks < 0 then
+       --  DEBUG: Log tokenization result
+       Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
+                 " Prompt_Len:" & Clean_P'Length'Img &
+                 " N_Toks:" & N_Toks'Img);
+
+       if N_Toks < 0 then
          Models (Kind).In_Use := False;
          if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Kind);
@@ -1100,7 +1112,7 @@ package body Model_Manager is
                  To_String (Raw_Q) & """. NO EXPLANATIONS. NO QUOTES. JUST KEYWORDS.";
             begin
                Model_Manager.Generate
-                 (Kind            => Qwen_0_8B,
+                 (Kind            => Qwen_9B,
                   Prompt          => Actual_Prompt,
                   Result          => Gen_Q,
                   Stream          => null,
@@ -1171,7 +1183,7 @@ package body Model_Manager is
             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
             Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
             Generate
-              (Qwen_0_8B,
+              (Qwen_9B,
                Get_Router_Prompt,
                Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
                null, False, Level);
@@ -1416,6 +1428,20 @@ package body Model_Manager is
                                "Score: " & Score'Img & "/10 | " &
                                "Session: " & Session_ID);
       end;
+   exception
+      when E : others =>
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
+           "[Hybrid]" & AnsiAda.Reset & " Error: " &
+           Ada.Exceptions.Exception_Message (E));
+         if Stream /= null then
+            begin
+               Push_Chunk (Stream, Session_ID,
+                           ASCII.LF & "ERROR: Generate failed" & ASCII.LF);
+            exception
+               when others => null;
+            end;
+         end if;
+         Result := To_Unbounded_String ("ERROR: Generate failed");
    end Hybrid_Generate;
 
 end Model_Manager;
