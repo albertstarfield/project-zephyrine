@@ -640,62 +640,62 @@ package body Model_Manager is
       In_Think_Block  : Boolean := False;
    end record;
 
-   procedure Process_And_Push_Char
-     (Stream     : Streaming_Queue.Queue_Access;
-      Session_ID : String;
-      Parser     : in out Stream_Parser_State;
-      C          : Character)
-   is
-      Think_Tag : constant String := "<think>";
-      Close_Tag : constant String := "</think>";
+   function Is_Prefix (S, Tag : String) return Boolean is
    begin
-      Append (Parser.Sanitize_Buffer, C);
-      declare
-         S_Str : constant String := To_String (Parser.Sanitize_Buffer);
-      begin
-         if S_Str = Think_Tag then
-            Parser.Sanitize_Buffer := Null_Unbounded_String;
-            if not Parser.In_Think_Block and then not Parser.Orch_Think_Open then
-               --  Only push the opening tag if we are NOT already inside a thought block
-               Push_Chunk (Stream, Session_ID, Think_Tag);
-            end if;
-            Parser.In_Think_Block := True;
-            return;
-         elsif S_Str = Close_Tag then
-            Parser.Sanitize_Buffer := Null_Unbounded_String;
-            Parser.In_Think_Block := False;
-            --  ALWAYS strip close tags from the stream.
-            --  The orchestration thinking is verbose status visible to the client;
-            --  the LLM thinking is internal reasoning. Neither tag should be sent raw.
-            if Parser.Orch_Think_Open then
-               Parser.Orch_Think_Open := False;
-            end if;
-            return;
-         end if;
+      return S'Length < Tag'Length
+        and then Tag (Tag'First .. Tag'First + S'Length - 1) = S;
+   end Is_Prefix;
 
-         -- If current buffer is a potential prefix of either tag, wait for more.
-         if (S_Str'Length < Think_Tag'Length and then
-             Think_Tag (Think_Tag'First .. Think_Tag'First + S_Str'Length - 1) = S_Str)
-            or else
-            (S_Str'Length < Close_Tag'Length and then
-             Close_Tag (Close_Tag'First .. Close_Tag'First + S_Str'Length - 1) = S_Str)
-         then
-            return;
-         end if;
+    procedure Process_And_Push_Char
+      (Stream     : Streaming_Queue.Queue_Access;
+       Session_ID : String;
+       Parser     : in out Stream_Parser_State;
+       C          : Character)
+    is
+       Think_Tag    : constant String := "<thinking>";
+       Close_Tag    : constant String := "</thinking>";
+       Response_Tag : constant String := "</response>";
+    begin
+       Append (Parser.Sanitize_Buffer, C);
+       declare
+          S_Str : constant String := To_String (Parser.Sanitize_Buffer);
+       begin
+          if S_Str = Think_Tag then
+             Parser.Sanitize_Buffer := Null_Unbounded_String;
+             Parser.In_Think_Block := True;
+             return;
+          elsif S_Str = Close_Tag then
+             Parser.Sanitize_Buffer := Null_Unbounded_String;
+             Parser.In_Think_Block := False;
+             if Parser.Orch_Think_Open then
+                Parser.Orch_Think_Open := False;
+             end if;
+             return;
+          elsif S_Str = Response_Tag then
+             --  Strip LLM-generated response XML tags
+             Parser.Sanitize_Buffer := Null_Unbounded_String;
+             return;
+          end if;
 
-         -- Stream EVERYTHING out, but strip the raw tags and apply the requested NPU token speeds
-         if not Parser.In_Think_Block then
-            -- Simulate 300-600 tok/s outside think block (approx 0.5ms per char)
-            delay 0.0005;
-            Push_Chunk (Stream, Session_ID, S_Str);
-         else
-            -- Simulate 150 tok/s inside think block (approx 1.6ms per char)
-            delay 0.0016;
-            Push_Chunk (Stream, Session_ID, S_Str);
-         end if;
-         Parser.Sanitize_Buffer := Null_Unbounded_String;
-      end;
-   end Process_And_Push_Char;
+          -- If current buffer is a potential prefix of any tag, wait for more.
+          if Is_Prefix (S_Str, Think_Tag)
+            or else Is_Prefix (S_Str, Close_Tag)
+            or else Is_Prefix (S_Str, Response_Tag)
+          then
+             return;
+          end if;
+
+          -- Stream EVERYTHING out, but strip the raw tags and apply the requested NPU token speeds
+          if not Parser.In_Think_Block then
+             delay 0.0005;
+             Push_Chunk (Stream, Session_ID, S_Str);
+          else
+             delay 0.0016;
+             Push_Chunk (Stream, Session_ID, S_Str);
+          end if;
+          Parser.Sanitize_Buffer := Null_Unbounded_String;
+       end;
+    end Process_And_Push_Char;
 
    procedure Process_And_Push_Chunk
      (Stream     : Streaming_Queue.Queue_Access;
@@ -734,10 +734,12 @@ package body Model_Manager is
       I   : Positive := Text'First;
    begin
       while I <= Text'Last loop
-         if I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
-            I := I + 7;
-         elsif I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
-            I := I + 8;
+         if I + 6 <= Text'Last and then Text (I .. I + 6) = "<thinking>" then
+            I := I + 10;
+         elsif I + 7 <= Text'Last and then Text (I .. I + 7) = "</thinking>" then
+            I := I + 11;
+         elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</response>" then
+            I := I + 11;
          else
             Append (Res, Text (I));
             I := I + 1;
@@ -1285,25 +1287,68 @@ package body Model_Manager is
 
       declare
          function Get_Final_Prompt return String is
+            System_Tag : constant String :=
+              "<|im_start|>system" & ASCII.LF;
+            Asst_Tag   : constant String :=
+              "<|im_start|>assistant" & ASCII.LF;
          begin
             if Raw_Prompt then
                declare
-                  Sub_Str : constant String :=
-                    "<|im_start|>assistant" & ASCII.LF;
-                  Idx     : constant Natural :=
-                    Index (Prompt, Sub_Str, Going => Ada.Strings.Backward);
+                  --  Find where the first user/assistant block begins.
+                  --  Inject our personality into the system block.
+                  Sys_Idx : constant Natural :=
+                    Index (Prompt, System_Tag);
+                  User_Idx : constant Natural :=
+                    Index (Prompt, "<|im_start|>user");
+                  First_Block : constant Natural :=
+                    (if User_Idx > 0 and then
+                        (Sys_Idx = 0 or else User_Idx < Sys_Idx)
+                     then User_Idx
+                     elsif Sys_Idx > 0 then Sys_Idx
+                     else 0);
+                  Asst_Idx : constant Natural :=
+                    Index (Prompt, Asst_Tag,
+                           Going => Ada.Strings.Backward);
                begin
-                  if Length (Internal_State) > 0 then
-                     if Idx > 0 then
-                        return Prompt (Prompt'First .. Idx - 1) &
-                               "Fact-Check: " & To_String (Internal_State) &
-                               ASCII.LF & Sub_Str;
+                  if First_Block > 1 then
+                     --  Prepend personality + fact-check before first block
+                     declare
+                        Prefix : constant String :=
+                          Prompt (Prompt'First .. First_Block - 1);
+                     begin
+                        if Length (Internal_State) > 0 then
+                           return Prefix &
+                             System_Tag & Whimsical_Adelaide & ASCII.LF &
+                             "Fact-Check: " &
+                             To_String (Internal_State) & ASCII.LF &
+                             Prompt (First_Block .. Prompt'Last);
+                        else
+                           return Prefix &
+                             System_Tag & Whimsical_Adelaide & ASCII.LF &
+                             Prompt (First_Block .. Prompt'Last);
+                        end if;
+                     end;
+                  elsif First_Block = 1 then
+                     --  Prompt starts with a tag; prepend system message
+                     if Length (Internal_State) > 0 then
+                        return System_Tag & Whimsical_Adelaide & ASCII.LF &
+                          "Fact-Check: " &
+                          To_String (Internal_State) & ASCII.LF &
+                          Prompt;
                      else
-                        return Prompt & ASCII.LF & "Fact-Check: " &
-                               To_String (Internal_State) & ASCII.LF & Sub_Str;
+                        return System_Tag & Whimsical_Adelaide & ASCII.LF &
+                          Prompt;
                      end if;
                   else
-                     return Prompt;
+                     --  No ChatML tags found; wrap fully
+                     if Length (Internal_State) > 0 then
+                        return Wrap_ChatML
+                          (Whimsical_Adelaide,
+                           Prompt & ASCII.LF & "Fact-Check: " &
+                           To_String (Internal_State));
+                     else
+                        return Wrap_ChatML (Whimsical_Adelaide, Prompt);
+                     end if;
                   end if;
                end;
             else
