@@ -236,9 +236,9 @@ begin
 
    --  Verbose: prefill complete
     if Stream /= null and then not External_Agent then
-       Push_Chunk (Stream, Session_ID,
-        "[Speculative] Prefill complete. Tokens:" & N_Toks'Img &
-        " Draft loaded:" & Boolean'Image (Models (Draft_Kind).Loaded) & ASCII.LF);
+        Push_Chunk (Stream, Session_ID,
+         "[Adelaide Core]: [Thought] Prompt processed (" & N_Toks'Img &
+         " tokens). Draft loaded: " & Boolean'Image (Models (Draft_Kind).Loaded) & ASCII.LF);
    end if;
 
    --  Create samplers
@@ -264,7 +264,7 @@ begin
     --  Verbose: push status into thinking block
     if Stream /= null and then not External_Agent then
       Push_Chunk (Stream, Session_ID,
-        "[Speculative] Models loaded. Target:" & Target_Kind'Img &
+        "[Adelaide Core]: [Thought] Models ready. Target:" & Target_Kind'Img &
         " Draft:" & Draft_Kind'Img &
         " Ctx:" & Models (Target_Kind).Current_Ctx'Img &
         " MaxTok:" & Max_Tokens'Img & ASCII.LF);
@@ -289,8 +289,8 @@ begin
     Ada.Text_IO.Put_Line ("[Speculative] Generation complete. Tokens generated:" & Max_Tokens'Img);
 
     if Stream /= null and then not External_Agent then
-       Push_Chunk (Stream, Session_ID,
-         "[Speculative] Generation complete. Max tokens: " & Max_Tokens'Img & ASCII.LF);
+        Push_Chunk (Stream, Session_ID,
+          "[Adelaide Core]: [Thought] Speculative generation complete. Max tokens: " & Max_Tokens'Img & ASCII.LF);
     end if;
 
     if Stream /= null then
