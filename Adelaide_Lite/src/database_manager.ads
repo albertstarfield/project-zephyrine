@@ -59,7 +59,8 @@ package Database_Manager is
      (Source   : String;
       Relation : String;
       Target   : String;
-      Weight   : Float := 1.0);
+      Weight   : Float := 1.0;
+      Context  : String := "");
 
    procedure Export_GraphML (Filename : String);
 
