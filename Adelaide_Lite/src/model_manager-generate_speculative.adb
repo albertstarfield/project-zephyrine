@@ -34,7 +34,7 @@ is
 
    --  Speculative decoding parameters
    Draft_Batch_K : constant Integer := 4;  -- Number of draft tokens to propose per step
-   Max_Tokens    : constant Integer := 4096;
+   Max_Tokens    : Integer := 2048;  -- Computed as Actual_Ctx / 2 after Load_Model
 
    --  Draft token buffer for speculative verification
    type Draft_Token_Array is array (1 .. Draft_Batch_K) of Llama_Token;
@@ -113,6 +113,11 @@ begin
       Free (Prompt_C);
       return;
    end if;
+
+   --  Max tokens = half the actual context window
+   Max_Tokens := Integer (Models (Target_Kind).Current_Ctx) / 2;
+   Ada.Text_IO.Put_Line ("[Speculative] Max_Tokens:" & Max_Tokens'Img &
+                         " (Ctx:" & Models (Target_Kind).Current_Ctx'Img & ")");
 
    --  Load draft model (smaller context is fine for draft)
    Load_Model (Draft_Kind, Success, 4096);
