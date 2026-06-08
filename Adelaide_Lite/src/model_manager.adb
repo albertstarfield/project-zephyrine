@@ -657,8 +657,8 @@ package body Model_Manager is
        Parser     : in out Stream_Parser_State;
        C          : Character)
     is
-       Think_Tag    : constant String := "<thinking>";
-       Close_Tag    : constant String := "</thinking>";
+       Think_Tag    : constant String := "<think>";
+       Close_Tag    : constant String := "</think>";
        Response_Tag : constant String := "</response>";
     begin
        Append (Parser.Sanitize_Buffer, C);
@@ -739,10 +739,10 @@ package body Model_Manager is
       I   : Positive := Text'First;
    begin
       while I <= Text'Last loop
-         if I + 6 <= Text'Last and then Text (I .. I + 6) = "<thinking>" then
-            I := I + 10;
-         elsif I + 7 <= Text'Last and then Text (I .. I + 7) = "</thinking>" then
-            I := I + 11;
+         if I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
+            I := I + 7;
+         elsif I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
+            I := I + 8;
          elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</response>" then
             I := I + 11;
          else
