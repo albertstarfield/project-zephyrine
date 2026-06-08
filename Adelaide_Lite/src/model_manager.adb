@@ -397,16 +397,6 @@ package body Model_Manager is
    is
       pragma Unreferenced (Session_ID, Level);
    begin
-      --  External agent detection: if the prompt contains ChatML instruction
-      --  markers or system-level framing, it's an external agent app
-      --  (e.g. OpenCode, OpenWebUI, etc.) — bypass personality pipeline.
-      if Index (Msg, "<|im_start|>system") > 0
-        or else Index (Msg, "<|im_start|>user") > 0
-        or else Index (Msg, "<|im_start|>assistant") > 0
-      then
-         return "External_Agent";
-      end if;
-
       if Index (Msg, "code") > 0 or else Index (Msg, "program") > 0 then
          return "Technical";
       else
@@ -1129,15 +1119,15 @@ package body Model_Manager is
       Level           : ELP_Level := ELP1) is separate;
 
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
-   procedure Hybrid_Generate
-     (Prompt     : String;
-      Result     : out Unbounded_String;
-      Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-      Session_ID : String := "";
-      Stream     : Streaming_Queue.Queue_Access := null;
-      Level      : ELP_Level := ELP1;
-      Agentic    : Boolean := False;
-      Raw_Prompt : Boolean := False)
+    procedure Hybrid_Generate
+      (Prompt     : String;
+       Result     : out Unbounded_String;
+       Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+       Session_ID : String := "";
+       Stream     : Streaming_Queue.Queue_Access := null;
+       Level      : ELP_Level := ELP1;
+       Agentic    : Boolean := False;
+       Raw_Prompt : Boolean := False)
    is
       Whimsical_Adelaide : constant String :=
         "You are Adelaide Zephyrine Charlotte, model name Snowball-Enaga, " &
@@ -1164,17 +1154,48 @@ package body Model_Manager is
 
       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
 
-      --  EXTERNAL AGENT PASSTHROUGH: If the prompt is already formatted
-      --  by an external agent app (ChatML tags detected), bypass the
-      --  entire personality pipeline. Raw LLM output only — GPU passthrough.
+      --  EXTERNAL AGENT PASSTHROUGH: Detect agentic prompts by content.
+      --  If the prompt contains tool-call syntax or system framing from
+      --  an external agent app, bypass personality pipeline.
+      --  Raw LLM output only.
       declare
-         Category : constant String :=
-           Get_Request_Category (Prompt, Session_ID, Level);
+         Is_Agentic_Prompt : Boolean := False;
       begin
-         if Category = "External_Agent" then
+         --  Tool call syntax: Bash(...), Read(...), Write(...), Edit(...)
+         if Index (Prompt, "Bash(") > 0
+           or else Index (Prompt, "Read(") > 0
+           or else Index (Prompt, "Write(") > 0
+           or else Index (Prompt, "Edit(") > 0
+           or else Index (Prompt, "bash(") > 0
+           or else Index (Prompt, "read(") > 0
+           or else Index (Prompt, "write(") > 0
+           or else Index (Prompt, "edit(") > 0
+         then
+            Is_Agentic_Prompt := True;
+         end if;
+         --  YAML frontmatter (agent task descriptions)
+         if Prompt'Length >= 4
+           and then Prompt (Prompt'First .. Prompt'First + 3) = "---" & ASCII.LF
+         then
+            Is_Agentic_Prompt := True;
+         end if;
+         --  Step-by-step tool instructions
+         if Index (Prompt, "Step 1") > 0
+           or else Index (Prompt, "step 1") > 0
+           or else Index (Prompt, "1.") > 0
+         then
+            if Index (Prompt, "Bash") > 0
+              or else Index (Prompt, "bash") > 0
+              or else Index (Prompt, "Use ") > 0
+            then
+               Is_Agentic_Prompt := True;
+            end if;
+         end if;
+
+         if Is_Agentic_Prompt then
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[Hybrid]" & AnsiAda.Reset &
-                      " External_Agent detected - passthrough mode.");
+                      " Agentic prompt detected - passthrough mode.");
             Generate
               (Qwen_9B,
                Prompt,
@@ -1183,7 +1204,7 @@ package body Model_Manager is
                Session_ID,
                8192,
                Stream,
-               False,  --  Orch_Think_Open: no orchestration thinking
+               False,
                Level);
             return;
          end if;
