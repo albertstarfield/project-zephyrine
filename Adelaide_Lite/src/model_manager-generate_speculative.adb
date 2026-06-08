@@ -284,11 +284,8 @@ begin
        end;
     end loop;
 
-   --  Verbose: generation complete
-   if Stream /= null then
-      Push_Chunk (Stream, Session_ID,
-        "[Speculative] Generation complete. Tokens generated:" & Max_Tokens'Img & ASCII.LF);
-   end if;
+   --  Generation complete (server-side only)
+   Ada.Text_IO.Put_Line ("[Speculative] Generation complete. Tokens generated:" & Max_Tokens'Img);
 
     if Stream /= null then
       Flush_Parser (Stream, Session_ID, Parser);
