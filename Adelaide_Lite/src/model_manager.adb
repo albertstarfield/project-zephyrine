@@ -16,6 +16,8 @@ with Ada.Unchecked_Conversion;
 with Ada.Exceptions;
 with Watchdog_Manager;
 with Kratos;
+with ELP_Queue;
+with System;
 
 package body Model_Manager is
    use Streaming_Queue;
@@ -199,6 +201,7 @@ package body Model_Manager is
    begin
       Llama_Backend_Init;
       Database_Manager.Initialize;
+      ELP_Queue.Initialize;
       Models (Qwen_0_8B).Path  := To_Unbounded_String
         ("llama.cpp/models/qwen3.5/Qwen3.5-0.8B-Q4_K_S.gguf");
       Models (Qwen_9B).Path   := To_Unbounded_String
@@ -501,9 +504,12 @@ package body Model_Manager is
       Clean_P  : constant String := Sanitize_UTF8 (Prompt);
       Prompt_C : chars_ptr := New_String (Clean_P);
    begin
+      ELP_Queue.Enqueue (Level, Kind);
       if Level = ELP0 then
           Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
-         if not Success then
+          if not Success then
+            declare D : ELP_Level; K : Model_Type;
+            begin ELP_Queue.Dequeue (D, K); end;
             Length := 0;
             Free (Prompt_C);
             return;
@@ -519,6 +525,8 @@ package body Model_Manager is
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
          end if;
+         declare D : ELP_Level; K : Model_Type;
+         begin ELP_Queue.Dequeue (D, K); end;
          Length := 0;
          Free (Prompt_C);
          return;
@@ -541,6 +549,8 @@ package body Model_Manager is
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
          end if;
+         declare D : ELP_Level; K : Model_Type;
+         begin ELP_Queue.Dequeue (D, K); end;
          Length := 0;
          return;
       end if;
@@ -578,6 +588,8 @@ package body Model_Manager is
                   else
                      Priority_Model_Gate.Release_ELP1 (Kind);
                   end if;
+                  declare D : ELP_Level; K : Model_Type;
+                  begin ELP_Queue.Dequeue (D, K); end;
                   Length := 0;
                   return;
                end if;
@@ -588,21 +600,32 @@ package body Model_Manager is
       end;
 
       declare
+         use System;
          function Llama_Model_N_Embd (M : Llama_Model) return int;
          pragma Import (C, Llama_Model_N_Embd, "llama_model_n_embd");
          Dim : constant int := Llama_Model_N_Embd (Models (Kind).Model);
-         Ptr : constant System.Address :=
+         Ptr : constant Address :=
            Llama_Get_Embeddings (Models (Kind).Context);
-         type Float_Array is array (1 .. Integer (Dim)) of Float;
-         pragma Convention (C, Float_Array);
-         Embed : Float_Array;
-         for Embed'Address use Ptr;
+         --  SAFE: copy via C memcpy instead of Ada address overlay
+         --  which could corrupt heap if Dim is wrong
+         function Memcpy
+           (Dst, Src : Address; N : Interfaces.C.size_t)
+            return Address;
+         pragma Import (C, Memcpy, "memcpy");
+         Copy_Count : constant Integer :=
+           Integer (Interfaces.C.size_t'Min
+             (Interfaces.C.size_t (Dim),
+              Interfaces.C.size_t (Result'Length)));
       begin
-         if Integer (Dim) <= Result'Length then
-            for I in 1 .. Integer (Dim) loop
-               Result (Result'First + I - 1) := Embed (I);
-            end loop;
-            Length := Integer (Dim);
+         if Copy_Count > 0 and then Ptr /= Null_Address then
+            declare
+               Dummy : Address;
+            begin
+               Dummy := Memcpy (Result (Result'First)'Address, Ptr,
+                         Interfaces.C.size_t (Copy_Count) *
+                           Interfaces.C.size_t (Float'Size / 8));
+            end;
+            Length := Copy_Count;
          else
             Length := 0;
          end if;
@@ -612,6 +635,8 @@ package body Model_Manager is
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
          end if;
+         declare D : ELP_Level; K : Model_Type;
+         begin ELP_Queue.Dequeue (D, K); end;
       end;
    exception
       when others =>
@@ -621,6 +646,8 @@ package body Model_Manager is
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
          end if;
+         declare D : ELP_Level; K : Model_Type;
+         begin ELP_Queue.Dequeue (D, K); end;
          Length := 0;
    end Get_Single_Embedding;
 
