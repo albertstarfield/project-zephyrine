@@ -651,7 +651,6 @@ package body Model_Manager is
          Length := 0;
    end Get_Single_Embedding;
     --  GET EMBEDDING (WITH CHUNKING > 800 CHARS)
-    function Sanitize_Think_Tags (Text : String) return String;
 
     procedure Get_Embedding
       (Prompt : String;
@@ -659,26 +658,25 @@ package body Model_Manager is
        Length : out Natural;
        Level  : ELP_Level := ELP1)
     is
-       Clean_P : constant String := Sanitize_Think_Tags (Prompt);
     begin
-       if Clean_P'Length <= 800 then
-          Get_Single_Embedding (Clean_P, Result, Length, Level);
+       if Prompt'Length <= 800 then
+          Get_Single_Embedding (Prompt, Result, Length, Level);
        else
          declare
             Num_Chunks : Natural := 0;
             Sum_Vec    : Math_Utils.Vector (Result'Range) := [others => 0.0];
             Dim        : Natural := 0;
-            Start_Idx  : Positive := Clean_P'First;
+            Start_Idx  : Positive := Prompt'First;
             End_Idx    : Positive;
          begin
-            while Start_Idx <= Clean_P'Last loop
+            while Start_Idx <= Prompt'Last loop
                End_Idx := Start_Idx + 800 - 1;
-               if End_Idx > Clean_P'Last then
-                  End_Idx := Clean_P'Last;
+               if End_Idx > Prompt'Last then
+                  End_Idx := Prompt'Last;
                end if;
                declare
                   Sub_Prompt : constant String :=
-                    Clean_P (Start_Idx .. End_Idx);
+                    Prompt (Start_Idx .. End_Idx);
                   Sub_Vec    : Math_Utils.Vector (Result'Range) :=
                     [others => 0.0];
                   Sub_Len    : Natural := 0;
@@ -1170,22 +1168,6 @@ package body Model_Manager is
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                    "[Hybrid]" & AnsiAda.Reset &
                    " External agent detected - passthrough mode.");
-         ELP_Queue.Enqueue (Level, Qwen_9B);
-         Generate_Speculative
-           (Target_Kind     => Qwen_9B,
-            Draft_Kind      => Qwen_0_8B,
-            Prompt          => Prompt,
-            Result          => Current_Response,
-            Images          => Images,
-            Session_ID      => Session_ID,
-            Requested_Ctx   => 8192,
-            Stream          => Stream,
-            Orch_Think_Open => False,
-            Level           => Level);
-         Result := Current_Response;
-         declare D : ELP_Level; K : Model_Type;
-         begin ELP_Queue.Dequeue (D, K); end;
-         return;
       end if;
 
       declare
@@ -1279,6 +1261,7 @@ package body Model_Manager is
 
             declare
                Final_Q : constant String :=
+                 Sanitize_Think_Tags
                  (if Length (Gen_Q) > 0 and then To_String (Gen_Q) /= "ERROR: Preempted"
                   then To_String (Gen_Q) else To_String (Raw_Q));
                R : constant Tool_Manager.Tool_Result :=
@@ -1409,7 +1392,7 @@ package body Model_Manager is
                                     declare
                                        R : constant Tool_Manager.Tool_Result :=
                                          Tool_Manager.Execute_Tool
-                                           (T_Name, T_Pars);
+                                           (T_Name, Sanitize_Think_Tags (T_Pars));
                                     begin
                                        Push_Chunk (Stream, Session_ID, "[Adelaide Core] Executing tool: " & T_Name & ASCII.LF);
                                        Append
@@ -1446,7 +1429,15 @@ package body Model_Manager is
             Asst_Tag   : constant String :=
               "<|im_start|>assistant" & ASCII.LF;
          begin
-            if Raw_Prompt then
+            if External_Agent then
+               --  Passthrough: skip personality, keep multi-hop/tools result
+               if Length (Internal_State) > 0 then
+                  return Prompt & ASCII.LF &
+                    "Fact-Check: " & To_String (Internal_State);
+               else
+                  return Prompt;
+               end if;
+            elsif Raw_Prompt then
                declare
                   --  Find where the first user/assistant block begins.
                   --  Inject our personality into the system block.
