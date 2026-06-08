@@ -1211,6 +1211,12 @@ package body Model_Manager is
 
       end;
 
+      if not External_Agent then
+         Push_Chunk (Stream, Session_ID, "[Adelaide Core] Cache miss - starting fresh reasoning chain." & ASCII.LF);
+         Push_Chunk (Stream, Session_ID, "[Adelaide Core] Priority: " & ELP_Level'Image (Level) &
+                     " | Session: " & Session_ID & ASCII.LF);
+      end if;
+
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
                 "[Hybrid]" & AnsiAda.Reset &
                 " Starting reasoning chain...");
@@ -1262,16 +1268,17 @@ package body Model_Manager is
                   Level           => Level);
             end;
 
-            declare
-               Final_Q : constant String :=
-                 Sanitize_Think_Tags
-                 (if Length (Gen_Q) > 0 and then To_String (Gen_Q) /= "ERROR: Preempted"
-                  then To_String (Gen_Q) else To_String (Raw_Q));
-               R : constant Tool_Manager.Tool_Result :=
-                 Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
-            begin
-                if not External_Agent then
-                   Push_Chunk (Stream, Session_ID, "[Adelaide Core] Factual context retrieved." & ASCII.LF);
+             declare
+                Final_Q : constant String :=
+                  Sanitize_Think_Tags
+                  (if Length (Gen_Q) > 0 and then To_String (Gen_Q) /= "ERROR: Preempted"
+                   then To_String (Gen_Q) else To_String (Raw_Q));
+                R : constant Tool_Manager.Tool_Result :=
+                  Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
+             begin
+                 if not External_Agent then
+                    Push_Chunk (Stream, Session_ID, "[Adelaide Core] Search query: """ & Trim (Final_Q, Ada.Strings.Both) & """" & ASCII.LF);
+                    Push_Chunk (Stream, Session_ID, "[Adelaide Core] Factual context retrieved." & ASCII.LF);
                 end if;
                 Append
                   (Internal_State,
@@ -1327,22 +1334,25 @@ package body Model_Manager is
                   return Wrap_ChatML (Router_Sys, Paging_Instr & ASCII.LF & Prompt);
                end if;
             end Get_Router_Prompt;
-         begin
-          if not External_Agent then
-             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
-          end if;
-          Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
-            Generate
-              (Qwen_9B,
-               Get_Router_Prompt,
-               Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
-               null, False, Level);
+          begin
+           if not External_Agent then
+              Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
+           end if;
+           Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
+             Generate
+               (Qwen_9B,
+                Get_Router_Prompt,
+                Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
+                null, False, Level);
 
-            declare
-               Step : constant String :=
-                 Trim (To_String (Step_Raw), Ada.Strings.Both);
-            begin
-               Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": " & Step);
+             declare
+                Step : constant String :=
+                  Trim (To_String (Step_Raw), Ada.Strings.Both);
+             begin
+                Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": " & Step);
+                if not External_Agent then
+                   Push_Chunk (Stream, Session_ID, "[Adelaide Core] Router decision: " & Step & ASCII.LF);
+                end if;
 
                if Index (Step, "[ACTION:") > 0 then
                   declare
@@ -1432,10 +1442,14 @@ package body Model_Manager is
             end;
          end;
          Current_Hop := Current_Hop + 1;
-         exit when Current_Hop > 5;
-      end loop;
+          exit when Current_Hop > 5;
+       end loop;
 
-      declare
+       if not External_Agent then
+          Push_Chunk (Stream, Session_ID, "[Adelaide Core] Reasoning chain complete (" & Current_Hop'Img & " hops)." & ASCII.LF);
+       end if;
+
+       declare
          function Get_Final_Prompt return String is
             System_Tag : constant String :=
               "<|im_start|>system" & ASCII.LF;
@@ -1586,10 +1600,18 @@ package body Model_Manager is
                if Dur > Current_WCET_ELP3 then
                   Current_WCET_ELP3 := Dur;
                end if;
-         end case;
-      end;
+          end case;
+       end;
 
-      if Stream = null then
+       if not External_Agent then
+          declare
+             Dur_Str : constant String := Duration'Image (T1 - T0);
+          begin
+             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Generation complete in " & Dur_Str & "s." & ASCII.LF);
+          end;
+       end if;
+
+       if Stream = null then
          --  Strip orchestration thinking from non-streaming response.
          --  Client already saw verbose status via real-time streaming;
          --  the stored result is clean.
@@ -1609,11 +1631,14 @@ package body Model_Manager is
             Has_Citations => Index (To_String (Result), "[") > 0 and then Index (To_String (Result), "]") > 0,
             Session_ID    => Session_ID,
             Level         => Level);
-      begin
-         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
-                               "[Quality Score] " & AnsiAda.Reset &
-                               "Score: " & Score'Img & "/10 | " &
-                               "Session: " & Session_ID);
+       begin
+          if not External_Agent then
+             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Quality score: " & Score'Img & "/10" & ASCII.LF);
+          end if;
+          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                                "[Quality Score] " & AnsiAda.Reset &
+                                "Score: " & Score'Img & "/10 | " &
+                                "Session: " & Session_ID);
       end;
    exception
       when E : others =>

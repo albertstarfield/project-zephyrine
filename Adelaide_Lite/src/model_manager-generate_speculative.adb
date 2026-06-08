@@ -285,8 +285,13 @@ begin
        end;
     end loop;
 
-   --  Generation complete (server-side only)
-   Ada.Text_IO.Put_Line ("[Speculative] Generation complete. Tokens generated:" & Max_Tokens'Img);
+    --  Generation complete (server-side only)
+    Ada.Text_IO.Put_Line ("[Speculative] Generation complete. Tokens generated:" & Max_Tokens'Img);
+
+    if Stream /= null and then not External_Agent then
+       Push_Chunk (Stream, Session_ID,
+         "[Speculative] Generation complete. Max tokens: " & Max_Tokens'Img & ASCII.LF);
+    end if;
 
     if Stream /= null then
       Flush_Parser (Stream, Session_ID, Parser);
