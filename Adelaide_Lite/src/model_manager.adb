@@ -1106,17 +1106,18 @@ package body Model_Manager is
          Result := To_Unbounded_String ("ERROR: Decode failed");
    end Generate;
 
-   procedure Generate_Speculative
-     (Target_Kind     : Model_Type;
-      Draft_Kind      : Model_Type;
-      Prompt          : String;
-      Result          : out Unbounded_String;
-      Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-      Session_ID      : String := "";
-      Requested_Ctx   : Positive := 4096;
-      Stream          : Streaming_Queue.Queue_Access := null;
-      Orch_Think_Open : Boolean := False;
-      Level           : ELP_Level := ELP1) is separate;
+    procedure Generate_Speculative
+      (Target_Kind     : Model_Type;
+       Draft_Kind      : Model_Type;
+       Prompt          : String;
+       Result          : out Unbounded_String;
+       Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+       Session_ID      : String := "";
+       Requested_Ctx   : Positive := 4096;
+       Stream          : Streaming_Queue.Queue_Access := null;
+       Orch_Think_Open : Boolean := False;
+       Level           : ELP_Level := ELP1;
+       External_Agent  : Boolean := False) is separate;
 
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
     procedure Hybrid_Generate
@@ -1175,7 +1176,7 @@ package body Model_Manager is
            Database_Manager.Get_Cached_Response
              (Emb_Vec (1 .. Emb_Len), Current_WCET);
       begin
-         if Cached_Res /= "" then
+          if not External_Agent and then Cached_Res /= "" then
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
                       "[Hybrid]" & AnsiAda.Reset &
                       " Cache HIT. Returning cached response.");
@@ -1223,7 +1224,9 @@ package body Model_Manager is
          or else Index (Prompt, "tell me about") > 0)
       then
          Put_Line (" [Hybrid] Factual context trigger matched.");
-         Push_Chunk (Stream, Session_ID, "[Adelaide Core] Analyzing query for factual context..." & ASCII.LF);
+          if not External_Agent then
+             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Analyzing query for factual context..." & ASCII.LF);
+          end if;
          declare
             Start_Tag : constant String := "<|im_start|>user";
             End_Tag   : constant String := "<|im_end|>";
@@ -1267,11 +1270,15 @@ package body Model_Manager is
                R : constant Tool_Manager.Tool_Result :=
                  Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
             begin
-               Push_Chunk (Stream, Session_ID, "[Adelaide Core] Factual context retrieved." & ASCII.LF);
-               Append
-                 (Internal_State,
-                  "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
-               Push_Chunk (Stream, Session_ID, "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+                if not External_Agent then
+                   Push_Chunk (Stream, Session_ID, "[Adelaide Core] Factual context retrieved." & ASCII.LF);
+                end if;
+                Append
+                  (Internal_State,
+                   "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+                if not External_Agent then
+                   Push_Chunk (Stream, Session_ID, "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+                end if;
             end;
          end;
       end if;
@@ -1321,8 +1328,10 @@ package body Model_Manager is
                end if;
             end Get_Router_Prompt;
          begin
-            Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
-            Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
+          if not External_Agent then
+             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
+          end if;
+          Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
             Generate
               (Qwen_9B,
                Get_Router_Prompt,
@@ -1394,14 +1403,18 @@ package body Model_Manager is
                                          Tool_Manager.Execute_Tool
                                            (T_Name, Sanitize_Think_Tags (T_Pars));
                                     begin
-                                       Push_Chunk (Stream, Session_ID, "[Adelaide Core] Executing tool: " & T_Name & ASCII.LF);
-                                       Append
-                                         (Internal_State,
-                                          "[TOOL (" & T_Name & ")]: " &
-                                          To_String (R.Output) & ASCII.LF);
-                                       Push_Chunk (Stream, Session_ID,
-                                                   ASCII.LF & "[TOOL (" & T_Name & ")]: " &
-                                                   To_String (R.Output) & ASCII.LF);
+                                        if not External_Agent then
+                                           Push_Chunk (Stream, Session_ID, "[Adelaide Core] Executing tool: " & T_Name & ASCII.LF);
+                                        end if;
+                                        Append
+                                          (Internal_State,
+                                           "[TOOL (" & T_Name & ")]: " &
+                                           To_String (R.Output) & ASCII.LF);
+                                        if not External_Agent then
+                                           Push_Chunk (Stream, Session_ID,
+                                                       ASCII.LF & "[TOOL (" & T_Name & ")]: " &
+                                                       To_String (R.Output) & ASCII.LF);
+                                        end if;
                                     end;
                                  else
                                     exit;
@@ -1430,8 +1443,6 @@ package body Model_Manager is
               "<|im_start|>assistant" & ASCII.LF;
          begin
             if External_Agent then
-               --  Passthrough: skip personality, skip fact-check in output.
-               --  LLM already has enriched context from multi-hop/tools.
                return Prompt;
             elsif Raw_Prompt then
                declare
@@ -1506,18 +1517,21 @@ package body Model_Manager is
 
          Synth_Prompt : constant String := Get_Final_Prompt;
       begin
-         Push_Chunk (Stream, Session_ID, "[Adelaide Core] Generating brilliant response..." & ASCII.LF);
-         Generate_Speculative
-           (Target_Kind     => Qwen_9B,
-            Draft_Kind      => Qwen_0_8B,
-            Prompt          => Synth_Prompt,
-            Result          => Current_Response,
-            Images          => Images,
-            Session_ID      => Session_ID,
-            Requested_Ctx   => 8192,
-            Stream          => Stream,
-             Orch_Think_Open => True,
-             Level           => Level);
+          if not External_Agent then
+             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Generating brilliant response..." & ASCII.LF);
+          end if;
+           Generate_Speculative
+            (Target_Kind     => Qwen_9B,
+             Draft_Kind      => Qwen_0_8B,
+             Prompt          => Synth_Prompt,
+             Result          => Current_Response,
+             Images          => Images,
+             Session_ID      => Session_ID,
+             Requested_Ctx   => 8192,
+             Stream          => Stream,
+              Orch_Think_Open => True,
+              Level           => Level,
+              External_Agent  => External_Agent);
 
          Result := To_Unbounded_String (Sanitize_Think_Tags (To_String (Current_Response)));
          declare
@@ -1542,7 +1556,7 @@ package body Model_Manager is
            Index (Resp_Str, "<thinking>") > 0 or else
            Index (Resp_Str, "<think>") > 0;
       begin
-         if not Is_Error and then not Has_Think then
+          if not External_Agent and then not Is_Error and then not Has_Think then
             Database_Manager.Add_To_Cache
               (Prompt, Emb_Vec (1 .. Emb_Len), Resp_Str);
          end if;

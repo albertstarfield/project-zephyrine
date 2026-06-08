@@ -16,7 +16,8 @@ procedure Generate_Speculative
    Requested_Ctx   : Positive := 4096;
    Stream          : Streaming_Queue.Queue_Access := null;
    Orch_Think_Open : Boolean := False;
-   Level           : ELP_Level := ELP1)
+   Level           : ELP_Level := ELP1;
+   External_Agent  : Boolean := False)
 is
    pragma SPARK_Mode (Off);
    Success       : Boolean;
@@ -234,8 +235,8 @@ begin
    end;
 
    --  Verbose: prefill complete
-   if Stream /= null then
-      Push_Chunk (Stream, Session_ID,
+    if Stream /= null and then not External_Agent then
+       Push_Chunk (Stream, Session_ID,
         "[Speculative] Prefill complete. Tokens:" & N_Toks'Img &
         " Draft loaded:" & Boolean'Image (Models (Draft_Kind).Loaded) & ASCII.LF);
    end if;
@@ -260,8 +261,8 @@ begin
 
    Parser.Orch_Think_Open := Orch_Think_Open;
 
-   --  Verbose: push status into thinking block
-   if Stream /= null then
+    --  Verbose: push status into thinking block
+    if Stream /= null and then not External_Agent then
       Push_Chunk (Stream, Session_ID,
         "[Speculative] Models loaded. Target:" & Target_Kind'Img &
         " Draft:" & Draft_Kind'Img &
