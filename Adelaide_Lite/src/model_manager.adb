@@ -490,7 +490,8 @@ package body Model_Manager is
    procedure Get_Single_Embedding
      (Prompt : String;
       Result : out Math_Utils.Vector;
-      Length : out Natural)
+      Length : out Natural;
+      Level  : ELP_Level := ELP1)
    is
       Success  : Boolean;
       Kind     : constant Model_Type := Qwen_Embedding;
@@ -500,11 +501,24 @@ package body Model_Manager is
       Clean_P  : constant String := Sanitize_UTF8 (Prompt);
       Prompt_C : chars_ptr := New_String (Clean_P);
    begin
-      Priority_Model_Gate.Request_ELP1;
-      Priority_Model_Gate.Acquire_ELP1 (Kind);
+      if Level = ELP0 then
+          Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
+         if not Success then
+            Length := 0;
+            Free (Prompt_C);
+            return;
+         end if;
+      else
+         Priority_Model_Gate.Request_ELP1;
+         Priority_Model_Gate.Acquire_ELP1 (Kind);
+      end if;
       Load_Model (Kind, Success);
       if not Success then
-         Priority_Model_Gate.Release_ELP1 (Kind);
+         if Level = ELP0 then
+            Priority_Model_Gate.Release_ELP0 (Kind);
+         else
+            Priority_Model_Gate.Release_ELP1 (Kind);
+         end if;
          Length := 0;
          Free (Prompt_C);
          return;
@@ -522,7 +536,11 @@ package body Model_Manager is
           Free (Prompt_C);
       if N_Toks <= 0 then
          Models (Kind).In_Use := False;
-         Priority_Model_Gate.Release_ELP1 (Kind);
+         if Level = ELP0 then
+            Priority_Model_Gate.Release_ELP0 (Kind);
+         else
+            Priority_Model_Gate.Release_ELP1 (Kind);
+         end if;
          Length := 0;
          return;
       end if;
@@ -555,7 +573,11 @@ package body Model_Manager is
                end if;
                if Dec_Result /= 0 then
                   Models (Kind).In_Use := False;
-                  Priority_Model_Gate.Release_ELP1 (Kind);
+                  if Level = ELP0 then
+                     Priority_Model_Gate.Release_ELP0 (Kind);
+                  else
+                     Priority_Model_Gate.Release_ELP1 (Kind);
+                  end if;
                   Length := 0;
                   return;
                end if;
@@ -585,12 +607,20 @@ package body Model_Manager is
             Length := 0;
          end if;
          Models (Kind).In_Use := False;
-         Priority_Model_Gate.Release_ELP1 (Kind);
+         if Level = ELP0 then
+            Priority_Model_Gate.Release_ELP0 (Kind);
+         else
+            Priority_Model_Gate.Release_ELP1 (Kind);
+         end if;
       end;
    exception
       when others =>
          Models (Kind).In_Use := False;
-         Priority_Model_Gate.Release_ELP1 (Kind);
+         if Level = ELP0 then
+            Priority_Model_Gate.Release_ELP0 (Kind);
+         else
+            Priority_Model_Gate.Release_ELP1 (Kind);
+         end if;
          Length := 0;
    end Get_Single_Embedding;
 
@@ -598,11 +628,12 @@ package body Model_Manager is
    procedure Get_Embedding
      (Prompt : String;
       Result : out Math_Utils.Vector;
-      Length : out Natural)
+      Length : out Natural;
+      Level  : ELP_Level := ELP1)
    is
    begin
       if Prompt'Length <= 800 then
-         Get_Single_Embedding (Prompt, Result, Length);
+         Get_Single_Embedding (Prompt, Result, Length, Level);
       else
          declare
             Num_Chunks : Natural := 0;
@@ -623,7 +654,7 @@ package body Model_Manager is
                     [others => 0.0];
                   Sub_Len    : Natural := 0;
                begin
-                  Get_Single_Embedding (Sub_Prompt, Sub_Vec, Sub_Len);
+                   Get_Single_Embedding (Sub_Prompt, Sub_Vec, Sub_Len, Level);
                   if Sub_Len > 0 then
                      if Num_Chunks = 0 then
                         Dim := Sub_Len;

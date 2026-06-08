@@ -113,7 +113,7 @@ package body Knowledge_Manager is
                   Vec     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
                   Len     : Natural := 0;
                begin
-                  Model_Manager.Get_Embedding (Content, Vec, Len);
+                  Model_Manager.Get_Embedding (Content, Vec, Len, ELP0);
                   if Len > 0 then
                      Database_Manager.Add_Literature_Chunk
                        ("references.bib", Content, Vec (1 .. Len), "hash");
@@ -131,7 +131,7 @@ package body Knowledge_Manager is
             Vec     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
             Len     : Natural := 0;
          begin
-            Model_Manager.Get_Embedding (Content, Vec, Len);
+            Model_Manager.Get_Embedding (Content, Vec, Len, ELP0);
             if Len > 0 then
                Database_Manager.Add_Literature_Chunk
                  ("references.bib", Content, Vec (1 .. Len), "hash");
@@ -185,7 +185,7 @@ package body Knowledge_Manager is
                end if;
                Append (Local_Content, Text (Start_Idx .. End_Idx - 1) & ASCII.LF);
                if Length (Local_Content) > 1000 then
-                  Model_Manager.Get_Embedding (To_String (Local_Content), Vec, Len);
+                  Model_Manager.Get_Embedding (To_String (Local_Content), Vec, Len, ELP0);
                   if Len > 0 then
                      Database_Manager.Add_Literature_Chunk
                        (Path, To_String (Local_Content), Vec (1 .. Len), "hash");
@@ -252,7 +252,7 @@ package body Knowledge_Manager is
             Line := To_Unbounded_String (Get_Line (File));
             Append (Content, To_String (Line) & ASCII.LF);
             if Length (Content) > 1000 then
-               Model_Manager.Get_Embedding (To_String (Content), Vec, Len);
+               Model_Manager.Get_Embedding (To_String (Content), Vec, Len, ELP0);
                if Len > 0 then
                   Database_Manager.Add_Literature_Chunk
                     (Path, To_String (Content), Vec (1 .. Len), "hash");
