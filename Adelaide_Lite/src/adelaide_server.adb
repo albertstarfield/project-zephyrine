@@ -13,6 +13,7 @@ with Watchdog_Manager;
 with AWS.Config.Set;
 with AWS.Server;
 with Moonshine_Interface;
+with ELP_Queue;
 
 procedure Adelaide_Server is
    WS   : AWS.Server.HTTP;
@@ -87,9 +88,21 @@ begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Server is UP. Press Q to shutdown (or kill if background).");
 
+      --  Queue heartbeat counter
+      Heartbeat_Count : Natural := 0;
+
       --  Avoid Get_Line failure in background
       loop
          Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
+         Heartbeat_Count := Heartbeat_Count + 1;
+         if Heartbeat_Count >= 5 then
+            Heartbeat_Count := 0;
+            Ada.Text_IO.Put_Line
+              (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+               AnsiAda.Reset & " ELP Queue: " &
+               ELP_Queue.Utilization'Img & "% full (" &
+               ELP_Queue.Depth'Img & " pending)");
+         end if;
          delay 1.0;
       end loop;
 
