@@ -650,33 +650,35 @@ package body Model_Manager is
          begin ELP_Queue.Dequeue (D, K); end;
          Length := 0;
    end Get_Single_Embedding;
+    --  GET EMBEDDING (WITH CHUNKING > 800 CHARS)
+    function Sanitize_Think_Tags (Text : String) return String;
 
-   --  GET EMBEDDING (WITH CHUNKING > 800 CHARS)
-   procedure Get_Embedding
-     (Prompt : String;
-      Result : out Math_Utils.Vector;
-      Length : out Natural;
-      Level  : ELP_Level := ELP1)
-   is
-   begin
-      if Prompt'Length <= 800 then
-         Get_Single_Embedding (Prompt, Result, Length, Level);
-      else
+    procedure Get_Embedding
+      (Prompt : String;
+       Result : out Math_Utils.Vector;
+       Length : out Natural;
+       Level  : ELP_Level := ELP1)
+    is
+       Clean_P : constant String := Sanitize_Think_Tags (Prompt);
+    begin
+       if Clean_P'Length <= 800 then
+          Get_Single_Embedding (Clean_P, Result, Length, Level);
+       else
          declare
             Num_Chunks : Natural := 0;
             Sum_Vec    : Math_Utils.Vector (Result'Range) := [others => 0.0];
             Dim        : Natural := 0;
-            Start_Idx  : Positive := Prompt'First;
+            Start_Idx  : Positive := Clean_P'First;
             End_Idx    : Positive;
          begin
-            while Start_Idx <= Prompt'Last loop
+            while Start_Idx <= Clean_P'Last loop
                End_Idx := Start_Idx + 800 - 1;
-               if End_Idx > Prompt'Last then
-                  End_Idx := Prompt'Last;
+               if End_Idx > Clean_P'Last then
+                  End_Idx := Clean_P'Last;
                end if;
                declare
                   Sub_Prompt : constant String :=
-                    Prompt (Start_Idx .. End_Idx);
+                    Clean_P (Start_Idx .. End_Idx);
                   Sub_Vec    : Math_Utils.Vector (Result'Range) :=
                     [others => 0.0];
                   Sub_Len    : Natural := 0;
