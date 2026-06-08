@@ -191,18 +191,26 @@ package body Adelaide_Server_Pkg is
    end Stream_To_String;
 
    --  Fuzzy match: ratio of matching characters over longer string length
+   --  Case-insensitive
    function Fuzzy_Match (Haystack, Needle : String) return Float is
       H_Len : constant Integer := Haystack'Length;
       N_Len : constant Integer := Needle'Length;
       Matches : Integer := 0;
       J : Integer := Needle'First;
+      function To_Lower (C : Character) return Character is
+      begin
+         if C in 'A' .. 'Z' then
+            return Character'Val (Character'Pos (C) + 32);
+         end if;
+         return C;
+      end To_Lower;
    begin
       if H_Len = 0 or else N_Len = 0 then
          return 0.0;
       end if;
       for I in Haystack'Range loop
          if J <= Needle'Last then
-            if Haystack (I) = Needle (J) then
+            if To_Lower (Haystack (I)) = To_Lower (Needle (J)) then
                Matches := Matches + 1;
                J := J + 1;
             end if;
