@@ -4,7 +4,7 @@ with "gnatcoll";
 with "ada_sqlite3";
 project Adelaide_Lite is
 
-   for Languages use ("Ada", "C++");
+   for Languages use ("Ada", "C", "C++");
    for Source_Dirs use ("src/", "config/", "ZenithOrion/src/");
    for Object_Dir use "obj/" & Adelaide_Lite_Config.Build_Profile;
    for Create_Missing_Dirs use "True";
@@ -20,6 +20,9 @@ project Adelaide_Lite is
          "-I" & project'Project_Dir & "../llama.cpp/ggml/include",
          "-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
          "-std=c++17", "-mmacosx-version-min=15.0");
+      for Default_Switches ("C") use
+        ("-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
+         "-mmacosx-version-min=15.0");
    end Compiler;
 
    package Binder is
