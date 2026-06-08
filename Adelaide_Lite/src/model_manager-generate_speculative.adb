@@ -34,7 +34,7 @@ is
 
    --  Speculative decoding parameters
    Draft_Batch_K : constant Integer := 4;  -- Number of draft tokens to propose per step
-   Max_Tokens    : constant Integer := 2048;
+   Max_Tokens    : constant Integer := 4096;
 
    --  Draft token buffer for speculative verification
    type Draft_Token_Array is array (1 .. Draft_Batch_K) of Llama_Token;
