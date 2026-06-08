@@ -17,7 +17,10 @@ procedure Generate_Speculative
    Stream          : Streaming_Queue.Queue_Access := null;
    Orch_Think_Open : Boolean := False;
    Level           : ELP_Level := ELP1;
-   External_Agent  : Boolean := False)
+   External_Agent  : Boolean := False;
+   Fault_Detected  : out Boolean;
+   Fault_Query     : out Unbounded_String;
+   Fault_Category  : out Unbounded_String)
 is
    pragma SPARK_Mode (Off);
    Success       : Boolean;
@@ -109,6 +112,9 @@ begin
    T0 := Ada.Calendar.Clock;
    pragma Unreferenced (Images);
    Result := Null_Unbounded_String;
+   Fault_Detected := False;
+   Fault_Query := Null_Unbounded_String;
+   Fault_Category := Null_Unbounded_String;
    Parser.Orch_Think_Open := Orch_Think_Open;
 
    --  Acquire both models for speculative decoding
@@ -309,45 +315,58 @@ begin
         Generated_Count : Integer := 0;
         Gen_T0 : constant Ada.Calendar.Time := Ada.Calendar.Clock;
      begin
-        for I in 1 .. Max_Tokens loop
-           declare
-              Token : constant Llama_Token :=
-                Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
-           begin
-              if Llama_Vocab_Is_Eog (Vocab, Token) then
-                 exit;
-              end if;
-              Emit_Token (Token, Vocab);
-              Decode_Context (Models (Target_Kind).Context, Token);
-              Generated_Count := Generated_Count + 1;
-           end;
-        end loop;
+         for I in 1 .. Max_Tokens loop
+            declare
+               Token : constant Llama_Token :=
+                 Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
+            begin
+               if Llama_Vocab_Is_Eog (Vocab, Token) then
+                  exit;
+               end if;
+               Emit_Token (Token, Vocab);
+               --  Check for context fault signal from stream parser
+               if Parser.Fault_Detected then
+                  Fault_Detected := True;
+                  Fault_Query := Parser.Fault_Query;
+                  Fault_Category := Parser.Fault_Category;
+                  --  Flush remaining parser buffer and exit
+                  Flush_Parser (Stream, Session_ID, Parser);
+                  exit;
+               end if;
+               Decode_Context (Models (Target_Kind).Context, Token);
+               Generated_Count := Generated_Count + 1;
+            end;
+         end loop;
 
-        declare
-           Gen_Dur : constant Duration := Ada.Calendar.Clock - Gen_T0;
-           TPS : Float;
-        begin
-           if Gen_Dur > 0.0 then
-              TPS := Float (Generated_Count) / Float (Gen_Dur);
-           else
-              TPS := 0.0;
-           end if;
-           Ada.Text_IO.Put_Line ("[Speculative] Generation complete. Tokens:" & Generated_Count'Img &
-                                 " in" & Duration'Image (Gen_Dur) &
-                                 "s (" & Integer (TPS)'Img & " tok/s)");
+        if not Fault_Detected then
+         declare
+            Gen_Dur : constant Duration := Ada.Calendar.Clock - Gen_T0;
+            TPS : Float;
+         begin
+            if Gen_Dur > 0.0 then
+               TPS := Float (Generated_Count) / Float (Gen_Dur);
+            else
+               TPS := 0.0;
+            end if;
+            Ada.Text_IO.Put_Line ("[Speculative] Generation complete. Tokens:" & Generated_Count'Img &
+                                  " in" & Duration'Image (Gen_Dur) &
+                                  "s (" & Integer (TPS)'Img & " tok/s)");
 
-           if Stream /= null and then not External_Agent then
-               Push_Chunk (Stream, Session_ID,
-                 "[Adelaide Core]: [Thought] Generated " & Generated_Count'Img &
-                 " tokens in" & Duration'Image (Gen_Dur) &
-                 "s (" & Integer (TPS)'Img & " tok/s)" & ASCII.LF);
-           end if;
-        end;
-     end;
+            if Stream /= null and then not External_Agent then
+                Push_Chunk (Stream, Session_ID,
+                  "[Adelaide Core]: [Thought] Generated " & Generated_Count'Img &
+                  " tokens in" & Duration'Image (Gen_Dur) &
+                  "s (" & Integer (TPS)'Img & " tok/s)" & ASCII.LF);
+            end if;
+         end;
+        end if;
+      end;
 
-    if Stream /= null then
-      Flush_Parser (Stream, Session_ID, Parser);
-   end if;
+     if not Fault_Detected then
+        if Stream /= null then
+           Flush_Parser (Stream, Session_ID, Parser);
+        end if;
+     end if;
 
    --  Cleanup
    Llama_Sampler_Free (Target_Sampler);

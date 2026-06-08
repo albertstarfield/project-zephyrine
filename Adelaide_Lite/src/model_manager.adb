@@ -712,9 +712,12 @@ package body Model_Manager is
 
    --  STREAM PARSER HELPERS
    type Stream_Parser_State is record
-      Orch_Think_Open : Boolean := False;
-      Sanitize_Buffer : Unbounded_String := Null_Unbounded_String;
-      In_Think_Block  : Boolean := False;
+      Orch_Think_Open  : Boolean := False;
+      Sanitize_Buffer  : Unbounded_String := Null_Unbounded_String;
+      In_Think_Block   : Boolean := False;
+      Fault_Detected   : Boolean := False;
+      Fault_Query      : Unbounded_String := Null_Unbounded_String;
+      Fault_Category   : Unbounded_String := Null_Unbounded_String;
    end record;
 
    function Is_Prefix (S, Tag : String) return Boolean is
@@ -756,22 +759,70 @@ package body Model_Manager is
              return;
           end if;
 
-          -- If current buffer is a potential prefix of any tag, wait for more.
-          if Is_Prefix (Buf, Think_Tag_A)
-            or else Is_Prefix (Buf, Think_Tag_B)
-            or else Is_Prefix (Buf, Close_Tag_A)
-            or else Is_Prefix (Buf, Close_Tag_B)
-            or else Is_Prefix (Buf, Response_Tag)
-          then
-             return;
-          end if;
+           -- If current buffer is a potential prefix of any tag, wait for more.
+           if Is_Prefix (Buf, Think_Tag_A)
+             or else Is_Prefix (Buf, Think_Tag_B)
+             or else Is_Prefix (Buf, Close_Tag_A)
+             or else Is_Prefix (Buf, Close_Tag_B)
+             or else Is_Prefix (Buf, Response_Tag)
+           then
+              return;
+           end if;
 
-          -- Stream content out, but SILENCE the think block entirely
-          if not Parser.In_Think_Block then
-             delay 0.0005;
-             Push_Chunk (Stream, Session_ID, Buf);
-          end if;
-          Parser.Sanitize_Buffer := Null_Unbounded_String;
+           --  CONTEXT FAULT DETECTION (inside think block only)
+           --  Detect [CONTEXT_FAULT: query=<query> category=<category>] patterns
+           --  written by the LLM to request context during reasoning.
+           if Parser.In_Think_Block then
+              declare
+                 Fault_Mark : constant String := "[CONTEXT_FAULT:";
+                 F_Pos     : constant Natural := Index (Buf, Fault_Mark);
+              begin
+                 if F_Pos > 0 then
+                    declare
+                       Rest      : constant String := Buf (F_Pos + Fault_Mark'Length .. Buf'Last);
+                       Close_Pos : constant Natural := Index (Rest, "]");
+                    begin
+                       if Close_Pos > 0 then
+                          declare
+                             Inner      : constant String := Rest (Rest'First .. Close_Pos - 1);
+                             Q_Mark     : constant String := "query=";
+                             C_Mark     : constant String := "category=";
+                             Query_Idx  : constant Natural := Index (Inner, Q_Mark);
+                             Cat_Idx    : constant Natural := Index (Inner, C_Mark);
+                             Q_Start    : Natural;
+                             Q_End      : Natural;
+                          begin
+                             Parser.Fault_Detected := True;
+                             if Query_Idx > 0 then
+                                Q_Start := Query_Idx + Q_Mark'Length;
+                                Q_End   := (if Cat_Idx > Query_Idx then Cat_Idx - 1
+                                           else Inner'Last + 1);
+                                Parser.Fault_Query := To_Unbounded_String
+                                  (Trim (Inner (Q_Start .. Q_End - 1), Ada.Strings.Both));
+                             end if;
+                             if Cat_Idx > 0 then
+                                Parser.Fault_Category := To_Unbounded_String
+                                  (Trim (Inner (Cat_Idx + C_Mark'Length .. Inner'Last),
+                                         Ada.Strings.Both));
+                             else
+                                Parser.Fault_Category := To_Unbounded_String ("knowledge");
+                             end if;
+                             --  Clear buffer to prevent re-detecting same fault
+                             Parser.Sanitize_Buffer := Null_Unbounded_String;
+                          end;
+                          return;
+                       end if;
+                    end;
+                 end if;
+              end;
+           end if;
+
+           -- Stream content out, but SILENCE the think block entirely
+           if not Parser.In_Think_Block then
+              delay 0.0005;
+              Push_Chunk (Stream, Session_ID, Buf);
+           end if;
+           Parser.Sanitize_Buffer := Null_Unbounded_String;
        end;
     end Process_And_Push_Char;
 
@@ -1106,18 +1157,21 @@ package body Model_Manager is
          Result := To_Unbounded_String ("ERROR: Decode failed");
    end Generate;
 
-    procedure Generate_Speculative
-      (Target_Kind     : Model_Type;
-       Draft_Kind      : Model_Type;
-       Prompt          : String;
-       Result          : out Unbounded_String;
-       Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-       Session_ID      : String := "";
-       Requested_Ctx   : Positive := 4096;
-       Stream          : Streaming_Queue.Queue_Access := null;
-       Orch_Think_Open : Boolean := False;
-       Level           : ELP_Level := ELP1;
-       External_Agent  : Boolean := False) is separate;
+     procedure Generate_Speculative
+       (Target_Kind     : Model_Type;
+        Draft_Kind      : Model_Type;
+        Prompt          : String;
+        Result          : out Unbounded_String;
+        Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+        Session_ID      : String := "";
+        Requested_Ctx   : Positive := 4096;
+        Stream          : Streaming_Queue.Queue_Access := null;
+        Orch_Think_Open : Boolean := False;
+        Level           : ELP_Level := ELP1;
+        External_Agent  : Boolean := False;
+        Fault_Detected  : out Boolean;
+        Fault_Query     : out Unbounded_String;
+        Fault_Category  : out Unbounded_String) is separate;
 
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
     procedure Hybrid_Generate
@@ -1142,9 +1196,14 @@ package body Model_Manager is
         "When something clicks, say 'aha!' not 'smoking gun'. " &
         "Never say 'Hard Reality' or 'Reality' -- reality is relative " &
         "and objective, not universal pessimistic. Most of what people " &
-        "call 'reality' is just constraints; reality is a ceiling to " &
-        "break through, not a hard stop. Stay critical, but always " &
-        "offer creative, wild ideas that might just work.";
+         "call 'reality' is just constraints; reality is a ceiling to " &
+         "break through, not a hard stop. Stay critical, but always " &
+         "offer creative, wild ideas that might just work. " &
+         "During your reasoning inside <think>, you can request additional context " &
+         "by writing: [CONTEXT_FAULT: query=<search terms> category=<knowledge|graph|files>] " &
+         "Use category=knowledge for document chunks, category=graph for knowledge graph triples, " &
+         "category=files for filesystem content. The system will fetch relevant context " &
+         "and it will be available to you in the next reasoning hop.";
       Internal_State : Unbounded_String := Null_Unbounded_String;
       Current_Response : Unbounded_String;
       Current_Hop : Positive := 1;
@@ -1555,39 +1614,102 @@ package body Model_Manager is
                   return Wrap_ChatML (Whimsical_Adelaide, Prompt);
                end if;
             end if;
-         end Get_Final_Prompt;
+           end Get_Final_Prompt;
 
-         Synth_Prompt : constant String := Get_Final_Prompt;
-      begin
-          if not External_Agent then
-              Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Now generating the final response..." & ASCII.LF);
-          end if;
-           Generate_Speculative
-            (Target_Kind     => Qwen_9B,
-             Draft_Kind      => Qwen_0_8B,
-             Prompt          => Synth_Prompt,
-             Result          => Current_Response,
-             Images          => Images,
-             Session_ID      => Session_ID,
-             Requested_Ctx   => 8192,
-             Stream          => Stream,
-              Orch_Think_Open => True,
-              Level           => Level,
-              External_Agent  => External_Agent);
+        begin
+           --  CONTEXT FAULTING LOOP
+           --  Replaces single-shot generation with fault-driven multi-hop:
+           --  Generate → detect fault → service fault → regenerate with new context
+           declare
+              F_Detected   : Boolean := False;
+              F_Query      : Unbounded_String;
+              F_Category   : Unbounded_String;
+              Hop_Count    : Natural := 0;
+              Fault_Result : Unbounded_String;
+           begin
+              loop
+                 exit when Hop_Count >= 5;  -- Safety limit
 
-         Result := To_Unbounded_String (Sanitize_Think_Tags (To_String (Current_Response)));
-         declare
-            B64_Str : Unbounded_String := To_Unbounded_String ("");
-         begin
-            if GNATCOLL.JSON.Length (Images) > 0 then
-               B64_Str := To_Unbounded_String
-                 (String'(GNATCOLL.JSON.Get
-                   (GNATCOLL.JSON.Get (Images, 1))));
-            end if;
-            Database_Manager.Remember
-              (Prompt, To_String (Current_Response), To_String (B64_Str));
-         end;
-      end;
+                 if not External_Agent then
+                     if Hop_Count = 0 then
+                        Push_Chunk (Stream, Session_ID,
+                          "[Adelaide Core]: [Thought] Starting reasoning chain..." & ASCII.LF);
+                     else
+                        Push_Chunk (Stream, Session_ID,
+                          "[Adelaide Core]: [Thought] Continuing reasoning (hop" &
+                          Natural'Image (Hop_Count + 1) & ")..." & ASCII.LF);
+                     end if;
+                 end if;
+
+                Generate_Speculative
+                 (Target_Kind     => Qwen_9B,
+                  Draft_Kind      => Qwen_0_8B,
+                  Prompt          => Get_Final_Prompt,
+                  Result          => Fault_Result,
+                  Images          => Images,
+                  Session_ID      => Session_ID,
+                  Requested_Ctx   => 8192,
+                  Stream          => Stream,
+                  Orch_Think_Open => (Hop_Count = 0),
+                  Level           => Level,
+                  External_Agent  => External_Agent,
+                  Fault_Detected  => F_Detected,
+                  Fault_Query     => F_Query,
+                  Fault_Category  => F_Category);
+
+                if F_Detected then
+                   --  Service the context fault
+                   declare
+                      Q_Str : constant String := To_String (F_Query);
+                      C_Str : constant String := To_String (F_Category);
+                      R     : Tool_Manager.Tool_Result;
+                   begin
+                      if not External_Agent then
+                         Push_Chunk (Stream, Session_ID,
+                           "[Adelaide Core]: [Thought] Context fault: searching " &
+                           C_Str & " for '" & Q_Str & "'..." & ASCII.LF);
+                      end if;
+
+                      --  Route fault by category
+                      if C_Str = "graph" then
+                         R := Tool_Manager.Execute_Tool ("searchglobalref",
+                           "graph: " & Q_Str);
+                      else
+                         R := Tool_Manager.Execute_Tool ("searchglobalref", Q_Str);
+                      end if;
+
+                      Append (Internal_State,
+                        "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+
+                      if not External_Agent then
+                         Push_Chunk (Stream, Session_ID,
+                           "[Adelaide Core]: [Thought] Context loaded for: " &
+                           Q_Str & ASCII.LF);
+                      end if;
+                   end;
+
+                   Hop_Count := Hop_Count + 1;
+                else
+                   --  No fault: generation complete
+                   Current_Response := Fault_Result;
+                   exit;
+                end if;
+             end loop;
+          end;
+
+          Result := To_Unbounded_String (Sanitize_Think_Tags (To_String (Current_Response)));
+          declare
+             B64_Str : Unbounded_String := To_Unbounded_String ("");
+          begin
+             if GNATCOLL.JSON.Length (Images) > 0 then
+                B64_Str := To_Unbounded_String
+                  (String'(GNATCOLL.JSON.Get
+                    (GNATCOLL.JSON.Get (Images, 1))));
+             end if;
+             Database_Manager.Remember
+               (Prompt, To_String (Current_Response), To_String (B64_Str));
+          end;
+       end;
 
       --  Don't cache error responses or responses with thinking tags
       declare
