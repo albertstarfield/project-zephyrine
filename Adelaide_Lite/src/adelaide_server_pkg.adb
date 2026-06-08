@@ -657,12 +657,12 @@ package body Adelaide_Server_Pkg is
                      Handle => S));
                end;
             else
-               Model_Manager.Hybrid_Generate
-                 (Prompt     => To_String (Prompt),
-                  Result     => Result,
-                  Session_ID => To_String (S_ID),
-                  Agentic    => Is_Agentic,
-                  Raw_Prompt => Is_Raw_Prompt);
+             Model_Manager.Hybrid_Generate
+               (Prompt     => To_String (Prompt),
+                Result     => Result,
+                Session_ID => To_String (S_ID),
+                Agentic    => Is_Agentic,
+                Raw_Prompt => Is_Raw_Prompt);
 
                declare
                   use GNATCOLL.JSON;
