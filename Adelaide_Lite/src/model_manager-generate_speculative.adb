@@ -3,6 +3,7 @@ with Ada.Calendar;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Exceptions; use Ada.Exceptions;
+with Kratos;
 
 separate (Model_Manager)
 procedure Generate_Speculative
@@ -66,8 +67,15 @@ is
 
    procedure Decode_Context (Ctx : Llama_Context; Tok : Llama_Token) is
       B   : constant Llama_Batch := Llama_Batch_Get_One (Tok'Address, 1);
-      Ret : constant int := Llama_Decode (Ctx, B);
+      Ret : int;
    begin
+      if Kratos.Guard_Enter = 0 then
+         Ret := Llama_Decode (Ctx, B);
+         Kratos.Guard_Exit;
+      else
+         Kratos.Log_Crash;
+         Ret := -1;
+      end if;
       if Ret /= 0 then
          raise Program_Error with "Decode failed (" & Ret'Img & ")";
       end if;
@@ -82,7 +90,13 @@ is
       for I in 1 .. Count loop
          Llama_Batch_Add_Safe (B'Address, Tks (I), Start_Pos + int (I - 1), 0, I = Count);
       end loop;
-      Ret := Llama_Decode (Ctx, B);
+      if Kratos.Guard_Enter = 0 then
+         Ret := Llama_Decode (Ctx, B);
+         Kratos.Guard_Exit;
+      else
+         Kratos.Log_Crash;
+         Ret := -1;
+      end if;
       Llama_Batch_Free (B);
       if Ret /= 0 then
          raise Program_Error with "Batch decode failed (" & Ret'Img & ")";
@@ -173,8 +187,15 @@ begin
             declare
                B   : constant Llama_Batch :=
                  Llama_Batch_Get_One (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
-               Ret : constant int := Llama_Decode (Models (Target_Kind).Context, B);
+               Ret : int;
             begin
+               if Kratos.Guard_Enter = 0 then
+                  Ret := Llama_Decode (Models (Target_Kind).Context, B);
+                  Kratos.Guard_Exit;
+               else
+                  Kratos.Log_Crash;
+                  Ret := -1;
+               end if;
                if Ret /= 0 then
                   Models (Target_Kind).In_Use := False;
                   if Models (Draft_Kind).Loaded then
@@ -192,8 +213,15 @@ begin
                declare
                   B   : constant Llama_Batch :=
                     Llama_Batch_Get_One (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
-                  Ret : constant int := Llama_Decode (Models (Draft_Kind).Context, B);
+                  Ret : int;
                begin
+                  if Kratos.Guard_Enter = 0 then
+                     Ret := Llama_Decode (Models (Draft_Kind).Context, B);
+                     Kratos.Guard_Exit;
+                  else
+                     Kratos.Log_Crash;
+                     Ret := -1;
+                  end if;
                   if Ret /= 0 then
                      Ada.Text_IO.Put_Line ("[!] Draft decode error during prefill, continuing target-only");
                   end if;

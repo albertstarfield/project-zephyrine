@@ -15,6 +15,7 @@ with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Unchecked_Conversion;
 with Ada.Exceptions;
 with Watchdog_Manager;
+with Kratos;
 
 package body Model_Manager is
    use Streaming_Queue;
@@ -509,6 +510,7 @@ package body Model_Manager is
          return;
       end if;
 
+      Models (Kind).In_Use := True;
       Models (Kind).Last_Used := Clock;
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
           N_Toks := Llama_Tokenize
@@ -519,6 +521,7 @@ package body Model_Manager is
                     " N_Toks:" & N_Toks'Img);
           Free (Prompt_C);
       if N_Toks <= 0 then
+         Models (Kind).In_Use := False;
          Priority_Model_Gate.Release_ELP1 (Kind);
          Length := 0;
          return;
@@ -541,8 +544,17 @@ package body Model_Manager is
                B : constant Llama_Batch :=
                  Llama_Batch_Get_One
                    (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
+               Dec_Result : int;
             begin
-               if Llama_Decode (Models (Kind).Context, B) /= 0 then
+               if Kratos.Guard_Enter = 0 then
+                  Dec_Result := Llama_Decode (Models (Kind).Context, B);
+                  Kratos.Guard_Exit;
+               else
+                  Kratos.Log_Crash;
+                  Dec_Result := -1;
+               end if;
+               if Dec_Result /= 0 then
+                  Models (Kind).In_Use := False;
                   Priority_Model_Gate.Release_ELP1 (Kind);
                   Length := 0;
                   return;
@@ -572,10 +584,12 @@ package body Model_Manager is
          else
             Length := 0;
          end if;
+         Models (Kind).In_Use := False;
          Priority_Model_Gate.Release_ELP1 (Kind);
       end;
    exception
       when others =>
+         Models (Kind).In_Use := False;
          Priority_Model_Gate.Release_ELP1 (Kind);
          Length := 0;
    end Get_Single_Embedding;
@@ -694,12 +708,9 @@ package body Model_Manager is
              return;
           end if;
 
-          -- Stream EVERYTHING out, but strip the raw tags and apply the requested NPU token speeds
+          -- Stream content out, but SILENCE the think block entirely
           if not Parser.In_Think_Block then
              delay 0.0005;
-             Push_Chunk (Stream, Session_ID, Buf);
-          else
-             delay 0.0016;
              Push_Chunk (Stream, Session_ID, Buf);
           end if;
           Parser.Sanitize_Buffer := Null_Unbounded_String;
@@ -912,21 +923,25 @@ package body Model_Manager is
                B : constant Llama_Batch :=
                  Llama_Batch_Get_One
                    (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
+               Ret : int;
             begin
-               declare
-                  Ret : constant int := Llama_Decode (Models (Kind).Context, B);
-               begin
-                  if Ret /= 0 then
-                     Models (Kind).In_Use := False;
-                     if Level = ELP0 then
-                        Priority_Model_Gate.Release_ELP0 (Kind);
-                     else
-                        Priority_Model_Gate.Release_ELP1 (Kind);
-                     end if;
-                     Result := To_Unbounded_String ("ERROR: Decode failed (" & Ret'Img & ")");
-                     return;
+               if Kratos.Guard_Enter = 0 then
+                  Ret := Llama_Decode (Models (Kind).Context, B);
+                  Kratos.Guard_Exit;
+               else
+                  Kratos.Log_Crash;
+                  Ret := -1;
+               end if;
+               if Ret /= 0 then
+                  Models (Kind).In_Use := False;
+                  if Level = ELP0 then
+                     Priority_Model_Gate.Release_ELP0 (Kind);
+                  else
+                     Priority_Model_Gate.Release_ELP1 (Kind);
                   end if;
-               end;
+                  Result := To_Unbounded_String ("ERROR: Decode failed (" & Ret'Img & ")");
+                  return;
+               end if;
                Tokens_Left := Tokens_Left - To_Decode;
                Current_Pos := Current_Pos + To_Decode;
             end;
@@ -979,8 +994,15 @@ package body Model_Manager is
             declare
                B : constant Llama_Batch :=
                  Llama_Batch_Get_One (Token'Address, 1);
-               Ret : constant int := Llama_Decode (Models (Kind).Context, B);
+               Ret : int;
             begin
+               if Kratos.Guard_Enter = 0 then
+                  Ret := Llama_Decode (Models (Kind).Context, B);
+                  Kratos.Guard_Exit;
+               else
+                  Kratos.Log_Crash;
+                  Ret := -1;
+               end if;
                if Ret /= 0 then
                   Result := To_Unbounded_String (To_String (Result) & " [ABORTED:" & Ret'Img & "]");
                   exit;
