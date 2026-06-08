@@ -9,7 +9,6 @@ with Database_Manager;
 with Math_Utils;
 with Zenith_Manager;
 with Ada.Directories;
-with Ada.Environment_Variables;
 with Ada.Exceptions;
 with Ada.Streams;
 with Ada.Streams.Stream_IO;
@@ -288,6 +287,51 @@ package body Knowledge_Manager is
          Search : Ada.Directories.Search_Type;
          Ent    : Ada.Directories.Directory_Entry_Type;
          use Ada.Directories;
+
+         function Should_Skip_Dir (Name : String) return Boolean is
+         begin
+            return Name = "node_modules" or else
+                   Name = ".git" or else
+                   Name = ".svn" or else
+                   Name = "__pycache__" or else
+                   Name = "venv" or else
+                   Name = ".venv" or else
+                   Name = "env" or else
+                   Name = ".env" or else
+                   Name = ".cache" or else
+                   Name = "Caches" or else
+                   Name = "Trash" or else
+                   Name = ".Trash" or else
+                   Name = "tmp" or else
+                   Name = "Temp" or else
+                   Name = "logs" or else
+                   Name = "Logs" or else
+                   Name = ".npm" or else
+                   Name = ".yarn" or else
+                   Name = ".cargo" or else
+                   Name = ".rustup" or else
+                   Name = ".gem" or else
+                   Name = ".m2" or else
+                   Name = ".ivy2" or else
+                   Name = ".sbt" or else
+                   Name = ".vagrant" or else
+                   Name = ".docker" or else
+                   Name = ".gitlab" or else
+                   Name = ".github" or else
+                   Name = ".circleci" or else
+                   Name = "build" or else
+                   Name = "dist" or else
+                   Name = "target" or else
+                   Name = "_build" or else
+                   Name = ".terraform" or else
+                   Name = ".serverless" or else
+                   Name = "miniconda3" or else
+                   Name = "miniconda" or else
+                   Name = "anaconda3" or else
+                   Name = ".opam" or else
+                   Name = "_opam";
+         end Should_Skip_Dir;
+
       begin
          Start_Search (Search, Dir, "");
          while More_Entries (Search) loop
@@ -299,9 +343,11 @@ package body Knowledge_Manager is
                N : constant String := Simple_Name (Ent);
                P : constant String := Full_Name (Ent);
             begin
-               if N /= "." and then N /= ".." and then N /= "node_modules" and then N /= ".git" then
+               if N /= "." and then N /= ".." then
                   if Kind (Ent) = Directory then
-                     Walk_Directory (P);
+                     if not Should_Skip_Dir (N) then
+                        Walk_Directory (P);
+                     end if;
                   elsif Kind (Ent) = Ordinary_File then
                      declare
                         function Ends_With (S, Ext : String) return Boolean is
@@ -315,7 +361,29 @@ package body Knowledge_Manager is
                            Ends_With (N, ".adb") or else
                            Ends_With (N, ".ads") or else
                            Ends_With (N, ".py") or else
-                           Ends_With (N, ".pdf")
+                           Ends_With (N, ".pdf") or else
+                           Ends_With (N, ".json") or else
+                           Ends_With (N, ".yaml") or else
+                           Ends_With (N, ".yml") or else
+                           Ends_With (N, ".xml") or else
+                           Ends_With (N, ".csv") or else
+                           Ends_With (N, ".html") or else
+                           Ends_With (N, ".htm") or else
+                           Ends_With (N, ".css") or else
+                           Ends_With (N, ".js") or else
+                           Ends_With (N, ".ts") or else
+                           Ends_With (N, ".rs") or else
+                           Ends_With (N, ".go") or else
+                           Ends_With (N, ".c") or else
+                           Ends_With (N, ".h") or else
+                           Ends_With (N, ".cpp") or else
+                           Ends_With (N, ".hpp") or else
+                           Ends_With (N, ".lua") or else
+                           Ends_With (N, ".toml") or else
+                           Ends_With (N, ".ini") or else
+                           Ends_With (N, ".cfg") or else
+                           Ends_With (N, ".conf") or else
+                           Ends_With (N, ".log")
                         then
                            Index_File (P);
                         end if;
@@ -328,26 +396,26 @@ package body Knowledge_Manager is
          when others => null;
       end Walk_Directory;
 
-      Home_Dir : constant String :=
-        (if Ada.Environment_Variables.Exists ("HOME")
-         then Ada.Environment_Variables.Value ("HOME")
-         else ".");
-      Volumes_Dir : constant String := "/Volumes";
-   begin
-      accept Start;
-      loop
-         if Model_Manager.Should_Abort_ELP0 then
-            delay 1.0;
-         else
-            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
-                      AnsiAda.Reset & " Starting filesystem crawl...");
-            Walk_Directory (Home_Dir);
-            
-            if Ada.Directories.Exists (Volumes_Dir) then
-               Walk_Directory (Volumes_Dir);
-            end if;
-            
-            delay 3600.0;
+    begin
+       accept Start;
+       loop
+          if Model_Manager.Should_Abort_ELP0 then
+             delay 1.0;
+          else
+             Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                       AnsiAda.Reset & " Starting filesystem crawl...");
+             --  Crawl common cross-computer knowledge directories
+             if Ada.Directories.Exists ("/Users") then
+                Walk_Directory ("/Users");
+             end if;
+             if Ada.Directories.Exists ("/opt") then
+                Walk_Directory ("/opt");
+             end if;
+             if Ada.Directories.Exists ("/usr/local") then
+                Walk_Directory ("/usr/local");
+             end if;
+
+             delay 3600.0;
          end if;
       end loop;
    end Native_Crawl_Task;
