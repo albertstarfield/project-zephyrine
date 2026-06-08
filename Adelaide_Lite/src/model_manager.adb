@@ -813,13 +813,27 @@ package body Model_Manager is
    begin
       while I <= Text'Last loop
          if I + 9 <= Text'Last and then Text (I .. I + 9) = "<thinking>" then
+            --  Skip everything until closing </thinking>
             I := I + 10;
+            while I <= Text'Last loop
+               if I + 10 <= Text'Last and then Text (I .. I + 10) = "</thinking>" then
+                  I := I + 11;
+                  exit;
+               else
+                  I := I + 1;
+               end if;
+            end loop;
          elsif I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
+            --  Skip everything until closing 
             I := I + 7;
-         elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</thinking>" then
-            I := I + 11;
-         elsif I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
-            I := I + 8;
+            while I <= Text'Last loop
+               if I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
+                  I := I + 8;
+                  exit;
+               else
+                  I := I + 1;
+               end if;
+            end loop;
          elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</response>" then
             I := I + 11;
          else
@@ -1481,10 +1495,10 @@ package body Model_Manager is
             Session_ID      => Session_ID,
             Requested_Ctx   => 8192,
             Stream          => Stream,
-            Orch_Think_Open => True,
-            Level           => Level);
+             Orch_Think_Open => True,
+             Level           => Level);
 
-         Result := Current_Response;
+         Result := To_Unbounded_String (Sanitize_Think_Tags (To_String (Current_Response)));
          declare
             B64_Str : Unbounded_String := To_Unbounded_String ("");
          begin
@@ -1504,7 +1518,8 @@ package body Model_Manager is
          Is_Error : constant Boolean :=
            Resp_Str'Length >= 6 and then Resp_Str (1 .. 6) = "ERROR:";
          Has_Think : constant Boolean :=
-           Index (Resp_Str, "<thinking>") > 0;
+           Index (Resp_Str, "<thinking>") > 0 or else
+           Index (Resp_Str, "<think>") > 0;
       begin
          if not Is_Error and then not Has_Think then
             Database_Manager.Add_To_Cache
