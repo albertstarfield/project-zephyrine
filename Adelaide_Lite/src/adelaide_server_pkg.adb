@@ -208,10 +208,24 @@ package body Adelaide_Server_Pkg is
         Match_Score : Float := 0.0;
      begin
         --  Fuzzy match User-Agent against known external agents
+        declare
+           Known_Agents : constant array (1 .. 16) of String (1 .. 12) :=
+             ("OpenCode    ", "OpenClaw    ", "Hermes      ", "VSCode      ",
+              "Copilot     ", "Continue    ", "Chatbox     ", "Palchat     ",
+              "OpenCat     ", "Enlighten   ", "Aiko        ", "Shortcuts   ",
+              "MindMac     ", "Comments    ", "OpenWebUI   ", "Perplexity  ");
+           Current_Score : Float;
         begin
-           Match_Score := Fuzzy_Match.Match (UA, "OpenCode");
-        exception
-           when others => Match_Score := 0.0;
+           for Agent of Known_Agents loop
+              begin
+                 Current_Score := Fuzzy_Match.Match (UA, Trim (Agent, Ada.Strings.Right));
+                 if Current_Score > Match_Score then
+                    Match_Score := Current_Score;
+                 end if;
+              exception
+                 when others => null;
+              end;
+           end loop;
         end;
         Is_External_Agent := Match_Score >= 0.7;
         declare
@@ -666,13 +680,17 @@ package body Adelaide_Server_Pkg is
                   --  starting the generator task. This guarantees sub-ms TTFB
                   --  because the data is in the queue buffer before AWS even
                   --  begins reading from the Response_Stream.
-                  Q.Set_Format (Fmt, To_String (Req_Model));
-                   Q.Push ("[Adelaide Core Orchestration]" & ASCII.LF &
-                           "Timestamp: " & TS & "Z" & ASCII.LF &
-                           "Session: " & To_String (S_ID) & ASCII.LF &
-                           "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
-                           "Model: " & To_String (Req_Model) & ASCII.LF &
-                           "Status: Request received - starting orchestration..." & ASCII.LF);
+                   Q.Set_Format (Fmt, To_String (Req_Model));
+                   if Is_External_Agent then
+                      Q.Push ("" & ASCII.LF);
+                   else
+                      Q.Push ("[Adelaide Core Orchestration]" & ASCII.LF &
+                              "Timestamp: " & TS & "Z" & ASCII.LF &
+                              "Session: " & To_String (S_ID) & ASCII.LF &
+                              "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
+                              "Model: " & To_String (Req_Model) & ASCII.LF &
+                              "Status: Request received - starting orchestration..." & ASCII.LF);
+                   end if;
 
                   T.Start (To_String (Prompt), To_String (Req_Model),
                            Fmt, Q, To_String (S_ID),
