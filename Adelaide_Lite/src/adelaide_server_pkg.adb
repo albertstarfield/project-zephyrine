@@ -637,13 +637,12 @@ package body Adelaide_Server_Pkg is
                   --  because the data is in the queue buffer before AWS even
                   --  begins reading from the Response_Stream.
                   Q.Set_Format (Fmt, To_String (Req_Model));
-                  Q.Push ("<thinking>" & ASCII.LF &
-                          "[Adelaide Core Orchestration]" & ASCII.LF &
-                          "Timestamp: " & TS & "Z" & ASCII.LF &
-                          "Session: " & To_String (S_ID) & ASCII.LF &
-                          "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
-                          "Model: " & To_String (Req_Model) & ASCII.LF &
-                          "Status: Request received - starting orchestration..." & ASCII.LF);
+                   Q.Push ("[Adelaide Core Orchestration]" & ASCII.LF &
+                           "Timestamp: " & TS & "Z" & ASCII.LF &
+                           "Session: " & To_String (S_ID) & ASCII.LF &
+                           "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
+                           "Model: " & To_String (Req_Model) & ASCII.LF &
+                           "Status: Request received - starting orchestration..." & ASCII.LF);
 
                   T.Start (To_String (Prompt), To_String (Req_Model),
                            Fmt, Q, To_String (S_ID),
