@@ -1149,6 +1149,7 @@ package body Model_Manager is
       Current_Response : Unbounded_String;
       Current_Hop : Positive := 1;
       T0, T1      : Ada.Calendar.Time;
+      Last_Heartbeat : Ada.Calendar.Time := Ada.Calendar.Clock;
       Emb_Vec     : Math_Utils.Vector (1 .. 1536) := [others => 0.0];
       Emb_Len     : Natural;
    begin
@@ -1255,12 +1256,19 @@ package body Model_Manager is
                Raw_Q := To_Unbounded_String (Trim (Prompt, Ada.Strings.Both));
             end if;
 
-            declare
-               Actual_Prompt : constant String :=
-                 "Generate ONLY a concise 2-4 keyword search query for the following request: """ &
-                 To_String (Raw_Q) & """. NO EXPLANATIONS. NO QUOTES. JUST KEYWORDS.";
-            begin
-               Model_Manager.Generate
+             declare
+                Actual_Prompt : constant String :=
+                  "Generate ONLY a concise 2-4 keyword search query for the following request: """ &
+                  To_String (Raw_Q) & """. NO EXPLANATIONS. NO QUOTES. JUST KEYWORDS.";
+                Now : Ada.Calendar.Time;
+             begin
+                Now := Ada.Calendar.Clock;
+                if not External_Agent and then Stream /= null and then (Now - Last_Heartbeat) > 2.0 then
+                   Push_Chunk (Stream, Session_ID,
+                     "[Adelaide Core]: [Thought] I'm still here and processing..." & ASCII.LF);
+                   Last_Heartbeat := Now;
+                end if;
+                Model_Manager.Generate
                  (Kind            => Qwen_9B,
                   Prompt          => Actual_Prompt,
                   Result          => Gen_Q,
@@ -1334,12 +1342,22 @@ package body Model_Manager is
                   return Wrap_ChatML (Router_Sys, Paging_Instr & ASCII.LF & Prompt);
                end if;
             end Get_Router_Prompt;
-          begin
-           if not External_Agent then
-              Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Deciding next action (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
-           end if;
-           Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
-             Generate
+           begin
+            if not External_Agent then
+               Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Deciding next action (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
+            end if;
+            --  Heartbeat check before blocking Generate call
+            declare
+               H_Now : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+            begin
+               if not External_Agent and then Stream /= null and then (H_Now - Last_Heartbeat) > 2.0 then
+                  Push_Chunk (Stream, Session_ID,
+                    "[Adelaide Core]: [Thought] I'm still here and processing..." & ASCII.LF);
+                  Last_Heartbeat := H_Now;
+               end if;
+            end;
+            Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
+              Generate
                (Qwen_9B,
                 Get_Router_Prompt,
                 Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
@@ -1407,11 +1425,21 @@ package body Model_Manager is
                                          ("[TOOL_CALL: " & T_Name &
                                           "(" & T_Pars & ")]");
                                        return;
-                                    end if;
-                                    declare
-                                       R : constant Tool_Manager.Tool_Result :=
-                                         Tool_Manager.Execute_Tool
-                                           (T_Name, Sanitize_Think_Tags (T_Pars));
+                                     end if;
+                                     --  Heartbeat check before tool execution
+                                     declare
+                                        H_Now : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+                                     begin
+                                        if not External_Agent and then Stream /= null and then (H_Now - Last_Heartbeat) > 2.0 then
+                                           Push_Chunk (Stream, Session_ID,
+                                             "[Adelaide Core]: [Thought] I'm still here and processing..." & ASCII.LF);
+                                           Last_Heartbeat := H_Now;
+                                        end if;
+                                     end;
+                                     declare
+                                        R : constant Tool_Manager.Tool_Result :=
+                                          Tool_Manager.Execute_Tool
+                                            (T_Name, Sanitize_Think_Tags (T_Pars));
                                     begin
                                         if not External_Agent then
                                             Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Running tool: " & T_Name & ASCII.LF);

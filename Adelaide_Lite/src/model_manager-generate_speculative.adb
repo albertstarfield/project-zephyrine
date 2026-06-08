@@ -171,18 +171,19 @@ begin
         (Llama_Interface.Llama_Get_Memory (Models (Draft_Kind).Context), False);
    end if;
 
-   --  Prefill: feed prompt tokens into both models
-   declare
-      Batch_Size  : constant int := 512;
-      Current_Pos : int := 0;
-      Tokens_Left : int := N_Toks;
-   begin
-      while Tokens_Left > 0 loop
-         declare
-            To_Decode : constant int :=
-              (if Tokens_Left > Batch_Size
-               then Batch_Size
-               else Tokens_Left);
+    --  Prefill: feed prompt tokens into both models
+    declare
+       Batch_Size  : constant int := 512;
+       Current_Pos : int := 0;
+       Tokens_Left : int := N_Toks;
+       Last_Prefill_Heartbeat : Ada.Calendar.Time := Ada.Calendar.Clock;
+    begin
+       while Tokens_Left > 0 loop
+          declare
+             To_Decode : constant int :=
+               (if Tokens_Left > Batch_Size
+                then Batch_Size
+                else Tokens_Left);
          begin
             --  Decode on target
             declare
@@ -228,11 +229,21 @@ begin
                   end if;
                end;
             end if;
-            Tokens_Left := Tokens_Left - To_Decode;
-            Current_Pos := Current_Pos + To_Decode;
-         end;
-      end loop;
-   end;
+             Tokens_Left := Tokens_Left - To_Decode;
+             Current_Pos := Current_Pos + To_Decode;
+             --  Heartbeat during long prefill
+             declare
+                H_Now : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+             begin
+                if not External_Agent and then Stream /= null and then (H_Now - Last_Prefill_Heartbeat) > 2.0 then
+                   Push_Chunk (Stream, Session_ID,
+                     "[Adelaide Core]: [Thought] I'm still here and processing..." & ASCII.LF);
+                   Last_Prefill_Heartbeat := H_Now;
+                end if;
+             end;
+          end;
+       end loop;
+    end;
 
    --  Verbose: prefill complete
     if Stream /= null and then not External_Agent then
