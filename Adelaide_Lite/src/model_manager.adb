@@ -1212,9 +1212,9 @@ package body Model_Manager is
       end;
 
       if not External_Agent then
-         Push_Chunk (Stream, Session_ID, "[Adelaide Core] Cache miss - starting fresh reasoning chain." & ASCII.LF);
-         Push_Chunk (Stream, Session_ID, "[Adelaide Core] Priority: " & ELP_Level'Image (Level) &
-                     " | Session: " & Session_ID & ASCII.LF);
+         Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] No cached response found, starting fresh reasoning chain." & ASCII.LF);
+         Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Operating at " & ELP_Level'Image (Level) &
+                     " priority. Session: " & Session_ID & ASCII.LF);
       end if;
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
@@ -1231,7 +1231,7 @@ package body Model_Manager is
       then
          Put_Line (" [Hybrid] Factual context trigger matched.");
           if not External_Agent then
-             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Analyzing query for factual context..." & ASCII.LF);
+              Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Let me analyze this query for factual context..." & ASCII.LF);
           end if;
          declare
             Start_Tag : constant String := "<|im_start|>user";
@@ -1277,8 +1277,8 @@ package body Model_Manager is
                   Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
              begin
                  if not External_Agent then
-                    Push_Chunk (Stream, Session_ID, "[Adelaide Core] Search query: """ & Trim (Final_Q, Ada.Strings.Both) & """" & ASCII.LF);
-                    Push_Chunk (Stream, Session_ID, "[Adelaide Core] Factual context retrieved." & ASCII.LF);
+                      Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Searching knowledge base for: " & Trim (Final_Q, Ada.Strings.Both) & "..." & ASCII.LF);
+                      Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Found relevant context from knowledge base." & ASCII.LF);
                 end if;
                 Append
                   (Internal_State,
@@ -1336,7 +1336,7 @@ package body Model_Manager is
             end Get_Router_Prompt;
           begin
            if not External_Agent then
-              Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
+              Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Deciding next action (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
            end if;
            Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
              Generate
@@ -1351,7 +1351,7 @@ package body Model_Manager is
              begin
                 Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": " & Step);
                 if not External_Agent then
-                   Push_Chunk (Stream, Session_ID, "[Adelaide Core] Router decision: " & Step & ASCII.LF);
+                   Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] I will: " & Step & ASCII.LF);
                 end if;
 
                if Index (Step, "[ACTION:") > 0 then
@@ -1414,7 +1414,7 @@ package body Model_Manager is
                                            (T_Name, Sanitize_Think_Tags (T_Pars));
                                     begin
                                         if not External_Agent then
-                                           Push_Chunk (Stream, Session_ID, "[Adelaide Core] Executing tool: " & T_Name & ASCII.LF);
+                                            Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Running tool: " & T_Name & ASCII.LF);
                                         end if;
                                         Append
                                           (Internal_State,
@@ -1446,7 +1446,7 @@ package body Model_Manager is
        end loop;
 
        if not External_Agent then
-          Push_Chunk (Stream, Session_ID, "[Adelaide Core] Reasoning chain complete (" & Current_Hop'Img & " hops)." & ASCII.LF);
+          Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Reasoning complete after " & Current_Hop'Img & " hops." & ASCII.LF);
        end if;
 
        declare
@@ -1532,7 +1532,7 @@ package body Model_Manager is
          Synth_Prompt : constant String := Get_Final_Prompt;
       begin
           if not External_Agent then
-             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Generating brilliant response..." & ASCII.LF);
+              Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Now generating the final response..." & ASCII.LF);
           end if;
            Generate_Speculative
             (Target_Kind     => Qwen_9B,
@@ -1607,7 +1607,7 @@ package body Model_Manager is
           declare
              Dur_Str : constant String := Duration'Image (T1 - T0);
           begin
-             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Generation complete in " & Dur_Str & "s." & ASCII.LF);
+             Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Response generated in " & Dur_Str & "s." & ASCII.LF);
           end;
        end if;
 
@@ -1633,7 +1633,7 @@ package body Model_Manager is
             Level         => Level);
        begin
           if not External_Agent then
-             Push_Chunk (Stream, Session_ID, "[Adelaide Core] Quality score: " & Score'Img & "/10" & ASCII.LF);
+             Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Self-assessment: " & Score'Img & "/10" & ASCII.LF);
           end if;
           Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
                                 "[Quality Score] " & AnsiAda.Reset &
