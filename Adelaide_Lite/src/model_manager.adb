@@ -1154,61 +1154,26 @@ package body Model_Manager is
 
       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
 
-      --  EXTERNAL AGENT PASSTHROUGH: Detect agentic prompts by content.
-      --  If the prompt contains tool-call syntax or system framing from
-      --  an external agent app, bypass personality pipeline.
-      --  Raw LLM output only.
-      declare
-         Is_Agentic_Prompt : Boolean := False;
-      begin
-         --  Tool call syntax: Bash(...), Read(...), Write(...), Edit(...)
-         if Index (Prompt, "Bash(") > 0
-           or else Index (Prompt, "Read(") > 0
-           or else Index (Prompt, "Write(") > 0
-           or else Index (Prompt, "Edit(") > 0
-           or else Index (Prompt, "bash(") > 0
-           or else Index (Prompt, "read(") > 0
-           or else Index (Prompt, "write(") > 0
-           or else Index (Prompt, "edit(") > 0
-         then
-            Is_Agentic_Prompt := True;
-         end if;
-         --  YAML frontmatter (agent task descriptions)
-         if Prompt'Length >= 4
-           and then Prompt (Prompt'First .. Prompt'First + 3) = "---" & ASCII.LF
-         then
-            Is_Agentic_Prompt := True;
-         end if;
-         --  Step-by-step tool instructions
-         if Index (Prompt, "Step 1") > 0
-           or else Index (Prompt, "step 1") > 0
-           or else Index (Prompt, "1.") > 0
-         then
-            if Index (Prompt, "Bash") > 0
-              or else Index (Prompt, "bash") > 0
-              or else Index (Prompt, "Use ") > 0
-            then
-               Is_Agentic_Prompt := True;
-            end if;
-         end if;
-
-         if Is_Agentic_Prompt then
-            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
-                      "[Hybrid]" & AnsiAda.Reset &
-                      " Agentic prompt detected - passthrough mode.");
-            Generate
-              (Qwen_9B,
-               Prompt,
-               Result,
-               Images,
-               Session_ID,
-               8192,
-               Stream,
-               False,
-               Level);
-            return;
-         end if;
-      end;
+      --  EXTERNAL AGENT PASSTHROUGH: When the dispatch detected a chat
+      --  format request (messages array), Raw_Prompt is True. This means
+      --  the prompt is already structured by an external agent app.
+      --  Bypass personality pipeline. Raw LLM output only.
+      if Raw_Prompt then
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                   "[Hybrid]" & AnsiAda.Reset &
+                   " External agent (Raw_Prompt) - passthrough mode.");
+         Generate
+           (Qwen_9B,
+            Prompt,
+            Result,
+            Images,
+            Session_ID,
+            8192,
+            Stream,
+            False,
+            Level);
+         return;
+      end if;
 
       declare
          Cached_Res : constant String :=
