@@ -189,3 +189,34 @@ fi
 echo -e "\n${BLUE}======================================================================${NC}"
 echo -e "${GREEN}             Test Suite Execution Complete & Documented               ${NC}"
 echo -e "${BLUE}======================================================================${NC}"
+
+# ===========================================================================
+# STREAMING TTFB REQUIREMENT (DO NOT REMOVE)
+# ===========================================================================
+# The first chunk (ACK or token) of any streaming response MUST arrive
+# within 5ms of the HTTP request. This is measured from the moment the
+# HTTP request headers are fully received to the first byte of the
+# response body (either an SSE ACK event or the first token chunk).
+#
+# If TTFB exceeds 5ms, the test is considered a FAILURE.
+#
+# Root causes of TTFB violations:
+#   1. Background indexing (ELP0) blocking chat endpoint (ELP1 contention)
+#   2. Missing immediate ACK push in Dispatch before Generator_Task start
+#   3. Model loading delay on first request (cold start)
+#   4. Kratos crash isolation overhead (should be negligible, <1us)
+#
+# Verification command:
+#   curl -s -w "TTFB: %{time_starttransfer}s\n" \
+#     http://localhost:11420/v1/chat/completions \
+#     -H "Content-Type: application/json" \
+#     -d '{"model":"Snowball-Enaga","messages":[{"role":"user","content":"test"}],"stream":true}'
+#
+# Two-query session test (same session_id, verify no cross-contamination):
+#   curl -s http://localhost:11420/v1/chat/completions \
+#     -H "Content-Type: application/json" \
+#     -d '{"model":"Snowball-Enaga","messages":[{"role":"user","content":"What is Cauchy Number"}],"stream":true,"session_id":"test-session-1"}'
+#   curl -s http://localhost:11420/v1/chat/completions \
+#     -H "Content-Type: application/json" \
+#     -d '{"model":"Snowball-Enaga","messages":[{"role":"user","content":"What is homogenous turbulent"}],"stream":true,"session_id":"test-session-1"}'
+# ===========================================================================
