@@ -32,6 +32,7 @@
 
 # Project specific volatile
 **/ollama_data/
+**.tmp**
 server_log.txt
 server_run_log.txt
 test_results.txt
