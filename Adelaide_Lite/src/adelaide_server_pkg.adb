@@ -19,6 +19,7 @@ with GNATCOLL.JSON;
 with Math_Utils;
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Real_Time;
+with Fuzzy_Match;
 
 package body Adelaide_Server_Pkg is
 
@@ -190,35 +191,6 @@ package body Adelaide_Server_Pkg is
       return Result;
    end Stream_To_String;
 
-   --  Fuzzy match: ratio of matching characters over longer string length
-   --  Case-insensitive
-   function Fuzzy_Match (Haystack, Needle : String) return Float is
-      H_Len : constant Integer := Haystack'Length;
-      N_Len : constant Integer := Needle'Length;
-      Matches : Integer := 0;
-      J : Integer := Needle'First;
-      function To_Lower (C : Character) return Character is
-      begin
-         if C in 'A' .. 'Z' then
-            return Character'Val (Character'Pos (C) + 32);
-         end if;
-         return C;
-      end To_Lower;
-   begin
-      if H_Len = 0 or else N_Len = 0 then
-         return 0.0;
-      end if;
-      for I in Haystack'Range loop
-         if J <= Needle'Last then
-            if To_Lower (Haystack (I)) = To_Lower (Needle (J)) then
-               Matches := Matches + 1;
-               J := J + 1;
-            end if;
-         end if;
-      end loop;
-      return Float (Matches) / Float (Integer'Max (H_Len, N_Len));
-   end Fuzzy_Match;
-
    Is_External_Agent : Boolean := False;
 
    --------------
@@ -227,12 +199,22 @@ package body Adelaide_Server_Pkg is
    is
        URI    : constant String := AWS.Status.URI (Request);
        UA     : constant String := AWS.Status.User_Agent (Request);
+       Match_Score : constant Float := Fuzzy_Match.Match (UA, "OpenCode");
     begin
        --  Fuzzy match User-Agent against known external agents
-       Is_External_Agent := Fuzzy_Match (UA, "OpenCode") >= 0.7;
-       Ada.Text_IO.Put_Line ("[API] Request: " & URI &
-                             " | UA: " & UA &
-                             (if Is_External_Agent then " [EXTERNAL]" else ""));
+       Is_External_Agent := Match_Score >= 0.7;
+       declare
+         Score_Str : String := Float'Image (Match_Score * 100.0);
+       begin
+         --  Trim leading space from Float'Image
+         if Score_Str'Length > 1 and then Score_Str (Score_Str'First) = ' ' then
+            Score_Str := Score_Str (Score_Str'First + 1 .. Score_Str'Last);
+         end if;
+         Ada.Text_IO.Put_Line ("[API] Request: " & URI &
+                               " | UA: " & UA &
+                               " | Confidence: " & Score_Str & "%" &
+                               (if Is_External_Agent then " [EXTERNAL]" else ""));
+       end;
       declare
          Method : constant String := AWS.Status.Method (Request);
       Raw_S  : constant String := AWS.Status.Parameter (Request, "prompt");
