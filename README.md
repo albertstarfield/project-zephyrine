@@ -38,6 +38,23 @@ Adelaide Lite is specifically tailored for environments with lower storage and c
 2.  **WCET Enforcements:** The Worst-Case Execution Time (WCET) manager actively monitors and terminates non-deterministic AI generation if it breaches strict latency budgets, falling back to cached or deterministic responses. for ELP0 ELP1 ELP2 and ELP 3
 3.  **Hybrid Deno Global Internet Reference Hooks:** Instead of embedding fragile web drivers, Adelaide Lite securely spawns isolated Deno/TypeScript subprocesses (`playwright_scraper.ts`) that utilize stealth-plugin techniques to breach bot-detection challenges and retrieve factual data for the generative core without compromising the stability of the Ada parent process.
 
+### 🕊️ Volatus Damarae
+
+The Ada-native orchestration layer of Adelaide Lite is codenamed **Volatus Damarae** — a deliberate departure from the Python-centric architecture of Project Zephyrine.
+
+Where Zephyrine relies on Python for scheduling, embedding math, and inference routing, Volatus Damarae replaces those layers with native Ada tasking, the ELP priority queue, and Kratos crash isolation. This yields deterministic scheduling, sub-millisecond TTFB, and memory safety guarantees that a Python orchestrator cannot provide.
+
+The ELP queue features four priority tiers:
+
+| Level | Role | Description |
+|-------|------|-------------|
+| **ELP0** | Background | Deep cognitive reasoning, indexing, embedding — preemptible |
+| **ELP1** | Foreground | Real-time inference, user-facing generation — high priority |
+| **ELP2** | Deterministic | Stella-Icarus Deterministic API responses |
+| **ELP3** | Reserved | Future orchestration layers |
+
+All inference flows through a single serial queue (parallelism = 1) to prevent heap corruption from concurrent llama.cpp FFI calls on shared contexts.
+
 ### 🎭 API Interfaces
 
 Adelaide Lite maintains compatibility with standard communication dialects to ease integration.
