@@ -1290,6 +1290,7 @@ package body Model_Manager is
                end if;
             end Get_Router_Prompt;
          begin
+            Push_Chunk (Stream, Session_ID, "[Adelaide Core] Decision routing (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
             Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
             Generate
               (Qwen_9B,
@@ -1470,6 +1471,7 @@ package body Model_Manager is
 
          Synth_Prompt : constant String := Get_Final_Prompt;
       begin
+         Push_Chunk (Stream, Session_ID, "[Adelaide Core] Generating brilliant response..." & ASCII.LF);
          Generate_Speculative
            (Target_Kind     => Qwen_9B,
             Draft_Kind      => Qwen_0_8B,
