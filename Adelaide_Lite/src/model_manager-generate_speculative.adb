@@ -263,35 +263,62 @@ begin
 
     --  Verbose: push status into thinking block
     if Stream /= null and then not External_Agent then
-      Push_Chunk (Stream, Session_ID,
-        "[Adelaide Core]: [Thought] Models ready. Target:" & Target_Kind'Img &
-        " Draft:" & Draft_Kind'Img &
-        " Ctx:" & Models (Target_Kind).Current_Ctx'Img &
-        " MaxTok:" & Max_Tokens'Img & ASCII.LF);
+      declare
+         Draft_Loaded : constant Boolean := Models (Draft_Kind).Loaded;
+         Spec_Status : constant String :=
+           (if Draft_Loaded
+            then "Draft loaded (0.8B, too small for useful speculations)"
+            else "Draft unavailable, standard generation");
+      begin
+         Push_Chunk (Stream, Session_ID,
+           "[Adelaide Core]: [Thought] Models ready. Target:" & Target_Kind'Img &
+           " Ctx:" & Models (Target_Kind).Current_Ctx'Img &
+           " MaxTok:" & Max_Tokens'Img &
+           " | " & Spec_Status & ASCII.LF);
+      end;
    end if;
 
-     --  STANDARD AUTOREGRESSIVE GENERATION (target model only)
-    --  Draft model (0.8B) is too small to provide useful speculative tokens
-    for I in 1 .. Max_Tokens loop
-       declare
-          Token : constant Llama_Token :=
-            Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
-       begin
-          if Llama_Vocab_Is_Eog (Vocab, Token) then
-             exit;
-          end if;
-          Emit_Token (Token, Vocab);
-          Decode_Context (Models (Target_Kind).Context, Token);
-       end;
-    end loop;
+      --  STANDARD AUTOREGRESSIVE GENERATION (target model only)
+     --  Draft model (0.8B) is too small to provide useful speculative tokens
+     declare
+        Generated_Count : Integer := 0;
+        Gen_T0 : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+     begin
+        for I in 1 .. Max_Tokens loop
+           declare
+              Token : constant Llama_Token :=
+                Llama_Sampler_Sample (Target_Sampler, Models (Target_Kind).Context, -1);
+           begin
+              if Llama_Vocab_Is_Eog (Vocab, Token) then
+                 exit;
+              end if;
+              Emit_Token (Token, Vocab);
+              Decode_Context (Models (Target_Kind).Context, Token);
+              Generated_Count := Generated_Count + 1;
+           end;
+        end loop;
 
-    --  Generation complete (server-side only)
-    Ada.Text_IO.Put_Line ("[Speculative] Generation complete. Tokens generated:" & Max_Tokens'Img);
+        declare
+           Gen_Dur : constant Duration := Ada.Calendar.Clock - Gen_T0;
+           TPS : Float;
+        begin
+           if Gen_Dur > 0.0 then
+              TPS := Float (Generated_Count) / Float (Gen_Dur);
+           else
+              TPS := 0.0;
+           end if;
+           Ada.Text_IO.Put_Line ("[Speculative] Generation complete. Tokens:" & Generated_Count'Img &
+                                 " in" & Duration'Image (Gen_Dur) &
+                                 "s (" & Integer (TPS)'Img & " tok/s)");
 
-    if Stream /= null and then not External_Agent then
-        Push_Chunk (Stream, Session_ID,
-          "[Adelaide Core]: [Thought] Speculative generation complete. Max tokens: " & Max_Tokens'Img & ASCII.LF);
-    end if;
+           if Stream /= null and then not External_Agent then
+               Push_Chunk (Stream, Session_ID,
+                 "[Adelaide Core]: [Thought] Generated " & Generated_Count'Img &
+                 " tokens in" & Duration'Image (Gen_Dur) &
+                 "s (" & Integer (TPS)'Img & " tok/s)" & ASCII.LF);
+           end if;
+        end;
+     end;
 
     if Stream /= null then
       Flush_Parser (Stream, Session_ID, Parser);
