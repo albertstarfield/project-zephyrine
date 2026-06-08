@@ -189,9 +189,11 @@ package body Adelaide_Server_Pkg is
    function Dispatch
      (Request : AWS.Status.Data) return AWS.Response.Data
    is
-      URI    : constant String := AWS.Status.URI (Request);
-   begin
-      Ada.Text_IO.Put_Line ("[API] Request: " & URI);
+       URI    : constant String := AWS.Status.URI (Request);
+       UA     : constant String := AWS.Status.User_Agent (Request);
+    begin
+       Ada.Text_IO.Put_Line ("[API] Request: " & URI &
+                             " | UA: " & UA);
       declare
          Method : constant String := AWS.Status.Method (Request);
       Raw_S  : constant String := AWS.Status.Parameter (Request, "prompt");
@@ -673,8 +675,8 @@ package body Adelaide_Server_Pkg is
                         Msg     : constant JSON_Value := Create_Object;
                         Usage   : constant JSON_Value := Create_Object;
                      begin
-                        Set_Field (Msg, "role", "assistant");
-                        Set_Field (Msg, "content", To_String (Result));
+                         Set_Field (Msg, "role", "assistant");
+                         Set_Field (Msg, "content", To_String (Result));
                         Set_Field (Choice, "index", Integer'(0));
                         Set_Field (Choice, "message", Msg);
                         Set_Field (Choice, "finish_reason", "stop");

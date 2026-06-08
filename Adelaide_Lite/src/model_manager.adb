@@ -397,6 +397,16 @@ package body Model_Manager is
    is
       pragma Unreferenced (Session_ID, Level);
    begin
+      --  External agent detection: if the prompt contains ChatML instruction
+      --  markers or system-level framing, it's an external agent app
+      --  (e.g. OpenCode, OpenWebUI, etc.) — bypass personality pipeline.
+      if Index (Msg, "<|im_start|>system") > 0
+        or else Index (Msg, "<|im_start|>user") > 0
+        or else Index (Msg, "<|im_start|>assistant") > 0
+      then
+         return "External_Agent";
+      end if;
+
       if Index (Msg, "code") > 0 or else Index (Msg, "program") > 0 then
          return "Technical";
       else
@@ -1153,6 +1163,31 @@ package body Model_Manager is
       T0 := Ada.Calendar.Clock;
 
       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
+
+      --  EXTERNAL AGENT PASSTHROUGH: If the prompt is already formatted
+      --  by an external agent app (ChatML tags detected), bypass the
+      --  entire personality pipeline. Raw LLM output only — GPU passthrough.
+      declare
+         Category : constant String :=
+           Get_Request_Category (Prompt, Session_ID, Level);
+      begin
+         if Category = "External_Agent" then
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[Hybrid]" & AnsiAda.Reset &
+                      " External_Agent detected - passthrough mode.");
+            Generate
+              (Qwen_9B,
+               Prompt,
+               Result,
+               Images,
+               Session_ID,
+               8192,
+               Stream,
+               False,  --  Orch_Think_Open: no orchestration thinking
+               Level);
+            return;
+         end if;
+      end;
 
       declare
          Cached_Res : constant String :=
