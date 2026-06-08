@@ -51,7 +51,7 @@ The ELP queue features four priority tiers:
 | **ELP0** | Background | Deep cognitive reasoning, indexing, embedding — preemptible |
 | **ELP1** | Foreground | Real-time inference, user-facing generation — high priority |
 | **ELP2** | Deterministic | Stella-Icarus Deterministic API responses |
-| **ELP3** | Reserved | Future orchestration layers |
+| **ELP3** | Light Task | Deterministic light task — 1ms fixed nanosecond WCET, Ravenscar profile |
 
 All inference flows through a single serial queue (parallelism = 1) to prevent heap corruption from concurrent llama.cpp FFI calls on shared contexts.
 

@@ -4,10 +4,10 @@ pragma SPARK_Mode (Off);
 --  Architecture: "Volatus Damarae"
 --  A departure from the Python-centric orchestration of Project Zephyrine.
 --  This Ada-native queue manages four Elevated Level Privilege priorities:
---    ELP0: Deep cognitive reasoning (background indexing, embedding)
+--    ELP0: Deep cognitive reasoning (background indexing, embedding) — preemptible
 --    ELP1: High-priority real-time inference (user-facing generation)
 --    ELP2: Stella-Icarus Deterministic API response
---    ELP3: Reserved for future orchestration layers
+--    ELP3: Deterministic light task — 1ms fixed nanosecond WCET, Ravenscar profile
 --
 --  Serial processing (parallelism = 1) prevents heap corruption from
 --  concurrent llama.cpp FFI calls on shared contexts.
