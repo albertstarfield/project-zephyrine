@@ -99,6 +99,8 @@ package Model_Manager is
 
    function Generator_Callback (Prompt : String) return String;
 
+   function Sanitize_Think_Tags (Text : String) return String;
+
    Current_WCET : Duration := 0.0;
    Current_WCET_ELP0 : Duration := 0.0;
    Current_WCET_ELP1 : Duration := 0.0;
