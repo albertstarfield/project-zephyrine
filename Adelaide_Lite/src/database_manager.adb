@@ -240,7 +240,8 @@ package body Database_Manager is
      (Source   : String;
       Relation : String;
       Target   : String;
-      Weight   : Float := 1.0)
+      Weight   : Float := 1.0;
+      Context  : String := "")
    is
    begin
       if Lit_DB_Ptr = null then
@@ -249,13 +250,14 @@ package body Database_Manager is
       declare
          Stmt : Statement := Prepare
            (Lit_DB_Ptr.all,
-            "INSERT INTO knowledge_graph (source, relation, target, weight) " &
-            "VALUES (?, ?, ?, ?)");
+            "INSERT INTO knowledge_graph (source, relation, target, weight, context) " &
+            "VALUES (?, ?, ?, ?, ?)");
       begin
          Bind_Text (Stmt, 1, Source);
          Bind_Text (Stmt, 2, Relation);
          Bind_Text (Stmt, 3, Target);
          Bind_Double (Stmt, 4, Weight);
+         Bind_Text (Stmt, 5, Context);
          Step (Stmt);
       end;
    exception

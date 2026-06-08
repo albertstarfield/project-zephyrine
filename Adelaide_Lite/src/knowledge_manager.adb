@@ -353,11 +353,67 @@ package body Knowledge_Manager is
    end Native_Crawl_Task;
 
    task body Thought_Task is
-      Success       : Boolean;
-      Chunk_Content : Unbounded_String;
-      Target_Text   : Unbounded_String;
-      Prompt        : Unbounded_String;
-      Res_Val       : Unbounded_String;
+      Success          : Boolean;
+      Chunk_Content    : Unbounded_String;
+      Target_Text      : Unbounded_String;
+      Prompt           : Unbounded_String;
+      Res_Val          : Unbounded_String;
+      Extraction_Count : Natural := 0;
+      GraphML_Interval : constant Natural := 10;
+
+      --  Parse "Source | Relation | Target" lines from LLM output
+      procedure Store_Triples (Output : String; Source_Text : String) is
+         Line_Start : Positive := Output'First;
+         Line_End   : Natural;
+         Src, Rel, Tgt : Unbounded_String;
+         Sep_Pos1, Sep_Pos2 : Natural;
+      begin
+         while Line_Start <= Output'Last loop
+             Line_End := Index (Output (Line_Start .. Output'Last), (1 => ASCII.LF));
+            if Line_End = 0 then
+               Line_End := Output'Last + 1;
+            end if;
+            declare
+               Line : constant String := Trim (Output (Line_Start .. Line_End - 1), Ada.Strings.Both);
+            begin
+               if Line'Length > 0 then
+                  Sep_Pos1 := Index (Line, " | ");
+                  if Sep_Pos1 > 0 then
+                     Sep_Pos2 := Index (Line (Sep_Pos1 + 3 .. Line'Last), " | ");
+                     if Sep_Pos2 > 0 then
+                        Sep_Pos2 := Sep_Pos2 + Sep_Pos1 + 2;
+                        Src := To_Unbounded_String (Trim (Line (Line'First .. Sep_Pos1 - 1), Ada.Strings.Both));
+                        Rel := To_Unbounded_String (Trim (Line (Sep_Pos1 + 3 .. Sep_Pos2 - 1), Ada.Strings.Both));
+                        Tgt := To_Unbounded_String (Trim (Line (Sep_Pos2 + 3 .. Line'Last), Ada.Strings.Both));
+                        if Length (Src) > 0 and then Length (Rel) > 0 and then Length (Tgt) > 0 then
+                           Database_Manager.Add_Graph_Relation
+                             (Source   => To_String (Src),
+                              Relation => To_String (Rel),
+                              Target   => To_String (Tgt),
+                              Weight   => 1.0,
+                              Context  => Source_Text);
+                           Extraction_Count := Extraction_Count + 1;
+
+                           --  Periodic GraphML export
+                           if Extraction_Count mod GraphML_Interval = 0 then
+                              begin
+                                 Database_Manager.Export_GraphML ("knowledge_graph.graphml");
+                                 Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Thought]" &
+                                   AnsiAda.Reset & " Exported knowledge_graph.graphml (" &
+                                   Extraction_Count'Img & " relations)");
+                              exception
+                                 when others => null;
+                              end;
+                           end if;
+                        end if;
+                     end if;
+                  end if;
+               end if;
+            end;
+            Line_Start := Line_End + 1;
+         end loop;
+      end Store_Triples;
+
    begin
       accept Start;
       loop
@@ -379,6 +435,10 @@ package body Knowledge_Manager is
                Model_Manager.Generate
                  (Kind => Qwen_0_8B, Prompt => To_String (Prompt),
                   Result => Res_Val, Level => ELP0);
+               --  Store extracted triples
+               if Length (Res_Val) > 0 then
+                  Store_Triples (To_String (Res_Val), To_String (Target_Text));
+               end if;
             exception
                when others => null;
             end;
