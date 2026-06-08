@@ -652,40 +652,44 @@ package body Model_Manager is
    end Is_Prefix;
 
     procedure Process_And_Push_Char
-      (Stream     : Streaming_Queue.Queue_Access;
-       Session_ID : String;
-       Parser     : in out Stream_Parser_State;
-       C          : Character)
+       (Stream     : Streaming_Queue.Queue_Access;
+        Session_ID : String;
+        Parser     : in out Stream_Parser_State;
+        C          : Character)
     is
-       Think_Tag    : constant String := "<think>";
-       Close_Tag    : constant String := "</think>";
+       --  Support both <thinking> and ` tags
+       Think_Tag_A : constant String := "<thinking>";
+       Think_Tag_B : constant String := "<think>";
+       Close_Tag_A : constant String := "</thinking>";
+       Close_Tag_B : constant String := "</think>";
        Response_Tag : constant String := "</response>";
     begin
        Append (Parser.Sanitize_Buffer, C);
        declare
-          S_Str : constant String := To_String (Parser.Sanitize_Buffer);
+          Buf : constant String := To_String (Parser.Sanitize_Buffer);
        begin
-          if S_Str = Think_Tag then
+          if Buf = Think_Tag_A or else Buf = Think_Tag_B then
              Parser.Sanitize_Buffer := Null_Unbounded_String;
              Parser.In_Think_Block := True;
              return;
-          elsif S_Str = Close_Tag then
+          elsif Buf = Close_Tag_A or else Buf = Close_Tag_B then
              Parser.Sanitize_Buffer := Null_Unbounded_String;
              Parser.In_Think_Block := False;
              if Parser.Orch_Think_Open then
                 Parser.Orch_Think_Open := False;
              end if;
              return;
-          elsif S_Str = Response_Tag then
-             --  Strip LLM-generated response XML tags
+          elsif Buf = Response_Tag then
              Parser.Sanitize_Buffer := Null_Unbounded_String;
              return;
           end if;
 
           -- If current buffer is a potential prefix of any tag, wait for more.
-          if Is_Prefix (S_Str, Think_Tag)
-            or else Is_Prefix (S_Str, Close_Tag)
-            or else Is_Prefix (S_Str, Response_Tag)
+          if Is_Prefix (Buf, Think_Tag_A)
+            or else Is_Prefix (Buf, Think_Tag_B)
+            or else Is_Prefix (Buf, Close_Tag_A)
+            or else Is_Prefix (Buf, Close_Tag_B)
+            or else Is_Prefix (Buf, Response_Tag)
           then
              return;
           end if;
@@ -693,10 +697,10 @@ package body Model_Manager is
           -- Stream EVERYTHING out, but strip the raw tags and apply the requested NPU token speeds
           if not Parser.In_Think_Block then
              delay 0.0005;
-             Push_Chunk (Stream, Session_ID, S_Str);
+             Push_Chunk (Stream, Session_ID, Buf);
           else
              delay 0.0016;
-             Push_Chunk (Stream, Session_ID, S_Str);
+             Push_Chunk (Stream, Session_ID, Buf);
           end if;
           Parser.Sanitize_Buffer := Null_Unbounded_String;
        end;
@@ -739,8 +743,12 @@ package body Model_Manager is
       I   : Positive := Text'First;
    begin
       while I <= Text'Last loop
-         if I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
+         if I + 9 <= Text'Last and then Text (I .. I + 9) = "<thinking>" then
+            I := I + 10;
+         elsif I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
             I := I + 7;
+         elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</thinking>" then
+            I := I + 11;
          elsif I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
             I := I + 8;
          elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</response>" then
