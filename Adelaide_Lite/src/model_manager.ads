@@ -54,17 +54,20 @@ package Model_Manager is
       External_Agent : Boolean := False);
 
    procedure Generate_Speculative
-      (Target_Kind     : Model_Type;
-       Draft_Kind      : Model_Type;
-       Prompt          : String;
-       Result          : out Unbounded_String;
-       Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-       Session_ID      : String := "";
-       Requested_Ctx   : Positive := 4096;
-       Stream          : Streaming_Queue.Queue_Access := null;
-       Orch_Think_Open : Boolean := False;
-       Level           : ELP_Level := ELP1;
-       External_Agent  : Boolean := False);
+       (Target_Kind     : Model_Type;
+        Draft_Kind      : Model_Type;
+        Prompt          : String;
+        Result          : out Unbounded_String;
+        Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+        Session_ID      : String := "";
+        Requested_Ctx   : Positive := 4096;
+        Stream          : Streaming_Queue.Queue_Access := null;
+        Orch_Think_Open : Boolean := False;
+        Level           : ELP_Level := ELP1;
+        External_Agent  : Boolean := False;
+        Fault_Detected  : out Boolean;
+        Fault_Query     : out Unbounded_String;
+        Fault_Category  : out Unbounded_String);
 
    procedure Get_Embedding
      (Prompt : String;

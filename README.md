@@ -22,25 +22,25 @@
 
 [![Hippocratic License HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV](https://img.shields.io/static/v1?label=Hippocratic%20License&message=HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV&labelColor=5e2751&color=bc8c3d)](https://firstdonoharm.dev/version/3/0/bds-bod-law-media-mil-soc-sup-sv.html)
 
-## Adelaide Lite: The Lightweight version Core of Project Zephyrine
+## Adelaide: The Lightweight version Core of Project Zephyrine
 
 ### A Glimpse Into the Aether: Abstract
 
-Adelaide Lite is an more efficient iteration of Project Zephyrine's core architecture, Adelaide Lite distills the conversational and adaptive nature of Zephyrine into an engine designed for minimal storage footprint, lower runtime memory usage.
+Adelaide is an more efficient iteration of Project Zephyrine's core architecture, Adelaide distills the conversational and adaptive nature of Zephyrine into an engine designed for minimal storage footprint, lower runtime memory usage.
 
 This is just another Adaptive Agent wrapper with determenistic response on certain question and query represents the integration of the **Stella-Icarus Deterministic Core** directly into the API routing layer. By utilizing an Elevated Level Privilege (ELP) priority thread scheduler and native OS tasking, we can ensure that deep cognitive reasoning (ELP0) never interrupts high-priority real-time responses on client response (ELP1), and finally ELP2 (StellaIcarus Determenistic API response)
 
 ### ⚙️ Core Architecture
 
-Adelaide Lite is specifically tailored for environments with lower storage and constrained runtime memory capacity.
+Adelaide is specifically tailored for environments with lower storage and constrained runtime memory capacity.
 
 1.  **Ada/SPARK Foundation:** Inspired by some paradigms (Not really compliance completely but just inspired), specifically (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C). the entire networking, caching, and task-scheduling layer is written in Ada, providing structured guidance against buffer overflows, race conditions, and memory leaks.
 2.  **WCET Enforcements:** The Worst-Case Execution Time (WCET) manager actively monitors and terminates non-deterministic AI generation if it breaches strict latency budgets, falling back to cached or deterministic responses. for ELP0 ELP1 ELP2 and ELP 3
-3.  **Hybrid Deno Global Internet Reference Hooks:** Instead of embedding fragile web drivers, Adelaide Lite securely spawns isolated Deno/TypeScript subprocesses (`playwright_scraper.ts`) that utilize stealth-plugin techniques to breach bot-detection challenges and retrieve factual data for the generative core without compromising the stability of the Ada parent process.
+3.  **Hybrid Deno Global Internet Reference Hooks:** Instead of embedding fragile web drivers, Adelaide securely spawns isolated Deno/TypeScript subprocesses (`playwright_scraper.ts`) that utilize stealth-plugin techniques to breach bot-detection challenges and retrieve factual data for the generative core without compromising the stability of the Ada parent process.
 
 ### 🕊️ Volatus Damarae
 
-The Ada-native orchestration layer of Adelaide Lite is codenamed **Volatus Damarae** — a deliberate departure from the Python-centric architecture of Project Zephyrine.
+The Ada-native orchestration layer of Adelaide is codenamed **Volatus Damarae** — a deliberate departure from the Python-centric architecture of Project Zephyrine.
 
 Where Zephyrine relies on Python for scheduling, embedding math, and inference routing, Volatus Damarae replaces those layers with native Ada tasking, the ELP priority queue, and Kratos crash isolation. This yields deterministic scheduling, sub-millisecond TTFB, and memory safety guarantees that a Python orchestrator cannot provide.
 
@@ -51,23 +51,23 @@ The ELP queue features four priority tiers:
 | **ELP0** | Background | Deep cognitive reasoning, indexing, embedding — preemptible |
 | **ELP1** | Foreground | Real-time inference, user-facing generation — high priority |
 | **ELP2** | Deterministic | Stella-Icarus Deterministic API responses |
-| **ELP3** | Light Task | Deterministic light task — 1ms fixed nanosecond WCET, Ravenscar profile |
+| **ELP3** | Determenistic Life Critical | Deterministic light task — 1ms fixed nanosecond WCET, Ravenscar profile |
 
 All inference flows through a single serial queue (parallelism = 1) to prevent heap corruption from concurrent llama.cpp FFI calls on shared contexts.
 
-**Pool Capacity:** 9223372036854775808 items — expanded queue depth, never blocks on enqueue.
+**Pool Capacity:** 4611686018427387904 items — expanded queue depth, never blocks on enqueue.
 **Context Paging:** 9223372036854775808 tokens — increased context window from previous architecture.
 
 ### 🎭 API Interfaces
 
-Adelaide Lite maintains compatibility with standard communication dialects to ease integration.
+Adelaide maintains compatibility with standard communication dialects to ease integration.
 
 *   **The OpenAI Mask (`/v1/*`):** Full compatibility layer for `/v1/chat/completions` and `/v1/models`. Future implementations will expand this to full stateful Assistant APIs routed directly into the local SQLite memory graph.
 *   **The Ollama Mask (`/api/*`):** Direct proxy and multiplexing for local inference endpoints (`/api/chat`, `/api/generate`), allowing Zephy to wrap and manage local models seamlessly.
 
 ### 🚀 Prerequisites and Quick Start
 
-Adelaide Lite is designed to be highly portable but requires a specific set of tools to minimize bloat.
+Adelaide is designed to be highly portable but requires a specific set of tools to minimize bloat.
 
 #### Requirements
 *   **Alire (Ada LIbrary REpository):** Required to resolve Ada dependencies and build the core executable.
@@ -92,7 +92,7 @@ Adelaide Lite is designed to be highly portable but requires a specific set of t
     *The script will automatically fetch Ada Web Server (AWS) packages via Alire, install the Deno Playwright Chromium binaries, and start the local API listener on port `11420`.*
 
 ## Warning
-> A Warning to Adelaide Lite users newcomers
+> A Warning to Adelaide users newcomers
 > 
 > **(Please Read Carefully)**
 > 
