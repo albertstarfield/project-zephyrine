@@ -107,27 +107,31 @@ package body Knowledge_Manager is
 
          Line := To_Unbounded_String (Get_Line (File));
          if Index (To_String (Line), "@") = 1 then
-            if Length (Current_Entry) > 0 then
-               declare
-                  Content : constant String := To_String (Current_Entry);
-                  Vec     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
-                  Len     : Natural := 0;
-               begin
-                  Model_Manager.Get_Embedding (Content, Vec, Len, ELP0);
-                  if Len > 0 then
-                     Database_Manager.Add_Literature_Chunk
-                       ("references.bib", Content, Vec (1 .. Len), "hash");
-                  end if;
-               end;
-               Current_Entry := Null_Unbounded_String;
-            end if;
+             if Length (Current_Entry) > 0 then
+                declare
+                   Raw_Content : constant String := To_String (Current_Entry);
+                   Content : constant String :=
+                     Model_Manager.Sanitize_Think_Tags (Raw_Content);
+                   Vec     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
+                   Len     : Natural := 0;
+                begin
+                   Model_Manager.Get_Embedding (Content, Vec, Len, ELP0);
+                   if Len > 0 then
+                      Database_Manager.Add_Literature_Chunk
+                        ("references.bib", Content, Vec (1 .. Len), "hash");
+                   end if;
+                end;
+                Current_Entry := Null_Unbounded_String;
+             end if;
          end if;
          Append (Current_Entry, To_String (Line) & ASCII.LF);
       end loop;
 
       if Length (Current_Entry) > 0 then
          declare
-            Content : constant String := To_String (Current_Entry);
+            Raw_Content : constant String := To_String (Current_Entry);
+            Content : constant String :=
+              Model_Manager.Sanitize_Think_Tags (Raw_Content);
             Vec     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
             Len     : Natural := 0;
          begin
@@ -183,15 +187,21 @@ package body Knowledge_Manager is
                if End_Idx = 0 then
                   End_Idx := Text'Last + 1;
                end if;
-               Append (Local_Content, Text (Start_Idx .. End_Idx - 1) & ASCII.LF);
-               if Length (Local_Content) > 1000 then
-                  Model_Manager.Get_Embedding (To_String (Local_Content), Vec, Len, ELP0);
-                  if Len > 0 then
-                     Database_Manager.Add_Literature_Chunk
-                       (Path, To_String (Local_Content), Vec (1 .. Len), "hash");
-                  end if;
-                  Local_Content := Null_Unbounded_String;
-               end if;
+                Append (Local_Content, Text (Start_Idx .. End_Idx - 1) & ASCII.LF);
+                if Length (Local_Content) > 1000 then
+                   declare
+                      Raw_C : constant String := To_String (Local_Content);
+                      Clean_C : constant String :=
+                        Model_Manager.Sanitize_Think_Tags (Raw_C);
+                   begin
+                      Model_Manager.Get_Embedding (Clean_C, Vec, Len, ELP0);
+                      if Len > 0 then
+                         Database_Manager.Add_Literature_Chunk
+                           (Path, Clean_C, Vec (1 .. Len), "hash");
+                      end if;
+                   end;
+                   Local_Content := Null_Unbounded_String;
+                end if;
                Start_Idx := End_Idx + 1;
             end loop;
          end Process_Text;
@@ -252,11 +262,17 @@ package body Knowledge_Manager is
             Line := To_Unbounded_String (Get_Line (File));
             Append (Content, To_String (Line) & ASCII.LF);
             if Length (Content) > 1000 then
-               Model_Manager.Get_Embedding (To_String (Content), Vec, Len, ELP0);
-               if Len > 0 then
-                  Database_Manager.Add_Literature_Chunk
-                    (Path, To_String (Content), Vec (1 .. Len), "hash");
-               end if;
+               declare
+                  Raw_C : constant String := To_String (Content);
+                  Clean_C : constant String :=
+                    Model_Manager.Sanitize_Think_Tags (Raw_C);
+               begin
+                  Model_Manager.Get_Embedding (Clean_C, Vec, Len, ELP0);
+                  if Len > 0 then
+                     Database_Manager.Add_Literature_Chunk
+                       (Path, Clean_C, Vec (1 .. Len), "hash");
+                  end if;
+               end;
                Content := Null_Unbounded_String;
             end if;
          end loop;
