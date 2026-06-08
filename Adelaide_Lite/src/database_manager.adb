@@ -372,21 +372,24 @@ package body Database_Manager is
                                    " Semantic Match (Sim: " & Max_Sim'Img & ") | ID" & Best_Id'Img);
          end if;
 
-         if Best_Elapsed <= Float (2.0 * WCET) then
-            if Best_Hits >= 2 then
-               Execute (Main_DB_Ptr.all,
-                       "DELETE FROM response_cache WHERE id = " & Best_Id'Img);
-               return "";
-            else
-               Execute (Main_DB_Ptr.all,
-                       "UPDATE response_cache SET hit_count = hit_count + 1, " &
-                       "last_hit_time = CURRENT_TIMESTAMP WHERE id = " &
-                       Best_Id'Img);
-               return To_String (Best_Res);
-            end if;
+         --  Require at least 30s elapsed before serving from cache.
+         --  Prevents stale/wrong responses from rapid re-requests.
+         if Best_Elapsed < 30.0 then
+            Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                                  "[Cache]" & AnsiAda.Reset &
+                                  " Too fresh (" & Best_Elapsed'Img &
+                                  "s < 30s). Skipping cache.");
+            return "";
+         end if;
+
+         --  Evict stale entries (hit 2+ times, served successfully)
+         if Best_Hits >= 2 then
+            Execute (Main_DB_Ptr.all,
+                    "DELETE FROM response_cache WHERE id = " & Best_Id'Img);
+            return "";
          else
             Execute (Main_DB_Ptr.all,
-                    "UPDATE response_cache SET hit_count = 1, " &
+                    "UPDATE response_cache SET hit_count = hit_count + 1, " &
                     "last_hit_time = CURRENT_TIMESTAMP WHERE id = " &
                     Best_Id'Img);
             return To_String (Best_Res);
