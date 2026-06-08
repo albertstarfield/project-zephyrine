@@ -67,7 +67,8 @@ package Model_Manager is
    procedure Get_Embedding
      (Prompt : String;
       Result : out Math_Utils.Vector;
-      Length : out Natural);
+      Length : out Natural;
+      Level  : ELP_Level := ELP1);
 
    function Should_Abort_ELP0 return Boolean;
 
