@@ -1430,13 +1430,9 @@ package body Model_Manager is
               "<|im_start|>assistant" & ASCII.LF;
          begin
             if External_Agent then
-               --  Passthrough: skip personality, keep multi-hop/tools result
-               if Length (Internal_State) > 0 then
-                  return Prompt & ASCII.LF &
-                    "Fact-Check: " & To_String (Internal_State);
-               else
-                  return Prompt;
-               end if;
+               --  Passthrough: skip personality, skip fact-check in output.
+               --  LLM already has enriched context from multi-hop/tools.
+               return Prompt;
             elsif Raw_Prompt then
                declare
                   --  Find where the first user/assistant block begins.
