@@ -197,6 +197,12 @@ package body Adelaide_Server_Pkg is
     function Dispatch
       (Request : AWS.Status.Data) return AWS.Response.Data
     is
+        --  UserAgent=FuzzyMatch: Behavioural patch for external agent detection.
+        --  External agent apps (OpenCode, OpenWebUI, etc.) send structured
+        --  chat completions requests but expect raw LLM output, not our
+        --  personality pipeline. Fuzzy matching the User-Agent against known
+        --  agent signatures at 0.7 threshold lets us bypass the personality
+        --  orchestrator and passthrough raw inference.
         URI    : constant String := AWS.Status.URI (Request);
         UA     : constant String := AWS.Status.User_Agent (Request);
         Match_Score : Float := 0.0;
