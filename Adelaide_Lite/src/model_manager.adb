@@ -1158,20 +1158,31 @@ package body Model_Manager is
       --  EXTERNAL AGENT PASSTHROUGH: If User-Agent fuzzy-matched an external
       --  agent app (0.7+ threshold), bypass personality pipeline.
       --  Raw LLM output only.
+      --
+      --  Two output levels:
+      --  1. RawZepForm: personality pipeline with <think> block representing
+      --     the research/reasoning process before the final answer.
+      --  2. ExclusiveStatusQuoWesternFormatAI: raw mode for external agents,
+      --     only returns the raw language model response with no wrapping.
       if External_Agent then
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                    "[Hybrid]" & AnsiAda.Reset &
                    " External agent detected - passthrough mode.");
-         Generate
-           (Qwen_9B,
-            Prompt,
-            Result,
-            Images,
-            Session_ID,
-            8192,
-            Stream,
-            False,
-            Level);
+         ELP_Queue.Enqueue (Level, Qwen_9B);
+         Generate_Speculative
+           (Target_Kind     => Qwen_9B,
+            Draft_Kind      => Qwen_0_8B,
+            Prompt          => Prompt,
+            Result          => Current_Response,
+            Images          => Images,
+            Session_ID      => Session_ID,
+            Requested_Ctx   => 8192,
+            Stream          => Stream,
+            Orch_Think_Open => False,
+            Level           => Level);
+         Result := Current_Response;
+         declare D : ELP_Level; K : Model_Type;
+         begin ELP_Queue.Dequeue (D, K); end;
          return;
       end if;
 
