@@ -99,12 +99,13 @@ package body Adelaide_Server_Pkg is
    end Wrap_Response;
 
    task type Generator_Task is
-      entry Start
-        (Prompt : String; Model_Name : String;
-         Format : Streaming_Queue.Format_Type;
-         Q : Streaming_Queue.Queue_Access;
-         Session_ID : String;
-         Agentic : Boolean := False; Raw_Prompt : Boolean := False);
+       entry Start
+         (Prompt : String; Model_Name : String;
+          Format : Streaming_Queue.Format_Type;
+          Q : Streaming_Queue.Queue_Access;
+          Session_ID : String;
+          Agentic : Boolean := False; Raw_Prompt : Boolean := False;
+          External_Agent : Boolean := False);
    end Generator_Task;
 
    type Generator_Task_Access is access Generator_Task;
@@ -116,6 +117,7 @@ package body Adelaide_Server_Pkg is
       Res : Unbounded_String;
       Is_Ag : Boolean;
       Is_Raw : Boolean;
+      Is_Ext : Boolean;
       use type Streaming_Queue.Queue_Access;
    begin
       accept Start
@@ -123,7 +125,8 @@ package body Adelaide_Server_Pkg is
          Format : Streaming_Queue.Format_Type;
          Q : Streaming_Queue.Queue_Access;
          Session_ID : String;
-         Agentic : Boolean := False; Raw_Prompt : Boolean := False)
+         Agentic : Boolean := False; Raw_Prompt : Boolean := False;
+         External_Agent : Boolean := False)
       do
          P := To_Unbounded_String (Prompt);
          S_ID := To_Unbounded_String (Session_ID);
@@ -131,16 +134,18 @@ package body Adelaide_Server_Pkg is
          --  Dispatch already set format and pushed the immediate ACK.
          Is_Ag := Agentic;
          Is_Raw := Raw_Prompt;
+         Is_Ext := External_Agent;
       end Start;
 
       begin
          Model_Manager.Hybrid_Generate
-           (Prompt     => To_String (P),
-            Result     => Res,
-            Session_ID => To_String (S_ID),
-            Stream     => QA,
-            Agentic    => Is_Ag,
-            Raw_Prompt => Is_Raw);
+           (Prompt         => To_String (P),
+            Result         => Res,
+            Session_ID     => To_String (S_ID),
+            Stream         => QA,
+            Agentic        => Is_Ag,
+            Raw_Prompt     => Is_Raw,
+            External_Agent => Is_Ext);
       exception
          when E : others =>
             Ada.Text_IO.Put_Line ("Generator Task Error: " &
@@ -185,6 +190,29 @@ package body Adelaide_Server_Pkg is
       return Result;
    end Stream_To_String;
 
+   --  Fuzzy match: ratio of matching characters over longer string length
+   function Fuzzy_Match (Haystack, Needle : String) return Float is
+      H_Len : constant Integer := Haystack'Length;
+      N_Len : constant Integer := Needle'Length;
+      Matches : Integer := 0;
+      J : Integer := Needle'First;
+   begin
+      if H_Len = 0 or else N_Len = 0 then
+         return 0.0;
+      end if;
+      for I in Haystack'Range loop
+         if J <= Needle'Last then
+            if Haystack (I) = Needle (J) then
+               Matches := Matches + 1;
+               J := J + 1;
+            end if;
+         end if;
+      end loop;
+      return Float (Matches) / Float (Integer'Max (H_Len, N_Len));
+   end Fuzzy_Match;
+
+   Is_External_Agent : Boolean := False;
+
    --------------
    function Dispatch
      (Request : AWS.Status.Data) return AWS.Response.Data
@@ -192,8 +220,11 @@ package body Adelaide_Server_Pkg is
        URI    : constant String := AWS.Status.URI (Request);
        UA     : constant String := AWS.Status.User_Agent (Request);
     begin
+       --  Fuzzy match User-Agent against known external agents
+       Is_External_Agent := Fuzzy_Match (UA, "OpenCode") >= 0.7;
        Ada.Text_IO.Put_Line ("[API] Request: " & URI &
-                             " | UA: " & UA);
+                             " | UA: " & UA &
+                             (if Is_External_Agent then " [EXTERNAL]" else ""));
       declare
          Method : constant String := AWS.Status.Method (Request);
       Raw_S  : constant String := AWS.Status.Parameter (Request, "prompt");
@@ -648,7 +679,8 @@ package body Adelaide_Server_Pkg is
 
                   T.Start (To_String (Prompt), To_String (Req_Model),
                            Fmt, Q, To_String (S_ID),
-                           Is_Agentic, Is_Raw_Prompt);
+                           Is_Agentic, Is_Raw_Prompt,
+                           Is_External_Agent);
                   return Wrap_Response (AWS.Response.Stream
                     (Content_Type => (if URI = "/v1/chat/completions" or else
                                          URI = "/v1/completions"

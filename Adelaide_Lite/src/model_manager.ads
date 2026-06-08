@@ -43,14 +43,15 @@ package Model_Manager is
 
    --  Perform multi-hop reasoning
    procedure Hybrid_Generate
-     (Prompt     : String;
-      Result     : out Unbounded_String;
-      Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-      Session_ID : String := "";
-      Stream     : Streaming_Queue.Queue_Access := null;
-      Level      : ELP_Level := ELP1;
-      Agentic    : Boolean := False;
-      Raw_Prompt : Boolean := False);
+     (Prompt         : String;
+      Result         : out Unbounded_String;
+      Images         : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+      Session_ID     : String := "";
+      Stream         : Streaming_Queue.Queue_Access := null;
+      Level          : ELP_Level := ELP1;
+      Agentic        : Boolean := False;
+      Raw_Prompt     : Boolean := False;
+      External_Agent : Boolean := False);
 
    procedure Generate_Speculative
      (Target_Kind     : Model_Type;

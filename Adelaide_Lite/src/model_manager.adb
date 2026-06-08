@@ -1120,18 +1120,19 @@ package body Model_Manager is
 
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
     procedure Hybrid_Generate
-      (Prompt     : String;
-       Result     : out Unbounded_String;
-       Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-       Session_ID : String := "";
-       Stream     : Streaming_Queue.Queue_Access := null;
-       Level      : ELP_Level := ELP1;
-       Agentic    : Boolean := False;
-       Raw_Prompt : Boolean := False)
+      (Prompt         : String;
+       Result         : out Unbounded_String;
+       Images         : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+       Session_ID     : String := "";
+       Stream         : Streaming_Queue.Queue_Access := null;
+       Level          : ELP_Level := ELP1;
+       Agentic        : Boolean := False;
+       Raw_Prompt     : Boolean := False;
+       External_Agent : Boolean := False)
    is
       Whimsical_Adelaide : constant String :=
         "You are Adelaide Zephyrine Charlotte, model name Snowball-Enaga, " &
-        "a whimsical, curious, and endearingly cute AI companion " &
+        "a whimsical, curious, and endearingly cute Automata companion " &
         "with high integrity. " &
         "You love exploring ideas with wonder and playfulness, " &
         "but you never compromise on honesty or accuracy. " &
@@ -1154,14 +1155,13 @@ package body Model_Manager is
 
       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
 
-      --  EXTERNAL AGENT PASSTHROUGH: When the dispatch detected a chat
-      --  format request (messages array), Raw_Prompt is True. This means
-      --  the prompt is already structured by an external agent app.
-      --  Bypass personality pipeline. Raw LLM output only.
-      if Raw_Prompt then
+      --  EXTERNAL AGENT PASSTHROUGH: If User-Agent fuzzy-matched an external
+      --  agent app (0.7+ threshold), bypass personality pipeline.
+      --  Raw LLM output only.
+      if External_Agent then
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                    "[Hybrid]" & AnsiAda.Reset &
-                   " External agent (Raw_Prompt) - passthrough mode.");
+                   " External agent detected - passthrough mode.");
          Generate
            (Qwen_9B,
             Prompt,
