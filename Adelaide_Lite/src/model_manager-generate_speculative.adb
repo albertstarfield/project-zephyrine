@@ -32,7 +32,8 @@ is
    Clean_P  : constant String := Sanitize_UTF8 (Prompt);
    Prompt_C : chars_ptr := New_String (Clean_P);
    Parser   : Stream_Parser_State;
-   T0, T1   : Ada.Calendar.Time;
+    T0, T1   : Ada.Calendar.Time;
+    Prefill_Dur : Duration := 0.0;
 
    --  Speculative decoding parameters
    Draft_Batch_K : constant Integer := 4;  -- Number of draft tokens to propose per step
@@ -177,6 +178,7 @@ begin
        Current_Pos : int := 0;
        Tokens_Left : int := N_Toks;
        Last_Prefill_Heartbeat : Ada.Calendar.Time := Ada.Calendar.Clock;
+       Prefill_T0 : constant Ada.Calendar.Time := Ada.Calendar.Clock;
     begin
        while Tokens_Left > 0 loop
           declare
@@ -231,25 +233,37 @@ begin
             end if;
              Tokens_Left := Tokens_Left - To_Decode;
              Current_Pos := Current_Pos + To_Decode;
-             --  Heartbeat during long prefill
-             declare
-                H_Now : constant Ada.Calendar.Time := Ada.Calendar.Clock;
-             begin
-                if not External_Agent and then Stream /= null and then (H_Now - Last_Prefill_Heartbeat) > 2.0 then
-                   Push_Chunk (Stream, Session_ID,
-                     "[Adelaide Core]: [Thought] I'm still here and processing..." & ASCII.LF);
-                   Last_Prefill_Heartbeat := H_Now;
-                end if;
-             end;
-          end;
-       end loop;
-    end;
+              --  Heartbeat during long prefill
+              declare
+                 H_Now : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+                 Elapsed : constant Duration := H_Now - Prefill_T0;
+                 TPS : Integer;
+              begin
+                 if not External_Agent and then Stream /= null and then (H_Now - Last_Prefill_Heartbeat) > 2.0 then
+                    TPS := (if Elapsed > 0.0 then Integer (Float (Current_Pos) / Float (Elapsed)) else 0);
+                    Push_Chunk (Stream, Session_ID,
+                      "[Adelaide Core]: [Thought] Prefill: " & Current_Pos'Img & "/" & N_Toks'Img &
+                      " tokens processed (" & TPS'Img & " tok/s)" & ASCII.LF);
+                    Last_Prefill_Heartbeat := H_Now;
+                 end if;
+              end;
+           end;
+        end loop;
+        Prefill_Dur := Ada.Calendar.Clock - Prefill_T0;
+     end;
 
    --  Verbose: prefill complete
     if Stream /= null and then not External_Agent then
-        Push_Chunk (Stream, Session_ID,
-         "[Adelaide Core]: [Thought] Prompt processed (" & N_Toks'Img &
-         " tokens). Draft loaded: " & Boolean'Image (Models (Draft_Kind).Loaded) & ASCII.LF);
+        declare
+           TPS : Integer := (if Prefill_Dur > 0.0
+                             then Integer (Float (N_Toks) / Float (Prefill_Dur))
+                             else 0);
+        begin
+           Push_Chunk (Stream, Session_ID,
+            "[Adelaide Core]: [Thought] Prompt processed (" & N_Toks'Img &
+            " tokens in" & Duration'Image (Prefill_Dur) &
+            "s, " & TPS'Img & " tok/s)." & ASCII.LF);
+        end;
    end if;
 
    --  Create samplers
