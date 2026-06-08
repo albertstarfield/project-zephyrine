@@ -55,8 +55,8 @@ The ELP queue features four priority tiers:
 
 All inference flows through a single serial queue (parallelism = 1) to prevent heap corruption from concurrent llama.cpp FFI calls on shared contexts.
 
-**Pool Capacity:** 9223372036854775808 items — effectively unlimited queue depth, never blocks on enqueue.
-**Context Paging:** 9223372036854775808 tokens — virtual context window, pages dynamically to fit any prompt size without truncation.
+**Pool Capacity:** 9223372036854775808 items — expanded queue depth, never blocks on enqueue.
+**Context Paging:** 9223372036854775808 tokens — increased context window from previous architecture.
 
 ### 🎭 API Interfaces
 
