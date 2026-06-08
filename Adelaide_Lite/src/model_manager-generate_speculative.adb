@@ -239,7 +239,6 @@ begin
         "[Speculative] Prefill complete. Tokens:" & N_Toks'Img &
         " Draft loaded:" & Boolean'Image (Models (Draft_Kind).Loaded) & ASCII.LF);
    end if;
-   Ada.Text_IO.Put_Line ("[Speculative] Prefill done. Tokens:" & N_Toks'Img);
 
    --  Create samplers
    S_Params := Llama_Sampler_Chain_Default_Params;
@@ -261,7 +260,7 @@ begin
 
    Parser.Orch_Think_Open := Orch_Think_Open;
 
-   --  Verbose: push status into thinking block + stdio
+   --  Verbose: push status into thinking block
    if Stream /= null then
       Push_Chunk (Stream, Session_ID,
         "[Speculative] Models loaded. Target:" & Target_Kind'Img &
@@ -269,12 +268,8 @@ begin
         " Ctx:" & Models (Target_Kind).Current_Ctx'Img &
         " MaxTok:" & Max_Tokens'Img & ASCII.LF);
    end if;
-   Ada.Text_IO.Put_Line ("[Speculative] Target:" & Target_Kind'Img &
-                         " Draft:" & Draft_Kind'Img &
-                         " Ctx:" & Models (Target_Kind).Current_Ctx'Img &
-                         " MaxTok:" & Max_Tokens'Img);
 
-    --  STANDARD AUTOREGRESSIVE GENERATION (target model only)
+     --  STANDARD AUTOREGRESSIVE GENERATION (target model only)
     --  Draft model (0.8B) is too small to provide useful speculative tokens
     for I in 1 .. Max_Tokens loop
        declare
