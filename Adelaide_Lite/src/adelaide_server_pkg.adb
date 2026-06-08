@@ -194,28 +194,29 @@ package body Adelaide_Server_Pkg is
    Is_External_Agent : Boolean := False;
 
    --------------
-   function Dispatch
-     (Request : AWS.Status.Data) return AWS.Response.Data
-   is
-       URI    : constant String := AWS.Status.URI (Request);
-       UA     : constant String := AWS.Status.User_Agent (Request);
-       Match_Score : constant Float := Fuzzy_Match.Match (UA, "OpenCode");
-    begin
-       --  Fuzzy match User-Agent against known external agents
-       Is_External_Agent := Match_Score >= 0.7;
+    function Dispatch
+      (Request : AWS.Status.Data) return AWS.Response.Data
+    is
+        URI    : constant String := AWS.Status.URI (Request);
+        UA     : constant String := AWS.Status.User_Agent (Request);
+        Match_Score : Float := 0.0;
+     begin
+        --  Fuzzy match User-Agent against known external agents
+        begin
+           Match_Score := Fuzzy_Match.Match (UA, "OpenCode");
+        exception
+           when others => Match_Score := 0.0;
+        end;
+        Is_External_Agent := Match_Score >= 0.7;
+        declare
+          Score_Pct : constant Integer := Integer (Match_Score * 100.0);
+        begin
+          Ada.Text_IO.Put_Line ("[API] Request: " & URI &
+                                " | UA: " & UA &
+                                " | Confidence: " & Integer'Image (Score_Pct) & "%" &
+                                (if Is_External_Agent then " [EXTERNAL]" else ""));
+        end;
        declare
-         Score_Str : String := Float'Image (Match_Score * 100.0);
-       begin
-         --  Trim leading space from Float'Image
-         if Score_Str'Length > 1 and then Score_Str (Score_Str'First) = ' ' then
-            Score_Str := Score_Str (Score_Str'First + 1 .. Score_Str'Last);
-         end if;
-         Ada.Text_IO.Put_Line ("[API] Request: " & URI &
-                               " | UA: " & UA &
-                               " | Confidence: " & Score_Str & "%" &
-                               (if Is_External_Agent then " [EXTERNAL]" else ""));
-       end;
-      declare
          Method : constant String := AWS.Status.Method (Request);
       Raw_S  : constant String := AWS.Status.Parameter (Request, "prompt");
       Raw_B   : constant Unbounded_String :=
