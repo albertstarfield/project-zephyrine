@@ -1645,22 +1645,36 @@ package body Model_Manager is
                      end if;
                  end if;
 
-               Generate_Speculative
-                  (Target_Kind             => Qwen_9B,
-                   Draft_Kind              => Qwen_0_8B,
-                   Prompt                  => Get_Final_Prompt,
-                   Result                  => Fault_Result,
-                   Images                  => Images,
-                   Session_ID              => Session_ID,
-                   Requested_Ctx           => 8192,
-                   Stream                  => Stream,
-                   Orch_Think_Open         => (Hop_Count = 0),
-                   Level                   => Level,
-                   External_Agent          => External_Agent,
-                   Fault_Detected          => F_Detected,
-                   Fault_Query             => F_Query,
-                   Fault_Category          => F_Category,
-                   Stream_Final_Response   => F_Detected);  -- Stream tokens only during fault hops, not final
+                if Enable_Speculative then
+                   Generate_Speculative
+                      (Target_Kind             => Qwen_9B,
+                       Draft_Kind              => Qwen_0_8B,
+                       Prompt                  => Get_Final_Prompt,
+                       Result                  => Fault_Result,
+                       Images                  => Images,
+                       Session_ID              => Session_ID,
+                       Requested_Ctx           => 8192,
+                       Stream                  => Stream,
+                       Orch_Think_Open         => (Hop_Count = 0),
+                       Level                   => Level,
+                       External_Agent          => External_Agent,
+                       Fault_Detected          => F_Detected,
+                       Fault_Query             => F_Query,
+                       Fault_Category          => F_Category,
+                       Stream_Final_Response   => F_Detected);
+                else
+                   Generate
+                      (Kind                  => Qwen_9B,
+                       Prompt                => Get_Final_Prompt,
+                       Result                => Fault_Result,
+                       Images                => Images,
+                       Session_ID            => Session_ID,
+                       Requested_Ctx         => 8192,
+                       Stream                => Stream,
+                       Orch_Think_Open       => (Hop_Count = 0),
+                       Level                 => Level);
+                   F_Detected := False;
+                end if;
 
                 if F_Detected then
                    --  Service the context fault

@@ -68,7 +68,7 @@ signal.signal(signal.SIGINT, cleanup)
 signal.signal(signal.SIGTERM, cleanup)
 
 def main():
-    global daemon_process, server_process
+    global daemon_process, server_process, watchdog_process
     
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
     start_time = int(time.time() * 1000)
