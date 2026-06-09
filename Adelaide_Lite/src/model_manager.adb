@@ -90,47 +90,56 @@ package body Model_Manager is
       Owner             : Owner_Array := [others => ELP0];
    end Priority_Model_Gate;
 
-   protected body Priority_Model_Gate is
-      procedure Request_ELP1 is
-      begin
-         ELP1_Pending := ELP1_Pending + 1;
-      end Request_ELP1;
+    protected body Priority_Model_Gate is
+       procedure Request_ELP1 is
+       begin
+          ELP1_Pending := ELP1_Pending + 1;
+          Put_Line ("[ELP1-REQUEST] Pending ELP1 requests: " & ELP1_Pending'Img);
+       end Request_ELP1;
 
-      entry Acquire_ELP1 (for K in Model_Type) when not Busy (K) is
-      begin
-         ELP1_Pending := ELP1_Pending - 1;
-         Busy (K) := True;
-         Owner (K) := ELP1;
-         ELP1_Active_Count := ELP1_Active_Count + 1;
-      end Acquire_ELP1;
+       entry Acquire_ELP1 (for K in Model_Type) when not Busy (K) is
+       begin
+          ELP1_Pending := ELP1_Pending - 1;
+          Busy (K) := True;
+          Owner (K) := ELP1;
+          ELP1_Active_Count := ELP1_Active_Count + 1;
+          Put_Line ("[ELP1-ACQUIRED] " & K'Img & " | Active: " & ELP1_Active_Count'Img & 
+                    " | Pending: " & ELP1_Pending'Img);
+       end Acquire_ELP1;
 
-      procedure Release_ELP1 (Kind : Model_Type) is
-      begin
-         Busy (Kind) := False;
-         Owner (Kind) := ELP0;
-         if ELP1_Active_Count > 0 then
-            ELP1_Active_Count := ELP1_Active_Count - 1;
-         end if;
-      end Release_ELP1;
+       procedure Release_ELP1 (Kind : Model_Type) is
+       begin
+          Busy (Kind) := False;
+          Owner (Kind) := ELP0;
+          if ELP1_Active_Count > 0 then
+             ELP1_Active_Count := ELP1_Active_Count - 1;
+          end if;
+          Put_Line ("[ELP1-RELEASED] " & Kind'Img & " | Active: " & ELP1_Active_Count'Img & 
+                    " | Pending: " & ELP1_Pending'Img);
+       end Release_ELP1;
 
-      entry Acquire_ELP0 (for K in Model_Type) (Success : out Boolean)
-         when not Busy (K)
-           or else ELP1_Pending > 0
-           or else ELP1_Active_Count > 0 is
-      begin
-         if ELP1_Pending > 0 or else ELP1_Active_Count > 0 then
-            Success := False;
-         else
-            Busy (K) := True;
-            Owner (K) := ELP0;
-            Success := True;
-         end if;
-      end Acquire_ELP0;
+       entry Acquire_ELP0 (for K in Model_Type) (Success : out Boolean)
+          when not Busy (K)
+            or else ELP1_Pending > 0
+            or else ELP1_Active_Count > 0 is
+       begin
+          if ELP1_Pending > 0 or else ELP1_Active_Count > 0 then
+             Success := False;
+             Put_Line ("[ELP0-DENIED] " & K'Img & " | ELP1 Pending: " & ELP1_Pending'Img & 
+                       " | ELP1 Active: " & ELP1_Active_Count'Img);
+          else
+             Busy (K) := True;
+             Owner (K) := ELP0;
+             Success := True;
+             Put_Line ("[ELP0-ACQUIRED] " & K'Img);
+          end if;
+       end Acquire_ELP0;
 
-      procedure Release_ELP0 (Kind : Model_Type) is
-      begin
-         Busy (Kind) := False;
-      end Release_ELP0;
+       procedure Release_ELP0 (Kind : Model_Type) is
+       begin
+          Busy (Kind) := False;
+          Put_Line ("[ELP0-RELEASED] " & Kind'Img);
+       end Release_ELP0;
 
       procedure Try_Acquire_For_Cleanup (Kind : Model_Type; Success : out Boolean) is
       begin
@@ -143,10 +152,15 @@ package body Model_Manager is
          end if;
       end Try_Acquire_For_Cleanup;
 
-      function Should_Abort return Boolean is
-      begin
-         return ELP1_Pending > 0 or else ELP1_Active_Count > 0;
-      end Should_Abort;
+       function Should_Abort return Boolean is
+          Result : constant Boolean := ELP1_Pending > 0 or else ELP1_Active_Count > 0;
+       begin
+          if Result then
+             Put_Line ("[ELP0-ABORT-CHECK] ABORTING | ELP1 Pending: " & ELP1_Pending'Img & 
+                       " | ELP1 Active: " & ELP1_Active_Count'Img);
+          end if;
+          return Result;
+       end Should_Abort;
 
       function Is_ELP0_Owner (Kind : Model_Type) return Boolean is
       begin
@@ -478,21 +492,22 @@ package body Model_Manager is
       N_Toks   : int;
       Clean_P  : constant String := Sanitize_UTF8 (Prompt);
       Prompt_C : chars_ptr := New_String (Clean_P);
-   begin
-      ELP_Queue.Enqueue (Level, Kind);
-      if Level = ELP0 then
-          Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
-          if not Success then
-            declare D : ELP_Level; K : Model_Type;
-            begin ELP_Queue.Dequeue (D, K); end;
-            Length := 0;
-            Free (Prompt_C);
-            return;
-         end if;
-      else
-         Priority_Model_Gate.Request_ELP1;
-         Priority_Model_Gate.Acquire_ELP1 (Kind);
-      end if;
+    begin
+       ELP_Queue.Enqueue (Level, Kind);
+       if Level = ELP0 then
+           Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
+           if not Success then
+             Put_Line ("[ELP0-BLOCKED] " & Kind'Img & " | ELP1 is active or pending");
+             declare D : ELP_Level; K : Model_Type;
+             begin ELP_Queue.Dequeue (D, K); end;
+             Length := 0;
+             Free (Prompt_C);
+             return;
+          end if;
+       else
+          Priority_Model_Gate.Request_ELP1;
+          Priority_Model_Gate.Acquire_ELP1 (Kind);
+       end if;
       Load_Model (Kind, Success);
       if not Success then
          if Level = ELP0 then
@@ -953,40 +968,45 @@ package body Model_Manager is
                     " N_Toks:" & N_Toks'Img);
           Free (Prompt_C);
          
-         --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
-         if N_Toks > int (Models (Kind).Current_Ctx) then
-            Put_Line ("[!] Prompt size (" & N_Toks'Img & 
-                      ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
-                      "). Resizing...");
-            declare
-               Rounded_Ctx : constant unsigned :=
-                 ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
-            begin
-               Free_Tokens (Tokens);
-               Load_Model (Kind, Success, Positive (Rounded_Ctx));
-               if not Success then
-                  Result := To_Unbounded_String ("ERROR: Resize failed");
-                  if Level = ELP0 then
-                     Priority_Model_Gate.Release_ELP0 (Kind);
-                  else
-                     Priority_Model_Gate.Release_ELP1 (Kind);
-                  end if;
-                  return;
-               end if;
-               
-               --  Re-allocate token array for new context size
-               Tokens := new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
-               
-               --  Tokenize again since the model/vocab might have reloaded
-               Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-               Prompt_C := New_String (Clean_P);
-               N_Toks := Llama_Tokenize
-                 (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
-                  int (Tokens.all'Length), True, True);
-               Free (Prompt_C);
-            end;
-         end if;
-      exception
+           --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
+           --  Binned to 8192-increments.  Capped at 65536 for stability
+           --  on this hardware (16GB RAM); Qwen3.5-9B with Q4_1 KV cache
+           --  uses ~10GB at both 65536 ctx and 228K ctx (Q4_1 is efficient).
+           --  65536 cap chosen for practical stability; 228K theoretically
+           --  possible but leaves minimal headroom for model weights + OS.
+           if N_Toks > int (Models (Kind).Current_Ctx) then
+             Put_Line ("[!] Prompt size (" & N_Toks'Img & 
+                       ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
+                       "). Resizing...");
+             declare
+                Rounded_Ctx : constant unsigned :=
+                  ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
+             begin
+                Free_Tokens (Tokens);
+                Load_Model (Kind, Success, Positive (Rounded_Ctx));
+                if not Success then
+                   Result := To_Unbounded_String ("ERROR: Resize failed");
+                   if Level = ELP0 then
+                      Priority_Model_Gate.Release_ELP0 (Kind);
+                   else
+                      Priority_Model_Gate.Release_ELP1 (Kind);
+                   end if;
+                   return;
+                end if;
+                
+                --  Re-allocate token array for new context size
+                Tokens := new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
+                
+                --  Tokenize again since the model/vocab might have reloaded
+                Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
+                Prompt_C := New_String (Clean_P);
+                N_Toks := Llama_Tokenize
+                  (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
+                    int (Tokens.all'Length), True, True);
+                 Free (Prompt_C);
+              end;
+            end if;
+       exception
          when others =>
             if Tokens /= null then
                Free_Tokens (Tokens);
@@ -1028,11 +1048,12 @@ package body Model_Manager is
           Current_Pos : int := 0;
           Tokens_Left : int := N_Toks;
        begin
-          while Tokens_Left > 0 loop
+           while Tokens_Left > 0 loop
 
-             if Level = ELP0 and then Should_Abort_ELP0 then
-               Free_Tokens (Tokens);
-               Models (Kind).In_Use := False;
+              if Level = ELP0 and then Should_Abort_ELP0 then
+                Put_Line ("[ELP0-ABORT-EXECUTION] Aborting " & Kind'Img & " prompt processing");
+                Free_Tokens (Tokens);
+                Models (Kind).In_Use := False;
                Priority_Model_Gate.Release_ELP0 (Kind);
                Result := To_Unbounded_String ("");
                return;
@@ -1083,9 +1104,10 @@ package body Model_Manager is
 
       Parser.Orch_Think_Open := Orch_Think_Open;
 
-      for I in 1 .. 2048 loop
-         if Level = ELP0 and then Should_Abort_ELP0 then
-            exit;
+       for I in 1 .. 2048 loop
+          if Level = ELP0 and then Should_Abort_ELP0 then
+             Put_Line ("[ELP0-ABORT-LOOP] Aborting " & Kind'Img & " token loop at iteration " & I'Img);
+             exit;
          end if;
 
          declare
@@ -1361,11 +1383,12 @@ package body Model_Manager is
          end;
       end if;
 
-      loop
-         if Level = ELP0 and then Should_Abort_ELP0 then
-            Result := To_Unbounded_String ("");
-            return;
-         end if;
+        loop
+           if Level = ELP0 and then Should_Abort_ELP0 then
+              Put_Line ("[ELP0-ABORT-HYBRID] Aborting hybrid_generate loop");
+              Result := To_Unbounded_String ("");
+              return;
+           end if;
 
          declare
             Router_Sys : constant String :=
