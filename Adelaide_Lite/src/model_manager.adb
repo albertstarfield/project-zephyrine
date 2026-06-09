@@ -443,52 +443,22 @@ package body Model_Manager is
       return "Callback response to " & Prompt;
    end Generator_Callback;
 
-   function Sanitize_UTF8 (S : String) return String is
-      Res : Unbounded_String;
-      I   : Positive := S'First;
-      Val : Natural;
-   begin
-      while I <= S'Last loop
-         Val := Character'Pos (S (I));
-         if Val < 128 then
-            Append (Res, S (I));
-            I := I + 1;
-         elsif Val >= 192 and Val <= 223 then
-            if I + 1 <= S'Last and then
-               Character'Pos (S (I + 1)) >= 128 and then Character'Pos (S (I + 1)) <= 191
-            then
-               Append (Res, S (I .. I + 1));
-               I := I + 2;
-            else
-               I := I + 1;
-            end if;
-         elsif Val >= 224 and Val <= 239 then
-            if I + 2 <= S'Last and then
-               Character'Pos (S (I + 1)) >= 128 and then Character'Pos (S (I + 1)) <= 191 and then
-               Character'Pos (S (I + 2)) >= 128 and then Character'Pos (S (I + 2)) <= 191
-            then
-               Append (Res, S (I .. I + 2));
-               I := I + 3;
-            else
-               I := I + 1;
-            end if;
-         elsif Val >= 240 and Val <= 247 then
-            if I + 3 <= S'Last and then
-               Character'Pos (S (I + 1)) >= 128 and then Character'Pos (S (I + 1)) <= 191 and then
-               Character'Pos (S (I + 2)) >= 128 and then Character'Pos (S (I + 2)) <= 191 and then
-               Character'Pos (S (I + 3)) >= 128 and then Character'Pos (S (I + 3)) <= 191
-            then
-               Append (Res, S (I .. I + 3));
-               I := I + 4;
-            else
-               I := I + 1;
-            end if;
-         else
-            I := I + 1;
-         end if;
-      end loop;
-      return To_String (Res);
-   end Sanitize_UTF8;
+    function Sanitize_UTF8 (S : String) return String is
+       Res : Unbounded_String;
+       Val : Natural;
+    begin
+       for I in S'Range loop
+          Val := Character'Pos (S (I));
+          --  Keep only: \t (9), \n (10), \r (13), and printable ASCII (32-126)
+          --  Strip everything else: control chars, DEL (127), all non-ASCII (128+)
+          if Val = 9 or else Val = 10 or else Val = 13 or else
+            (Val >= 32 and Val <= 126)
+          then
+             Append (Res, S (I));
+          end if;
+       end loop;
+       return To_String (Res);
+    end Sanitize_UTF8;
 
    --  SINGLE EMBEDDING HELPER
    procedure Get_Single_Embedding
