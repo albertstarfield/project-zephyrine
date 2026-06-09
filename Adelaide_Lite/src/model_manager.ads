@@ -9,6 +9,10 @@ with Model_Types; use Model_Types;
 
 package Model_Manager is
 
+   --  Toggle speculative decoding (draft model + verification).
+   --  When False, falls back to target-only generation (no draft model).
+   Enable_Speculative : constant Boolean := False;
+
    procedure Initialize;
 
    procedure Load_Model

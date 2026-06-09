@@ -25,6 +25,7 @@ static struct sigaction jorvik_prev_segv;
 static struct sigaction jorvik_prev_bus;
 static struct sigaction jorvik_prev_fpe;
 static struct sigaction jorvik_prev_trap;
+static struct sigaction jorvik_prev_abrt;
 
 static void jorvik_handler(int sig) {
     jorvik_crash_signal = sig;
@@ -38,6 +39,7 @@ static void jorvik_handler(int sig) {
         case SIGBUS:  prev = &jorvik_prev_bus;  break;
         case SIGFPE:  prev = &jorvik_prev_fpe;  break;
         case SIGTRAP: prev = &jorvik_prev_trap; break;
+        case SIGABRT: prev = &jorvik_prev_abrt; break;
         default: return;
     }
     if (prev->sa_handler != SIG_DFL && prev->sa_handler != SIG_IGN) {
@@ -61,6 +63,7 @@ void jorvik_install_handlers(void) {
     sigaction(SIGBUS,  &sa, &jorvik_prev_bus);
     sigaction(SIGFPE,  &sa, &jorvik_prev_fpe);
     sigaction(SIGTRAP, &sa, &jorvik_prev_trap);
+    sigaction(SIGABRT, &sa, &jorvik_prev_abrt);
 
     jorvik_installed = 1;
 }

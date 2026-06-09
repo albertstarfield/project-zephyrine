@@ -1,10 +1,10 @@
 pragma SPARK_Mode (Off);
 --  Kratos Crash Isolation Layer
 --
---  Protects inference threads from C-level crashes (SIGSEGV, SIGBUS, SIGFPE, SIGTRAP).
---  If llama.cpp faults during Llama_Decode or similar, Kratos catches the
---  signal and longjmps back to a safe recovery point instead of killing
---  the entire Ada server process.
+--  Protects inference threads from C-level crashes (SIGSEGV, SIGBUS, SIGFPE,
+--  SIGTRAP, SIGABRT).  If llama.cpp faults during Llama_Decode or similar,
+--  Kratos catches the signal and longjmps back to a safe recovery point
+--  instead of killing the entire Ada server process.
 --
 --  Usage:
 --    if Kratos.Guard_Enter = 0 then
@@ -22,7 +22,7 @@ with System;
 
 package Kratos is
 
-   --  Install signal handlers (SIGSEGV, SIGBUS, SIGFPE, SIGTRAP).
+   --  Install signal handlers (SIGSEGV, SIGBUS, SIGFPE, SIGTRAP, SIGABRT).
    --  Safe to call multiple times (idempotent).
    procedure Install_Handlers;
    pragma Import (C, Install_Handlers, "jorvik_install_handlers");
