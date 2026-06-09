@@ -17,6 +17,7 @@ os.makedirs(os.environ["HF_HOME"], exist_ok=True)
 # Globals to keep track of background processes
 daemon_process = None
 server_process = None
+watchdog_process = None
 kokoro_process = None
 
 def get_files_to_hash():
@@ -59,6 +60,8 @@ def cleanup(signum=None, frame=None):
         daemon_process.terminate()
     if server_process and server_process.poll() is None:
         server_process.terminate()
+    if watchdog_process and watchdog_process.poll() is None:
+        watchdog_process.terminate()
     sys.exit(0)
 
 signal.signal(signal.SIGINT, cleanup)
@@ -303,6 +306,20 @@ def main():
         server_process = subprocess.Popen(["alr", "exec", "--", server_path], cwd=BASE_DIR, env=env)
     else:
         server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
+
+    # Launch external watchdog process (separate binary, monitors server health)
+    watchdog_bin = "adelaide_watchdog.exe" if platform.system() == "Windows" else "adelaide_watchdog"
+    watchdog_path = os.path.join(BASE_DIR, "bin", watchdog_bin)
+    if os.path.exists(watchdog_path):
+        print("[*] Booting Adelaide Watchdog...")
+        if shutil.which("alr"):
+            watchdog_process = subprocess.Popen(["alr", "exec", "--", watchdog_path], cwd=BASE_DIR, env=env,
+                                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        else:
+            watchdog_process = subprocess.Popen([watchdog_path], cwd=BASE_DIR, env=env,
+                                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    else:
+        print("[!] Watchdog binary not found at", watchdog_path, "- skipping")
 
     if launch_gui:
         print("[*] Booting Python Sidecar UI...")

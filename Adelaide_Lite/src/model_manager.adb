@@ -13,6 +13,7 @@ with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Directories;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Unchecked_Conversion;
+with Ada.Unchecked_Deallocation;
 with Ada.Exceptions;
 with Watchdog_Manager;
 with Kratos;
@@ -499,7 +500,11 @@ package body Model_Manager is
       Success  : Boolean;
       Kind     : constant Model_Type := Qwen_Embedding;
       Vocab    : Llama_Vocab;
-      Tokens   : array (1 .. 32768) of Llama_Token;
+      type Token_Array is array (Positive range <>) of Llama_Token;
+      type Token_Array_Access is access Token_Array;
+      procedure Free_Tokens is new Ada.Unchecked_Deallocation
+        (Token_Array, Token_Array_Access);
+      Tokens   : Token_Array_Access;
       N_Toks   : int;
       Clean_P  : constant String := Sanitize_UTF8 (Prompt);
       Prompt_C : chars_ptr := New_String (Clean_P);
@@ -534,15 +539,20 @@ package body Model_Manager is
 
       Models (Kind).In_Use := True;
       Models (Kind).Last_Used := Clock;
+      
+      --  Allocate token array based on actual context size
+      Tokens := new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
+      
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
           N_Toks := Llama_Tokenize
-            (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
-             32768, True, True);
+            (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
+             int (Tokens.all'Length), True, True);
           Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
                     " Prompt_Len:" & Clean_P'Length'Img &
                     " N_Toks:" & N_Toks'Img);
           Free (Prompt_C);
       if N_Toks <= 0 then
+         Free_Tokens (Tokens);
          Models (Kind).In_Use := False;
          if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Kind);
@@ -557,12 +567,12 @@ package body Model_Manager is
 
       --  CHUNKED DECODING FOR EMBEDDINGS
       declare
-         Batch_Size  : constant int := int'Min (512, int (Models (Kind).Current_Ctx));
+         Batch_Size  : constant int := int'Min (256, int (Models (Kind).Current_Ctx));
          Current_Pos : int := 0;
          Tokens_Left : int := N_Toks;
       begin
          Llama_Interface.Llama_Memory_Clear
-           (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
+            (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
          Llama_Set_Embeddings (Models (Kind).Context, True);
          
          while Tokens_Left > 0 loop
@@ -570,8 +580,8 @@ package body Model_Manager is
                To_Decode : constant int :=
                  (if Tokens_Left > Batch_Size then Batch_Size else Tokens_Left);
                B : constant Llama_Batch :=
-                 Llama_Batch_Get_One
-                   (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
+                  Llama_Batch_Get_One
+                    (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
                Dec_Result : int;
             begin
                if Kratos.Guard_Enter = 0 then
@@ -581,18 +591,19 @@ package body Model_Manager is
                   Kratos.Log_Crash;
                   Dec_Result := -1;
                end if;
-               if Dec_Result /= 0 then
-                  Models (Kind).In_Use := False;
-                  if Level = ELP0 then
-                     Priority_Model_Gate.Release_ELP0 (Kind);
-                  else
-                     Priority_Model_Gate.Release_ELP1 (Kind);
-                  end if;
-                  declare D : ELP_Level; K : Model_Type;
-                  begin ELP_Queue.Dequeue (D, K); end;
-                  Length := 0;
-                  return;
-               end if;
+                if Dec_Result /= 0 then
+                   Free_Tokens (Tokens);
+                   Models (Kind).In_Use := False;
+                   if Level = ELP0 then
+                      Priority_Model_Gate.Release_ELP0 (Kind);
+                   else
+                      Priority_Model_Gate.Release_ELP1 (Kind);
+                   end if;
+                   declare D : ELP_Level; K : Model_Type;
+                   begin ELP_Queue.Dequeue (D, K); end;
+                   Length := 0;
+                   return;
+                end if;
                Tokens_Left := Tokens_Left - To_Decode;
                Current_Pos := Current_Pos + To_Decode;
             end;
@@ -625,22 +636,24 @@ package body Model_Manager is
                          Interfaces.C.size_t (Copy_Count) *
                            Interfaces.C.size_t (Float'Size / 8));
             end;
-            Length := Copy_Count;
-         else
-            Length := 0;
-         end if;
-         Models (Kind).In_Use := False;
-         if Level = ELP0 then
-            Priority_Model_Gate.Release_ELP0 (Kind);
-         else
-            Priority_Model_Gate.Release_ELP1 (Kind);
-         end if;
-         declare D : ELP_Level; K : Model_Type;
-         begin ELP_Queue.Dequeue (D, K); end;
-      end;
-   exception
-      when others =>
-         Models (Kind).In_Use := False;
+             Length := Copy_Count;
+          else
+             Length := 0;
+          end if;
+          Free_Tokens (Tokens);
+          Models (Kind).In_Use := False;
+          if Level = ELP0 then
+             Priority_Model_Gate.Release_ELP0 (Kind);
+          else
+             Priority_Model_Gate.Release_ELP1 (Kind);
+          end if;
+          declare D : ELP_Level; K : Model_Type;
+          begin ELP_Queue.Dequeue (D, K); end;
+       end;
+    exception
+       when others =>
+          Free_Tokens (Tokens);
+          Models (Kind).In_Use := False;
          if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Kind);
          else
@@ -897,20 +910,24 @@ package body Model_Manager is
 
    --  GENERATE (CORE GGUF INFERENCE WITH PREEMPTION SUPPORT)
    procedure Generate
-     (Kind            : Model_Type;
-      Prompt          : String;
-      Result          : out Unbounded_String;
-      Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-      Session_ID      : String := "";
-      Requested_Ctx   : Positive := 4096;
-      Stream          : Streaming_Queue.Queue_Access := null;
-      Orch_Think_Open : Boolean := False;
-      Level           : ELP_Level := ELP1)
-   is
-      Success  : Boolean;
-      Vocab    : Llama_Vocab;
-      Tokens   : array (1 .. 32768) of Llama_Token;
-      N_Toks   : int;
+      (Kind            : Model_Type;
+       Prompt          : String;
+       Result          : out Unbounded_String;
+       Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+       Session_ID      : String := "";
+       Requested_Ctx   : Positive := 4096;
+       Stream          : Streaming_Queue.Queue_Access := null;
+       Orch_Think_Open : Boolean := False;
+       Level           : ELP_Level := ELP1)
+    is
+       Success  : Boolean;
+       Vocab    : Llama_Vocab;
+       type Token_Array is array (Positive range <>) of Llama_Token;
+       type Token_Array_Access is access Token_Array;
+       procedure Free_Tokens is new Ada.Unchecked_Deallocation
+         (Token_Array, Token_Array_Access);
+       Tokens   : Token_Array_Access;
+       N_Toks   : int;
       Sampler  : Llama_Sampler;
       S_Params : Llama_Sampler_Chain_Params;
       
@@ -953,10 +970,14 @@ package body Model_Manager is
 
          Models (Kind).In_Use := True;
          Models (Kind).Last_Used := Clock;
+         
+         --  Allocate token array based on actual context size
+         Tokens := new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
+         
          Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
           N_Toks := Llama_Tokenize
-            (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
-             32768, True, True);
+            (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
+             int (Tokens.all'Length), True, True);
           Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
                     " Prompt_Len:" & Clean_P'Length'Img &
                     " N_Toks:" & N_Toks'Img);
@@ -971,6 +992,7 @@ package body Model_Manager is
                Rounded_Ctx : constant unsigned :=
                  ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
             begin
+               Free_Tokens (Tokens);
                Load_Model (Kind, Success, Positive (Rounded_Ctx));
                if not Success then
                   Result := To_Unbounded_String ("ERROR: Resize failed");
@@ -982,17 +1004,23 @@ package body Model_Manager is
                   return;
                end if;
                
+               --  Re-allocate token array for new context size
+               Tokens := new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
+               
                --  Tokenize again since the model/vocab might have reloaded
                Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
                Prompt_C := New_String (Clean_P);
                N_Toks := Llama_Tokenize
-                 (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
-                  32768, True, True);
+                 (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
+                  int (Tokens.all'Length), True, True);
                Free (Prompt_C);
             end;
          end if;
       exception
          when others =>
+            if Tokens /= null then
+               Free_Tokens (Tokens);
+            end if;
             Models (Kind).In_Use := False;
             if Level = ELP0 then
                Priority_Model_Gate.Release_ELP0 (Kind);
@@ -1009,6 +1037,7 @@ package body Model_Manager is
                  " N_Toks:" & N_Toks'Img);
 
        if N_Toks < 0 then
+         Free_Tokens (Tokens);
          Models (Kind).In_Use := False;
          if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Kind);
@@ -1025,13 +1054,14 @@ package body Model_Manager is
       --  CHUNKED DECODING
       declare
          --  Cap batch size to context size to avoid engine assertions.
-         Batch_Size  : constant int := int'Min (512, int (Models (Kind).Current_Ctx));
-         Current_Pos : int := 0;
-         Tokens_Left : int := N_Toks;
-      begin
-         while Tokens_Left > 0 loop
+          Batch_Size  : constant int := int'Min (256, int (Models (Kind).Current_Ctx));
+          Current_Pos : int := 0;
+          Tokens_Left : int := N_Toks;
+       begin
+          while Tokens_Left > 0 loop
 
-            if Level = ELP0 and then Should_Abort_ELP0 then
+             if Level = ELP0 and then Should_Abort_ELP0 then
+               Free_Tokens (Tokens);
                Models (Kind).In_Use := False;
                Priority_Model_Gate.Release_ELP0 (Kind);
                Result := To_Unbounded_String ("");
@@ -1039,32 +1069,33 @@ package body Model_Manager is
             end if;
 
             declare
-               To_Decode : constant int :=
-                 (if Tokens_Left > Batch_Size
-                  then Batch_Size
-                  else Tokens_Left);
-               B : constant Llama_Batch :=
-                 Llama_Batch_Get_One
-                   (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
-               Ret : int;
-            begin
-               if Kratos.Guard_Enter = 0 then
-                  Ret := Llama_Decode (Models (Kind).Context, B);
-                  Kratos.Guard_Exit;
-               else
-                  Kratos.Log_Crash;
-                  Ret := -1;
-               end if;
-               if Ret /= 0 then
-                  Models (Kind).In_Use := False;
-                  if Level = ELP0 then
-                     Priority_Model_Gate.Release_ELP0 (Kind);
-                  else
-                     Priority_Model_Gate.Release_ELP1 (Kind);
-                  end if;
-                  Result := To_Unbounded_String ("ERROR: Decode failed (" & Ret'Img & ")");
-                  return;
-               end if;
+                To_Decode : constant int :=
+                  (if Tokens_Left > Batch_Size
+                   then Batch_Size
+                   else Tokens_Left);
+                B : constant Llama_Batch :=
+                  Llama_Batch_Get_One
+                    (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
+                Ret : int;
+             begin
+                if Kratos.Guard_Enter = 0 then
+                   Ret := Llama_Decode (Models (Kind).Context, B);
+                   Kratos.Guard_Exit;
+                else
+                   Kratos.Log_Crash;
+                   Ret := -1;
+                end if;
+                if Ret /= 0 then
+                   Free_Tokens (Tokens);
+                   Models (Kind).In_Use := False;
+                   if Level = ELP0 then
+                      Priority_Model_Gate.Release_ELP0 (Kind);
+                   else
+                      Priority_Model_Gate.Release_ELP1 (Kind);
+                   end if;
+                   Result := To_Unbounded_String ("ERROR: Decode failed (" & Ret'Img & ")");
+                   return;
+                end if;
                Tokens_Left := Tokens_Left - To_Decode;
                Current_Pos := Current_Pos + To_Decode;
             end;
@@ -1138,40 +1169,43 @@ package body Model_Manager is
          Flush_Parser (Stream, Session_ID, Parser);
       end if;
 
-      Llama_Sampler_Free (Sampler);
-      Models (Kind).In_Use := False;
+       Llama_Sampler_Free (Sampler);
+       Free_Tokens (Tokens);
+       Models (Kind).In_Use := False;
 
-      if Level = ELP0 then
-         Priority_Model_Gate.Release_ELP0 (Kind);
-      else
-         Priority_Model_Gate.Release_ELP1 (Kind);
-      end if;
-   exception
-      when others =>
-         Models (Kind).In_Use := False;
-         if Level = ELP0 then
-            Priority_Model_Gate.Release_ELP0 (Kind);
-         else
-            Priority_Model_Gate.Release_ELP1 (Kind);
-         end if;
-         Result := To_Unbounded_String ("ERROR: Decode failed");
-   end Generate;
+       if Level = ELP0 then
+          Priority_Model_Gate.Release_ELP0 (Kind);
+       else
+          Priority_Model_Gate.Release_ELP1 (Kind);
+       end if;
+    exception
+       when others =>
+          Free_Tokens (Tokens);
+          Models (Kind).In_Use := False;
+          if Level = ELP0 then
+             Priority_Model_Gate.Release_ELP0 (Kind);
+          else
+             Priority_Model_Gate.Release_ELP1 (Kind);
+          end if;
+          Result := To_Unbounded_String ("ERROR: Decode failed");
+    end Generate;
 
-     procedure Generate_Speculative
-       (Target_Kind     : Model_Type;
-        Draft_Kind      : Model_Type;
-        Prompt          : String;
-        Result          : out Unbounded_String;
-        Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-        Session_ID      : String := "";
-        Requested_Ctx   : Positive := 4096;
-        Stream          : Streaming_Queue.Queue_Access := null;
-        Orch_Think_Open : Boolean := False;
-        Level           : ELP_Level := ELP1;
-        External_Agent  : Boolean := False;
-        Fault_Detected  : out Boolean;
-        Fault_Query     : out Unbounded_String;
-        Fault_Category  : out Unbounded_String) is separate;
+      procedure Generate_Speculative
+        (Target_Kind             : Model_Type;
+         Draft_Kind              : Model_Type;
+         Prompt                  : String;
+         Result                  : out Unbounded_String;
+         Images                  : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+         Session_ID              : String := "";
+         Requested_Ctx           : Positive := 4096;
+         Stream                  : Streaming_Queue.Queue_Access := null;
+         Orch_Think_Open         : Boolean := False;
+         Level                   : ELP_Level := ELP1;
+         External_Agent          : Boolean := False;
+         Fault_Detected          : out Boolean;
+         Fault_Query             : out Unbounded_String;
+         Fault_Category          : out Unbounded_String;
+         Stream_Final_Response   : Boolean := True) is separate;
 
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
     procedure Hybrid_Generate
@@ -1641,21 +1675,22 @@ package body Model_Manager is
                      end if;
                  end if;
 
-                Generate_Speculative
-                 (Target_Kind     => Qwen_9B,
-                  Draft_Kind      => Qwen_0_8B,
-                  Prompt          => Get_Final_Prompt,
-                  Result          => Fault_Result,
-                  Images          => Images,
-                  Session_ID      => Session_ID,
-                  Requested_Ctx   => 8192,
-                  Stream          => Stream,
-                  Orch_Think_Open => (Hop_Count = 0),
-                  Level           => Level,
-                  External_Agent  => External_Agent,
-                  Fault_Detected  => F_Detected,
-                  Fault_Query     => F_Query,
-                  Fault_Category  => F_Category);
+               Generate_Speculative
+                  (Target_Kind             => Qwen_9B,
+                   Draft_Kind              => Qwen_0_8B,
+                   Prompt                  => Get_Final_Prompt,
+                   Result                  => Fault_Result,
+                   Images                  => Images,
+                   Session_ID              => Session_ID,
+                   Requested_Ctx           => 8192,
+                   Stream                  => Stream,
+                   Orch_Think_Open         => (Hop_Count = 0),
+                   Level                   => Level,
+                   External_Agent          => External_Agent,
+                   Fault_Detected          => F_Detected,
+                   Fault_Query             => F_Query,
+                   Fault_Category          => F_Category,
+                   Stream_Final_Response   => F_Detected);  -- Stream tokens only during fault hops, not final
 
                 if F_Detected then
                    --  Service the context fault
@@ -1761,35 +1796,76 @@ package body Model_Manager is
           end;
        end if;
 
-       if Stream = null then
-         --  Strip orchestration thinking from non-streaming response.
-         --  Client already saw verbose status via real-time streaming;
-         --  the stored result is clean.
-         Result := To_Unbounded_String
-           (Sanitize_Think_Tags (To_String (Current_Response)));
-      else
-         --  Streaming path: close thinking silently, don't push raw tag
-         Result := Current_Response;
-      end if;
+        --  For External Agent: always sanitize to get clean response
+        --  For Adelaide Mode streaming: keep raw for simulated streaming
+        if External_Agent then
+           Result := To_Unbounded_String (Sanitize_Think_Tags (To_String (Current_Response)));
+        elsif Stream = null then
+           --  Strip orchestration thinking from non-streaming response.
+           --  Client already saw verbose status via real-time streaming;
+           --  the stored result is clean.
+           Result := To_Unbounded_String
+             (Sanitize_Think_Tags (To_String (Current_Response)));
+       else
+          --  Streaming path: keep raw for simulated streaming delivery
+          Result := Current_Response;
+       end if;
 
-      --  Score and Log the result
-      declare
-         Score : constant Natural := Grade_Response_Quality
-           (Response_Text => To_String (Result),
-            Prompt        => Prompt,
-            Search_Used   => Index (To_String (Internal_State), "[FACTUAL_DATA]") > 0,
-            Has_Citations => Index (To_String (Result), "[") > 0 and then Index (To_String (Result), "]") > 0,
-            Session_ID    => Session_ID,
-            Level         => Level);
-       begin
-          if not External_Agent then
-             Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Self-assessment: " & Score'Img & "/10" & ASCII.LF);
-          end if;
-          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
-                                "[Quality Score] " & AnsiAda.Reset &
-                                "Score: " & Score'Img & "/10 | " &
-                                "Session: " & Session_ID);
-      end;
+        --  Score and Log the result
+        declare
+           Score : constant Natural := Grade_Response_Quality
+             (Response_Text => To_String (Result),
+              Prompt        => Prompt,
+              Search_Used   => Index (To_String (Internal_State), "[FACTUAL_DATA]") > 0,
+              Has_Citations => Index (To_String (Result), "[") > 0 and then Index (To_String (Result), "]") > 0,
+              Session_ID    => Session_ID,
+              Level         => Level);
+        begin
+           if not External_Agent then
+              Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Self-assessment: " & Score'Img & "/10" & ASCII.LF);
+           end if;
+           Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                                 "[Quality Score] " & AnsiAda.Reset &
+                                 "Score: " & Score'Img & "/10 | " &
+                                 "Session: " & Session_ID);
+        end;
+
+         --  Adelaide Mode: Simulate ~300 tok/s streaming for final response
+         --  (Response was generated internally without streaming; now deliver at natural rate)
+         if not External_Agent and then Stream /= null then
+            declare
+               Resp_Text : constant String := To_String (Current_Response);
+               Chunk_Size : constant Positive := 16;  -- ~16 chars per chunk at 300 tok/s
+               Simulated_TPS : constant Float := 300.0;
+               Delay_Per_Chunk : constant Duration := Duration (Float (Chunk_Size) / Simulated_TPS);
+               Pos : Natural := 1;
+            begin
+               Ada.Text_IO.Put_Line ("[Adelaide] Simulating ~300 tok/s streaming for " & Resp_Text'Length'Img & " chars...");
+               
+               --  Stream response in chunks at ~300 tok/s
+               while Pos <= Resp_Text'Length loop
+                  declare
+                     Chunk_End : constant Natural := Natural'Min (Pos + Chunk_Size - 1, Resp_Text'Length);
+                     Chunk : constant String := Resp_Text (Pos .. Chunk_End);
+                  begin
+                     delay Delay_Per_Chunk;
+                     Push_Chunk (Stream, Session_ID, Chunk);
+                     Pos := Chunk_End + 1;
+                  end;
+               end loop;
+               --  Final newline
+               Push_Chunk (Stream, Session_ID, ASCII.LF & "");
+            end;
+         elsif External_Agent and then Stream /= null then
+            --  Status Quo / External Agent Mode: Send final scored response as batch
+            --  (No orchestration thoughts, just the clean response after quality scoring)
+            declare
+               Resp_Text : constant String := To_String (Result);  -- Already sanitized
+            begin
+               Ada.Text_IO.Put_Line ("[External Agent] Sending final scored response (" & Resp_Text'Length'Img & " chars)...");
+               Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
+            end;
+         end if;
    exception
       when E : others =>
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) &

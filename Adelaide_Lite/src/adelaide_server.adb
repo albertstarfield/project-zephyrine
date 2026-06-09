@@ -10,6 +10,7 @@ with Model_Manager;
 with Knowledge_Manager;
 with Scheduler_Manager;
 with Watchdog_Manager;
+with Watchdog_IPC;
 with AWS.Config.Set;
 with AWS.Server;
 with Moonshine_Interface;
@@ -35,6 +36,9 @@ begin
       Model_Manager.Initialize;
       Knowledge_Manager.Initialize;
       Scheduler_Manager.Initialize;
+
+      --  Start file-based IPC for the external watchdog process
+      Watchdog_IPC.Init;
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Connecting to Kokoro-ONNX sidecar (TTS)...");
@@ -94,6 +98,7 @@ begin
       --  Avoid Get_Line failure in background
       loop
          Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
+         Watchdog_IPC.Write_Heartbeat;
          Heartbeat_Count := Heartbeat_Count + 1;
          if Heartbeat_Count >= 5 then
             Heartbeat_Count := 0;
