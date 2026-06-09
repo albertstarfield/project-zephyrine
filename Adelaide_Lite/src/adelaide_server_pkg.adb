@@ -206,28 +206,52 @@ package body Adelaide_Server_Pkg is
         URI    : constant String := AWS.Status.URI (Request);
         UA     : constant String := AWS.Status.User_Agent (Request);
         Match_Score : Float := 0.0;
-     begin
-        --  Fuzzy match User-Agent against known external agents
-        declare
-           Known_Agents : constant array (1 .. 16) of String (1 .. 12) :=
-             ("OpenCode    ", "OpenClaw    ", "Hermes      ", "VSCode      ",
-              "Copilot     ", "Continue    ", "Chatbox     ", "Palchat     ",
-              "OpenCat     ", "Enlighten   ", "Aiko        ", "Shortcuts   ",
-              "MindMac     ", "Comments    ", "OpenWebUI   ", "Perplexity  ");
-           Current_Score : Float;
-        begin
-           for Agent of Known_Agents loop
-              begin
-                 Current_Score := Fuzzy_Match.Match (UA, Trim (Agent, Ada.Strings.Right));
-                 if Current_Score > Match_Score then
-                    Match_Score := Current_Score;
-                 end if;
-              exception
-                 when others => null;
-              end;
-           end loop;
-        end;
-        Is_External_Agent := Match_Score >= 0.7;
+      begin
+         --  Fuzzy match User-Agent against known external agents (Status Quo mode)
+         declare
+            Known_Agents : constant array (1 .. 16) of String (1 .. 12) :=
+              ("OpenCode    ", "OpenClaw    ", "Hermes      ", "VSCode      ",
+               "Copilot     ", "Continue    ", "Chatbox     ", "Palchat     ",
+               "OpenCat     ", "Enlighten   ", "Aiko        ", "Shortcuts   ",
+               "MindMac     ", "Comments    ", "OpenWebUI   ", "Perplexity  ");
+            Current_Score : Float;
+         begin
+            for Agent of Known_Agents loop
+               begin
+                  Current_Score := Fuzzy_Match.Match (UA, Trim (Agent, Ada.Strings.Right));
+                  if Current_Score > Match_Score then
+                     Match_Score := Current_Score;
+                  end if;
+               exception
+                  when others => null;
+               end;
+            end loop;
+         end;
+
+         --  Standard chatbot list: these get Adelaide Mode (full personality pipeline)
+         --  even if their UA might partially match external agents
+         Is_Standard_Chatbot : Boolean := False;
+         declare
+            Standard_Chatbots : constant array (1 .. 8) of String (1 .. 12) :=
+              ("msty        ", "OpenWebUI   ", "Chatbox     ", "Palchat     ",
+               "OpenCat     ", "Enlighten   ", "Aiko        ", "MindMac     ");
+            Current_Score_2 : Float;
+         begin
+            for Bot of Standard_Chatbots loop
+               begin
+                  Current_Score_2 := Fuzzy_Match.Match (UA, Trim (Bot, Ada.Strings.Right));
+                  if Current_Score_2 >= 0.7 then
+                     Is_Standard_Chatbot := True;
+                     exit;
+                  end if;
+               exception
+                  when others => null;
+               end;
+            end loop;
+         end;
+
+         --  External Agent = matches known agents AND NOT a standard chatbot
+         Is_External_Agent := Match_Score >= 0.7 and then not Is_Standard_Chatbot;
         declare
           Score_Pct : constant Integer := Integer (Match_Score * 100.0);
         begin

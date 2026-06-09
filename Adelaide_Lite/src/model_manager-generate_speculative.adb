@@ -3,30 +3,36 @@ with Ada.Calendar;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Exceptions; use Ada.Exceptions;
+with Ada.Unchecked_Deallocation;
 with Kratos;
 
 separate (Model_Manager)
 procedure Generate_Speculative
-  (Target_Kind     : Model_Type;
-   Draft_Kind      : Model_Type;
-   Prompt          : String;
-   Result          : out Unbounded_String;
-   Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-   Session_ID      : String := "";
-   Requested_Ctx   : Positive := 4096;
-   Stream          : Streaming_Queue.Queue_Access := null;
-   Orch_Think_Open : Boolean := False;
-   Level           : ELP_Level := ELP1;
-   External_Agent  : Boolean := False;
-   Fault_Detected  : out Boolean;
-   Fault_Query     : out Unbounded_String;
-   Fault_Category  : out Unbounded_String)
+  (Target_Kind            : Model_Type;
+   Draft_Kind             : Model_Type;
+   Prompt                 : String;
+   Result                 : out Unbounded_String;
+   Images                 : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+   Session_ID             : String := "";
+   Requested_Ctx          : Positive := 4096;
+   Stream                 : Streaming_Queue.Queue_Access := null;
+   Orch_Think_Open        : Boolean := False;
+   Level                  : ELP_Level := ELP1;
+   External_Agent         : Boolean := False;
+   Fault_Detected         : out Boolean;
+   Fault_Query            : out Unbounded_String;
+   Fault_Category         : out Unbounded_String;
+   Stream_Final_Response  : Boolean := True)
 is
    pragma SPARK_Mode (Off);
    Success       : Boolean;
    Vocab         : Llama_Vocab;
    Draft_Vocab   : Llama_Vocab;
-   Tokens        : array (1 .. 32768) of Llama_Token;
+   type Token_Array is array (Positive range <>) of Llama_Token;
+   type Token_Array_Access is access Token_Array;
+   procedure Free_Tokens is new Ada.Unchecked_Deallocation
+     (Token_Array, Token_Array_Access);
+   Tokens        : Token_Array_Access;
    N_Toks        : int;
    Target_Sampler : Llama_Sampler;
    Draft_Sampler  : Llama_Sampler;
@@ -47,28 +53,28 @@ is
    Draft_Tokens  : Draft_Token_Array;
    N_Draft       : Integer;
 
-   procedure Emit_Token (Tok : Llama_Token; V : Llama_Vocab) is
-      Piece : array (1 .. 256) of aliased Character;
-      Len   : int;
-   begin
-      if Llama_Vocab_Is_Eog (V, Tok) then
-         return;
-      end if;
-      Len := Llama_Token_To_Piece (V, Tok, Piece (1)'Address, 256, 0, True);
-      if Len > 0 then
-         declare
-            Str_Piece : String (1 .. Integer (Len));
-         begin
-            for J in 1 .. Integer (Len) loop
-               Str_Piece (J) := Piece (J);
-               Append (Result, Piece (J));
-            end loop;
-            if Stream /= null then
-               Process_And_Push_Chunk (Stream, Session_ID, Parser, Str_Piece);
-            end if;
-         end;
-      end if;
-   end Emit_Token;
+    procedure Emit_Token (Tok : Llama_Token; V : Llama_Vocab) is
+       Piece : array (1 .. 256) of aliased Character;
+       Len   : int;
+    begin
+       if Llama_Vocab_Is_Eog (V, Tok) then
+          return;
+       end if;
+       Len := Llama_Token_To_Piece (V, Tok, Piece (1)'Address, 256, 0, True);
+       if Len > 0 then
+          declare
+             Str_Piece : String (1 .. Integer (Len));
+          begin
+             for J in 1 .. Integer (Len) loop
+                Str_Piece (J) := Piece (J);
+                Append (Result, Piece (J));
+             end loop;
+             if Stream /= null and then Stream_Final_Response then
+                Process_And_Push_Chunk (Stream, Session_ID, Parser, Str_Piece);
+             end if;
+          end;
+       end if;
+    end Emit_Token;
 
    procedure Decode_Context (Ctx : Llama_Context; Tok : Llama_Token) is
       B   : constant Llama_Batch := Llama_Batch_Get_One (Tok'Address, 1);
@@ -136,6 +142,9 @@ begin
       return;
    end if;
 
+   --  Allocate token array dynamically based on actual context size
+   Tokens := new Token_Array (1 .. Positive (Models (Target_Kind).Current_Ctx));
+
    --  Max tokens = half the actual context window
    Max_Tokens := Integer (Models (Target_Kind).Current_Ctx) / 2;
    Ada.Text_IO.Put_Line ("[Speculative] Max_Tokens:" & Max_Tokens'Img &
@@ -153,8 +162,8 @@ begin
 
    Vocab := Llama_Model_Get_Vocab (Models (Target_Kind).Model);
    N_Toks := Llama_Tokenize
-     (Vocab, Prompt_C, int (Clean_P'Length), Tokens (1)'Address,
-      32768, True, True);
+     (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
+      int (Tokens.all'Length), True, True);
    Free (Prompt_C);
 
    if N_Toks < 0 then
@@ -164,6 +173,7 @@ begin
          Priority_Model_Gate.Release_ELP1 (Draft_Kind);
       end if;
       Priority_Model_Gate.Release_ELP1 (Target_Kind);
+      Free_Tokens (Tokens);
       Result := To_Unbounded_String ("ERROR: Tokenization failed");
       Ada.Text_IO.Put_Line ("ERROR: Tokenization failed");
       return;
@@ -193,50 +203,51 @@ begin
                 then Batch_Size
                 else Tokens_Left);
          begin
-            --  Decode on target
-            declare
-               B   : constant Llama_Batch :=
-                 Llama_Batch_Get_One (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
-               Ret : int;
-            begin
-               if Kratos.Guard_Enter = 0 then
-                  Ret := Llama_Decode (Models (Target_Kind).Context, B);
-                  Kratos.Guard_Exit;
-               else
-                  Kratos.Log_Crash;
-                  Ret := -1;
-               end if;
-               if Ret /= 0 then
-                  Models (Target_Kind).In_Use := False;
-                  if Models (Draft_Kind).Loaded then
-                     Models (Draft_Kind).In_Use := False;
-                     Priority_Model_Gate.Release_ELP1 (Draft_Kind);
-                  end if;
-                  Priority_Model_Gate.Release_ELP1 (Target_Kind);
-                  Ada.Text_IO.Put_Line ("ERROR: Target decode failed");
-                  Result := To_Unbounded_String ("ERROR: Target decode failed (" & Ret'Img & ")");
-                  return;
-               end if;
-            end;
-            --  Decode on draft
-            if Models (Draft_Kind).Loaded then
-               declare
-                  B   : constant Llama_Batch :=
-                    Llama_Batch_Get_One (Tokens (Integer (Current_Pos) + 1)'Address, To_Decode);
-                  Ret : int;
-               begin
-                  if Kratos.Guard_Enter = 0 then
-                     Ret := Llama_Decode (Models (Draft_Kind).Context, B);
-                     Kratos.Guard_Exit;
-                  else
-                     Kratos.Log_Crash;
-                     Ret := -1;
-                  end if;
-                  if Ret /= 0 then
-                     Ada.Text_IO.Put_Line ("[!] Draft decode error during prefill, continuing target-only");
-                  end if;
-               end;
-            end if;
+             --  Decode on target
+             declare
+                B   : constant Llama_Batch :=
+                  Llama_Batch_Get_One (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
+                Ret : int;
+             begin
+                if Kratos.Guard_Enter = 0 then
+                   Ret := Llama_Decode (Models (Target_Kind).Context, B);
+                   Kratos.Guard_Exit;
+                else
+                   Kratos.Log_Crash;
+                   Ret := -1;
+                end if;
+                if Ret /= 0 then
+                   Models (Target_Kind).In_Use := False;
+                   if Models (Draft_Kind).Loaded then
+                      Models (Draft_Kind).In_Use := False;
+                      Priority_Model_Gate.Release_ELP1 (Draft_Kind);
+                   end if;
+                   Priority_Model_Gate.Release_ELP1 (Target_Kind);
+                   Free_Tokens (Tokens);
+                   Ada.Text_IO.Put_Line ("ERROR: Target decode failed");
+                   Result := To_Unbounded_String ("ERROR: Target decode failed (" & Ret'Img & ")");
+                   return;
+                end if;
+             end;
+             --  Decode on draft (best-effort; failure falls back to target-only)
+             if Models (Draft_Kind).Loaded then
+                declare
+                   B   : constant Llama_Batch :=
+                     Llama_Batch_Get_One (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
+                   Ret : int;
+                begin
+                   if Kratos.Guard_Enter = 0 then
+                      Ret := Llama_Decode (Models (Draft_Kind).Context, B);
+                      Kratos.Guard_Exit;
+                   else
+                      Kratos.Log_Crash;
+                      Ret := -1;
+                   end if;
+                   if Ret /= 0 then
+                      Ada.Text_IO.Put_Line ("[!] Draft decode error during prefill, continuing target-only");
+                   end if;
+                end;
+             end if;
              Tokens_Left := Tokens_Left - To_Decode;
              Current_Pos := Current_Pos + To_Decode;
               --  Heartbeat during long prefill
@@ -377,6 +388,7 @@ begin
    end if;
    Models (Target_Kind).In_Use := False;
    Priority_Model_Gate.Release_ELP1 (Target_Kind);
+   Free_Tokens (Tokens);
 
    T1 := Ada.Calendar.Clock;
    declare
@@ -406,13 +418,40 @@ begin
    end;
 exception
    when E : others =>
-      Ada.Text_IO.Put_Line ("Generate_Speculative Error: " &
-        Ada.Exceptions.Exception_Information (E));
+      Ada.Text_IO.Put_Line ("[!] Generate_Speculative failed: " &
+        Ada.Exceptions.Exception_Message (E) &
+        " - falling back to single model generation");
+      if Tokens /= null then
+         Free_Tokens (Tokens);
+      end if;
       Models (Target_Kind).In_Use := False;
       if Models (Draft_Kind).Loaded then
          Models (Draft_Kind).In_Use := False;
          Priority_Model_Gate.Release_ELP1 (Draft_Kind);
       end if;
       Priority_Model_Gate.Release_ELP1 (Target_Kind);
-      Result := To_Unbounded_String ("ERROR: Speculative Decode failed");
+      --  Fallback to single-model generation (skip 0.8B draft)
+      declare
+         Fallback_Result : Unbounded_String;
+      begin
+         Generate (Kind           => Target_Kind,
+                   Prompt         => Prompt,
+                   Result         => Fallback_Result,
+                   Images         => Images,
+                   Session_ID     => Session_ID,
+                   Requested_Ctx  => Requested_Ctx,
+                   Stream         => Stream,
+                   Orch_Think_Open => Orch_Think_Open,
+                   Level          => Level);
+         Result := Fallback_Result;
+         Fault_Detected := False;
+         Fault_Query := Null_Unbounded_String;
+         Fault_Category := Null_Unbounded_String;
+      exception
+         when E2 : others =>
+            Ada.Text_IO.Put_Line ("[!] Fallback Generate also failed: " &
+              Ada.Exceptions.Exception_Message (E2));
+            Result := To_Unbounded_String ("ERROR: Both speculative and single-model generation failed");
+            Fault_Detected := False;
+      end;
 end Generate_Speculative;

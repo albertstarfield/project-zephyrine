@@ -24,6 +24,7 @@ static volatile sig_atomic_t jorvik_guard_depth = 0;
 static struct sigaction jorvik_prev_segv;
 static struct sigaction jorvik_prev_bus;
 static struct sigaction jorvik_prev_fpe;
+static struct sigaction jorvik_prev_trap;
 
 static void jorvik_handler(int sig) {
     jorvik_crash_signal = sig;
@@ -36,6 +37,7 @@ static void jorvik_handler(int sig) {
         case SIGSEGV: prev = &jorvik_prev_segv; break;
         case SIGBUS:  prev = &jorvik_prev_bus;  break;
         case SIGFPE:  prev = &jorvik_prev_fpe;  break;
+        case SIGTRAP: prev = &jorvik_prev_trap; break;
         default: return;
     }
     if (prev->sa_handler != SIG_DFL && prev->sa_handler != SIG_IGN) {
@@ -58,6 +60,7 @@ void jorvik_install_handlers(void) {
     sigaction(SIGSEGV, &sa, &jorvik_prev_segv);
     sigaction(SIGBUS,  &sa, &jorvik_prev_bus);
     sigaction(SIGFPE,  &sa, &jorvik_prev_fpe);
+    sigaction(SIGTRAP, &sa, &jorvik_prev_trap);
 
     jorvik_installed = 1;
 }

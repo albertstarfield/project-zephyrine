@@ -37,12 +37,13 @@ package body Kratos is
 
    procedure Log_Crash is
       Sig : constant Interfaces.C.int := Get_Crash_Signal;
-      Sig_Name : constant String :=
-        (case Integer (Sig) is
-         when 11 => "SIGSEGV (Segmentation Fault)",
-         when 7  => "SIGBUS  (Bus Error)",
-         when 8  => "SIGFPE  (Floating Point Exception)",
-         when others => "Signal" & Integer (Sig)'Image);
+       Sig_Name : constant String :=
+         (case Integer (Sig) is
+          when 11 => "SIGSEGV (Segmentation Fault)",
+          when 7  => "SIGBUS  (Bus Error)",
+          when 8  => "SIGFPE  (Floating Point Exception)",
+          when 5  => "SIGTRAP (Trace/BPT Trap)",
+          when others => "Signal" & Integer (Sig)'Image);
    begin
       Put_Line (Standard_Error,
         "[Kratos] *** CRASH ISOLATED *** " & Sig_Name);
