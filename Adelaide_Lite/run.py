@@ -31,6 +31,8 @@ watchdog_process = None
 kokoro_process = None
 
 def get_files_to_hash():
+    # NOTE: run.py itself is NOT hashed - it's an interpreter script, not a
+    # compiled artifact. Changes to run.py don't trigger rebuilds.
     patterns = [
         "src/**/*",
         "config/**/*",
@@ -189,6 +191,18 @@ def main():
         
         models_to_download = [
             {
+                "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf?download=true",
+                "output": "Qwen3.5-0.8B-Q4_K_M.gguf"
+            },
+            {
+                "url": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf?download=true",
+                "output": "mmproj-0.8B-F16.gguf"
+            },
+            {
+                "url": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf?download=true",
+                "output": "Qwen3-Embedding-0.6B-Q8_0.gguf"
+            },
+            {
                 "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-UD-Q2_K_XL.gguf?download=true",
                 "output": "Qwen3.5-9B-UD-Q2_K_XL.gguf"
             },
@@ -328,11 +342,8 @@ def main():
     if platform.system() == "Darwin":
         env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
     
-    # Start through ALIRE to ensure correct environment variables for Ada libraries
-    if shutil.which("alr"):
-        server_process = subprocess.Popen(["alr", "exec", "--", server_path], cwd=BASE_DIR, env=env)
-    else:
-        server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
+    # Run server directly (ALIRE wrapper changes CWD which breaks relative model paths)
+    server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
 
     # Launch external watchdog process (separate binary, monitors server health)
     watchdog_bin = "adelaide_watchdog.exe" if platform.system() == "Windows" else "adelaide_watchdog"
