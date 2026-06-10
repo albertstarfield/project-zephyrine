@@ -620,12 +620,22 @@ package body Knowledge_Manager is
                        (Kind   => Qwen_0_8B,
                         Prompt => "Based on this conversation, generate 1-3 short "
                                   & "follow-up questions the user might ask next. "
-                                  & "Output one per line, no numbering: "
+                                  & "Use raw text only, no thinking tags or markup: "
                                   & Current_Prompt,
                         Result => Prediction_Result,
                         Level  => ELP0);
 
                      if Length (Prediction_Result) > 0 then
+
+                        --  Strip any thinking tags from the prediction output
+                        declare
+                           Raw : constant String :=
+                             Model_Manager.Sanitize_Think_Tags
+                               (To_String (Prediction_Result));
+                        begin
+                           Prediction_Result := To_Unbounded_String (Raw);
+                        end;
+
                         declare
                            Resp   : constant String := To_String (Prediction_Result);
                            Pos    : Positive := Resp'First;
@@ -642,7 +652,13 @@ package body Knowledge_Manager is
                                    Ada.Strings.Fixed.Trim
                                      (Resp (Pos .. End_Ln - 1), Ada.Strings.Both);
                               begin
-                                 if Pred_Q'Length > 5 then
+                                 --  Filter: skip thinking tags, empty lines, very short text
+                                 if Pred_Q'Length > 5
+                                   and then Pred_Q /= "<think>"
+                                   and then Pred_Q /= "</think>"
+                                   and then Pred_Q /= "<thinking>"
+                                   and then Pred_Q /= "</thinking>"
+                                 then
                                     Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
                                               "[ProactiveCache]" & AnsiAda.Reset &
                                               " Pre-computing answer for: " & Pred_Q);
