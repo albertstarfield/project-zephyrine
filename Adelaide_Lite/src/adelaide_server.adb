@@ -16,6 +16,34 @@ with AWS.Server;
 with Moonshine_Interface;
 with ELP_Queue;
 
+--  ===========================================================================
+--  SERVER QUIRKS & DISCOVERED WORKAROUNDS
+--  ===========================================================================
+--  [QUIRK-S01] [ALL] Pre-existing unload crash (exit code -1)
+--  After QWEN_0_8B processes a request and ELP0 releases the model, the
+--  server may crash with exit code -1 (kratos signal isolation).  The
+--  run.sh wrapper auto-restarts the server on crash, producing a brief
+--  (~2s) service interruption.  See QUIRK-M03 for details.
+--
+--  [QUIRK-S02] [ALL] Port 11420 binding with retry
+--  The server tries to bind to port 11420 with up to 3 retries (2s apart).
+--  If the port is still in use (e.g., stale server from a previous crash),
+--  a [BUGCHECK] message is printed with the port conflict details.
+--  Kill the stale process: kill $(lsof -ti:11420)
+--
+--  [QUIRK-S03] [ALL] ELP Queue utilization logging
+--  Every 5 seconds, the main loop logs ELP queue depth and utilization.
+--  This is the primary diagnostic for whether background tasks (ELP0) are
+--  keeping up or the system is overloaded with user requests (ELP1).
+--
+--  [QUIRK-S04] [macOS] Moonshine model path
+--  The Moonshine STT model is loaded from a hardcoded relative path:
+--    "../moonshine/models/download.moonshine.ai/model/medium-streaming-en/quantized"
+--  LINUX-COMPAT: This path is the same on Linux, but the model files may
+--  reside at a different location.  The path is relative to the CWD at
+--  startup (Adelaide_Lite/ when run via run.py).
+--  ===========================================================================
+
 procedure Adelaide_Server is
    WS   : AWS.Server.HTTP;
    Conf : AWS.Config.Object := AWS.Config.Get_Current;

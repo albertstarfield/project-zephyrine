@@ -21,6 +21,48 @@ with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Real_Time;
 with Fuzzy_Match;
 
+--  ===========================================================================
+--  DISPATCH QUIRKS & DISCOVERED WORKAROUNDS
+--  ===========================================================================
+--  [QUIRK-D01] [ALL] Model routing always goes through Hybrid_Generate
+--  Regardless of the "model" field in the client request, the server
+--  ignores it and routes everything through Hybrid_Generate (Adelaide
+--  Core Orchestration) at line 731-736.  The requested model name is
+--  only echoed back in the response for OpenAI/Ollama compatibility.
+--  This means:
+--     - "model": "gpt-4" -> still uses Qwen3.5-9B backend
+--     - "model": "llama3" -> still uses Qwen3.5-9B backend
+--     - "model": "Snowball-Enaga" -> uses Qwen3.5-9B backend (correct)
+--  LINUX-COMPAT: Same behavior applies on Linux.
+--
+--  [QUIRK-D02] [ALL] User-Agent fuzzy match for external agent detection
+--  The Dispatch function uses Fuzzy_Match to score the User-Agent header
+--  against known agent signatures at 0.7 threshold.  If matched AND the
+--  agent is not in the "standard chatbot" list, it's treated as an
+--  "External Agent" and gets raw LLM passthrough (no personality pipeline).
+--  Standard chatbots (OpenWebUI, Msty, Chatbox, etc.) always get the full
+--  Adelaide personality pipeline regardless of UA score.
+--  LINUX-COMPAT: Same behavior, no platform dependencies.
+--
+--  [QUIRK-D03] [ALL] Streaming format: NDJSON for Ollama, SSE for OpenAI
+--  /api/chat and /api/generate use NDJSON (application/x-ndjson).
+--  /v1/chat/completions and /v1/completions use SSE (text/event-stream).
+--  The Streaming_Queue handles both with the correct markers:
+--     - Ollama: done:true / done:false
+--     - OpenAI: data: [DONE]
+--  The immediate ACK pattern (line 707-717) guarantees sub-ms TTFB by
+--  pushing the first chunk into the queue buffer BEFORE the generator
+--  task starts.
+--  LINUX-COMPAT: Same behavior, no platform dependencies.
+--
+--  [QUIRK-D04] [ALL] Audio endpoint data format
+--  /v1/audio/transcriptions expects raw PCM float32 audio data (not WAV
+--  or other container format).  The Moonshine interface transcribes
+--  directly from the raw float array.  /v1/audio/speech returns raw PCM
+--  float32 as well (from Kokoro TTS).  Clients must send/receive raw PCM.
+--  LINUX-COMPAT: Same behavior, no platform dependencies.
+--  ===========================================================================
+
 package body Adelaide_Server_Pkg is
 
    --  API Alignment Details:

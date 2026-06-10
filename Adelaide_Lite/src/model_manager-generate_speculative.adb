@@ -1,3 +1,12 @@
+--  ===========================================================================
+--  QUIRK: Same Kratos guard pattern as Generate (see QUIRK-M01 in
+--  model_manager.adb).  Every llama_decode call is wrapped in
+--  Guard_Enter/Guard_Exit.  Speculative decoding (Target + Draft model)
+--  doubles the number of decode calls, so the guard is especially
+--  important here.  If either model crashes during decode, the signal
+--  is caught and we fall back to non-speculative generation.
+--  ===========================================================================
+
 with Llama_Interface; use Llama_Interface;
 with Ada.Calendar;
 with Interfaces.C; use Interfaces.C;
