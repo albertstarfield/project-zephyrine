@@ -23,9 +23,12 @@ with ELP_Queue;
 --  After QWEN_0_8B processes a request and ELP0 releases the model, the
 --  server could crash with exit code -1 (kratos signal isolation).  Root
 --  cause: Idle_Monitor unloaded QWEN_0_8B via Llama_Free after 30s
---  inactivity, triggering a ggml-metal GPU buffer race.  FIXED: QWEN_0_8B
---  is now exempt from Idle_Monitor unloading and kept permanently loaded.
---  If porting to Linux (no ggml-metal), this exemption can be removed.
+--  inactivity, triggering a ggml-metal GPU buffer race.  FIXED [macOS]:
+--  QWEN_0_8B is now exempt from Idle_Monitor unloading and kept permanently
+--  loaded.  LINUX-COMPAT / Android-Termux: On Linux (no ggml-metal) remove
+--  the Qwen_0_8B exemption in Idle_Monitor to allow aggressive unloading.
+--  For smartphone / Termux targets, also consider lowering Idle_Monitor
+--  timeout from 30s to 10-15s for tighter memory pressure response.
 --  See QUIRK-M03 for details.
 --
 --  [QUIRK-S02] [ALL] Port 11420 binding with retry

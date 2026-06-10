@@ -47,12 +47,16 @@ with System;
 --  is released, the server may crash with exit code -1 (signal caught by
 --  Kratos).  Root cause: Idle_Monitor unloads QWEN_0_8B via Llama_Free
 --  after 30s inactivity, which triggers a ggml-metal GPU buffer race
---  (SIGABRT / Abort trap: 6).  Fixed by exempting QWEN_0_8B from the
---  Idle_Monitor unload loop — the 0.8B model is only ~0.5-0.6GB VRAM at
---  Q4_K_S and is kept permanently loaded.
---  LINUX-COMPAT: If porting to Linux with CUDA/Vulkan, this race may not
---  occur as ggml-metal is the primary suspect.  Remove the Qwen_0_8B
---  exemption guard in Idle_Monitor if the crash is confirmed absent.
+--  (SIGABRT / Abort trap: 6).  Fixed on macOS by exempting QWEN_0_8B from
+--  the Idle_Monitor unload loop — the 0.8B model is only ~0.5-0.6GB VRAM
+--  at Q4_K_S and is kept permanently loaded.
+--  LINUX-COMPAT / Android-Termux: On Linux (CUDA/Vulkan) the ggml-metal
+--  race does not occur, so the Qwen_0_8B exemption guard should be REMOVED
+--  from Idle_Monitor to allow aggressive model unloading.  Smartphone /
+--  Termux-on-Android targets have very limited RAM (4-8GB) and shared GPU
+--  memory, so ALL models including QWEN_0_8B must be unloaded aggressively
+--  when not in use.  The Idle_Monitor timeout can be lowered to 10-15s
+--  for those targets.
 --
 --  [QUIRK-M04] [ALL] Model path discovery fallback
 --  Load_Model tries 3 path variants (direct, ../, ../../) because the
@@ -238,11 +242,13 @@ package body Model_Manager is
       loop
          Next_Check := Clock + Interval;
          Now := Clock;
-          for Kind in Model_Type loop
-             --  [QUIRK-FIX] Keep QWEN_0_8B permanently loaded to avoid
-             --  ggml-metal GPU buffer race during Llama_Free/Unload_Model.
-             --  The 0.8B model costs only ~0.5-0.6GB VRAM at Q4_K_S.
-             --  See QUIRK-M03 / QUIRK-S01 for crash details.
+           for Kind in Model_Type loop
+              --  [QUIRK-FIX] [macOS] Keep QWEN_0_8B permanently loaded to avoid
+              --  ggml-metal GPU buffer race during Llama_Free/Unload_Model.
+              --  The 0.8B model costs only ~0.5-0.6GB VRAM at Q4_K_S.
+              --  [Linux/Android-Termux] REMOVE this exemption guard to unload
+              --  QWEN_0_8B aggressively on memory-constrained devices.
+              --  See QUIRK-M03 / QUIRK-S01 for crash details.
              if Kind = Qwen_0_8B then
                 null;
              elsif Models (Kind).Loaded and then
