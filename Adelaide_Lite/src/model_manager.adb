@@ -1428,7 +1428,8 @@ package body Model_Manager is
       end;
 
       if not External_Agent then
-         Push_Chunk (Stream, Session_ID, "<think>" & ASCII.LF);
+         --  <think> was already opened by adelaide_server_pkg before starting
+         --  the generator task, so we continue pushing thought content inside it.
          Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] No cached response found, starting fresh reasoning chain." & ASCII.LF);
          Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Operating at " & ELP_Level'Image (Level) &
                      " priority. Session: " & Session_ID & ASCII.LF);

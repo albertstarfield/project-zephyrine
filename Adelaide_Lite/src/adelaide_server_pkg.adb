@@ -751,12 +751,17 @@ package body Adelaide_Server_Pkg is
                    if Is_External_Agent then
                       Q.Push ("" & ASCII.LF);
                    else
-                      Q.Push ("[Adelaide Core Orchestration]" & ASCII.LF &
-                              "Timestamp: " & TS & "Z" & ASCII.LF &
-                              "Session: " & To_String (S_ID) & ASCII.LF &
-                              "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
-                              "Model: " & To_String (Req_Model) & ASCII.LF &
-                              "Status: Request received - starting orchestration..." & ASCII.LF);
+                       --  Wrap orchestration metadata in <think> block so it is
+                       --  captured as internal reasoning, not leaked to the client.
+                       --  The </think> close is pushed by Hybrid_Generate after all
+                       --  thought content and model thinking have been emitted.
+                       Q.Push ("<think>" & ASCII.LF &
+                               "[Adelaide Core Orchestration]" & ASCII.LF &
+                               "Timestamp: " & TS & "Z" & ASCII.LF &
+                               "Session: " & To_String (S_ID) & ASCII.LF &
+                               "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
+                               "Model: " & To_String (Req_Model) & ASCII.LF &
+                               "Status: Request received - starting orchestration..." & ASCII.LF);
                    end if;
 
                   T.Start (To_String (Prompt), To_String (Req_Model),
