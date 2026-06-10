@@ -45,16 +45,14 @@ with System;
 --  [QUIRK-M03] [macOS] Pre-existing signal crash after QWEN_0_8B release
 --  Observed (2026-06-10): After QWEN_0_8B processes a request and the model
 --  is released, the server may crash with exit code -1 (signal caught by
---  Kratos).  This appears to be a timing issue during model unload where
---  the llama.cpp context cleanup races with an ongoing background decode.
---  The run.sh wrapper auto-restarts the server, but clients see a brief
---  connection reset.  Root cause has not been fully diagnosed; possible
---  culprits are:
---     a) LLama_Free called while a decode thread is still active
---     b) GPU buffer deallocation race in ggml-metal
---     c) Double-free in speculative decoding cleanup path
---  LINUX-COMPAT: If porting to Linux with CUDA/Vulkan, this may not occur
---  as the ggml-metal backend is the primary suspect.
+--  Kratos).  Root cause: Idle_Monitor unloads QWEN_0_8B via Llama_Free
+--  after 30s inactivity, which triggers a ggml-metal GPU buffer race
+--  (SIGABRT / Abort trap: 6).  Fixed by exempting QWEN_0_8B from the
+--  Idle_Monitor unload loop — the 0.8B model is only ~0.5-0.6GB VRAM at
+--  Q4_K_S and is kept permanently loaded.
+--  LINUX-COMPAT: If porting to Linux with CUDA/Vulkan, this race may not
+--  occur as ggml-metal is the primary suspect.  Remove the Qwen_0_8B
+--  exemption guard in Idle_Monitor if the crash is confirmed absent.
 --
 --  [QUIRK-M04] [ALL] Model path discovery fallback
 --  Load_Model tries 3 path variants (direct, ../, ../../) because the
@@ -240,11 +238,17 @@ package body Model_Manager is
       loop
          Next_Check := Clock + Interval;
          Now := Clock;
-         for Kind in Model_Type loop
-            if Models (Kind).Loaded and then
-               not Models (Kind).In_Use and then
-               (Now - Models (Kind).Last_Used) > Timeout
-            then
+          for Kind in Model_Type loop
+             --  [QUIRK-FIX] Keep QWEN_0_8B permanently loaded to avoid
+             --  ggml-metal GPU buffer race during Llama_Free/Unload_Model.
+             --  The 0.8B model costs only ~0.5-0.6GB VRAM at Q4_K_S.
+             --  See QUIRK-M03 / QUIRK-S01 for crash details.
+             if Kind = Qwen_0_8B then
+                null;
+             elsif Models (Kind).Loaded and then
+                not Models (Kind).In_Use and then
+                (Now - Models (Kind).Last_Used) > Timeout
+             then
                Priority_Model_Gate.Try_Acquire_For_Cleanup (Kind, Cleanup_OK);
                if Cleanup_OK then
                   Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Idle]" &

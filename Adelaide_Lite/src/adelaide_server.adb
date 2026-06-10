@@ -19,11 +19,14 @@ with ELP_Queue;
 --  ===========================================================================
 --  SERVER QUIRKS & DISCOVERED WORKAROUNDS
 --  ===========================================================================
---  [QUIRK-S01] [ALL] Pre-existing unload crash (exit code -1)
+--  [QUIRK-S01] [ALL] Pre-existing unload crash (exit code -1) — FIXED
 --  After QWEN_0_8B processes a request and ELP0 releases the model, the
---  server may crash with exit code -1 (kratos signal isolation).  The
---  run.sh wrapper auto-restarts the server on crash, producing a brief
---  (~2s) service interruption.  See QUIRK-M03 for details.
+--  server could crash with exit code -1 (kratos signal isolation).  Root
+--  cause: Idle_Monitor unloaded QWEN_0_8B via Llama_Free after 30s
+--  inactivity, triggering a ggml-metal GPU buffer race.  FIXED: QWEN_0_8B
+--  is now exempt from Idle_Monitor unloading and kept permanently loaded.
+--  If porting to Linux (no ggml-metal), this exemption can be removed.
+--  See QUIRK-M03 for details.
 --
 --  [QUIRK-S02] [ALL] Port 11420 binding with retry
 --  The server tries to bind to port 11420 with up to 3 retries (2s apart).
