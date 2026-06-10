@@ -274,9 +274,10 @@ package body Adelaide_Server_Pkg is
          --  even if their UA might partially match external agents
          Is_Standard_Chatbot : Boolean := False;
          declare
-            Standard_Chatbots : constant array (1 .. 8) of String (1 .. 12) :=
-              ("msty        ", "OpenWebUI   ", "Chatbox     ", "Palchat     ",
-               "OpenCat     ", "Enlighten   ", "Aiko        ", "MindMac     ");
+             Standard_Chatbots : constant array (1 .. 9) of String (1 .. 12) :=
+               ("msty        ", "OpenWebUI   ", "Chatbox     ", "Palchat     ",
+                "OpenCat     ", "Enlighten   ", "Aiko        ", "MindMac     ",
+                "curl        ");
             Current_Score_2 : Float;
          begin
             for Bot of Standard_Chatbots loop

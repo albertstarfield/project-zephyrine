@@ -9,9 +9,11 @@ with Model_Types; use Model_Types;
 
 package Model_Manager is
 
-   --  Toggle speculative decoding (draft model + verification).
-   --  When False, falls back to target-only generation (no draft model).
-   Enable_Speculative : constant Boolean := False;
+   --  REMOVED: Generate_Speculative (ggml draft-model token speculation).
+   --  Was disabled via `Enable_Speculative => False` due to ggml-metal GPU
+   --  buffer races during QWEN_0_8B unload causing Abort trap: 6.
+   --  Replaced by Speculative_Cache (query-level semantic cache populated
+   --  proactively by ELP0 background tasks — see Knowledge_Manager).
 
    procedure Initialize;
 
@@ -56,23 +58,6 @@ package Model_Manager is
       Agentic        : Boolean := False;
       Raw_Prompt     : Boolean := False;
       External_Agent : Boolean := False);
-
-    procedure Generate_Speculative
-       (Target_Kind         : Model_Type;
-        Draft_Kind          : Model_Type;
-        Prompt              : String;
-        Result              : out Unbounded_String;
-        Images              : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-        Session_ID          : String := "";
-        Requested_Ctx       : Positive := 4096;
-        Stream              : Streaming_Queue.Queue_Access := null;
-        Orch_Think_Open     : Boolean := False;
-        Level               : ELP_Level := ELP1;
-        External_Agent      : Boolean := False;
-        Fault_Detected      : out Boolean;
-        Fault_Query         : out Unbounded_String;
-        Fault_Category      : out Unbounded_String;
-        Stream_Final_Response : Boolean := True);
 
    procedure Get_Embedding
      (Prompt : String;
@@ -119,5 +104,10 @@ package Model_Manager is
    --  ELP3 Timing Correction / Jitter Profile
    Current_Jitter_Max : Duration := 0.0;
    Current_Jitter_Avg : Duration := 0.0;
+
+   --  Last user prompt (set by Hybrid_Generate at ELP1 level).
+   --  Read by Proactive_Cache_Task in Knowledge_Manager to predict
+   --  follow-up questions and pre-populate Speculative_Cache.
+   Last_User_Prompt : Unbounded_String := Null_Unbounded_String;
 
 end Model_Manager;

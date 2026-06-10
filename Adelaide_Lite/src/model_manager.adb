@@ -18,6 +18,7 @@ with Ada.Exceptions;
 with Watchdog_Manager;
 with Kratos;
 with ELP_Queue;
+with Speculative_Cache;
 with System;
 
 --  ===========================================================================
@@ -1263,23 +1264,6 @@ package body Model_Manager is
           Result := To_Unbounded_String ("ERROR: Decode failed");
     end Generate;
 
-      procedure Generate_Speculative
-        (Target_Kind             : Model_Type;
-         Draft_Kind              : Model_Type;
-         Prompt                  : String;
-         Result                  : out Unbounded_String;
-         Images                  : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-         Session_ID              : String := "";
-         Requested_Ctx           : Positive := 4096;
-         Stream                  : Streaming_Queue.Queue_Access := null;
-         Orch_Think_Open         : Boolean := False;
-         Level                   : ELP_Level := ELP1;
-         External_Agent          : Boolean := False;
-         Fault_Detected          : out Boolean;
-         Fault_Query             : out Unbounded_String;
-         Fault_Category          : out Unbounded_String;
-         Stream_Final_Response   : Boolean := True) is separate;
-
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
     procedure Hybrid_Generate
       (Prompt         : String;
@@ -1318,10 +1302,15 @@ package body Model_Manager is
       Last_Heartbeat : Ada.Calendar.Time := Ada.Calendar.Clock;
       Emb_Vec     : Math_Utils.Vector (1 .. 1536) := [others => 0.0];
       Emb_Len     : Natural;
-   begin
-      T0 := Ada.Calendar.Clock;
+    begin
+       T0 := Ada.Calendar.Clock;
 
-      Get_Embedding (Prompt, Emb_Vec, Emb_Len);
+       --  Save last user prompt for ELP0 proactive cache speculation
+       if Level /= ELP0 then
+          Last_User_Prompt := To_Unbounded_String (Prompt);
+       end if;
+
+       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
 
       --  EXTERNAL AGENT PASSTHROUGH: If User-Agent fuzzy-matched an external
       --  agent app (0.7+ threshold), bypass personality pipeline.
@@ -1376,6 +1365,22 @@ package body Model_Manager is
             return;
          end if;
 
+       end;
+
+      --  Speculative_Cache lookup (proactive predicted-query cache populated by ELP0)
+      declare
+         SC_Res : constant String := Speculative_Cache.Proactive_Cache.Lookup (Prompt);
+      begin
+         if not External_Agent and then SC_Res /= "" then
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
+                      "[Hybrid]" & AnsiAda.Reset &
+                      " Speculative Cache HIT. Returning cached response.");
+            Result := To_Unbounded_String (Sanitize_Think_Tags (SC_Res));
+            if Stream /= null then
+               Push_Chunk (Stream, Session_ID, To_String (Result));
+            end if;
+            return;
+         end if;
       end;
 
       if not External_Agent then
@@ -1749,36 +1754,20 @@ package body Model_Manager is
                      end if;
                  end if;
 
-                if Enable_Speculative then
-                   Generate_Speculative
-                      (Target_Kind             => Qwen_9B,
-                       Draft_Kind              => Qwen_0_8B,
-                       Prompt                  => Get_Final_Prompt,
-                       Result                  => Fault_Result,
-                       Images                  => Images,
-                       Session_ID              => Session_ID,
-                       Requested_Ctx           => 8192,
-                       Stream                  => Stream,
-                       Orch_Think_Open         => (Hop_Count = 0),
-                       Level                   => Level,
-                       External_Agent          => External_Agent,
-                       Fault_Detected          => F_Detected,
-                       Fault_Query             => F_Query,
-                       Fault_Category          => F_Category,
-                       Stream_Final_Response   => F_Detected);
-                else
-                   Generate
-                      (Kind                  => Qwen_9B,
-                       Prompt                => Get_Final_Prompt,
-                       Result                => Fault_Result,
-                       Images                => Images,
-                       Session_ID            => Session_ID,
-                       Requested_Ctx         => 8192,
-                       Stream                => Stream,
-                       Orch_Think_Open       => (Hop_Count = 0),
-                       Level                 => Level);
-                   F_Detected := False;
-                end if;
+                --  Legacy note: removed Generate_Speculative (draft-model token
+                --  speculation). Replaced by Speculative_Cache (query-level
+                --  semantic cache populated by ELP0 Proactive_Cache_Task).
+                Generate
+                   (Kind                  => Qwen_9B,
+                    Prompt                => Get_Final_Prompt,
+                    Result                => Fault_Result,
+                    Images                => Images,
+                    Session_ID            => Session_ID,
+                    Requested_Ctx         => 8192,
+                    Stream                => Stream,
+                    Orch_Think_Open       => (Hop_Count = 0),
+                    Level                 => Level);
+                F_Detected := False;
 
                 if F_Detected then
                    --  Service the context fault

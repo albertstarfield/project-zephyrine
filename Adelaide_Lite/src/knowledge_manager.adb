@@ -15,6 +15,7 @@ with Ada.Streams.Stream_IO;
 with GNAT.Expect;
 with GNAT.OS_Lib;
 with Integrity_Utils;
+with Speculative_Cache;
 with Interfaces;
 
 package body Knowledge_Manager is
@@ -49,6 +50,10 @@ package body Knowledge_Manager is
       entry Start;
    end Zenith_Prover_Task;
 
+   task Proactive_Cache_Task is
+      entry Start;
+   end Proactive_Cache_Task;
+
    procedure Initialize is
    begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
@@ -65,6 +70,7 @@ package body Knowledge_Manager is
       Zenith_Manager.Zenith_Orion_Task.Start;
       Telemetry_Sync_Task.Start;
       Zenith_Prover_Task.Start;
+      Proactive_Cache_Task.Start;
    end Start_Tasks;
 
    --  Helper to index references.bib
@@ -579,5 +585,112 @@ package body Knowledge_Manager is
          delay 3600.0;
       end loop;
    end Zenith_Prover_Task;
+
+   --  ─── Proactive_Cache_Task ────────────────────────────────────
+   --  ELP0 background task that predicts what the user might ask next
+   --  and pre-computes answers via the full Hybrid_Generate pipeline,
+   --  storing them in Speculative_Cache for instant ELP1 cache hits.
+   task body Proactive_Cache_Task is
+      Last_Processed : Unbounded_String := Null_Unbounded_String;
+   begin
+      accept Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[ProactiveCache]" &
+                AnsiAda.Reset & " Starting proactive speculation (ELP0)...");
+      loop
+         if Model_Manager.Should_Abort_ELP0 then
+            delay 1.0;
+         else
+            declare
+               Current_Prompt : constant String :=
+                 To_String (Model_Manager.Last_User_Prompt);
+            begin
+               if Current_Prompt'Length = 0
+                 or else Current_Prompt = To_String (Last_Processed)
+               then
+                  --  Nothing new to process
+                  delay 5.0;
+               else
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[ProactiveCache]" &
+                            AnsiAda.Reset & " Predicting follow-up questions...");
+
+                  declare
+                     Prediction_Result : Unbounded_String;
+                  begin
+                     Model_Manager.Generate
+                       (Kind   => Qwen_0_8B,
+                        Prompt => "Based on this conversation, generate 1-3 short "
+                                  & "follow-up questions the user might ask next. "
+                                  & "Output one per line, no numbering: "
+                                  & Current_Prompt,
+                        Result => Prediction_Result,
+                        Level  => ELP0);
+
+                     if Length (Prediction_Result) > 0 then
+                        declare
+                           Resp   : constant String := To_String (Prediction_Result);
+                           Pos    : Positive := Resp'First;
+                           End_Ln : Natural;
+                        begin
+                           while Pos <= Resp'Last loop
+                              End_Ln := Ada.Strings.Fixed.Index
+                                (Resp (Pos .. Resp'Last), (1 => ASCII.LF));
+                              if End_Ln = 0 then
+                                 End_Ln := Resp'Last + 1;
+                              end if;
+                              declare
+                                 Pred_Q : constant String :=
+                                   Ada.Strings.Fixed.Trim
+                                     (Resp (Pos .. End_Ln - 1), Ada.Strings.Both);
+                              begin
+                                 if Pred_Q'Length > 5 then
+                                    Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                                              "[ProactiveCache]" & AnsiAda.Reset &
+                                              " Pre-computing answer for: " & Pred_Q);
+                                    declare
+                                       Answer : Unbounded_String;
+                                    begin
+                                       Model_Manager.Hybrid_Generate
+                                         (Prompt => Pred_Q,
+                                          Result => Answer,
+                                          Level  => ELP0);
+
+                                       if Length (Answer) > 0
+                                         and then To_String (Answer) (1 .. 6) /= "ERROR:"
+                                       then
+                                          Speculative_Cache.Proactive_Cache.Store
+                                            (Predicted_Query => Pred_Q,
+                                             Answer => To_String (Answer));
+                                          Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                                                    "[ProactiveCache]" & AnsiAda.Reset &
+                                                    " Cached answer for: " & Pred_Q);
+                                       end if;
+                                    exception
+                                       when others =>
+                                          Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                                                    "[ProactiveCache]" & AnsiAda.Reset &
+                                                    " Failed to pre-compute: " & Pred_Q);
+                                    end;
+                                 end if;
+                              end;
+                              Pos := End_Ln + 1;
+                           end loop;
+                        end;
+                     end if;
+                  exception
+                     when others =>
+                        Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[ProactiveCache]" &
+                                  AnsiAda.Reset & " Prediction failed (model not loaded?).");
+                  end;
+
+                  Last_Processed := Model_Manager.Last_User_Prompt;
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[ProactiveCache]" &
+                            AnsiAda.Reset & " Done. Cache entries:" &
+                            Natural'Image (Speculative_Cache.Proactive_Cache.Count));
+               end if;
+            end;
+         end if;
+         delay 10.0;
+      end loop;
+   end Proactive_Cache_Task;
 
 end Knowledge_Manager;
