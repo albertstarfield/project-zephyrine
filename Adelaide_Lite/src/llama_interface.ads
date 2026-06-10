@@ -176,7 +176,7 @@ package Llama_Interface is
    function Llama_Get_Logits (Context : Llama_Context) return System.Address;
    pragma Import (C, Llama_Get_Logits, "llama_get_logits");
 
-   procedure Llama_Set_Embeddings (Context : Llama_Context; Value : Boolean);
+   procedure Llama_Set_Embeddings (Context : Llama_Context; Value : Interfaces.C.int);
    pragma Import (C, Llama_Set_Embeddings, "llama_set_embeddings");
 
    function Llama_Get_Embeddings (Context : Llama_Context) return System.Address;
