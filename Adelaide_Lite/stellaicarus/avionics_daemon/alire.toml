@@ -1,3 +1,11 @@
+#  ============================================================================
+#  QUIRK: gnatcoll subcomponent (see Adelaide_Lite/alire.toml QUIRK-001)
+#  This subproject also depends on gnatcoll.  When `alr build` runs, the
+#  same libgnatcoll_core.a missing-objects issue applies.  If linking
+#  fails with _gnatcoll_atomic_write undefined, apply the fix from
+#  Adelaide_Lite/adelaide_lite.gpr QUIRK-001.
+#  ============================================================================
+
 name = "avionics_daemon"
 description = "StellaIcarus daemon for streaming simulated avionics data."
 version = "0.1.0-dev"

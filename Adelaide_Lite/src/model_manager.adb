@@ -20,6 +20,59 @@ with Kratos;
 with ELP_Queue;
 with System;
 
+--  ===========================================================================
+--  MODEL MANAGEMENT QUIRKS & DISCOVERED WORKAROUNDS
+--  ===========================================================================
+--  [QUIRK-M01] [ALL] Kratos crash isolation layer
+--  Every llama_decode call is wrapped in Kratos.Guard_Enter / Guard_Exit.
+--  If the C-level code crashes (SIGSEGV, SIGBUS, SIGFPE, SIGTRAP, SIGABRT),
+--  Kratos catches the signal and longjmps back, returning a nonzero code.
+--  The Ada code then calls Kratos.Log_Crash and returns -1 instead of
+--  crashing the entire server process.  This is ESSENTIAL because llama.cpp
+--  can segfault during edge-case decodes (e.g., corrupted KV cache state,
+--  context size mismatch, model unload races).
+--
+--  [QUIRK-M02] [ALL] Context size management
+--  Context sizes are binned to 8192-increment granularity with a hard cap
+--  at 65536.  The Q4_1 KV cache uses approximately 10GB for both 65536 and
+--  228K context lengths (Q4_1 is very efficient).  The 65536 cap is a
+--  practical stability limit on 16GB hardware; 228K is theoretically
+--  possible but leaves insufficient headroom for model weights + macOS.
+--  Minimum context is 8192 (smaller values cause llama_decode assertion
+--  failures with Qwen3.5-9B at Q4_1 KV quantization).
+--
+--  [QUIRK-M03] [macOS] Pre-existing signal crash after QWEN_0_8B release
+--  Observed (2026-06-10): After QWEN_0_8B processes a request and the model
+--  is released, the server may crash with exit code -1 (signal caught by
+--  Kratos).  This appears to be a timing issue during model unload where
+--  the llama.cpp context cleanup races with an ongoing background decode.
+--  The run.sh wrapper auto-restarts the server, but clients see a brief
+--  connection reset.  Root cause has not been fully diagnosed; possible
+--  culprits are:
+--     a) LLama_Free called while a decode thread is still active
+--     b) GPU buffer deallocation race in ggml-metal
+--     c) Double-free in speculative decoding cleanup path
+--  LINUX-COMPAT: If porting to Linux with CUDA/Vulkan, this may not occur
+--  as the ggml-metal backend is the primary suspect.
+--
+--  [QUIRK-M04] [ALL] Model path discovery fallback
+--  Load_Model tries 3 path variants (direct, ../, ../../) because the
+--  working directory at runtime is unpredictable:
+--     - run.py CWD = Adelaide_Lite/
+--     - alr exec CWD = Adelaide_Lite/
+--     - Direct binary CWD = varies
+--  This avoids requiring a fixed working directory.
+--
+--  [QUIRK-M05] [ALL] Sanitize_UTF8 strips non-ASCII
+--  The Sanitize_UTF8 function (used in Generate and Get_Single_Embedding)
+--  strips all characters with codepoint > 127 (DEL and non-ASCII).
+--  This means multilingual prompts (Chinese, Arabic, emoji, etc.) are
+--  silently corrupted.  Qwen3.5 models support Unicode natively, so this
+--  is a preprocessing limitation, not a model limitation.  If multilingual
+--  support is needed, Sanitize_UTF8 must be relaxed to pass through valid
+--  UTF-8 multi-byte sequences.
+--  ===========================================================================
+
 package body Model_Manager is
    use Streaming_Queue;
 
@@ -245,26 +298,46 @@ package body Model_Manager is
           To_Unbounded_String ("../../" & Base_Path));
     begin
        Actual_Ctx := unsigned (Requested_Ctx);
-       --  Minimum context size is now 8192 for stability and headroom.
-       if Actual_Ctx < 8192 then
-          Actual_Ctx := 8192;
-       end if;
-       
-       Success := False;
-       if Models (Kind).Loaded then
-          if Actual_Ctx <= Models (Kind).Current_Ctx then
-             Models (Kind).Last_Used := Clock;
-             Success := True;
-             return;
-          end if;
-          Unload_Model (Kind);
-       end if;
- 
-       Put_Line ("[+] Loading " & Model_Type'Image (Kind) &
-                 " (N_CTX=" & Actual_Ctx'Img & ")");
-       M_Params.N_Gpu_Layers := -1;
-       
-       for I in Paths'Range loop
+        --  Minimum context size is 8192 for stability and headroom.
+        --  Smaller contexts (e.g., 4096) caused llama_decode assertion failures
+        --  with Qwen3.5-9B at Q4_1 KV quantization on this hardware.
+        if Actual_Ctx < 8192 then
+           Actual_Ctx := 8192;
+        end if;
+        
+        Success := False;
+        if Models (Kind).Loaded then
+           --  REUSE EXISTING CONTEXT: If the requested context size is <= the
+           --  currently loaded context, we can reuse without reloading. This is
+           --  critical for performance because each reload destroys the KV cache.
+           --  The KV cache state (PromptCache) is lost on unload, so avoid
+           --  unnecessary Unload_Model + Load_Model cycles.
+           --
+           --  QUIRK: llama_context is extremely expensive to create/destroy
+           --  (~2s for Qwen3.5-9B).  Reusing an already-loaded context with
+           --  sufficient capacity saves this cost but means the KV cache from
+           --  the previous inference is preserved until the next decode clears
+           --  it with Llama_Memory_Clear.
+           if Actual_Ctx <= Models (Kind).Current_Ctx then
+              Models (Kind).Last_Used := Clock;
+              Success := True;
+              return;
+           end if;
+           Unload_Model (Kind);
+        end if;
+  
+        Put_Line ("[+] Loading " & Model_Type'Image (Kind) &
+                  " (N_CTX=" & Actual_Ctx'Img & ")");
+        M_Params.N_Gpu_Layers := -1;
+        
+        --  TRY THREE PATHS FOR MODEL FILES
+        --  The CWD at runtime is unpredictable:
+        --    1. Direct path (when run from project root or Adadelaide_Lite/)
+        --    2. ../ prefixed (when CWD is src/)
+        --    3. ../../ prefixed (when CWD is bin/)
+        --  This fallback loop handles all common launch configurations
+        --  without requiring a fixed working directory.
+        for I in Paths'Range loop
           declare
              Path_Str : constant String := To_String (Paths (I));
           begin
@@ -569,14 +642,22 @@ package body Model_Manager is
                     (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
                Dec_Result : int;
             begin
-               if Kratos.Guard_Enter = 0 then
-                  Dec_Result := Llama_Decode (Models (Kind).Context, B);
-                  Kratos.Guard_Exit;
-               else
-                  Kratos.Log_Crash;
-                  Dec_Result := -1;
-               end if;
-                if Dec_Result /= 0 then
+                --  KRATOS CRASH GUARD: Every llama_decode call is wrapped in
+                --  Guard_Enter/Guard_Exit.  If a signal (SIGSEGV, SIGBUS, etc.)
+                --  occurs during the C FFI call, Kratos catches it via longjmp
+                --  and Guard_Enter returns nonzero.  We then log the crash and
+                --  return -1 instead of crashing the server.  See QUIRK-M01.
+                --  LINUX-COMPAT: The guard mechanism is platform-independent
+                --  (uses sigaction + sigsetjmp/siglongjmp).  Same code works
+                --  on Linux without changes.
+                if Kratos.Guard_Enter = 0 then
+                   Dec_Result := Llama_Decode (Models (Kind).Context, B);
+                   Kratos.Guard_Exit;
+                else
+                   Kratos.Log_Crash;
+                   Dec_Result := -1;
+                end if;
+                 if Dec_Result /= 0 then
                    Free_Tokens (Tokens);
                    Models (Kind).In_Use := False;
                    if Level = ELP0 then

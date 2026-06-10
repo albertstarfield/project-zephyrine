@@ -1,3 +1,11 @@
+--  ============================================================================
+--  QUIRK: gnatcoll subcomponent objects (see Adelaide_Lite/adelaide_lite.gpr
+--  QUIRK-001 for full details).  This project also uses "with gnatcoll" and
+--  is affected by the same libgnatcoll_core.a missing-objects issue on
+--  macOS arm64.  If the linker reports "Undefined symbols for architecture
+--  arm64: _gnatcoll_atomic_write", apply the fix documented in adelaide_lite.gpr.
+--  ============================================================================
+
 with "config/avionics_daemon_config.gpr";
 with "gnatcoll";
 

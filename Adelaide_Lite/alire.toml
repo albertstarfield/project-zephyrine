@@ -1,3 +1,48 @@
+#  ==========================================================================
+#  BUILD QUIRKS & DISCOVERED WORKAROUNDS (macOS arm64)
+#  ==========================================================================
+#  [QUIRK-001] gnatcoll core vs minimal library (macOS arm64)
+#  When `alr build` compiles gnatcoll, libgnatcoll_core.a is built WITHOUT
+#  certain object files that are only present in libgnatcoll_minimal.a:
+#     - gnatcoll-atomic.o
+#     - gnatcoll-refcount.o  
+#     - gnatcoll-storage_pools-headers.o
+#  This causes linker errors on arm64:
+#    "Undefined symbols for architecture arm64: _gnatcoll_atomic_write"
+#  FIX (must be reapplied after each `alr update --force` or cache rebuild):
+#    cd ~/.local/share/alire/builds/gnatcoll_25.0.0_*/minimal/lib/gnatcoll_core/static/
+#    ar x libgnatcoll_minimal.a gnatcoll-atomic.o gnatcoll-refcount.o \
+#                              gnatcoll-storage_pools-headers.o
+#    cp *.o ../core/lib/gnatcoll_core/static/
+#    cd ../core/lib/gnatcoll_core/static/
+#    ar r libgnatcoll_core.a gnatcoll-atomic.o gnatcoll-refcount.o \
+#                              gnatcoll-storage_pools-headers.o
+#  The gnatcoll hash in the path changes with each version, so use a wildcard.
+#  Files in the minimal subcomponent are architecturally meant for "minimal"
+#  configurations but contain shared symbols that the "core" subcomponent
+#  does not export.  This appears to be a gnatcoll 25.0.0 build regression.
+#
+#  [QUIRK-002] macOS SDK path (arm64)
+#  Building requires SDKROOT environment variable set to the Xcode SDK path.
+#  run.py sets this automatically via `xcrun --show-sdk-path`.  Without it,
+#  gprbuild fails on -isysroot and linker flags.  Affects ALL Ada subprojects
+#  that import gnatcoll, aws, or libgpr with macOS framework links.
+#
+#  [QUIRK-003] alire subcomponent resolution
+#  `with "gnatcoll"` in a .gpr file resolves through alire's gprbuild config
+#  to pull gnatcoll.gpr which includes subcomponents: gnatcoll_core.gpr,
+#  gnatcoll_minimal.gpr, gnatcoll_projects.gpr.  These are compiled separately
+#  by alire in ~/.local/share/alire/builds/gnatcoll_25.0.0_*/.  If any
+#  subproject's .o or .a files are stale or mismatched, the fix from QUIRK-001
+#  must be reapplied.
+#
+#  [QUIRK-004] Binary runtime dependencies
+#  The server binary requires libonnxruntime.1.23.2.dylib from the moonshine
+#  submodule (moonshine/core/third-party/onnxruntime/lib/macos/arm64/).
+#  Set DYLD_LIBRARY_PATH before launching (run.py lines 297-302 handles this).
+#  Direct execution of bin/adelaide_server WILL FAIL without it.
+#  ==========================================================================
+
 name = "adelaide_lite"
 description = ""
 version = "0.1.0-dev"

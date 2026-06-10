@@ -1,3 +1,93 @@
+--  ============================================================================
+--  BUILD QUIRKS & DISCOVERED WORKAROUNDS
+--  ============================================================================
+--  PLATFORM LEGEND:
+--     [macOS]  = macOS specific (arm64 or x86_64)
+--     [Linux]  = Linux specific
+--     [PS]     = Platform-specific (adapt per target)
+--     [ALL]    = All platforms
+--     [Block]  = Build will hard-fail on this platform
+--  ============================================================================
+--
+--  [QUIRK-001] [macOS/arm64] gnatcoll core vs minimal library (2026-06-10)
+--  libgnatcoll_core.a is MISSING object files that are only present in
+--  libgnatcoll_minimal.a:
+--     - gnatcoll-atomic.o
+--     - gnatcoll-refcount.o
+--     - gnatcoll-storage_pools-headers.o
+--  This causes arm64 linker errors like:
+--    "Undefined symbols for architecture arm64: _gnatcoll_atomic_write"
+--  FIX: Extract from minimal and merge into core:
+--     cd <gnatcoll_build_dir>/minimal/lib/gnatcoll_core/static/
+--     ar x libgnatcoll_minimal.a gnatcoll-atomic.o gnatcoll-refcount.o \
+--                              gnatcoll-storage_pools-headers.o
+--     cp *.o ../core/lib/gnatcoll_core/static/
+--     cd ../core/lib/gnatcoll_core/static/
+--     ar r libgnatcoll_core.a gnatcoll-atomic.o gnatcoll-refcount.o \
+--                              gnatcoll-storage_pools-headers.o
+--  MUST BE REAPPLIED after any `alr update --force` or cache rebuild.
+--  When alire rebuilds gnatcoll, ALL subcomponent .a files are regenerated
+--  from source, which wipes our manual fix.  Trigger a rebuild with:
+--     alr update --force
+--  Then check:
+--     nm libgnatcoll_core.a | grep gnatcoll_atomic
+--  If the symbol is missing, reapply the fix from QUIRK-001.
+--  LINUX-COMPAT (for future porting agents):
+--     On Linux (x86_64), the gnatcoll build may not exhibit this issue
+--     because the library object partitioning differs.  However, if similar
+--     "Undefined symbols" errors appear for gnatcoll symbols during linking,
+--     check whether the core static library has all required objects from
+--     the minimal subcomponent.  The fix (ar x + ar r) is the same.
+--
+--  NOTE: gnatcoll = "^25.0.0" means alire resolves to the LATEST 25.x.x
+--  version in its cache.  If the cache hash changes (e.g., after a toolchain
+--  upgrade), the build directory path changes:
+--    ~/.local/share/alire/builds/gnatcoll_25.0.0_<NEW_HASH>/...
+--  The hash is based on the crate source + all input files.  Find the current
+--  build directory with:
+--    find ~/.local/share/alire/builds -name "libgnatcoll_core.a"
+--  Full cache path (example):
+--    ~/.local/share/alire/builds/gnatcoll_25.0.0_d7d84483/.../core/lib/gnatcoll_core/static/
+--
+--  [QUIRK-002] [macOS] DYLD_LIBRARY_PATH requirement
+--  The binary links against libmoonshine.dylib which requires
+--  libonnxruntime.1.23.2.dylib at runtime.  This MUST be resolved
+--  via DYLD_LIBRARY_PATH (set in run.py lines 297-302).  Direct
+--  execution of bin/adelaide_server will fail with:
+--    "Library not loaded: @rpath/libonnxruntime.1.23.2.dylib"
+--  LINUX-COMPAT: On Linux, the same applies via LD_LIBRARY_PATH instead
+--  of DYLD_LIBRARY_PATH.  The onnxruntime library path is:
+--    moonshine/core/third-party/onnxruntime/lib/linux/<arch>/
+--  See run.py for the dynamic linker path setup.
+--
+--  [QUIRK-003] [macOS] SDKROOT requirement for macOS builds
+--  All -isysroot and -F flags use SDKROOT from environment.  Set by run.py
+--  via `xcrun --show-sdk-path`.  Without this, gprbuild fails on macOS.
+--  LINUX-COMPAT: On Linux, replace -isysroot with --sysroot and point to
+--  the Linux sysroot.  Remove -framework flags (Accelerate, Metal, Foundation)
+--  and link equivalent Linux libraries (libblas, liblapack, etc.).
+--
+--  [QUIRK-004] [macOS] Framework linking (Accelerate, Metal, Foundation)
+--  These macOS-only frameworks are in the linker flags.  The ggml-metal
+--  library also requires Metal framework.  On Linux, ggml-metal does not
+--  exist; use ggml-cuda or ggml-vulkan instead.
+--  LINUX-COMPAT: Replace:
+--     -lggml-metal  ->  -lggml-cuda (or -lggml-vulkan)
+--     -framework Accelerate  ->  -lblas -llapack
+--     -framework Metal       ->  (not needed)
+--     -framework Foundation  ->  (not needed)
+--
+--  [QUIRK-005] [Block: NT kernel] Windows is NOT supported
+--  This project targets macOS (arm64) with future Linux support planned.
+--  Windows/NT kernel builds are explicitly blocked.  The build will fail
+--  on Windows at the linker stage.
+--
+--  [QUIRK-006] [macOS] arm64 arch-specific flags
+--  -mmacosx-version-min=15.0 and -arch arm64 are hardcoded for Apple M-series.
+--  LINUX-COMPAT: Remove -mmacosx-version-min.  Replace with -march=native
+--  or -march=x86-64-v3 for x86_64, or -march=armv8-a for Linux arm64.
+--  ============================================================================
+
 with "config/adelaide_lite_config.gpr";
 with "aws";
 with "gnatcoll";
@@ -10,6 +100,22 @@ project Adelaide_Lite is
    for Create_Missing_Dirs use "True";
    for Exec_Dir use "bin";
    for Main use ("adelaide_lite.adb", "adelaide_server.adb", "adelaide_watchdog.adb");
+
+   --  BLOCK NT KERNEL: Windows build is explicitly not supported.
+   --  See QUIRK-005 in the header comment block above.
+   --  Uses Alire's detected OS (Alire_Host_OS) from the config package.
+   --  On macOS: Alire_Host_OS = "macos"  -> others => null (no block)
+   --  On Linux: Alire_Host_OS = "linux"  -> others => null (no block)
+   --  On Win:   Alire_Host_OS = "windows" -> Source_Dirs overridden to fail
+   --  LINUX-COMPAT: This block has no effect on Linux.  Safe to leave as-is.
+   case Adelaide_Lite_Config.Alire_Host_OS is
+      when "windows" =>
+         --  Point to a non-existent directory so gprbuild fails immediately
+         --  with: "source directory does not exist: __WINDOWS_NT...__"
+         for Source_Dirs use ("__WINDOWS_NT_KERNEL_IS_NOT_SUPPORTED__");
+      when others =>
+         null;
+   end case;
 
    package Compiler is
       for Default_Switches ("Ada") use

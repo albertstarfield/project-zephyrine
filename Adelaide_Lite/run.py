@@ -10,6 +10,16 @@ import shutil
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+#  QUIRK: Block NT kernel at runtime (see QUIRK-005)
+#  Windows is NOT supported.  The build system (adelaide_lite.gpr) also
+#  blocks compilation on Windows, but this is an additional guard.
+#  LINUX-COMPAT (future): When porting to Linux, remove this check.
+if platform.system() == "Windows":
+    print("[FATAL] Windows (NT kernel) is not supported.")
+    print("[FATAL] This server targets macOS (arm64) with planned Linux support.")
+    print("[FATAL] See adelaide_lite.gpr QUIRK-005 for details.")
+    sys.exit(1)
+
 # Set HF_HOME so huggingface caches locally in the project directory
 os.environ["HF_HOME"] = os.path.join(BASE_DIR, ".hf_cache")
 os.makedirs(os.environ["HF_HOME"], exist_ok=True)
@@ -295,6 +305,23 @@ def main():
     env = os.environ.copy()
     
     # Architecture-aware Moonshine ONNX runtime path
+    #
+    # QUIRK: The server binary links against libmoonshine.dylib, which
+    #        dynamically loads libonnxruntime.1.23.2.dylib.  If this
+    #        library is NOT in DYLD_LIBRARY_PATH, the binary crashes at
+    #        startup with:
+    #          "Library not loaded: @rpath/libonnxruntime.1.23.2.dylib"
+    #          "Reason: no such file"
+    #        The onnxruntime dylib lives in the moonshine submodule:
+    #          moonshine/core/third-party/onnxruntime/lib/macos/{arch}/
+    #        This is the ONLY place it exists on the filesystem (not
+    #        in /opt/homebrew/lib or any standard path).
+    #
+    # IMPORTANT: Pre-existing bug (2026-06-10): After QWEN_0_8B processes
+    # a request and the model is released, the server may crash with
+    # exit code -1 (signal caught by Kratos crash isolation). The run.sh
+    # wrapper will auto-restart the server if this happens, but clients
+    # will see a brief connection reset.
     arch = "arm64" if platform.machine() == "arm64" else "x86_64"
     moonshine_onnx = os.path.join(BASE_DIR, "..", "moonshine", "core", "third-party", "onnxruntime", "lib", "macos", arch)
     

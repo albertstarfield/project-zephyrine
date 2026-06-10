@@ -6,6 +6,11 @@ pragma SPARK_Mode (Off);
 --  Kratos catches the signal and longjmps back to a safe recovery point
 --  instead of killing the entire Ada server process.
 --
+--  QUIRK: The underlying C implementation (jorvik_*) uses sigaction +
+--  sigsetjmp/siglongjmp, which is POSIX-standard and works on both macOS
+--  and Linux.  No platform-specific changes needed for Linux port.
+--  See QUIRK-M01 in model_manager.adb for the guard call pattern.
+--
 --  Usage:
 --    if Kratos.Guard_Enter = 0 then
 --       --  Normal path: call C FFI here
