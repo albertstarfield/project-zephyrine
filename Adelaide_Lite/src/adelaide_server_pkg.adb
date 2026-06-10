@@ -245,9 +245,10 @@ package body Adelaide_Server_Pkg is
         --  personality pipeline. Fuzzy matching the User-Agent against known
         --  agent signatures at 0.7 threshold lets us bypass the personality
         --  orchestrator and passthrough raw inference.
-        URI    : constant String := AWS.Status.URI (Request);
-        UA     : constant String := AWS.Status.User_Agent (Request);
-        Match_Score : Float := 0.0;
+         URI    : constant String := AWS.Status.URI (Request);
+         UA     : constant String := AWS.Status.User_Agent (Request);
+         Match_Score : Float := 0.0;
+         Best_Match_Name : Unbounded_String := To_Unbounded_String ("(none)");
       begin
          --  Fuzzy match User-Agent against known external agents (Status Quo mode)
          declare
@@ -263,6 +264,7 @@ package body Adelaide_Server_Pkg is
                   Current_Score := Fuzzy_Match.Match (UA, Trim (Agent, Ada.Strings.Right));
                   if Current_Score > Match_Score then
                      Match_Score := Current_Score;
+                     Best_Match_Name := To_Unbounded_String (Trim (Agent, Ada.Strings.Right));
                   end if;
                exception
                   when others => null;
@@ -273,6 +275,7 @@ package body Adelaide_Server_Pkg is
          --  Standard chatbot list: these get Adelaide Mode (full personality pipeline)
          --  even if their UA might partially match external agents
          Is_Standard_Chatbot : Boolean := False;
+         Matched_Chatbot : Unbounded_String := To_Unbounded_String ("(none)");
          declare
              Standard_Chatbots : constant array (1 .. 9) of String (1 .. 12) :=
                ("msty        ", "OpenWebUI   ", "Chatbox     ", "Palchat     ",
@@ -285,6 +288,7 @@ package body Adelaide_Server_Pkg is
                   Current_Score_2 := Fuzzy_Match.Match (UA, Trim (Bot, Ada.Strings.Right));
                   if Current_Score_2 >= 0.7 then
                      Is_Standard_Chatbot := True;
+                     Matched_Chatbot := To_Unbounded_String (Trim (Bot, Ada.Strings.Right));
                      exit;
                   end if;
                exception
@@ -297,11 +301,19 @@ package body Adelaide_Server_Pkg is
          Is_External_Agent := Match_Score >= 0.7 and then not Is_Standard_Chatbot;
         declare
           Score_Pct : constant Integer := Integer (Match_Score * 100.0);
+          Category  : constant String :=
+            (if Is_External_Agent then "external-agent"
+             elsif Is_Standard_Chatbot then "chatbot"
+             else "unknown");
+          Matched   : constant String :=
+            (if Is_Standard_Chatbot then To_String (Matched_Chatbot)
+             else To_String (Best_Match_Name));
         begin
           Ada.Text_IO.Put_Line ("[API] Request: " & URI &
                                 " | UA: " & UA &
                                 " | Confidence: " & Integer'Image (Score_Pct) & "%" &
-                                (if Is_External_Agent then " [EXTERNAL]" else ""));
+                                " | Category: " & Category &
+                                " | Matched: " & Matched);
         end;
        declare
          Method : constant String := AWS.Status.Method (Request);

@@ -161,9 +161,12 @@ package body Knowledge_Manager is
    begin
       accept Start;
       loop
-         if Model_Manager.Should_Abort_ELP0 then
-            delay 1.0;
-         elsif not Done then
+         --  Block until no ELP1 (user) request is pending or active.
+         --  This replaces the old polling pattern (Should_Abort_ELP0 + delay 1.0)
+         --  which caused a deadlock: ELP0 kept checking and delaying, never
+         --  releasing the model, while ELP1 waited at Acquire_ELP1.
+         Model_Manager.Wait_For_ELP1_Idle;
+         if not Done then
             Index_References;
             Done := True;
          else
@@ -597,19 +600,21 @@ package body Knowledge_Manager is
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[ProactiveCache]" &
                 AnsiAda.Reset & " Starting proactive speculation (ELP0)...");
       loop
-         if Model_Manager.Should_Abort_ELP0 then
-            delay 1.0;
-         else
-            declare
-               Current_Prompt : constant String :=
-                 To_String (Model_Manager.Last_User_Prompt);
-            begin
-               if Current_Prompt'Length = 0
-                 or else Current_Prompt = To_String (Last_Processed)
-               then
-                  --  Nothing new to process
-                  delay 5.0;
-               else
+         --  Block until no ELP1 (user) request is pending or active.
+         --  Replaces the old polling pattern (Should_Abort_ELP0 + delay 1.0)
+         --  that caused a deadlock: ELP0 kept checking and delaying, leaving
+         --  the model busy indefinitely while ELP1 waited at Acquire_ELP1.
+         Model_Manager.Wait_For_ELP1_Idle;
+         declare
+            Current_Prompt : constant String :=
+              To_String (Model_Manager.Last_User_Prompt);
+         begin
+            if Current_Prompt'Length = 0
+              or else Current_Prompt = To_String (Last_Processed)
+            then
+               --  Nothing new to process
+               delay 5.0;
+            else
                   Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[ProactiveCache]" &
                             AnsiAda.Reset & " Predicting follow-up questions...");
 
@@ -702,11 +707,10 @@ package body Knowledge_Manager is
                   Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[ProactiveCache]" &
                             AnsiAda.Reset & " Done. Cache entries:" &
                             Natural'Image (Speculative_Cache.Proactive_Cache.Count));
-               end if;
-            end;
-         end if;
-         delay 10.0;
-      end loop;
-   end Proactive_Cache_Task;
+                end if;
+             end;
+          delay 10.0;
+       end loop;
+    end Proactive_Cache_Task;
 
 end Knowledge_Manager;

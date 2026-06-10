@@ -67,6 +67,12 @@ package Model_Manager is
 
    function Should_Abort_ELP0 return Boolean;
 
+   --  Block until no ELP1 requests are pending or active.
+   --  ELP0 background tasks call this instead of polling Should_Abort_ELP0+delay,
+   --  so they suspend immediately when an ELP1 arrives and resume promptly
+   --  after it finishes — eliminating the 1-second polling deadlock.
+   procedure Wait_For_ELP1_Idle;
+
    function Get_Kind_For_Model_Name (Name : String) return Model_Type;
 
    function Is_Loaded (Kind : Model_Type) return Boolean;

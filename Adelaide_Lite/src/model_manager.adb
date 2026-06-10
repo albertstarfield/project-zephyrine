@@ -130,15 +130,16 @@ package body Model_Manager is
    --  PRIORITY MODEL GATE:
    --  Manages access to the model contexts.
    --  ELP1 requests (User Interactions) preempt running ELP0 requests (Background Tasks).
-   protected Priority_Model_Gate is
-      procedure Request_ELP1;
-      entry Acquire_ELP1 (Model_Type);
-      procedure Release_ELP1 (Kind : Model_Type);
-      entry Acquire_ELP0 (Model_Type) (Success : out Boolean);
-      procedure Release_ELP0 (Kind : Model_Type);
-      procedure Try_Acquire_For_Cleanup (Kind : Model_Type; Success : out Boolean);
-      function Should_Abort return Boolean;
-      function Is_ELP0_Owner (Kind : Model_Type) return Boolean;
+    protected Priority_Model_Gate is
+       procedure Request_ELP1;
+       entry Acquire_ELP1 (Model_Type);
+       procedure Release_ELP1 (Kind : Model_Type);
+       entry Acquire_ELP0 (Model_Type) (Success : out Boolean);
+       procedure Release_ELP0 (Kind : Model_Type);
+       procedure Try_Acquire_For_Cleanup (Kind : Model_Type; Success : out Boolean);
+       function Should_Abort return Boolean;
+       function Is_ELP0_Owner (Kind : Model_Type) return Boolean;
+       entry Wait_For_ELP1_Idle;
    private
       ELP1_Pending      : Natural := 0;
       ELP1_Active_Count : Natural := 0;
@@ -218,11 +219,16 @@ package body Model_Manager is
           return Result;
        end Should_Abort;
 
-      function Is_ELP0_Owner (Kind : Model_Type) return Boolean is
-      begin
-         return Owner (Kind) = ELP0;
-      end Is_ELP0_Owner;
-   end Priority_Model_Gate;
+       function Is_ELP0_Owner (Kind : Model_Type) return Boolean is
+       begin
+          return Owner (Kind) = ELP0;
+       end Is_ELP0_Owner;
+
+       entry Wait_For_ELP1_Idle when ELP1_Pending = 0 and ELP1_Active_Count = 0 is
+       begin
+          null;  -- Barrier opens when no ELP1 is pending or active
+       end Wait_For_ELP1_Idle;
+    end Priority_Model_Gate;
 
    --  IDLE MONITOR:
    --  Unloads models after 30 seconds of inactivity to free VRAM.
@@ -462,6 +468,11 @@ package body Model_Manager is
    begin
       return Priority_Model_Gate.Should_Abort;
    end Should_Abort_ELP0;
+
+   procedure Wait_For_ELP1_Idle is
+   begin
+      Priority_Model_Gate.Wait_For_ELP1_Idle;
+   end Wait_For_ELP1_Idle;
 
    function Get_Kind_For_Model_Name (Name : String) return Model_Type is
    begin
