@@ -209,6 +209,13 @@ package body Model_Manager is
          end if;
       end Try_Acquire_For_Cleanup;
 
+       --  Returns True when an ELP1 (user) request is pending or active.
+       --  Called from Llama_Abort_Callback (inside llama.cpp's decode loop)
+       --  and from post-decode abort checks in Generate/Hybrid_Generate.
+       --  The [ELP0-ABORT-CHECK] log fires from the callback — it is NORMAL
+       --  to see many of these during active decode; it does NOT mean a
+       --  deadlock.  The deadlock was caused by ELP0 tasks polling this
+       --  instead of suspending on Wait_For_ELP1_Idle (now fixed).
        function Should_Abort return Boolean is
           Result : constant Boolean := ELP1_Pending > 0 or else ELP1_Active_Count > 0;
        begin
@@ -224,9 +231,11 @@ package body Model_Manager is
           return Owner (Kind) = ELP0;
        end Is_ELP0_Owner;
 
+       --  Barrier: ELP0 tasks block here until all ELP1 requests have completed.
+       --  See Wait_For_ELP1_Idle spec in model_manager.ads for full explanation.
        entry Wait_For_ELP1_Idle when ELP1_Pending = 0 and ELP1_Active_Count = 0 is
        begin
-          null;  -- Barrier opens when no ELP1 is pending or active
+          null;
        end Wait_For_ELP1_Idle;
     end Priority_Model_Gate;
 
@@ -440,6 +449,14 @@ package body Model_Manager is
       return Models (Kind).Model;
    end Get_Model;
 
+   --  LLAMA.CPP ABORT CALLBACK:
+   --  Called by llama.cpp periodically during Llama_Decode (token generation).
+   --  Returns True to signal llama.cpp to abort the current decode operation.
+   --  NOTE: The [ELP0-ABORT-CHECK] log fires from inside Should_Abort here.
+   --  Seeing many of these is NORMAL during active decode — it means the abort
+   --  callback is being invoked but the decode has not yet returned.  This is
+   --  NOT a deadlock.  The deadlock was caused by ELP0 tasks polling instead
+   --  of suspending on Wait_For_ELP1_Idle (now fixed).
    function Llama_Abort_Callback (Data : System.Address) return Boolean is
       use System;
       type Model_Type_Ptr is access all Model_Type;
@@ -653,7 +670,7 @@ package body Model_Manager is
       begin
          Llama_Interface.Llama_Memory_Clear
             (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
-         Llama_Set_Embeddings (Models (Kind).Context, True);
+         Llama_Set_Embeddings (Models (Kind).Context, Interfaces.C.int (1));
          
          while Tokens_Left > 0 loop
             declare
