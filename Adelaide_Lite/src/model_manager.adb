@@ -975,6 +975,40 @@ package body Model_Manager is
       return To_String (Res);
    end Sanitize_Think_Tags;
 
+   function Extract_Think_Content (Text : String) return String is
+      Res : Unbounded_String;
+      I   : Positive := Text'First;
+   begin
+      while I <= Text'Last loop
+         if I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
+            I := I + 7;
+            while I <= Text'Last loop
+               if I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
+                  I := I + 8;
+                  exit;
+               else
+                  Append (Res, Text (I));
+                  I := I + 1;
+               end if;
+            end loop;
+         elsif I + 9 <= Text'Last and then Text (I .. I + 9) = "<thinking>" then
+            I := I + 10;
+            while I <= Text'Last loop
+               if I + 10 <= Text'Last and then Text (I .. I + 10) = "</thinking>" then
+                  I := I + 11;
+                  exit;
+               else
+                  Append (Res, Text (I));
+                  I := I + 1;
+               end if;
+            end loop;
+         else
+            I := I + 1;
+         end if;
+      end loop;
+      return To_String (Res);
+   end Extract_Think_Content;
+
    --  GENERATE (CORE GGUF INFERENCE WITH PREEMPTION SUPPORT)
    procedure Generate
       (Kind            : Model_Type;
@@ -1384,6 +1418,7 @@ package body Model_Manager is
       end;
 
       if not External_Agent then
+         Push_Chunk (Stream, Session_ID, "<think>" & ASCII.LF);
          Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] No cached response found, starting fresh reasoning chain." & ASCII.LF);
          Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Operating at " & ELP_Level'Image (Level) &
                      " priority. Session: " & Session_ID & ASCII.LF);
@@ -1905,19 +1940,34 @@ package body Model_Manager is
                                  "[Quality Score] " & AnsiAda.Reset &
                                  "Score: " & Score'Img & "/10 | " &
                                  "Session: " & Session_ID);
-        end;
+         end;
 
-         --  Adelaide Mode: Simulate ~300 tok/s streaming for final response
-         --  (Response was generated internally without streaming; now deliver at natural rate)
-         if not External_Agent and then Stream /= null then
+         --  Close the outer <think> block: push extracted model think content (if any),
+         --  then </think>. The final sanitized response follows via simulated streaming.
+         if not External_Agent then
             declare
-               Resp_Text : constant String := To_String (Current_Response);
-               Chunk_Size : constant Positive := 16;  -- ~16 chars per chunk at 300 tok/s
-               Simulated_TPS : constant Float := 300.0;
-               Delay_Per_Chunk : constant Duration := Duration (Float (Chunk_Size) / Simulated_TPS);
-               Pos : Natural := 1;
+               Model_Thinking : constant String :=
+                 Extract_Think_Content (To_String (Current_Response));
             begin
-               Ada.Text_IO.Put_Line ("[Adelaide] Simulating ~300 tok/s streaming for " & Resp_Text'Length'Img & " chars...");
+               if Model_Thinking /= "" then
+                  Push_Chunk (Stream, Session_ID, Model_Thinking & ASCII.LF);
+               end if;
+            end;
+            Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
+         end if;
+
+          --  Adelaide Mode: Simulate ~300 tok/s streaming for final response
+          --  (Response was generated internally without streaming; now deliver at natural rate)
+          if not External_Agent and then Stream /= null then
+             declare
+                Resp_Text : constant String :=
+                  Sanitize_Think_Tags (To_String (Current_Response));
+                Chunk_Size : constant Positive := 16;  -- ~16 chars per chunk at 300 tok/s
+                Simulated_TPS : constant Float := 300.0;
+                Delay_Per_Chunk : constant Duration := Duration (Float (Chunk_Size) / Simulated_TPS);
+                Pos : Natural := 1;
+             begin
+                Ada.Text_IO.Put_Line ("[Adelaide] Simulating ~300 tok/s streaming for " & Resp_Text'Length'Img & " chars...");
                
                --  Stream response in chunks at ~300 tok/s
                while Pos <= Resp_Text'Length loop
