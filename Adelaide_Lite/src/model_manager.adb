@@ -744,6 +744,102 @@ package body Model_Manager is
       return To_String (Res);
    end Sanitize_Orchestration_Output;
 
+   --  STRIP_BASE64_IMAGES: Removes base64-encoded image data from tool output
+   --  to prevent tokenization failures when feeding results back to the router.
+   --  The router (9B model) cannot handle massive base64 blobs.
+   --  User-facing stream still receives the full output with images.
+   --  Pattern: ![...](data:image/...;base64,...) and ![...](<base64_blob>)
+   function Strip_Base64_Images (S : String) return String is
+      Res : Unbounded_String;
+      I   : Positive := S'First;
+   begin
+      while I <= S'Last loop
+         --  Check for markdown image syntax: ![...](...)
+         if I + 1 <= S'Last and then S (I) = '!' and then S (I + 1) = '[' then
+            --  Find the closing ')' of the image tag
+            declare
+               Close_Bracket : Natural := 0;
+               Close_Paren   : Natural := 0;
+               J             : Natural := I + 2;
+            begin
+               --  Find ](
+               while J <= S'Last - 1 loop
+                  if S (J) = ']' and then S (J + 1) = '(' then
+                     Close_Bracket := J;
+                     exit;
+                  end if;
+                  J := J + 1;
+               end loop;
+
+               if Close_Bracket > 0 then
+                  --  Find matching )
+                  J := Close_Bracket + 2;
+                  declare
+                     Depth : Natural := 1;
+                  begin
+                     while J <= S'Last and then Depth > 0 loop
+                        if S (J) = '(' then
+                           Depth := Depth + 1;
+                        elsif S (J) = ')' then
+                           Depth := Depth - 1;
+                        end if;
+                        if Depth > 0 then
+                           J := J + 1;
+                        end if;
+                     end loop;
+                  end;
+
+                  if J <= S'Last then
+                     Close_Paren := J;
+                     --  Check if content is base64 (contains 'base64' or
+                     --  is a long string without spaces — base64 has no spaces)
+                     declare
+                        Content : constant String :=
+                          S (Close_Bracket + 2 .. Close_Paren - 1);
+                        Has_Base64_Marker : constant Boolean :=
+                          Index (Content, "base64") > 0;
+                        Is_Long_No_Space  : constant Boolean :=
+                          Content'Length > 200 and then
+                          Index (Content, " ") = 0;
+                     begin
+                        if Has_Base64_Marker or else Is_Long_No_Space then
+                           --  Skip entire image tag, replace with placeholder
+                           Append (Res, "[IMAGE_REMOVED]");
+                           I := Close_Paren + 1;
+                        else
+                           --  Not base64, keep as-is
+                           Append (Res, S (I .. Close_Paren));
+                           I := Close_Paren + 1;
+                        end if;
+                     end;
+                  else
+                     --  Unclosed, keep as-is
+                     Append (Res, S (I));
+                     I := I + 1;
+                  end if;
+               else
+                  --  No ]( found, keep as-is
+                  Append (Res, S (I));
+                  I := I + 1;
+               end if;
+            end;
+         else
+            Append (Res, S (I));
+            I := I + 1;
+         end if;
+      end loop;
+      --  [VITAL-DO-NOT-REMOVE] Report base64 stripping
+      if Length (Res) < S'Length then
+         Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                   "[StripBase64-V]" & AnsiAda.Reset &
+                   " Stripped base64 images. Input=" &
+                   Natural'Image (S'Length) & " Output=" &
+                   Natural'Image (Length (Res)) & " Saved=" &
+                   Natural'Image (S'Length - Length (Res)) & " bytes");
+      end if;
+      return To_String (Res);
+   end Strip_Base64_Images;
+
    --  SINGLE EMBEDDING HELPER
    procedure Get_Single_Embedding
      (Prompt : String;
@@ -1908,8 +2004,12 @@ package body Model_Manager is
               "use [ACTION: schedule(seconds, query)]. " &
               "If you are done, output [FINISH]. " &
               "Output ONLY the tag.";
+            --  Strip base64 images from router context to prevent tokenization
+            --  failure. The 9B router cannot handle massive base64 blobs.
+            --  User stream still receives full output with images.
             Paging_Instr : constant String :=
-              "Current Data: " & To_String (Internal_State);
+              "Current Data: " &
+              Strip_Base64_Images (To_String (Internal_State));
             Step_Raw     : Unbounded_String;
 
             function Get_Router_Prompt return String is
@@ -2145,9 +2245,12 @@ package body Model_Manager is
                           Prompt (Prompt'First .. First_Block - 1);
                      begin
                         if Length (Internal_State) > 0 then
+                           --  Strip base64 images — final model cannot
+                           --  tokenize them either.
                            return Prefix & Sys_Tag & Whimsical_Adelaide &
                              ASCII.LF & "Fact-Check: " &
-                             To_String (Internal_State) & ASCII.LF &
+                             Strip_Base64_Images
+                               (To_String (Internal_State)) & ASCII.LF &
                              Prompt (First_Block .. Prompt'Last);
                         else
                            return Prefix & Sys_Tag & Whimsical_Adelaide &
@@ -2157,7 +2260,9 @@ package body Model_Manager is
                   elsif First_Block = 1 then
                      if Length (Internal_State) > 0 then
                         return Sys_Tag & Whimsical_Adelaide & ASCII.LF &
-                          "Fact-Check: " & To_String (Internal_State) &
+                          "Fact-Check: " &
+                          Strip_Base64_Images
+                            (To_String (Internal_State)) &
                           ASCII.LF & Prompt;
                      else
                         return Sys_Tag & Whimsical_Adelaide & ASCII.LF &
@@ -2167,7 +2272,8 @@ package body Model_Manager is
                      if Length (Internal_State) > 0 then
                         return Wrap_ChatML (Whimsical_Adelaide,
                           Prompt & ASCII.LF & "Fact-Check: " &
-                          To_String (Internal_State));
+                          Strip_Base64_Images
+                            (To_String (Internal_State)));
                      else
                         return Wrap_ChatML (Whimsical_Adelaide, Prompt);
                      end if;
@@ -2177,7 +2283,9 @@ package body Model_Manager is
                if Length (Internal_State) > 0 then
                   return Wrap_ChatML (Whimsical_Adelaide,
                     "User: " & Prompt & ASCII.LF &
-                    "Fact-Check: " & To_String (Internal_State));
+                    "Fact-Check: " &
+                    Strip_Base64_Images
+                      (To_String (Internal_State)));
                else
                   return Wrap_ChatML (Whimsical_Adelaide, Prompt);
                end if;
