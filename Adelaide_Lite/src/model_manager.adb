@@ -1362,6 +1362,29 @@ package body Model_Manager is
       end loop;
    end Process_And_Push_Chunk;
 
+    --  PUSH_ORCHESTRATION_THROUGH_PARSER:
+    --  Routes orchestration metadata through the stream parser so it is
+    --  properly silenced when inside a think block. Without this, Push_Chunk
+    --  bypasses the parser entirely, causing orchestration thoughts to leak
+    --  to the client as raw text (duplicated headers, internal state visible).
+    --
+    --  WHY THIS EXISTS: The immediate ACK pushes `` + orchestration
+    --  header directly to the queue. When Hybrid_Generate then pushes
+    --  additional orchestration metadata via Push_Chunk, it bypasses the
+    --  parser. The client sees raw "[Adelaide Core]: [Thought]" messages
+    --  interleaved with the actual response. By routing through the parser,
+    --  orchestration content is silenced when In_Think_Block is True, and
+    --  only the final response content reaches the client.
+    procedure Push_Orchestration_Through_Parser
+      (Stream     : Streaming_Queue.Queue_Access;
+       Session_ID : String;
+       Parser     : in out Stream_Parser_State;
+       Content    : String)
+    is
+    begin
+       Process_And_Push_Chunk (Stream, Session_ID, Parser, Content);
+    end Push_Orchestration_Through_Parser;
+
     procedure Flush_Parser
       (Stream     : Streaming_Queue.Queue_Access;
        Session_ID : String;
@@ -1860,11 +1883,21 @@ package body Model_Manager is
       Last_Heartbeat   : Ada.Calendar.Time := Ada.Calendar.Clock;
       Emb_Vec          : Math_Utils.Vector (1 .. 1536) := [others => 0.0];
       Emb_Len          : Natural;
+      --  Orch_Parser: Local parser state for routing orchestration metadata
+      --  through the stream parser. This ensures orchestration thoughts are
+      --  silenced inside think blocks instead of leaking to the client.
+      Orch_Parser      : Stream_Parser_State;
    begin
       --  Reset context fault tracking for this request
       Current_Context_Fault_Hops := 0;
       Current_Internal_State_Len := 0;
       Current_Hop_Count          := 0;
+
+      --  Initialize orchestration parser state. The immediate ACK in the
+      --  dispatch already pushed `` + orchestration header to the queue.
+      --  So we start with Orch_Think_Open = True to match that state.
+      --  When the parser sees the closing </think>`, it will set this to False.
+      Orch_Parser.Orch_Think_Open := True;
 
       T0 := Ada.Calendar.Clock;
 
@@ -1963,10 +1996,10 @@ package body Model_Manager is
       end;
 
       if not External_Agent then
-         Push_Chunk (Stream, Session_ID,
+         Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
            "[Adelaide Core]: [Thought] No cached response found, " &
            "starting fresh reasoning chain." & ASCII.LF);
-         Push_Chunk (Stream, Session_ID,
+         Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
            "[Adelaide Core]: [Thought] Operating at " &
            ELP_Level'Image (Level) & " priority. Session: " &
            Session_ID & ASCII.LF);
@@ -1989,7 +2022,7 @@ package body Model_Manager is
       then
          Put_Line (" [Hybrid] Factual context trigger matched.");
          if not External_Agent then
-            Push_Chunk (Stream, Session_ID,
+            Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
               "[Adelaide Core]: [Thought] Let me analyze this query " &
               "for factual context..." & ASCII.LF);
          end if;
@@ -2028,7 +2061,7 @@ package body Model_Manager is
                if not External_Agent and then Stream /= null and then
                  (Now - Last_Heartbeat) > 2.0
                then
-                  Push_Chunk (Stream, Session_ID,
+                  Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                     "[Adelaide Core]: [Thought] I'm still here and " &
                     "processing..." & ASCII.LF);
                   Last_Heartbeat := Now;
@@ -2051,11 +2084,11 @@ package body Model_Manager is
                  Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
             begin
                if not External_Agent then
-                  Push_Chunk (Stream, Session_ID,
+                  Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                     "[Adelaide Core]: [Thought] Searching knowledge " &
                     "base for: " & Trim (Final_Q, Ada.Strings.Both) &
                     "..." & ASCII.LF);
-                  Push_Chunk (Stream, Session_ID,
+                  Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                     "[Adelaide Core]: [Thought] Found relevant context " &
                     "from knowledge base." & ASCII.LF);
                end if;
@@ -2064,7 +2097,7 @@ package body Model_Manager is
                   "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
                Current_Internal_State_Len := Length (Internal_State);
                if not External_Agent then
-                  Push_Chunk (Stream, Session_ID,
+                  Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                     "[FACTUAL_DATA]: " &
                     Sanitize_Orchestration_Output (To_String (R.Output)) &
                     ASCII.LF);
@@ -2126,7 +2159,7 @@ package body Model_Manager is
             end Get_Router_Prompt;
          begin
             if not External_Agent then
-               Push_Chunk (Stream, Session_ID,
+               Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                  "[Adelaide Core]: [Thought] Deciding next action (Hop" &
                  Current_Hop'Img & ")..." & ASCII.LF);
             end if;
@@ -2137,7 +2170,7 @@ package body Model_Manager is
                if not External_Agent and then Stream /= null and then
                  (H_Now - Last_Heartbeat) > 2.0
                then
-                  Push_Chunk (Stream, Session_ID,
+                  Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                     "[Adelaide Core]: [Thought] I'm still here and " &
                     "processing..." & ASCII.LF);
                   Last_Heartbeat := H_Now;
@@ -2166,7 +2199,7 @@ package body Model_Manager is
             begin
                Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": " & Step);
                if not External_Agent then
-                  Push_Chunk (Stream, Session_ID,
+                  Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                     "[Adelaide Core]: [Thought] I will: " &
                     Sanitize_Orchestration_Output (Step) & ASCII.LF);
                end if;
@@ -2247,16 +2280,16 @@ package body Model_Manager is
                                        H_Now : constant Ada.Calendar.Time :=
                                          Ada.Calendar.Clock;
                                     begin
-                                       if not External_Agent and then
-                                         Stream /= null and then
-                                         (H_Now - Last_Heartbeat) > 2.0
-                                       then
-                                          Push_Chunk (Stream, Session_ID,
-                                            "[Adelaide Core]: [Thought] I'm " &
-                                            "still here and processing..." &
-                                            ASCII.LF);
-                                          Last_Heartbeat := H_Now;
-                                       end if;
+                                     if not External_Agent and then
+                                       Stream /= null and then
+                                       (H_Now - Last_Heartbeat) > 2.0
+                                     then
+                                        Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
+                                          "[Adelaide Core]: [Thought] I'm " &
+                                          "still here and processing..." &
+                                          ASCII.LF);
+                                        Last_Heartbeat := H_Now;
+                                     end if;
                                     end;
                                     declare
                                        R : constant Tool_Manager.Tool_Result :=
@@ -2264,26 +2297,26 @@ package body Model_Manager is
                                            (T_Name,
                                             Sanitize_Think_Tags (T_Pars));
                                     begin
-                                       if not External_Agent then
-                                          Push_Chunk (Stream, Session_ID,
-                                            "[Adelaide Core]: [Thought] " &
-                                            "Running tool: " &
-                                            Sanitize_Orchestration_Output
-                                              (T_Name) & ASCII.LF);
-                                       end if;
+                                     if not External_Agent then
+                                        Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
+                                          "[Adelaide Core]: [Thought] " &
+                                          "Running tool: " &
+                                          Sanitize_Orchestration_Output
+                                            (T_Name) & ASCII.LF);
+                                     end if;
                                         Append
                                           (Internal_State,
                                            "[TOOL (" & T_Name & ")]: " &
                                            To_String (R.Output) & ASCII.LF);
                                         Current_Internal_State_Len := Length (Internal_State);
-                                       if not External_Agent then
-                                          Push_Chunk (Stream, Session_ID,
-                                            ASCII.LF & "[TOOL (" & T_Name &
-                                            ")]: " &
-                                            Sanitize_Orchestration_Output
-                                              (To_String (R.Output)) &
-                                            ASCII.LF);
-                                       end if;
+                                        if not External_Agent then
+                                           Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
+                                             ASCII.LF & "[TOOL (" & T_Name &
+                                             ")]: " &
+                                             Sanitize_Orchestration_Output
+                                               (To_String (R.Output)) &
+                                             ASCII.LF);
+                                        end if;
                                     end;
                                  else
                                     exit;
@@ -2307,7 +2340,7 @@ package body Model_Manager is
       end loop;
 
       if not External_Agent then
-         Push_Chunk (Stream, Session_ID,
+         Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
            "[Adelaide Core]: [Thought] Reasoning complete after " &
            Current_Hop'Img & " hops." & ASCII.LF);
       end if;
@@ -2404,11 +2437,11 @@ package body Model_Manager is
 
                if not External_Agent then
                   if Hop_Count = 0 then
-                     Push_Chunk (Stream, Session_ID,
+                     Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                        "[Adelaide Core]: [Thought] Starting reasoning " &
                        "chain..." & ASCII.LF);
                   else
-                     Push_Chunk (Stream, Session_ID,
+                     Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                        "[Adelaide Core]: [Thought] Continuing reasoning " &
                        "(hop" & Natural'Image (Hop_Count + 1) & ")..." &
                        ASCII.LF);
@@ -2443,7 +2476,7 @@ package body Model_Manager is
                      R     : Tool_Manager.Tool_Result;
                   begin
                      if not External_Agent then
-                        Push_Chunk (Stream, Session_ID,
+                        Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                           "[Adelaide Core]: [Thought] Context fault: " &
                           "searching " & C_Str & " for '" & Q_Str &
                           "'..." & ASCII.LF);
@@ -2461,7 +2494,7 @@ package body Model_Manager is
                      "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
 
                    if not External_Agent then
-                      Push_Chunk (Stream, Session_ID,
+                      Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                         "[Adelaide Core]: [Thought] Context loaded for: " &
                         Q_Str & ASCII.LF);
                    end if;
@@ -2552,7 +2585,7 @@ package body Model_Manager is
          declare
             Dur_Str : constant String := Duration'Image (T1 - T0);
          begin
-            Push_Chunk (Stream, Session_ID,
+            Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
               "[Adelaide Core]: [Thought] Response generated in " &
               Dur_Str & "s." & ASCII.LF);
          end;
@@ -2580,7 +2613,7 @@ package body Model_Manager is
             Level         => Level);
       begin
          if not External_Agent then
-            Push_Chunk (Stream, Session_ID,
+            Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
               "[Adelaide Core]: [Thought] Self-assessment: " &
               Score'Img & "/10" & ASCII.LF);
          end if;
@@ -2591,53 +2624,54 @@ package body Model_Manager is
       end;
 
       if not External_Agent then
+         --  Extract and push model's internal thinking content (if any).
+         --  This is the content between <think> and </think> tags that the
+         --  model generated during reasoning. We push it through the parser
+         --  so it is properly handled (silenced if In_Think_Block is True).
+         --  NOTE: The closing `` tag is pushed by the emulated streaming
+         --  section below, AFTER the response content has been streamed.
          declare
             Model_Thinking : constant String :=
               Extract_Think_Content (To_String (Current_Response));
          begin
             if Model_Thinking /= "" then
-               Push_Chunk (Stream, Session_ID, Model_Thinking & ASCII.LF);
+               Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
+                 Model_Thinking & ASCII.LF);
             end if;
          end;
-         Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
       end if;
 
+      --  EMULATED STREAMING (300 tok/s simulation)
+      --  The model's response was already streamed token-by-token through
+      --  the stream parser during Generate (Process_And_Push_Chunk). The
+      --  parser silenced content inside think blocks and pushed visible
+      --  content to the queue. This emulated streaming loop ONLY pushes
+      --  the closing `` tag AFTER the response content has been
+      --  fully streamed. It does NOT re-push the response text because
+      --  that would cause duplication (client sees response twice).
+      --
+      --  WHY THIS EXISTS: The immediate ACK pushes `` + orchestration
+      --  header. The model generates response content inside think blocks
+      --  (silenced by parser). After the model finishes, we need to close
+      --  the think block so the client knows the response is complete.
+      --  The 300 tok/s simulation delay ensures the closing tag arrives
+      --  after all response chunks have been flushed by AWS.
       if not External_Agent and then Stream /= null then
          declare
+            Sim_TPS      : constant Float := 300.0;
+            --  Calculate delay proportional to response length to simulate
+            --  300 tok/s streaming. Short responses get minimal delay.
             Resp_Text    : constant String :=
               Sanitize_Think_Tags (To_String (Current_Response));
-            Chunk_Size   : constant Positive := 16;
-            Sim_TPS      : constant Float := 300.0;
-            Delay_Chunk  : constant Duration :=
-              Duration (Float (Chunk_Size) / Sim_TPS);
-            Pos          : Natural := 1;
+            Resp_Len     : constant Natural := Resp_Text'Length;
+            Delay_Time   : constant Duration :=
+              Duration (Float (Resp_Len) / Sim_TPS);
          begin
             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                      AnsiAda.Reset & " Hybrid_Generate: STREAMING RESPONSE. Len=" &
-                      Natural'Image (Resp_Text'Length) & " ChunkSize=" &
-                      Positive'Image (Chunk_Size));
-            Ada.Text_IO.Put_Line
-              ("[Adelaide] Simulating ~300 tok/s streaming for " &
-               Resp_Text'Length'Img & " chars...");
-            while Pos <= Resp_Text'Length loop
-               declare
-                  Chunk_End : constant Natural :=
-                    Natural'Min (Pos + Chunk_Size - 1, Resp_Text'Length);
-                  Chunk     : constant String := Resp_Text (Pos .. Chunk_End);
-               begin
-                  delay Delay_Chunk;
-                  --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-                  --  [StreamChunk-V] Shows each chunk being streamed
-                  Put_Line
-                    (AnsiAda.Foreground (AnsiAda.Grey) & "[StreamChunk-V]" &
-                     AnsiAda.Reset & " Pos=" & Natural'Image (Pos) &
-                     " ChunkLen=" & Natural'Image (Chunk'Length) &
-                     " Text=" & Chunk);
-                  Push_Chunk (Stream, Session_ID, Chunk);
-                  Pos := Chunk_End + 1;
-               end;
-            end loop;
+                      AnsiAda.Reset & " Hybrid_Generate: Waiting " &
+                      Duration'Image (Delay_Time) & "s for 300 tok/s sim.");
+            delay Delay_Time;
             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                       AnsiAda.Reset & " Hybrid_Generate: STREAMING COMPLETE.");
