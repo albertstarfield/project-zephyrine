@@ -121,11 +121,12 @@ project Adelaide_Lite is
       for Default_Switches ("Ada") use
         Adelaide_Lite_Config.Ada_Compiler_Switches &
         ("-gnat2022", "-gnatX", "-mmacosx-version-min=15.0");
-      for Default_Switches ("C++") use
-        ("-I" & project'Project_Dir & "../llama.cpp/include", 
-         "-I" & project'Project_Dir & "../llama.cpp/ggml/include",
-         "-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
-         "-std=c++17", "-mmacosx-version-min=15.0");
+       for Default_Switches ("C++") use
+         ("-I" & project'Project_Dir & "../llama.cpp/include", 
+          "-I" & project'Project_Dir & "../llama.cpp/ggml/include",
+          "-I" & project'Project_Dir & "../llama.cpp/tools/mtmd",
+          "-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
+          "-std=c++17", "-mmacosx-version-min=15.0");
       for Default_Switches ("C") use
         ("-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
          "-mmacosx-version-min=15.0");
@@ -135,23 +136,25 @@ project Adelaide_Lite is
       for Switches ("Ada") use ("-d8m");
    end Binder;
 
-   package Linker is
-      -- Patch Note: SDK path is now resolved dynamically using the SDKROOT environment variable.
-      for Switches ("Ada") use (
-          "-L" & project'Project_Dir & "../moonshine/build/core",
-          "-lmoonshine",
-          "-L" & project'Project_Dir & "../llama.cpp/build/src",
-          "-lllama",
-          "-L" & project'Project_Dir & "../llama.cpp/build/ggml/src",
-          "-lggml",
-          "-lggml-base",
-          "-lggml-cpu",
-          "-L" & project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-metal",
-          "-lggml-metal",
-          "-L" & project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-blas",
-          "-lggml-blas",
-          "-L/opt/homebrew/opt/sqlite/lib",
-          "-lsqlite3",
+    package Linker is
+       -- Patch Note: SDK path is now resolved dynamically using the SDKROOT environment variable.
+       for Switches ("Ada") use (
+           "-L" & project'Project_Dir & "../moonshine/build/core",
+           "-lmoonshine",
+           "-L" & project'Project_Dir & "../llama.cpp/build/src",
+           "-lllama",
+           "-L" & project'Project_Dir & "../llama.cpp/build/ggml/src",
+           "-lggml",
+           "-lggml-base",
+           "-lggml-cpu",
+           "-L" & project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-metal",
+           "-lggml-metal",
+           "-L" & project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-blas",
+           "-lggml-blas",
+           "-L" & project'Project_Dir & "../llama.cpp/build/tools/mtmd",
+           "-lmtmd",
+           "-L/opt/homebrew/opt/sqlite/lib",
+           "-lsqlite3",
           "-Wl,-syslibroot," & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
           "-F" & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk") & "/System/Library/Frameworks",
           "-mmacosx-version-min=15.0",
