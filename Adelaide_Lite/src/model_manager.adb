@@ -106,6 +106,84 @@ package body Model_Manager is
 
    Printer_Task : WCET_Printer;
 
+   --  =====================================================================
+   --  CONTEXT MONITOR TASK
+   --  =====================================================================
+   --  Prints virtual context state every 5 seconds:
+   --    - Virtual Context: 2^63 capacity, how much occupied (depth)
+   --    - Context Fault Division Page: where each hop jumps, how much data
+   --    - Internal_State size: accumulated factual data from paging
+   --
+   --  The "virtual context" is the 2^63 theoretical space (ELP Queue).
+   --  The "division page" is how context fault hops divide the reasoning
+   --  chain: each hop pages in new factual data via tool execution.
+   --  =====================================================================
+   task Context_Monitor is
+      entry Start;
+   end Context_Monitor;
+
+   task body Context_Monitor is
+      Interval   : constant Duration := 5.0;
+      Next_Check : Ada.Calendar.Time;
+      Fault_Total : Natural := 0;
+   begin
+      accept Start;
+      loop
+         Next_Check := Ada.Calendar.Clock + Interval;
+
+         --  Aggregate context fault hops across all active sessions
+         --  (Current_Context_Fault_Hops is updated by Hybrid_Generate)
+         Fault_Total := Current_Context_Fault_Hops;
+
+         declare
+            --  Virtual Context (2^63) metrics from ELP Queue
+            VC_Capacity : constant Long_Long_Integer := ELP_Queue.Capacity;
+            VC_Depth    : constant Long_Long_Integer := ELP_Queue.Depth;
+            VC_Util     : constant Long_Long_Float   := ELP_Queue.Utilization;
+
+            --  Context Fault Division Page math
+            --  Each hop "pages" into a new division of the context space.
+            --  Division page = hop_count + 1 (first page is the original prompt).
+            --  Max pages = 6 (original + 5 hops).
+            Max_Divisions : constant Natural := 6;
+            Cur_Division  : constant Natural := Fault_Total + 1;
+         begin
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[CtxMonitor]" & AnsiAda.Reset &
+                      " === VIRTUAL CONTEXT STATUS (5s) ===");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[CtxMonitor]" & AnsiAda.Reset &
+                      " Virtual Ctx: Cap=" &
+                      Long_Long_Integer'Image (VC_Capacity) &
+                      " (2^63) | Occupied=" &
+                      Long_Long_Integer'Image (VC_Depth) &
+                      " | Util=" &
+                      Long_Long_Float'Image (VC_Util) & "%");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[CtxMonitor]" & AnsiAda.Reset &
+                      " Context Fault Division Page:");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[CtxMonitor]" & AnsiAda.Reset &
+                      "   Current Page=" & Natural'Image (Cur_Division) &
+                      " /" & Natural'Image (Max_Divisions) &
+                      " | Hops Used=" & Natural'Image (Fault_Total) &
+                      " /5 max");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[CtxMonitor]" & AnsiAda.Reset &
+                      "   Internal_State Occupied=" &
+                      Natural'Image (Current_Internal_State_Len) &
+                      " bytes" & " | Page Jump=" &
+                      (if Fault_Total = 0 then "INITIAL"
+                       else "HOP" & Natural'Image (Fault_Total)));
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[CtxMonitor]" & AnsiAda.Reset &
+                      " ======================================");
+         end;
+
+         delay until Next_Check;
+      end loop;
+   end Context_Monitor;
+
    type Model_Record is record
       Model       : Llama_Model := Null_Model;
       Context     : Llama_Context := Null_Context;
@@ -377,6 +455,11 @@ package body Model_Manager is
       ELP_Queue.Initialize;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 6/7 ELP_Queue.Initialize DONE.");
+
+      --  Start Virtual Context Monitor (prints every 5s)
+      if not Context_Monitor'Terminated then
+         Context_Monitor.Start;
+      end if;
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Model paths are set here.  None of these load models from disk.
@@ -1779,6 +1862,11 @@ package body Model_Manager is
       Emb_Vec          : Math_Utils.Vector (1 .. 1536) := [others => 0.0];
       Emb_Len          : Natural;
    begin
+      --  Reset context fault tracking for this request
+      Current_Context_Fault_Hops := 0;
+      Current_Internal_State_Len := 0;
+      Current_Hop_Count          := 0;
+
       T0 := Ada.Calendar.Clock;
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -1975,6 +2063,7 @@ package body Model_Manager is
                Append
                  (Internal_State,
                   "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+               Current_Internal_State_Len := Length (Internal_State);
                if not External_Agent then
                   Push_Chunk (Stream, Session_ID,
                     "[FACTUAL_DATA]: " &
@@ -2131,9 +2220,10 @@ package body Model_Manager is
                                                Integer'Value (Time_Str);
                                              Scheduler_Manager.Schedule
                                                (Delay_Secs, Prompt_Str);
-                                             Append (Internal_State,
-                                               "[SCHEDULED]: " & Prompt_Str &
-                                               ASCII.LF);
+                                           Append (Internal_State,
+                                             "[SCHEDULED]: " & Prompt_Str &
+                                             ASCII.LF);
+                                           Current_Internal_State_Len := Length (Internal_State);
                                           exception
                                              when others => null;
                                           end;
@@ -2182,10 +2272,11 @@ package body Model_Manager is
                                             Sanitize_Orchestration_Output
                                               (T_Name) & ASCII.LF);
                                        end if;
-                                       Append
-                                         (Internal_State,
-                                          "[TOOL (" & T_Name & ")]: " &
-                                          To_String (R.Output) & ASCII.LF);
+                                        Append
+                                          (Internal_State,
+                                           "[TOOL (" & T_Name & ")]: " &
+                                           To_String (R.Output) & ASCII.LF);
+                                        Current_Internal_State_Len := Length (Internal_State);
                                        if not External_Agent then
                                           Push_Chunk (Stream, Session_ID,
                                             ASCII.LF & "[TOOL (" & T_Name &
@@ -2211,6 +2302,8 @@ package body Model_Manager is
             end;
          end;
          Current_Hop := Current_Hop + 1;
+         --  Update context fault monitor tracking
+         Current_Hop_Count := Current_Hop;
          exit when Current_Hop > 5;
       end loop;
 
@@ -2365,16 +2458,19 @@ package body Model_Manager is
                           ("searchglobalref", Q_Str);
                      end if;
 
-                     Append (Internal_State,
-                       "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+                   Append (Internal_State,
+                     "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
 
-                     if not External_Agent then
-                        Push_Chunk (Stream, Session_ID,
-                          "[Adelaide Core]: [Thought] Context loaded for: " &
-                          Q_Str & ASCII.LF);
-                     end if;
-                  end;
-                  Hop_Count := Hop_Count + 1;
+                   if not External_Agent then
+                      Push_Chunk (Stream, Session_ID,
+                        "[Adelaide Core]: [Thought] Context loaded for: " &
+                        Q_Str & ASCII.LF);
+                   end if;
+                end;
+                Hop_Count := Hop_Count + 1;
+                --  Update context fault monitor tracking
+                Current_Context_Fault_Hops := Hop_Count;
+                Current_Internal_State_Len := Length (Internal_State);
                else
                   --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &

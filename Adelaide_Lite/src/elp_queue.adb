@@ -85,12 +85,16 @@ package body ELP_Queue is
    end Dequeue_Level;
 
    function Depth return Long_Long_Integer is (Load_State.Get_Total);
-   function Capacity return Long_Long_Integer is (1_000);
+   function Capacity return Long_Long_Integer is (Long_Long_Integer'Last);
 
    function Utilization return Long_Long_Float is
       D : constant Long_Long_Integer := Depth;
+      C : constant Long_Long_Integer := Capacity;
    begin
-      return Long_Long_Float (D) / 1000.0 * 100.0;
+      if C = 0 then
+         return 0.0;
+      end if;
+      return Long_Long_Float (D) / Long_Long_Float (C) * 100.0;
    end Utilization;
 
    task Monitor_Task is

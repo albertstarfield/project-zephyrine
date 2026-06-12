@@ -143,9 +143,18 @@ package Model_Manager is
    Current_Jitter_Max : Duration := 0.0;
    Current_Jitter_Avg : Duration := 0.0;
 
-   --  Last user prompt (set by Hybrid_Generate at ELP1 level).
-   --  Read by Proactive_Cache_Task in Knowledge_Manager to predict
-   --  follow-up questions and pre-populate Speculative_Cache.
-   Last_User_Prompt : Unbounded_String := Null_Unbounded_String;
+    --  Last user prompt (set by Hybrid_Generate at ELP1 level).
+    --  Read by Proactive_Cache_Task in Knowledge_Manager to predict
+    --  follow-up questions and pre-populate Speculative_Cache.
+    Last_User_Prompt : Unbounded_String := Null_Unbounded_String;
+
+    --  CONTEXT FAULT MONITORING (printed every 5s by Context_Monitor task)
+    --  Tracks the virtual context space and context fault paging state.
+    --  Virtual Context: 2^63 capacity (ELP Queue), LLM context per model.
+    --  Context Fault: Model requests additional context mid-generation via
+    --  [CONTEXT_FAULT: query=... category=...]. Each fault adds a "hop".
+    Current_Context_Fault_Hops : Natural := 0;
+    Current_Internal_State_Len : Natural := 0;
+    Current_Hop_Count          : Natural := 0;
 
 end Model_Manager;
