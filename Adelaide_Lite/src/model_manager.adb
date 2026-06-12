@@ -1,6 +1,7 @@
 pragma SPARK_Mode (Off);
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
+with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Calendar; use type Ada.Calendar.Time;
 with Database_Manager;
@@ -168,6 +169,12 @@ package body Model_Manager is
       end Release;
    end Metal_Lock_Object;
 
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  Init_Start_Time: Captured when Model_Manager.Initialize is called.
+   --  All [Init-V] verbose prints in this package compute uptime relative
+   --  to this timestamp.
+   Init_Start_Time : Ada.Real_Time.Time;
+
    protected body Priority_Model_Gate is
       procedure Request_ELP1 is
       begin
@@ -255,11 +262,18 @@ package body Model_Manager is
 
       --  Barrier: ELP0 tasks block here until all ELP1 requests have completed.
       --  See Wait_For_ELP1_Idle spec in model_manager.ads for full explanation.
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: prints guard state when an ELP0 task arrives.
       entry Wait_For_ELP1_Idle when (ELP1_Pending = 0 and
         ELP1_Active_Count = 0)
         and then (not On_Battery_State or else Battery_Level >= 80) is
       begin
-         null;
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Wait_For_ELP1_Idle GUARD PASSED" &
+                   " ELP1_Pending=" & ELP1_Pending'Img &
+                   " ELP1_Active=" & ELP1_Active_Count'Img &
+                   " OnBattery=" & On_Battery_State'Img &
+                   " BattLevel=" & Battery_Level'Img);
       end Wait_For_ELP1_Idle;
 
       procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
@@ -283,7 +297,13 @@ package body Model_Manager is
       Now        : Time;
       Cleanup_OK : Boolean;
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms the Idle_Monitor task actually started.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Idle_Monitor task entered, waiting for Start...");
       accept Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Idle_Monitor task ACCEPTED Start, entering loop.");
       loop
          Next_Check := Clock + Interval;
          Now := Clock;
@@ -324,9 +344,33 @@ package body Model_Manager is
 
    procedure Initialize is
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Capture start time for uptime calculation.
+      Init_Start_Time := Ada.Real_Time.Clock;
+      --  Verbose init tracing: each print confirms a subsystem completed.
+      --  If the server hangs during init, the LAST print before silence
+      --  tells you exactly which step is stuck.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 1/7 Calling Llama_Backend_Init...");
       Llama_Backend_Init;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 2/7 Llama_Backend_Init DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 3/7 Calling Database_Manager.Initialize...");
       Database_Manager.Initialize;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 4/7 Database_Manager.Initialize DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 5/7 Calling ELP_Queue.Initialize...");
       ELP_Queue.Initialize;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 6/7 ELP_Queue.Initialize DONE.");
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Model paths are set here.  None of these load models from disk.
+      --  Loading happens lazily in Load_Model on first use.
       Models (Qwen_0_8B).Path  := To_Unbounded_String
         ("llama.cpp/models/qwen3.5/Qwen3.5-0.8B-Q4_K_S.gguf");
       Models (Qwen_9B).Path   := To_Unbounded_String
@@ -335,7 +379,12 @@ package body Model_Manager is
         ("llama.cpp/models/qwen3.5/Qwen3-Embedding-0.6B-Q8_0.gguf");
       Models (MMProj).Path := To_Unbounded_String
         ("llama.cpp/models/qwen3.5/mmproj-9B-F16.gguf");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 7/7 Starting Idle_Monitor...");
       Idle_Monitor.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Model_Manager.Initialize COMPLETE.");
    end Initialize;
 
    procedure Load_Model
