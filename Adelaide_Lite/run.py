@@ -54,6 +54,21 @@ def get_files_to_hash():
         else:
             if os.path.exists(os.path.join(BASE_DIR, pattern)):
                 files.append(os.path.join(BASE_DIR, pattern))
+    
+    # Also hash mtmd source files in llama.cpp (for multimodal rebuild detection)
+    # Why: Changes to mtmd source files should trigger a rebuild of the mtmd library.
+    #      Without this, code changes in llama.cpp/tools/mtmd/ would be silently ignored.
+    mtmd_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "llama.cpp", "tools", "mtmd"))
+    mtmd_count = 0
+    if os.path.exists(mtmd_dir):
+        for root, _, filenames in os.walk(mtmd_dir):
+            for name in filenames:
+                if name.endswith(('.cpp', '.h', '.c')):
+                    files.append(os.path.join(root, name))
+                    mtmd_count += 1
+    if mtmd_count > 0:
+        print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Tracking {mtmd_count} mtmd source files for rebuild detection")
+    
     return sorted(files)
 
 def calculate_hash(file_paths):
@@ -111,16 +126,65 @@ def main():
         # Ensure llama.cpp is built
         llama_build_dir = os.path.join(llama_dir, "build")
         llama_lib = os.path.join(llama_build_dir, "src", "libllama.a")
+        llama_start = time.time()
         if not os.path.exists(llama_lib):
-            print("[*] Building llama.cpp...")
+            print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Building llama.cpp...")
+            print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake flags: -DGGML_NATIVE=ON -DLLAMA_BUILD_TOOLS=ON")
+            if platform.system() == "Darwin" and platform.machine() == "arm64":
+                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Metal GPU acceleration: ENABLED")
             os.makedirs(llama_build_dir, exist_ok=True)
-            cmake_flags = ["cmake", "-B", "build", "-DGGML_NATIVE=ON"]
+            cmake_flags = ["cmake", "-B", "build", "-DGGML_NATIVE=ON", "-DLLAMA_BUILD_TOOLS=ON"]
             if platform.system() == "Darwin" and platform.machine() == "arm64":
                 cmake_flags.append("-DGGML_METAL=ON")
-            subprocess.run(cmake_flags, cwd=llama_dir, check=False)
-            subprocess.run(["cmake", "--build", "build", "--config", "Release", "-j"], cwd=llama_dir, check=False)
+            result = subprocess.run(cmake_flags, cwd=llama_dir, check=False, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake configure FAILED")
+                if result.stderr:
+                    print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] stderr: {result.stderr[-500:]}")
+            else:
+                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake configure OK, building...")
+                result = subprocess.run(["cmake", "--build", "build", "--config", "Release", "-j"], cwd=llama_dir, check=False, capture_output=True, text=True)
+                llama_elapsed = time.time() - llama_start
+                if result.returncode == 0:
+                    print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Build SUCCESS in {llama_elapsed:.1f}s")
+                else:
+                    print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Build FAILED in {llama_elapsed:.1f}s")
+                    if result.stderr:
+                        print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] stderr: {result.stderr[-500:]}")
         else:
-            print("[*] llama.cpp library exists, skipping build.")
+            llama_elapsed = time.time() - llama_start
+            print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Library exists, skipping build")
+        
+        # Ensure mtmd (multimodal) library is built
+        # Why: The mtmd library provides CLIP vision encoding for multimodal support.
+        #      It's built as a separate target from llama.cpp and must be linked
+        #      into adelaide_server for image processing to work.
+        mtmd_lib = os.path.join(llama_build_dir, "tools", "mtmd", "libmtmd.a")
+        mtmd_start = time.time()
+        if not os.path.exists(mtmd_lib):
+            print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Building mtmd (multimodal) library...")
+            print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Target: {mtmd_lib}")
+            print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Running: cmake --build build --target mtmd -j")
+            result = subprocess.run(["cmake", "--build", "build", "--target", "mtmd", "-j"], cwd=llama_dir, check=False, capture_output=True, text=True)
+            mtmd_elapsed = time.time() - mtmd_start
+            if result.returncode == 0:
+                print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Build SUCCESS in {mtmd_elapsed:.1f}s")
+                # Verify the library was created
+                if os.path.exists(mtmd_lib):
+                    mtmd_size = os.path.getsize(mtmd_lib)
+                    print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Library created: {mtmd_size:,} bytes")
+                else:
+                    print(f"[MTMD] [{time.strftime('%H:%M:%S')}] WARNING: Library file not found after build!")
+            else:
+                print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Build FAILED in {mtmd_elapsed:.1f}s")
+                if result.stdout:
+                    print(f"[MTMD] [{time.strftime('%H:%M:%S')}] stdout: {result.stdout[-500:]}")
+                if result.stderr:
+                    print(f"[MTMD] [{time.strftime('%H:%M:%S')}] stderr: {result.stderr[-500:]}")
+        else:
+            mtmd_elapsed = time.time() - mtmd_start
+            mtmd_size = os.path.getsize(mtmd_lib)
+            print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Library exists ({mtmd_size:,} bytes), skipping build")
 
         # Check and clone kokoro-onnx
         kokoro_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro-onnx"))

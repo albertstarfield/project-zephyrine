@@ -9,6 +9,8 @@ with Tool_Manager;
 with Scheduler_Manager;
 with Llama_Interface;
 use Llama_Interface;
+with Mtmd_Interface;
+use Mtmd_Interface;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Directories;
@@ -186,6 +188,7 @@ package body Model_Manager is
    type Model_Record is record
       Model       : Llama_Model := Null_Model;
       Context     : Llama_Context := Null_Context;
+      Mtmd_Ctx    : Mtmd_Interface.Mtmd_Context := Null_Mtmd_Context;
       Path        : Unbounded_String;
       Loaded      : Boolean := False;
       In_Use      : Boolean := False;
@@ -527,6 +530,64 @@ package body Model_Manager is
       Put_Line ("[+] Loading " & Model_Type'Image (Kind) &
                 " (N_CTX=" & Actual_Ctx'Img & ")");
 
+      --  SPECIAL CASE: MMProj (multimodal projection) model loading
+      --  Why: MMProj is not a standalone llama model - it's a vision encoder
+      --       that must be initialized with mtmd_init_from_file_safe, which
+      --       requires the text model (Qwen_9B) to be loaded first.
+      --       The mmproj file contains the CLIP vision encoder weights that
+      --       project images into the embedding space of the text model.
+      if Kind = MMProj then
+         --  MMProj requires the text model to be loaded first
+         if not Models (Qwen_9B).Loaded then
+            Put_Line ("[!] MMProj requires Qwen_9B to be loaded first");
+            Success := False;
+            return;
+         end if;
+
+         --  Try to find and load the mmproj file
+         for I in Paths'Range loop
+            declare
+               Path_Str : constant String := To_String (Paths (I));
+            begin
+               if Ada.Directories.Exists (Path_Str) then
+                  declare
+                     Path_C : chars_ptr := New_String (Path_Str);
+                  begin
+                     begin
+                        --  Load mmproj using mtmd API
+                        --  Use GPU if available, 8 threads for vision encoding
+                        Models (Kind).Mtmd_Ctx :=
+                          Mtmd_Init_From_File_Safe
+                            (Path_C,
+                             System.Address (Models (Qwen_9B).Model),
+                             True,
+                             8);
+                     exception
+                        when others =>
+                           Put_Line ("[!] Exception caught in Ada during " &
+                                     "Mtmd_Init_From_File_Safe");
+                           Models (Kind).Mtmd_Ctx := Null_Mtmd_Context;
+                     end;
+                     Free (Path_C);
+                     if Models (Kind).Mtmd_Ctx /= Null_Mtmd_Context then
+                        exit;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+
+         if Models (Kind).Mtmd_Ctx /= Null_Mtmd_Context then
+            Models (Kind).Loaded := True;
+            Models (Kind).Last_Used := Clock;
+            Success := True;
+            Put_Line ("[+] MMProj loaded successfully");
+         else
+            Put_Line ("[!] Failed to load MMProj model");
+         end if;
+         return;
+      end if;
+
       --  [QUIRK-M10] GPU Contention & Metal Backend Analysis
       --  ======================================================================
       --  [VITAL-DO-NOT-REMOVE]
@@ -619,10 +680,18 @@ package body Model_Manager is
    procedure Unload_Model (Kind : Model_Type) is
    begin
       if Models (Kind).Loaded then
-         Llama_Free (Models (Kind).Context);
-         Llama_Model_Free (Models (Kind).Model);
-         Models (Kind).Context := Null_Context;
-         Models (Kind).Model := Null_Model;
+         --  SPECIAL CASE: MMProj uses mtmd context, not llama context
+         if Kind = MMProj then
+            if Models (Kind).Mtmd_Ctx /= Null_Mtmd_Context then
+               Mtmd_Free_Safe (Models (Kind).Mtmd_Ctx);
+               Models (Kind).Mtmd_Ctx := Null_Mtmd_Context;
+            end if;
+         else
+            Llama_Free (Models (Kind).Context);
+            Llama_Model_Free (Models (Kind).Model);
+            Models (Kind).Context := Null_Context;
+            Models (Kind).Model := Null_Model;
+         end if;
          Models (Kind).Loaded := False;
          Models (Kind).Current_Ctx := 0;
       end if;
@@ -652,6 +721,19 @@ package body Model_Manager is
       end if;
       return Models (Kind).Model;
    end Get_Model;
+
+   --  Get the mtmd (multimodal) context for vision processing
+   --  Why: MMProj is a special model type that uses the mtmd API for
+   --       image/audio encoding. This function returns the mtmd context
+   --       so other modules can encode images for the vision pipeline.
+   function Get_Mtmd_Context
+     (Kind : Model_Type) return Mtmd_Interface.Mtmd_Context is
+   begin
+      if Models (Kind).Loaded then
+         Models (Kind).Last_Used := Clock;
+      end if;
+      return Models (Kind).Mtmd_Ctx;
+   end Get_Mtmd_Context;
 
    --  LLAMA.CPP ABORT CALLBACK:
    --  Called by llama.cpp periodically during Llama_Decode (token generation).

@@ -13,6 +13,8 @@ with Interfaces;
 with Model_Manager;
 with Streaming_Queue;
 use Streaming_Queue;
+with Multimodal_Content_Parser;
+use Multimodal_Content_Parser;
 with AWS.Response.Set;
 with AWS.Messages;
 with GNATCOLL.JSON;

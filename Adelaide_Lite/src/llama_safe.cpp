@@ -1,8 +1,12 @@
 #include "llama.h"
+#include "mtmd.h"
 #include <stdexcept>
 #include <iostream>
+#include <cstring>
 
 extern "C" {
+    // ===== llama.cpp safe wrappers =====
+    
     struct llama_model * llama_model_load_from_file_safe(const char * path_model, struct llama_model_params params) {
         try {
             return llama_model_load_from_file(path_model, params);
@@ -26,5 +30,190 @@ extern "C" {
 
     void llama_batch_clear_safe(struct llama_batch * batch) {
         batch->n_tokens = 0;
+    }
+
+    // ===== mtmd (multimodal) safe wrappers =====
+    // These wrap the mtmd C API with exception safety for Ada FFI.
+    // Why: The mtmd API is the public interface for multimodal support in llama.cpp.
+    //      We need these wrappers because Ada cannot directly call C++ code,
+    //      and we want exception safety at the boundary.
+    
+    // Opaque handle types for Ada - these are just void pointers
+    typedef void* mtmd_context_handle;
+    typedef void* mtmd_bitmap_handle;
+    typedef void* mtmd_input_chunks_handle;
+    typedef void* mtmd_input_chunk_handle;
+
+    // Initialize mtmd context from mmproj file
+    // Returns nullptr on failure
+    mtmd_context_handle mtmd_init_from_file_safe(const char * mmproj_fname,
+                                                  const struct llama_model * text_model,
+                                                  bool use_gpu,
+                                                  int n_threads) {
+        try {
+            struct mtmd_context_params params = mtmd_context_params_default();
+            params.use_gpu = use_gpu;
+            params.n_threads = n_threads;
+            params.warmup = true;
+            return (mtmd_context_handle)mtmd_init_from_file(mmproj_fname, text_model, params);
+        } catch (const std::exception& e) {
+            std::cerr << "Caught C++ exception in mtmd_init_from_file: " << e.what() << std::endl;
+            return nullptr;
+        } catch (...) {
+            std::cerr << "Caught unknown C++ exception in mtmd_init_from_file" << std::endl;
+            return nullptr;
+        }
+    }
+
+    // Free mtmd context
+    void mtmd_free_safe(mtmd_context_handle ctx) {
+        if (ctx) {
+            try {
+                mtmd_free((mtmd_context*)ctx);
+            } catch (const std::exception& e) {
+                std::cerr << "Caught C++ exception in mtmd_free: " << e.what() << std::endl;
+            }
+        }
+    }
+
+    // Create bitmap from raw RGB pixels
+    // data must be nx * ny * 3 bytes in RGBRGBRGB... format
+    mtmd_bitmap_handle mtmd_bitmap_init_safe(uint32_t nx, uint32_t ny, const unsigned char * data) {
+        try {
+            return (mtmd_bitmap_handle)mtmd_bitmap_init(nx, ny, data);
+        } catch (const std::exception& e) {
+            std::cerr << "Caught C++ exception in mtmd_bitmap_init: " << e.what() << std::endl;
+            return nullptr;
+        } catch (...) {
+            std::cerr << "Caught unknown C++ exception in mtmd_bitmap_init" << std::endl;
+            return nullptr;
+        }
+    }
+
+    // Free bitmap
+    void mtmd_bitmap_free_safe(mtmd_bitmap_handle bitmap) {
+        if (bitmap) {
+            try {
+                mtmd_bitmap_free((mtmd_bitmap*)bitmap);
+            } catch (const std::exception& e) {
+                std::cerr << "Caught C++ exception in mtmd_bitmap_free: " << e.what() << std::endl;
+            }
+        }
+    }
+
+    // Get bitmap dimensions
+    uint32_t mtmd_bitmap_get_nx_safe(mtmd_bitmap_handle bitmap) {
+        if (!bitmap) return 0;
+        try {
+            return mtmd_bitmap_get_nx((const mtmd_bitmap*)bitmap);
+        } catch (...) { return 0; }
+    }
+
+    uint32_t mtmd_bitmap_get_ny_safe(mtmd_bitmap_handle bitmap) {
+        if (!bitmap) return 0;
+        try {
+            return mtmd_bitmap_get_ny((const mtmd_bitmap*)bitmap);
+        } catch (...) { return 0; }
+    }
+
+    // Initialize empty input chunks list
+    mtmd_input_chunks_handle mtmd_input_chunks_init_safe(void) {
+        try {
+            return (mtmd_input_chunks_handle)mtmd_input_chunks_init();
+        } catch (const std::exception& e) {
+            std::cerr << "Caught C++ exception in mtmd_input_chunks_init: " << e.what() << std::endl;
+            return nullptr;
+        } catch (...) {
+            std::cerr << "Caught unknown C++ exception in mtmd_input_chunks_init" << std::endl;
+            return nullptr;
+        }
+    }
+
+    // Free input chunks
+    void mtmd_input_chunks_free_safe(mtmd_input_chunks_handle chunks) {
+        if (chunks) {
+            try {
+                mtmd_input_chunks_free((mtmd_input_chunks*)chunks);
+            } catch (const std::exception& e) {
+                std::cerr << "Caught C++ exception in mtmd_input_chunks_free: " << e.what() << std::endl;
+            }
+        }
+    }
+
+    // Get number of chunks
+    size_t mtmd_input_chunks_size_safe(mtmd_input_chunks_handle chunks) {
+        if (!chunks) return 0;
+        try {
+            return mtmd_input_chunks_size((const mtmd_input_chunks*)chunks);
+        } catch (...) { return 0; }
+    }
+
+    // Get chunk type: 0=text, 1=image, 2=audio
+    int32_t mtmd_input_chunk_get_type_safe(mtmd_input_chunk_handle chunk) {
+        if (!chunk) return -1;
+        try {
+            return (int32_t)mtmd_input_chunk_get_type((const mtmd_input_chunk*)chunk);
+        } catch (...) { return -1; }
+    }
+
+    // Get number of tokens in a chunk
+    size_t mtmd_input_chunk_get_n_tokens_safe(mtmd_input_chunk_handle chunk) {
+        if (!chunk) return 0;
+        try {
+            return mtmd_input_chunk_get_n_tokens((const mtmd_input_chunk*)chunk);
+        } catch (...) { return 0; }
+    }
+
+    // Get text tokens from a text chunk
+    // Returns pointer to internal token array, n_tokens_output receives count
+    // WARNING: Do not free the returned pointer - it's owned by the chunk
+    const int32_t * mtmd_input_chunk_get_tokens_text_safe(mtmd_input_chunk_handle chunk, size_t * n_tokens_output) {
+        if (!chunk || !n_tokens_output) { *n_tokens_output = 0; return nullptr; }
+        try {
+            return mtmd_input_chunk_get_tokens_text((const mtmd_input_chunk*)chunk, n_tokens_output);
+        } catch (...) { *n_tokens_output = 0; return nullptr; }
+    }
+
+    // Encode a chunk (image or audio) - must be called before using embeddings
+    int32_t mtmd_encode_chunk_safe(mtmd_context_handle ctx, mtmd_input_chunk_handle chunk) {
+        if (!ctx || !chunk) return -1;
+        try {
+            return mtmd_encode_chunk((mtmd_context*)ctx, (const mtmd_input_chunk*)chunk);
+        } catch (const std::exception& e) {
+            std::cerr << "Caught C++ exception in mtmd_encode_chunk: " << e.what() << std::endl;
+            return -1;
+        } catch (...) { return -1; }
+    }
+
+    // Get output embeddings after encoding
+    // Returns pointer to float array, size = n_embd * n_tokens * sizeof(float)
+    float * mtmd_get_output_embd_safe(mtmd_context_handle ctx) {
+        if (!ctx) return nullptr;
+        try {
+            return mtmd_get_output_embd((mtmd_context*)ctx);
+        } catch (...) { return nullptr; }
+    }
+
+    // Check if model supports vision
+    int32_t mtmd_support_vision_safe(mtmd_context_handle ctx) {
+        if (!ctx) return 0;
+        try {
+            return mtmd_support_vision((const mtmd_context*)ctx) ? 1 : 0;
+        } catch (...) { return 0; }
+    }
+
+    // Check if chunk needs non-causal mask (for image chunks)
+    int32_t mtmd_decode_use_non_causal_safe(mtmd_context_handle ctx, mtmd_input_chunk_handle chunk) {
+        if (!ctx) return 0;
+        try {
+            return mtmd_decode_use_non_causal((const mtmd_context*)ctx, (const mtmd_input_chunk*)chunk) ? 1 : 0;
+        } catch (...) { return 0; }
+    }
+
+    // Get default media marker string
+    const char * mtmd_default_marker_safe(void) {
+        try {
+            return mtmd_default_marker();
+        } catch (...) { return "<__media__>"; }
     }
 }

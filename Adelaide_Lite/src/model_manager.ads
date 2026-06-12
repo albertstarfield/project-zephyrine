@@ -1,5 +1,6 @@
 pragma SPARK_Mode (Off);
 with Llama_Interface;
+with Mtmd_Interface;
 with Math_Utils;
 with Streaming_Queue;
 with System;
@@ -34,6 +35,11 @@ package Model_Manager is
 
    function Get_Model
      (Kind : Model_Type) return Llama_Interface.Llama_Model;
+
+   --  Get the mtmd (multimodal) context for vision processing
+   --  Returns Null_Mtmd_Context if MMProj is not loaded
+   function Get_Mtmd_Context
+     (Kind : Model_Type) return Mtmd_Interface.Mtmd_Context;
 
    --  Perform inference
    procedure Generate

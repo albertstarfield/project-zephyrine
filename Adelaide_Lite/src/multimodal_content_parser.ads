@@ -1,0 +1,27 @@
+pragma SPARK_Mode (Off);
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with GNATCOLL.JSON;
+with Image_Encoder;
+
+--  Utility functions for parsing OpenAI-compatible request content.
+--  Why: The OpenAI API supports two content formats:
+--       1. Simple string: "content": "What is in this image?"
+--       2. Multipart array: "content": [{"type": "text", "text": "..."}, {"type": "image_url", ...}]
+--       This module handles both formats and extracts images for encoding.
+package Multimodal_Content_Parser is
+
+   --  Extract text content from an OpenAI message content field
+   --  Handles both string and array formats
+   function Extract_Text_Content
+     (Message : GNATCOLL.JSON.JSON_Value) return Unbounded_String;
+
+   --  Extract and encode images from an OpenAI message content field
+   --  Returns True if any images were found and encoded
+   function Extract_And_Encode_Images
+     (Message : GNATCOLL.JSON.JSON_Value) return Boolean;
+
+   --  Check if a message contains image content
+   function Has_Images
+     (Message : GNATCOLL.JSON.JSON_Value) return Boolean;
+
+end Multimodal_Content_Parser;
