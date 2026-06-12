@@ -28,6 +28,8 @@ with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Exceptions;
 with Ada.Command_Line;
+with Ada.Strings; use Ada.Strings;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Real_Time; use Ada.Real_Time;
 with Adelaide_Server_Pkg;
 with Model_Manager;
@@ -165,6 +167,11 @@ procedure Adelaide_Server is
    Retry_Count : Natural := 0;
    Started     : Boolean := False;
 begin
+   declare
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Start_Time: Captured at the very first line of the main block.
+      --  All [Init-V] verbose prints compute uptime relative to this.
+      Start_Time : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
    begin
       --  ==================================================================
       --  STEP 1-4: Core subsystem initialization
@@ -200,31 +207,40 @@ begin
       --  This MUST complete before any other init because Knowledge_Manager
       --  and Scheduler_Manager depend on the database and ELP queue being
       --  ready.
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: wraps Model_Manager.Initialize so we can see timing.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 1: Calling Model_Manager.Initialize...");
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset &
                 " Initializing Adelaide Intelligence Backend...");
       Model_Manager.Initialize;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 1 DONE: Model_Manager.Initialize returned.");
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  Knowledge_Manager.Initialize opens the SQLite literature database
-      --  and prepares the embedding/chunk tables.  It calls
-      --  Database_Manager.Initialize internally, but that function is
-      --  gated by an Init_Gate protected object — calling it twice is
-      --  safe and idempotent.
+      --  Verbose: wraps Knowledge_Manager.Initialize.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 2: Calling Knowledge_Manager.Initialize...");
       Knowledge_Manager.Initialize;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 2 DONE: Knowledge_Manager.Initialize returned.");
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  Scheduler_Manager.Initialize creates the Scheduler_Task_Type
-      --  which monitors the Event_Queue for scheduled proactive thoughts.
-      --  Events are added via the /api/schedule HTTP endpoint.
+      --  Verbose: wraps Scheduler_Manager.Initialize.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 3: Calling Scheduler_Manager.Initialize...");
       Scheduler_Manager.Initialize;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 3 DONE: Scheduler_Manager.Initialize returned.");
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  Watchdog_IPC.Init creates the .heartbeat file used by the
-      --  external adelaide_watchdog process to detect server liveness.
-      --  If the heartbeat file stops being updated, the watchdog kills
-      --  the server and reports the failure.
+      --  Verbose: wraps Watchdog_IPC.Init.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 4: Calling Watchdog_IPC.Init...");
       Watchdog_IPC.Init;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 4 DONE: Watchdog_IPC.Init returned.");
 
       --  ==================================================================
       --  STEP 5: Start ELP0 background tasks BEFORE HTTP bind
@@ -251,9 +267,15 @@ begin
       --  immediately while the HTTP server binds in the next step.
       --  This eliminates the chicken-and-egg dependency.
       --  ----------------------------------------------------------------
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: wraps Knowledge_Manager.Start_Tasks.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 5: Calling Knowledge_Manager.Start_Tasks...");
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Starting background tasks (ELP0 producers)...");
       Knowledge_Manager.Start_Tasks;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 5 DONE: Knowledge_Manager.Start_Tasks returned.");
 
       --  ==================================================================
       --  STEP 6: Bind HTTP server to port 11420
@@ -264,9 +286,15 @@ begin
       --  TIME_WAIT state.  This is critical for crash-recovery scenarios
       --  where the old process was killed but the socket hasn't fully
       --  released yet.
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: wraps HTTP server config and bind.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 6: Configuring AWS HTTP server...");
       AWS.Config.Set.Server_Port (Conf, 11420);
       AWS.Config.Set.Server_Host (Conf, "0.0.0.0");
       AWS.Config.Set.Reuse_Address (Conf, True);
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 6: AWS config set. Entering bind retry loop...");
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Read back the configured port so we can use it in the health
@@ -295,6 +323,11 @@ begin
                   Callback   => Adelaide_Server_Pkg.Dispatch'Access,
                   Config     => Conf);
                Started := True;
+               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+               --  Verbose: confirms port bind succeeded.
+               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                         AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 6 DONE: AWS.Server.Start SUCCEEDED on port" &
+                         Natural'Image (Server_Port) & ".");
             exception
                when E : others =>
                   Retry_Count := Retry_Count + 1;
@@ -375,6 +408,10 @@ begin
            "/api/power";
       begin
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: confirms we entered the health ping loop.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 7: Entering health ping loop. URL=" & Health_URL);
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          --  Ping loop: Send GET requests to /api/power every 3 seconds.
          --  AWS.Client.Get is synchronous -- it blocks until the server
          --  responds or the connection times out.  If the server is
@@ -404,13 +441,18 @@ begin
                --  Check the HTTP status code.  We accept any 2xx as
                --  healthy.  The /api/power endpoint returns 200 OK
                --  with {"status":"ok"} on success.
-               if AWS.Response.Status_Code (Response) in Success then
-                  Got_Response := True;
-                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                  --  Stop the init phase epoch clock now that the server
-                  --  is confirmed healthy.  No more epoch prints after this.
-                  Init_Clock_Control.Stop_Clock;
-                  Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                if AWS.Response.Status_Code (Response) in Success then
+                   Got_Response := True;
+                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                   --  Stop the init phase epoch clock now that the server
+                   --  is confirmed healthy.  No more epoch prints after this.
+                   Init_Clock_Control.Stop_Clock;
+                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                   --  Verbose: confirms health ping passed.
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                             AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 7 DONE: Health ping OK on ping" &
+                             Natural'Image (Ping_Count) & ".");
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
                             "[Watchdog]" & AnsiAda.Reset &
                              " Health ping OK -- server responding on port" &
                              Natural'Image (Server_Port) & ".");

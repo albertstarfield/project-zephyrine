@@ -2,6 +2,7 @@ pragma SPARK_Mode (Off);
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Model_Manager;
 with Model_Types; use Model_Types;
@@ -10,6 +11,8 @@ with Math_Utils;
 with Zenith_Manager;
 with Ada.Directories; use Ada.Directories;
 with Ada.Exceptions;
+with Ada.Calendar;
+with Ada.Real_Time; use Ada.Real_Time;
 with Speculative_Cache;
 
 package body Knowledge_Manager is
@@ -62,23 +65,84 @@ package body Knowledge_Manager is
       entry Start;
    end Proactive_Cache_Task;
 
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  Init_Start_Time: Captured when Knowledge_Manager.Initialize is called.
+   --  All [Init-V] verbose prints in this package compute uptime relative
+   --  to this timestamp.
+   Init_Start_Time : Ada.Real_Time.Time;
+
    procedure Initialize is
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Capture start time for uptime calculation.
+      Init_Start_Time := Ada.Real_Time.Clock;
+      --  Verbose: confirms Knowledge_Manager.Initialize was entered.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s +" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Knowledge_Manager.Initialize ENTERED.");
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                 AnsiAda.Reset & " Initializing Knowledge Base...");
       Database_Manager.Initialize;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Knowledge_Manager.Initialize COMPLETE.");
    end Initialize;
 
    procedure Start_Tasks is
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: prints each task start so we can see which one hangs.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Knowledge_Manager.Start_Tasks ENTERED.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Starting Indexing_Task...");
       Indexing_Task.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task.Start DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Starting Thought_Task...");
       Thought_Task.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Thought_Task.Start DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Starting Native_Crawl_Task...");
       Native_Crawl_Task.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Native_Crawl_Task.Start DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Starting Salience_Maintenance_Task...");
       Salience_Maintenance_Task.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Salience_Maintenance_Task.Start DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Starting Zenith_Orion_Task...");
       Zenith_Manager.Zenith_Orion_Task.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Zenith_Orion_Task.Start DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Starting Telemetry_Sync_Task...");
       Telemetry_Sync_Task.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Telemetry_Sync_Task.Start DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Starting Zenith_Prover_Task...");
       Zenith_Prover_Task.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Zenith_Prover_Task.Start DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Starting Proactive_Cache_Task...");
       Proactive_Cache_Task.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Proactive_Cache_Task.Start DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Knowledge_Manager.Start_Tasks COMPLETE.");
    end Start_Tasks;
 
    --  Helper to index references.bib
@@ -88,16 +152,32 @@ package body Knowledge_Manager is
       Current_Entry : Unbounded_String;
       Line          : Unbounded_String;
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: prints every path tried for references.bib.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Index_References ENTERED.");
       begin
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Index_References: trying ../legacyPython/references.bib...");
          Open (File, In_File, "../legacyPython/references.bib");
          Opened := True;
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Index_References: OPENED ../legacyPython/references.bib");
       exception
          when others =>
+            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                      AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Index_References: ../legacyPython/references.bib NOT FOUND.");
             begin
+               Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                         AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Index_References: trying legacyPython/references.bib...");
                Open (File, In_File, "legacyPython/references.bib");
                Opened := True;
+               Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                         AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Index_References: OPENED legacyPython/references.bib");
             exception
                when others =>
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                            AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Index_References: legacyPython/references.bib NOT FOUND.");
                   Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                             AnsiAda.Reset & " references.bib not found.");
             end;
@@ -162,10 +242,18 @@ package body Knowledge_Manager is
 
    task body Indexing_Task is
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms task accepted Start and is running.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task waiting for Start...");
       accept Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task ACCEPTED Start, calling Index_References...");
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                 AnsiAda.Reset & " Indexing Task Active.");
       Index_References;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task Index_References DONE.");
    exception
       when E : others =>
          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" &
@@ -188,7 +276,13 @@ package body Knowledge_Manager is
    procedure Crawl_Directory (Path : String) is
       Search  : Ada.Directories.Search_Type;
       Entry_D : Ada.Directories.Directory_Entry_Type;
+      Files_Scanned : Natural := 0;
+      Files_Indexed : Natural := 0;
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: prints crawl start and stats so we can see if it runs.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory ENTERED: Path=" & Path);
       Ada.Directories.Start_Search (Search, Path, "");
       while Ada.Directories.More_Entries (Search) loop
          if Model_Manager.Should_Abort_ELP0 then
@@ -224,6 +318,15 @@ package body Knowledge_Manager is
                            end loop;
                            Close (File_H);
 
+                           --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                           --  Verbose: print every file being indexed so we
+                           --  can see if the crawl actually finds files.
+                           Files_Scanned := Files_Scanned + 1;
+                           Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                                     AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Crawl: indexing file " &
+                                     Full & " (" &
+                                     Natural'Image (Files_Scanned) & " scanned)");
+
                            declare
                               Raw_Content : constant String :=
                                 To_String (File_Content);
@@ -255,16 +358,38 @@ package body Knowledge_Manager is
          end;
       end loop;
       Ada.Directories.End_Search (Search);
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: prints crawl completion stats.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory COMPLETE: Path=" & Path &
+                " Files_Scanned=" & Natural'Image (Files_Scanned));
    end Crawl_Directory;
 
    task body Native_Crawl_Task is
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms task accepted Start and is running.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Native_Crawl_Task waiting for Start...");
       accept Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Native_Crawl_Task ACCEPTED Start, entering main loop.");
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                 AnsiAda.Reset & " Native Crawl Task Active.");
       loop
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: prints BEFORE blocking on Wait_For_ELP1_Idle so we can
+         --  see if the task is stuck on the guard condition.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: calling Wait_For_ELP1_Idle...");
          Model_Manager.Wait_For_ELP1_Idle;
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: prints AFTER guard passes so we know it unblocked.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: Wait_For_ELP1_Idle PASSED, starting crawl...");
          Crawl_Directory (".");
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: crawl DONE, sleeping 3600s...");
          delay 3600.0; -- Crawl every hour
       end loop;
    exception
@@ -312,7 +437,13 @@ package body Knowledge_Manager is
 
    task body Proactive_Cache_Task is
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms task accepted Start and is running.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Proactive_Cache_Task waiting for Start...");
       accept Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Proactive_Cache_Task ACCEPTED Start, entering main loop.");
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                 AnsiAda.Reset & " Proactive Cache Task Active.");
       loop
