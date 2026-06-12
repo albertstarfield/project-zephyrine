@@ -1,6 +1,6 @@
 pragma SPARK_Mode (Off);
 with AnsiAda;
-with Ada.Text_IO;
+with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
@@ -236,21 +236,25 @@ package body Adelaide_Server_Pkg is
    Is_External_Agent : Boolean := False;
 
    --------------
-    function Dispatch
-      (Request : AWS.Status.Data) return AWS.Response.Data
-    is
-        --  UserAgent=FuzzyMatch: Behavioural patch for external agent detection.
-        --  External agent apps (OpenCode, OpenWebUI, etc.) send structured
-        --  chat completions requests but expect raw LLM output, not our
-        --  personality pipeline. Fuzzy matching the User-Agent against known
-        --  agent signatures at 0.7 threshold lets us bypass the personality
-        --  orchestrator and passthrough raw inference.
-         URI    : constant String := AWS.Status.URI (Request);
-         UA     : constant String := AWS.Status.User_Agent (Request);
-         Match_Score : Float := 0.0;
-         Best_Match_Name : Unbounded_String := To_Unbounded_String ("(none)");
-      begin
-         --  Fuzzy match User-Agent against known external agents (Status Quo mode)
+     function Dispatch
+       (Request : AWS.Status.Data) return AWS.Response.Data
+     is
+         --  UserAgent=FuzzyMatch: Behavioural patch for external agent detection.
+         --  External agent apps (OpenCode, OpenWebUI, etc.) send structured
+         --  chat completions requests but expect raw LLM output, not our
+         --  personality pipeline. Fuzzy matching the User-Agent against known
+         --  agent signatures at 0.7 threshold lets us bypass the personality
+         --  orchestrator and passthrough raw inference.
+          URI    : constant String := AWS.Status.URI (Request);
+          UA     : constant String := AWS.Status.User_Agent (Request);
+          Match_Score : Float := 0.0;
+          Best_Match_Name : Unbounded_String := To_Unbounded_String ("(none)");
+       begin
+          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+          --  Verbose: confirms Dispatch was called and shows which URI.
+          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Dispatch-V]" &
+                    AnsiAda.Reset & " Dispatch ENTERED: URI=" & URI);
+          --  Fuzzy match User-Agent against known external agents (Status Quo mode)
          declare
             Known_Agents : constant array (1 .. 16) of String (1 .. 12) :=
               ("OpenCode    ", "OpenClaw    ", "Hermes      ", "VSCode      ",
