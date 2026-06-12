@@ -17,4 +17,8 @@ package Watchdog_IPC is
    --  Overwrites run/adelaide_server.heartbeat with the current monotonic time.
    --  Called from the server main loop every ~1 s.
 
+   procedure Write_Exit_Reason (Reason : String; Signal_Or_Code : Integer);
+   --  Writes an explicit exit reason and exit code/signal to run/adelaide_server.exit_reason
+   --  before the server terminates.
+
 end Watchdog_IPC;

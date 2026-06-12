@@ -44,7 +44,8 @@ with ELP_Queue;
 --
 --  [QUIRK-S04] [macOS] Moonshine model path
 --  The Moonshine STT model is loaded from a hardcoded relative path:
---    "../moonshine/models/download.moonshine.ai/model/medium-streaming-en/quantized"
+--    "../moonshine/models/download.moonshine.ai/model/medium-streaming-en/" &
+--    "quantized"
 --  LINUX-COMPAT: This path is the same on Linux, but the model files may
 --  reside at a different location.  The path is relative to the CWD at
 --  startup (Adelaide_Lite/ when run via run.py).
@@ -66,7 +67,8 @@ begin
       Put_Line ("/_/  |_\__,_/\___/_/\__,_/_/\__,_/\___/ ");
       Put_Line ("");
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-                AnsiAda.Reset & " Initializing Adelaide Intelligence Backend...");
+                AnsiAda.Reset &
+                " Initializing Adelaide Intelligence Backend...");
       Model_Manager.Initialize;
       Knowledge_Manager.Initialize;
       Scheduler_Manager.Initialize;
@@ -75,19 +77,22 @@ begin
       Watchdog_IPC.Init;
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-                AnsiAda.Reset & " Connecting to Kokoro-ONNX sidecar (TTS)...");
-      --  Kokoro does not require C-level init in Ada since it runs on Python Sidecar
+                AnsiAda.Reset &
+                " Connecting to Kokoro-ONNX sidecar (TTS)...");
+      --  Kokoro does not require C-level init in Ada since it runs on Python
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Initializing Moonshine (STT)...");
       Moonshine_Interface.Init_Moonshine
-        ("../moonshine/models/download.moonshine.ai/model/medium-streaming-en/quantized");
+        ("../moonshine/models/download.moonshine.ai/model/" &
+         "medium-streaming-en/quantized");
 
       AWS.Config.Set.Server_Port (Conf, 11420);
       AWS.Config.Set.Server_Host (Conf, "0.0.0.0");
       AWS.Config.Set.Reuse_Address (Conf, True);
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-                AnsiAda.Reset & " Adelaide-Lite Server starting on port 11420...");
+                AnsiAda.Reset &
+                " Adelaide-Lite Server starting on port 11420...");
 
       while not Started and then Retry_Count < Max_Retries loop
          begin
@@ -124,32 +129,38 @@ begin
       Knowledge_Manager.Start_Tasks;
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-                AnsiAda.Reset & " Server is UP. Press Q to shutdown (or kill if background).");
+                AnsiAda.Reset &
+                " Server is UP. Press Q to shutdown (or kill if background).");
 
       --  Queue heartbeat counter
-      Heartbeat_Count : Natural := 0;
-
-      --  Avoid Get_Line failure in background
-      loop
-         Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
-         Watchdog_IPC.Write_Heartbeat;
-         Heartbeat_Count := Heartbeat_Count + 1;
-         if Heartbeat_Count >= 5 then
-            Heartbeat_Count := 0;
-            Ada.Text_IO.Put_Line
-              (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-               AnsiAda.Reset & " ELP Queue: " &
-               ELP_Queue.Utilization'Img & "% full (" &
-               ELP_Queue.Depth'Img & " pending)");
-         end if;
-         delay 1.0;
-      end loop;
+      declare
+         Heartbeat_Count : Natural := 0;
+      begin
+         --  Avoid Get_Line failure in background
+         loop
+            Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
+            Watchdog_IPC.Write_Heartbeat;
+            Heartbeat_Count := Heartbeat_Count + 1;
+            if Heartbeat_Count >= 5 then
+               Heartbeat_Count := 0;
+               Ada.Text_IO.Put_Line
+                 (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+                  AnsiAda.Reset & " ELP Queue: " &
+                  ELP_Queue.Utilization'Img & "% full (" &
+                  ELP_Queue.Depth'Img & " pending)");
+            end if;
+            delay 1.0;
+         end loop;
+      end;
 
    exception
       when E : others =>
          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" &
                    AnsiAda.Reset & " Server Error: " &
                    Ada.Exceptions.Exception_Message (E));
+         Watchdog_IPC.Write_Exit_Reason
+           ("Exception: " & Ada.Exceptions.Exception_Message (E), -1);
          Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
    end;
+   Watchdog_IPC.Write_Exit_Reason ("Clean Shutdown", 0);
 end Adelaide_Server;
