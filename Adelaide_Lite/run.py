@@ -385,15 +385,19 @@ def main():
     server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
 
     # Launch external watchdog process (separate binary, monitors server health)
+    # [DO NOT REMOVE THIS] LAUNCH GUARD: Set orchestration flag so watchdog
+    # knows it was launched through run.py (prevents direct binary execution).
     watchdog_bin = "adelaide_watchdog.exe" if platform.system() == "Windows" else "adelaide_watchdog"
     watchdog_path = os.path.join(BASE_DIR, "bin", watchdog_bin)
     if os.path.exists(watchdog_path):
         print("[*] Booting Adelaide Watchdog...")
+        watchdog_env = env.copy()
+        watchdog_env["ADLAIDE_WATCHDOG_ORCHESTRATED"] = "1"
         if shutil.which("alr"):
-            watchdog_process = subprocess.Popen(["alr", "exec", "--", watchdog_path], cwd=BASE_DIR, env=env,
+            watchdog_process = subprocess.Popen(["alr", "exec", "--", watchdog_path], cwd=BASE_DIR, env=watchdog_env,
                                                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         else:
-            watchdog_process = subprocess.Popen([watchdog_path], cwd=BASE_DIR, env=env,
+            watchdog_process = subprocess.Popen([watchdog_path], cwd=BASE_DIR, env=watchdog_env,
                                                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     else:
         print("[!] Watchdog binary not found at", watchdog_path, "- skipping")
