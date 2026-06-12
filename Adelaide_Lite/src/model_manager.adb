@@ -153,12 +153,11 @@ package body Model_Manager is
                       " === VIRTUAL CONTEXT STATUS (5s) ===");
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
-                      " Virtual Ctx: Cap=" &
-                      Interfaces.Unsigned_64'Image (VC_Capacity) &
-                      " (2^63) | Occupied=" &
+                      " ELP Queue: " &
                       Long_Long_Integer'Image (VC_Depth) &
-                      " | Util=" &
-                      Long_Long_Float'Image (VC_Util) & "%");
+                      " /" &
+                      Interfaces.Unsigned_64'Image (VC_Capacity) &
+                      " pending");
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
                       " Context Fault Division Page:");
