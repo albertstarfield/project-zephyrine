@@ -33,8 +33,11 @@
 # Project specific volatile
 **/ollama_data/
 **.tmp**
+**.pid**
+**.heartbeat**
 server_log.txt
 server_run_log.txt
 test_results.txt
 agenticinst.txt
 cinst.txt
+**GE**.md
