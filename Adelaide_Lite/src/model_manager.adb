@@ -1578,12 +1578,25 @@ package body Model_Manager is
    begin
       T0 := Ada.Calendar.Clock;
 
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & " Hybrid_Generate ENTERED. Level=" &
+                ELP_Level'Image (Level) & " Stream=" &
+                (if Stream /= null then "YES" else "NO") &
+                " Agentic=" & Boolean'Image (Agentic) &
+                " External=" & Boolean'Image (External_Agent));
+
       --  Save last user prompt for ELP0 proactive cache speculation
       if Level /= ELP0 then
          Last_User_Prompt := To_Unbounded_String (Prompt);
       end if;
 
       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & " Hybrid_Generate: Embedding computed. Len=" &
+                Natural'Image (Emb_Len));
 
       --  EXTERNAL AGENT PASSTHROUGH: If User-Agent fuzzy-matched an external
       --  agent app (0.7+ threshold), bypass personality pipeline.
@@ -1643,6 +1656,10 @@ package body Model_Manager is
          SC_Res : constant String :=
            Speculative_Cache.Proactive_Cache.Lookup (Prompt);
       begin
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                   AnsiAda.Reset & " Hybrid_Generate: Speculative_Cache lookup. Hit=" &
+                   Boolean'Image (SC_Res /= ""));
          if not External_Agent and then SC_Res /= "" then
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
                       "[Hybrid]" & AnsiAda.Reset &
@@ -1664,6 +1681,10 @@ package body Model_Manager is
            ELP_Level'Image (Level) & " priority. Session: " &
            Session_ID & ASCII.LF);
       end if;
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & " Hybrid_Generate: Starting reasoning chain loop.");
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
                 "[Hybrid]" & AnsiAda.Reset &
@@ -1827,13 +1848,22 @@ package body Model_Manager is
                   Last_Heartbeat := H_Now;
                end if;
             end;
-            Put_Line (" [Hybrid] Hop" & Current_Hop'Img &
-                      ": Decision routing...");
-            Generate
-              (Qwen_9B,
-               Get_Router_Prompt,
-               Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
-               null, False, Level);
+             Put_Line (" [Hybrid] Hop" & Current_Hop'Img &
+                       ": Decision routing...");
+             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                       AnsiAda.Reset & " Hybrid_Generate: Hop" &
+                       Current_Hop'Img & " calling Generate for router...");
+             Generate
+               (Qwen_9B,
+                Get_Router_Prompt,
+                Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
+                null, False, Level);
+             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                       AnsiAda.Reset & " Hybrid_Generate: Hop" &
+                       Current_Hop'Img & " Generate returned. Len=" &
+                       Natural'Image (Length (Step_Raw)));
 
             declare
                Step : constant String :=
@@ -1871,7 +1901,10 @@ package body Model_Manager is
                                      Ada.Strings.Both);
                               begin
                                  if T_Name = "schedule" then
-                                    declare
+                                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                                     Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                                               AnsiAda.Reset & " Hybrid_Generate: Tool=schedule, Params=" & T_Pars);
+                                     declare
                                        Comma_Idx : constant Natural :=
                                          Index (T_Pars, ",");
                                     begin
@@ -1899,11 +1932,15 @@ package body Model_Manager is
                                           end;
                                        end if;
                                     end;
-                                 elsif T_Pars'Length < 256 and then
-                                   Index (To_String (Internal_State),
-                                     T_Name & "(" & T_Pars & ")") = 0
-                                 then
-                                    if Agentic then
+                                  elsif T_Pars'Length < 256 and then
+                                    Index (To_String (Internal_State),
+                                      T_Name & "(" & T_Pars & ")") = 0
+                                  then
+                                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                                     Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                                               AnsiAda.Reset & " Hybrid_Generate: Executing tool=" &
+                                               T_Name & " params=" & T_Pars);
+                                     if Agentic then
                                        Result := To_Unbounded_String
                                          ("[TOOL_CALL: " & T_Name &
                                           "(" & T_Pars & ")]");
@@ -2064,17 +2101,26 @@ package body Model_Manager is
                   end if;
                end if;
 
-               Generate
-                 (Kind            => Qwen_9B,
-                  Prompt          => Get_Final_Prompt,
-                  Result          => Fault_Result,
-                  Images          => Images,
-                  Session_ID      => Session_ID,
-                  Requested_Ctx   => 8192,
-                  Stream          => Stream,
-                  Orch_Think_Open => (Hop_Count = 0),
-                  Level           => Level);
-               F_Detected := False;
+                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                          AnsiAda.Reset & " Hybrid_Generate: Final generation. Hop=" &
+                          Natural'Image (Hop_Count) & " Len=" &
+                          Natural'Image (Get_Final_Prompt'Length));
+                Generate
+                  (Kind            => Qwen_9B,
+                   Prompt          => Get_Final_Prompt,
+                   Result          => Fault_Result,
+                   Images          => Images,
+                   Session_ID      => Session_ID,
+                   Requested_Ctx   => 8192,
+                   Stream          => Stream,
+                   Orch_Think_Open => (Hop_Count = 0),
+                   Level           => Level);
+                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                          AnsiAda.Reset & " Hybrid_Generate: Final Generate returned. Len=" &
+                          Natural'Image (Length (Fault_Result)));
+                F_Detected := False;
 
                if F_Detected then
                   declare
@@ -2137,6 +2183,12 @@ package body Model_Manager is
            Index (Resp_Str, "<thinking>") > 0 or else
            Index (Resp_Str, "<think>") > 0;
       begin
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                   AnsiAda.Reset & " Hybrid_Generate: COMPLETE. ResultLen=" &
+                   Natural'Image (Length (Result)) & " Error=" &
+                   Boolean'Image (Is_Error) & " HasThink=" &
+                   Boolean'Image (Has_Think));
          if not External_Agent and then not Is_Error and then
            not Has_Think
          then

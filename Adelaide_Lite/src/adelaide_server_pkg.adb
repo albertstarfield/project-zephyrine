@@ -181,6 +181,10 @@ package body Adelaide_Server_Pkg is
       end Start;
 
       begin
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+               "[Dispatch-V]" & AnsiAda.Reset &
+               " Generator_Task: Starting Hybrid_Generate...");
          Model_Manager.Hybrid_Generate
            (Prompt         => To_String (P),
             Result         => Res,
@@ -189,6 +193,11 @@ package body Adelaide_Server_Pkg is
             Agentic        => Is_Ag,
             Raw_Prompt     => Is_Raw,
             External_Agent => Is_Ext);
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+               "[Dispatch-V]" & AnsiAda.Reset &
+               " Generator_Task: Hybrid_Generate returned. ResLen=" &
+               Natural'Image (Length (Res)));
       exception
          when E : others =>
             Ada.Text_IO.Put_Line ("Generator Task Error: " &
