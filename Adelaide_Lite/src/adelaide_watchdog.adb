@@ -1,7 +1,9 @@
 pragma SPARK_Mode (Off);
---
+
+--  [DO NOT REMOVE THIS]
+--  ===========================================================================
 --  Adelaide Watchdog — Separate Process Monitor
---
+--  ===========================================================================
 --  A dedicated external process that monitors the health of the
 --  main adelaide_server process.  If the server dies (e.g. from
 --  a Kratos-escaped SIGTRAP, kernel OOM, etc.) or its heartbeat
@@ -9,16 +11,26 @@ pragma SPARK_Mode (Off);
 --
 --  Communication: file-based IPC via the run/ directory.
 --
---  Usage:
---    bin/adelaide_watchdog           # start watchdog (monitors)
---    bin/adelaide_watchdog --oneshot # single health-check, exit with status
---
+--  [DO NOT REMOVE THIS] LAUNCH GUARD:
+--  This watchdog MUST be launched exclusively through run.py (or run.sh).
+--  Direct execution of bin/adelaide_watchdog is PROHIBITED because it
+--  bypasses the orchestration layer that manages:
+--    - Environment setup (DYLD_LIBRARY_PATH for onnxruntime)
+--    - Server process lifecycle (PID tracking, graceful shutdown)
+--    - Health ping coordination (startup watchdog timeout)
+--    - Resource cleanup on exit (SIGTERM propagation)
+--  Running the watchdog directly will cause orphaned processes, broken
+--  health monitoring, and resource leaks.  run.py sets the environment
+--  variable ADLAIDE_WATCHDOG_ORCHESTRATED=1 before spawning this process.
+--  If that variable is not present, this binary will refuse to start.
+--  ===========================================================================
 
 with Ada.Text_IO;           use Ada.Text_IO;
 with Ada.Exceptions;        use Ada.Exceptions;
 with Ada.Directories;       use Ada.Directories;
 with Ada.Real_Time;         use Ada.Real_Time;
 with Ada.Command_Line;
+with Ada.Environment_Variables;
 with GNAT.OS_Lib;           use GNAT.OS_Lib;
 
 procedure Adelaide_Watchdog is
@@ -203,6 +215,23 @@ procedure Adelaide_Watchdog is
 
 --  Program start
 begin
+   --  [DO NOT REMOVE THIS] LAUNCH GUARD
+   --  Refuse to run if not launched through run.py orchestration.
+   --  This prevents orphaned processes, broken health monitoring, and
+   --  resource leaks from direct binary execution.
+   if not Ada.Environment_Variables.Exists ("ADLAIDE_WATCHDOG_ORCHESTRATED") then
+      Put_Line (Standard_Error,
+        "[Watchdog] FATAL: Cannot run adelaide_watchdog directly.");
+      Put_Line (Standard_Error,
+        "[Watchdog] This binary MUST be launched through run.py (or run.sh).");
+      Put_Line (Standard_Error,
+        "[Watchdog] Direct execution bypasses orchestration and causes resource leaks.");
+      Put_Line (Standard_Error,
+        "[Watchdog] Use: ./run.py --no-gui   OR   python3 run.py");
+      Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
+      return;
+   end if;
+
    --  Parse --oneshot flag
    if Ada.Command_Line.Argument_Count > 0
      and then Ada.Command_Line.Argument (1) = "--oneshot"
