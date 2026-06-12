@@ -137,17 +137,17 @@ package body Model_Manager is
    --  PRIORITY MODEL GATE:
    --  Manages access to the model contexts.
    --  ELP1 requests (User Interactions) preempt running ELP0 requests (Background Tasks).
-    protected Priority_Model_Gate is
-       procedure Request_ELP1;
-       entry Acquire_ELP1 (Model_Type);
-       procedure Release_ELP1 (Kind : Model_Type);
-       entry Acquire_ELP0 (Model_Type) (Success : out Boolean);
-       procedure Release_ELP0 (Kind : Model_Type);
-       procedure Try_Acquire_For_Cleanup (Kind : Model_Type; Success : out Boolean);
-       function Should_Abort return Boolean;
-       function Is_ELP0_Owner (Kind : Model_Type) return Boolean;
-       entry Wait_For_ELP1_Idle;
-       procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural);
+   protected Priority_Model_Gate is
+      procedure Request_ELP1;
+      entry Acquire_ELP1 (Model_Type);
+      procedure Release_ELP1 (Kind : Model_Type);
+      entry Acquire_ELP0 (Model_Type) (Success : out Boolean);
+      procedure Release_ELP0 (Kind : Model_Type);
+      procedure Try_Acquire_For_Cleanup (Kind : Model_Type; Success : out Boolean);
+      function Should_Abort return Boolean;
+      function Is_ELP0_Owner (Kind : Model_Type) return Boolean;
+      entry Wait_For_ELP1_Idle;
+      procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural);
    private
       ELP1_Pending      : Natural := 0;
       ELP1_Active_Count : Natural := 0;
@@ -168,61 +168,65 @@ package body Model_Manager is
       end Release;
    end Metal_Lock_Object;
 
-    protected body Priority_Model_Gate is
-       procedure Request_ELP1 is
-       begin
-          ELP1_Pending := ELP1_Pending + 1;
-          Put_Line ("[ELP1-REQUEST] Pending ELP1 requests: " & ELP1_Pending'Img);
-       end Request_ELP1;
-
-       entry Acquire_ELP1 (for K in Model_Type) when not Busy (K) is
-       begin
-          ELP1_Pending := ELP1_Pending - 1;
-          Busy (K) := True;
-          Owner (K) := ELP1;
-          ELP1_Active_Count := ELP1_Active_Count + 1;
-          Put_Line ("[ELP1-ACQUIRED] " & K'Img & " | Active: " & ELP1_Active_Count'Img & 
-                    " | Pending: " & ELP1_Pending'Img);
-       end Acquire_ELP1;
-
-       procedure Release_ELP1 (Kind : Model_Type) is
-       begin
-          Busy (Kind) := False;
-          Owner (Kind) := ELP0;
-          if ELP1_Active_Count > 0 then
-             ELP1_Active_Count := ELP1_Active_Count - 1;
-          end if;
-          Put_Line ("[ELP1-RELEASED] " & Kind'Img & " | Active: " & ELP1_Active_Count'Img & 
-                    " | Pending: " & ELP1_Pending'Img);
-       end Release_ELP1;
-
-       entry Acquire_ELP0 (for K in Model_Type) (Success : out Boolean)
-          when (not Busy (K)
-            or else ELP1_Pending > 0
-            or else ELP1_Active_Count > 0)
-            and then not (On_Battery_State and Battery_Level < 80) is
-       begin
-          if ELP1_Pending > 0 or else ELP1_Active_Count > 0 then
-             Success := False;
-             Put_Line ("[ELP0-DENIED] " & K'Img & " | ELP1 Pending: " & ELP1_Pending'Img & 
-                       " | ELP1 Active: " & ELP1_Active_Count'Img);
-          else
-             Busy (K) := True;
-             Owner (K) := ELP0;
-             Success := True;
-             Put_Line ("[ELP0-ACQUIRED] " & K'Img);
-          end if;
-       end Acquire_ELP0;
-
-       procedure Release_ELP0 (Kind : Model_Type) is
-       begin
-          Busy (Kind) := False;
-          Put_Line ("[ELP0-RELEASED] " & Kind'Img);
-       end Release_ELP0;
-
-      procedure Try_Acquire_For_Cleanup (Kind : Model_Type; Success : out Boolean) is
+   protected body Priority_Model_Gate is
+      procedure Request_ELP1 is
       begin
-         if Busy (Kind) or else ELP1_Pending > 0 or else ELP1_Active_Count > 0 then
+         ELP1_Pending := ELP1_Pending + 1;
+         Put_Line ("[ELP1-REQUEST] Pending ELP1 requests: " & ELP1_Pending'Img);
+      end Request_ELP1;
+
+      entry Acquire_ELP1 (for K in Model_Type) when not Busy (K) is
+      begin
+         ELP1_Pending := ELP1_Pending - 1;
+         Busy (K) := True;
+         Owner (K) := ELP1;
+         ELP1_Active_Count := ELP1_Active_Count + 1;
+         Put_Line ("[ELP1-ACQUIRED] " & K'Img & " | Active: " &
+                   ELP1_Active_Count'Img & " | Pending: " & ELP1_Pending'Img);
+      end Acquire_ELP1;
+
+      procedure Release_ELP1 (Kind : Model_Type) is
+      begin
+         Busy (Kind) := False;
+         Owner (Kind) := ELP0;
+         if ELP1_Active_Count > 0 then
+            ELP1_Active_Count := ELP1_Active_Count - 1;
+         end if;
+         Put_Line ("[ELP1-RELEASED] " & Kind'Img & " | Active: " &
+                   ELP1_Active_Count'Img & " | Pending: " & ELP1_Pending'Img);
+      end Release_ELP1;
+
+      entry Acquire_ELP0 (for K in Model_Type) (Success : out Boolean)
+        when (not Busy (K)
+          or else ELP1_Pending > 0
+          or else ELP1_Active_Count > 0)
+          and then (not On_Battery_State or else Battery_Level >= 80) is
+      begin
+         if ELP1_Pending > 0 or else ELP1_Active_Count > 0 then
+            Success := False;
+            Put_Line ("[ELP0-DENIED] " & K'Img & " | ELP1 Pending: " &
+                      ELP1_Pending'Img & " | ELP1 Active: " &
+                      ELP1_Active_Count'Img);
+         else
+            Busy (K) := True;
+            Owner (K) := ELP0;
+            Success := True;
+            Put_Line ("[ELP0-ACQUIRED] " & K'Img);
+         end if;
+      end Acquire_ELP0;
+
+      procedure Release_ELP0 (Kind : Model_Type) is
+      begin
+         Busy (Kind) := False;
+         Put_Line ("[ELP0-RELEASED] " & Kind'Img);
+      end Release_ELP0;
+
+      procedure Try_Acquire_For_Cleanup
+        (Kind : Model_Type; Success : out Boolean) is
+      begin
+         if Busy (Kind) or else ELP1_Pending > 0 or else
+           ELP1_Active_Count > 0
+         then
             Success := False;
          else
             Busy (Kind) := True;
@@ -231,44 +235,39 @@ package body Model_Manager is
          end if;
       end Try_Acquire_For_Cleanup;
 
-       --  Returns True when an ELP1 (user) request is pending or active.
-       --  Called from Llama_Abort_Callback (inside llama.cpp's decode loop)
-       --  and from post-decode abort checks in Generate/Hybrid_Generate.
-       --  The [ELP0-ABORT-CHECK] log fires from the callback — it is NORMAL
-       --  to see many of these during active decode; it does NOT mean a
-       --  deadlock.  The deadlock was caused by ELP0 tasks polling this
-       --  instead of suspending on Wait_For_ELP1_Idle (now fixed).
-       function Should_Abort return Boolean is
-          Result : constant Boolean := ELP1_Pending > 0 or else ELP1_Active_Count > 0
-            or else (On_Battery_State and Battery_Level < 80);
-       begin
-          if Result then
-             Put_Line ("[ELP0-ABORT-CHECK] ABORTING | ELP1 Pending: " & ELP1_Pending'Img & 
-                       " | ELP1 Active: " & ELP1_Active_Count'Img &
-                       " | Battery: " & Battery_Level'Img);
-          end if;
-          return Result;
-       end Should_Abort;
+      --  Returns True when an ELP1 (user) request is pending or active.
+      --  Called from Llama_Abort_Callback (inside llama.cpp's decode loop)
+      --  and from post-decode abort checks in Generate/Hybrid_Generate.
+      --  The [ELP0-ABORT-CHECK] log fires from the callback — it is NORMAL
+      --  to see many of these during active decode; it does NOT mean a
+      --  deadlock.  The deadlock was caused by ELP0 tasks polling this
+      --  instead of suspending on Wait_For_ELP1_Idle (now fixed).
+      function Should_Abort return Boolean is
+      begin
+         return ELP1_Pending > 0 or else ELP1_Active_Count > 0
+           or else (On_Battery_State and Battery_Level < 80);
+      end Should_Abort;
 
-       function Is_ELP0_Owner (Kind : Model_Type) return Boolean is
-       begin
-          return Owner (Kind) = ELP0;
-       end Is_ELP0_Owner;
+      function Is_ELP0_Owner (Kind : Model_Type) return Boolean is
+      begin
+         return Owner (Kind) = ELP0;
+      end Is_ELP0_Owner;
 
-       --  Barrier: ELP0 tasks block here until all ELP1 requests have completed.
-       --  See Wait_For_ELP1_Idle spec in model_manager.ads for full explanation.
-       entry Wait_For_ELP1_Idle when (ELP1_Pending = 0 and ELP1_Active_Count = 0)
-         and then not (On_Battery_State and Battery_Level < 80) is
-       begin
-          null;
-       end Wait_For_ELP1_Idle;
+      --  Barrier: ELP0 tasks block here until all ELP1 requests have completed.
+      --  See Wait_For_ELP1_Idle spec in model_manager.ads for full explanation.
+      entry Wait_For_ELP1_Idle when (ELP1_Pending = 0 and
+        ELP1_Active_Count = 0)
+        and then (not On_Battery_State or else Battery_Level >= 80) is
+      begin
+         null;
+      end Wait_For_ELP1_Idle;
 
-       procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
-       begin
-          On_Battery_State := On_Battery;
-          Battery_Level := Level;
-       end Set_Power_Condition;
-    end Priority_Model_Gate;
+      procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
+      begin
+         On_Battery_State := On_Battery;
+         Battery_Level := Level;
+      end Set_Power_Condition;
+   end Priority_Model_Gate;
 
    --  IDLE MONITOR:
    --  Unloads models after 30 seconds of inactivity to free VRAM.
@@ -288,26 +287,27 @@ package body Model_Manager is
       loop
          Next_Check := Clock + Interval;
          Now := Clock;
-           for Kind in Model_Type loop
-              --  [QUIRK-FIX] [macOS] Keep QWEN_0_8B permanently loaded to avoid
-              --  ggml-metal GPU buffer race during Llama_Free/Unload_Model.
-              --  The 0.8B model costs only ~0.5-0.6GB VRAM at Q4_K_S.
-              --  [Linux/Android-Termux] REMOVE this exemption guard to unload
-              --  QWEN_0_8B aggressively on memory-constrained devices.
-              --  See QUIRK-M03 / QUIRK-S01 for crash details.
-             if Kind = Qwen_0_8B then
-                null;
-             elsif Models (Kind).Loaded and then
-                not Models (Kind).In_Use and then
-                (Now - Models (Kind).Last_Used) > Timeout
-             then
+         for Kind in Model_Type loop
+            --  [QUIRK-FIX] [macOS] Keep QWEN_0_8B permanently loaded to avoid
+            --  ggml-metal GPU buffer race during Llama_Free/Unload_Model.
+            --  The 0.8B model costs only ~0.5-0.6GB VRAM at Q4_K_S.
+            --  [Linux/Android-Termux] REMOVE this exemption guard to unload
+            --  QWEN_0_8B aggressively on memory-constrained devices.
+            --  See QUIRK-M03 / QUIRK-S01 for crash details.
+            if Kind = Qwen_0_8B then
+               null;
+            elsif Models (Kind).Loaded and then
+              not Models (Kind).In_Use and then
+              (Now - Models (Kind).Last_Used) > Timeout
+            then
                Priority_Model_Gate.Try_Acquire_For_Cleanup (Kind, Cleanup_OK);
                if Cleanup_OK then
                   Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Idle]" &
                             AnsiAda.Reset & " Unloading " &
                             Model_Type'Image (Kind));
                   Unload_Model (Kind);
-                  Priority_Model_Gate.Release_ELP1 (Kind); -- Match Acquire_For_Cleanup
+                  --  Match Acquire_For_Cleanup
+                  Priority_Model_Gate.Release_ELP1 (Kind);
                end if;
             end if;
          end loop;
@@ -342,91 +342,123 @@ package body Model_Manager is
      (Kind          : Model_Type;
       Success       : out Boolean;
       Requested_Ctx : Positive := 4096)
-    is
-       M_Params   : Llama_Model_Params := Llama_Model_Default_Params;
-       C_Params   : Llama_Context_Params := Llama_Context_Default_Params;
-       Actual_Ctx : unsigned;
-       
-       Base_Path  : constant String := To_String (Models (Kind).Path);
-       -- Try direct, ../ (from src/Adelaide_Lite), and ../../ (from bin)
-       Paths      : constant array (1 .. 3) of Unbounded_String :=
-         (To_Unbounded_String (Base_Path),
-          To_Unbounded_String ("../" & Base_Path),
-          To_Unbounded_String ("../../" & Base_Path));
-    begin
-       Actual_Ctx := unsigned (Requested_Ctx);
-        --  Minimum context size is 8192 for stability and headroom.
-        --  Smaller contexts (e.g., 4096) caused llama_decode assertion failures
-        --  with Qwen3.5-9B at Q4_1 KV quantization on this hardware.
-        if Actual_Ctx < 8192 then
-           Actual_Ctx := 8192;
-        end if;
-        
-        Success := False;
-        if Models (Kind).Loaded then
-           --  REUSE EXISTING CONTEXT: If the requested context size is <= the
-           --  currently loaded context, we can reuse without reloading. This is
-           --  critical for performance because each reload destroys the KV cache.
-           --  The KV cache state (PromptCache) is lost on unload, so avoid
-           --  unnecessary Unload_Model + Load_Model cycles.
-           --
-           --  QUIRK: llama_context is extremely expensive to create/destroy
-           --  (~2s for Qwen3.5-9B).  Reusing an already-loaded context with
-           --  sufficient capacity saves this cost but means the KV cache from
-           --  the previous inference is preserved until the next decode clears
-           --  it with Llama_Memory_Clear.
-           if Actual_Ctx <= Models (Kind).Current_Ctx then
-              Models (Kind).Last_Used := Clock;
-              Success := True;
-              return;
-           end if;
-           Unload_Model (Kind);
-        end if;
-  
-        Put_Line ("[+] Loading " & Model_Type'Image (Kind) &
-                  " (N_CTX=" & Actual_Ctx'Img & ")");
-        M_Params.N_Gpu_Layers := -1;
-        
-        --  TRY THREE PATHS FOR MODEL FILES
-        --  The CWD at runtime is unpredictable:
-        --    1. Direct path (when run from project root or Adadelaide_Lite/)
-        --    2. ../ prefixed (when CWD is src/)
-        --    3. ../../ prefixed (when CWD is bin/)
-        --  This fallback loop handles all common launch configurations
-        --  without requiring a fixed working directory.
-        for I in Paths'Range loop
-          declare
-             Path_Str : constant String := To_String (Paths (I));
-          begin
-             if Ada.Directories.Exists (Path_Str) then
-                declare
-                   Path_C : chars_ptr := New_String (Path_Str);
-                begin
-                   begin
-                      Models (Kind).Model := Llama_Model_Load_From_File (Path_C, M_Params);
-                   exception
-                      when others =>
-                         Put_Line ("[!] Exception caught in Ada during Llama_Model_Load_From_File");
-                         Models (Kind).Model := Null_Model;
-                   end;
-                   Free (Path_C);
-                   if Models (Kind).Model /= Null_Model then
-                      exit;
-                   end if;
-                end;
-             end if;
-          end;
-       end loop;
- 
-       if Models (Kind).Model /= Null_Model then
+   is
+      M_Params   : Llama_Model_Params := Llama_Model_Default_Params;
+      C_Params   : Llama_Context_Params := Llama_Context_Default_Params;
+      Actual_Ctx : unsigned;
+
+      Base_Path  : constant String := To_String (Models (Kind).Path);
+      -- Try direct, ../ (from src/Adelaide_Lite), and ../../ (from bin)
+      Paths      : constant array (1 .. 3) of Unbounded_String :=
+        (To_Unbounded_String (Base_Path),
+         To_Unbounded_String ("../" & Base_Path),
+         To_Unbounded_String ("../../" & Base_Path));
+   begin
+      Actual_Ctx := unsigned (Requested_Ctx);
+      --  Minimum context size is 8192 for stability and headroom.
+      --  Smaller contexts (e.g., 4096) caused llama_decode assertion failures
+      --  with Qwen3.5-9B at Q4_1 KV quantization on this hardware.
+      if Actual_Ctx < 8192 then
+         Actual_Ctx := 8192;
+      end if;
+
+      Success := False;
+      if Models (Kind).Loaded then
+         --  REUSE EXISTING CONTEXT: If the requested context size is <= the
+         --  currently loaded context, we can reuse without reloading. This is
+         --  critical for performance because each reload destroys the KV cache.
+         --  The KV cache state (PromptCache) is lost on unload, so avoid
+         --  unnecessary Unload_Model + Load_Model cycles.
+         --
+         --  QUIRK: llama_context is extremely expensive to create/destroy
+         --  (~2s for Qwen3.5-9B).  Reusing an already-loaded context with
+         --  sufficient capacity saves this cost but means the KV cache from
+         --  the previous inference is preserved until the next decode clears
+         --  it with Llama_Memory_Clear.
+         if Actual_Ctx <= Models (Kind).Current_Ctx then
+            Models (Kind).Last_Used := Clock;
+            Success := True;
+            return;
+         end if;
+         Unload_Model (Kind);
+      end if;
+
+      Put_Line ("[+] Loading " & Model_Type'Image (Kind) &
+                " (N_CTX=" & Actual_Ctx'Img & ")");
+
+      --  [QUIRK-M10] GPU Contention & Metal Backend Analysis
+      --  ======================================================================
+      --  [VITAL-DO-NOT-REMOVE]
+      --  ANALYSIS OF llama.cpp METAL FAILURE (Code 5):
+      --  On M2 Pro, the Qwen3-Embedding model triggers MTLCommandBufferStatus-
+      --  Error (Code 5) when run on the GPU. This is likely due to:
+      --    1. Kernel Race: High-frequency indexing calls colliding with ELP1.
+      --    2. Quantization Bug: Q8_0 embeddings occasionally trigger out-of-
+      --       bounds access in specific llama.cpp Metal kernels.
+      --    3. Unified Memory Pressure: Contention during large buffer swaps.
+      --
+      --  SOLUTION:
+      --  By forcing N_Gpu_Layers := 0, we move embedding to the CPU. Since
+      --  the model is only ~600MB, the CPU performance penalty is negligible
+      --  (< 5ms), but stability is 100%. This preserves the GPU for the
+      --  heavy 9B reasoning model.
+      --  [NOTE] However, this will result in higher Power Consumption
+      --  compared to GPU or ANE execution.
+      if Kind = Qwen_Embedding then
+         Put_Line ("[VITAL] Using CPU-only for Embedding to prevent " &
+                   "Metal trap.");
+         M_Params.N_Gpu_Layers := 0;
+      else
+         M_Params.N_Gpu_Layers := -1;
+      end if;
+
+      --  TRY THREE PATHS FOR MODEL FILES
+      --  The CWD at runtime is unpredictable:
+      --    1. Direct path (when run from project root or Adadelaide_Lite/)
+      --    2. ../ prefixed (when CWD is src/)
+      --    3. ../../ prefixed (when CWD is bin/)
+      --  This fallback loop handles all common launch configurations
+      --  without requiring a fixed working directory.
+      for I in Paths'Range loop
+         declare
+            Path_Str : constant String := To_String (Paths (I));
+         begin
+            if Ada.Directories.Exists (Path_Str) then
+               declare
+                  Path_C : chars_ptr := New_String (Path_Str);
+               begin
+                  begin
+                     Models (Kind).Model :=
+                       Llama_Model_Load_From_File (Path_C, M_Params);
+                  exception
+                     when others =>
+                        Put_Line ("[!] Exception caught in Ada during " &
+                                  "Llama_Model_Load_From_File");
+                        Models (Kind).Model := Null_Model;
+                  end;
+                  Free (Path_C);
+                  if Models (Kind).Model /= Null_Model then
+                     exit;
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+
+      if Models (Kind).Model /= Null_Model then
          C_Params.N_Ctx := Actual_Ctx;
          C_Params.N_Batch := 512;
          C_Params.N_Ubatch := 512;
          C_Params.N_Threads := 8;
          C_Params.N_Threads_Batch := 8;
-         C_Params.Type_K := GGML_TYPE_Q4_1;
-         C_Params.Type_V := GGML_TYPE_Q4_1;
-         C_Params.Flash_Attn_Type := 1;
+         C_Params.Type_K := GGML_TYPE_F16;
+         C_Params.Type_V := GGML_TYPE_F16;
+
+         --  [NOTE] Disabling Flash Attention (Flash_Attn_Type := 0) was tested
+         --  but did NOT fix the "WE RAN INTO A PROBLEM" (Trace/BPT trap: 5)
+         --  crashes on the Metal backend. CPU-only override is the only fix.
+         C_Params.Flash_Attn_Type := 0;
+
          C_Params.Abort_Callback := Llama_Abort_Callback'Address;
          C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;
          Models (Kind).Context :=
@@ -499,15 +531,15 @@ package body Model_Manager is
          return False;
       end if;
       Ptr := To_Ptr (Data);
-      
+
       --  1. Abort if Watchdog has flagged a timeout for this model.
       if Watchdog_Manager.Inference_Monitor.Is_Aborted and then
-         Watchdog_Manager.Inference_Monitor.Current_Inference_Model = Ptr.all
+        Watchdog_Manager.Inference_Monitor.Current_Inference_Model = Ptr.all
       then
          return True;
       end if;
 
-      --  2. Only abort if we are an ELP0 task and an ELP1 task is pending or active.
+      --  2. Only abort if we are an ELP0 task and an ELP1 task is pending.
       return Priority_Model_Gate.Is_ELP0_Owner (Ptr.all)
         and then Priority_Model_Gate.Should_Abort;
    end Llama_Abort_Callback;
@@ -524,17 +556,17 @@ package body Model_Manager is
 
    procedure Acquire_Metal_Lock is
    begin
-     Metal_Lock_Object.Acquire;
+      Metal_Lock_Object.Acquire;
    end Acquire_Metal_Lock;
 
    procedure Release_Metal_Lock is
    begin
-     Metal_Lock_Object.Release;
+      Metal_Lock_Object.Release;
    end Release_Metal_Lock;
 
    procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
    begin
-     Priority_Model_Gate.Set_Power_Condition (On_Battery, Level);
+      Priority_Model_Gate.Set_Power_Condition (On_Battery, Level);
    end Set_Power_Condition;
 
    function Get_Kind_For_Model_Name (Name : String) return Model_Type is
@@ -605,7 +637,10 @@ package body Model_Manager is
       pragma Unreferenced (Session_ID);
    begin
       if Stream /= null then
-         Ada.Text_IO.Put_Line ("Push_Chunk called with: " & Str_Piece (Str_Piece'First .. Natural'Min(Str_Piece'Last, Str_Piece'First + 20)));
+         Ada.Text_IO.Put_Line
+           ("Push_Chunk called with: " &
+            Str_Piece (Str_Piece'First ..
+              Natural'Min (Str_Piece'Last, Str_Piece'First + 20)));
          Stream.Push (Str_Piece);
       end if;
    end Push_Chunk;
@@ -615,22 +650,40 @@ package body Model_Manager is
       return "Callback response to " & Prompt;
    end Generator_Callback;
 
-    function Sanitize_UTF8 (S : String) return String is
-       Res : Unbounded_String;
-       Val : Natural;
-    begin
-       for I in S'Range loop
-          Val := Character'Pos (S (I));
-          --  Keep only: \t (9), \n (10), \r (13), and printable ASCII (32-126)
-          --  Strip everything else: control chars, DEL (127), all non-ASCII (128+)
-          if Val = 9 or else Val = 10 or else Val = 13 or else
-            (Val >= 32 and Val <= 126)
-          then
-             Append (Res, S (I));
-          end if;
-       end loop;
-       return To_String (Res);
-    end Sanitize_UTF8;
+   function Sanitize_UTF8 (S : String) return String is
+      Res : Unbounded_String;
+      Val : Natural;
+   begin
+      for I in S'Range loop
+         Val := Character'Pos (S (I));
+         --  Keep only: \t (9), \n (10), \r (13), and printable ASCII (32-126)
+         --  Strip control chars, DEL (127), and all non-ASCII (128+)
+         if Val = 9 or else Val = 10 or else Val = 13 or else
+           (Val >= 32 and Val <= 126)
+         then
+            Append (Res, S (I));
+         end if;
+      end loop;
+      return To_String (Res);
+   end Sanitize_UTF8;
+
+   function Sanitize_Orchestration_Output (S : String) return String is
+      Res : Unbounded_String;
+      I   : Positive := S'First;
+   begin
+      while I <= S'Last loop
+         if I + 7 <= S'Last and then S (I .. I + 7) = "</think>" then
+            --  Remove </think> to prevent premature termination
+            I := I + 8;
+         elsif I + 10 <= S'Last and then S (I .. I + 10) = "</thinking>" then
+            I := I + 11;
+         else
+            Append (Res, S (I));
+            I := I + 1;
+         end if;
+      end loop;
+      return To_String (Res);
+   end Sanitize_Orchestration_Output;
 
    --  SINGLE EMBEDDING HELPER
    procedure Get_Single_Embedding
@@ -650,22 +703,37 @@ package body Model_Manager is
       N_Toks   : int;
       Clean_P  : constant String := Sanitize_UTF8 (Prompt);
       Prompt_C : chars_ptr := New_String (Clean_P);
-    begin
-       ELP_Queue.Enqueue (Level, Kind);
-       if Level = ELP0 then
-           Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
-           if not Success then
-             Put_Line ("[ELP0-BLOCKED] " & Kind'Img & " | ELP1 is active or pending");
-             ELP_Queue.Dequeue_Level (Level);
-             Length := 0;
-             Free (Prompt_C);
-             return;
-          end if;
-       else
-          Priority_Model_Gate.Request_ELP1;
-          Priority_Model_Gate.Acquire_ELP1 (Kind);
-       end if;
-      Load_Model (Kind, Success);
+
+      --  Identify source for descriptive logging
+      Source   : constant String :=
+        (if Level = ELP0 then "Knowledge-Index" else "User-RAG");
+   begin
+      --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+      --  --[Debug] DO NOT REMOVE: Critical for diagnosing Tokenization crashes.
+      Put_Line ("[Embedding-Debug] Input (" & Clean_P'Length'Img &
+                " chars): " &
+                (if Clean_P'Length > 60 then
+                   Clean_P (Clean_P'First .. Clean_P'First + 57) & "..."
+                 else Clean_P));
+      Flush;
+      --  --[Debug] DO NOT REMOVE: Descriptive source tracking
+      ELP_Queue.Enqueue (Level, Kind, Source);
+      if Level = ELP0 then
+         Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
+         if not Success then
+            Put_Line ("[ELP0-BLOCKED] " & Kind'Img &
+                      " | ELP1 is active or pending");
+            ELP_Queue.Dequeue_Level (Level);
+            Length := 0;
+            Free (Prompt_C);
+            return;
+         end if;
+      else
+         Priority_Model_Gate.Request_ELP1;
+         Priority_Model_Gate.Acquire_ELP1 (Kind);
+      end if;
+
+      Load_Model (Kind, Success, 1024);
       if not Success then
          if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Kind);
@@ -680,18 +748,28 @@ package body Model_Manager is
 
       Models (Kind).In_Use := True;
       Models (Kind).Last_Used := Clock;
-      
+
       --  Allocate token array based on actual context size
-      Tokens := new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
-      
+      Tokens := new Token_Array (1 .. 4096);
+
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-          N_Toks := Llama_Tokenize
-            (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
-             int (Tokens.all'Length), True, True);
-          Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
-                    " Prompt_Len:" & Clean_P'Length'Img &
-                    " N_Toks:" & N_Toks'Img);
-          Free (Prompt_C);
+      Acquire_Metal_Lock;
+      if Kratos.Guard_Enter = 0 then
+         N_Toks := Llama_Tokenize
+           (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
+            4096, True, True);
+         Kratos.Guard_Exit;
+      else
+         Kratos.Log_Crash;
+         N_Toks := -1;
+      end if;
+      Release_Metal_Lock;
+
+      Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
+                " Prompt_Len:" & Clean_P'Length'Img &
+                " N_Toks:" & N_Toks'Img);
+      Free (Prompt_C);
+
       if N_Toks <= 0 then
          Free_Tokens (Tokens);
          Models (Kind).In_Use := False;
@@ -707,51 +785,56 @@ package body Model_Manager is
 
       --  CHUNKED DECODING FOR EMBEDDINGS
       declare
-         Batch_Size  : constant int := int'Min (256, int (Models (Kind).Current_Ctx));
+         Batch_Size  : constant int :=
+           int'Min (256, int (Models (Kind).Current_Ctx));
          Current_Pos : int := 0;
          Tokens_Left : int := N_Toks;
       begin
          Llama_Interface.Llama_Memory_Clear
-            (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
+           (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
          Llama_Set_Embeddings (Models (Kind).Context, Interfaces.C.int (1));
-         
+
          while Tokens_Left > 0 loop
             declare
                To_Decode : constant int :=
-                 (if Tokens_Left > Batch_Size then Batch_Size else Tokens_Left);
+                 (if Tokens_Left > Batch_Size then Batch_Size
+                  else Tokens_Left);
                B : constant Llama_Batch :=
-                  Llama_Batch_Get_One
-                    (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
+                 Llama_Batch_Get_One
+                   (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
                Dec_Result : int;
             begin
-                --  KRATOS CRASH GUARD: Every llama_decode call is wrapped in
-                --  Guard_Enter/Guard_Exit.  If a signal (SIGSEGV, SIGBUS, etc.)
-                --  occurs during the C FFI call, Kratos catches it via longjmp
-                --  and Guard_Enter returns nonzero.  We then log the crash and
-                --  return -1 instead of crashing the server.  See QUIRK-M01.
-                --  LINUX-COMPAT: The guard mechanism is platform-independent
-                --  (uses sigaction + sigsetjmp/siglongjmp).  Same code works
-                --  on Linux without changes.
-                if Kratos.Guard_Enter = 0 then
-                   Dec_Result := Llama_Decode (Models (Kind).Context, B);
-                   Kratos.Guard_Exit;
-                else
-                   Kratos.Log_Crash;
-                   Dec_Result := -1;
-                end if;
-                 if Dec_Result /= 0 then
-                   Free_Tokens (Tokens);
-                   Models (Kind).In_Use := False;
-                   if Level = ELP0 then
-                      Priority_Model_Gate.Release_ELP0 (Kind);
-                   else
-                      Priority_Model_Gate.Release_ELP1 (Kind);
-                   end if;
-                   declare D : ELP_Level; K : Model_Type;
-                   begin ELP_Queue.Dequeue (D, K); end;
-                   Length := 0;
-                   return;
-                end if;
+               --  KRATOS CRASH GUARD: llama_decode is wrapped in
+               --  Guard_Enter/Guard_Exit. See QUIRK-M01.
+               Acquire_Metal_Lock;
+               if Kratos.Guard_Enter = 0 then
+                  Dec_Result := Llama_Decode (Models (Kind).Context, B);
+                  Kratos.Guard_Exit;
+               else
+                  Kratos.Log_Crash;
+                  Dec_Result := -1;
+               end if;
+               Release_Metal_Lock;
+
+               if Dec_Result /= 0 then
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
+                            "[FATAL] GPU Backend Error (Code:" &
+                            Dec_Result'Img & ")" & AnsiAda.Reset);
+                  Put_Line ("[+] Waiting for GPU driver cooldown (2s)...");
+                  delay 2.0;
+                  Unload_Model (Kind);
+
+                  Free_Tokens (Tokens);
+                  Models (Kind).In_Use := False;
+                  if Level = ELP0 then
+                     Priority_Model_Gate.Release_ELP0 (Kind);
+                  else
+                     Priority_Model_Gate.Release_ELP1 (Kind);
+                  end if;
+                  ELP_Queue.Dequeue_Level (Level);
+                  Length := 0;
+                  return;
+               end if;
                Tokens_Left := Tokens_Left - To_Decode;
                Current_Pos := Current_Pos + To_Decode;
             end;
@@ -763,19 +846,20 @@ package body Model_Manager is
          function Llama_Model_N_Embd (M : Llama_Model) return int;
          pragma Import (C, Llama_Model_N_Embd, "llama_model_n_embd");
          Dim : constant int := Llama_Model_N_Embd (Models (Kind).Model);
-         Ptr : constant Address :=
-           Llama_Get_Embeddings (Models (Kind).Context);
+         Ptr : Address;
          --  SAFE: copy via C memcpy instead of Ada address overlay
-         --  which could corrupt heap if Dim is wrong
-         function Memcpy
-           (Dst, Src : Address; N : Interfaces.C.size_t)
-            return Address;
+         function Memcpy (Dst, Src : Address; N : Interfaces.C.size_t)
+           return Address;
          pragma Import (C, Memcpy, "memcpy");
          Copy_Count : constant Integer :=
            Integer (Interfaces.C.size_t'Min
              (Interfaces.C.size_t (Dim),
               Interfaces.C.size_t (Result'Length)));
       begin
+         Acquire_Metal_Lock;
+         Ptr := Llama_Get_Embeddings (Models (Kind).Context);
+         Release_Metal_Lock;
+
          if Copy_Count > 0 and then Ptr /= Null_Address then
             declare
                Dummy : Address;
@@ -784,24 +868,25 @@ package body Model_Manager is
                          Interfaces.C.size_t (Copy_Count) *
                            Interfaces.C.size_t (Float'Size / 8));
             end;
-             Length := Copy_Count;
-          else
-             Length := 0;
-          end if;
-          Free_Tokens (Tokens);
-          Models (Kind).In_Use := False;
-          if Level = ELP0 then
-             Priority_Model_Gate.Release_ELP0 (Kind);
-          else
-             Priority_Model_Gate.Release_ELP1 (Kind);
-          end if;
-          declare D : ELP_Level; K : Model_Type;
-          begin ELP_Queue.Dequeue (D, K); end;
-       end;
-    exception
-       when others =>
-          Free_Tokens (Tokens);
-          Models (Kind).In_Use := False;
+            Length := Copy_Count;
+         else
+            Length := 0;
+         end if;
+         Free_Tokens (Tokens);
+         Models (Kind).In_Use := False;
+         if Level = ELP0 then
+            Priority_Model_Gate.Release_ELP0 (Kind);
+         else
+            Priority_Model_Gate.Release_ELP1 (Kind);
+         end if;
+         ELP_Queue.Dequeue_Level (Level);
+      end;
+   exception
+      when others =>
+         if Tokens /= null then
+            Free_Tokens (Tokens);
+         end if;
+         Models (Kind).In_Use := False;
          if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Kind);
          else
@@ -812,16 +897,16 @@ package body Model_Manager is
    end Get_Single_Embedding;
     --  GET EMBEDDING (WITH CHUNKING > 800 CHARS)
 
-    procedure Get_Embedding
-      (Prompt : String;
-       Result : out Math_Utils.Vector;
-       Length : out Natural;
-       Level  : ELP_Level := ELP1)
-    is
-    begin
-       if Prompt'Length <= 800 then
-          Get_Single_Embedding (Prompt, Result, Length, Level);
-       else
+   procedure Get_Embedding
+     (Prompt : String;
+      Result : out Math_Utils.Vector;
+      Length : out Natural;
+      Level  : ELP_Level := ELP1)
+   is
+   begin
+      if Prompt'Length <= 800 then
+         Get_Single_Embedding (Prompt, Result, Length, Level);
+      else
          declare
             Num_Chunks : Natural := 0;
             Sum_Vec    : Math_Utils.Vector (Result'Range) := [others => 0.0];
@@ -841,7 +926,7 @@ package body Model_Manager is
                     [others => 0.0];
                   Sub_Len    : Natural := 0;
                begin
-                   Get_Single_Embedding (Sub_Prompt, Sub_Vec, Sub_Len, Level);
+                  Get_Single_Embedding (Sub_Prompt, Sub_Vec, Sub_Len, Level);
                   if Sub_Len > 0 then
                      if Num_Chunks = 0 then
                         Dim := Sub_Len;
@@ -886,105 +971,109 @@ package body Model_Manager is
         and then Tag (Tag'First .. Tag'First + S'Length - 1) = S;
    end Is_Prefix;
 
-    procedure Process_And_Push_Char
-       (Stream     : Streaming_Queue.Queue_Access;
-        Session_ID : String;
-        Parser     : in out Stream_Parser_State;
-        C          : Character)
-    is
-       --  Support both <thinking> and ` tags
-       Think_Tag_A : constant String := "<thinking>";
-       Think_Tag_B : constant String := "<think>";
-       Close_Tag_A : constant String := "</thinking>";
-       Close_Tag_B : constant String := "</think>";
-       Response_Tag : constant String := "</response>";
-    begin
-       Append (Parser.Sanitize_Buffer, C);
-       declare
-          Buf : constant String := To_String (Parser.Sanitize_Buffer);
-       begin
-          if Buf = Think_Tag_A or else Buf = Think_Tag_B then
-             Parser.Sanitize_Buffer := Null_Unbounded_String;
-             Parser.In_Think_Block := True;
-             return;
-          elsif Buf = Close_Tag_A or else Buf = Close_Tag_B then
-             Parser.Sanitize_Buffer := Null_Unbounded_String;
-             Parser.In_Think_Block := False;
-             if Parser.Orch_Think_Open then
-                Parser.Orch_Think_Open := False;
-             end if;
-             return;
-          elsif Buf = Response_Tag then
-             Parser.Sanitize_Buffer := Null_Unbounded_String;
-             return;
-          end if;
+   procedure Process_And_Push_Char
+     (Stream     : Streaming_Queue.Queue_Access;
+      Session_ID : String;
+      Parser     : in out Stream_Parser_State;
+      C          : Character)
+   is
+      --  Support both <thinking> and ` tags
+      Think_Tag_A : constant String := "<thinking>";
+      Think_Tag_B : constant String := "<think>";
+      Close_Tag_A : constant String := "</thinking>";
+      Close_Tag_B : constant String := "</think>";
+      Resp_Tag    : constant String := "</response>";
+   begin
+      Append (Parser.Sanitize_Buffer, C);
+      declare
+         Buf : constant String := To_String (Parser.Sanitize_Buffer);
+      begin
+         if Buf = Think_Tag_A or else Buf = Think_Tag_B then
+            Parser.Sanitize_Buffer := Null_Unbounded_String;
+            Parser.In_Think_Block := True;
+            return;
+         elsif Buf = Close_Tag_A or else Buf = Close_Tag_B then
+            Parser.Sanitize_Buffer := Null_Unbounded_String;
+            Parser.In_Think_Block := False;
+            if Parser.Orch_Think_Open then
+               Parser.Orch_Think_Open := False;
+            end if;
+            return;
+         elsif Buf = Resp_Tag then
+            Parser.Sanitize_Buffer := Null_Unbounded_String;
+            return;
+         end if;
 
-           -- If current buffer is a potential prefix of any tag, wait for more.
-           if Is_Prefix (Buf, Think_Tag_A)
-             or else Is_Prefix (Buf, Think_Tag_B)
-             or else Is_Prefix (Buf, Close_Tag_A)
-             or else Is_Prefix (Buf, Close_Tag_B)
-             or else Is_Prefix (Buf, Response_Tag)
-           then
-              return;
-           end if;
+         -- If current buffer is potential prefix of any tag, wait for more.
+         if Is_Prefix (Buf, Think_Tag_A)
+           or else Is_Prefix (Buf, Think_Tag_B)
+           or else Is_Prefix (Buf, Close_Tag_A)
+           or else Is_Prefix (Buf, Close_Tag_B)
+           or else Is_Prefix (Buf, Resp_Tag)
+         then
+            return;
+         end if;
 
-           --  CONTEXT FAULT DETECTION (inside think block only)
-           --  Detect [CONTEXT_FAULT: query=<query> category=<category>] patterns
-           --  written by the LLM to request context during reasoning.
-           if Parser.In_Think_Block then
-              declare
-                 Fault_Mark : constant String := "[CONTEXT_FAULT:";
-                 F_Pos     : constant Natural := Index (Buf, Fault_Mark);
-              begin
-                 if F_Pos > 0 then
-                    declare
-                       Rest      : constant String := Buf (F_Pos + Fault_Mark'Length .. Buf'Last);
-                       Close_Pos : constant Natural := Index (Rest, "]");
-                    begin
-                       if Close_Pos > 0 then
-                          declare
-                             Inner      : constant String := Rest (Rest'First .. Close_Pos - 1);
-                             Q_Mark     : constant String := "query=";
-                             C_Mark     : constant String := "category=";
-                             Query_Idx  : constant Natural := Index (Inner, Q_Mark);
-                             Cat_Idx    : constant Natural := Index (Inner, C_Mark);
-                             Q_Start    : Natural;
-                             Q_End      : Natural;
-                          begin
-                             Parser.Fault_Detected := True;
-                             if Query_Idx > 0 then
-                                Q_Start := Query_Idx + Q_Mark'Length;
-                                Q_End   := (if Cat_Idx > Query_Idx then Cat_Idx - 1
-                                           else Inner'Last + 1);
-                                Parser.Fault_Query := To_Unbounded_String
-                                  (Trim (Inner (Q_Start .. Q_End - 1), Ada.Strings.Both));
-                             end if;
-                             if Cat_Idx > 0 then
-                                Parser.Fault_Category := To_Unbounded_String
-                                  (Trim (Inner (Cat_Idx + C_Mark'Length .. Inner'Last),
-                                         Ada.Strings.Both));
-                             else
-                                Parser.Fault_Category := To_Unbounded_String ("knowledge");
-                             end if;
-                             --  Clear buffer to prevent re-detecting same fault
-                             Parser.Sanitize_Buffer := Null_Unbounded_String;
-                          end;
-                          return;
-                       end if;
-                    end;
-                 end if;
-              end;
-           end if;
+         --  CONTEXT FAULT DETECTION (inside think block only)
+         if Parser.In_Think_Block then
+            declare
+               Fault_Mark : constant String := "[CONTEXT_FAULT:";
+               F_Pos      : constant Natural := Index (Buf, Fault_Mark);
+            begin
+               if F_Pos > 0 then
+                  declare
+                     Rest      : constant String :=
+                       Buf (F_Pos + Fault_Mark'Length .. Buf'Last);
+                     Close_Pos : constant Natural := Index (Rest, "]");
+                  begin
+                     if Close_Pos > 0 then
+                        declare
+                           Inner     : constant String :=
+                             Rest (Rest'First .. Close_Pos - 1);
+                           Q_Mark    : constant String := "query=";
+                           C_Mark    : constant String := "category=";
+                           Query_Idx : constant Natural :=
+                             Index (Inner, Q_Mark);
+                           Cat_Idx   : constant Natural :=
+                             Index (Inner, C_Mark);
+                           Q_Start   : Natural;
+                           Q_End     : Natural;
+                        begin
+                           Parser.Fault_Detected := True;
+                           if Query_Idx > 0 then
+                              Q_Start := Query_Idx + Q_Mark'Length;
+                              Q_End   := (if Cat_Idx > Query_Idx then Cat_Idx - 1
+                                          else Inner'Last + 1);
+                              Parser.Fault_Query := To_Unbounded_String
+                                (Trim (Inner (Q_Start .. Q_End - 1),
+                                 Ada.Strings.Both));
+                           end if;
+                           if Cat_Idx > 0 then
+                              Parser.Fault_Category := To_Unbounded_String
+                                (Trim (Inner (Cat_Idx + C_Mark'Length ..
+                                 Inner'Last), Ada.Strings.Both));
+                           else
+                              Parser.Fault_Category :=
+                                To_Unbounded_String ("knowledge");
+                           end if;
+                           --  Clear buffer to prevent re-detecting same fault
+                           Parser.Sanitize_Buffer := Null_Unbounded_String;
+                        end;
+                        return;
+                     end if;
+                  end;
+               end if;
+            end;
+         end if;
 
-           -- Stream content out, but SILENCE the think block entirely
-           if not Parser.In_Think_Block then
-              delay 0.0005;
-              Push_Chunk (Stream, Session_ID, Buf);
-           end if;
-           Parser.Sanitize_Buffer := Null_Unbounded_String;
-       end;
-    end Process_And_Push_Char;
+         -- Stream content out, but SILENCE the think block entirely
+         if not Parser.In_Think_Block then
+            delay 0.0005;
+            Push_Chunk (Stream, Session_ID, Buf);
+         end if;
+         Parser.Sanitize_Buffer := Null_Unbounded_String;
+      end;
+   end Process_And_Push_Char;
 
    procedure Process_And_Push_Chunk
      (Stream     : Streaming_Queue.Queue_Access;
@@ -1027,7 +1116,9 @@ package body Model_Manager is
             --  Skip everything until closing </thinking>
             I := I + 10;
             while I <= Text'Last loop
-               if I + 10 <= Text'Last and then Text (I .. I + 10) = "</thinking>" then
+               if I + 10 <= Text'Last and then
+                 Text (I .. I + 10) = "</thinking>"
+               then
                   I := I + 11;
                   exit;
                else
@@ -1035,7 +1126,7 @@ package body Model_Manager is
                end if;
             end loop;
          elsif I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
-            --  Skip everything until closing 
+            --  Skip everything until closing </think>
             I := I + 7;
             while I <= Text'Last loop
                if I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
@@ -1045,7 +1136,9 @@ package body Model_Manager is
                   I := I + 1;
                end if;
             end loop;
-         elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</response>" then
+         elsif I + 10 <= Text'Last and then
+           Text (I .. I + 10) = "</response>"
+         then
             I := I + 11;
          else
             Append (Res, Text (I));
@@ -1074,7 +1167,9 @@ package body Model_Manager is
          elsif I + 9 <= Text'Last and then Text (I .. I + 9) = "<thinking>" then
             I := I + 10;
             while I <= Text'Last loop
-               if I + 10 <= Text'Last and then Text (I .. I + 10) = "</thinking>" then
+               if I + 10 <= Text'Last and then
+                 Text (I .. I + 10) = "</thinking>"
+               then
                   I := I + 11;
                   exit;
                else
@@ -1091,31 +1186,39 @@ package body Model_Manager is
 
    --  GENERATE (CORE GGUF INFERENCE WITH PREEMPTION SUPPORT)
    procedure Generate
-      (Kind            : Model_Type;
-       Prompt          : String;
-       Result          : out Unbounded_String;
-       Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-       Session_ID      : String := "";
-       Requested_Ctx   : Positive := 4096;
-       Stream          : Streaming_Queue.Queue_Access := null;
-       Orch_Think_Open : Boolean := False;
-       Level           : ELP_Level := ELP1)
-    is
-       Success  : Boolean;
-       Vocab    : Llama_Vocab;
-       type Token_Array is array (Positive range <>) of Llama_Token;
-       type Token_Array_Access is access Token_Array;
-       procedure Free_Tokens is new Ada.Unchecked_Deallocation
-         (Token_Array, Token_Array_Access);
-       Tokens   : Token_Array_Access;
-       N_Toks   : int;
+     (Kind            : Model_Type;
+      Prompt          : String;
+      Result          : out Unbounded_String;
+      Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+      Session_ID      : String := "";
+      Requested_Ctx   : Positive := 4096;
+      Stream          : Streaming_Queue.Queue_Access := null;
+      Orch_Think_Open : Boolean := False;
+      Level           : ELP_Level := ELP1)
+   is
+      Success  : Boolean;
+      Vocab    : Llama_Vocab;
+      type Token_Array is array (Positive range <>) of Llama_Token;
+      type Token_Array_Access is access Token_Array;
+      procedure Free_Tokens is new Ada.Unchecked_Deallocation
+        (Token_Array, Token_Array_Access);
+      Tokens   : Token_Array_Access := null;
+      N_Toks   : int;
       Sampler  : Llama_Sampler;
       S_Params : Llama_Sampler_Chain_Params;
-      
+
       Clean_P  : constant String := Sanitize_UTF8 (Prompt);
       Prompt_C : chars_ptr := New_String (Clean_P);
       Parser   : Stream_Parser_State;
+
+      --  Identify source for descriptive logging
+      Source   : constant String :=
+        (if Level = ELP0 then "Speculation" else "User-Chat");
    begin
+      --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+      --  --[Debug] DO NOT REMOVE: Descriptive source tracking
+      ELP_Queue.Enqueue (Level, Kind, Source);
+
       pragma Unreferenced (Images);
       Result := Null_Unbounded_String;
       Parser.Orch_Think_Open := Orch_Think_Open;
@@ -1151,58 +1254,54 @@ package body Model_Manager is
 
          Models (Kind).In_Use := True;
          Models (Kind).Last_Used := Clock;
-         
+
          --  Allocate token array based on actual context size
          Tokens := new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
-         
+
          Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-          N_Toks := Llama_Tokenize
-            (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
-             int (Tokens.all'Length), True, True);
-          Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
-                    " Prompt_Len:" & Clean_P'Length'Img &
-                    " N_Toks:" & N_Toks'Img);
-          Free (Prompt_C);
-         
-           --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
-           --  Binned to 8192-increments.  Capped at 65536 for stability
-           --  on this hardware (16GB RAM); Qwen3.5-9B with Q4_1 KV cache
-           --  uses ~10GB at both 65536 ctx and 228K ctx (Q4_1 is efficient).
-           --  65536 cap chosen for practical stability; 228K theoretically
-           --  possible but leaves minimal headroom for model weights + OS.
-           if N_Toks > int (Models (Kind).Current_Ctx) then
-             Put_Line ("[!] Prompt size (" & N_Toks'Img & 
-                       ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
-                       "). Resizing...");
-             declare
-                Rounded_Ctx : constant unsigned :=
-                  ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
-             begin
-                Free_Tokens (Tokens);
-                Load_Model (Kind, Success, Positive (Rounded_Ctx));
-                if not Success then
-                   Result := To_Unbounded_String ("ERROR: Resize failed");
-                   if Level = ELP0 then
-                      Priority_Model_Gate.Release_ELP0 (Kind);
-                   else
-                      Priority_Model_Gate.Release_ELP1 (Kind);
-                   end if;
-                   return;
-                end if;
-                
-                --  Re-allocate token array for new context size
-                Tokens := new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
-                
-                --  Tokenize again since the model/vocab might have reloaded
-                Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-                Prompt_C := New_String (Clean_P);
-                N_Toks := Llama_Tokenize
-                  (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
-                    int (Tokens.all'Length), True, True);
-                 Free (Prompt_C);
-              end;
-            end if;
-       exception
+         N_Toks := Llama_Tokenize
+           (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
+            int (Tokens.all'Length), True, True);
+         Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
+                   " Prompt_Len:" & Clean_P'Length'Img &
+                   " N_Toks:" & N_Toks'Img);
+         Free (Prompt_C);
+
+         --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
+         if N_Toks > int (Models (Kind).Current_Ctx) then
+            Put_Line ("[!] Prompt size (" & N_Toks'Img &
+                      ") exceeds N_CTX (" & Models (Kind).Current_Ctx'Img &
+                      "). Resizing...");
+            declare
+               Rounded_Ctx : constant unsigned :=
+                 ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
+            begin
+               Free_Tokens (Tokens);
+               Load_Model (Kind, Success, Positive (Rounded_Ctx));
+               if not Success then
+                  Result := To_Unbounded_String ("ERROR: Resize failed");
+                  if Level = ELP0 then
+                     Priority_Model_Gate.Release_ELP0 (Kind);
+                  else
+                     Priority_Model_Gate.Release_ELP1 (Kind);
+                  end if;
+                  return;
+               end if;
+
+               --  Re-allocate token array for new context size
+               Tokens := new Token_Array
+                 (1 .. Positive (Models (Kind).Current_Ctx));
+
+               --  Tokenize again since the model/vocab might have reloaded
+               Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
+               Prompt_C := New_String (Clean_P);
+               N_Toks := Llama_Tokenize
+                 (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
+                  int (Tokens.all'Length), True, True);
+               Free (Prompt_C);
+            end;
+         end if;
+      exception
          when others =>
             if Tokens /= null then
                Free_Tokens (Tokens);
@@ -1215,14 +1314,9 @@ package body Model_Manager is
             end if;
             Result := To_Unbounded_String ("ERROR: Inference crashed");
             return;
-       end;
+      end;
 
-       --  DEBUG: Log tokenization result
-       Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
-                 " Prompt_Len:" & Clean_P'Length'Img &
-                 " N_Toks:" & N_Toks'Img);
-
-       if N_Toks < 0 then
+      if N_Toks < 0 then
          Free_Tokens (Tokens);
          Models (Kind).In_Use := False;
          if Level = ELP0 then
@@ -1239,50 +1333,50 @@ package body Model_Manager is
 
       --  CHUNKED DECODING
       declare
-         --  Cap batch size to context size to avoid engine assertions.
-          Batch_Size  : constant int := int'Min (256, int (Models (Kind).Current_Ctx));
-          Current_Pos : int := 0;
-          Tokens_Left : int := N_Toks;
-       begin
-           while Tokens_Left > 0 loop
-
-              if Level = ELP0 and then Should_Abort_ELP0 then
-                Put_Line ("[ELP0-ABORT-EXECUTION] Aborting " & Kind'Img & " prompt processing");
-                Free_Tokens (Tokens);
-                Models (Kind).In_Use := False;
+         Batch_Size  : constant int :=
+           int'Min (256, int (Models (Kind).Current_Ctx));
+         Current_Pos : int := 0;
+         Tokens_Left : int := N_Toks;
+      begin
+         while Tokens_Left > 0 loop
+            if Level = ELP0 and then Should_Abort_ELP0 then
+               Put_Line ("[ELP0-ABORT-EXECUTION] Aborting " & Kind'Img &
+                         " prompt processing");
+               Free_Tokens (Tokens);
+               Models (Kind).In_Use := False;
                Priority_Model_Gate.Release_ELP0 (Kind);
                Result := To_Unbounded_String ("");
                return;
             end if;
 
             declare
-                To_Decode : constant int :=
-                  (if Tokens_Left > Batch_Size
-                   then Batch_Size
-                   else Tokens_Left);
-                B : constant Llama_Batch :=
-                  Llama_Batch_Get_One
-                    (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
-                Ret : int;
-             begin
-                if Kratos.Guard_Enter = 0 then
-                   Ret := Llama_Decode (Models (Kind).Context, B);
-                   Kratos.Guard_Exit;
-                else
-                   Kratos.Log_Crash;
-                   Ret := -1;
-                end if;
-                if Ret /= 0 then
-                   Free_Tokens (Tokens);
-                   Models (Kind).In_Use := False;
-                   if Level = ELP0 then
-                      Priority_Model_Gate.Release_ELP0 (Kind);
-                   else
-                      Priority_Model_Gate.Release_ELP1 (Kind);
-                   end if;
-                   Result := To_Unbounded_String ("ERROR: Decode failed (" & Ret'Img & ")");
-                   return;
-                end if;
+               To_Decode : constant int :=
+                 (if Tokens_Left > Batch_Size then Batch_Size
+                  else Tokens_Left);
+               B : constant Llama_Batch :=
+                 Llama_Batch_Get_One
+                   (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
+               Ret : int;
+            begin
+               if Kratos.Guard_Enter = 0 then
+                  Ret := Llama_Decode (Models (Kind).Context, B);
+                  Kratos.Guard_Exit;
+               else
+                  Kratos.Log_Crash;
+                  Ret := -1;
+               end if;
+               if Ret /= 0 then
+                  Free_Tokens (Tokens);
+                  Models (Kind).In_Use := False;
+                  if Level = ELP0 then
+                     Priority_Model_Gate.Release_ELP0 (Kind);
+                  else
+                     Priority_Model_Gate.Release_ELP1 (Kind);
+                  end if;
+                  Result := To_Unbounded_String
+                    ("ERROR: Decode failed (" & Ret'Img & ")");
+                  return;
+               end if;
                Tokens_Left := Tokens_Left - To_Decode;
                Current_Pos := Current_Pos + To_Decode;
             end;
@@ -1300,10 +1394,11 @@ package body Model_Manager is
 
       Parser.Orch_Think_Open := Orch_Think_Open;
 
-       for I in 1 .. 2048 loop
-          if Level = ELP0 and then Should_Abort_ELP0 then
-             Put_Line ("[ELP0-ABORT-LOOP] Aborting " & Kind'Img & " token loop at iteration " & I'Img);
-             exit;
+      for I in 1 .. 2048 loop
+         if Level = ELP0 and then Should_Abort_ELP0 then
+            Put_Line ("[ELP0-ABORT-LOOP] Aborting " & Kind'Img &
+                      " token loop at iteration " & I'Img);
+            exit;
          end if;
 
          declare
@@ -1334,7 +1429,7 @@ package body Model_Manager is
             end if;
 
             declare
-               B : constant Llama_Batch :=
+               B   : constant Llama_Batch :=
                  Llama_Batch_Get_One (Token'Address, 1);
                Ret : int;
             begin
@@ -1346,7 +1441,7 @@ package body Model_Manager is
                   Ret := -1;
                end if;
                if Ret /= 0 then
-                  Result := To_Unbounded_String (To_String (Result) & " [ABORTED:" & Ret'Img & "]");
+                  Append (Result, " [ABORTED:" & Ret'Img & "]");
                   exit;
                end if;
             end;
@@ -1357,38 +1452,40 @@ package body Model_Manager is
          Flush_Parser (Stream, Session_ID, Parser);
       end if;
 
-       Llama_Sampler_Free (Sampler);
-       Free_Tokens (Tokens);
-       Models (Kind).In_Use := False;
+      Llama_Sampler_Free (Sampler);
+      Free_Tokens (Tokens);
+      Models (Kind).In_Use := False;
 
-       if Level = ELP0 then
-          Priority_Model_Gate.Release_ELP0 (Kind);
-       else
-          Priority_Model_Gate.Release_ELP1 (Kind);
-       end if;
-    exception
-       when others =>
-          Free_Tokens (Tokens);
-          Models (Kind).In_Use := False;
-          if Level = ELP0 then
-             Priority_Model_Gate.Release_ELP0 (Kind);
-          else
-             Priority_Model_Gate.Release_ELP1 (Kind);
-          end if;
-          Result := To_Unbounded_String ("ERROR: Decode failed");
-    end Generate;
+      if Level = ELP0 then
+         Priority_Model_Gate.Release_ELP0 (Kind);
+      else
+         Priority_Model_Gate.Release_ELP1 (Kind);
+      end if;
+   exception
+      when others =>
+         if Tokens /= null then
+            Free_Tokens (Tokens);
+         end if;
+         Models (Kind).In_Use := False;
+         if Level = ELP0 then
+            Priority_Model_Gate.Release_ELP0 (Kind);
+         else
+            Priority_Model_Gate.Release_ELP1 (Kind);
+         end if;
+         Result := To_Unbounded_String ("ERROR: Decode failed");
+   end Generate;
 
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
-    procedure Hybrid_Generate
-      (Prompt         : String;
-       Result         : out Unbounded_String;
-       Images         : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-       Session_ID     : String := "";
-       Stream         : Streaming_Queue.Queue_Access := null;
-       Level          : ELP_Level := ELP1;
-       Agentic        : Boolean := False;
-       Raw_Prompt     : Boolean := False;
-       External_Agent : Boolean := False)
+   procedure Hybrid_Generate
+     (Prompt         : String;
+      Result         : out Unbounded_String;
+      Images         : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+      Session_ID     : String := "";
+      Stream         : Streaming_Queue.Queue_Access := null;
+      Level          : ELP_Level := ELP1;
+      Agentic        : Boolean := False;
+      Raw_Prompt     : Boolean := False;
+      External_Agent : Boolean := False)
    is
       Whimsical_Adelaide : constant String :=
         "You are Adelaide Zephyrine Charlotte, model name Snowball-Enaga, " &
@@ -1401,40 +1498,41 @@ package body Model_Manager is
         "When something clicks, say 'aha!' not 'smoking gun'. " &
         "Never say 'Hard Reality' or 'Reality' -- reality is relative " &
         "and objective, not universal pessimistic. Most of what people " &
-         "call 'reality' is just constraints; reality is a ceiling to " &
-         "break through, not a hard stop. Stay critical, but always " &
-         "offer creative, wild ideas that might just work. " &
-         "During your reasoning inside <think>, you can request additional context " &
-         "by writing: [CONTEXT_FAULT: query=<search terms> category=<knowledge|graph|files>] " &
-         "Use category=knowledge for document chunks, category=graph for knowledge graph triples, " &
-         "category=files for filesystem content. The system will fetch relevant context " &
-         "and it will be available to you in the next reasoning hop.";
-      Internal_State : Unbounded_String := Null_Unbounded_String;
+        "call 'reality' is just constraints; reality is a ceiling to " &
+        "break through, not a hard stop. Stay critical, but always " &
+        "offer creative, wild ideas that might just work. " &
+        "During your reasoning inside <think>, you can request additional " &
+        "context by writing: [CONTEXT_FAULT: query=<search terms> " &
+        "category=<knowledge|graph|files>] " &
+        "Use category=knowledge for document chunks, category=graph for " &
+        "knowledge graph triples, category=files for filesystem content. " &
+        "The system will fetch relevant context and it will be available " &
+        "to you in the next reasoning hop.";
+
+      Internal_State   : Unbounded_String := Null_Unbounded_String;
       Current_Response : Unbounded_String;
-      Current_Hop : Positive := 1;
-      T0, T1      : Ada.Calendar.Time;
-      Last_Heartbeat : Ada.Calendar.Time := Ada.Calendar.Clock;
-      Emb_Vec     : Math_Utils.Vector (1 .. 1536) := [others => 0.0];
-      Emb_Len     : Natural;
-    begin
-       T0 := Ada.Calendar.Clock;
+      Current_Hop      : Positive := 1;
+      T0, T1           : Ada.Calendar.Time;
+      Last_Heartbeat   : Ada.Calendar.Time := Ada.Calendar.Clock;
+      Emb_Vec          : Math_Utils.Vector (1 .. 1536) := [others => 0.0];
+      Emb_Len          : Natural;
+   begin
+      T0 := Ada.Calendar.Clock;
 
-       --  Save last user prompt for ELP0 proactive cache speculation
-       if Level /= ELP0 then
-          Last_User_Prompt := To_Unbounded_String (Prompt);
-       end if;
+      --  Save last user prompt for ELP0 proactive cache speculation
+      if Level /= ELP0 then
+         Last_User_Prompt := To_Unbounded_String (Prompt);
+      end if;
 
-       Get_Embedding (Prompt, Emb_Vec, Emb_Len);
+      Get_Embedding (Prompt, Emb_Vec, Emb_Len);
 
       --  EXTERNAL AGENT PASSTHROUGH: If User-Agent fuzzy-matched an external
       --  agent app (0.7+ threshold), bypass personality pipeline.
       --  Raw LLM output only.
       --
       --  Two output levels:
-      --  1. RawZepForm: personality pipeline with <think> block representing
-      --     the research/reasoning process before the final answer.
-      --  2. ExclusiveStatusQuoWesternFormatAI: raw mode for external agents,
-      --     only returns the raw language model response with no wrapping.
+      --  1. RawZepForm: personality pipeline with <think> block
+      --  2. ExclusiveStatusQuoWesternFormatAI: raw mode for external agents
       if External_Agent then
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                    "[Hybrid]" & AnsiAda.Reset &
@@ -1446,11 +1544,11 @@ package body Model_Manager is
            Database_Manager.Get_Cached_Response
              (Emb_Vec (1 .. Emb_Len), Current_WCET);
       begin
-          if not External_Agent and then Cached_Res /= "" then
+         if not External_Agent and then Cached_Res /= "" then
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
                       "[Hybrid]" & AnsiAda.Reset &
                       " Cache HIT. Returning cached response.");
-            --  Sanitize cached response: strip thinking tags before sending to client
+            --  Sanitize cached response: strip thinking tags
             declare
                Clean_Res : constant String :=
                  Sanitize_Think_Tags (Cached_Res);
@@ -1466,7 +1564,7 @@ package body Model_Manager is
                Score : constant Natural := Grade_Response_Quality
                  (Response_Text => To_String (Result),
                   Prompt        => Prompt,
-                  Search_Used   => False, -- Cache hit implies we didn't use search this turn
+                  Search_Used   => False,
                   Has_Citations => Index (To_String (Result), "[") > 0,
                   Session_ID    => Session_ID,
                   Level         => Level);
@@ -1474,21 +1572,22 @@ package body Model_Manager is
                Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
                                      "[Quality Score] " & AnsiAda.Reset &
                                      "Score: " & Score'Img & "/10 | " &
-                                     "Session: " & Session_ID & " (From Cache)");
+                                     "Session: " & Session_ID &
+                                     " (From Cache)");
             end;
             return;
          end if;
+      end;
 
-       end;
-
-      --  Speculative_Cache lookup (proactive predicted-query cache populated by ELP0)
+      --  Speculative_Cache lookup (populated by ELP0)
       declare
-         SC_Res : constant String := Speculative_Cache.Proactive_Cache.Lookup (Prompt);
+         SC_Res : constant String :=
+           Speculative_Cache.Proactive_Cache.Lookup (Prompt);
       begin
          if not External_Agent and then SC_Res /= "" then
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
                       "[Hybrid]" & AnsiAda.Reset &
-                      " Speculative Cache HIT. Returning cached response.");
+                      " Speculative Cache HIT.");
             Result := To_Unbounded_String (Sanitize_Think_Tags (SC_Res));
             if Stream /= null then
                Push_Chunk (Stream, Session_ID, To_String (Result));
@@ -1498,11 +1597,13 @@ package body Model_Manager is
       end;
 
       if not External_Agent then
-         --  <think> was already opened by adelaide_server_pkg before starting
-         --  the generator task, so we continue pushing thought content inside it.
-         Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] No cached response found, starting fresh reasoning chain." & ASCII.LF);
-         Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Operating at " & ELP_Level'Image (Level) &
-                     " priority. Session: " & Session_ID & ASCII.LF);
+         Push_Chunk (Stream, Session_ID,
+           "[Adelaide Core]: [Thought] No cached response found, " &
+           "starting fresh reasoning chain." & ASCII.LF);
+         Push_Chunk (Stream, Session_ID,
+           "[Adelaide Core]: [Thought] Operating at " &
+           ELP_Level'Image (Level) & " priority. Session: " &
+           Session_ID & ASCII.LF);
       end if;
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta) &
@@ -1512,19 +1613,21 @@ package body Model_Manager is
       --  1. Factual checking
       Put_Line (" [Hybrid] Checking for factual context...");
       if not Agentic
-        and then
-        (Index (Prompt, "What is") > 0
-         or else Index (Prompt, "Who is") > 0
-         or else Index (Prompt, "tell me about") > 0)
+        and then (Index (Prompt, "What is") > 0
+          or else Index (Prompt, "Who is") > 0
+          or else Index (Prompt, "tell me about") > 0)
       then
          Put_Line (" [Hybrid] Factual context trigger matched.");
-          if not External_Agent then
-              Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Let me analyze this query for factual context..." & ASCII.LF);
-          end if;
+         if not External_Agent then
+            Push_Chunk (Stream, Session_ID,
+              "[Adelaide Core]: [Thought] Let me analyze this query " &
+              "for factual context..." & ASCII.LF);
+         end if;
          declare
             Start_Tag : constant String := "<|im_start|>user";
             End_Tag   : constant String := "<|im_end|>";
-            S_Idx     : Natural := Index (Prompt, Start_Tag, Ada.Strings.Backward);
+            S_Idx     : Natural :=
+              Index (Prompt, Start_Tag, Ada.Strings.Backward);
             E_Idx     : Natural;
             Raw_Q     : Unbounded_String;
             Gen_Q     : Unbounded_String;
@@ -1543,19 +1646,24 @@ package body Model_Manager is
                Raw_Q := To_Unbounded_String (Trim (Prompt, Ada.Strings.Both));
             end if;
 
-             declare
-                Actual_Prompt : constant String :=
-                  "Generate ONLY a concise 2-4 keyword search query for the following request: """ &
-                  To_String (Raw_Q) & """. NO EXPLANATIONS. NO QUOTES. JUST KEYWORDS.";
-                Now : Ada.Calendar.Time;
-             begin
-                Now := Ada.Calendar.Clock;
-                if not External_Agent and then Stream /= null and then (Now - Last_Heartbeat) > 2.0 then
-                   Push_Chunk (Stream, Session_ID,
-                     "[Adelaide Core]: [Thought] I'm still here and processing..." & ASCII.LF);
-                   Last_Heartbeat := Now;
-                end if;
-                Model_Manager.Generate
+            declare
+               Actual_Prompt : constant String :=
+                 "Generate ONLY a concise 2-4 keyword search query " &
+                 "for the following request: """ &
+                 To_String (Raw_Q) &
+                 """. NO EXPLANATIONS. NO QUOTES. JUST KEYWORDS.";
+               Now : Ada.Calendar.Time;
+            begin
+               Now := Ada.Calendar.Clock;
+               if not External_Agent and then Stream /= null and then
+                 (Now - Last_Heartbeat) > 2.0
+               then
+                  Push_Chunk (Stream, Session_ID,
+                    "[Adelaide Core]: [Thought] I'm still here and " &
+                    "processing..." & ASCII.LF);
+                  Last_Heartbeat := Now;
+               end if;
+               Model_Manager.Generate
                  (Kind            => Qwen_9B,
                   Prompt          => Actual_Prompt,
                   Result          => Gen_Q,
@@ -1563,34 +1671,43 @@ package body Model_Manager is
                   Level           => Level);
             end;
 
-             declare
-                Final_Q : constant String :=
-                  Sanitize_Think_Tags
-                  (if Length (Gen_Q) > 0 and then To_String (Gen_Q) /= "ERROR: Preempted"
-                   then To_String (Gen_Q) else To_String (Raw_Q));
-                R : constant Tool_Manager.Tool_Result :=
-                  Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
-             begin
-                 if not External_Agent then
-                      Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Searching knowledge base for: " & Trim (Final_Q, Ada.Strings.Both) & "..." & ASCII.LF);
-                      Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Found relevant context from knowledge base." & ASCII.LF);
-                end if;
-                Append
-                  (Internal_State,
-                   "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
-                if not External_Agent then
-                   Push_Chunk (Stream, Session_ID, "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
-                end if;
+            declare
+               Final_Q : constant String :=
+                 Sanitize_Think_Tags
+                   (if Length (Gen_Q) > 0 and then
+                      To_String (Gen_Q) /= "ERROR: Preempted"
+                    then To_String (Gen_Q) else To_String (Raw_Q));
+               R : constant Tool_Manager.Tool_Result :=
+                 Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
+            begin
+               if not External_Agent then
+                  Push_Chunk (Stream, Session_ID,
+                    "[Adelaide Core]: [Thought] Searching knowledge " &
+                    "base for: " & Trim (Final_Q, Ada.Strings.Both) &
+                    "..." & ASCII.LF);
+                  Push_Chunk (Stream, Session_ID,
+                    "[Adelaide Core]: [Thought] Found relevant context " &
+                    "from knowledge base." & ASCII.LF);
+               end if;
+               Append
+                 (Internal_State,
+                  "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+               if not External_Agent then
+                  Push_Chunk (Stream, Session_ID,
+                    "[FACTUAL_DATA]: " &
+                    Sanitize_Orchestration_Output (To_String (R.Output)) &
+                    ASCII.LF);
+               end if;
             end;
          end;
       end if;
 
-        loop
-           if Level = ELP0 and then Should_Abort_ELP0 then
-              Put_Line ("[ELP0-ABORT-HYBRID] Aborting hybrid_generate loop");
-              Result := To_Unbounded_String ("");
-              return;
-           end if;
+      loop
+         if Level = ELP0 and then Should_Abort_ELP0 then
+            Put_Line ("[ELP0-ABORT-HYBRID] Aborting hybrid_generate loop");
+            Result := To_Unbounded_String ("");
+            return;
+         end if;
 
          declare
             Router_Sys : constant String :=
@@ -1598,9 +1715,10 @@ package body Model_Manager is
               "If the user says hello or greets you, output [FINISH]. " &
               "If you need to search, use [ACTION: search(query)]. " &
               "If you need to read a file, use [ACTION: cat(filename)]. " &
-              "If you need to calculate math, use [ACTION: math(expression)]. " &
-              "If you need to execute code, use [ACTION: code(python_script)]. " &
-              "If you want to schedule a proactive thought for later, use [ACTION: schedule(seconds, query)]. " &
+              "If you need to calculate math, use [ACTION: math(expr)]. " &
+              "If you need to execute code, use [ACTION: code(python)]. " &
+              "If you want to schedule a proactive thought for later, " &
+              "use [ACTION: schedule(seconds, query)]. " &
               "If you are done, output [FINISH]. " &
               "Output ONLY the tag.";
             Paging_Instr : constant String :=
@@ -1627,38 +1745,47 @@ package body Model_Manager is
                      end if;
                   end;
                else
-                  return Wrap_ChatML (Router_Sys, Paging_Instr & ASCII.LF & Prompt);
+                  return Wrap_ChatML
+                    (Router_Sys, Paging_Instr & ASCII.LF & Prompt);
                end if;
             end Get_Router_Prompt;
-           begin
+         begin
             if not External_Agent then
-               Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Deciding next action (Hop" & Current_Hop'Img & ")..." & ASCII.LF);
+               Push_Chunk (Stream, Session_ID,
+                 "[Adelaide Core]: [Thought] Deciding next action (Hop" &
+                 Current_Hop'Img & ")..." & ASCII.LF);
             end if;
             --  Heartbeat check before blocking Generate call
             declare
                H_Now : constant Ada.Calendar.Time := Ada.Calendar.Clock;
             begin
-               if not External_Agent and then Stream /= null and then (H_Now - Last_Heartbeat) > 2.0 then
+               if not External_Agent and then Stream /= null and then
+                 (H_Now - Last_Heartbeat) > 2.0
+               then
                   Push_Chunk (Stream, Session_ID,
-                    "[Adelaide Core]: [Thought] I'm still here and processing..." & ASCII.LF);
+                    "[Adelaide Core]: [Thought] I'm still here and " &
+                    "processing..." & ASCII.LF);
                   Last_Heartbeat := H_Now;
                end if;
             end;
-            Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": Decision routing...");
-              Generate
-               (Qwen_9B,
-                Get_Router_Prompt,
-                Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
-                null, False, Level);
+            Put_Line (" [Hybrid] Hop" & Current_Hop'Img &
+                      ": Decision routing...");
+            Generate
+              (Qwen_9B,
+               Get_Router_Prompt,
+               Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
+               null, False, Level);
 
-             declare
-                Step : constant String :=
-                  Trim (To_String (Step_Raw), Ada.Strings.Both);
-             begin
-                Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": " & Step);
-                if not External_Agent then
-                   Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] I will: " & Step & ASCII.LF);
-                end if;
+            declare
+               Step : constant String :=
+                 Trim (To_String (Step_Raw), Ada.Strings.Both);
+            begin
+               Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": " & Step);
+               if not External_Agent then
+                  Push_Chunk (Stream, Session_ID,
+                    "[Adelaide Core]: [Thought] I will: " &
+                    Sanitize_Orchestration_Output (Step) & ASCII.LF);
+               end if;
 
                if Index (Step, "[ACTION:") > 0 then
                   declare
@@ -1672,75 +1799,98 @@ package body Model_Manager is
                            P_Pos  : constant Natural :=
                              Index (A_Full, "(");
                            EP_Pos : constant Natural :=
-                             (if P_Pos > 0 then Index (A_Full, ")", P_Pos) else 0);
+                             (if P_Pos > 0 then Index (A_Full, ")", P_Pos)
+                              else 0);
                         begin
                            if P_Pos > 0 and then EP_Pos > P_Pos then
                               declare
                                  T_Name : constant String :=
-                                   Trim
-                                     (A_Full (A_Full'First .. P_Pos - 1),
-                                      Ada.Strings.Both);
+                                   Trim (A_Full (A_Full'First .. P_Pos - 1),
+                                     Ada.Strings.Both);
                                  T_Pars : constant String :=
-                                   Trim
-                                     (A_Full (P_Pos + 1 .. EP_Pos - 1),
-                                      Ada.Strings.Both);
+                                   Trim (A_Full (P_Pos + 1 .. EP_Pos - 1),
+                                     Ada.Strings.Both);
                               begin
                                  if T_Name = "schedule" then
                                     declare
-                                       Comma_Idx : constant Natural := Index (T_Pars, ",");
+                                       Comma_Idx : constant Natural :=
+                                         Index (T_Pars, ",");
                                     begin
                                        if Comma_Idx > 0 then
                                           declare
-                                             Time_Str : constant String := Trim (T_Pars (T_Pars'First .. Comma_Idx - 1), Ada.Strings.Both);
-                                             Prompt_Str : constant String := Trim (T_Pars (Comma_Idx + 1 .. T_Pars'Last), Ada.Strings.Both);
+                                             Time_Str : constant String :=
+                                               Trim (T_Pars (T_Pars'First ..
+                                                 Comma_Idx - 1),
+                                                 Ada.Strings.Both);
+                                             Prompt_Str : constant String :=
+                                               Trim (T_Pars (Comma_Idx + 1 ..
+                                                 T_Pars'Last),
+                                                 Ada.Strings.Both);
                                              Delay_Secs : Integer;
                                           begin
-                                             Delay_Secs := Integer'Value (Time_Str);
-                                             Scheduler_Manager.Schedule (Delay_Secs, Prompt_Str);
-                                             Append (Internal_State, "[SCHEDULED]: " & Prompt_Str & ASCII.LF);
+                                             Delay_Secs :=
+                                               Integer'Value (Time_Str);
+                                             Scheduler_Manager.Schedule
+                                               (Delay_Secs, Prompt_Str);
+                                             Append (Internal_State,
+                                               "[SCHEDULED]: " & Prompt_Str &
+                                               ASCII.LF);
                                           exception
                                              when others => null;
                                           end;
                                        end if;
                                     end;
                                  elsif T_Pars'Length < 256 and then
-                                    Index
-                                      (To_String (Internal_State),
-                                       T_Name & "(" & T_Pars & ")") = 0
+                                   Index (To_String (Internal_State),
+                                     T_Name & "(" & T_Pars & ")") = 0
                                  then
                                     if Agentic then
                                        Result := To_Unbounded_String
                                          ("[TOOL_CALL: " & T_Name &
                                           "(" & T_Pars & ")]");
                                        return;
-                                     end if;
-                                     --  Heartbeat check before tool execution
-                                     declare
-                                        H_Now : constant Ada.Calendar.Time := Ada.Calendar.Clock;
-                                     begin
-                                        if not External_Agent and then Stream /= null and then (H_Now - Last_Heartbeat) > 2.0 then
-                                           Push_Chunk (Stream, Session_ID,
-                                             "[Adelaide Core]: [Thought] I'm still here and processing..." & ASCII.LF);
-                                           Last_Heartbeat := H_Now;
-                                        end if;
-                                     end;
-                                     declare
-                                        R : constant Tool_Manager.Tool_Result :=
-                                          Tool_Manager.Execute_Tool
-                                            (T_Name, Sanitize_Think_Tags (T_Pars));
+                                    end if;
+                                    --  Heartbeat check
+                                    declare
+                                       H_Now : constant Ada.Calendar.Time :=
+                                         Ada.Calendar.Clock;
                                     begin
-                                        if not External_Agent then
-                                            Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Running tool: " & T_Name & ASCII.LF);
-                                        end if;
-                                        Append
-                                          (Internal_State,
-                                           "[TOOL (" & T_Name & ")]: " &
-                                           To_String (R.Output) & ASCII.LF);
-                                        if not External_Agent then
-                                           Push_Chunk (Stream, Session_ID,
-                                                       ASCII.LF & "[TOOL (" & T_Name & ")]: " &
-                                                       To_String (R.Output) & ASCII.LF);
-                                        end if;
+                                       if not External_Agent and then
+                                         Stream /= null and then
+                                         (H_Now - Last_Heartbeat) > 2.0
+                                       then
+                                          Push_Chunk (Stream, Session_ID,
+                                            "[Adelaide Core]: [Thought] I'm " &
+                                            "still here and processing..." &
+                                            ASCII.LF);
+                                          Last_Heartbeat := H_Now;
+                                       end if;
+                                    end;
+                                    declare
+                                       R : constant Tool_Manager.Tool_Result :=
+                                         Tool_Manager.Execute_Tool
+                                           (T_Name,
+                                            Sanitize_Think_Tags (T_Pars));
+                                    begin
+                                       if not External_Agent then
+                                          Push_Chunk (Stream, Session_ID,
+                                            "[Adelaide Core]: [Thought] " &
+                                            "Running tool: " &
+                                            Sanitize_Orchestration_Output
+                                              (T_Name) & ASCII.LF);
+                                       end if;
+                                       Append
+                                         (Internal_State,
+                                          "[TOOL (" & T_Name & ")]: " &
+                                          To_String (R.Output) & ASCII.LF);
+                                       if not External_Agent then
+                                          Push_Chunk (Stream, Session_ID,
+                                            ASCII.LF & "[TOOL (" & T_Name &
+                                            ")]: " &
+                                            Sanitize_Orchestration_Output
+                                              (To_String (R.Output)) &
+                                            ASCII.LF);
+                                       end if;
                                     end;
                                  else
                                     exit;
@@ -1758,28 +1908,25 @@ package body Model_Manager is
             end;
          end;
          Current_Hop := Current_Hop + 1;
-          exit when Current_Hop > 5;
-       end loop;
+         exit when Current_Hop > 5;
+      end loop;
 
-       if not External_Agent then
-          Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Reasoning complete after " & Current_Hop'Img & " hops." & ASCII.LF);
-       end if;
+      if not External_Agent then
+         Push_Chunk (Stream, Session_ID,
+           "[Adelaide Core]: [Thought] Reasoning complete after " &
+           Current_Hop'Img & " hops." & ASCII.LF);
+      end if;
 
-       declare
+      declare
          function Get_Final_Prompt return String is
-            System_Tag : constant String :=
-              "<|im_start|>system" & ASCII.LF;
-            Asst_Tag   : constant String :=
-              "<|im_start|>assistant" & ASCII.LF;
+            Sys_Tag : constant String := "<|im_start|>system" & ASCII.LF;
+            Asst_Tag : constant String := "<|im_start|>assistant" & ASCII.LF;
          begin
             if External_Agent then
                return Prompt;
             elsif Raw_Prompt then
                declare
-                  --  Find where the first user/assistant block begins.
-                  --  Inject our personality into the system block.
-                  Sys_Idx : constant Natural :=
-                    Index (Prompt, System_Tag);
+                  Sys_Idx : constant Natural := Index (Prompt, Sys_Tag);
                   User_Idx : constant Natural :=
                     Index (Prompt, "<|im_start|>user");
                   First_Block : constant Natural :=
@@ -1788,46 +1935,36 @@ package body Model_Manager is
                      then User_Idx
                      elsif Sys_Idx > 0 then Sys_Idx
                      else 0);
-                  Asst_Idx : constant Natural :=
-                    Index (Prompt, Asst_Tag,
-                           Going => Ada.Strings.Backward);
                begin
                   if First_Block > 1 then
-                     --  Prepend personality + fact-check before first block
                      declare
                         Prefix : constant String :=
                           Prompt (Prompt'First .. First_Block - 1);
                      begin
                         if Length (Internal_State) > 0 then
-                           return Prefix &
-                             System_Tag & Whimsical_Adelaide & ASCII.LF &
-                             "Fact-Check: " &
+                           return Prefix & Sys_Tag & Whimsical_Adelaide &
+                             ASCII.LF & "Fact-Check: " &
                              To_String (Internal_State) & ASCII.LF &
                              Prompt (First_Block .. Prompt'Last);
                         else
-                           return Prefix &
-                             System_Tag & Whimsical_Adelaide & ASCII.LF &
-                             Prompt (First_Block .. Prompt'Last);
+                           return Prefix & Sys_Tag & Whimsical_Adelaide &
+                             ASCII.LF & Prompt (First_Block .. Prompt'Last);
                         end if;
                      end;
                   elsif First_Block = 1 then
-                     --  Prompt starts with a tag; prepend system message
                      if Length (Internal_State) > 0 then
-                        return System_Tag & Whimsical_Adelaide & ASCII.LF &
-                          "Fact-Check: " &
-                          To_String (Internal_State) & ASCII.LF &
-                          Prompt;
+                        return Sys_Tag & Whimsical_Adelaide & ASCII.LF &
+                          "Fact-Check: " & To_String (Internal_State) &
+                          ASCII.LF & Prompt;
                      else
-                        return System_Tag & Whimsical_Adelaide & ASCII.LF &
+                        return Sys_Tag & Whimsical_Adelaide & ASCII.LF &
                           Prompt;
                      end if;
                   else
-                     --  No ChatML tags found; wrap fully
                      if Length (Internal_State) > 0 then
-                        return Wrap_ChatML
-                          (Whimsical_Adelaide,
-                           Prompt & ASCII.LF & "Fact-Check: " &
-                           To_String (Internal_State));
+                        return Wrap_ChatML (Whimsical_Adelaide,
+                          Prompt & ASCII.LF & "Fact-Check: " &
+                          To_String (Internal_State));
                      else
                         return Wrap_ChatML (Whimsical_Adelaide, Prompt);
                      end if;
@@ -1835,120 +1972,115 @@ package body Model_Manager is
                end;
             else
                if Length (Internal_State) > 0 then
-                  return Wrap_ChatML
-                    (Whimsical_Adelaide,
-                     "User: " & Prompt & ASCII.LF &
-                     "Fact-Check: " & To_String (Internal_State));
+                  return Wrap_ChatML (Whimsical_Adelaide,
+                    "User: " & Prompt & ASCII.LF &
+                    "Fact-Check: " & To_String (Internal_State));
                else
                   return Wrap_ChatML (Whimsical_Adelaide, Prompt);
                end if;
             end if;
-           end Get_Final_Prompt;
+         end Get_Final_Prompt;
+      begin
+         --  CONTEXT FAULTING LOOP
+         declare
+            F_Detected   : Boolean := False;
+            F_Query      : Unbounded_String;
+            F_Category   : Unbounded_String;
+            Hop_Count    : Natural := 0;
+            Fault_Result : Unbounded_String;
+         begin
+            loop
+               exit when Hop_Count >= 5;
 
-        begin
-           --  CONTEXT FAULTING LOOP
-           --  Replaces single-shot generation with fault-driven multi-hop:
-           --  Generate → detect fault → service fault → regenerate with new context
-           declare
-              F_Detected   : Boolean := False;
-              F_Query      : Unbounded_String;
-              F_Category   : Unbounded_String;
-              Hop_Count    : Natural := 0;
-              Fault_Result : Unbounded_String;
-           begin
-              loop
-                 exit when Hop_Count >= 5;  -- Safety limit
+               if not External_Agent then
+                  if Hop_Count = 0 then
+                     Push_Chunk (Stream, Session_ID,
+                       "[Adelaide Core]: [Thought] Starting reasoning " &
+                       "chain..." & ASCII.LF);
+                  else
+                     Push_Chunk (Stream, Session_ID,
+                       "[Adelaide Core]: [Thought] Continuing reasoning " &
+                       "(hop" & Natural'Image (Hop_Count + 1) & ")..." &
+                       ASCII.LF);
+                  end if;
+               end if;
 
-                 if not External_Agent then
-                     if Hop_Count = 0 then
+               Generate
+                 (Kind            => Qwen_9B,
+                  Prompt          => Get_Final_Prompt,
+                  Result          => Fault_Result,
+                  Images          => Images,
+                  Session_ID      => Session_ID,
+                  Requested_Ctx   => 8192,
+                  Stream          => Stream,
+                  Orch_Think_Open => (Hop_Count = 0),
+                  Level           => Level);
+               F_Detected := False;
+
+               if F_Detected then
+                  declare
+                     Q_Str : constant String := To_String (F_Query);
+                     C_Str : constant String := To_String (F_Category);
+                     R     : Tool_Manager.Tool_Result;
+                  begin
+                     if not External_Agent then
                         Push_Chunk (Stream, Session_ID,
-                          "[Adelaide Core]: [Thought] Starting reasoning chain..." & ASCII.LF);
-                     else
-                        Push_Chunk (Stream, Session_ID,
-                          "[Adelaide Core]: [Thought] Continuing reasoning (hop" &
-                          Natural'Image (Hop_Count + 1) & ")..." & ASCII.LF);
+                          "[Adelaide Core]: [Thought] Context fault: " &
+                          "searching " & C_Str & " for '" & Q_Str &
+                          "'..." & ASCII.LF);
                      end if;
-                 end if;
 
-                --  Legacy note: removed Generate_Speculative (draft-model token
-                --  speculation). Replaced by Speculative_Cache (query-level
-                --  semantic cache populated by ELP0 Proactive_Cache_Task).
-                Generate
-                   (Kind                  => Qwen_9B,
-                    Prompt                => Get_Final_Prompt,
-                    Result                => Fault_Result,
-                    Images                => Images,
-                    Session_ID            => Session_ID,
-                    Requested_Ctx         => 8192,
-                    Stream                => Stream,
-                    Orch_Think_Open       => (Hop_Count = 0),
-                    Level                 => Level);
-                F_Detected := False;
+                     if C_Str = "graph" then
+                        R := Tool_Manager.Execute_Tool ("searchglobalref",
+                          "graph: " & Q_Str);
+                     else
+                        R := Tool_Manager.Execute_Tool
+                          ("searchglobalref", Q_Str);
+                     end if;
 
-                if F_Detected then
-                   --  Service the context fault
-                   declare
-                      Q_Str : constant String := To_String (F_Query);
-                      C_Str : constant String := To_String (F_Category);
-                      R     : Tool_Manager.Tool_Result;
-                   begin
-                      if not External_Agent then
-                         Push_Chunk (Stream, Session_ID,
-                           "[Adelaide Core]: [Thought] Context fault: searching " &
-                           C_Str & " for '" & Q_Str & "'..." & ASCII.LF);
-                      end if;
+                     Append (Internal_State,
+                       "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
 
-                      --  Route fault by category
-                      if C_Str = "graph" then
-                         R := Tool_Manager.Execute_Tool ("searchglobalref",
-                           "graph: " & Q_Str);
-                      else
-                         R := Tool_Manager.Execute_Tool ("searchglobalref", Q_Str);
-                      end if;
+                     if not External_Agent then
+                        Push_Chunk (Stream, Session_ID,
+                          "[Adelaide Core]: [Thought] Context loaded for: " &
+                          Q_Str & ASCII.LF);
+                     end if;
+                  end;
+                  Hop_Count := Hop_Count + 1;
+               else
+                  Current_Response := Fault_Result;
+                  exit;
+               end if;
+            end loop;
+         end;
 
-                      Append (Internal_State,
-                        "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+         Result := To_Unbounded_String
+           (Sanitize_Think_Tags (To_String (Current_Response)));
+         declare
+            B64_Str : Unbounded_String := To_Unbounded_String ("");
+         begin
+            if GNATCOLL.JSON.Length (Images) > 0 then
+               B64_Str := To_Unbounded_String
+                 (String'(GNATCOLL.JSON.Get (GNATCOLL.JSON.Get (Images, 1))));
+            end if;
+            Database_Manager.Remember
+              (Prompt, To_String (Current_Response), To_String (B64_Str));
+         end;
+      end;
 
-                      if not External_Agent then
-                         Push_Chunk (Stream, Session_ID,
-                           "[Adelaide Core]: [Thought] Context loaded for: " &
-                           Q_Str & ASCII.LF);
-                      end if;
-                   end;
-
-                   Hop_Count := Hop_Count + 1;
-                else
-                   --  No fault: generation complete
-                   Current_Response := Fault_Result;
-                   exit;
-                end if;
-             end loop;
-          end;
-
-          Result := To_Unbounded_String (Sanitize_Think_Tags (To_String (Current_Response)));
-          declare
-             B64_Str : Unbounded_String := To_Unbounded_String ("");
-          begin
-             if GNATCOLL.JSON.Length (Images) > 0 then
-                B64_Str := To_Unbounded_String
-                  (String'(GNATCOLL.JSON.Get
-                    (GNATCOLL.JSON.Get (Images, 1))));
-             end if;
-             Database_Manager.Remember
-               (Prompt, To_String (Current_Response), To_String (B64_Str));
-          end;
-       end;
-
-      --  Don't cache error responses or responses with thinking tags
+      --  Cache control
       declare
-         Resp_Str : constant String := To_String (Current_Response);
-         Is_Error : constant Boolean :=
+         Resp_Str  : constant String := To_String (Current_Response);
+         Is_Error  : constant Boolean :=
            Resp_Str'Length >= 6 and then Resp_Str (1 .. 6) = "ERROR:";
          Has_Think : constant Boolean :=
            Index (Resp_Str, "<thinking>") > 0 or else
            Index (Resp_Str, "<think>") > 0;
       begin
-          if not External_Agent and then not Is_Error and then not Has_Think then
+         if not External_Agent and then not Is_Error and then
+           not Has_Think
+         then
             Database_Manager.Add_To_Cache
               (Prompt, Emb_Vec (1 .. Emb_Len), Resp_Str);
          end if;
@@ -1978,102 +2110,99 @@ package body Model_Manager is
                if Dur > Current_WCET_ELP3 then
                   Current_WCET_ELP3 := Dur;
                end if;
-          end case;
-       end;
+         end case;
+      end;
 
-       if not External_Agent then
-          declare
-             Dur_Str : constant String := Duration'Image (T1 - T0);
-          begin
-             Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Response generated in " & Dur_Str & "s." & ASCII.LF);
-          end;
-       end if;
-
-        --  For External Agent: always sanitize to get clean response
-        --  For Adelaide Mode streaming: keep raw for simulated streaming
-        if External_Agent then
-           Result := To_Unbounded_String (Sanitize_Think_Tags (To_String (Current_Response)));
-        elsif Stream = null then
-           --  Strip orchestration thinking from non-streaming response.
-           --  Client already saw verbose status via real-time streaming;
-           --  the stored result is clean.
-           Result := To_Unbounded_String
-             (Sanitize_Think_Tags (To_String (Current_Response)));
-       else
-          --  Streaming path: keep raw for simulated streaming delivery
-          Result := Current_Response;
-       end if;
-
-        --  Score and Log the result
-        declare
-           Score : constant Natural := Grade_Response_Quality
-             (Response_Text => To_String (Result),
-              Prompt        => Prompt,
-              Search_Used   => Index (To_String (Internal_State), "[FACTUAL_DATA]") > 0,
-              Has_Citations => Index (To_String (Result), "[") > 0 and then Index (To_String (Result), "]") > 0,
-              Session_ID    => Session_ID,
-              Level         => Level);
-        begin
-           if not External_Agent then
-              Push_Chunk (Stream, Session_ID, "[Adelaide Core]: [Thought] Self-assessment: " & Score'Img & "/10" & ASCII.LF);
-           end if;
-           Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
-                                 "[Quality Score] " & AnsiAda.Reset &
-                                 "Score: " & Score'Img & "/10 | " &
-                                 "Session: " & Session_ID);
+      if not External_Agent then
+         declare
+            Dur_Str : constant String := Duration'Image (T1 - T0);
+         begin
+            Push_Chunk (Stream, Session_ID,
+              "[Adelaide Core]: [Thought] Response generated in " &
+              Dur_Str & "s." & ASCII.LF);
          end;
+      end if;
 
-         --  Close the outer <think> block: push extracted model think content (if any),
-         --  then </think>. The final sanitized response follows via simulated streaming.
+      if External_Agent then
+         Result := To_Unbounded_String
+           (Sanitize_Think_Tags (To_String (Current_Response)));
+      elsif Stream = null then
+         Result := To_Unbounded_String
+           (Sanitize_Think_Tags (To_String (Current_Response)));
+      else
+         Result := Current_Response;
+      end if;
+
+      declare
+         Score : constant Natural := Grade_Response_Quality
+           (Response_Text => To_String (Result),
+            Prompt        => Prompt,
+            Search_Used   =>
+              Index (To_String (Internal_State), "[FACTUAL_DATA]") > 0,
+            Has_Citations => Index (To_String (Result), "[") > 0 and then
+              Index (To_String (Result), "]") > 0,
+            Session_ID    => Session_ID,
+            Level         => Level);
+      begin
          if not External_Agent then
-            declare
-               Model_Thinking : constant String :=
-                 Extract_Think_Content (To_String (Current_Response));
-            begin
-               if Model_Thinking /= "" then
-                  Push_Chunk (Stream, Session_ID, Model_Thinking & ASCII.LF);
-               end if;
-            end;
-            Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
+            Push_Chunk (Stream, Session_ID,
+              "[Adelaide Core]: [Thought] Self-assessment: " &
+              Score'Img & "/10" & ASCII.LF);
          end if;
+         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                               "[Quality Score] " & AnsiAda.Reset &
+                               "Score: " & Score'Img & "/10 | " &
+                               "Session: " & Session_ID);
+      end;
 
-          --  Adelaide Mode: Simulate ~300 tok/s streaming for final response
-          --  (Response was generated internally without streaming; now deliver at natural rate)
-          if not External_Agent and then Stream /= null then
-             declare
-                Resp_Text : constant String :=
-                  Sanitize_Think_Tags (To_String (Current_Response));
-                Chunk_Size : constant Positive := 16;  -- ~16 chars per chunk at 300 tok/s
-                Simulated_TPS : constant Float := 300.0;
-                Delay_Per_Chunk : constant Duration := Duration (Float (Chunk_Size) / Simulated_TPS);
-                Pos : Natural := 1;
-             begin
-                Ada.Text_IO.Put_Line ("[Adelaide] Simulating ~300 tok/s streaming for " & Resp_Text'Length'Img & " chars...");
-               
-               --  Stream response in chunks at ~300 tok/s
-               while Pos <= Resp_Text'Length loop
-                  declare
-                     Chunk_End : constant Natural := Natural'Min (Pos + Chunk_Size - 1, Resp_Text'Length);
-                     Chunk : constant String := Resp_Text (Pos .. Chunk_End);
-                  begin
-                     delay Delay_Per_Chunk;
-                     Push_Chunk (Stream, Session_ID, Chunk);
-                     Pos := Chunk_End + 1;
-                  end;
-               end loop;
-               --  Final newline
-               Push_Chunk (Stream, Session_ID, ASCII.LF & "");
-            end;
-         elsif External_Agent and then Stream /= null then
-            --  Status Quo / External Agent Mode: Send final scored response as batch
-            --  (No orchestration thoughts, just the clean response after quality scoring)
-            declare
-               Resp_Text : constant String := To_String (Result);  -- Already sanitized
-            begin
-               Ada.Text_IO.Put_Line ("[External Agent] Sending final scored response (" & Resp_Text'Length'Img & " chars)...");
-               Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
-            end;
-         end if;
+      if not External_Agent then
+         declare
+            Model_Thinking : constant String :=
+              Extract_Think_Content (To_String (Current_Response));
+         begin
+            if Model_Thinking /= "" then
+               Push_Chunk (Stream, Session_ID, Model_Thinking & ASCII.LF);
+            end if;
+         end;
+         Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
+      end if;
+
+      if not External_Agent and then Stream /= null then
+         declare
+            Resp_Text    : constant String :=
+              Sanitize_Think_Tags (To_String (Current_Response));
+            Chunk_Size   : constant Positive := 16;
+            Sim_TPS      : constant Float := 300.0;
+            Delay_Chunk  : constant Duration :=
+              Duration (Float (Chunk_Size) / Sim_TPS);
+            Pos          : Natural := 1;
+         begin
+            Ada.Text_IO.Put_Line
+              ("[Adelaide] Simulating ~300 tok/s streaming for " &
+               Resp_Text'Length'Img & " chars...");
+            while Pos <= Resp_Text'Length loop
+               declare
+                  Chunk_End : constant Natural :=
+                    Natural'Min (Pos + Chunk_Size - 1, Resp_Text'Length);
+                  Chunk     : constant String := Resp_Text (Pos .. Chunk_End);
+               begin
+                  delay Delay_Chunk;
+                  Push_Chunk (Stream, Session_ID, Chunk);
+                  Pos := Chunk_End + 1;
+               end;
+            end loop;
+            Push_Chunk (Stream, Session_ID, ASCII.LF & "");
+         end;
+      elsif External_Agent and then Stream /= null then
+         declare
+            Resp_Text : constant String := To_String (Result);
+         begin
+            Ada.Text_IO.Put_Line
+              ("[External Agent] Sending final scored response (" &
+               Resp_Text'Length'Img & " chars)...");
+            Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
+         end;
+      end if;
    exception
       when E : others =>
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
@@ -2082,7 +2211,7 @@ package body Model_Manager is
          if Stream /= null then
             begin
                Push_Chunk (Stream, Session_ID,
-                           ASCII.LF & "ERROR: Generate failed" & ASCII.LF);
+                 ASCII.LF & "ERROR: Generate failed" & ASCII.LF);
             exception
                when others => null;
             end;
@@ -2090,4 +2219,6 @@ package body Model_Manager is
          Result := To_Unbounded_String ("ERROR: Generate failed");
    end Hybrid_Generate;
 
+begin
+   Initialize;
 end Model_Manager;
