@@ -403,9 +403,9 @@ begin
          --  Health_URL: The endpoint we ping.  /api/power is chosen
          --  because it's lightweight (no LLM inference, no DB query)
          --  and always returns {"status":"ok"} when the server is alive.
-         Health_URL : constant String :=
-           "http://127.0.0.1:" & Natural'Image (Server_Port) &
-           "/api/power";
+          Health_URL : constant String :=
+            "http://127.0.0.1:" & Trim(Natural'Image (Server_Port), Ada.Strings.Both) &
+            "/api/power";
       begin
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          --  Verbose: confirms we entered the health ping loop.
@@ -435,8 +435,10 @@ begin
             declare
                Response : AWS.Response.Data;
             begin
+               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                         AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 7: Sending health ping #" &
+                         Natural'Image (Ping_Count) & " to " & Health_URL);
                Response := AWS.Client.Get (Health_URL);
-
                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                --  Check the HTTP status code.  We accept any 2xx as
                --  healthy.  The /api/power endpoint returns 200 OK
@@ -451,7 +453,8 @@ begin
                    --  Verbose: confirms health ping passed.
                    Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                              AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 7 DONE: Health ping OK on ping" &
-                             Natural'Image (Ping_Count) & ".");
+                             Natural'Image (Ping_Count) & ". Status=" &
+                             AWS.Response.Status_Code (Response)'Img);
                    Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
                             "[Watchdog]" & AnsiAda.Reset &
                              " Health ping OK -- server responding on port" &
@@ -459,13 +462,16 @@ begin
                   exit;
                end if;
             exception
-               when others =>
+               when E : others =>
                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                   --  Connection refused, timeout, or any other error.
                   --  This is expected during the first few seconds while
                   --  the server is still starting up.  We print a warning
                   --  and continue the loop.
-                  null;
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Init-V]" &
+                            AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 7: Health ping #" &
+                            Natural'Image (Ping_Count) & " FAILED: " &
+                            Ada.Exceptions.Exception_Message (E));
             end;
 
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
