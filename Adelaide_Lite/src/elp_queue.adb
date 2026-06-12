@@ -85,11 +85,12 @@ package body ELP_Queue is
    end Dequeue_Level;
 
    function Depth return Long_Long_Integer is (Load_State.Get_Total);
-   function Capacity return Long_Long_Integer is (Long_Long_Integer'Last);
+   --  (2^64)/2 = 2^63 — fits in Unsigned_64 (max 2^64 - 1).
+   function Capacity return Unsigned_64 is ((2**64) / 2);
 
    function Utilization return Long_Long_Float is
       D : constant Long_Long_Integer := Depth;
-      C : constant Long_Long_Integer := Capacity;
+      C : constant Unsigned_64 := Capacity;
    begin
       if C = 0 then
          return 0.0;

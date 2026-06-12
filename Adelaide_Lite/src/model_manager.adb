@@ -137,7 +137,7 @@ package body Model_Manager is
 
          declare
             --  Virtual Context (2^63) metrics from ELP Queue
-            VC_Capacity : constant Long_Long_Integer := ELP_Queue.Capacity;
+            VC_Capacity : constant Interfaces.Unsigned_64 := ELP_Queue.Capacity;
             VC_Depth    : constant Long_Long_Integer := ELP_Queue.Depth;
             VC_Util     : constant Long_Long_Float   := ELP_Queue.Utilization;
 
@@ -154,7 +154,7 @@ package body Model_Manager is
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
                       " Virtual Ctx: Cap=" &
-                      Long_Long_Integer'Image (VC_Capacity) &
+                      Interfaces.Unsigned_64'Image (VC_Capacity) &
                       " (2^63) | Occupied=" &
                       Long_Long_Integer'Image (VC_Depth) &
                       " | Util=" &
