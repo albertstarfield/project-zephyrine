@@ -17,6 +17,7 @@ pragma SPARK_Mode (Off);
 --  Every 5 seconds, a monitor task prints queue depth as 0%-100%.
 
 with Model_Types; use Model_Types;
+with Interfaces; use Interfaces;
 
 package ELP_Queue is
 
@@ -42,7 +43,7 @@ package ELP_Queue is
    function Depth return Long_Long_Integer;
 
    --  Query capacity (2^63).
-   function Capacity return Long_Long_Integer;
+   function Capacity return Unsigned_64;
 
    --  Query utilization as percentage (0.0 .. 100.0).
    function Utilization return Long_Long_Float;

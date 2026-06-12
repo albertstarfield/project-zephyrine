@@ -41,3 +41,7 @@ test_results.txt
 agenticinst.txt
 cinst.txt
 **GE**.md
+
+# Volatile build/runtime artifacts
+**/.build_hash
+**/.sidecar_port
