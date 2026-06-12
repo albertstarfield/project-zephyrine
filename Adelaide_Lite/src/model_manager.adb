@@ -1030,38 +1030,57 @@ package body Model_Manager is
         and then Tag (Tag'First .. Tag'First + S'Length - 1) = S;
    end Is_Prefix;
 
-   procedure Process_And_Push_Char
-     (Stream     : Streaming_Queue.Queue_Access;
-      Session_ID : String;
-      Parser     : in out Stream_Parser_State;
-      C          : Character)
-   is
-      --  Support both <thinking> and ` tags
-      Think_Tag_A : constant String := "<thinking>";
-      Think_Tag_B : constant String := "<think>";
-      Close_Tag_A : constant String := "</thinking>";
-      Close_Tag_B : constant String := "</think>";
-      Resp_Tag    : constant String := "</response>";
-   begin
-      Append (Parser.Sanitize_Buffer, C);
+    procedure Process_And_Push_Char
+      (Stream     : Streaming_Queue.Queue_Access;
+       Session_ID : String;
+       Parser     : in out Stream_Parser_State;
+       C          : Character)
+    is
+       --  Support both <thinking> and ` tags
+       Think_Tag_A : constant String := "<thinking>";
+       Think_Tag_B : constant String := "<think>";
+       Close_Tag_A : constant String := "</thinking>";
+       Close_Tag_B : constant String := "</think>";
+       Resp_Tag    : constant String := "</response>";
+    begin
+       --  [VITAL-DO-NOT-REMOVE] Mandated by user for token flow visibility.
+       --  [StreamParse-V] Shows every character entering the parser
+       --  Ada.Text_IO.Put_Line
+       --    (AnsiAda.Foreground (AnsiAda.Grey) & "[StreamParse-V]" &
+       --     AnsiAda.Reset & " Char=" &
+       --     (if C = ASCII.LF then "LF" else (1 => C)));
+       Append (Parser.Sanitize_Buffer, C);
       declare
          Buf : constant String := To_String (Parser.Sanitize_Buffer);
       begin
-         if Buf = Think_Tag_A or else Buf = Think_Tag_B then
-            Parser.Sanitize_Buffer := Null_Unbounded_String;
-            Parser.In_Think_Block := True;
-            return;
-         elsif Buf = Close_Tag_A or else Buf = Close_Tag_B then
-            Parser.Sanitize_Buffer := Null_Unbounded_String;
-            Parser.In_Think_Block := False;
-            if Parser.Orch_Think_Open then
-               Parser.Orch_Think_Open := False;
-            end if;
-            return;
-         elsif Buf = Resp_Tag then
-            Parser.Sanitize_Buffer := Null_Unbounded_String;
-            return;
-         end if;
+          if Buf = Think_Tag_A or else Buf = Think_Tag_B then
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) &
+                       "[StreamParse-V]" & AnsiAda.Reset &
+                       " THINK_OPEN detected. In_Think_Block -> True");
+             Parser.Sanitize_Buffer := Null_Unbounded_String;
+             Parser.In_Think_Block := True;
+             return;
+          elsif Buf = Close_Tag_A or else Buf = Close_Tag_B then
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) &
+                       "[StreamParse-V]" & AnsiAda.Reset &
+                       " THINK_CLOSE detected. In_Think_Block -> False" &
+                       " Orch_Think_Open=" & Boolean'Image (Parser.Orch_Think_Open));
+             Parser.Sanitize_Buffer := Null_Unbounded_String;
+             Parser.In_Think_Block := False;
+             if Parser.Orch_Think_Open then
+                Parser.Orch_Think_Open := False;
+             end if;
+             return;
+          elsif Buf = Resp_Tag then
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) &
+                       "[StreamParse-V]" & AnsiAda.Reset &
+                       " RESP_CLOSE detected.");
+             Parser.Sanitize_Buffer := Null_Unbounded_String;
+             return;
+          end if;
 
          -- If current buffer is potential prefix of any tag, wait for more.
          if Is_Prefix (Buf, Think_Tag_A)
@@ -1127,8 +1146,27 @@ package body Model_Manager is
 
          -- Stream content out, but SILENCE the think block entirely
          if not Parser.In_Think_Block then
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            --  [StreamParse-V] Shows content being pushed to stream
+            if Buf'Length > 0 then
+               Put_Line
+                 (AnsiAda.Foreground (AnsiAda.Grey) & "[StreamParse-V]" &
+                  AnsiAda.Reset & " PUSH_BUF Len=" &
+                  Natural'Image (Buf'Length) & " Text=" &
+                  Buf (Buf'First .. Natural'Min (Buf'Last, Buf'First + 30)));
+            end if;
             delay 0.0005;
             Push_Chunk (Stream, Session_ID, Buf);
+         else
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            --  [StreamParse-V] Shows content being SILENCED inside think block
+            if Buf'Length > 0 then
+               Put_Line
+                 (AnsiAda.Foreground (AnsiAda.Grey) & "[StreamParse-V]" &
+                  AnsiAda.Reset & " SILENCED_BUF Len=" &
+                  Natural'Image (Buf'Length) & " Text=" &
+                  Buf (Buf'First .. Natural'Min (Buf'Last, Buf'First + 30)));
+            end if;
          end if;
          Parser.Sanitize_Buffer := Null_Unbounded_String;
       end;
@@ -1146,25 +1184,44 @@ package body Model_Manager is
       end loop;
    end Process_And_Push_Chunk;
 
-   procedure Flush_Parser
-     (Stream     : Streaming_Queue.Queue_Access;
-      Session_ID : String;
-      Parser     : in out Stream_Parser_State)
-   is
-   begin
-      declare
-         S_Str : constant String := To_String (Parser.Sanitize_Buffer);
-      begin
-         if S_Str /= "" then
-            Push_Chunk (Stream, Session_ID, S_Str);
-            Parser.Sanitize_Buffer := Null_Unbounded_String;
-         end if;
-      end;
-      if Parser.Orch_Think_Open then
-         --  Silently close orchestration thinking; tag is stripped by parser
-         Parser.Orch_Think_Open := False;
-      end if;
-   end Flush_Parser;
+    procedure Flush_Parser
+      (Stream     : Streaming_Queue.Queue_Access;
+       Session_ID : String;
+       Parser     : in out Stream_Parser_State)
+    is
+    begin
+       --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
+                 AnsiAda.Reset & " Flush_Parser ENTERED. Buffer=" &
+                 Natural'Image (Length (Parser.Sanitize_Buffer)) &
+                 " Orch_Think_Open=" & Boolean'Image (Parser.Orch_Think_Open));
+       declare
+          S_Str : constant String := To_String (Parser.Sanitize_Buffer);
+       begin
+          if S_Str /= "" then
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
+                       AnsiAda.Reset & " Flush_Parser: Pushing remaining " &
+                       Natural'Image (S_Str'Length) & " chars.");
+             Push_Chunk (Stream, Session_ID, S_Str);
+             Parser.Sanitize_Buffer := Null_Unbounded_String;
+          else
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
+                       AnsiAda.Reset & " Flush_Parser: Buffer empty, nothing to push.");
+          end if;
+       end;
+       if Parser.Orch_Think_Open then
+          --  Silently close orchestration thinking; tag is stripped by parser
+          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
+                    AnsiAda.Reset & " Flush_Parser: Closing Orch_Think_Open.");
+          Parser.Orch_Think_Open := False;
+       end if;
+       --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
+                 AnsiAda.Reset & " Flush_Parser COMPLETE.");
+    end Flush_Parser;
 
    function Sanitize_Think_Tags (Text : String) return String is
       Res : Unbounded_String;
@@ -1282,34 +1339,61 @@ package body Model_Manager is
       Result := Null_Unbounded_String;
       Parser.Orch_Think_Open := Orch_Think_Open;
 
-      begin
-         if Level = ELP0 then
-            declare
-               Acq_OK : Boolean;
-            begin
-               Priority_Model_Gate.Acquire_ELP0 (Kind) (Acq_OK);
-               if not Acq_OK then
-                  Result := To_Unbounded_String ("ERROR: Preempted");
-                  Free (Prompt_C);
-                  return;
-               end if;
-            end;
-         else
-            Priority_Model_Gate.Request_ELP1;
-            Priority_Model_Gate.Acquire_ELP1 (Kind);
-         end if;
+      --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                AnsiAda.Reset & " Generate ENTERED. Kind=" & Kind'Img &
+                " Level=" & Level'Img &
+                " Stream=" & (if Stream /= null then "YES" else "NO") &
+                " Orch_Think_Open=" & Boolean'Image (Orch_Think_Open) &
+                " Prompt_Len=" & Natural'Image (Clean_P'Length));
 
-         Load_Model (Kind, Success, Requested_Ctx);
-         if not Success then
-            if Level = ELP0 then
-               Priority_Model_Gate.Release_ELP0 (Kind);
-            else
-               Priority_Model_Gate.Release_ELP1 (Kind);
-            end if;
-            Result := To_Unbounded_String ("ERROR: Load failed");
-            Free (Prompt_C);
-            return;
-         end if;
+      begin
+          if Level = ELP0 then
+             declare
+                Acq_OK : Boolean;
+             begin
+                Priority_Model_Gate.Acquire_ELP0 (Kind) (Acq_OK);
+                if not Acq_OK then
+                   --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V]" &
+                             AnsiAda.Reset & " Generate: ELP0 ACQUIRE FAILED (Preempted)");
+                   Result := To_Unbounded_String ("ERROR: Preempted");
+                   Free (Prompt_C);
+                   return;
+                end if;
+                --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                          AnsiAda.Reset & " Generate: ELP0 ACQUIRED. Kind=" & Kind'Img);
+             end;
+          else
+             Priority_Model_Gate.Request_ELP1;
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                       AnsiAda.Reset & " Generate: ELP1 REQUESTED. Kind=" & Kind'Img);
+             Priority_Model_Gate.Acquire_ELP1 (Kind);
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                       AnsiAda.Reset & " Generate: ELP1 ACQUIRED. Kind=" & Kind'Img);
+          end if;
+
+          Load_Model (Kind, Success, Requested_Ctx);
+          if not Success then
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V]" &
+                       AnsiAda.Reset & " Generate: Load_Model FAILED. Kind=" & Kind'Img);
+             if Level = ELP0 then
+                Priority_Model_Gate.Release_ELP0 (Kind);
+             else
+                Priority_Model_Gate.Release_ELP1 (Kind);
+             end if;
+             Result := To_Unbounded_String ("ERROR: Load failed");
+             Free (Prompt_C);
+             return;
+          end if;
+          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                    AnsiAda.Reset & " Generate: Load_Model OK. Ctx=" &
+                    Natural'Image (Natural (Models (Kind).Current_Ctx)));
 
          Models (Kind).In_Use := True;
          Models (Kind).Last_Used := Clock;
@@ -1467,6 +1551,11 @@ package body Model_Manager is
             Len   : int;
          begin
             if Llama_Vocab_Is_Eog (Vocab, Token) then
+               --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                         AnsiAda.Reset & " Generate: EOG token at iteration " &
+                         Natural'Image (I) & ". Total tokens=" &
+                         Natural'Image (I - 1));
                exit;
             end if;
             Len := Llama_Token_To_Piece
@@ -1481,6 +1570,14 @@ package body Model_Manager is
                   end loop;
 
                   if Stream /= null then
+                     --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                     Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Grey) & "[Gen-V]" &
+                        AnsiAda.Reset & " Generate: Token " &
+                        Natural'Image (I) & " Len=" & Natural'Image (Natural (Len)) &
+                        " Text=" &
+                        Str_Piece (Str_Piece'First ..
+                          Natural'Min (Str_Piece'Last, Str_Piece'First + 20)));
                      Process_And_Push_Chunk
                        (Stream, Session_ID, Parser, Str_Piece);
                   end if;
@@ -1508,6 +1605,9 @@ package body Model_Manager is
       end loop;
 
       if Stream /= null then
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                   AnsiAda.Reset & " Generate: Calling Flush_Parser after token loop.");
          Flush_Parser (Stream, Session_ID, Parser);
       end if;
 
@@ -1515,11 +1615,18 @@ package body Model_Manager is
       Free_Tokens (Tokens);
       Models (Kind).In_Use := False;
 
+      --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                AnsiAda.Reset & " Generate: Releasing model. Kind=" & Kind'Img);
       if Level = ELP0 then
          Priority_Model_Gate.Release_ELP0 (Kind);
       else
          Priority_Model_Gate.Release_ELP1 (Kind);
       end if;
+      --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                AnsiAda.Reset & " Generate: COMPLETE. ResultLen=" &
+                Natural'Image (Length (Result)));
    exception
       when others =>
          if Tokens /= null then
@@ -2077,6 +2184,10 @@ package body Model_Manager is
             end if;
          end Get_Final_Prompt;
       begin
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                   AnsiAda.Reset & " Hybrid_Generate: Building final prompt. Len=" &
+                   Natural'Image (Get_Final_Prompt'Length));
          --  CONTEXT FAULTING LOOP
          declare
             F_Detected   : Boolean := False;
@@ -2085,6 +2196,9 @@ package body Model_Manager is
             Hop_Count    : Natural := 0;
             Fault_Result : Unbounded_String;
          begin
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & " Hybrid_Generate: CONTEXT_FAULT_LOOP ENTERED.");
             loop
                exit when Hop_Count >= 5;
 
@@ -2154,10 +2268,17 @@ package body Model_Manager is
                   end;
                   Hop_Count := Hop_Count + 1;
                else
+                  --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                            AnsiAda.Reset & " Hybrid_Generate: No fault detected. Exiting loop.");
                   Current_Response := Fault_Result;
                   exit;
                end if;
             end loop;
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & " Hybrid_Generate: CONTEXT_FAULT_LOOP EXITED. Hop_Count=" &
+                      Natural'Image (Hop_Count));
          end;
 
          Result := To_Unbounded_String
@@ -2288,6 +2409,11 @@ package body Model_Manager is
               Duration (Float (Chunk_Size) / Sim_TPS);
             Pos          : Natural := 1;
          begin
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & " Hybrid_Generate: STREAMING RESPONSE. Len=" &
+                      Natural'Image (Resp_Text'Length) & " ChunkSize=" &
+                      Positive'Image (Chunk_Size));
             Ada.Text_IO.Put_Line
               ("[Adelaide] Simulating ~300 tok/s streaming for " &
                Resp_Text'Length'Img & " chars...");
@@ -2298,11 +2424,21 @@ package body Model_Manager is
                   Chunk     : constant String := Resp_Text (Pos .. Chunk_End);
                begin
                   delay Delay_Chunk;
+                  --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                  --  [StreamChunk-V] Shows each chunk being streamed
+                  Put_Line
+                    (AnsiAda.Foreground (AnsiAda.Grey) & "[StreamChunk-V]" &
+                     AnsiAda.Reset & " Pos=" & Natural'Image (Pos) &
+                     " ChunkLen=" & Natural'Image (Chunk'Length) &
+                     " Text=" & Chunk);
                   Push_Chunk (Stream, Session_ID, Chunk);
                   Pos := Chunk_End + 1;
                end;
             end loop;
-            Push_Chunk (Stream, Session_ID, ASCII.LF & "");
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & " Hybrid_Generate: STREAMING COMPLETE.");
+            Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
          end;
       elsif External_Agent and then Stream /= null then
          declare

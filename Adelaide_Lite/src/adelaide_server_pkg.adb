@@ -153,32 +153,45 @@ package body Adelaide_Server_Pkg is
 
    type Generator_Task_Access is access Generator_Task;
 
-   task body Generator_Task is
-      P : Unbounded_String;
-      S_ID : Unbounded_String;
-      QA : Streaming_Queue.Queue_Access;
-      Res : Unbounded_String;
-      Is_Ag : Boolean;
-      Is_Raw : Boolean;
-      Is_Ext : Boolean;
-      use type Streaming_Queue.Queue_Access;
-   begin
-      accept Start
-        (Prompt : String; Model_Name : String;
-         Format : Streaming_Queue.Format_Type;
-         Q : Streaming_Queue.Queue_Access;
-         Session_ID : String;
-         Agentic : Boolean := False; Raw_Prompt : Boolean := False;
-         External_Agent : Boolean := False)
-      do
-         P := To_Unbounded_String (Prompt);
-         S_ID := To_Unbounded_String (Session_ID);
-         QA := Q;
-         --  Dispatch already set format and pushed the immediate ACK.
-         Is_Ag := Agentic;
-         Is_Raw := Raw_Prompt;
-         Is_Ext := External_Agent;
-      end Start;
+    task body Generator_Task is
+       P : Unbounded_String;
+       S_ID : Unbounded_String;
+       QA : Streaming_Queue.Queue_Access;
+       Res : Unbounded_String;
+       Is_Ag : Boolean;
+       Is_Raw : Boolean;
+       Is_Ext : Boolean;
+       use type Streaming_Queue.Queue_Access;
+    begin
+       --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+       Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+             "[Dispatch-V]" & AnsiAda.Reset &
+             " Generator_Task: Task body ENTERED. Waiting for Start...");
+       accept Start
+         (Prompt : String; Model_Name : String;
+          Format : Streaming_Queue.Format_Type;
+          Q : Streaming_Queue.Queue_Access;
+          Session_ID : String;
+          Agentic : Boolean := False; Raw_Prompt : Boolean := False;
+          External_Agent : Boolean := False)
+       do
+          P := To_Unbounded_String (Prompt);
+          S_ID := To_Unbounded_String (Session_ID);
+          QA := Q;
+          --  Dispatch already set format and pushed the immediate ACK.
+          Is_Ag := Agentic;
+          Is_Raw := Raw_Prompt;
+          Is_Ext := External_Agent;
+          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                "[Dispatch-V]" & AnsiAda.Reset &
+                " Generator_Task: Start accepted. Q=" &
+                (if QA /= null then "YES" else "NO") &
+                " Format=" & Format'Image &
+                " Agentic=" & Boolean'Image (Is_Ag) &
+                " Raw=" & Boolean'Image (Is_Raw) &
+                " Ext=" & Boolean'Image (Is_Ext));
+       end Start;
 
       begin
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -198,26 +211,36 @@ package body Adelaide_Server_Pkg is
                "[Dispatch-V]" & AnsiAda.Reset &
                " Generator_Task: Hybrid_Generate returned. ResLen=" &
                Natural'Image (Length (Res)));
-      exception
-         when E : others =>
-            Ada.Text_IO.Put_Line ("Generator Task Error: " &
-              Ada.Exceptions.Exception_Message (E));
-            begin
-               if QA /= null then
-                  QA.Push (ASCII.LF & "ERROR: Inference Task Failed." & ASCII.LF);
-               end if;
-            exception
-               when others => null;
-            end;
-      end;
+       exception
+          when E : others =>
+             Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
+               "[Dispatch-V]" & AnsiAda.Reset &
+               " Generator Task EXCEPTION: " &
+               Ada.Exceptions.Exception_Message (E));
+             begin
+                if QA /= null then
+                   QA.Push (ASCII.LF & "ERROR: Inference Task Failed." & ASCII.LF);
+                end if;
+             exception
+                when others => null;
+             end;
+       end;
 
-      begin
-         if QA /= null then
-            QA.Close;
-         end if;
-      exception
-         when others => null;
-      end;
+       begin
+          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                "[Dispatch-V]" & AnsiAda.Reset &
+                " Generator_Task: Calling Q.Close...");
+          if QA /= null then
+             QA.Close;
+          end if;
+          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                "[Dispatch-V]" & AnsiAda.Reset &
+                " Generator_Task: Q.Close returned.");
+       exception
+          when others => null;
+       end;
    exception
       when E : others =>
          Ada.Text_IO.Put_Line ("Error in Generator_Task: " &
@@ -796,6 +819,14 @@ package body Adelaide_Server_Pkg is
                      TS (11) := 'T';
                   end if;
                   S.Q := Q;
+                  --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                  Ada.Text_IO.Put_Line
+                    (AnsiAda.Foreground (AnsiAda.Cyan) & "[Dispatch-V]" &
+                     AnsiAda.Reset & " Streaming: Queue created. Q=" &
+                     (if Q /= null then "YES" else "NO") &
+                     " S.Q=" & (if S.Q /= null then "YES" else "NO") &
+                     " Fmt=" & Fmt'Image &
+                     " URI=" & URI);
 
                   --  IMMEDIATE ACK: Set format and push first chunk BEFORE
                   --  starting the generator task. This guarantees sub-ms TTFB
@@ -822,6 +853,11 @@ package body Adelaide_Server_Pkg is
                            Fmt, Q, To_String (S_ID),
                            Is_Agentic, Is_Raw_Prompt,
                            Is_External_Agent);
+                  --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                  Ada.Text_IO.Put_Line
+                    (AnsiAda.Foreground (AnsiAda.Cyan) & "[Dispatch-V]" &
+                     AnsiAda.Reset & " Streaming: Generator_Task.Start called." &
+                     " Returning stream response.");
                   return Wrap_Response (AWS.Response.Stream
                     (Content_Type => (if URI = "/v1/chat/completions" or else
                                          URI = "/v1/completions"
