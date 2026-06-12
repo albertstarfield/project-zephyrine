@@ -122,11 +122,36 @@ package body ELP_Queue is
       end loop;
    end Monitor_Task;
 
+   Initialized : Boolean := False;
+
    procedure Initialize is
    begin
-      if not Monitor_Task'Terminated then
-         Monitor_Task.Start;
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & " ELP_Queue.Initialize ENTERED.");
+      if Initialized then
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                   AnsiAda.Reset & " ELP_Queue.Initialize: ALREADY INITIALIZED, skipping.");
+         return;
       end if;
+      Initialized := True;
+      if not Monitor_Task'Terminated then
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                   AnsiAda.Reset & " ELP_Queue.Initialize: Monitor_Task not terminated, calling Start...");
+         Monitor_Task.Start;
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                   AnsiAda.Reset & " ELP_Queue.Initialize: Monitor_Task.Start returned.");
+      else
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                   AnsiAda.Reset & " ELP_Queue.Initialize: Monitor_Task already terminated, skipping Start.");
+      end if;
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & " ELP_Queue.Initialize COMPLETE.");
    end Initialize;
 
 end ELP_Queue;

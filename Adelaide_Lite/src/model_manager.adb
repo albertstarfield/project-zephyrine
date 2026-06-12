@@ -342,8 +342,18 @@ package body Model_Manager is
              "<|im_start|>assistant" & ASCII.LF;
    end Wrap_ChatML;
 
+   Initialized : Boolean := False;
+
    procedure Initialize is
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Guard: prevent double initialization (idle monitor blocks on 2nd Start).
+      if Initialized then
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                   AnsiAda.Reset & " Model_Manager.Initialize: ALREADY INITIALIZED, skipping.");
+         return;
+      end if;
+      Initialized := True;
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Capture start time for uptime calculation.
       Init_Start_Time := Ada.Real_Time.Clock;
