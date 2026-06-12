@@ -65,12 +65,34 @@ package Model_Manager is
       Length : out Natural;
       Level  : ELP_Level := ELP1);
 
+   --  POWER AWARE SCHEDULING
+   --  [VITAL-DO-NOT-REMOVE]
+   --  Allows external bridge (Python) to signal power state.
+   --  When On_Battery is True and Level < 80, ELP0 execution is suspended.
+   procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural);
+
    function Should_Abort_ELP0 return Boolean;
 
-   --  Block until no ELP1 requests are pending or active.
-   --  ELP0 background tasks call this instead of polling Should_Abort_ELP0+delay,
-   --  so they suspend immediately when an ELP1 arrives and resume promptly
-   --  after it finishes — eliminating the 1-second polling deadlock.
+   --  BLOCK UNTIL ELP1 COMPLETES (used by ELP0 background tasks).
+   --
+   --  WHY THIS EXISTS — the 1-second polling deadlock:
+   --  Previously, ELP0 tasks (Indexing_Task, Proactive_Cache_Task) polled
+   --  Should_Abort_ELP0 every 1 second.  When an ELP1 (user) request arrived,
+   --  the abort callback fired inside Llama_Decode, but decode did not return
+   --  quickly.  So ELP0 kept looping: Should_Abort=True → delay 1.0 → re-enter
+   --  loop → Should_Abort=True → delay 1.0 → …  During this loop ELP0 held
+   --  the model (Busy=True), so Acquire_ELP1 blocked forever.  The abort
+   --  callback printed "[ELP0-ABORT-CHECK]" every second but never reached the
+   --  code that calls Release_ELP0, because Llama_Decode had not returned.
+   --
+   --  HOW THIS FIXES IT:
+   --  Instead of polling, ELP0 tasks call this entry which blocks on an Ada
+   --  protected entry barrier (when ELP1_Pending = 0 and ELP1_Active_Count = 0).
+   --  When ELP1 arrives (Request_ELP1 increments Pending), the barrier is False
+   --  and the ELP0 task suspends immediately — no polling, no delay loop.
+   --  Once the current Llama_Decode returns and ELP1 finishes (Release_ELP1
+   --  decrements Active_Count), the barrier opens and the ELP0 task resumes.
+   --  This eliminates the deadlock entirely.
    procedure Wait_For_ELP1_Idle;
 
    function Get_Kind_For_Model_Name (Name : String) return Model_Type;
@@ -100,6 +122,16 @@ package Model_Manager is
    function Generator_Callback (Prompt : String) return String;
 
    function Sanitize_Think_Tags (Text : String) return String;
+
+   --  GLOBAL METAL SERIALIZATION LOCK
+   --  [QUIRK-M04] ggml-Metal GPU buffer corruption when multiple models
+   --  (QWEN_EMBEDDING + QWEN_0_8B) decode concurrently on the same MTL device.
+   --  Root cause: Metal command buffers from different llama.cpp contexts
+   --  interleave, corrupting buffer metadata (malloc error: "pointer being
+   --  freed was not allocated" at address 0x1). Fix: serialize all
+   --  llama_decode + llama_get_embeddings calls through this entry barrier.
+   procedure Acquire_Metal_Lock;
+   procedure Release_Metal_Lock;
 
    Current_WCET : Duration := 0.0;
    Current_WCET_ELP0 : Duration := 0.0;

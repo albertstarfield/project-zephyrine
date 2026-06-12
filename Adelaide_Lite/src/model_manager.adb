@@ -127,6 +127,13 @@ package body Model_Manager is
    type Owner_Array is array (Model_Type) of ELP_Level;
    type Busy_Array is array (Model_Type) of Boolean;
 
+   protected Metal_Lock_Object is
+      entry Acquire;
+      procedure Release;
+   private
+      Busy : Boolean := False;
+   end Metal_Lock_Object;
+
    --  PRIORITY MODEL GATE:
    --  Manages access to the model contexts.
    --  ELP1 requests (User Interactions) preempt running ELP0 requests (Background Tasks).
@@ -140,12 +147,26 @@ package body Model_Manager is
        function Should_Abort return Boolean;
        function Is_ELP0_Owner (Kind : Model_Type) return Boolean;
        entry Wait_For_ELP1_Idle;
+       procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural);
    private
       ELP1_Pending      : Natural := 0;
       ELP1_Active_Count : Natural := 0;
       Busy              : Busy_Array := [others => False];
       Owner             : Owner_Array := [others => ELP0];
+      On_Battery_State  : Boolean := False;
+      Battery_Level     : Natural := 100;
    end Priority_Model_Gate;
+
+   protected body Metal_Lock_Object is
+      entry Acquire when not Busy is
+      begin
+         Busy := True;
+      end Acquire;
+      procedure Release is
+      begin
+         Busy := False;
+      end Release;
+   end Metal_Lock_Object;
 
     protected body Priority_Model_Gate is
        procedure Request_ELP1 is
@@ -176,9 +197,10 @@ package body Model_Manager is
        end Release_ELP1;
 
        entry Acquire_ELP0 (for K in Model_Type) (Success : out Boolean)
-          when not Busy (K)
+          when (not Busy (K)
             or else ELP1_Pending > 0
-            or else ELP1_Active_Count > 0 is
+            or else ELP1_Active_Count > 0)
+            and then not (On_Battery_State and Battery_Level < 80) is
        begin
           if ELP1_Pending > 0 or else ELP1_Active_Count > 0 then
              Success := False;
@@ -217,11 +239,13 @@ package body Model_Manager is
        --  deadlock.  The deadlock was caused by ELP0 tasks polling this
        --  instead of suspending on Wait_For_ELP1_Idle (now fixed).
        function Should_Abort return Boolean is
-          Result : constant Boolean := ELP1_Pending > 0 or else ELP1_Active_Count > 0;
+          Result : constant Boolean := ELP1_Pending > 0 or else ELP1_Active_Count > 0
+            or else (On_Battery_State and Battery_Level < 80);
        begin
           if Result then
              Put_Line ("[ELP0-ABORT-CHECK] ABORTING | ELP1 Pending: " & ELP1_Pending'Img & 
-                       " | ELP1 Active: " & ELP1_Active_Count'Img);
+                       " | ELP1 Active: " & ELP1_Active_Count'Img &
+                       " | Battery: " & Battery_Level'Img);
           end if;
           return Result;
        end Should_Abort;
@@ -233,10 +257,17 @@ package body Model_Manager is
 
        --  Barrier: ELP0 tasks block here until all ELP1 requests have completed.
        --  See Wait_For_ELP1_Idle spec in model_manager.ads for full explanation.
-       entry Wait_For_ELP1_Idle when ELP1_Pending = 0 and ELP1_Active_Count = 0 is
+       entry Wait_For_ELP1_Idle when (ELP1_Pending = 0 and ELP1_Active_Count = 0)
+         and then not (On_Battery_State and Battery_Level < 80) is
        begin
           null;
        end Wait_For_ELP1_Idle;
+
+       procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
+       begin
+          On_Battery_State := On_Battery;
+          Battery_Level := Level;
+       end Set_Power_Condition;
     end Priority_Model_Gate;
 
    --  IDLE MONITOR:
@@ -491,6 +522,21 @@ package body Model_Manager is
       Priority_Model_Gate.Wait_For_ELP1_Idle;
    end Wait_For_ELP1_Idle;
 
+   procedure Acquire_Metal_Lock is
+   begin
+     Metal_Lock_Object.Acquire;
+   end Acquire_Metal_Lock;
+
+   procedure Release_Metal_Lock is
+   begin
+     Metal_Lock_Object.Release;
+   end Release_Metal_Lock;
+
+   procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
+   begin
+     Priority_Model_Gate.Set_Power_Condition (On_Battery, Level);
+   end Set_Power_Condition;
+
    function Get_Kind_For_Model_Name (Name : String) return Model_Type is
    begin
       if Name = "adelaide-hybrid"
@@ -610,8 +656,7 @@ package body Model_Manager is
            Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
            if not Success then
              Put_Line ("[ELP0-BLOCKED] " & Kind'Img & " | ELP1 is active or pending");
-             declare D : ELP_Level; K : Model_Type;
-             begin ELP_Queue.Dequeue (D, K); end;
+             ELP_Queue.Dequeue_Level (Level);
              Length := 0;
              Free (Prompt_C);
              return;
@@ -627,8 +672,7 @@ package body Model_Manager is
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
          end if;
-         declare D : ELP_Level; K : Model_Type;
-         begin ELP_Queue.Dequeue (D, K); end;
+         ELP_Queue.Dequeue_Level (Level);
          Length := 0;
          Free (Prompt_C);
          return;
@@ -656,8 +700,7 @@ package body Model_Manager is
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
          end if;
-         declare D : ELP_Level; K : Model_Type;
-         begin ELP_Queue.Dequeue (D, K); end;
+         ELP_Queue.Dequeue_Level (Level);
          Length := 0;
          return;
       end if;
@@ -764,8 +807,7 @@ package body Model_Manager is
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
          end if;
-         declare D : ELP_Level; K : Model_Type;
-         begin ELP_Queue.Dequeue (D, K); end;
+         ELP_Queue.Dequeue_Level (Level);
          Length := 0;
    end Get_Single_Embedding;
     --  GET EMBEDDING (WITH CHUNKING > 800 CHARS)

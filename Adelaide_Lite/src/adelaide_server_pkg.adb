@@ -609,6 +609,35 @@ package body Adelaide_Server_Pkg is
          end;
       end if;
 
+      if URI = "/api/power" then
+         declare
+            use GNATCOLL.JSON;
+            Payload_Str : constant String :=
+              (if Raw_S /= "" then Raw_S
+               elsif Length (Raw_B) > 0 then To_String (Raw_B)
+               else Stream_To_String (Ada.Streams.Stream_Element_Array'
+                 (AWS.Status.Binary_Data (Request))));
+            P_Res    : constant Read_Result := Read (Payload_Str);
+         begin
+            if P_Res.Success then
+               declare
+                  Val : constant JSON_Value := P_Res.Value;
+                  On_Batt : Boolean := False;
+                  Level   : Natural := 100;
+               begin
+                  if Has_Field (Val, "on_battery") then
+                     On_Batt := Get (Val, "on_battery");
+                  end if;
+                  if Has_Field (Val, "level") then
+                     Level := Get (Val, "level");
+                  end if;
+                  Model_Manager.Set_Power_Condition (On_Batt, Level);
+               end;
+            end if;
+            return Wrap_Response (Build_Response ("{""status"":""ok""}"));
+         end;
+      end if;
+
       if URI = "/api/chat" or else URI = "/api/generate" or else
          URI = "/v1/chat/completions" or else URI = "/v1/completions"
       then

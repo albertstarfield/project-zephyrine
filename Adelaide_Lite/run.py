@@ -136,6 +136,45 @@ def main():
             subprocess.run(["git", "clone", "https://github.com/Ashish-Patnaik/kokoclone.git", kokoclone_dir], check=True)
         else:
             print("[*] kokoclone already exists, skipping clone.")
+
+        # Check and clone Anemll (Apple Neural Engine Acceleration)
+        anemll_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "Anemll"))
+        if not os.path.exists(anemll_dir):
+            print("[*] Cloning Anemll (ANE Acceleration)...")
+            subprocess.run(["git", "clone", "https://github.com/Anemll/Anemll.git", anemll_dir], check=False)
+        else:
+            print("[*] Anemll already exists, skipping clone.")
+
+        # Check and clone flash-moe (Mixture-of-Experts Optimization)
+        moe_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "flash-moe"))
+        if not os.path.exists(moe_dir):
+            print("[*] Cloning flash-moe (MoE Optimization)...")
+            subprocess.run(["git", "clone", "https://github.com/danveloper/flash-moe.git", moe_dir], check=False)
+        else:
+            print("[*] flash-moe already exists, skipping clone.")
+
+        # Build Anemll Swift CLI for ANE acceleration
+        if platform.system() == "Darwin":
+            print("[*] Building Anemll Swift CLI...")
+            anemll_swift_dir = os.path.join(anemll_dir, "anemll-swift-cli")
+            try:
+                subprocess.run(["swift", "build", "-c", "release"], cwd=anemll_swift_dir, check=False)
+            except Exception as e:
+                print(f"[!] Failed to build Anemll Swift CLI: {e}")
+            
+        print("[*] Checking Anemll Python dependencies...")
+        import importlib.util
+        missing_deps = False
+        for dep in ["coremltools", "torch", "transformers", "scikit-learn", "sentencepiece"]:
+            if importlib.util.find_spec(dep) is None:
+                missing_deps = True
+                break
+                
+        if not missing_deps:
+            print("[+] Anemll Python dependencies satisfied.")
+        else:
+            print("[!] Anemll Python dependencies missing. Installing...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "coremltools", "torch", "transformers", "scikit-learn", "sentencepiece"], check=False)
             
         # Ensure Kokoro TTS component dependencies are installed in an isolated venv
         kokoro_comp_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "tts_kokoro_component"))
@@ -377,8 +416,42 @@ def main():
         subprocess.run([sidecar_python, "sidecar_ui.py"], cwd=ui_dir)
     else:
         try:
-            server_process.wait()
+            exit_code = server_process.wait()
+            if exit_code != 0:
+                import signal
+                if exit_code < 0:
+                    sig_val = -exit_code
+                elif exit_code > 128:
+                    sig_val = exit_code - 128
+                else:
+                    sig_val = None
+                    
+                sig_name = "UNKNOWN"
+                if sig_val:
+                    try:
+                        sig_name = signal.Signals(sig_val).name
+                    except ValueError:
+                        sig_name = f"SIGNAL_{sig_val}"
+                
+                BG_BLUE = "\033[44m\033[97m" # Blue background, white text
+                RESET = "\033[0m"
+                
+                print("\n")
+                print(f"{BG_BLUE}{'='*70}{RESET}")
+                print(f"{BG_BLUE}{'   :(  WE RAN INTO A PROBLEM'.ljust(70)}{RESET}")
+                print(f"{BG_BLUE}{'-'*70}{RESET}")
+                print(f"{BG_BLUE}{'   The Adelaide Server encountered a fatal error and terminated.'.ljust(70)}{RESET}")
+                print(f"{BG_BLUE}{f'   Exit Code: {exit_code}'.ljust(70)}{RESET}")
+                if sig_val:
+                    print(f"{BG_BLUE}{f'   Signal:    {sig_name} ({sig_val})'.ljust(70)}{RESET}")
+                print(f"{BG_BLUE}{'   '.ljust(70)}{RESET}")
+                print(f"{BG_BLUE}{'   Check the output immediately above this banner for the'.ljust(70)}{RESET}")
+                print(f"{BG_BLUE}{'   last C/Ada stack traces or GPU assertion failures.'.ljust(70)}{RESET}")
+                print(f"{BG_BLUE}{'='*70}{RESET}\n")
+            else:
+                print("\n[*] Server exited cleanly (code: 0)")
         except KeyboardInterrupt:
+            print("\n[*] Keyboard interrupt received. Shutting down...")
             pass
         
     # Wait for background processes to finish if main blocking process exits
