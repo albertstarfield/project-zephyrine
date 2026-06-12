@@ -155,6 +155,15 @@ package Llama_Interface is
 
    function Llama_Get_Memory (Context : Llama_Context) return System.Address;
    pragma Import (C, Llama_Get_Memory, "llama_get_memory");
+
+   function Llama_State_Save_File
+     (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t) return Boolean;
+   pragma Import (C, Llama_State_Save_File, "llama_state_save_file");
+
+   function Llama_State_Load_File
+     (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t; N_Tokens_Out : access size_t) return Boolean;
+   pragma Import (C, Llama_State_Load_File, "llama_state_load_file");
+
    function Llama_Batch_Init
      (N_Tokens : int; Embd : int; N_Seq_Max : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Init, "llama_batch_init");
