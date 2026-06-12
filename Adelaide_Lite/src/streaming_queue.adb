@@ -2,6 +2,8 @@ pragma SPARK_Mode (Off);
 with GNATCOLL.JSON;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;
+with Ada.Text_IO; use Ada.Text_IO;
+with AnsiAda;
 
 package body Streaming_Queue is
 
@@ -18,6 +20,12 @@ package body Streaming_Queue is
          Now  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
          TS   : String := Ada.Calendar.Formatting.Image (Now);
       begin
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user for stream visibility.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Queue-V]" &
+                   AnsiAda.Reset & " Push ENTERED. Len=" &
+                   Natural'Image (Item'Length) & " Format=" &
+                   Format'Image & " BufferLen=" &
+                   Natural'Image (Ada.Strings.Unbounded.Length (Buffer)));
          if TS'Length >= 11 then
             TS (11) := 'T';
          end if;
@@ -87,6 +95,12 @@ package body Streaming_Queue is
            Natural'Min (Ada.Strings.Unbounded.Length (Buffer),
              Natural'Min (Item'Length, Max_Len));
       begin
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user for stream visibility.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Queue-V]" &
+                   AnsiAda.Reset & " Pop ENTERED. BufferLen=" &
+                   Natural'Image (Ada.Strings.Unbounded.Length (Buffer)) &
+                   " Max_Len=" & Natural'Image (Max_Len) &
+                   " Closed=" & Boolean'Image (Closed));
          Last := Len;
          if Len > 0 then
             Item (Item'First .. Item'First + Len - 1) :=
@@ -94,9 +108,18 @@ package body Streaming_Queue is
                 (Ada.Strings.Unbounded.Unbounded_Slice (Buffer, 1, Len));
             Buffer := Ada.Strings.Unbounded.Unbounded_Slice
               (Buffer, Len + 1, Ada.Strings.Unbounded.Length (Buffer));
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Queue-V]" &
+                      AnsiAda.Reset & " Pop: Popped " & Natural'Image (Len) &
+                      " chars. Remaining=" &
+                      Natural'Image (Ada.Strings.Unbounded.Length (Buffer)));
          end if;
          Is_Closed := Closed and then
            Ada.Strings.Unbounded.Length (Buffer) = 0;
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Queue-V]" &
+                   AnsiAda.Reset & " Pop: Is_Closed=" &
+                   Boolean'Image (Is_Closed) & " Last=" & Natural'Image (Last));
       end Pop;
 
       procedure Close is
@@ -105,6 +128,11 @@ package body Streaming_Queue is
          Now  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
          TS   : String := Ada.Calendar.Formatting.Image (Now);
       begin
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user for stream visibility.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Queue-V]" &
+                   AnsiAda.Reset & " Close ENTERED. Format=" & Format'Image &
+                   " BufferLen=" &
+                   Natural'Image (Ada.Strings.Unbounded.Length (Buffer)));
          if TS'Length >= 11 then
             TS (11) := 'T';
          end if;
@@ -149,6 +177,10 @@ package body Streaming_Queue is
                end;
          end case;
          Closed := True;
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Queue-V]" &
+                   AnsiAda.Reset & " Close: Closed=True. BufferLen=" &
+                   Natural'Image (Ada.Strings.Unbounded.Length (Buffer)));
       end Close;
 
       function Is_Empty_And_Closed return Boolean is
@@ -160,9 +192,20 @@ package body Streaming_Queue is
    overriding function End_Of_File (Resource : Response_Stream) return Boolean is
    begin
       if Resource.Q = null then
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Stream-V]" &
+                   AnsiAda.Reset & " End_Of_File: Q=null, returning True");
          return True;
       end if;
-      return Resource.Q.Is_Empty_And_Closed;
+      declare
+         Result : constant Boolean := Resource.Q.Is_Empty_And_Closed;
+      begin
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Stream-V]" &
+                   AnsiAda.Reset & " End_Of_File: Result=" &
+                   Boolean'Image (Result));
+         return Result;
+      end;
    end End_Of_File;
 
    overriding procedure Read
@@ -176,7 +219,14 @@ package body Streaming_Queue is
       Target_Last : constant Stream_Element_Offset := Buffer'Last;
       Current_Last : Stream_Element_Offset := Buffer'First - 1;
    begin
+      --  [VITAL-DO-NOT-REMOVE] Mandated by user for stream visibility.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Stream-V]" &
+                AnsiAda.Reset & " Read ENTERED. BufferSize=" &
+                Natural'Image (Natural (Target_Last - Buffer'First + 1)));
       if Resource.Q = null then
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Stream-V]" &
+                   AnsiAda.Reset & " Read: Q=null, returning empty");
          Last := Current_Last;
          return;
       end if;
@@ -185,6 +235,10 @@ package body Streaming_Queue is
          Resource.Q.Pop (Item, Actual_Len, Is_Closed, Natural (Target_Last - Current_Last));
 
          if Actual_Len > 0 then
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Stream-V]" &
+                      AnsiAda.Reset & " Read: Popped " & Natural'Image (Actual_Len) &
+                      " chars. CurrentLast=" & Natural'Image (Natural (Current_Last + 1)));
             declare
                To_Fill : constant Stream_Element_Offset :=
                  Stream_Element_Offset (Actual_Len);
@@ -201,6 +255,11 @@ package body Streaming_Queue is
       end loop;
 
       Last := Current_Last;
+      --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Stream-V]" &
+                AnsiAda.Reset & " Read COMPLETE. Last=" &
+                Natural'Image (Natural (Last - Buffer'First + 1)) &
+                " Is_Closed=" & Boolean'Image (Is_Closed));
    end Read;
 
 end Streaming_Queue;
