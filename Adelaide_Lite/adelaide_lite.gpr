@@ -163,7 +163,9 @@ project Adelaide_Lite is
           "-framework", "Foundation",
           "-lc++",
            project'Object_Dir & "/llama_safe.o",
-           project'Object_Dir & "/stderr_suppress.o"
+           project'Object_Dir & "/stderr_suppress.o",
+           project'Object_Dir & "/shutdown_handler.o",
+           project'Object_Dir & "/kratos_signal.o"
       );
    end Linker;
 end Adelaide_Lite;
