@@ -74,7 +74,16 @@ fi
 # 3. GNATprove SPARK Verification
 echo -e "\n${BLUE}[*] Stage 3: Running GNATprove (SPARK Static Analysis)...${NC}"
 alr exec -- gnatprove -P adelaide_spark.gpr --level=$PROVE_LEVEL --prover=cvc5,z3,altergo --timeout=60 --memlimit=2000 --steps=0 --counterexamples=on --report=fail --warnings=error
-if [ $? -eq 0 ]; then
+GNATPROVE_STATUS=$?
+
+# Print summary regardless of success/failure
+if [ -f "obj/spark/gnatprove/gnatprove.out" ]; then
+    echo -e "${CYAN}--- GNATprove Summary ---${NC}"
+    cat obj/spark/gnatprove/gnatprove.out
+    echo -e "${CYAN}------------------------${NC}"
+fi
+
+if [ $GNATPROVE_STATUS -eq 0 ]; then
     echo -e "${GREEN}[ok] GNATprove SPARK analysis completed successfully!${NC}"
 else
     echo -e "${RED}[!] GNATprove failed! SPARK proofing detected an issue. Complete failure.${NC}"
@@ -148,6 +157,18 @@ if kill -0 $SERVER_PID 2>/dev/null; then
     echo -e "${GREEN}[ok] Server SURVIVED the torture test!${NC}"
     # Gracefully kill it
     kill $SERVER_PID
+    
+    # Wait with 5s timeout
+    count=0
+    while kill -0 $SERVER_PID 2>/dev/null && [ $count -lt 5 ]; do
+        sleep 1
+        count=$((count + 1))
+    done
+    
+    if kill -0 $SERVER_PID 2>/dev/null; then
+        echo -e "${YELLOW}[!] Server did not exit gracefully, forcing...${NC}"
+        kill -9 $SERVER_PID 2>/dev/null
+    fi
     wait $SERVER_PID 2>/dev/null
 else
     echo -e "${RED}[!] Server CRASHED during the torture test! Check server_torture.log for details.${NC}"
