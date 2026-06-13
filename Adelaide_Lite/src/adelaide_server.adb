@@ -208,6 +208,25 @@ begin
       Start_Time : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
    begin
       --  ==================================================================
+      --  SINGLE-INSTANCE LOCK (FIRST CHECK)
+      --  ==================================================================
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Before ANYTHING else (before banner, before init), check if
+      --  another adelaide_server is already running.  This prevents
+      --  port conflicts, database locks, and split-brain state.
+      --  ----------------------------------------------------------------
+      if Watchdog_IPC.Check_Single_Instance then
+         Put_Line (Character'Val (27) & "[31m" &
+                   "[FATAL] Another adelaide_server instance is already running!" &
+                   Character'Val (27) & "[0m");
+         Put_Line (Character'Val (27) & "[31m" &
+                   " Kill the existing instance: kill $(cat run/adelaide_server.pid)" &
+                   Character'Val (27) & "[0m");
+         Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
+         return;
+      end if;
+
+      --  ==================================================================
       --  STEP 1-4: Core subsystem initialization
       --  ==================================================================
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]

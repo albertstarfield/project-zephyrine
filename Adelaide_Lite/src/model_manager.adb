@@ -781,8 +781,12 @@ package body Model_Manager is
          C_Params.N_Ubatch := 512;
          C_Params.N_Threads := 8;
          C_Params.N_Threads_Batch := 8;
-         C_Params.Type_K := GGML_TYPE_F16;
-         C_Params.Type_V := GGML_TYPE_F16;
+         --  [DO NOT REMOVE] Q4_1 KV cache: 4-bit quantized KV cache saves
+         --  ~75% memory vs F16.  On 16GB M2 Pro, this is the difference
+         --  between fitting Qwen3.5-9B + 8192 ctx and OOM SIGTERM.
+         --  Quality loss is minimal for KV cache (activations, not weights).
+         C_Params.Type_K := GGML_TYPE_Q4_1;
+         C_Params.Type_V := GGML_TYPE_Q4_1;
 
          --  [NOTE] Disabling Flash Attention (Flash_Attn_Type := 0) was tested
          --  but did NOT fix the "WE RAN INTO A PROBLEM" (Trace/BPT trap: 5)
