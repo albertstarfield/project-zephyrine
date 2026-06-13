@@ -201,45 +201,6 @@ def main():
         else:
             print("[*] kokoclone already exists, skipping clone.")
 
-        # Check and clone Anemll (Apple Neural Engine Acceleration)
-        anemll_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "Anemll"))
-        if not os.path.exists(anemll_dir):
-            print("[*] Cloning Anemll (ANE Acceleration)...")
-            subprocess.run(["git", "clone", "https://github.com/Anemll/Anemll.git", anemll_dir], check=False)
-        else:
-            print("[*] Anemll already exists, skipping clone.")
-
-        # Check and clone flash-moe (Mixture-of-Experts Optimization)
-        moe_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "flash-moe"))
-        if not os.path.exists(moe_dir):
-            print("[*] Cloning flash-moe (MoE Optimization)...")
-            subprocess.run(["git", "clone", "https://github.com/danveloper/flash-moe.git", moe_dir], check=False)
-        else:
-            print("[*] flash-moe already exists, skipping clone.")
-
-        # Build Anemll Swift CLI for ANE acceleration
-        if platform.system() == "Darwin":
-            print("[*] Building Anemll Swift CLI...")
-            anemll_swift_dir = os.path.join(anemll_dir, "anemll-swift-cli")
-            try:
-                subprocess.run(["swift", "build", "-c", "release"], cwd=anemll_swift_dir, check=False)
-            except Exception as e:
-                print(f"[!] Failed to build Anemll Swift CLI: {e}")
-            
-        print("[*] Checking Anemll Python dependencies...")
-        import importlib.util
-        missing_deps = False
-        for dep in ["coremltools", "torch", "transformers", "scikit-learn", "sentencepiece"]:
-            if importlib.util.find_spec(dep) is None:
-                missing_deps = True
-                break
-                
-        if not missing_deps:
-            print("[+] Anemll Python dependencies satisfied.")
-        else:
-            print("[!] Anemll Python dependencies missing. Installing...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "coremltools", "torch", "transformers", "scikit-learn", "sentencepiece"], check=False)
-            
         # Ensure Kokoro TTS component dependencies are installed in an isolated venv
         kokoro_comp_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "tts_kokoro_component"))
         kokoro_venv_dir = os.path.join(kokoro_comp_dir, "venv")
