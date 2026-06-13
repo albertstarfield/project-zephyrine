@@ -150,10 +150,26 @@ package body Model_Manager is
             --  Max pages = 6 (original + 5 hops).
             Max_Divisions : constant Natural := 6;
             Cur_Division  : constant Natural := Fault_Total + 1;
+
+            --  Virtual Context: Internal_State bytes → approx tokens
+            --  Rule of thumb: ~3 bytes per token for English text
+            VC_Bytes   : constant Natural := Current_Internal_State_Len;
+            VC_Tokens  : constant Natural := VC_Bytes / 3;
+            --  As percentage of the LLM context window
+            LLM_Ctx    : constant Natural := Current_Ctx_Capacity;
+            VC_Ctx_Pct : constant Natural :=
+              (if LLM_Ctx > 0 then (VC_Tokens * 100) / LLM_Ctx else 0);
+
+            --  LLM Context: actual tokens submitted to llama.cpp
+            Prompt_Toks : constant Natural := Current_Prompt_Tokens;
+            LLM_Pct     : constant Natural :=
+              (if LLM_Ctx > 0 then (Prompt_Toks * 100) / LLM_Ctx else 0);
          begin
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
                       " === VIRTUAL CONTEXT STATUS (5s) ===");
+
+            --  ELP Queue: request depth (synthetic 2^63 capacity)
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
                       " ELP Queue: " &
@@ -163,22 +179,43 @@ package body Model_Manager is
                       " pending (" &
                       Long_Long_Float'Image (VC_Pct) &
                       "% used)");
+
+            --  Virtual Context: accumulated factual data (Internal_State)
+            --  This is the data paged in from tool results across hops
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
-                      " Context Fault Division Page:");
+                      " Virtual CTX: " &
+                      Natural'Image (VC_Bytes) & " bytes / " &
+                      Natural'Image (VC_Tokens) & " ~tokens" &
+                      " (" & Natural'Image (VC_Ctx_Pct) &
+                      "% of LLM window)");
+
+            --  LLM Context: actual tokens in the prompt submitted to llama
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
-                      "   Current Page=" & Natural'Image (Cur_Division) &
-                      " /" & Natural'Image (Max_Divisions) &
-                      " | Hops Used=" & Natural'Image (Fault_Total) &
-                      " /5 max");
+                      " LLM CTX:    " &
+                      Natural'Image (Prompt_Toks) & " / " &
+                      Natural'Image (LLM_Ctx) & " tokens" &
+                      " (" & Natural'Image (LLM_Pct) &
+                      "% used)");
+
+            --  Context Fault Division Page
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
-                      "   Internal_State Occupied=" &
-                      Natural'Image (Current_Internal_State_Len) &
-                      " bytes" & " | Page Jump=" &
+                      " Context Fault Page: " &
+                      Natural'Image (Cur_Division) & " /" &
+                      Natural'Image (Max_Divisions) &
+                      " | Hops=" & Natural'Image (Fault_Total) & "/5");
+
+            --  Internal_State size + page jump state
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[CtxMonitor]" & AnsiAda.Reset &
+                      " Internal_State=" &
+                      Natural'Image (VC_Bytes) & " bytes" &
+                      " | Page=" &
                       (if Fault_Total = 0 then "INITIAL"
                        else "HOP" & Natural'Image (Fault_Total)));
+
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
                       " ======================================");
@@ -1694,6 +1731,9 @@ package body Model_Manager is
          Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
                    " Prompt_Len:" & Clean_P'Length'Img &
                    " N_Toks:" & N_Toks'Img);
+         --  Track token count and context capacity for CtxMonitor
+         Current_Prompt_Tokens := Natural (N_Toks);
+         Current_Ctx_Capacity  := Natural (Models (Kind).Current_Ctx);
          Free (Prompt_C);
 
          --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
@@ -1973,10 +2013,12 @@ package body Model_Manager is
       --  silenced inside think blocks instead of leaking to the client.
       Orch_Parser      : Stream_Parser_State;
    begin
-      --  Reset context fault tracking for this request
-      Current_Context_Fault_Hops := 0;
-      Current_Internal_State_Len := 0;
-      Current_Hop_Count          := 0;
+       --  Reset context fault tracking for this request
+       Current_Context_Fault_Hops := 0;
+       Current_Internal_State_Len := 0;
+       Current_Hop_Count          := 0;
+       Current_Prompt_Tokens      := 0;
+       Current_Ctx_Capacity       := 8192;
 
       --  Initialize orchestration parser state. The immediate ACK in the
       --  dispatch already pushed `` + orchestration header to the queue.
