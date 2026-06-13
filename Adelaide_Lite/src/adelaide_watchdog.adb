@@ -40,6 +40,7 @@ procedure Adelaide_Watchdog is
    HB_File    : constant String := Run_Dir & "/adelaide_server.heartbeat";
    Args_File  : constant String := Run_Dir & "/adelaide_server.args";
    Server_Bin : constant String := "bin/adelaide_server";
+   WD_PID_File : constant String := Run_Dir & "/adelaide_watchdog.pid";
 
    --  Timeouts
    HB_Stale_Limit : constant Duration := 10.0;
@@ -54,6 +55,93 @@ procedure Adelaide_Watchdog is
    --  requires the private Process_Id type (no Integer-to-Process_Id conversion).
    function Sys_Kill (P : Integer; Sig : Integer) return Integer;
    pragma Import (C, Sys_Kill, "kill");
+
+   function Get_PID return Integer;
+   pragma Import (C, Get_PID, "getpid");
+
+   --  Check if another watchdog is already running.
+   --  Uses PID file + heartbeat freshness (same logic as server).
+   function Is_Another_Watchdog_Running return Boolean is
+      F       : File_Type;
+      S       : String (1 .. 16);
+      L       : Natural;
+      Old_PID : Integer;
+   begin
+      if not Exists (WD_PID_File) then
+         return False;
+      end if;
+
+      --  Read PID
+      begin
+         Open (F, In_File, WD_PID_File);
+         Get_Line (F, S, L);
+         Close (F);
+         Old_PID := Integer'Value (S (1 .. L));
+      exception
+         when others => return False;
+      end;
+
+      --  Can't check our own PID
+      if Old_PID = Get_PID then
+         return False;
+      end if;
+
+      --  Check if process is alive
+      if Sys_Kill (Old_PID, 0) /= 0 then
+         return False;  --  Dead => stale
+      end if;
+
+      --  Process alive — verify it's actually a watchdog by checking
+      --  if it wrote a heartbeat recently (within 30s).
+      --  If the heartbeat is stale, the PID was recycled.
+      declare
+         WD_HB_File : constant String := Run_Dir & "/adelaide_watchdog.heartbeat";
+         HB_F       : File_Type;
+         HB_S       : String (1 .. 32);
+         HB_L       : Natural;
+         HB_Time    : Duration;
+         Now_Time   : constant Time := Clock;
+         Now_Dur    : constant Duration :=
+           To_Duration (Now_Time - Time_Of (0, Time_Span_Zero));
+      begin
+         if not Exists (WD_HB_File) then
+            return False;
+         end if;
+         Open (HB_F, In_File, WD_HB_File);
+         Get_Line (HB_F, HB_S, HB_L);
+         Close (HB_F);
+         HB_Time := Duration'Value (HB_S (1 .. HB_L));
+         if Now_Dur - HB_Time > 30.0 then
+            return False;  --  Stale heartbeat => recycled PID
+         end if;
+      exception
+         when others => return False;
+      end;
+
+      return True;  --  Another watchdog is alive with fresh heartbeat
+   end Is_Another_Watchdog_Running;
+
+   --  Write our own PID file and heartbeat for other instances to detect.
+   procedure Write_Watchdog_PID is
+      F : File_Type;
+   begin
+      if not Exists (Run_Dir) then
+         Create_Path (Run_Dir);
+      end if;
+      Create (F, Out_File, WD_PID_File);
+      Put_Line (F, Integer'Image (Get_PID));
+      Close (F);
+   end Write_Watchdog_PID;
+
+   procedure Write_Watchdog_Heartbeat is
+      F : File_Type;
+      T : constant Duration :=
+        To_Duration (Clock - Time_Of (0, Time_Span_Zero));
+   begin
+      Create (F, Out_File, Run_Dir & "/adelaide_watchdog.heartbeat");
+      Put_Line (F, Duration'Image (T));
+      Close (F);
+   end Write_Watchdog_Heartbeat;
 
    Oneshot       : Boolean := False;
    Last_Restart  : Ada.Real_Time.Time := Time_Of (0, Time_Span_Zero);
@@ -379,6 +467,19 @@ begin
       return;
    end if;
 
+   --  SINGLE-INSTANCE LOCK: Refuse to start if another watchdog is running
+   if Is_Another_Watchdog_Running then
+      Put_Line (Standard_Error,
+        "[Watchdog] FATAL: Another adelaide_watchdog instance is already running!");
+      Put_Line (Standard_Error,
+        "[Watchdog] Kill the existing one first: kill $(cat run/adelaide_watchdog.pid)");
+      Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
+      return;
+   end if;
+
+   --  Write our own PID file so future instances can detect us
+   Write_Watchdog_PID;
+
    --  Parse --oneshot flag
    if Ada.Command_Line.Argument_Count > 0
      and then Ada.Command_Line.Argument (1) = "--oneshot"
@@ -396,6 +497,9 @@ begin
       API_Check_Count : Natural := 0;
    begin
       loop
+         --  Update our heartbeat so future instances can verify we're alive
+         Write_Watchdog_Heartbeat;
+
          Check_Server;
 
          --  Check all APIs every 30 seconds
