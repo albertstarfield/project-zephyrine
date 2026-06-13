@@ -525,7 +525,8 @@ package body Model_Manager is
    procedure Load_Model
      (Kind          : Model_Type;
       Success       : out Boolean;
-      Requested_Ctx : Positive := 4096)
+      Requested_Ctx : Positive := 4096;
+      Level         : ELP_Level := ELP1)
    is
       M_Params   : Llama_Model_Params := Llama_Model_Default_Params;
       C_Params   : Llama_Context_Params := Llama_Context_Default_Params;
@@ -712,7 +713,24 @@ package body Model_Manager is
       --      Full debug print added to show untruncated input. Content filtering
       --      fix pending in knowledge_manager.adb.
       --  ======================================================================
-      M_Params.N_Gpu_Layers := -1;  -- GPU enabled; crash is input-related (see QUIRK-M10)
+      --  EMBEDDING GPU STRATEGY (see QUIRK-M10):
+      --  ELP0 (background indexing): CPU-only — Metal kernel compilation
+      --    crashes with SIGTRAP that Kratos cannot catch (happens in Metal's
+      --    shader compiler thread). Background indexing processes hundreds of
+      --    chunks, so stability matters more than speed.
+      --  ELP1 (user-facing RAG): GPU — fast response for user queries.
+      --    If it crashes, the error handler skips the batch and continues.
+      --    Single-user requests are less likely to trigger the Metal crash.
+      --  ======================================================================
+      if Kind = Qwen_Embedding then
+         if Level = ELP0 then
+            M_Params.N_Gpu_Layers := 0;   -- CPU-only for background indexing
+         else
+            M_Params.N_Gpu_Layers := -1;  -- GPU for user-facing requests
+         end if;
+      else
+         M_Params.N_Gpu_Layers := -1;     -- GPU for all other models
+      end if;
 
       --  TRY THREE PATHS FOR MODEL FILES
       --  The CWD at runtime is unpredictable:
@@ -1163,7 +1181,7 @@ package body Model_Manager is
          Priority_Model_Gate.Acquire_ELP1 (Kind);
       end if;
 
-      Load_Model (Kind, Success, 1024);
+      Load_Model (Kind, Success, 1024, Level);
       if not Success then
          if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Kind);

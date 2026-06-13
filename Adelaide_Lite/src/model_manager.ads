@@ -21,7 +21,8 @@ package Model_Manager is
    procedure Load_Model
      (Kind          : Model_Type;
       Success       : out Boolean;
-      Requested_Ctx : Positive := 4096);
+      Requested_Ctx : Positive := 4096;
+      Level         : ELP_Level := ELP1);
 
    procedure Unload_Model (Kind : Model_Type);
 
