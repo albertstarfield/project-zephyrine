@@ -753,11 +753,22 @@ package body Adelaide_Server_Pkg is
                                          GNATCOLL.JSON.Get (Msgs, I);
                                        Role : constant String :=
                                          GNATCOLL.JSON.Get (M, "role");
+                                       --  Use Extract_Text_Content to handle both
+                                       --  string and array content formats
                                        Content : constant String :=
-                                         GNATCOLL.JSON.Get (M, "content");
+                                         To_String (Extract_Text_Content (M));
+                                       Has_OpenAI_Img  : Boolean;
+                                       Has_Ollama_Img  : Boolean;
+                                       pragma Unreferenced (Has_OpenAI_Img);
+                                       pragma Unreferenced (Has_Ollama_Img);
                                     begin
+                                       --  Extract text content into prompt
                                        Append (Prompt, "<|im_start|>" & Role & ASCII.LF &
                                                Content & "<|im_end|>" & ASCII.LF);
+                                       --  Extract and encode images (OpenAI format)
+                                       Has_OpenAI_Img := Extract_And_Encode_Images (M);
+                                       --  Extract and encode images (Ollama format)
+                                       Has_Ollama_Img := Extract_Ollama_Images (M);
                                     end;
                                  end loop;
                                  Append (Prompt, "<|im_start|>assistant" & ASCII.LF);

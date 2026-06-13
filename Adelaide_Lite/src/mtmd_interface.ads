@@ -129,4 +129,38 @@ package Mtmd_Interface is
    function Mtmd_Default_Marker_Safe return chars_ptr;
    pragma Import (C, Mtmd_Default_Marker_Safe, "mtmd_default_marker_safe");
 
+   --  Tokenize text prompt + bitmaps into input chunks.
+   --  The text must contain the media marker (default: "<__media__>").
+   --  Number of bitmaps must equal number of markers in text.
+   --  Returns 0 on success, 1 on marker/bitmap count mismatch, 2 on image error.
+   function Mtmd_Tokenize_Safe
+     (Ctx           : Mtmd_Context;
+      Output        : Mtmd_Input_Chunks;
+      Text          : chars_ptr;
+      Add_Special   : Boolean;
+      Parse_Special : Boolean;
+      Bitmaps       : System.Address;
+      N_Bitmaps     : size_t) return int;
+   pragma Import (C, Mtmd_Tokenize_Safe, "mtmd_tokenize_safe");
+
+   --  Create bitmap from image buffer (JPEG, PNG, etc.)
+   --  Uses stb_image internally to decode the image bytes.
+   --  Returns Null_Mtmd_Bitmap on failure.
+   function Mtmd_Helper_Bitmap_Init_From_Buf_Safe
+     (Ctx : Mtmd_Context;
+      Buf : System.Address;
+      Len : size_t) return Mtmd_Bitmap;
+   pragma Import
+     (C, Mtmd_Helper_Bitmap_Init_From_Buf_Safe,
+      "mtmd_helper_bitmap_init_from_buf_safe");
+
+   --  Get a chunk from the chunks list by index.
+   --  Returns null address if index is out of range.
+   --  WARNING: The returned pointer is owned by the chunks list - do NOT free it.
+   function Mtmd_Input_Chunks_Get_Safe
+     (Chunks : Mtmd_Input_Chunks;
+      Idx    : size_t) return Mtmd_Input_Chunk;
+   pragma Import
+     (C, Mtmd_Input_Chunks_Get_Safe, "mtmd_input_chunks_get_safe");
+
 end Mtmd_Interface;
