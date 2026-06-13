@@ -42,6 +42,8 @@ procedure Adelaide_Watchdog is
    function Is_Shutdown_Requested return Interfaces.C.int;
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
 
+   Shutdown_Requested : exception;
+
    Run_Dir    : constant String := "run";
    PID_File   : constant String := Run_Dir & "/adelaide_server.pid";
    HB_File    : constant String := Run_Dir & "/adelaide_server.heartbeat";
@@ -49,6 +51,8 @@ procedure Adelaide_Watchdog is
    Server_Bin : constant String := "bin/adelaide_server";
    WD_PID_File : constant String := Run_Dir & "/adelaide_watchdog.pid";
    Shutdown_Flag : constant String := Run_Dir & "/.shutdown_requested";
+   WD_HB_File    : constant String :=
+     Run_Dir & "/adelaide_watchdog.heartbeat";
 
    --  Timeouts
    HB_Stale_Limit : constant Duration := 10.0;
@@ -103,7 +107,6 @@ procedure Adelaide_Watchdog is
       --  if it wrote a heartbeat recently (within 30s).
       --  If the heartbeat is stale, the PID was recycled.
       declare
-         WD_HB_File : constant String := Run_Dir & "/adelaide_watchdog.heartbeat";
          HB_F       : File_Type;
          HB_S       : String (1 .. 32);
          HB_L       : Natural;
@@ -146,7 +149,7 @@ procedure Adelaide_Watchdog is
       T : constant Duration :=
         To_Duration (Clock - Time_Of (0, Time_Span_Zero));
    begin
-      Create (F, Out_File, Run_Dir & "/adelaide_watchdog.heartbeat");
+      Create (F, Out_File, WD_HB_File);
       Put_Line (F, Duration'Image (T));
       Close (F);
    end Write_Watchdog_Heartbeat;
@@ -267,9 +270,9 @@ procedure Adelaide_Watchdog is
            Integer'Image (Old_Pid));
          if Sys_Kill (Old_Pid, 15) /= 0 then    --  SIGTERM
             declare
-               R : Integer := Sys_Kill (Old_Pid, 9);  --  SIGKILL
+               Unused_Result : Integer;
             begin
-               null;
+               Unused_Result := Sys_Kill (Old_Pid, 9);  --  SIGKILL
             end;
          end if;
          delay 1.0;
@@ -400,7 +403,7 @@ procedure Adelaide_Watchdog is
    --  Port is read from environment variable ADLAIDE_SERVER_PORT.
 
    Endpoints : constant array (1 .. 10) of access constant String :=
-     (new String'("/api/version"),
+     [new String'("/api/version"),
       new String'("/api/tags"),
       new String'("/api/power"),
       new String'("/v1/models"),
@@ -409,7 +412,7 @@ procedure Adelaide_Watchdog is
       new String'("/v1/audio/speech"),
       new String'("/v1/audio/transcriptions"),
       new String'("/api/telemetry"),
-      new String'("/api/ps"));
+      new String'("/api/ps")];
 
    --  Port/Host resolution: args > env vars > defaults
    function Get_Port return String is
@@ -443,7 +446,6 @@ procedure Adelaide_Watchdog is
    end Get_Host;
 
    procedure Check_All_APIs is
-      use GNAT.OS_Lib;
       Port     : constant String := Get_Port;
       Host     : constant String := Get_Host;
       Base_URL : constant String := "http://" & Host & ":" & Port;
@@ -456,7 +458,8 @@ procedure Adelaide_Watchdog is
          declare
             Ep_Name : constant String := Ep.all;
             Cmd   : constant String :=
-              "curl -s -o /dev/null -w '%{http_code}' --max-time 2 " &
+              "curl -s -o /dev/null -w '%{http_code}' " &
+              "--max-time 2 " &
               Base_URL & Ep_Name & "?ping=true";
             Args  : Argument_List (1 .. 2);
          begin
@@ -490,7 +493,9 @@ begin
    --  Refuse to run if not launched through run.py orchestration.
    --  This prevents orphaned processes, broken health monitoring, and
    --  resource leaks from direct binary execution.
-   if not Ada.Environment_Variables.Exists ("ADLAIDE_WATCHDOG_ORCHESTRATED") then
+   if not Ada.Environment_Variables.Exists
+     ("ADLAIDE_WATCHDOG_ORCHESTRATED")
+   then
       Put_Line (Standard_Error,
         "[Watchdog] FATAL: Cannot run adelaide_watchdog directly.");
       Put_Line (Standard_Error,
