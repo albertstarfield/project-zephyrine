@@ -13,4 +13,8 @@ package Adelaide_Server_Pkg is
    procedure Unregister (ID : String);
    procedure Push_Log (ID : String; Log : String);
 
+   --  Last API endpoint tracker (thread-safe for heartbeat)
+   procedure Set_Last_API (URI : String);
+   function Get_Last_API return String;
+
 end Adelaide_Server_Pkg;

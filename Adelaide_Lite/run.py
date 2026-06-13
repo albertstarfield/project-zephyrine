@@ -67,15 +67,58 @@ def show_help():
 
   {BOLD}{WHT}OPTIONS{RST}
     {GRN}--no-gui{RST}                        Launch server without the Python Sidecar UI
+    {GRN}--host{RST} {CYN}HOST{RST}                     Bind address (default: 0.0.0.0, env: ADLAIDE_SERVER_HOST)
+    {GRN}--port{RST} {CYN}PORT{RST}                     Bind port (default: 11420, env: ADLAIDE_SERVER_PORT)
     {GRN}--test-build-integrity-check{RST}    Build only, verify integrity, then exit
     {GRN}-h{RST}, {GRN}--help{RST}                  Show this help screen
 
+  {BOLD}{WHT}EXAMPLES{RST}
+    {DIM}Default — full GUI, binds on all interfaces, port 11420:{RST}
+      {CYN}./run.sh{RST}
+
+    {DIM}Headless server, no GUI sidecar:{RST}
+      {CYN}./run.sh --no-gui{RST}
+
+    {DIM}Custom port (e.g. 8080):{RST}
+      {CYN}./run.sh --port 8080{RST}
+      {DIM}→ API at http://localhost:8080{RST}
+
+    {DIM}Bind to localhost only (private, no LAN access):{RST}
+      {CYN}./run.sh --host 127.0.0.1{RST}
+      {DIM}→ API at http://127.0.0.1:11420{RST}
+
+    {DIM}Custom host + port:{RST}
+      {CYN}./run.sh --host 0.0.0.0 --port 9000{RST}
+      {DIM}→ API at http://localhost:9000{RST}
+
+    {DIM}Headless with custom port:{RST}
+      {CYN}./run.sh --no-gui --port 8080{RST}
+
+    {DIM}Via environment variables:{RST}
+      {CYN}ADLAIDE_SERVER_PORT=3000 ADLAIDE_SERVER_HOST=127.0.0.1 ./run.sh{RST}
+
+    {DIM}Docker / LAN access (bind all interfaces):{RST}
+      {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
+      {DIM}→ API at http://<your-ip>:11420 from other machines{RST}
+
+    {DIM}Phone / Cloud Terminal (access from phone or tablet):{RST}
+      {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
+      {DIM}→ Find your Mac IP: ifconfig | grep 'inet '{RST}
+      {DIM}→ Open http://<your-mac-ip>:11420 on your phone browser{RST}
+      {DIM}→ Or use curl in Termux / iSH / a-Shell:{RST}
+      {DIM}  curl http://<your-mac-ip>:11420/api/version{RST}
+
+    {DIM}Multiple devices ( LAN party / office ):{RST}
+      {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
+      {DIM}→ Any device on same network can hit http://<mac-ip>:11420{RST}
+      {DIM}→ Works with OpenWebUI, OpenCode, curl, or any HTTP client{RST}
+
   {BOLD}{WHT}RUNTIME PROCESSES{RST}
     {MGN}1. StellaIcarus Daemon{RST}    Hardware monitor, power state, telemetry
-    {MGN}2. adelaide_server{RST}        Ada/AWS HTTP API (port 11420)
+    {MGN}2. adelaide_server{RST}        Ada/AWS HTTP API (default port 11420)
     {MGN}3. adelaide_watchdog{RST}      Monitors server health, auto-restarts
 
-  {BOLD}{WHT}ADA SERVER API (port 11420){RST}
+  {BOLD}{WHT}ADA SERVER API{RST} (connect via {CYN}http://localhost:11420{RST} or {CYN}http://127.0.0.1:11420{RST})
     {CYN}POST{RST} /api/chat                Chat completion (streaming)
     {CYN}POST{RST} /api/generate            Text generation
     {CYN}POST{RST} /v1/chat/completions    OpenAI-compatible chat
@@ -329,8 +372,9 @@ def cleanup(signum=None, frame=None):
         daemon_process.terminate()
     if server_process and server_process.poll() is None:
         server_process.terminate()
-    if watchdog_process and watchdog_process.poll() is None:
-        watchdog_process.terminate()
+    # DO NOT kill watchdog here — it has its own restart logic.
+    # If the server crashes, the watchdog detects it and relaunches.
+    # Killing the watchdog defeats that purpose.
     sys.exit(0)
 
 signal.signal(signal.SIGINT, cleanup)
@@ -605,6 +649,15 @@ def main():
     if "--no-gui" in sys.argv:
         launch_gui = False
 
+    # Port/Host: args > env > defaults
+    server_host = os.environ.get("ADLAIDE_SERVER_HOST", "0.0.0.0")
+    server_port = os.environ.get("ADLAIDE_SERVER_PORT", "11420")
+    for i, arg in enumerate(sys.argv):
+        if arg == "--host" and i + 1 < len(sys.argv):
+            server_host = sys.argv[i + 1]
+        if arg == "--port" and i + 1 < len(sys.argv):
+            server_port = sys.argv[i + 1]
+
     print("[*] Booting StellaIcarus Ada Daemon Manager...")
     python_cmd = sys.executable
     daemon_script = os.path.join(BASE_DIR, "python", "stellaicarus_daemon_runner.py")
@@ -613,7 +666,7 @@ def main():
     if daemon_build_flag:
         daemon_args.append(daemon_build_flag)
         
-    daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR)
+    daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR, start_new_session=True)
 
     print("[*] Booting Adelaide Intelligence Server...")
     end_time = int(time.time() * 1000)
@@ -649,7 +702,13 @@ def main():
         env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
     
     # Run server directly (ALIRE wrapper changes CWD which breaks relative model paths)
-    server_process = subprocess.Popen([server_path], cwd=BASE_DIR, env=env)
+    # Write server launch args to file so the watchdog can relaunch with same args.
+    server_args = ["--host", server_host, "--port", server_port]
+    server_args_file = os.path.join(BASE_DIR, "run", "adelaide_server.args")
+    with open(server_args_file, "w") as f:
+        f.write(" ".join(server_args))
+    server_process = subprocess.Popen([server_path] + server_args, cwd=BASE_DIR, env=env,
+                                       start_new_session=True)
 
     # Launch external watchdog process (separate binary, monitors server health)
     # [DO NOT REMOVE THIS] LAUNCH GUARD: Set orchestration flag so watchdog
@@ -660,12 +719,16 @@ def main():
         print("[*] Booting Adelaide Watchdog...")
         watchdog_env = env.copy()
         watchdog_env["ADLAIDE_WATCHDOG_ORCHESTRATED"] = "1"
-        if shutil.which("alr"):
-            watchdog_process = subprocess.Popen(["alr", "exec", "--", watchdog_path], cwd=BASE_DIR, env=watchdog_env,
-                                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        else:
-            watchdog_process = subprocess.Popen([watchdog_path], cwd=BASE_DIR, env=watchdog_env,
-                                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        # Launch watchdog fully detached — nohup + own session + own process group.
+        # This ensures the watchdog survives even if run.py exits or the
+        # terminal is closed.  The watchdog monitors the server via file-based
+        # IPC (run/ directory) so it doesn't need a parent process.
+        watchdog_log = os.path.join(BASE_DIR, "run", "adelaide_watchdog.log")
+        with open(watchdog_log, "a") as wlog:
+            watchdog_process = subprocess.Popen(
+                [watchdog_path], cwd=BASE_DIR, env=watchdog_env,
+                stdout=wlog, stderr=subprocess.STDOUT,
+                start_new_session=True)
     else:
         print("[!] Watchdog binary not found at", watchdog_path, "- skipping")
 

@@ -31,6 +31,7 @@ with Ada.Command_Line;
 with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Real_Time; use Ada.Real_Time;
+with Ada.Environment_Variables;
 with Adelaide_Server_Pkg;
 with Model_Manager;
 with Knowledge_Manager;
@@ -159,6 +160,37 @@ procedure Adelaide_Server is
    --  Conf is populated from AWS defaults then overridden with our port/host.
    WS   : AWS.Server.HTTP;
    Conf : AWS.Config.Object := AWS.Config.Get_Current;
+
+   --  Port/Host resolution: args > env vars > defaults
+   function Get_Port return Natural is
+   begin
+      for I in 1 .. Ada.Command_Line.Argument_Count loop
+         if Ada.Command_Line.Argument (I) = "--port"
+           and then I < Ada.Command_Line.Argument_Count
+         then
+            return Natural'Value (Ada.Command_Line.Argument (I + 1));
+         end if;
+      end loop;
+      if Ada.Environment_Variables.Exists ("ADLAIDE_SERVER_PORT") then
+         return Natural'Value (Ada.Environment_Variables.Value ("ADLAIDE_SERVER_PORT"));
+      end if;
+      return 11420;
+   end Get_Port;
+
+   function Get_Host return String is
+   begin
+      for I in 1 .. Ada.Command_Line.Argument_Count loop
+         if Ada.Command_Line.Argument (I) = "--host"
+           and then I < Ada.Command_Line.Argument_Count
+         then
+            return Ada.Command_Line.Argument (I + 1);
+         end if;
+      end loop;
+      if Ada.Environment_Variables.Exists ("ADLAIDE_SERVER_HOST") then
+         return Ada.Environment_Variables.Value ("ADLAIDE_SERVER_HOST");
+      end if;
+      return "0.0.0.0";
+   end Get_Host;
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
    --  Max_Retries: How many times we attempt to bind port 11420 before
@@ -456,21 +488,27 @@ begin
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 5 DONE: Knowledge_Manager.Start_Tasks returned.");
 
       --  ==================================================================
-      --  STEP 6: Bind HTTP server to port 11420
+      --  STEP 6: Bind HTTP server
       --  ==================================================================
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  Configure AWS to listen on all interfaces (0.0.0.0) on port 11420.
+      --  Configure AWS to listen on all interfaces (0.0.0.0).
+      --  Port is read from ADLAIDE_SERVER_PORT env var, default 11420.
       --  Reuse_Address allows rebinding even if a previous server is in
       --  TIME_WAIT state.  This is critical for crash-recovery scenarios
       --  where the old process was killed but the socket hasn't fully
       --  released yet.
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: wraps HTTP server config and bind.
-      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 6: Configuring AWS HTTP server...");
-      AWS.Config.Set.Server_Port (Conf, 11420);
-      AWS.Config.Set.Server_Host (Conf, "0.0.0.0");
-      AWS.Config.Set.Reuse_Address (Conf, True);
+      declare
+         Port : constant Natural := Get_Port;
+         Host : constant String := Get_Host;
+      begin
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 6: Configuring AWS HTTP server on " & Host & ":" & Natural'Image (Port) & "...");
+         AWS.Config.Set.Server_Port (Conf, Port);
+         AWS.Config.Set.Server_Host (Conf, Host);
+         AWS.Config.Set.Reuse_Address (Conf, True);
+      end;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 6: AWS config set. Entering bind retry loop...");
 
@@ -765,12 +803,23 @@ begin
       --  ----------------------------------------------------------------
       declare
          Heartbeat_Count : Natural := 0;
+         Alive_Count     : Natural := 0;
       begin
          --  Avoid Get_Line failure in background
          loop
             Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
             Watchdog_IPC.Write_Heartbeat;
             Heartbeat_Count := Heartbeat_Count + 1;
+            Alive_Count     := Alive_Count + 1;
+            if Alive_Count >= 3 then
+               Alive_Count := 0;
+               Ada.Text_IO.Put_Line
+                 (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Heartbeat]" &
+                   AnsiAda.Reset & " Server alive - uptime " &
+                  Trim(Duration'Image(Ada.Real_Time.To_Duration
+                    (Ada.Real_Time.Clock - Start_Time)), Both) & "s" &
+                  " | API: " & Adelaide_Server_Pkg.Get_Last_API);
+            end if;
             if Heartbeat_Count >= 5 then
                Heartbeat_Count := 0;
                Ada.Text_IO.Put_Line
