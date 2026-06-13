@@ -9,6 +9,99 @@ import signal
 import shutil
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+
+# ANSI Color Codes
+RST  = "\033[0m"
+BOLD = "\033[1m"
+DIM  = "\033[2m"
+RED  = "\033[31m"
+GRN  = "\033[32m"
+YLW  = "\033[33m"
+BLU  = "\033[34m"
+MGN  = "\033[35m"
+CYN  = "\033[36m"
+WHT  = "\033[97m"
+BG_B = "\033[44m\033[97m"
+
+def get_git_version():
+    """Get current git commit hash and branch from the project root."""
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=PROJECT_ROOT, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=PROJECT_ROOT, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        dirty = subprocess.check_output(
+            ["git", "status", "--porcelain"],
+            cwd=PROJECT_ROOT, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        status = f"{YLW}(dirty){RST}" if dirty else f"{GRN}(clean){RST}"
+        return commit, branch, status
+    except Exception:
+        return None, None, None
+
+def show_help():
+    """Print colorful help screen with ASCII Adelaide and git version."""
+    commit, branch, status = get_git_version()
+    ver_str = f"{CYN}{commit}{RST}" if commit else f"{DIM}unknown{RST}"
+    brn_str = f"{MGN}{branch}{RST}" if branch else f"{DIM}unknown{RST}"
+
+    print(f"""
+{BG_B}{'='*70}{RST}
+{BG_B}{'  Adelaide Intelligence Platform — run.sh'.center(70)}{RST}
+{BG_B}{'='*70}{RST}
+
+  {BOLD}{CYN}        _    _   _____  ____  _   _ __  __ ____  _     _____ ____  {RST}
+  {BOLD}{CYN}       / \\  | | |___ / |  _ \\| | | |  \\/  |  _ \\| |   | ____|  _ \\ {RST}
+  {BOLD}{CYN}      / _ \\ | |   |_ \\ | |_) | | | | |\\/| | |_) | |   |  _| | |_) |{RST}
+  {BOLD}{CYN}     / ___ \\| |___ ___)|  __/| |_| | |  | |  __/| |___| |___|  _ < {RST}
+  {BOLD}{CYN}    /_/   \\_\\_____|____/|_|    \\___/|_|  |_|_|   |_____|_____|_| \\_\\{RST}
+
+  {BOLD}Whimsical Automata Companion — Snowball-Enaga{RST}
+  {DIM}Hybrid Multi-Hop Reasoning · ELP Priority Queue · Kratos Crash Isolation{RST}
+
+  {BOLD}Version:{RST}  {ver_str}  {status}
+  {BOLD}Branch:{RST}   {brn_str}
+  {BOLD}Platform:{RST} {YLW}{platform.system()}{RST} ({platform.machine()})
+
+  {BOLD}{WHT}USAGE{RST}
+    {CYN}./run.sh{RST} [OPTIONS]
+
+  {BOLD}{WHT}OPTIONS{RST}
+    {GRN}--no-gui{RST}                        Launch server without the Python Sidecar UI
+    {GRN}--test-build-integrity-check{RST}    Build only, verify integrity, then exit
+    {GRN}-h{RST}, {GRN}--help{RST}                  Show this help screen
+
+  {BOLD}{WHT}RUNTIME PROCESSES{RST}
+    {MGN}1. StellaIcarus Daemon{RST}    Hardware monitor, power state, telemetry
+    {MGN}2. adelaide_server{RST}        Ada/AWS HTTP API (port 11420)
+    {MGN}3. adelaide_watchdog{RST}      Monitors server health, auto-restarts
+
+  {BOLD}{WHT}API ENDPOINTS{RST}
+    {CYN}POST{RST} /api/chat              Chat completion (streaming)
+    {CYN}POST{RST} /api/generate          Text generation
+    {CYN}POST{RST} /api/embeddings        Text embeddings
+    {CYN}POST{RST} /api/transcribe        Speech-to-text (Moonshine)
+    {CYN}POST{RST} /api/tts               Text-to-speech (Kokoro)
+    {CYN}POST{RST} /api/vision            Image analysis (CLIP)
+    {CYN}GET{RST}  /api/health            Health check
+    {CYN}GET{RST}  /api/power             Power state (StellaIcarus)
+    {CYN}POST{RST} /api/schedule          Schedule a delayed task
+    {CYN}GET{RST}  /v1/models             List available models
+
+  {BOLD}{WHT}MODEL TYPES{RST}
+    {YLW}Qwen_0_8B{RST}       Small LLM (always loaded)
+    {YLW}Qwen_9B{RST}         Large LLM (loaded on-demand)
+    {YLW}Qwen_Embedding{RST}  Semantic search embeddings
+    {YLW}MMProj{RST}          Multimodal CLIP vision
+
+  {DIM}  Documentation:  Adelaide_Lite/documentation/{RST}
+  {DIM}  Architecture:   Adelaide_Lite/run.py (line 14){RST}
+""")
 
 # ============================================================================
 # [DO NOT REMOVE] ADELAITE LITE — PROGRAM ARCHITECTURE
@@ -141,6 +234,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 #  Windows is NOT supported.  The build system (adelaide_lite.gpr) also
 #  blocks compilation on Windows, but this is an additional guard.
 #  LINUX-COMPAT (future): When porting to Linux, remove this check.
+if "--help" in sys.argv or "-h" in sys.argv:
+    show_help()
+    sys.exit(0)
+
 if platform.system() == "Windows":
     print("[FATAL] Windows (NT kernel) is not supported.")
     print("[FATAL] This server targets macOS (arm64) with planned Linux support.")
