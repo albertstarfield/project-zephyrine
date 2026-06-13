@@ -97,7 +97,7 @@ package body Watchdog_IPC is
             Close (Cmd_File);
 
             --  Heartbeat file contains a monotonic timestamp.
-            --  If it's more than 5 seconds old, the server is dead.
+            --  If it's more than 2 seconds old, the server is dead.
             declare
                HB_Time : constant Duration :=
                  Duration'Value (To_String (Line));
@@ -105,7 +105,7 @@ package body Watchdog_IPC is
                  To_Duration (Clock - Time_Of (0, Time_Span_Zero));
                Age     : constant Duration := Now - HB_Time;
             begin
-               if Age > 5.0 then
+               if Age > 2.0 then
                   --  Heartbeat is stale => old server is dead, PID recycled
                   return False;
                end if;
