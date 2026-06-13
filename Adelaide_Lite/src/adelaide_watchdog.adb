@@ -111,7 +111,7 @@ procedure Adelaide_Watchdog is
          Get_Line (HB_F, HB_S, HB_L);
          Close (HB_F);
          HB_Time := Duration'Value (HB_S (1 .. HB_L));
-         if Now_Dur - HB_Time > 5.0 then
+         if Now_Dur - HB_Time > 2.0 then
             return False;  --  Stale heartbeat (>5s) => recycled PID
          end if;
       exception
