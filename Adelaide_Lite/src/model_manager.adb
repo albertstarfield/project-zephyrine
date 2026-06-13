@@ -2914,18 +2914,21 @@ package body Model_Manager is
       --  EMULATED STREAMING (300 tok/s simulation)
       --  The model's response was already streamed token-by-token through
       --  the stream parser during Generate (Process_And_Push_Chunk). The
-      --  parser silenced content inside think blocks and pushed visible
-      --  content to the queue. This emulated streaming loop ONLY pushes
-      --  the closing `` tag AFTER the response content has been
-      --  fully streamed. It does NOT re-push the response text because
-      --  that would cause duplication (client sees response twice).
+      --  parser pushed content to the queue inside the `<think>` block.
+      --  This emulated streaming loop does TWO things:
       --
-      --  WHY THIS EXISTS: The immediate ACK pushes `` + orchestration
-      --  header. The model generates response content inside think blocks
-      --  (silenced by parser). After the model finishes, we need to close
-      --  the think block so the client knows the response is complete.
-      --  The 300 tok/s simulation delay ensures the closing tag arrives
-      --  after all response chunks have been flushed by AWS.
+      --  1. Pushes `</think>` to close the think block
+      --  2. Pushes the visible response text AFTER `</think>`
+      --
+      --  DUPLICATION IS INTENTIONAL (DO NOT REMOVE): The response content
+      --  appears both inside `<think>` (from Generate token streaming) AND
+      --  after `</think>` (from this emulation). This is required for the
+      --  client-side "status quo" field to decode the response correctly.
+      --  Removing the re-emission would break status quo field decoding.
+      --
+      --  The 300 tok/s simulation delay ensures the closing tag and the
+      --  re-emitted response arrive after all chunks have been flushed by
+      --  AWS, making the stream appear to flow at a human-readable pace.
       if not External_Agent and then Stream /= null then
          declare
             Sim_TPS      : constant Float := 300.0;
@@ -2942,10 +2945,13 @@ package body Model_Manager is
                       AnsiAda.Reset & " Hybrid_Generate: Waiting " &
                       Duration'Image (Delay_Time) & "s for 300 tok/s sim.");
             delay Delay_Time;
-            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                      AnsiAda.Reset & " Hybrid_Generate: STREAMING COMPLETE.");
-            Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                       AnsiAda.Reset & " Hybrid_Generate: STREAMING COMPLETE.");
+             --  [DUPLICATION IS INTENTIONAL] Pushing `</think>` first, then
+             --  re-emitting the visible response for status quo decoding.
+             Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
+             Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
          end;
       elsif External_Agent and then Stream /= null then
          declare
