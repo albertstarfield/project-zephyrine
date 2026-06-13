@@ -32,8 +32,15 @@ with Ada.Real_Time;         use Ada.Real_Time;
 with Ada.Command_Line;
 with Ada.Environment_Variables;
 with GNAT.OS_Lib;           use GNAT.OS_Lib;
+with Interfaces.C;          use Interfaces.C;
 
 procedure Adelaide_Watchdog is
+
+   --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
+   procedure Install_Shutdown_Handlers;
+   pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
+   function Is_Shutdown_Requested return Interfaces.C.int;
+   pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
 
    Run_Dir    : constant String := "run";
    PID_File   : constant String := Run_Dir & "/adelaide_server.pid";
@@ -480,6 +487,9 @@ begin
    --  Write our own PID file so future instances can detect us
    Write_Watchdog_PID;
 
+   --  [DO NOT REMOVE] Install SIGINT/SIGTERM handlers for graceful shutdown.
+   Install_Shutdown_Handlers;
+
    --  Parse --oneshot flag
    if Ada.Command_Line.Argument_Count > 0
      and then Ada.Command_Line.Argument (1) = "--oneshot"
@@ -497,6 +507,22 @@ begin
       API_Check_Count : Natural := 0;
    begin
       loop
+         --  [DO NOT REMOVE] Graceful shutdown check (SIGINT/SIGTERM).
+         if Is_Shutdown_Requested /= 0 then
+            Put_Line (Standard_Error,
+              "[Watchdog] SIGINT/SIGTERM received. Shutting down gracefully...");
+            --  Clean up our own PID file
+            if Exists (WD_PID_File) then
+               Delete_File (WD_PID_File);
+            end if;
+            if Exists (Run_Dir & "/adelaide_watchdog.heartbeat") then
+               Delete_File (Run_Dir & "/adelaide_watchdog.heartbeat");
+            end if;
+            Put_Line (Standard_Error,
+              "[Watchdog] Clean shutdown complete.");
+            return;
+         end if;
+
          --  Update our heartbeat so future instances can verify we're alive
          Write_Watchdog_Heartbeat;
 

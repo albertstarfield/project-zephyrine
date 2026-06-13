@@ -32,6 +32,7 @@ with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Environment_Variables;
+with Ada.Directories;
 with Adelaide_Server_Pkg;
 with Model_Manager;
 with Knowledge_Manager;
@@ -49,6 +50,7 @@ with Ada.Streams.Stream_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Moonshine_Interface;
 with ELP_Queue;
+with Interfaces.C; use Interfaces.C;
 
 --  ===========================================================================
 --  SERVER QUIRKS & DISCOVERED WORKAROUNDS
@@ -92,6 +94,12 @@ with ELP_Queue;
 --  ===========================================================================
 
 procedure Adelaide_Server is
+
+   --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
+   procedure Install_Shutdown_Handlers;
+   pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
+   function Is_Shutdown_Requested return Interfaces.C.int;
+   pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
    --  ==================================================================
@@ -225,6 +233,11 @@ begin
          Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
          return;
       end if;
+
+      --  [DO NOT REMOVE] Install SIGINT/SIGTERM handlers for graceful shutdown.
+      --  Without this, Ctrl+C kills the process immediately, leaving stale
+      --  PID/heartbeat files, and the watchdog restarts the server.
+      Install_Shutdown_Handlers;
 
       --  ==================================================================
       --  STEP 1-4: Core subsystem initialization
@@ -826,6 +839,27 @@ begin
       begin
          --  Avoid Get_Line failure in background
          loop
+            --  [DO NOT REMOVE] Graceful shutdown check (SIGINT/SIGTERM).
+            --  If Ctrl+C or kill was received, exit the loop cleanly.
+            if Is_Shutdown_Requested /= 0 then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                         "[Shutdown]" & AnsiAda.Reset &
+                         " SIGINT/SIGTERM received. Cleaning up...");
+               --  Write clean exit reason (not a crash)
+               Watchdog_IPC.Write_Exit_Reason ("Clean Shutdown (SIGINT/SIGTERM)", 0);
+               --  Delete PID file so watchdog doesn't try to restart
+               if Ada.Directories.Exists ("run/adelaide_server.pid") then
+                  Ada.Directories.Delete_File ("run/adelaide_server.pid");
+               end if;
+               if Ada.Directories.Exists ("run/adelaide_server.heartbeat") then
+                  Ada.Directories.Delete_File ("run/adelaide_server.heartbeat");
+               end if;
+               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                         "[Shutdown]" & AnsiAda.Reset &
+                         " Clean shutdown complete.");
+               return;
+            end if;
+
             Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
             Watchdog_IPC.Write_Heartbeat;
             Heartbeat_Count := Heartbeat_Count + 1;
