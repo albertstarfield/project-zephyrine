@@ -819,10 +819,10 @@ package body Model_Manager is
          C_Params.Type_K := GGML_TYPE_Q4_1;
          C_Params.Type_V := GGML_TYPE_Q4_1;
 
-         --  [NOTE] Disabling Flash Attention (Flash_Attn_Type := 0) was tested
-         --  but did NOT fix the "WE RAN INTO A PROBLEM" (Trace/BPT trap: 5)
-         --  crashes on the Metal backend. CPU-only override is the only fix.
-         C_Params.Flash_Attn_Type := 0;
+         --  Flash attention MUST be enabled for Q4_1 KV cache.
+         --  llama.cpp: "V cache quantization requires flash_attn"
+         --  Value 1 = flash_attn enabled (non-causal not needed for LLM).
+         C_Params.Flash_Attn_Type := 1;
 
          C_Params.Abort_Callback := Llama_Abort_Callback'Address;
          C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;
