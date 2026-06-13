@@ -1588,18 +1588,39 @@ package body Model_Manager is
          end if;
 
          --  CONTEXT FAULT DETECTION (inside think block only)
+         --
+         --  CRITICAL: Characters arrive ONE AT A TIME through this function
+         --  (Process_And_Push_Char is called per character by Process_And_Push_Chunk).
+         --  If we clear the buffer after each character, the pattern
+         --  [CONTEXT_FAULT:query=X category=Y] can never accumulate because:
+         --    char 1: Buf="[", not a tag prefix → would be cleared
+         --    char 2: Buf="C", would be cleared
+         --    etc.
+         --
+         --  FIX: Inside the think block, we DO NOT clear the buffer after
+         --  each character. Instead, we keep accumulating until either:
+         --  (a) A complete [CONTEXT_FAULT:...] marker is found → handle it
+         --  (b) Buffer exceeds MAX_FAULT_LEN → it's regular think content,
+         --      clear the buffer to prevent unbounded growth
          if Parser.In_Think_Block then
             declare
-               Fault_Mark : constant String := "[CONTEXT_FAULT:";
-               F_Pos      : constant Natural := Index (Buf, Fault_Mark);
+               Fault_Mark   : constant String := "[CONTEXT_FAULT:";
+               --  Max buffer size for fault detection. The fault marker
+               --  is [CONTEXT_FAULT:query=... category=...] which typically
+               --  fits within 150 chars. Using 500 as a generous upper bound.
+               MAX_FAULT_LEN : constant Integer := 500;
+               SBuf         : constant String := To_String (Parser.Sanitize_Buffer);
+               F_Pos        : constant Natural := Index (SBuf, Fault_Mark);
             begin
                if F_Pos > 0 then
+                  --  Found the fault marker prefix. Check if complete: [...]
                   declare
                      Rest      : constant String :=
-                       Buf (F_Pos + Fault_Mark'Length .. Buf'Last);
+                       SBuf (F_Pos + Fault_Mark'Length .. SBuf'Last);
                      Close_Pos : constant Natural := Index (Rest, "]");
                   begin
                      if Close_Pos > 0 then
+                        --  Complete marker found! Parse and handle.
                         declare
                            Inner     : constant String :=
                              Rest (Rest'First .. Close_Pos - 1);
@@ -1633,8 +1654,44 @@ package body Model_Manager is
                            Parser.Sanitize_Buffer := Null_Unbounded_String;
                         end;
                         return;
+                     else
+                        --  Incomplete marker (have [CONTEXT_FAULT: but no ] yet).
+                        --  Keep accumulating. Do NOT clear buffer.
+                        --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                        if SBuf'Length mod 10 = 0 then
+                           Put_Line
+                             (AnsiAda.Foreground (AnsiAda.Grey) &
+                              "[StreamParse-V]" & AnsiAda.Reset &
+                              " CONTEXT_FAULT accum Len=" &
+                              Natural'Image (SBuf'Length) &
+                              " awaiting closing bracket.");
+                        end if;
+                        return;
                      end if;
                   end;
+               end if;
+
+               --  No fault marker found (or incomplete). Keep accumulating
+               --  up to MAX_FAULT_LEN. Do NOT clear the buffer here — we
+               --  need the characters to accumulate across multiple calls.
+               if SBuf'Length < MAX_FAULT_LEN then
+                  --  Keep accumulating. Silently discard but don't clear.
+                  --  This ensures the [CONTEXT_FAULT:...] pattern can form
+                  --  across multiple Process_And_Push_Char calls.
+                  return;
+               else
+                  --  Buffer exceeded max length without matching a fault marker.
+                  --  This is regular think content — clear to prevent unbounded
+                  --  memory growth.
+                  --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                  Put_Line
+                    (AnsiAda.Foreground (AnsiAda.Grey) &
+                     "[StreamParse-V]" & AnsiAda.Reset &
+                     " THINK_BLOCK_BUF Len=" &
+                     Natural'Image (SBuf'Length) &
+                     " exceeded MAX_FAULT_LEN. Clearing buffer.");
+                  Parser.Sanitize_Buffer := Null_Unbounded_String;
+                  return;
                end if;
             end;
          end if;
@@ -2161,14 +2218,33 @@ package body Model_Manager is
                end if;
             end;
          end;
-      end loop;
+       end loop;
 
-      if Stream /= null then
-         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
-                   AnsiAda.Reset & " Generate: Calling Flush_Parser after token loop.");
-         Flush_Parser (Stream, Session_ID, Parser);
-      end if;
+       --  AUTO-CLOSE UNCLOSED THINK BLOCK:
+       --  If the model hit EOG while In_Think_Block was still True,
+       --  it never output `</think>`. This means:
+       --    1. The entire response content is inside `<think>` (silenced)
+       --    2. `Sanitize_Think_Tags` would strip EVERYTHING from `</think>`, yielding empty answer
+       --    3. The emulated streaming pushes `</think>` + empty Resp_Text = useless
+       --
+       --  FIX: Append `</think>` to Result so `Sanitize_Think_Tags` can properly
+       --  separate think content from any content that follows (even if empty).
+       --  NOTE: We do NOT push `</think>` to the stream here — the emulated
+       --  streaming section in Hybrid_Generate handles that (line 3116).
+       --  Pushing it here would cause a duplicate `</think>` in the client output.
+       if Parser.In_Think_Block then
+          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                    AnsiAda.Reset & " Generate: AUTO-CLOSING unclosed think block at EOG.");
+          Append (Result, "</think>");
+       end if;
+
+       if Stream /= null then
+          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                    AnsiAda.Reset & " Generate: Calling Flush_Parser after token loop.");
+          Flush_Parser (Stream, Session_ID, Parser);
+       end if;
 
       Llama_Sampler_Free (Sampler);
       Free_Tokens (Tokens);
