@@ -82,6 +82,13 @@ with System;
 package body Model_Manager is
    use Streaming_Queue;
 
+   --  Token array types (package-level for use by Generate and
+   --  Tokenize_And_Cache_Virtual_Ctx)
+   type Token_Array is array (Positive range <>) of Llama_Interface.Llama_Token;
+   type Token_Array_Access is access Token_Array;
+   procedure Free_Tokens is new Ada.Unchecked_Deallocation
+     (Token_Array, Token_Array_Access);
+
    function Llama_Batch_Get_One
      (T : System.Address; N : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
@@ -154,7 +161,10 @@ package body Model_Manager is
             --  Virtual Context: Internal_State bytes → approx tokens
             --  Rule of thumb: ~3 bytes per token for English text
             VC_Bytes   : constant Natural := Current_Internal_State_Len;
-            VC_Tokens  : constant Natural := VC_Bytes / 3;
+            VC_Tokens  : constant Natural :=
+              (if Cached_Virtual_Len > 0
+               then Cached_Virtual_Len   --  Exact count from token cache
+               else VC_Bytes / 3);       --  Approximation (no cache yet)
             --  As percentage of the LLM context window
             LLM_Ctx    : constant Natural := Current_Ctx_Capacity;
             VC_Ctx_Pct : constant Natural :=
@@ -1132,10 +1142,6 @@ package body Model_Manager is
       Success  : Boolean;
       Kind     : constant Model_Type := Qwen_Embedding;
       Vocab    : Llama_Vocab;
-      type Token_Array is array (Positive range <>) of Llama_Token;
-      type Token_Array_Access is access Token_Array;
-      procedure Free_Tokens is new Ada.Unchecked_Deallocation
-        (Token_Array, Token_Array_Access);
       Tokens   : Token_Array_Access;
       N_Toks   : int;
       Clean_P  : constant String := Sanitize_UTF8 (Prompt);
@@ -1776,14 +1782,12 @@ package body Model_Manager is
       Requested_Ctx   : Positive := 4096;
       Stream          : Streaming_Queue.Queue_Access := null;
       Orch_Think_Open : Boolean := False;
-      Level           : ELP_Level := ELP1)
+      Level           : ELP_Level := ELP1;
+      Virtual_Tokens  : Cached_Token_Access := null;
+      Virtual_Tok_Len : Natural := 0)
    is
       Success  : Boolean;
       Vocab    : Llama_Vocab;
-      type Token_Array is array (Positive range <>) of Llama_Token;
-      type Token_Array_Access is access Token_Array;
-      procedure Free_Tokens is new Ada.Unchecked_Deallocation
-        (Token_Array, Token_Array_Access);
       Tokens   : Token_Array_Access := null;
       N_Toks   : int;
       Sampler  : Llama_Sampler;
@@ -1868,9 +1872,49 @@ package body Model_Manager is
          Tokens := new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
 
          Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-         N_Toks := Llama_Tokenize
-           (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
-            int (Tokens.all'Length), True, True);
+
+         --  VIRTUAL CTX PAGING: If pre-tokenized virtual context tokens
+         --  are provided, write them first, then tokenize only the user
+         --  prompt into remaining slots.  This avoids re-tokenizing the
+         --  same Internal_State facts on every context fault hop.
+         if Virtual_Tokens /= null and then Virtual_Tok_Len > 0 then
+            --  Copy cached virtual ctx tokens to front of array
+            declare
+               VT_Len : constant Natural :=
+                 Natural'Min (Virtual_Tok_Len,
+                              Positive (Models (Kind).Current_Ctx));
+            begin
+               for I in 1 .. VT_Len loop
+                  Tokens (I) := Llama_Token (Virtual_Tokens (I));
+               end loop;
+               --  Tokenize user prompt AFTER the virtual prefix
+               declare
+                  Remaining : constant int :=
+                    int (Models (Kind).Current_Ctx) - int (VT_Len);
+                  Prompt_Toks : int;
+               begin
+                  Prompt_Toks := Llama_Tokenize
+                    (Vocab, Prompt_C, int (Clean_P'Length),
+                     Tokens (VT_Len + 1)'Address,
+                     Remaining, False, False);
+                  N_Toks := int (VT_Len) + Prompt_Toks;
+               end;
+               declare
+                  Total_Toks : constant Natural :=
+                    Virtual_Tok_Len + Natural (N_Toks);
+               begin
+                  Put_Line ("[Paging-VT] Virtual_Tokens:" & Virtual_Tok_Len'Img &
+                            " User_Toks:" & N_Toks'Img &
+                            " Total:" & Total_Toks'Img);
+               end;
+            end;
+         else
+            --  No cached virtual tokens — tokenize full prompt as before
+            N_Toks := Llama_Tokenize
+              (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
+               int (Tokens.all'Length), True, True);
+         end if;
+
          Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
                    " Prompt_Len:" & Clean_P'Length'Img &
                    " N_Toks:" & N_Toks'Img);
@@ -2110,6 +2154,56 @@ package body Model_Manager is
          Result := To_Unbounded_String ("ERROR: Decode failed");
    end Generate;
 
+   --  TOKENIZE_AND_CACHE_VIRTUAL_CTX
+   --  Called when Internal_State grows.  Tokenizes the full "Fact-Check: "
+   --  prefix + Internal_State string and stores the tokens in the cache.
+   --  On subsequent Generate calls, these tokens are written directly to
+   --  the token array, skipping re-tokenization of the same facts.
+   procedure Tokenize_And_Cache_Virtual_Ctx
+     (Kind   : Model_Type;
+      Text   : String)
+   is
+      Vocab    : Llama_Vocab;
+      Text_C   : chars_ptr := New_String (Text);
+      Tmp_Toks : Token_Array_Access;
+      N_Toks   : int;
+   begin
+      --  Free old cache
+      if Cached_Virtual_Tokens /= null then
+         Free_Cached_Tokens (Cached_Virtual_Tokens);
+         Cached_Virtual_Len := 0;
+      end if;
+
+      if Text'Length = 0 then
+         Free (Text_C);
+         return;
+      end if;
+
+      Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
+      --  Allocate temp array for tokenization
+      Tmp_Toks := new Token_Array (1 .. 8192);
+      N_Toks := Llama_Tokenize
+        (Vocab, Text_C, int (Text'Length), Tmp_Toks.all'Address,
+         int (Tmp_Toks.all'Length), True, True);
+      Free (Text_C);
+
+      if N_Toks <= 0 then
+         Free_Tokens (Tmp_Toks);
+         return;
+      end if;
+
+      --  Copy to permanent cache
+      Cached_Virtual_Len := Natural (N_Toks);
+      Cached_Virtual_Tokens := new Cached_Token_Array (1 .. Cached_Virtual_Len);
+      for I in 1 .. Cached_Virtual_Len loop
+         Cached_Virtual_Tokens (I) := Cached_Token (Tmp_Toks (I));
+      end loop;
+      Free_Tokens (Tmp_Toks);
+
+      Put_Line ("[Paging-VT] Cached" & Cached_Virtual_Len'Img &
+                " virtual ctx tokens from" & Text'Length'Img & " chars");
+   end Tokenize_And_Cache_Virtual_Ctx;
+
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
    procedure Hybrid_Generate
      (Prompt         : String;
@@ -2162,6 +2256,11 @@ package body Model_Manager is
        Current_Hop_Count          := 0;
        Current_Prompt_Tokens      := 0;
        Current_Ctx_Capacity       := 8192;
+       --  Reset virtual ctx token cache for this request
+       if Cached_Virtual_Tokens /= null then
+          Free_Cached_Tokens (Cached_Virtual_Tokens);
+          Cached_Virtual_Len := 0;
+       end if;
 
       --  Initialize orchestration parser state. The immediate ACK in the
       --  dispatch already pushed `` + orchestration header to the queue.
@@ -2341,7 +2440,9 @@ package body Model_Manager is
                   Prompt          => Actual_Prompt,
                   Result          => Gen_Q,
                   Stream          => null,
-                  Level           => Level);
+                  Level           => Level,
+                  Virtual_Tokens  => Cached_Virtual_Tokens,
+                  Virtual_Tok_Len => Cached_Virtual_Len);
             end;
 
             declare
@@ -2366,6 +2467,9 @@ package body Model_Manager is
                  (Internal_State,
                   "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
                Current_Internal_State_Len := Length (Internal_State);
+               --  Re-cache virtual ctx tokens after Internal_State grew
+               Tokenize_And_Cache_Virtual_Ctx (Model_Types.Qwen_9B,
+                 "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)));
                if not External_Agent then
                   Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                     "[FACTUAL_DATA]: " &
@@ -2456,7 +2560,8 @@ package body Model_Manager is
                (Qwen_9B,
                 Get_Router_Prompt,
                 Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
-                null, False, Level);
+                null, False, Level,
+                Cached_Virtual_Tokens, Cached_Virtual_Len);
              --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                        AnsiAda.Reset & " Hybrid_Generate: Hop" &
@@ -2522,10 +2627,13 @@ package body Model_Manager is
                                                Integer'Value (Time_Str);
                                              Scheduler_Manager.Schedule
                                                (Delay_Secs, Prompt_Str);
-                                           Append (Internal_State,
-                                             "[SCHEDULED]: " & Prompt_Str &
-                                             ASCII.LF);
-                                           Current_Internal_State_Len := Length (Internal_State);
+                                              Append (Internal_State,
+                                                "[SCHEDULED]: " & Prompt_Str &
+                                                ASCII.LF);
+                                              Current_Internal_State_Len := Length (Internal_State);
+                                              --  Re-cache virtual ctx tokens after Internal_State grew
+                                              Tokenize_And_Cache_Virtual_Ctx (Model_Types.Qwen_9B,
+                                                "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)));
                                           exception
                                              when others => null;
                                           end;
@@ -2579,6 +2687,9 @@ package body Model_Manager is
                                            "[TOOL (" & T_Name & ")]: " &
                                            To_String (R.Output) & ASCII.LF);
                                         Current_Internal_State_Len := Length (Internal_State);
+                                        --  Re-cache virtual ctx tokens after Internal_State grew
+                                        Tokenize_And_Cache_Virtual_Ctx (Model_Types.Qwen_9B,
+                                          "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)));
                                         if not External_Agent then
                                            Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                                              ASCII.LF & "[TOOL (" & T_Name &
@@ -2732,7 +2843,9 @@ package body Model_Manager is
                    Requested_Ctx   => 8192,
                    Stream          => Stream,
                    Orch_Think_Open => (Hop_Count = 0),
-                   Level           => Level);
+                   Level           => Level,
+                   Virtual_Tokens  => Cached_Virtual_Tokens,
+                   Virtual_Tok_Len => Cached_Virtual_Len);
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                 Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                           AnsiAda.Reset & " Hybrid_Generate: Final Generate returned. Len=" &
@@ -2762,6 +2875,10 @@ package body Model_Manager is
 
                    Append (Internal_State,
                      "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+
+                   --  Re-cache virtual ctx tokens after Internal_State grew
+                   Tokenize_And_Cache_Virtual_Ctx (Model_Types.Qwen_9B,
+                     "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)));
 
                    if not External_Agent then
                       Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
