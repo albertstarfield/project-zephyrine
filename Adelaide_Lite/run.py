@@ -10,6 +10,133 @@ import shutil
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# ============================================================================
+# [DO NOT REMOVE] ADELAITE LITE — PROGRAM ARCHITECTURE
+# ============================================================================
+# WARNING: This comment block documents the full system architecture.
+# Removing it will make the program nearly impossible to understand or
+# maintain. Any agent or contributor modifying this file must read this
+# section before making changes.
+#
+# This script is the top-level orchestrator for the Adelaide Intelligence
+# Platform. It builds all dependencies (if source changed), then spawns
+# three concurrent processes that together form the runtime.
+#
+# ENTRY POINT CHAIN:
+#   run.sh --no-gui
+#     └─ cd Adelaide_Lite && python3 run.py --no-gui
+#          ├─ [Build Phase] (triggered when MD5 hash of source files changes)
+#          │    ├─ Clone & build llama.cpp (CMake, ggml-metal on macOS arm64)
+#          │    ├─ Build mtmd library (CLIP vision encoding for multimodal)
+#          │    ├─ Clone & build moonshine (ONNX-based speech-to-text)
+#          │    ├─ Clone & build kokoro-onnx (text-to-speech)
+#          │    ├─ Download Qwen3.5 GGUF models (0.8B, 9B, Embedding)
+#          │    ├─ Download Kokoro TTS models (ONNX + voices)
+#          │    ├─ Install Playwright Chromium (for Deno web crawler)
+#          │    ├─ alr build (Ada/Alire — compiles all Ada sources to bin/)
+#          │    └─ npm install && npm run build (Vite frontend)
+#          │
+#          ├─ [Runtime] Spawns 3 background processes:
+#          │    ├─ 1. StellaIcarus Daemon Manager (Python, hardware monitor)
+#          │    ├─ 2. adelaide_server (Ada binary, HTTP API on port 11420)
+#          │    └─ 3. adelaide_watchdog (Ada binary, monitors server health)
+#          │
+#          └─ [--no-gui] Waits for adelaide_server exit, shows crash banner
+#
+# PROCESS ARCHITECTURE:
+#
+#   ┌─────────────────────────────────────────────────────────────┐
+#   │                    run.py (Orchestrator)                     │
+#   │  - Builds everything if source changed (MD5 hash check)     │
+#   │  - Sets DYLD_LIBRARY_PATH for onnxruntime (moonshine)       │
+#   │  - Spawns all child processes                               │
+#   │  - Handles SIGINT/SIGTERM cleanup                           │
+#   └──────┬──────────────────┬──────────────────┬────────────────┘
+#          │                  │                  │
+#          ▼                  ▼                  ▼
+#   ┌──────────────┐  ┌─────────────────┐  ┌──────────────────┐
+#   │  StellaIcarus │  │ adelaide_server │  │ adelaide_watchdog │
+#   │  Daemon (Py)  │  │    (Ada/AWS)    │  │    (Ada)         │
+#   │               │  │  Port 11420     │  │                  │
+#   │ - HW monitor  │  │ - HTTP API      │  │ - Monitors PID   │
+#   │ - Power state │  │ - LLM inference │  │ - Checks heartbeat│
+#   │ - Telemetry   │  │ - RAG pipeline  │  │ - Restarts server│
+#   │ - ELP bridge  │  │ - STT/TTS       │  │   if stale       │
+#   └──────────────┘  └─────────────────┘  └──────────────────┘
+#
+# ADA SERVER INTERNALS (adelaide_server.adb):
+#
+#   Startup sequence (order matters):
+#     STEP 0: Disk benchmark (reads 1GB from GGUF, classifies storage speed)
+#     STEP 1: Model_Manager.Initialize
+#              ├─ Llama_Backend_Init (ggml-metal/CPU backends)
+#              ├─ Database_Manager.Initialize (SQLite databases)
+#              ├─ ELP_Queue.Initialize (priority queue monitor)
+#              └─ Idle_Monitor task (unloads idle models after 30s)
+#     STEP 2: Knowledge_Manager.Initialize
+#              └─ Background tasks (ELP0):
+#                   ├─ Indexing_Task (parses references.bib)
+#                   ├─ Native_Crawl_Task (walks filesystem → embeddings)
+#                   └─ Proactive_Cache_Task (predicts follow-ups)
+#     STEP 3: Scheduler_Manager.Initialize
+#     STEP 4: Watchdog_IPC.Init (creates run/, writes PID + heartbeat)
+#     STEP 5: Knowledge_Manager.Start_Tasks (starts ELP0 producers)
+#     STEP 6: AWS.Server.Start (HTTP on port 11420)
+#     STEP 7: Health ping watchdog (3s interval, 60s deadline)
+#     STEP 8: Moonshine_Interface.Init_Moonshine (STT, ~500MB ONNX)
+#     STEP 9: Main heartbeat loop (1Hz heartbeat + ELP stats every 5s)
+#
+# ELP PRIORITY QUEUE ("Volatus Damarae" architecture):
+#   Serial processing — prevents heap corruption from concurrent llama.cpp FFI.
+#   Capacity: 2^63. Priority: ELP3 > ELP2 > ELP1 > ELP0.
+#
+#   ELP3: ZenithOrion — 1ms deterministic pacing loop (highest frequency)
+#   ELP2: StellaIcarus — deterministic API response hooks
+#   ELP1: User-facing generation (real-time inference)
+#   ELP0: Background indexing/RAG (preemptible by ELP1)
+#
+# MODEL TYPES:
+#   Qwen_0_8B       — Small LLM (always loaded, exempt from idle unload)
+#   Qwen_9B         — Large LLM (loaded on-demand for complex reasoning)
+#   Qwen_Embedding  — Embedding model (semantic search)
+#   MMProj          — Multimodal projection (CLIP vision via mtmd)
+#
+# KEY SUBSYSTEMS:
+#   Llama_Interface     — Ada→C FFI wrapping llama.cpp
+#   Mtmd_Interface      — Ada→C FFI for multimodal (CLIP vision)
+#   Moonshine_Interface — Ada→C FFI for speech-to-text (ONNX)
+#   Kokoro_Interface    — Ada→Python for text-to-speech
+#   Kratos              — Crash isolation (sigaction + longjmp)
+#   Speculative_Cache   — Predictive response cache (5 entries, LRU)
+#   Database_Manager    — SQLite (memory, literature, knowledge graph)
+#   Streaming_Queue     — AWS streaming response support
+#   Watchdog_IPC        — File-based IPC (PID, heartbeat, exit reason)
+#   ZenithOrion         — 1ms deterministic pacing loop (ELP3)
+#
+# EXTERNAL DEPENDENCIES (sibling directories):
+#   ../llama.cpp/            — LLM inference engine
+#   ../moonshine/            — Speech-to-text ONNX models
+#   ../kokoro-onnx/          — Text-to-speech ONNX
+#   ../kokoclone/            — Zero-shot voice cloning
+#   ../tts_kokoro_component/ — Kokoro TTS Python deps (isolated venv)
+#
+# COMMUNICATION FLOW:
+#   User Request → HTTP :11420 → Adelaide_Server_Pkg.Dispatch
+#     ├─ Chat/Generate   → Model_Manager → Llama_Interface → llama.cpp
+#     ├─ Embeddings      → Model_Manager → Llama_Interface (embed mode)
+#     ├─ Transcription   → Moonshine_Interface → libmoonshine.dylib
+#     ├─ TTS             → Kokoro_Interface → Python subprocess
+#     ├─ Vision          → Image_Encoder → mtmd (CLIP) → Llama_Interface
+#     ├─ RAG             → Database_Manager → semantic search → Model_Manager
+#     └─ Power state     ← StellaIcarus Daemon → /api/power endpoint
+#
+# CRASH ISOLATION (Kratos):
+#   C-level crashes (SIGSEGV, SIGBUS, SIGFPE, SIGTRAP, SIGABRT) during
+#   llama.cpp inference are caught by Kratos (sigaction + longjmp) instead
+#   of killing the server. The external watchdog monitors heartbeat files
+#   and restarts the server if it dies.
+# ============================================================================
+
 #  QUIRK: Block NT kernel at runtime (see QUIRK-005)
 #  Windows is NOT supported.  The build system (adelaide_lite.gpr) also
 #  blocks compilation on Windows, but this is an additional guard.
@@ -475,7 +602,7 @@ def main():
                     print(f"{BG_BLUE}{f'   Signal:    {sig_name} ({sig_val})'.ljust(70)}{RESET}")
                 print(f"{BG_BLUE}{'   '.ljust(70)}{RESET}")
                 print(f"{BG_BLUE}{'   Check the output immediately above this banner for the'.ljust(70)}{RESET}")
-                print(f"{BG_BLUE}{'   last C/Ada stack traces or GPU assertion failures.'.ljust(70)}{RESET}")
+                print(f"{BG_BLUE}{'   last Ada stack traces or GPU assertion failures.'.ljust(70)}{RESET}")
                 print(f"{BG_BLUE}{'='*70}{RESET}\n")
             else:
                 print("\n[*] Server exited cleanly (code: 0)")
