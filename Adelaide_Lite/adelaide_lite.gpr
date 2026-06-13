@@ -162,7 +162,8 @@ project Adelaide_Lite is
           "-framework", "Metal",
           "-framework", "Foundation",
           "-lc++",
-          project'Object_Dir & "/llama_safe.o"
+           project'Object_Dir & "/llama_safe.o",
+           project'Object_Dir & "/stderr_suppress.o"
       );
    end Linker;
 end Adelaide_Lite;
