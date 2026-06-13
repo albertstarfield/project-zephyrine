@@ -142,6 +142,7 @@ package body Model_Manager is
             VC_Capacity : constant Interfaces.Unsigned_64 := ELP_Queue.Capacity;
             VC_Depth    : constant Long_Long_Integer := ELP_Queue.Depth;
             VC_Util     : constant Long_Long_Float   := ELP_Queue.Utilization;
+            VC_Pct      : constant Long_Long_Float   := VC_Util * 100.0;
 
             --  Context Fault Division Page math
             --  Each hop "pages" into a new division of the context space.
@@ -159,7 +160,9 @@ package body Model_Manager is
                       Long_Long_Integer'Image (VC_Depth) &
                       " /" &
                       Interfaces.Unsigned_64'Image (VC_Capacity) &
-                      " pending");
+                      " pending (" &
+                      Long_Long_Float'Image (VC_Pct) &
+                      "% used)");
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[CtxMonitor]" & AnsiAda.Reset &
                       " Context Fault Division Page:");

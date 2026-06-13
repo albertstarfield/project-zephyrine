@@ -44,6 +44,8 @@ with AWS.Client;
 with AWS.Response;
 with AWS.Messages; use AWS.Messages;
 with Ada.Calendar;
+with Ada.Streams.Stream_IO;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Moonshine_Interface;
 with ELP_Queue;
 
@@ -186,6 +188,182 @@ begin
       Put_Line (" / ___ / /_/ /  __/ / /_/ / / /_/ /  __/ ");
       Put_Line ("/_/  |_\__,_/\___/_/\__,_/_/\__,_/\___/ ");
       Put_Line ("");
+
+      --  ==================================================================
+      --  STEP 0: Disk Read Benchmark (1GB sequential from GGUF)
+      --  ==================================================================
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Reads 1GB sequentially from the largest GGUF model file to
+      --  measure storage throughput. This tells us how fast model loading
+      --  will be and categorizes the hardware for the user.
+      --
+      --  Categories:
+      --    <1 MB/s   = Apollo Mission Computer (Unusable)
+      --    <=5 MB/s  = USB Powered? (Almost Unusable)
+      --    <=30 MB/s = Potato (Why Bother)
+      --    <=100 MB/s = HDD Spinning Drive (Ultra Low)
+      --    <=500 MB/s = SSHD Drive (Very Low)
+      --    <=3000 MB/s = SATA SSD (Mildly Low)
+      --    <=8000 MB/s = NVMe SSD (Low)
+      --    <=14000 MB/s = NVMe SSD (Medium/Standard) RECOMMENDED MIN
+      --    <=18000 MB/s = NVMe SSD (Medium to High)
+      --    <=25000 MB/s = NVMe SSD (High)
+      --    <=90000 MB/s = NVMe SSD (Mildly High)
+      --    <=200000 MB/s = Next Generation Drive (Very High)
+      --    >200000 MB/s = Next Generation Drive (Ultra High)
+      --  ----------------------------------------------------------------
+      declare
+         GGUF_Path : constant String :=
+           "llama.cpp/models/qwen3.5/Qwen3.5-9B-UD-Q2_K_XL.gguf";
+         --  Target: 1GB = 1024 * 1024 * 1024 bytes
+         Target_Bytes : constant Long_Long_Integer := 1024 * 1024 * 1024;
+         --  Read in 1MB chunks to avoid huge stack allocations
+         Chunk_Size   : constant := 1024 * 1024;
+         Buffer       : Ada.Streams.Stream_Element_Array
+           (1 .. Ada.Streams.Stream_Element_Offset (Chunk_Size));
+         Bytes_Read   : Long_Long_Integer := 0;
+         F            : Ada.Streams.Stream_IO.File_Type;
+         Last         : Ada.Streams.Stream_Element_Offset;
+         T_Start      : Ada.Calendar.Time;
+         T_End        : Ada.Calendar.Time;
+         Elapsed      : Duration;
+         MB_per_sec   : Long_Long_Integer;
+         Category     : Unbounded_String;
+         Warning      : Unbounded_String;
+      begin
+         --  Verbose: announce benchmark start
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                   AnsiAda.Reset & "+" &
+                   Trim (Duration'Image (Ada.Real_Time.To_Duration
+                     (Ada.Real_Time.Clock - Start_Time)), Both) &
+                   "s STEP 0: Starting disk read benchmark (1GB from " &
+                   GGUF_Path & ")...");
+
+         --  Try to open the GGUF file; skip if not found
+         begin
+            Ada.Streams.Stream_IO.Open (F, Ada.Streams.Stream_IO.In_File,
+                                        GGUF_Path);
+         exception
+            when others =>
+               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                         AnsiAda.Reset & "+" &
+                         Trim (Duration'Image (Ada.Real_Time.To_Duration
+                           (Ada.Real_Time.Clock - Start_Time)), Both) &
+                         "s STEP 0 SKIPPED: GGUF file not found at " &
+                         GGUF_Path);
+               goto Skip_Disk_Bench;
+         end;
+
+         --  Read 1GB sequentially, timing the whole operation
+         T_Start := Ada.Calendar.Clock;
+         while not Ada.Streams.Stream_IO.End_Of_File (F)
+               and then Bytes_Read < Target_Bytes
+         loop
+            Ada.Streams.Stream_IO.Read (F, Buffer, Last);
+            exit when Integer (Last) = 0;
+            Bytes_Read := Bytes_Read +
+              Long_Long_Integer (Last);
+         end loop;
+         T_End := Ada.Calendar.Clock;
+         Ada.Streams.Stream_IO.Close (F);
+
+         --  Calculate throughput in MB/s
+         Elapsed := Ada.Calendar."-" (T_End, T_Start);
+         if Elapsed > 0.0 then
+            MB_per_sec := Long_Long_Integer (
+              Long_Long_Float (Bytes_Read) / (1024.0 * 1024.0) /
+              Long_Long_Float (Elapsed));
+         else
+            MB_per_sec := 0;
+         end if;
+
+         --  ----------------------------------------------------------------
+         --  Categorize throughput and assign label + warning
+         --  ----------------------------------------------------------------
+         if MB_per_sec < 1 then
+            --  Apollo Mission Computer: slower than a 1960s spacecraft
+            Category := To_Unbounded_String ("Apollo Mission Computer");
+            Warning  := To_Unbounded_String ("(Unusable)");
+         elsif MB_per_sec <= 5 then
+            --  USB Powered?: likely a slow USB stick or network mount
+            Category := To_Unbounded_String ("USB Powered?");
+            Warning  := To_Unbounded_String ("(Almost Unusable)");
+         elsif MB_per_sec <= 30 then
+            --  Potato: the machine is actively fighting you
+            Category := To_Unbounded_String ("Potato");
+            Warning  := To_Unbounded_String ("(Why Bother)");
+         elsif MB_per_sec <= 100 then
+            --  HDD Spinning Drive: mechanical platters, 5400/7200 RPM
+            Category := To_Unbounded_String ("HDD Spinning Drive");
+            Warning  := To_Unbounded_String ("(Ultra Low)");
+         elsif MB_per_sec <= 500 then
+            --  SSHD Drive: hybrid or slow SATA SSD
+            Category := To_Unbounded_String ("SSHD Drive");
+            Warning  := To_Unbounded_String ("(Very Low)");
+         elsif MB_per_sec <= 3000 then
+            --  SATA SSD: typical 2.5" SSD, capped at SATA III ~550 MB/s
+            --  (benchmark reads cached/OS-buffered, so can appear higher)
+            Category := To_Unbounded_String ("SATA SSD");
+            Warning  := To_Unbounded_String ("(Mildly Low)");
+         elsif MB_per_sec <= 8000 then
+            --  NVMe SSD: entry-level NVMe, PCIe Gen3 x2 or similar
+            Category := To_Unbounded_String ("NVMe SSD");
+            Warning  := To_Unbounded_String ("(Low)");
+         elsif MB_per_sec <= 14000 then
+            --  NVMe SSD: standard NVMe, PCIe Gen3 x4 / Gen4 x2
+            --  THIS IS THE RECOMMENDED BARE MINIMUM for model loading
+            Category := To_Unbounded_String ("NVMe SSD");
+            Warning  := To_Unbounded_String ("(Medium/Standard) RECOMMENDED BARE MINIMUM");
+         elsif MB_per_sec <= 18000 then
+            --  NVMe SSD: good NVMe, PCIe Gen4 x4
+            Category := To_Unbounded_String ("NVMe SSD");
+            Warning  := To_Unbounded_String ("(Medium to High)");
+         elsif MB_per_sec <= 25000 then
+            --  NVMe SSD: fast NVMe, PCIe Gen4 x4 / Gen5 x2
+            Category := To_Unbounded_String ("NVMe SSD");
+            Warning  := To_Unbounded_String ("(High)");
+         elsif MB_per_sec <= 90000 then
+            --  NVMe SSD: top-tier consumer NVMe, PCIe Gen5 x4
+            Category := To_Unbounded_String ("NVMe SSD");
+            Warning  := To_Unbounded_String ("(Mildly High)");
+         elsif MB_per_sec <= 200000 then
+            --  Next Generation Drive: unified memory, extreme bandwidth
+            Category := To_Unbounded_String ("Next Generation Drive");
+            Warning  := To_Unbounded_String ("(Very High)");
+         else
+            --  Next Generation Drive: extreme bandwidth tier
+            Category := To_Unbounded_String ("Next Generation Drive");
+            Warning  := To_Unbounded_String ("(Ultra High)");
+         end if;
+
+         --  Print the result with category
+         Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Hardware]" &
+                   AnsiAda.Reset & " Storage: " &
+                   Long_Long_Integer'Image (MB_per_sec) & " MB/s " &
+                   To_String (Category) & " " & To_String (Warning));
+         Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Hardware]" &
+                   AnsiAda.Reset & " Read " &
+                   Long_Long_Integer'Image (Bytes_Read / (1024 * 1024)) &
+                   " MB in" & Duration'Image (Elapsed) & "s from " &
+                   GGUF_Path);
+
+         --  Print warning if below recommended minimum
+         if MB_per_sec < 8001 then
+            Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Hardware]" &
+                      AnsiAda.Reset &
+                      " WARNING: Storage below recommended minimum" &
+                      " (8001 MB/s). Model loading will be slow.");
+         end if;
+
+         --  Verbose: announce benchmark complete
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                   AnsiAda.Reset & "+" &
+                   Trim (Duration'Image (Ada.Real_Time.To_Duration
+                     (Ada.Real_Time.Clock - Start_Time)), Both) &
+                   "s STEP 0 DONE: Disk benchmark complete.");
+
+         <<Skip_Disk_Bench>>
+      end;
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Start the init phase epoch clock.  This prints the current
