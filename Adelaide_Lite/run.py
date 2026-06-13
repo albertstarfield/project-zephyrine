@@ -45,24 +45,18 @@ def get_git_version():
         return None, None, None
 
 def show_help():
-    """Print colorful help screen with ASCII Adelaide and git version."""
+    """Print colorful help screen with git version."""
     commit, branch, status = get_git_version()
     ver_str = f"{CYN}{commit}{RST}" if commit else f"{DIM}unknown{RST}"
     brn_str = f"{MGN}{branch}{RST}" if branch else f"{DIM}unknown{RST}"
 
     print(f"""
 {BG_B}{'='*70}{RST}
-{BG_B}{'  Adelaide Intelligence Platform — run.sh'.center(70)}{RST}
+{BG_B}{'  Adelaide Platform — run.sh'.center(70)}{RST}
 {BG_B}{'='*70}{RST}
 
-  {BOLD}{CYN}        _    _   _____  ____  _   _ __  __ ____  _     _____ ____  {RST}
-  {BOLD}{CYN}       / \\  | | |___ / |  _ \\| | | |  \\/  |  _ \\| |   | ____|  _ \\ {RST}
-  {BOLD}{CYN}      / _ \\ | |   |_ \\ | |_) | | | | |\\/| | |_) | |   |  _| | |_) |{RST}
-  {BOLD}{CYN}     / ___ \\| |___ ___)|  __/| |_| | |  | |  __/| |___| |___|  _ < {RST}
-  {BOLD}{CYN}    /_/   \\_\\_____|____/|_|    \\___/|_|  |_|_|   |_____|_____|_| \\_\\{RST}
-
   {BOLD}Whimsical Automata Companion — Snowball-Enaga{RST}
-  {DIM}Hybrid Multi-Hop Reasoning · ELP Priority Queue · Kratos Crash Isolation{RST}
+  {DIM}ELP Priority Queue · Kratos Crash Isolation{RST}
 
   {BOLD}Version:{RST}  {ver_str}  {status}
   {BOLD}Branch:{RST}   {brn_str}
