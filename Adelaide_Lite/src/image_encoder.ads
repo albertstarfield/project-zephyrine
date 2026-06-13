@@ -21,9 +21,15 @@ package Image_Encoder is
       Ny         : unsigned;
       Pixel_Data : System.Address) return Boolean;
 
+   --  Encode an image from raw image bytes (JPEG, PNG, etc.)
+   --  The mtmd helper decodes the image internally using stb_image.
+   --  Returns: True on success, False on failure
+   function Encode_Image_From_Buffer
+     (Image_Data : System.Address;
+      Image_Len  : size_t) return Boolean;
+
    --  Encode an image from a file (supports PNG, JPG, etc.)
-   --  This is a convenience function that loads the image file
-   --  and calls Encode_Image with the raw pixel data.
+   --  Reads the file into a buffer and calls Encode_Image_From_Buffer.
    function Encode_Image_From_File
      (Filename : String) return Boolean;
 

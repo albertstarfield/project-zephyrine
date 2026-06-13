@@ -1,5 +1,6 @@
 #include "llama.h"
 #include "mtmd.h"
+#include "mtmd-helper.h"
 #include <stdexcept>
 #include <iostream>
 #include <cstring>
@@ -215,5 +216,62 @@ extern "C" {
         try {
             return mtmd_default_marker();
         } catch (...) { return "<__media__>"; }
+    }
+
+    // ===== NEW: Tokenization and helper wrappers =====
+
+    // Tokenize text prompt + bitmaps into input chunks.
+    // The text must contain the media marker (default: "<__media__>").
+    // Number of bitmaps must equal number of markers in text.
+    // Returns 0 on success, 1 on marker/bitmap count mismatch, 2 on image error.
+    int32_t mtmd_tokenize_safe(mtmd_context_handle ctx,
+                               mtmd_input_chunks_handle output,
+                               const char * text,
+                               bool add_special,
+                               bool parse_special,
+                               const mtmd_bitmap_handle * bitmaps,
+                               size_t n_bitmaps) {
+        if (!ctx || !output || !text) return -1;
+        try {
+            struct mtmd_input_text input_text;
+            input_text.text = text;
+            input_text.add_special = add_special;
+            input_text.parse_special = parse_special;
+            return mtmd_tokenize((mtmd_context*)ctx,
+                                 (mtmd_input_chunks*)output,
+                                 &input_text,
+                                 (const mtmd_bitmap**)bitmaps,
+                                 n_bitmaps);
+        } catch (const std::exception& e) {
+            std::cerr << "Caught C++ exception in mtmd_tokenize: " << e.what() << std::endl;
+            return -1;
+        } catch (...) { return -1; }
+    }
+
+    // Create bitmap from image buffer (JPEG, PNG, etc.)
+    // Uses stb_image internally to decode the image bytes.
+    // Returns nullptr on failure.
+    mtmd_bitmap_handle mtmd_helper_bitmap_init_from_buf_safe(mtmd_context_handle ctx,
+                                                              const unsigned char * buf,
+                                                              size_t len) {
+        if (!ctx || !buf || len == 0) return nullptr;
+        try {
+            return (mtmd_bitmap_handle)mtmd_helper_bitmap_init_from_buf(
+                (mtmd_context*)ctx, buf, len);
+        } catch (const std::exception& e) {
+            std::cerr << "Caught C++ exception in mtmd_helper_bitmap_init_from_buf: " << e.what() << std::endl;
+            return nullptr;
+        } catch (...) { return nullptr; }
+    }
+
+    // Get a chunk from the chunks list by index.
+    // Returns nullptr if index is out of range.
+    // WARNING: The returned pointer is owned by the chunks list - do NOT free it.
+    mtmd_input_chunk_handle mtmd_input_chunks_get_safe(mtmd_input_chunks_handle chunks, size_t idx) {
+        if (!chunks) return nullptr;
+        try {
+            return (mtmd_input_chunk_handle)mtmd_input_chunks_get(
+                (const mtmd_input_chunks*)chunks, idx);
+        } catch (...) { return nullptr; }
     }
 }
