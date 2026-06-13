@@ -156,11 +156,17 @@ package Model_Manager is
 
     --  CONTEXT FAULT MONITORING (printed every 5s by Context_Monitor task)
     --  Tracks the virtual context space and context fault paging state.
-    --  Virtual Context: 2^63 capacity (ELP Queue), LLM context per model.
+    --  Virtual Context: accumulated factual data from tool results, measured
+    --  in bytes (Internal_State) then approximated to tokens.
+    --  LLM Context: the actual llama.cpp context window (N_Ctx) that holds
+    --  the tokenized prompt + KV cache for attention.
     --  Context Fault: Model requests additional context mid-generation via
     --  [CONTEXT_FAULT: query=... category=...]. Each fault adds a "hop".
     Current_Context_Fault_Hops : Natural := 0;
     Current_Internal_State_Len : Natural := 0;
     Current_Hop_Count          : Natural := 0;
+    --  Token tracking for context window utilization
+    Current_Prompt_Tokens      : Natural := 0;   -- actual tokens in prompt
+    Current_Ctx_Capacity       : Natural := 8192; -- llama context window size
 
 end Model_Manager;
