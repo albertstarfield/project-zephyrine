@@ -89,6 +89,14 @@ package body Model_Manager is
    procedure Free_Tokens is new Ada.Unchecked_Deallocation
      (Token_Array, Token_Array_Access);
 
+   --  [DO NOT REMOVE] C FFI for stderr suppression during model loading.
+   --  llama.cpp prints hundreds of verbose lines to stderr during load.
+   --  We redirect stderr to /dev/null, load, then restore.
+   function Sys_Dup (Fildes : int) return int;
+   pragma Import (C, Sys_Dup, "suppress_dup");
+   function Sys_Restore_Stderr (Saved_Fd : int) return int;
+   pragma Import (C, Sys_Restore_Stderr, "suppress_restore");
+
    function Llama_Batch_Get_One
      (T : System.Address; N : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
@@ -492,7 +500,18 @@ package body Model_Manager is
       --  tells you exactly which step is stuck.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 1/7 Calling Llama_Backend_Init...");
-      Llama_Backend_Init;
+      --  [DO NOT REMOVE] Suppress llama.cpp stderr during backend init.
+      --  load_backend, ggml_metal_device_init lines go to stderr.
+      declare
+         Saved_Stderr : constant int := Sys_Dup (2);
+      begin
+         Llama_Backend_Init;
+         declare
+            Dummy : int := Sys_Restore_Stderr (Saved_Stderr);
+         begin
+            null;
+         end;
+      end;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 2/7 Llama_Backend_Init DONE.");
 
@@ -757,14 +776,26 @@ package body Model_Manager is
                declare
                   Path_C : chars_ptr := New_String (Path_Str);
                begin
+                  --  [DO NOT REMOVE] Suppress llama.cpp stderr during model load.
+                  --  Hundreds of create_tensor/repack/print_info lines go to stderr.
+                  declare
+                     Saved_Stderr : constant int := Sys_Dup (2);
                   begin
-                     Models (Kind).Model :=
-                       Llama_Model_Load_From_File (Path_C, M_Params);
-                  exception
-                     when others =>
-                        Put_Line ("[!] Exception caught in Ada during " &
-                                  "Llama_Model_Load_From_File");
-                        Models (Kind).Model := Null_Model;
+                     begin
+                        Models (Kind).Model :=
+                          Llama_Model_Load_From_File (Path_C, M_Params);
+                     exception
+                        when others =>
+                           Put_Line ("[!] Exception caught in Ada during " &
+                                     "Llama_Model_Load_From_File");
+                           Models (Kind).Model := Null_Model;
+                     end;
+                     --  Restore stderr after model load
+                     declare
+                        Dummy : int := Sys_Restore_Stderr (Saved_Stderr);
+                     begin
+                        null;
+                     end;
                   end;
                   Free (Path_C);
                   if Models (Kind).Model /= Null_Model then
@@ -795,8 +826,19 @@ package body Model_Manager is
 
          C_Params.Abort_Callback := Llama_Abort_Callback'Address;
          C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;
-         Models (Kind).Context :=
-           Llama_Init_From_Model (Models (Kind).Model, C_Params);
+         --  [DO NOT REMOVE] Suppress llama.cpp stderr during context init.
+         --  llama_context, llama_kv_cache, ggml_metal lines go to stderr.
+         declare
+            Saved_Stderr : constant int := Sys_Dup (2);
+         begin
+            Models (Kind).Context :=
+              Llama_Init_From_Model (Models (Kind).Model, C_Params);
+            declare
+               Dummy : int := Sys_Restore_Stderr (Saved_Stderr);
+            begin
+               null;
+            end;
+         end;
          if Models (Kind).Context /= Null_Context then
             Models (Kind).Loaded := True;
             Models (Kind).Last_Used := Clock;
