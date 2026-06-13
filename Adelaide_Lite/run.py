@@ -368,13 +368,23 @@ def calculate_hash(file_paths):
 
 def cleanup(signum=None, frame=None):
     print("\n[*] Shutting down background processes...")
+    # Write shutdown flag so watchdog knows this was an intentional stop
+    # and does NOT restart the server.  The watchdog checks for this file
+    # before calling Restart_Server and exits cleanly if it exists.
+    shutdown_flag = os.path.join(BASE_DIR, "run", ".shutdown_requested")
+    try:
+        os.makedirs(os.path.dirname(shutdown_flag), exist_ok=True)
+        with open(shutdown_flag, "w") as f:
+            f.write(f"pid={os.getpid()}\n")
+    except Exception:
+        pass
     if daemon_process and daemon_process.poll() is None:
         daemon_process.terminate()
     if server_process and server_process.poll() is None:
         server_process.terminate()
     # DO NOT kill watchdog here — it has its own restart logic.
     # If the server crashes, the watchdog detects it and relaunches.
-    # Killing the watchdog defeats that purpose.
+    # The .shutdown_requested flag prevents restart on intentional stop.
     sys.exit(0)
 
 signal.signal(signal.SIGINT, cleanup)
@@ -715,6 +725,17 @@ def main():
     # knows it was launched through run.py (prevents direct binary execution).
     watchdog_bin = "adelaide_watchdog.exe" if platform.system() == "Windows" else "adelaide_watchdog"
     watchdog_path = os.path.join(BASE_DIR, "bin", watchdog_bin)
+
+    # Clear any stale shutdown flag from a previous run.
+    # This flag is written by cleanup() to prevent the watchdog from
+    # restarting the server after an intentional Ctrl+C.  If we're
+    # starting a fresh session, the old flag must be removed.
+    shutdown_flag = os.path.join(BASE_DIR, "run", ".shutdown_requested")
+    if os.path.exists(shutdown_flag):
+        try:
+            os.remove(shutdown_flag)
+        except Exception:
+            pass
     if os.path.exists(watchdog_path):
         print("[*] Booting Adelaide Watchdog...")
         watchdog_env = env.copy()

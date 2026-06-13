@@ -48,6 +48,7 @@ procedure Adelaide_Watchdog is
    Args_File  : constant String := Run_Dir & "/adelaide_server.args";
    Server_Bin : constant String := "bin/adelaide_server";
    WD_PID_File : constant String := Run_Dir & "/adelaide_watchdog.pid";
+   Shutdown_Flag : constant String := Run_Dir & "/.shutdown_requested";
 
    --  Timeouts
    HB_Stale_Limit : constant Duration := 10.0;
@@ -348,6 +349,34 @@ procedure Adelaide_Watchdog is
    begin
       if Since_RS_D < Restart_Cooldown then
          return;  --  Still in cooldown after previous restart
+      end if;
+
+      --  Check if run.py wrote the shutdown flag (intentional Ctrl+C).
+      --  If so, the server was stopped on purpose — do NOT restart.
+      if Exists (Shutdown_Flag) then
+         Put_Line (Standard_Error,
+           "[Watchdog] Shutdown flag detected. Server was stopped" &
+           " intentionally. Not restarting.");
+         --  Clean up the flag so a fresh run.py launch starts clean.
+         begin
+            Delete_File (Shutdown_Flag);
+         exception
+            when others => null;
+         end;
+         --  Clean up server IPC files too so single-instance check
+         --  doesn't block the next launch.
+         begin
+            if Exists (PID_File) then
+               Delete_File (PID_File);
+            end if;
+            if Exists (HB_File) then
+               Delete_File (HB_File);
+            end if;
+         exception
+            when others => null;
+         end;
+         --  Exit the watchdog cleanly — no restart.
+         raise Shutdown_Requested;
       end if;
 
       if not Alive then
