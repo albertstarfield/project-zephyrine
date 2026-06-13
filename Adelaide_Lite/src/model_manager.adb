@@ -2968,13 +2968,74 @@ package body Model_Manager is
                    Level           => Level,
                    Virtual_Tokens  => Cached_Virtual_Tokens,
                    Virtual_Tok_Len => Cached_Virtual_Len);
-                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                          AnsiAda.Reset & " Hybrid_Generate: Final Generate returned. Len=" &
-                          Natural'Image (Length (Fault_Result)));
-                F_Detected := False;
+                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                 Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                           AnsiAda.Reset & " Hybrid_Generate: Final Generate returned. Len=" &
+                           Natural'Image (Length (Fault_Result)));
 
-               if F_Detected then
+                 --  Parse Fault_Result for CONTEXT_FAULT marker.
+                 --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                 --  When the model outputs [CONTEXT_FAULT:query=X category=Y] inside
+                 --  <think>, Generate's Parser detects it but cannot communicate it
+                 --  back to Hybrid_Generate (Parser is local to Generate).  However,
+                 --  all tokens (including the fault marker) are appended to Result
+                 --  before streaming.  So Fault_Result contains the raw marker text.
+                 --  Parse it here to set F_Detected, F_Query, F_Category.
+                 declare
+                    Raw_Result : constant String := To_String (Fault_Result);
+                    F_Mark     : constant String := "[CONTEXT_FAULT:";
+                    F_Mark_Pos : constant Natural := Index (Raw_Result, F_Mark);
+                 begin
+                    if F_Mark_Pos > 0 then
+                       declare
+                          Close_Pos : constant Natural :=
+                            Index (Raw_Result (F_Mark_Pos .. Raw_Result'Last), "]");
+                       begin
+                          if Close_Pos > 0 then
+                             declare
+                                Inner     : constant String :=
+                                  Raw_Result (F_Mark_Pos + F_Mark'Length ..
+                                    F_Mark_Pos + Close_Pos - 2);
+                                Q_Mark    : constant String := "query=";
+                                C_Mark    : constant String := "category=";
+                                Query_Idx : constant Natural := Index (Inner, Q_Mark);
+                                Cat_Idx   : constant Natural := Index (Inner, C_Mark);
+                             begin
+                                F_Detected := True;
+                                if Query_Idx > 0 then
+                                   declare
+                                      Q_Start : constant Natural :=
+                                        Query_Idx + Q_Mark'Length;
+                                      Q_End   : constant Natural :=
+                                        (if Cat_Idx > Query_Idx then Cat_Idx - 1
+                                         else Inner'Last + 1);
+                                   begin
+                                      F_Query := To_Unbounded_String
+                                        (Trim (Inner (Q_Start .. Q_End - 1),
+                                         Ada.Strings.Both));
+                                   end;
+                                end if;
+                                if Cat_Idx > 0 then
+                                   F_Category := To_Unbounded_String
+                                     (Trim (Inner
+                                       (Cat_Idx + C_Mark'Length .. Inner'Last),
+                                      Ada.Strings.Both));
+                                else
+                                   F_Category := To_Unbounded_String ("knowledge");
+                                end if;
+                             end;
+                          end if;
+                       end;
+                    end if;
+                 end;
+
+                 --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                 Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                           AnsiAda.Reset & " Hybrid_Generate: F_Detected=" &
+                           Boolean'Image (F_Detected) & " Hop_Count=" &
+                           Natural'Image (Hop_Count));
+
+                if F_Detected then
                   declare
                      Q_Str : constant String := To_String (F_Query);
                      C_Str : constant String := To_String (F_Category);
