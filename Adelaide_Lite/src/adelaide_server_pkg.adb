@@ -121,6 +121,36 @@ package body Adelaide_Server_Pkg is
       end if;
    end Push_Log;
 
+   --  Thread-safe last API tracker for heartbeat display
+   protected Last_API_Tracker is
+      procedure Set (URI : String);
+      function Get return String;
+   private
+      Last_URI : Unbounded_String := To_Unbounded_String ("none");
+   end Last_API_Tracker;
+
+   protected body Last_API_Tracker is
+      procedure Set (URI : String) is
+      begin
+         Last_URI := To_Unbounded_String (URI);
+      end Set;
+
+      function Get return String is
+      begin
+         return To_String (Last_URI);
+      end Get;
+   end Last_API_Tracker;
+
+   procedure Set_Last_API (URI : String) is
+   begin
+      Last_API_Tracker.Set (URI);
+   end Set_Last_API;
+
+   function Get_Last_API return String is
+   begin
+      return Last_API_Tracker.Get;
+   end Get_Last_API;
+
    function Build_Response
      (Content : String;
       Status  : AWS.Messages.Status_Code := AWS.Messages.S200;
@@ -284,6 +314,8 @@ package body Adelaide_Server_Pkg is
           Match_Score : Float := 0.0;
           Best_Match_Name : Unbounded_String := To_Unbounded_String ("(none)");
        begin
+          --  Track last API for heartbeat display
+          Adelaide_Server_Pkg.Set_Last_API (URI);
           --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
           --  Verbose: confirms Dispatch was called and shows which URI.
           Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Dispatch-V]" &
@@ -367,6 +399,16 @@ package body Adelaide_Server_Pkg is
       if Method = "OPTIONS" then
          return Wrap_Response (Build_Response (""));
       end if;
+
+      --  Health check: any endpoint with ?ping=true returns alive status
+      declare
+         Ping_Param : constant String := AWS.Status.Parameter (Request, "ping");
+      begin
+         if Ping_Param = "true" then
+            return Build_Response
+              ("{""status"": ""ok"", ""endpoint"": """ & URI & """}");
+         end if;
+      end;
 
       if URI = "/api/version" then
          return Build_Response ("{""version"": ""Project-Zephyrine-0.27""}");

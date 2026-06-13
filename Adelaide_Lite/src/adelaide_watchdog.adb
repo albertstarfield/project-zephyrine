@@ -38,6 +38,7 @@ procedure Adelaide_Watchdog is
    Run_Dir    : constant String := "run";
    PID_File   : constant String := Run_Dir & "/adelaide_server.pid";
    HB_File    : constant String := Run_Dir & "/adelaide_server.heartbeat";
+   Args_File  : constant String := Run_Dir & "/adelaide_server.args";
    Server_Bin : constant String := "bin/adelaide_server";
 
    --  Timeouts
@@ -116,16 +117,48 @@ procedure Adelaide_Watchdog is
          return Duration'Last;
    end Get_Heartbeat_Age_S;
 
+   -----------------
+   -- Read_Args --
+   -----------------
+
+   --  Reads server launch arguments from run/adelaide_server.args.
+   --  Returns the arguments as a single string (may be empty).
+   --  The file is written by run.py before launching the server.
+
+   function Read_Args return String is
+      F : File_Type;
+      S : String (1 .. 256);
+      L : Natural;
+   begin
+      if not Exists (Args_File) then
+         return "";
+      end if;
+      Open (F, In_File, Args_File);
+      if End_Of_File (F) then
+         Close (F);
+         return "";
+      end if;
+      Get_Line (F, S, L);
+      Close (F);
+      return S (1 .. L);
+   exception
+      when others =>
+         return "";
+   end Read_Args;
+
    ----------------------
    -- Restart_Server --
    ----------------------
 
    procedure Restart_Server (Old_Pid : Integer) is
-      Alr     : String_Access;
-      Cmd     : String_Access;
-      Args    : Argument_List (1 .. 3);
-      New_Pid : Process_Id;
-      N_Args  : Natural := 0;
+      Alr       : String_Access;
+      Cmd       : String_Access;
+      Args      : Argument_List (1 .. 8);
+      New_Pid   : Process_Id;
+      N_Args    : Natural := 0;
+      Raw_Args  : constant String := Read_Args;
+      Arg_Start : Natural := Raw_Args'First;
+      Arg_End   : Natural;
    begin
       Put_Line (Standard_Error,
         "[Watchdog] Server (PID" & Integer'Image (Old_Pid) &
@@ -156,9 +189,30 @@ procedure Adelaide_Watchdog is
          N_Args := 3;
       else
          Cmd := new String'(Server_Bin);
-         Args (1) := new String'("--no-gui");
-         N_Args := 1;
+         N_Args := 0;
       end if;
+
+      --  Parse launch args from file (space-separated)
+      while Arg_Start <= Raw_Args'Last loop
+         --  Skip spaces
+         while Arg_Start <= Raw_Args'Last
+           and then Raw_Args (Arg_Start) = ' '
+         loop
+            Arg_Start := Arg_Start + 1;
+         end loop;
+         exit when Arg_Start > Raw_Args'Last;
+         --  Find end of arg
+         Arg_End := Arg_Start;
+         while Arg_End <= Raw_Args'Last
+           and then Raw_Args (Arg_End) /= ' '
+         loop
+            Arg_End := Arg_End + 1;
+         end loop;
+         --  Add arg
+         N_Args := N_Args + 1;
+         Args (N_Args) := new String'(Raw_Args (Arg_Start .. Arg_End - 1));
+         Arg_Start := Arg_End;
+      end loop;
 
       Put_Line (Standard_Error,
         "[Watchdog] Spawning: " & Cmd.all);
@@ -213,6 +267,99 @@ procedure Adelaide_Watchdog is
       end if;
    end Check_Server;
 
+   ----------------------
+   -- Check_All_APIs --
+   ----------------------
+
+   --  Tests each API endpoint via HTTP GET with ?ping=true.
+   --  Prints status of each endpoint.  Uses curl for HTTP.
+   --  Port is read from environment variable ADLAIDE_SERVER_PORT.
+
+   Endpoints : constant array (1 .. 10) of access constant String :=
+     (new String'("/api/version"),
+      new String'("/api/tags"),
+      new String'("/api/power"),
+      new String'("/v1/models"),
+      new String'("/v1/embeddings"),
+      new String'("/api/chat"),
+      new String'("/v1/audio/speech"),
+      new String'("/v1/audio/transcriptions"),
+      new String'("/api/telemetry"),
+      new String'("/api/ps"));
+
+   --  Port/Host resolution: args > env vars > defaults
+   function Get_Port return String is
+   begin
+      for I in 1 .. Ada.Command_Line.Argument_Count loop
+         if Ada.Command_Line.Argument (I) = "--port"
+           and then I < Ada.Command_Line.Argument_Count
+         then
+            return Ada.Command_Line.Argument (I + 1);
+         end if;
+      end loop;
+      if Ada.Environment_Variables.Exists ("ADLAIDE_SERVER_PORT") then
+         return Ada.Environment_Variables.Value ("ADLAIDE_SERVER_PORT");
+      end if;
+      return "11420";
+   end Get_Port;
+
+   function Get_Host return String is
+   begin
+      for I in 1 .. Ada.Command_Line.Argument_Count loop
+         if Ada.Command_Line.Argument (I) = "--host"
+           and then I < Ada.Command_Line.Argument_Count
+         then
+            return Ada.Command_Line.Argument (I + 1);
+         end if;
+      end loop;
+      if Ada.Environment_Variables.Exists ("ADLAIDE_SERVER_HOST") then
+         return Ada.Environment_Variables.Value ("ADLAIDE_SERVER_HOST");
+      end if;
+      return "127.0.0.1";
+   end Get_Host;
+
+   procedure Check_All_APIs is
+      use GNAT.OS_Lib;
+      Port     : constant String := Get_Port;
+      Host     : constant String := Get_Host;
+      Base_URL : constant String := "http://" & Host & ":" & Port;
+      Success  : Boolean;
+      Ret_Code : Integer;
+   begin
+      Put_Line (Standard_Error,
+        "[Watchdog] === API Health Check (port " & Port & ") ===");
+      for Ep of Endpoints loop
+         declare
+            Ep_Name : constant String := Ep.all;
+            Cmd   : constant String :=
+              "curl -s -o /dev/null -w '%{http_code}' --max-time 2 " &
+              Base_URL & Ep_Name & "?ping=true";
+            Args  : Argument_List (1 .. 2);
+         begin
+            Args (1) := new String'("-c");
+            Args (2) := new String'(Cmd);
+            Spawn
+              (Program_Name => "/bin/sh",
+               Args         => Args,
+               Output_File  => "",
+               Success      => Success,
+               Return_Code  => Ret_Code);
+            if Success and then Ret_Code = 0 then
+               Put_Line (Standard_Error,
+                 "[Watchdog]   " & Ep_Name & " : UP");
+            else
+               Put_Line (Standard_Error,
+                 "[Watchdog]   " & Ep_Name & " : DOWN (code" &
+                 Integer'Image (Ret_Code) & ")");
+            end if;
+            Free (Args (1));
+            Free (Args (2));
+         end;
+      end loop;
+      Put_Line (Standard_Error,
+        "[Watchdog] === End Health Check ===");
+   end Check_All_APIs;
+
 --  Program start
 begin
    --  [DO NOT REMOVE THIS] LAUNCH GUARD
@@ -245,13 +392,24 @@ begin
         "Monitoring server via run/ directory...");
    end if;
 
-   loop
-      Check_Server;
+   declare
+      API_Check_Count : Natural := 0;
+   begin
+      loop
+         Check_Server;
 
-      exit when Oneshot;
+         --  Check all APIs every 30 seconds
+         API_Check_Count := API_Check_Count + 1;
+         if API_Check_Count >= 30 then
+            API_Check_Count := 0;
+            Check_All_APIs;
+         end if;
 
-      delay Check_Interval;
-   end loop;
+         exit when Oneshot;
+
+         delay Check_Interval;
+      end loop;
+   end;
 exception
    when E : others =>
       Put_Line (Standard_Error,
