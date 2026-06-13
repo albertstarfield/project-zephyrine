@@ -2,6 +2,8 @@ pragma SPARK_Mode (Off);
 with Ada.Text_IO;           use Ada.Text_IO;
 with Ada.Directories;       use Ada.Directories;
 with Ada.Real_Time;         use Ada.Real_Time;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Interfaces.C;          use Interfaces.C;
 
 package body Watchdog_IPC is
 
@@ -12,6 +14,65 @@ package body Watchdog_IPC is
 
    function Get_PID return Integer;
    pragma Import (C, Get_PID, "getpid");
+
+   --  kill(pid, 0) checks if a process exists without sending a signal.
+   --  Returns 0 if process exists, -1 if not (ESRCH).
+   function Kill (PID : Integer; Sig : Integer) return Integer;
+   pragma Import (C, Kill, "kill");
+
+   -------------------------
+   -- Check_Single_Instance --
+   -------------------------
+
+   function Check_Single_Instance return Boolean is
+      F           : File_Type;
+      PID_Str     : Unbounded_String;
+      Old_PID     : Integer;
+      Kill_Result : Integer;
+   begin
+      --  No PID file => no other instance running
+      if not Exists (PID_File) then
+         return False;
+      end if;
+
+      --  Read PID from file
+      begin
+         Open (F, In_File, PID_File);
+         if not End_Of_File (F) then
+            PID_Str := To_Unbounded_String (Get_Line (F));
+         end if;
+         Close (F);
+      exception
+         when others =>
+            --  Corrupted PID file, treat as stale
+            return False;
+      end;
+
+      --  Parse PID
+      begin
+         Old_PID := Integer'Value (To_String (PID_Str));
+      exception
+         when others =>
+            --  Corrupted PID, treat as stale
+            return False;
+      end;
+
+      --  Can't check our own PID
+      if Old_PID = Get_PID then
+         return False;
+      end if;
+
+      --  Check if old process is still alive (kill(pid, 0))
+      Kill_Result := Kill (Old_PID, 0);
+
+      if Kill_Result = 0 then
+         --  Process exists => another instance is running
+         return True;
+      end if;
+
+      --  Process doesn't exist => stale PID file from crash
+      return False;
+   end Check_Single_Instance;
 
    ----------
    -- Init --
