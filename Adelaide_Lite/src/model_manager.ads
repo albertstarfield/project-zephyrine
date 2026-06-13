@@ -4,11 +4,20 @@ with Mtmd_Interface;
 with Math_Utils;
 with Streaming_Queue;
 with System;
+with Interfaces.C;
+with Ada.Unchecked_Deallocation;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNATCOLL.JSON;
 with Model_Types; use Model_Types;
 
 package Model_Manager is
+
+   --  Token array type for virtual context paging cache
+   subtype Cached_Token is Interfaces.C.int;
+   type Cached_Token_Array is array (Positive range <>) of Cached_Token;
+   type Cached_Token_Access is access Cached_Token_Array;
+   procedure Free_Cached_Tokens is new Ada.Unchecked_Deallocation
+     (Cached_Token_Array, Cached_Token_Access);
 
    --  REMOVED: Generate_Speculative (ggml draft-model token speculation).
    --  Was disabled via `Enable_Speculative => False` due to ggml-metal GPU
@@ -52,7 +61,13 @@ package Model_Manager is
       Requested_Ctx   : Positive := 4096;
       Stream          : Streaming_Queue.Queue_Access := null;
       Orch_Think_Open : Boolean := False;
-      Level           : ELP_Level := ELP1);
+      Level           : ELP_Level := ELP1;
+      --  VIRTUAL CTX PAGING: pre-tokenized Internal_State tokens.
+      --  When provided, these are written to the token array FIRST,
+      --  then Prompt is tokenized into the remaining slots.  This
+      --  avoids re-tokenizing the same facts on every context fault hop.
+      Virtual_Tokens  : Cached_Token_Access := null;
+      Virtual_Tok_Len : Natural := 0);
 
    --  Perform multi-hop reasoning
    procedure Hybrid_Generate
@@ -169,5 +184,14 @@ package Model_Manager is
     --  Token tracking for context window utilization
     Current_Prompt_Tokens      : Natural := 0;   -- actual tokens in prompt
     Current_Ctx_Capacity       : Natural := 8192; -- llama context window size
+
+    --  CACHED VIRTUAL CTX TOKENS
+    --  When Internal_State grows, we re-tokenize ONLY the new portion.
+    --  The cached tokens are prepended to the prompt on each generation,
+    --  skipping re-tokenization of already-known facts.  This makes
+    --  context faulting faster: the LLM sees pre-tokenized facts without
+    --  paying the tokenization cost again.
+    Cached_Virtual_Tokens : Cached_Token_Access := null;
+    Cached_Virtual_Len    : Natural := 0;
 
 end Model_Manager;
