@@ -75,17 +75,41 @@ def show_help():
     {MGN}2. adelaide_server{RST}        Ada/AWS HTTP API (port 11420)
     {MGN}3. adelaide_watchdog{RST}      Monitors server health, auto-restarts
 
-  {BOLD}{WHT}API ENDPOINTS{RST}
-    {CYN}POST{RST} /api/chat              Chat completion (streaming)
-    {CYN}POST{RST} /api/generate          Text generation
-    {CYN}POST{RST} /api/embeddings        Text embeddings
-    {CYN}POST{RST} /api/transcribe        Speech-to-text (Moonshine)
-    {CYN}POST{RST} /api/tts               Text-to-speech (Kokoro)
-    {CYN}POST{RST} /api/vision            Image analysis (CLIP)
-    {CYN}GET{RST}  /api/health            Health check
-    {CYN}GET{RST}  /api/power             Power state (StellaIcarus)
-    {CYN}POST{RST} /api/schedule          Schedule a delayed task
-    {CYN}GET{RST}  /v1/models             List available models
+  {BOLD}{WHT}ADA SERVER API (port 11420){RST}
+    {CYN}POST{RST} /api/chat                Chat completion (streaming)
+    {CYN}POST{RST} /api/generate            Text generation
+    {CYN}POST{RST} /v1/chat/completions    OpenAI-compatible chat
+    {CYN}POST{RST} /v1/completions         OpenAI-compatible completions
+    {CYN}POST{RST} /api/embeddings         Text embeddings
+    {CYN}POST{RST} /v1/embeddings          OpenAI-compatible embeddings
+    {CYN}POST{RST} /v1/audio/transcriptions  Speech-to-text (Moonshine)
+    {CYN}POST{RST} /v1/audio/speech        Text-to-speech (Kokoro)
+    {CYN}GET{RST}  /api/health             Health check
+    {CYN}GET{RST}  /api/version            Server version
+    {CYN}GET{RST}  /api/tags               List models
+    {CYN}GET{RST}  /api/power              Power state (StellaIcarus)
+    {CYN}GET{RST}  /api/telemetry          System telemetry
+    {CYN}GET{RST}  /api/ps                 Process status
+    {CYN}POST{RST} /api/schedule           Schedule a delayed task
+    {CYN}POST{RST} /api/ZenithRoutine      ZenithOrion pacing loop
+
+  {BOLD}{WHT}GUI SIDECAR{RST}
+    {CYN}GET{RST}    /api/sessions             List chat sessions
+    {CYN}POST{RST}   /api/sessions             Create session
+    {CYN}PUT{RST}    /api/sessions/{{id}}      Rename session
+    {CYN}DELETE{RST} /api/sessions/{{id}}      Delete session
+    {CYN}POST{RST}   /api/sessions/{{id}}/duplicate  Duplicate session
+    {CYN}GET{RST}    /api/messages             Message history
+    {CYN}GET{RST}    /api/adelaideenginestats  Engine stats
+    {CYN}POST{RST}   /api/knowledgestackfrontend/upload     Knowledge upload
+    {CYN}GET{RST}    /api/knowledgestackfrontend/search     Knowledge search
+    {CYN}POST{RST}   /api/knowledgestackfrontend/memory/upload   Memory upload
+    {CYN}GET{RST}    /api/knowledgestackfrontend/memory/search   Memory search
+    {CYN}GET{RST}    /api/knowledgestackfrontend/graph          Knowledge graph
+    {CYN}GET{RST}    /api/knowledgestackfrontend/memory/graph   Memory graph
+    {CYN}GET{RST}    /api/docs/readme          Readme
+    {CYN}GET{RST}    /api/docs/license         License
+    {CYN}GET{RST}    /api/user_info            User info
 
   {BOLD}{WHT}MODEL TYPES{RST}
     {YLW}Qwen_0_8B{RST}       Small LLM (always loaded)
