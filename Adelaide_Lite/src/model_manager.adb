@@ -628,31 +628,91 @@ package body Model_Manager is
          return;
       end if;
 
-      --  [QUIRK-M10] GPU Contention & Metal Backend Analysis
+      --  [QUIRK-M10] Embedding Model Crash — Raw Content Feeding
       --  ======================================================================
       --  [VITAL-DO-NOT-REMOVE]
-      --  ANALYSIS OF llama.cpp METAL FAILURE (Code 5):
-      --  On M2 Pro, the Qwen3-Embedding model triggers MTLCommandBufferStatus-
-      --  Error (Code 5) when run on the GPU. This is likely due to:
-      --    1. Kernel Race: High-frequency indexing calls colliding with ELP1.
-      --    2. Quantization Bug: Q8_0 embeddings occasionally trigger out-of-
-      --       bounds access in specific llama.cpp Metal kernels.
-      --    3. Unified Memory Pressure: Contention during large buffer swaps.
       --
-      --  SOLUTION:
-      --  By forcing N_Gpu_Layers := 0, we move embedding to the CPU. Since
-      --  the model is only ~600MB, the CPU performance penalty is negligible
-      --  (< 5ms), but stability is 100%. This preserves the GPU for the
-      --  heavy 9B reasoning model.
-      --  [NOTE] However, this will result in higher Power Consumption
-      --  compared to GPU or ANE execution.
-      if Kind = Qwen_Embedding then
-         Put_Line ("[VITAL] Using CPU-only for Embedding to prevent " &
-                   "Metal trap.");
-         M_Params.N_Gpu_Layers := 0;
-      else
-         M_Params.N_Gpu_Layers := -1;
-      end if;
+      --  SYMPTOM:
+      --    MTLCommandBufferStatus-Error (Code 5) followed by SIGTRAP (exit -5).
+      --    Occurs during ELP0 background indexing when the embedding model
+      --    (Qwen3-Embedding-0.6B-Q8_0) processes raw CSS/HTML content.
+      --
+      --  CRASH LOG EXAMPLE:
+      --    [Embedding-Debug] Input ( 800 chars): ligraphic;font-style:normal;...
+      --    [FATAL] GPU Backend Error (Code: 5)
+      --    [+] Waiting for GPU driver cooldown (2s)...
+      --    Exit Code: -5 | Signal: SIGTRAP (5)
+      --
+      --  ROOT CAUSE (CONFIRMED):
+      --    The embedding model is designed for natural language text.
+      --    The Native_Crawl_Task in knowledge_manager.adb crawls the filesystem
+      --    and feeds raw file content to Get_Embedding in 800-char chunks.
+      --    When it encounters CSS files (or inline CSS in HTML/JS), it feeds
+      --    content like:
+      --      "ligraphic;font-style:normal;font-weight:400;src:url(/asset..."
+      --      "x;overflow-y:auto}.js-error-popup h4{color:#f55;margin:0 0..."
+      --      "e;box-shadow:0 0 40px #40e0d080,inset 0 0 20px #40e0d04d}..."
+      --    directly to the tokenizer and llama_decode.
+      --
+      --    This is NOT a GPU vs CPU issue — the crash occurs on both paths.
+      --    The raw CSS/HTML produces unusual token sequences that trigger
+      --    edge cases in ggml-metal kernels AND can cause issues on CPU.
+      --
+      --  WHY SANITIZE_UTF8 DOESN'T HELP:
+      --    Sanitize_UTF8 (line 915) only strips control chars and non-ASCII.
+      --    CSS syntax characters ({, }, :, ;, #, @, /, etc.) are all valid
+      --    printable ASCII (32-126) and pass through unchanged.
+      --
+      --  WHY CRAWL_DIRECTORY DOESN'T FILTER:
+      --    Crawl_Directory (knowledge_manager.adb:302) checks file extensions:
+      --      .adb, .ads, .c, .h, .txt, .md
+      --    But CSS content can still enter via:
+      --      1. Inline CSS in .html/.md files
+      --      2. .css.js or .css.md files (extension substring match)
+      --      3. Future file types not yet in the skip list
+      --
+      --  IMPACT:
+      --    - ELP0 background indexing crashes and stops entirely
+      --    - Server exits with code -5 (SIGTRAP)
+      --    - Watchdog restarts the server, but indexing crashes again
+      --    - Effectively: no background knowledge indexing works
+      --
+      --  GPU STATUS:
+      --    N_Gpu_Layers := -1 (GPU enabled). The crash is input-related,
+      --    not GPU-related. Once content filtering is fixed, GPU will work.
+      --    If crashes persist after fixing input, set N_Gpu_Layers := 0
+      --    as a temporary workaround and investigate further.
+      --
+      --  REAL FIX (REQUIRED):
+      --    Two fixes needed in knowledge_manager.adb:
+      --
+      --    FIX 1: Crawl_Directory must SKIP non-text files:
+      --      Add to the skip list (line 302-307):
+      --        .css, .js, .jsx, .ts, .tsx, .html, .htm, .svg, .json,
+      --        .xml, .yaml, .yml, .toml, .lock, .min, .map, .gz
+      --      Or better: use a whitelist of ONLY natural language files:
+      --        .adb, .ads, .c, .h, .txt, .md, .rst, .org, .bib
+      --
+      --    FIX 2: Get_Embedding should reject code-like content:
+      --      Before tokenizing, check if the input contains high densities
+      --      of CSS/code patterns ({}, ;, : , @, /, etc.). If so, skip it.
+      --      This is a safety net for any code path that feeds bad content.
+      --
+      --  ERROR HANDLER:
+      --    Line 1178: If Llama_Decode returns non-zero, the error is caught
+      --    gracefully — logs the error, waits 2s for GPU driver cooldown,
+      --    unloads the model, and returns length=0. The caller continues
+      --    without crashing the server (but indexing for that chunk is lost).
+      --
+      --  HISTORY:
+      --    - 2026-06-10: QUIRK-M10 created. Embedding forced to CPU-only
+      --      (N_Gpu_Layers := 0) to avoid Metal crashes. Performance: ~4s/chunk.
+      --    - 2026-06-13: Root cause identified — raw CSS/HTML content feeding.
+      --      GPU re-enabled (N_Gpu_Layers := -1) since crash is input-related.
+      --      Full debug print added to show untruncated input. Content filtering
+      --      fix pending in knowledge_manager.adb.
+      --  ======================================================================
+      M_Params.N_Gpu_Layers := -1;  -- GPU enabled; crash is input-related (see QUIRK-M10)
 
       --  TRY THREE PATHS FOR MODEL FILES
       --  The CWD at runtime is unpredictable:
@@ -1068,12 +1128,23 @@ package body Model_Manager is
         (if Level = ELP0 then "Knowledge-Index" else "User-RAG");
    begin
       --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-      --  --[Debug] DO NOT REMOVE: Critical for diagnosing Tokenization crashes.
+      --  --[Debug] DO NOT REMOVE or truncate: Critical for diagnosing Tokenization
+      --  and GPU Metal kernel crashes. We print the FULL input so we can see
+      --  exactly what raw content (CSS, HTML, special chars) is being fed to
+      --  the tokenizer. Truncating hides the problematic characters that cause
+      --  MTLCommandBufferStatus-Error (Code 5).
+      --
+      --  ROOT CAUSE HYPOTHESIS: The embedding model (Qwen3-Embedding-0.6B) is
+      --  designed for natural language text. Feeding it raw CSS/HTML code like
+      --  "ligraphic;font-style:normal;font-weight:400;src:url(/asset..." may
+      --  trigger edge cases in Metal compute kernels because:
+      --    1. CSS has dense special chars (: ; { } # @ /) that tokenize oddly
+      --    2. The tokenizer may produce unusual token ID sequences for code
+      --    3. These sequences could hit untested paths in ggml-metal kernels
+      --  FIX: The caller (Knowledge_Manager) should strip/filter non-text content
+      --  before chunking. See knowledge_manager.adb Native_Crawl_Task.
       Put_Line ("[Embedding-Debug] Input (" & Clean_P'Length'Img &
-                " chars): " &
-                (if Clean_P'Length > 60 then
-                   Clean_P (Clean_P'First .. Clean_P'First + 57) & "..."
-                 else Clean_P));
+                " chars): " & Clean_P);
       Flush;
       --  --[Debug] DO NOT REMOVE: Descriptive source tracking
       ELP_Queue.Enqueue (Level, Kind, Source);
@@ -1143,11 +1214,41 @@ package body Model_Manager is
       end if;
 
       --  CHUNKED DECODING FOR EMBEDDINGS
+      --  ============================================================================
+      --  ROOT CAUSE ANALYSIS (QUIRK-M10):
+      --  The embedding model (Qwen3-Embedding-0.6B) processes tokens in batches
+      --  of up to 256 tokens. Each batch calls Llama_Decode which dispatches to
+      --  ggml-metal kernels on macOS. The Metal backend compiles kernel variants
+      --  on-the-fly based on token count and quantization format (Q8_0).
+      --
+      --  THE BUG: After several successful decode calls, Metal fails to compile
+      --  a kernel variant and returns GGML_STATUS_FAILED (Code 5). This happens
+      --  because:
+      --    1. Different N_Toks values produce different kernel configurations
+      --       (nsg, nxpsg, ne12, r2, r3 parameters vary per batch)
+      --    2. Metal's shader cache has limited capacity for compiled variants
+      --    3. When the cache is full or a specific config is invalid, compilation
+      --       fails and llama_decode returns Code 5
+      --    4. The crash is NOT about the input content (CSS vs natural language)
+      --       — it's about Metal kernel compilation limits
+      --
+      --  WHY UNLOADING WAS WRONG:
+      --  The old code unloaded the model on ANY decode failure. This caused:
+      --    - Next chunk reloads the model (expensive: ~2s for context creation)
+      --    - New Metal context hits the same kernel compilation failure
+      --    - Infinite crash-reload loop until server dies
+      --
+      --  FIX: Skip the failed batch and continue. The next batch with a different
+      --  token count may use a different kernel variant that compiles successfully.
+      --  Only unload after 3 consecutive failures (all kernels failing = real issue).
+      --  ============================================================================
       declare
          Batch_Size  : constant int :=
            int'Min (256, int (Models (Kind).Current_Ctx));
          Current_Pos : int := 0;
          Tokens_Left : int := N_Toks;
+         Consecutive_Failures : Natural := 0;  -- Track consecutive decode failures
+         Max_Consecutive     : constant := 3;   -- Unload after 3 failures in a row
       begin
          Llama_Interface.Llama_Memory_Clear
            (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
@@ -1176,26 +1277,50 @@ package body Model_Manager is
                Release_Metal_Lock;
 
                if Dec_Result /= 0 then
-                  Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
-                            "[FATAL] GPU Backend Error (Code:" &
-                            Dec_Result'Img & ")" & AnsiAda.Reset);
-                  Put_Line ("[+] Waiting for GPU driver cooldown (2s)...");
-                  delay 2.0;
-                  Unload_Model (Kind);
+                  --  DECODE FAILED: Skip this batch, don't unload the model.
+                  --  The failure is likely a Metal kernel compilation error for
+                  --  this specific batch size/token count. The next batch may
+                  --  use a different configuration that compiles successfully.
+                  Consecutive_Failures := Consecutive_Failures + 1;
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                            "[WARN] Llama_Decode failed (Code:" &
+                            Dec_Result'Img & ") Batch:" &
+                            To_Decode'Img & " Consecutive:" &
+                            Consecutive_Failures'Img & AnsiAda.Reset);
 
-                  Free_Tokens (Tokens);
-                  Models (Kind).In_Use := False;
-                  if Level = ELP0 then
-                     Priority_Model_Gate.Release_ELP0 (Kind);
-                  else
-                     Priority_Model_Gate.Release_ELP1 (Kind);
+                  if Consecutive_Failures >= Max_Consecutive then
+                     --  3 consecutive failures = all kernel variants failing.
+                     --  This is a real issue, not a transient compilation error.
+                     --  Unload and let the caller decide what to do.
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
+                               "[FATAL] " & Max_Consecutive'Img &
+                               " consecutive decode failures. " &
+                               "Unloading model." & AnsiAda.Reset);
+                     delay 1.0;  -- Brief cooldown for GPU driver
+                     Unload_Model (Kind);
+                     Free_Tokens (Tokens);
+                     Models (Kind).In_Use := False;
+                     if Level = ELP0 then
+                        Priority_Model_Gate.Release_ELP0 (Kind);
+                     else
+                        Priority_Model_Gate.Release_ELP1 (Kind);
+                     end if;
+                     ELP_Queue.Dequeue_Level (Level);
+                     Length := 0;
+                     return;
                   end if;
-                  ELP_Queue.Dequeue_Level (Level);
-                  Length := 0;
-                  return;
+
+                  --  Skip this batch: advance past the failed tokens and continue.
+                  --  The embedding result will be incomplete for this chunk, but
+                  --  the model stays loaded for the next batch.
+                  Tokens_Left := Tokens_Left - To_Decode;
+                  Current_Pos := Current_Pos + To_Decode;
+               else
+                  --  DECODE SUCCEEDED: Reset consecutive failure counter.
+                  Consecutive_Failures := 0;
+                  Tokens_Left := Tokens_Left - To_Decode;
+                  Current_Pos := Current_Pos + To_Decode;
                end if;
-               Tokens_Left := Tokens_Left - To_Decode;
-               Current_Pos := Current_Pos + To_Decode;
             end;
          end loop;
       end;

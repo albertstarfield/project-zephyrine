@@ -602,7 +602,8 @@ def main():
                     print(f"{BG_BLUE}{f'   Signal:    {sig_name} ({sig_val})'.ljust(70)}{RESET}")
                 print(f"{BG_BLUE}{'   '.ljust(70)}{RESET}")
                 print(f"{BG_BLUE}{'   Check the output immediately above this banner for the'.ljust(70)}{RESET}")
-                print(f"{BG_BLUE}{'   last Ada stack traces or GPU assertion failures.'.ljust(70)}{RESET}")
+                print(f"{BG_BLUE}{'   last Ada stack traces and unfortunately we can'.ljust(70)}{RESET}")
+                print(f"{BG_BLUE}{'   t recover it needs to be relaunched.'.ljust(70)}{RESET}")
                 print(f"{BG_BLUE}{'='*70}{RESET}\n")
             else:
                 print("\n[*] Server exited cleanly (code: 0)")
