@@ -36,6 +36,7 @@
 **.pid**
 **.heartbeat**
 **.args**
+**.shutdown_requested**
 server_log.txt
 server_run_log.txt
 test_results.txt
