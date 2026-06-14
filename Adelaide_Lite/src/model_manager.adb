@@ -1769,16 +1769,24 @@ package body Model_Manager is
        Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
                  AnsiAda.Reset & " Flush_Parser ENTERED. Buffer=" &
                  Natural'Image (Length (Parser.Sanitize_Buffer)) &
-                 " Orch_Think_Open=" & Boolean'Image (Parser.Orch_Think_Open));
+                 " Orch_Think_Open=" & Boolean'Image (Parser.Orch_Think_Open) &
+                 " In_Think_Block=" & Boolean'Image (Parser.In_Think_Block));
        declare
           S_Str : constant String := To_String (Parser.Sanitize_Buffer);
        begin
           if S_Str /= "" then
-             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
-                       AnsiAda.Reset & " Flush_Parser: Pushing remaining " &
-                       Natural'Image (S_Str'Length) & " chars.");
-             Push_Chunk (Stream, Session_ID, S_Str);
+             if not Parser.In_Think_Block then
+                --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
+                          AnsiAda.Reset & " Flush_Parser: Pushing remaining " &
+                          Natural'Image (S_Str'Length) & " chars.");
+                Push_Chunk (Stream, Session_ID, S_Str);
+             else
+                --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
+                          AnsiAda.Reset & " Flush_Parser: Silencing " &
+                          Natural'Image (S_Str'Length) & " chars inside think block.");
+             end if;
              Parser.Sanitize_Buffer := Null_Unbounded_String;
           else
              --  [VITAL-DO-NOT-REMOVE] Mandated by user.
@@ -1805,28 +1813,52 @@ package body Model_Manager is
       while I <= Text'Last loop
          if I + 9 <= Text'Last and then Text (I .. I + 9) = "<thinking>" then
             --  Skip everything until closing </thinking>
-            I := I + 10;
-            while I <= Text'Last loop
-               if I + 10 <= Text'Last and then
-                 Text (I .. I + 10) = "</thinking>"
-               then
-                  I := I + 11;
-                  exit;
-               else
+            declare
+               Start_Pos : constant Positive := I;
+               Found     : Boolean := False;
+            begin
+               I := I + 10;
+               while I <= Text'Last loop
+                  if I + 10 <= Text'Last and then
+                    Text (I .. I + 10) = "</thinking>"
+                  then
+                     I := I + 11;
+                     Found := True;
+                     exit;
+                  else
+                     I := I + 1;
+                  end if;
+               end loop;
+               --  If not found, backtrack and treat as regular text
+               if not Found then
+                  I := Start_Pos;
+                  Append (Res, Text (I));
                   I := I + 1;
                end if;
-            end loop;
+            end;
          elsif I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
             --  Skip everything until closing </think>
-            I := I + 7;
-            while I <= Text'Last loop
-               if I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
-                  I := I + 8;
-                  exit;
-               else
+            declare
+               Start_Pos : constant Positive := I;
+               Found     : Boolean := False;
+            begin
+               I := I + 7;
+               while I <= Text'Last loop
+                  if I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
+                     I := I + 8;
+                     Found := True;
+                     exit;
+                  else
+                     I := I + 1;
+                  end if;
+               end loop;
+               --  If not found, backtrack and treat as regular text
+               if not Found then
+                  I := Start_Pos;
+                  Append (Res, Text (I));
                   I := I + 1;
                end if;
-            end loop;
+            end;
          elsif I + 10 <= Text'Last and then
            Text (I .. I + 10) = "</response>"
          then
@@ -3251,7 +3283,9 @@ package body Model_Manager is
              --  [DUPLICATION IS INTENTIONAL] Pushing `</think>` first, then
              --  re-emitting the visible response for status quo decoding.
              Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
-             Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
+             if Resp_Text /= "" then
+                Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
+             end if;
          end;
       elsif External_Agent and then Stream /= null then
          declare
