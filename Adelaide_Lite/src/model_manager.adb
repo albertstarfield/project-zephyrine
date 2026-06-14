@@ -77,6 +77,21 @@ with System;
 --  is a preprocessing limitation, not a model limitation.  If multilingual
 --  support is needed, Sanitize_UTF8 must be relaxed to pass through valid
 --  UTF-8 multi-byte sequences.
+--
+--  [QUIRK-M06] [ALL] Flush_Parser thinking block awareness
+--  The Flush_Parser procedure (called when the sanitize buffer grows too
+--  large) must respect the In_Think_Block state.  If a flush occurs while
+--  the model is inside a <think> block, the content must be silenced.
+--  Failing to check this state causes "thinking leaks" where internal
+--  reasoning is visible to the client if the thought exceeds 500 chars.
+--
+--  [QUIRK-M07] [ALL] Sanitize_Think_Tags backtracking
+--  If a model outputs an opening <think> tag but hits EOG before closing
+--  it, the naive sanitizer would strip the entire response until it finds
+--  a closing tag that never arrives.  The improved sanitizer uses a
+--  backtracking mechanism: if a closing tag is not found by the end of
+--  the string, it treats the opening tag as regular text.  This prevents
+--  "empty response" bugs when models fail to close their thinking blocks.
 --  ===========================================================================
 
 package body Model_Manager is
