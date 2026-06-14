@@ -16,13 +16,11 @@ with Interfaces.C.Strings; use Interfaces.C.Strings;
 with Ada.Directories;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Unchecked_Conversion;
-with Ada.Unchecked_Deallocation;
 with Ada.Exceptions;
 with Watchdog_Manager;
 with Kratos;
 with ELP_Queue;
 with Speculative_Cache;
-with System;
 
 --  ===========================================================================
 --  MODEL MANAGEMENT QUIRKS & DISCOVERED WORKAROUNDS
@@ -99,7 +97,8 @@ package body Model_Manager is
 
    --  Token array types (package-level for use by Generate and
    --  Tokenize_And_Cache_Virtual_Ctx)
-   type Token_Array is array (Positive range <>) of Llama_Interface.Llama_Token;
+   type Token_Array is array (Positive range <>) of
+     Llama_Interface.Llama_Token;
    type Token_Array_Access is access Token_Array;
    procedure Free_Tokens is new Ada.Unchecked_Deallocation
      (Token_Array, Token_Array_Access);
@@ -121,18 +120,21 @@ package body Model_Manager is
    begin
       loop
          delay 30.0;
-         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red) &
-                               "[WCET]" & AnsiAda.Reset &
-                               " Pipeline: " &
-                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET * 1_000_000_000)) & "ns | " &
-                               "ELP0: " &
-                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET_ELP0 * 1_000_000_000)) & "ns | " &
-                               "ELP1: " &
-                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET_ELP1 * 1_000_000_000)) & "ns | " &
-                               "ELP2: " &
-                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET_ELP2 * 1_000_000_000)) & "ns | " &
-                               "ELP3: " &
-                               Long_Long_Integer'Image (Long_Long_Integer (Current_WCET_ELP3 * 1_000_000_000)) & "ns");
+         Ada.Text_IO.Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red) & "[WCET]" & AnsiAda.Reset &
+            " Pipeline: " & Long_Long_Integer'Image
+              (Long_Long_Integer (Current_WCET * 1_000_000_000)) & "ns | " &
+            "ELP0: " & Long_Long_Integer'Image
+              (Long_Long_Integer (Current_WCET_ELP0 * 1_000_000_000)) &
+            "ns | " &
+            "ELP1: " & Long_Long_Integer'Image
+              (Long_Long_Integer (Current_WCET_ELP1 * 1_000_000_000)) &
+            "ns | " &
+            "ELP2: " & Long_Long_Integer'Image
+              (Long_Long_Integer (Current_WCET_ELP2 * 1_000_000_000)) &
+            "ns | " &
+            "ELP3: " & Long_Long_Integer'Image
+              (Long_Long_Integer (Current_WCET_ELP3 * 1_000_000_000)) & "ns");
       end loop;
    end WCET_Printer;
 
@@ -405,7 +407,7 @@ package body Model_Manager is
       function Should_Abort return Boolean is
       begin
          return ELP1_Pending > 0 or else ELP1_Active_Count > 0
-           or else (On_Battery_State and Battery_Level < 80);
+           or else (On_Battery_State and then Battery_Level < 80);
       end Should_Abort;
 
       function Is_ELP0_Owner (Kind : Model_Type) return Boolean is
@@ -417,12 +419,12 @@ package body Model_Manager is
       --  See Wait_For_ELP1_Idle spec in model_manager.ads for full explanation.
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: prints guard state when an ELP0 task arrives.
-      entry Wait_For_ELP1_Idle when (ELP1_Pending = 0 and
+      entry Wait_For_ELP1_Idle when (ELP1_Pending = 0 and then
         ELP1_Active_Count = 0)
         and then (not On_Battery_State or else Battery_Level >= 80) is
       begin
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Wait_For_ELP1_Idle GUARD PASSED" &
+                   AnsiAda.Reset & "+" & Trim (Duration'Image (Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Wait_For_ELP1_Idle GUARD PASSED" &
                    " ELP1_Pending=" & ELP1_Pending'Img &
                    " ELP1_Active=" & ELP1_Active_Count'Img &
                    " OnBattery=" & On_Battery_State'Img &

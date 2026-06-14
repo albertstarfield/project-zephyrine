@@ -1,6 +1,7 @@
 pragma SPARK_Mode (On);
 with Ada.Text_IO;
 with Model_Manager;
+with Shutdown_Manager;
 
 package body Watchdog_Manager is
 
@@ -25,35 +26,27 @@ package body Watchdog_Manager is
          Aborted := True;
       end Set_Aborted;
 
-      function Is_Aborted return Boolean is
-      begin
-         return Aborted;
-      end Is_Aborted;
+      function Is_Aborted return Boolean is (Aborted);
 
-      function Current_Inference_Model return Model_Type is
-      begin
-         return Current_Model;
-      end Current_Inference_Model;
+      function Current_Inference_Model return Model_Type is (Current_Model);
 
       procedure Check_Timeout
         (Limit       : Time_Span;
          Out_Aborted : out Boolean;
          Out_Model   : out Model_Type)
       is
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
          pragma Annotate
            (GNATprove, Intentional, "range check might fail",
             "Time arithmetic is safe given system uptime expectations " &
             "and positive timeout bounds");
          Now : constant Time := Clock;
       begin
-         if Active and then not Aborted and then Now > Time_Of (0, Limit) and then
-           Now - Limit > Start_Time
-         then
+         Out_Aborted := False;
+         Out_Model := Current_Model;
+         if Active and then not Aborted and then Now - Start_Time > Limit then
             Aborted := True;
             Out_Aborted := True;
-            Out_Model := Current_Model;
-         else
-            Out_Aborted := False;
             Out_Model := Current_Model;
          end if;
       end Check_Timeout;
@@ -66,18 +59,27 @@ package body Watchdog_Manager is
          Last_Heartbeat := Now;
       end Heartbeat;
 
+      procedure Deactivate is
+      begin
+         Active := False;
+      end Deactivate;
+
       procedure Check_Liveness (Limit : Time_Span; OK : out Boolean) is
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
          pragma Annotate
            (GNATprove, Intentional, "range check might fail",
             "Time arithmetic is safe given system uptime expectations " &
             "and positive timeout bounds");
          Now : constant Time := Clock;
       begin
-         if Last_Heartbeat = Time_Of (0, Time_Span_Zero) then
+         if not Active then
+            OK := True;
+         elsif Last_Heartbeat = Time_Of (0, Time_Span_Zero) then
             --  Not started yet, assume OK
             OK := True;
          else
-            OK := Now <= Time_Of (0, Limit) or else Now - Limit <= Last_Heartbeat;
+            OK := Now <= Time_Of (0, Limit) or else
+                  Now - Limit <= Last_Heartbeat;
          end if;
       end Check_Liveness;
    end AWS_Server_Monitor;
@@ -96,6 +98,7 @@ package body Watchdog_Manager is
       begin
          Next_Check := Clock;
          loop
+            exit when Shutdown_Manager.Shutdown_Status.Requested;
             Next_Check := Next_Check + Interval;
             delay until Next_Check;
 

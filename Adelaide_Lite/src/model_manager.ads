@@ -165,33 +165,33 @@ package Model_Manager is
    Current_Jitter_Max : Duration := 0.0;
    Current_Jitter_Avg : Duration := 0.0;
 
-    --  Last user prompt (set by Hybrid_Generate at ELP1 level).
-    --  Read by Proactive_Cache_Task in Knowledge_Manager to predict
-    --  follow-up questions and pre-populate Speculative_Cache.
-    Last_User_Prompt : Unbounded_String := Null_Unbounded_String;
+   --  Last user prompt (set by Hybrid_Generate at ELP1 level).
+   --  Read by Proactive_Cache_Task in Knowledge_Manager to predict
+   --  follow-up questions and pre-populate Speculative_Cache.
+   Last_User_Prompt : Unbounded_String := Null_Unbounded_String;
 
-    --  CONTEXT FAULT MONITORING (printed every 5s by Context_Monitor task)
-    --  Tracks the virtual context space and context fault paging state.
-    --  Virtual Context: accumulated factual data from tool results, measured
-    --  in bytes (Internal_State) then approximated to tokens.
-    --  LLM Context: the actual llama.cpp context window (N_Ctx) that holds
-    --  the tokenized prompt + KV cache for attention.
-    --  Context Fault: Model requests additional context mid-generation via
-    --  [CONTEXT_FAULT: query=... category=...]. Each fault adds a "hop".
-    Current_Context_Fault_Hops : Natural := 0;
-    Current_Internal_State_Len : Natural := 0;
-    Current_Hop_Count          : Natural := 0;
-    --  Token tracking for context window utilization
-    Current_Prompt_Tokens      : Natural := 0;   -- actual tokens in prompt
-    Current_Ctx_Capacity       : Natural := 8192; -- llama context window size
+   --  CONTEXT FAULT MONITORING (printed every 5s by Context_Monitor task)
+   --  Tracks the virtual context space and context fault paging state.
+   --  Virtual Context: accumulated factual data from tool results, measured
+   --  in bytes (Internal_State) then approximated to tokens.
+   --  LLM Context: the actual llama.cpp context window (N_Ctx) that holds
+   --  the tokenized prompt + KV cache for attention.
+   --  Context Fault: Model requests additional context mid-generation via
+   --  [CONTEXT_FAULT: query=... category=...]. Each fault adds a "hop".
+   Current_Context_Fault_Hops : Natural := 0;
+   Current_Internal_State_Len : Natural := 0;
+   Current_Hop_Count          : Natural := 0;
+   --  Token tracking for context window utilization
+   Current_Prompt_Tokens      : Natural := 0;   -- actual tokens in prompt
+   Current_Ctx_Capacity       : Natural := 8192; -- llama context window size
 
-    --  CACHED VIRTUAL CTX TOKENS
-    --  When Internal_State grows, we re-tokenize ONLY the new portion.
-    --  The cached tokens are prepended to the prompt on each generation,
-    --  skipping re-tokenization of already-known facts.  This makes
-    --  context faulting faster: the LLM sees pre-tokenized facts without
-    --  paying the tokenization cost again.
-    Cached_Virtual_Tokens : Cached_Token_Access := null;
-    Cached_Virtual_Len    : Natural := 0;
+   --  CACHED VIRTUAL CTX TOKENS
+   --  When Internal_State grows, we re-tokenize ONLY the new portion.
+   --  The cached tokens are prepended to the prompt on each generation,
+   --  skipping re-tokenization of already-known facts.  This makes
+   --  context faulting faster: the LLM sees pre-tokenized facts without
+   --  paying the tokenization cost again.
+   Cached_Virtual_Tokens : Cached_Token_Access := null;
+   Cached_Virtual_Len    : Natural := 0;
 
 end Model_Manager;

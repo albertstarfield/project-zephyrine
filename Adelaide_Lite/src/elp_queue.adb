@@ -2,6 +2,7 @@ pragma SPARK_Mode (Off);
 with Ada.Text_IO; use Ada.Text_IO;
 with AnsiAda;
 with Ada.Real_Time; use Ada.Real_Time;
+with Shutdown_Manager;
 
 package body ELP_Queue is
 
@@ -22,9 +23,9 @@ package body ELP_Queue is
       function Get_Total return Long_Long_Integer;
       function Get_Last_Source return String;
    private
-      Counts      : Level_Counts := (others => 0);
+      Counts      : Level_Counts := [others => 0];
       Total       : Long_Long_Integer := 0;
-      Last_Source : String (1 .. 32)  := (others => ' ');
+      Last_Source : String (1 .. 32)  := [others => ' '];
       Source_Len  : Natural := 0;
    end Load_State;
 
@@ -36,7 +37,7 @@ package body ELP_Queue is
          Source_Len := Natural'Min (Source'Length, 32);
          Last_Source (1 .. Source_Len) :=
            Source (Source'First .. Source'First + Source_Len - 1);
-         
+
          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
          Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[ELP-Queue] ENQUEUE: " &
                    Source & " (Level: " & Level'Img & ")" & AnsiAda.Reset);
@@ -48,10 +49,10 @@ package body ELP_Queue is
             Counts (Level) := Counts (Level) - 1;
             Total := Total - 1;
          end if;
-         
+
          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
          Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[ELP-Queue] DEQUEUE: " &
-                   Level'Img & " (Remaining Total:" & Total'Img & ")" & 
+                   Level'Img & " (Remaining Total:" & Total'Img & ")" &
                    AnsiAda.Reset);
       end Decrement;
 
@@ -108,6 +109,7 @@ package body ELP_Queue is
    begin
       accept Start;
       loop
+         exit when Shutdown_Manager.Shutdown_Status.Requested;
          Next_Check := Clock + Interval;
          declare
             C : constant Level_Counts := Load_State.Get_Counts;
@@ -137,22 +139,28 @@ package body ELP_Queue is
       if Initialized then
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                   AnsiAda.Reset & " ELP_Queue.Initialize: ALREADY INITIALIZED, skipping.");
+                   AnsiAda.Reset &
+                   " ELP_Queue.Initialize: ALREADY INITIALIZED, skipping.");
          return;
       end if;
       Initialized := True;
       if not Monitor_Task'Terminated then
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                   AnsiAda.Reset & " ELP_Queue.Initialize: Monitor_Task not terminated, calling Start...");
+                   AnsiAda.Reset &
+                   " ELP_Queue.Initialize: Monitor_Task not terminated, " &
+                   "calling Start...");
          Monitor_Task.Start;
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                   AnsiAda.Reset & " ELP_Queue.Initialize: Monitor_Task.Start returned.");
+                   AnsiAda.Reset &
+                   " ELP_Queue.Initialize: Monitor_Task.Start returned.");
       else
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                   AnsiAda.Reset & " ELP_Queue.Initialize: Monitor_Task already terminated, skipping Start.");
+                   AnsiAda.Reset &
+                   " ELP_Queue.Initialize: Monitor_Task already terminated, " &
+                   "skipping Start.");
       end if;
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
