@@ -42,6 +42,19 @@ procedure Adelaide_Watchdog is
    function Is_Shutdown_Requested return Interfaces.C.int;
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
 
+   function Is_Another_Watchdog_Running return Boolean;
+   procedure Write_Watchdog_PID;
+   procedure Write_Watchdog_Heartbeat;
+   function Read_PID return Integer;
+   function Is_Process_Alive (Pid : Integer) return Boolean;
+   function Get_Heartbeat_Age_S return Duration;
+   function Read_Args return String;
+   procedure Restart_Server (Old_Pid : Integer);
+   procedure Check_Server;
+   function Get_Port return String;
+   function Get_Host return String;
+   procedure Check_All_APIs;
+
    Shutdown_Requested : exception;
 
    Run_Dir    : constant String := "run";
@@ -103,7 +116,7 @@ procedure Adelaide_Watchdog is
          return False;  --  Dead => stale
       end if;
 
-      --  Process alive — verify it's actually a watchdog by checking
+      --  Process alive -- verify it's actually a watchdog by checking
       --  if it wrote a heartbeat recently (within 30s).
       --  If the heartbeat is stale, the PID was recycled.
       declare
@@ -499,9 +512,11 @@ begin
       Put_Line (Standard_Error,
         "[Watchdog] FATAL: Cannot run adelaide_watchdog directly.");
       Put_Line (Standard_Error,
-        "[Watchdog] This binary MUST be launched through run.py (or run.sh).");
+        "[Watchdog] This binary MUST be launched through " &
+        "run.py (or run.sh).");
       Put_Line (Standard_Error,
-        "[Watchdog] Direct execution bypasses orchestration and causes resource leaks.");
+        "[Watchdog] Direct execution bypasses orchestration and " &
+        "causes resource leaks.");
       Put_Line (Standard_Error,
         "[Watchdog] Use: ./run.py --no-gui   OR   python3 run.py");
       Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
@@ -511,9 +526,11 @@ begin
    --  SINGLE-INSTANCE LOCK: Refuse to start if another watchdog is running
    if Is_Another_Watchdog_Running then
       Put_Line (Standard_Error,
-        "[Watchdog] FATAL: Another adelaide_watchdog instance is already running!");
+        "[Watchdog] FATAL: Another adelaide_watchdog instance " &
+        "is already running!");
       Put_Line (Standard_Error,
-        "[Watchdog] Kill the existing one first: kill $(cat run/adelaide_watchdog.pid)");
+        "[Watchdog] Kill the existing one first: " &
+        "kill $(cat run/adelaide_watchdog.pid)");
       Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
       return;
    end if;

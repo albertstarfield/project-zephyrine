@@ -39,6 +39,7 @@ with Knowledge_Manager;
 with Scheduler_Manager;
 with Watchdog_Manager;
 with Watchdog_IPC;
+with Shutdown_Manager;
 with AWS.Config;
 with AWS.Config.Set;
 with AWS.Server;
@@ -95,6 +96,9 @@ with Interfaces.C; use Interfaces.C;
 
 procedure Adelaide_Server is
 
+   function Get_Port return Natural;
+   function Get_Host return String;
+
    --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
    procedure Install_Shutdown_Handlers;
    pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
@@ -121,7 +125,6 @@ procedure Adelaide_Server is
    --  spot in scrollback.  Format: [InitClock] EPOCH: <seconds>
    --  ----------------------------------------------------------------
    protected Init_Clock_Control is
-      procedure Start_Clock;
       procedure Stop_Clock;
       function Is_Running return Boolean;
    private
@@ -129,11 +132,6 @@ procedure Adelaide_Server is
    end Init_Clock_Control;
 
    protected body Init_Clock_Control is
-      procedure Start_Clock is
-      begin
-         Running := True;
-      end Start_Clock;
-
       procedure Stop_Clock is
       begin
          Running := False;
@@ -180,7 +178,8 @@ procedure Adelaide_Server is
          end if;
       end loop;
       if Ada.Environment_Variables.Exists ("ADLAIDE_SERVER_PORT") then
-         return Natural'Value (Ada.Environment_Variables.Value ("ADLAIDE_SERVER_PORT"));
+         return Natural'Value
+           (Ada.Environment_Variables.Value ("ADLAIDE_SERVER_PORT"));
       end if;
       return 11420;
    end Get_Port;
@@ -225,16 +224,19 @@ begin
       --  ----------------------------------------------------------------
       if Watchdog_IPC.Check_Single_Instance then
          Put_Line (Character'Val (27) & "[31m" &
-                   "[FATAL] Another adelaide_server instance is already running!" &
+                   "[FATAL] Another adelaide_server instance is " &
+                   "already running!" &
                    Character'Val (27) & "[0m");
          Put_Line (Character'Val (27) & "[31m" &
-                   " Kill the existing instance: kill $(cat run/adelaide_server.pid)" &
+                   " Kill the existing instance: kill $(cat " &
+                   "run/adelaide_server.pid)" &
                    Character'Val (27) & "[0m");
          Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
          return;
       end if;
 
-      --  [DO NOT REMOVE] Install SIGINT/SIGTERM handlers for graceful shutdown.
+      --  [DO NOT REMOVE] Install SIGINT/SIGTERM handlers for
+      --  graceful shutdown.
       --  Without this, Ctrl+C kills the process immediately, leaving stale
       --  PID/heartbeat files, and the watchdog restarts the server.
       Install_Shutdown_Handlers;
@@ -377,7 +379,8 @@ begin
             --  NVMe SSD: standard NVMe, PCIe Gen3 x4 / Gen4 x2
             --  THIS IS THE RECOMMENDED BARE MINIMUM for model loading
             Category := To_Unbounded_String ("NVMe SSD");
-            Warning  := To_Unbounded_String ("(Medium/Standard) RECOMMENDED BARE MINIMUM");
+            Warning  := To_Unbounded_String
+              ("(Medium/Standard) RECOMMENDED BARE MINIMUM");
          elsif MB_per_sec <= 18000 then
             --  NVMe SSD: good NVMe, PCIe Gen4 x4
             Category := To_Unbounded_String ("NVMe SSD");
@@ -452,37 +455,61 @@ begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: wraps Model_Manager.Initialize so we can see timing.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 1: Calling Model_Manager.Initialize...");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 1: Calling Model_Manager.Initialize...");
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset &
                 " Initializing Adelaide Intelligence Backend...");
       Model_Manager.Initialize;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 1 DONE: Model_Manager.Initialize returned.");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 1 DONE: Model_Manager.Initialize returned.");
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: wraps Knowledge_Manager.Initialize.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 2: Calling Knowledge_Manager.Initialize...");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 2: Calling Knowledge_Manager.Initialize...");
       Knowledge_Manager.Initialize;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 2 DONE: Knowledge_Manager.Initialize returned.");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 2 DONE: Knowledge_Manager.Initialize returned.");
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: wraps Scheduler_Manager.Initialize.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 3: Calling Scheduler_Manager.Initialize...");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 3: Calling Scheduler_Manager.Initialize...");
       Scheduler_Manager.Initialize;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 3 DONE: Scheduler_Manager.Initialize returned.");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 3 DONE: Scheduler_Manager.Initialize returned.");
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: wraps Watchdog_IPC.Init.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 4: Calling Watchdog_IPC.Init...");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 4: Calling Watchdog_IPC.Init...");
       Watchdog_IPC.Init;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 4 DONE: Watchdog_IPC.Init returned.");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 4 DONE: Watchdog_IPC.Init returned.");
 
       --  ==================================================================
       --  STEP 5: Start ELP0 background tasks BEFORE HTTP bind
@@ -498,9 +525,8 @@ begin
       --    - Salience_Maintenance_Task, Telemetry_Sync_Task, etc.
       --
       --  WHY THIS MATTERS: Previously, Start_Tasks was called AFTER
-      --  AWS.Server.Start (line ~99 in the old code).  This meant ELP0
-      --  stayed at 0 until the first HTTP request arrived.  Worse, if
-      --  Moonshine init (which loads 500MB+ of ONNX models) hung, the
+      --  AWS.Server.Start.  This meant ELP0 stayed at 0 until the first
+      --  HTTP request arrived.  Worse, if Moonshine init hung, the
       --  server never bound at all — so Start_Tasks was never called,
       --  and ELP0 producers never started.  The system appeared alive
       --  (ELP monitor printing zeros) but was functionally dead.
@@ -512,12 +538,19 @@ begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: wraps Knowledge_Manager.Start_Tasks.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 5: Calling Knowledge_Manager.Start_Tasks...");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 5: Calling Knowledge_Manager.Start_Tasks...");
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-                AnsiAda.Reset & " Starting background tasks (ELP0 producers)...");
+                AnsiAda.Reset &
+                " Starting background tasks (ELP0 producers)...");
       Knowledge_Manager.Start_Tasks;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 5 DONE: Knowledge_Manager.Start_Tasks returned.");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 5 DONE: Knowledge_Manager.Start_Tasks returned.");
 
       --  ==================================================================
       --  STEP 6: Bind HTTP server
@@ -536,13 +569,20 @@ begin
          Host : constant String := Get_Host;
       begin
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 6: Configuring AWS HTTP server on " & Host & ":" & Natural'Image (Port) & "...");
+                   AnsiAda.Reset & "+" &
+                   Trim (Duration'Image (Ada.Real_Time.To_Duration
+                     (Ada.Real_Time.Clock - Start_Time)), Both) &
+                   "s STEP 6: Configuring AWS HTTP server on " & Host & ":" &
+                   Natural'Image (Port) & "...");
          AWS.Config.Set.Server_Port (Conf, Port);
          AWS.Config.Set.Server_Host (Conf, Host);
          AWS.Config.Set.Reuse_Address (Conf, True);
       end;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 6: AWS config set. Entering bind retry loop...");
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 6: AWS config set. Entering bind retry loop...");
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Read back the configured port so we can use it in the health
@@ -574,7 +614,10 @@ begin
                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                --  Verbose: confirms port bind succeeded.
                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                         AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 6 DONE: AWS.Server.Start SUCCEEDED on port" &
+                         AnsiAda.Reset & "+" &
+                         Trim (Duration'Image (Ada.Real_Time.To_Duration
+                           (Ada.Real_Time.Clock - Start_Time)), Both) &
+                         "s STEP 6 DONE: AWS.Server.Start SUCCEEDED on port" &
                          Natural'Image (Server_Port) & ".");
             exception
                when E : others =>
@@ -589,9 +632,7 @@ begin
                   else
                      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                      --  Final retry failed.  Print the [BUGCHECK] banner in
-                     --  red so it's visible in scrollback.  The exception
-                     --  message contains the OS-level error (e.g., "Address
-                     --  already in use" or "Permission denied").
+                     --  red so it's visible in scrollback.
                      Put_Line (Character'Val (27) & "[31m" &
                                "[BUGCHECK] Failed to bind to port" &
                                Natural'Image (Server_Port) & ": " &
@@ -604,165 +645,140 @@ begin
             end;
          end loop;
 
-      --  ==================================================================
-      --  STEP 7: Startup health ping watchdog
-      --  ==================================================================
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  After the HTTP server is bound, we ping our own /api/power
-      --  endpoint every 3 seconds to verify the server is actually
-      --  responding to requests.  This catches two failure modes:
-      --
-      --    a) The server bound the port but the dispatch callback is
-      --       broken (e.g., null access, constraint error on first
-      --       request).  The port is open but requests hang or crash.
-      --
-      --    b) The server bound the port but the main loop is stuck
-      --       (e.g., a protected object deadlock, or a blocking FFI
-      --       call that never returns).
-      --
-      --  If no response is received within 60 seconds of startup, the
-      --  process exits with code 69 so run.sh displays the error banner.
-      --
-      --  The 3-second interval is chosen to be:
-      --    - Fast enough to catch hangs quickly
-      --    - Slow enough to not spam the log during normal startup
-      --    - Aligned with the Python power monitor's check interval
-      --
-      --  WARNING messages are printed every 3 seconds BEFORE the final
-      --  bugcheck so the user can see the watchdog counting down.
-      --  ----------------------------------------------------------------
-      declare
+         --  ==================================================================
+         --  STEP 7: Startup health ping watchdog
+         --  ==================================================================
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-         --  Startup_Deadline: Absolute time when the watchdog gives up.
-         --  Set to 60 seconds from now.  If the server hasn't responded
-         --  by this time, we exit with code 69.
-         Startup_Deadline : constant Ada.Real_Time.Time :=
-           Ada.Real_Time.Clock + Ada.Real_Time.Seconds (60);
-
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-         --  Ping_Count: How many pings we've sent so far (for the
-         --  warning message).
-         --  Got_Response: Set to True once we receive a valid HTTP 200
-         --  from /api/power.
-         Ping_Count    : Natural := 0;
-         Got_Response  : Boolean := False;
-
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-         --  Health_URL: The endpoint we ping.  /api/power is chosen
-         --  because it's lightweight (no LLM inference, no DB query)
-         --  and always returns {"status":"ok"} when the server is alive.
-          Health_URL : constant String :=
-            "http://127.0.0.1:" & Trim(Natural'Image (Server_Port), Ada.Strings.Both) &
-            "/api/power";
-      begin
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-         --  Verbose: confirms we entered the health ping loop.
-         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 7: Entering health ping loop. URL=" & Health_URL);
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-         --  Ping loop: Send GET requests to /api/power every 3 seconds.
-         --  AWS.Client.Get is synchronous -- it blocks until the server
-         --  responds or the connection times out.  If the server is
-         --  truly alive, the response should come back in < 100ms.
+         --  After the HTTP server is bound, we ping our own /api/power
+         --  endpoint every 3 seconds to verify the server is actually
+         --  responding to requests.  This catches two failure modes:
          --
-         --  We check the HTTP status code.  Any 2xx means the server
-         --  is healthy.  A connection error or non-2xx status means
-         --  the server is still starting up or is broken.
+         --    a) The server bound the port but the dispatch callback is
+         --       broken (e.g., null access, constraint error on first
+         --       request).  The port is open but requests hang or crash.
          --
-         --  The loop exits when:
-         --    a) Got_Response becomes True (server is healthy) -- break
-         --    b) Ada.Real_Time.Clock > Startup_Deadline (60s exceeded)
-         --       -- exit with code 69
-         loop
-            Ping_Count := Ping_Count + 1;
+         --    b) The server bound the port but the main loop is stuck
+         --       (e.g., a protected object deadlock, or a blocking FFI
+         --       call that never returns).
+         --
+         --  If no response is received within 60 seconds of startup, the
+         --  process exits with code 69 so run.sh displays the error banner.
+         --
+         --  The 3-second interval is chosen to be:
+         --    - Fast enough to catch hangs quickly
+         --    - Slow enough to not spam the log during normal startup
+         --    - Aligned with the Python power monitor's check interval
+         --
+         --  WARNING messages are printed every 3 seconds BEFORE the final
+         --  bugcheck so the user can see the watchdog counting down.
+         --  ----------------------------------------------------------------
+         declare
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Startup_Deadline: Absolute time when the watchdog gives up.
+            Startup_Deadline : constant Ada.Real_Time.Time :=
+              Ada.Real_Time.Clock + Ada.Real_Time.Seconds (60);
 
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-            --  Attempt the health ping.  AWS.Client.Get can raise
-            --  exceptions for connection refused, timeout, etc.
-            --  We catch all exceptions and treat them as "no response".
-            declare
-               Response : AWS.Response.Data;
-            begin
-               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                         AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 7: Sending health ping #" &
-                         Natural'Image (Ping_Count) & " to " & Health_URL);
-               Response := AWS.Client.Get (Health_URL);
+            --  Ping_Count: How many pings we've sent so far.
+            Ping_Count    : Natural := 0;
+
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Health_URL: The endpoint we ping.  /api/power is lightweight.
+            Health_URL : constant String :=
+              "http://127.0.0.1:" &
+              Trim (Natural'Image (Server_Port), Ada.Strings.Both) &
+              "/api/power";
+         begin
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Verbose: confirms we entered the health ping loop.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & "+" &
+                      Trim (Duration'Image (Ada.Real_Time.To_Duration
+                        (Ada.Real_Time.Clock - Start_Time)), Both) &
+                      "s STEP 7: Entering health ping loop. URL=" &
+                      Health_URL);
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Ping loop: Send GET requests to /api/power every 3 seconds.
+            loop
+               Ping_Count := Ping_Count + 1;
+
                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-               --  Check the HTTP status code.  We accept any 2xx as
-               --  healthy.  The /api/power endpoint returns 200 OK
-               --  with {"status":"ok"} on success.
-                if AWS.Response.Status_Code (Response) in Success then
-                   Got_Response := True;
-                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                   --  Stop the init phase epoch clock now that the server
-                   --  is confirmed healthy.  No more epoch prints after this.
-                   Init_Clock_Control.Stop_Clock;
-                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                   --  Verbose: confirms health ping passed.
-                   Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                             AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 7 DONE: Health ping OK on ping" &
-                             Natural'Image (Ping_Count) & ". Status=" &
-                             AWS.Response.Status_Code (Response)'Img);
-                   Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
-                            "[Watchdog]" & AnsiAda.Reset &
-                             " Health ping OK -- server responding on port" &
-                             Natural'Image (Server_Port) & ".");
-                  exit;
-               end if;
-            exception
-               when E : others =>
+               --  Attempt the health ping.
+               declare
+                  Response : AWS.Response.Data;
+               begin
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) &
+                            "[Init-V]" & AnsiAda.Reset & "+" &
+                            Trim (Duration'Image (Ada.Real_Time.To_Duration
+                              (Ada.Real_Time.Clock - Start_Time)), Both) &
+                            "s STEP 7: Sending health ping #" &
+                            Natural'Image (Ping_Count) & " to " & Health_URL);
+                  Response := AWS.Client.Get (Health_URL);
                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                  --  Connection refused, timeout, or any other error.
-                  --  This is expected during the first few seconds while
-                  --  the server is still starting up.  We print a warning
-                  --  and continue the loop.
-                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Init-V]" &
-                            AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Start_Time)), Both) & "s STEP 7: Health ping #" &
-                            Natural'Image (Ping_Count) & " FAILED: " &
-                            Ada.Exceptions.Exception_Message (E));
-            end;
+                  --  Check the HTTP status code.
+                  if AWS.Response.Status_Code (Response) in Success then
+                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                     --  Stop the init phase epoch clock.
+                     Init_Clock_Control.Stop_Clock;
+                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                     --  Verbose: confirms health ping passed.
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) &
+                               "[Init-V]" & AnsiAda.Reset & "+" &
+                               Trim (Duration'Image (Ada.Real_Time.To_Duration
+                                 (Ada.Real_Time.Clock - Start_Time)), Both) &
+                               "s STEP 7 DONE: Health ping OK on ping" &
+                               Natural'Image (Ping_Count) & ". Status=" &
+                               AWS.Response.Status_Code (Response)'Img);
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                              "[Watchdog]" & AnsiAda.Reset &
+                               " Health ping OK -- server responding on port" &
+                               Natural'Image (Server_Port) & ".");
+                     exit;
+                  end if;
+               exception
+                  when E : others =>
+                     --  Connection refused, timeout, or any other error.
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                               "[Init-V]" & AnsiAda.Reset & "+" &
+                               Trim (Duration'Image (Ada.Real_Time.To_Duration
+                                 (Ada.Real_Time.Clock - Start_Time)), Both) &
+                               "s STEP 7: Health ping #" &
+                               Natural'Image (Ping_Count) & " FAILED: " &
+                               Ada.Exceptions.Exception_Message (E));
+               end;
 
-            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-            --  If we haven't gotten a response yet, check if we've
-            --  exceeded the 60-second deadline.  If so, print the
-            --  [BUGCHECK] banner and exit with code 69.
-            if Ada.Real_Time.Clock > Startup_Deadline then
                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-               --  Stop the init clock before exiting.
-               Init_Clock_Control.Stop_Clock;
-               Put_Line ("");
-               Put_Line (Character'Val (27) & "[31m" &
-                         "[WARNING BEFORE BUGCHECK]: No Response from " &
-                         "Adelaide server after" & Ping_Count'Img &
-                         " health pings (" & Health_URL & ")." &
-                         Character'Val (27) & "[0m");
-               Put_Line (Character'Val (27) & "[31m" &
-                         "[BUGCHECK] Startup watchdog: server did not " &
-                         "respond to health ping within 60 seconds.  " &
-                         "Exiting with code 69." &
-                         Character'Val (27) & "[0m");
-               Ada.Command_Line.Set_Exit_Status (69);
-               return;
-            end if;
+               --  Exceeded the 60-second deadline.
+               if Ada.Real_Time.Clock > Startup_Deadline then
+                  Init_Clock_Control.Stop_Clock;
+                  Put_Line ("");
+                  Put_Line (Character'Val (27) & "[31m" &
+                            "[WARNING BEFORE BUGCHECK]: No Response from " &
+                            "Adelaide server after" & Ping_Count'Img &
+                            " health pings (" & Health_URL & ")." &
+                            Character'Val (27) & "[0m");
+                  Put_Line (Character'Val (27) & "[31m" &
+                            "[BUGCHECK] Startup watchdog: server did not " &
+                            "respond to health ping within 60 seconds.  " &
+                            "Exiting with code 69." &
+                            Character'Val (27) & "[0m");
+                  Ada.Command_Line.Set_Exit_Status (69);
+                  return;
+               end if;
 
-            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-            --  Print a warning every 3 seconds so the user can see the
-            --  watchdog counting down.  This is critical for debugging
-            --  because the server might appear to be "stuck" but is
-            --  actually still initializing (e.g., Moonshine model load).
-            --  The warning tells the user exactly what's happening.
-            Put_Line (Character'Val (27) & "[33m" &
-                      "[Watchdog]" & AnsiAda.Reset &
-                      " WARNING: No response from Adelaide server yet. " &
-                      "Ping" & Ping_Count'Img &
-                      " -- retrying in 3s (deadline in" &
-                      Natural'Image (60 - (Ping_Count * 3)) & "s)...");
+               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+               --  Print a warning every 3 seconds so the user can see the
+               --  watchdog counting down.
+               Put_Line (Character'Val (27) & "[33m" &
+                         "[Watchdog]" & AnsiAda.Reset &
+                         " WARNING: No response from Adelaide server yet. " &
+                         "Ping" & Ping_Count'Img &
+                         " -- retrying in 3s (deadline in" &
+                         Natural'Image (60 - (Ping_Count * 3)) & "s)...");
 
-            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-            --  Wait 3 seconds before the next ping attempt.
-            delay 3.0;
-         end loop;
-      end;
+               delay 3.0;
+            end loop;
+         end;
       end;
 
       --  ==================================================================
@@ -772,39 +788,18 @@ begin
       --  CRITICAL FIX: Moonshine init moved AFTER the HTTP server is live.
       --  Previously, Init_Moonshine was called before AWS.Server.Start,
       --  which blocked the port bind for 30-60 seconds while the 500MB+
-      --  ONNX model files were loaded into memory.  During this time:
-      --    - The Python power monitor got "connection refused"
-      --    - The external watchdog got no heartbeat
-      --    - Any health check would fail
-      --    - The ELP queue stayed at 0 (no producers started)
-      --
-      --  By moving this AFTER the bind, the server immediately starts
-      --  accepting HTTP requests.  Moonshine loads in the background
-      --  while the server is already serving.  The first transcription
-      --  request will block until Moonshine is ready, but all other
-      --  endpoints (chat, generate, power, etc.) work immediately.
-      --
-      --  The model path is relative to CWD (Adelaide_Lite/).  It loads
-      --  the quantized streaming variant which is ~500MB total across
-      --  encoder, decoder, frontend, and tokenizer files.
-      --  ----------------------------------------------------------------
+      --  ONNX model files were loaded into memory.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Initializing Moonshine (STT)...");
       Moonshine_Interface.Init_Moonshine
         ("../moonshine/models/download.moonshine.ai/model/" &
          "medium-streaming-en/quantized");
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  Kokoro TTS does NOT need C-level init in Ada because it runs
-      --  as a separate Python sidecar process.  The Ada server communicates
-      --  with it via HTTP when a TTS request is made.  No blocking init
-      --  needed here.
 
       --  ==================================================================
       --  STEP 9: Server is fully up
       --  ==================================================================
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  This message confirms all initialization steps completed.
-      --  If you see this line, the server is ready to accept requests.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset &
                 " Server is UP. Press Q to shutdown (or kill if background).");
@@ -815,44 +810,32 @@ begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  The main loop runs forever, updating the watchdog heartbeat
       --  every 1 second and printing ELP queue stats every 5 seconds.
-      --
-      --  Watchdog_Manager.AWS_Server_Monitor.Heartbeat: Updates the
-      --  in-memory timestamp that the external watchdog process reads
-      --  via file-based IPC.  If this stops updating, the watchdog
-      --  kills the server.
-      --
-      --  Watchdog_IPC.Write_Heartbeat: Writes the current timestamp
-      --  to the .heartbeat file on disk.  This is the external
-      --  visibility channel for the watchdog.
-      --
-      --  ELP Queue logging: Every 5 seconds, prints the queue depth
-      --  and utilization percentage.  This is the primary diagnostic
-      --  for whether ELP0 (background tasks) are keeping up or ELP1
-      --  (user requests) are overwhelming the system.
-      --
-      --  The delay 1.0 between iterations means the heartbeat fires
-      --  at ~1Hz and ELP stats fire at ~0.2Hz (every 5 iterations).
       --  ----------------------------------------------------------------
       declare
          Heartbeat_Count : Natural := 0;
          Alive_Count     : Natural := 0;
       begin
-         --  Avoid Get_Line failure in background
          loop
             --  [DO NOT REMOVE] Graceful shutdown check (SIGINT/SIGTERM).
-            --  If Ctrl+C or kill was received, exit the loop cleanly.
             if Is_Shutdown_Requested /= 0 then
                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
                          "[Shutdown]" & AnsiAda.Reset &
                          " SIGINT/SIGTERM received. Cleaning up...");
+
+               --  Signal all Ada tasks to stop
+               Shutdown_Manager.Shutdown_Status.Request;
+               Watchdog_Manager.AWS_Server_Monitor.Deactivate;
+
                --  Write clean exit reason (not a crash)
-               Watchdog_IPC.Write_Exit_Reason ("Clean Shutdown (SIGINT/SIGTERM)", 0);
+               Watchdog_IPC.Write_Exit_Reason
+                 ("Clean Shutdown (SIGINT/SIGTERM)", 0);
                --  Delete PID file so watchdog doesn't try to restart
                if Ada.Directories.Exists ("run/adelaide_server.pid") then
                   Ada.Directories.Delete_File ("run/adelaide_server.pid");
                end if;
                if Ada.Directories.Exists ("run/adelaide_server.heartbeat") then
-                  Ada.Directories.Delete_File ("run/adelaide_server.heartbeat");
+                  Ada.Directories.Delete_File
+                    ("run/adelaide_server.heartbeat");
                end if;
                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
                          "[Shutdown]" & AnsiAda.Reset &
@@ -869,7 +852,7 @@ begin
                Ada.Text_IO.Put_Line
                  (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Heartbeat]" &
                    AnsiAda.Reset & " Server alive - uptime " &
-                  Trim(Duration'Image(Ada.Real_Time.To_Duration
+                  Trim (Duration'Image (Ada.Real_Time.To_Duration
                     (Ada.Real_Time.Clock - Start_Time)), Both) & "s" &
                   " | API: " & Adelaide_Server_Pkg.Get_Last_API);
             end if;
@@ -889,17 +872,6 @@ begin
    --  ==================================================================
    --  Top-level exception handler
    --  ==================================================================
-   --  Catches ANY unhandled exception from the initialization sequence
-   --  or the main loop.  Prints the error message in red, writes the
-   --  exit reason to the watchdog IPC file, and sets the exit status
-   --  to Failure (non-zero).  This ensures the external watchdog
-   --  process knows the server crashed and can report the failure.
-   --
-   --  Common exceptions caught here:
-   --    - Constraint_Error: Array bounds, null access dereference
-   --    - Storage_Error: Out of memory (model too large for RAM)
-   --    - Tag CheckError: Wrong discriminated type in JSON parsing
-   --    - OS_Error: File not found, permission denied
    exception
       when E : others =>
          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" &
@@ -911,8 +883,5 @@ begin
    end;
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-   --  If we reach here, the main loop exited cleanly (user pressed Q
-   --  or SIGTERM was received).  Write the clean shutdown reason to
-   --  the watchdog IPC file so it doesn't trigger a crash report.
    Watchdog_IPC.Write_Exit_Reason ("Clean Shutdown", 0);
 end Adelaide_Server;

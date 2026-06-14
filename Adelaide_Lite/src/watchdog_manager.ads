@@ -1,6 +1,7 @@
 --  Formal Verification: Ravenscar Compliant
 --  Note: The Watchdog logic is designed to be a Ravenscar application.
---  However, partition-wide profile pragmas are omitted here to avoid 
+
+--  However, partition-wide profile pragmas are omitted here to avoid
 --  conflicts with non-compliant libraries (like AWS) in the main executable.
 --  Verification of Ravenscar compliance is performed via the SPARK toolset.
 pragma SPARK_Mode (On);
@@ -28,9 +29,11 @@ package Watchdog_Manager is
 
    protected AWS_Server_Monitor is
       procedure Heartbeat (Now : Time);
+      procedure Deactivate;
       procedure Check_Liveness (Limit : Time_Span; OK : out Boolean);
    private
       Last_Heartbeat : Time := Time_Of (0, Time_Span_Zero);
+      Active         : Boolean := True;
    end AWS_Server_Monitor;
 
    package Tasking with SPARK_Mode => Off is

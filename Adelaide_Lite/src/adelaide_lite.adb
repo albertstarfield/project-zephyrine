@@ -8,7 +8,7 @@ with Ada.Exceptions;
 
 procedure Adelaide_Lite is
 begin
-   -- Initialize core systems (fatal on failure)
+   --  Initialize core systems (fatal on failure)
    begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Initializing Adelaide Knowledge Core...");
@@ -22,7 +22,7 @@ begin
          return;
    end;
 
-   -- Start background tasks (non-fatal on failure)
+   --  Start background tasks (non-fatal on failure)
    begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Starting background tasks...");
@@ -40,7 +40,7 @@ begin
    Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
              AnsiAda.Reset & " Press Q to shutdown.");
 
-   -- Main loop - continues listening even after errors
+   --  Main loop - continues listening even after errors
    loop
       begin
          declare
