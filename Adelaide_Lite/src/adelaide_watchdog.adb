@@ -592,6 +592,10 @@ begin
       end loop;
    end;
 exception
+   when Shutdown_Requested =>
+      --  Clean exit: server was stopped intentionally via run.py Ctrl+C.
+      --  No error message, no non-zero exit code.
+      null;
    when E : others =>
       Put_Line (Standard_Error,
         "[Watchdog] Fatal error: " & Exception_Message (E));
