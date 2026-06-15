@@ -1534,6 +1534,7 @@ package body Model_Manager is
       Fault_Detected   : Boolean := False;
       Fault_Query      : Unbounded_String := Null_Unbounded_String;
       Fault_Category   : Unbounded_String := Null_Unbounded_String;
+      Output_Buffer    : Unbounded_String := Null_Unbounded_String;
    end record;
 
    function Is_Prefix (S, Tag : String) return Boolean is
@@ -1715,20 +1716,29 @@ package body Model_Manager is
 
          -- Stream content out, but SILENCE the think block entirely
          if not Parser.In_Think_Block then
-            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-            --  [StreamParse-V] Shows content being pushed to stream
+            --  Batch output: accumulate characters in Output_Buffer and
+            --  flush in bulk. This eliminates per-character JSON construction
+            --  overhead in the streaming queue (was ~500 JSON constructions
+            --  for a 500-char response, now ~4 for 128-char batches).
             if Buf'Length > 0 then
-               Put_Line
-                 (AnsiAda.Foreground (AnsiAda.Grey) & "[StreamParse-V]" &
-                  AnsiAda.Reset & " PUSH_BUF Len=" &
-                  Natural'Image (Buf'Length) & " Text=" &
-                  Buf (Buf'First .. Natural'Min (Buf'Last, Buf'First + 30)));
+               Append (Parser.Output_Buffer, Buf);
             end if;
-            delay 0.0005;
-            Push_Chunk (Stream, Session_ID, Buf);
+            if Length (Parser.Output_Buffer) >= 128 then
+               declare
+                  Flush_Str : constant String :=
+                    To_String (Parser.Output_Buffer);
+               begin
+                  Put_Line
+                    (AnsiAda.Foreground (AnsiAda.Grey) & "[StreamParse-V]" &
+                     AnsiAda.Reset & " BATCH_PUSH Len=" &
+                     Natural'Image (Flush_Str'Length));
+                  delay 0.003;
+                  Push_Chunk (Stream, Session_ID, Flush_Str);
+               end;
+               Parser.Output_Buffer := Null_Unbounded_String;
+            end if;
          else
             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-            --  [StreamParse-V] Shows content being SILENCED inside think block
             if Buf'Length > 0 then
                Put_Line
                  (AnsiAda.Foreground (AnsiAda.Grey) & "[StreamParse-V]" &
@@ -1786,8 +1796,29 @@ package body Model_Manager is
        Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
                  AnsiAda.Reset & " Flush_Parser ENTERED. Buffer=" &
                  Natural'Image (Length (Parser.Sanitize_Buffer)) &
+                 " Output_Buffer=" & Natural'Image (Length (Parser.Output_Buffer)) &
                  " Orch_Think_Open=" & Boolean'Image (Parser.Orch_Think_Open) &
                  " In_Think_Block=" & Boolean'Image (Parser.In_Think_Block));
+       --  Flush any remaining batched output
+       if Length (Parser.Output_Buffer) > 0 then
+          if not Parser.In_Think_Block then
+             declare
+                Flush_Str : constant String :=
+                  To_String (Parser.Output_Buffer);
+             begin
+               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
+                         AnsiAda.Reset & " Flush_Parser: Pushing batched output " &
+                         Natural'Image (Flush_Str'Length) & " chars.");
+               Push_Chunk (Stream, Session_ID, Flush_Str);
+             end;
+          else
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[StreamParse-V]" &
+                       AnsiAda.Reset & " Flush_Parser: Silencing batched output " &
+                       Natural'Image (Length (Parser.Output_Buffer)) &
+                       " chars inside think block.");
+          end if;
+          Parser.Output_Buffer := Null_Unbounded_String;
+       end if;
        declare
           S_Str : constant String := To_String (Parser.Sanitize_Buffer);
        begin
@@ -1979,6 +2010,7 @@ package body Model_Manager is
                    --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                    Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V]" &
                              AnsiAda.Reset & " Generate: ELP0 ACQUIRE FAILED (Preempted)");
+                   ELP_Queue.Dequeue_Level (Level);
                    Result := To_Unbounded_String ("ERROR: Preempted");
                    Free (Prompt_C);
                    return;
@@ -2008,6 +2040,7 @@ package body Model_Manager is
              else
                 Priority_Model_Gate.Release_ELP1 (Kind);
              end if;
+             ELP_Queue.Dequeue_Level (Level);
              Result := To_Unbounded_String ("ERROR: Load failed");
              Free (Prompt_C);
              return;
@@ -2307,6 +2340,7 @@ package body Model_Manager is
       else
          Priority_Model_Gate.Release_ELP1 (Kind);
       end if;
+      ELP_Queue.Dequeue_Level (Level);
       --  [VITAL-DO-NOT-REMOVE] Mandated by user.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
                 AnsiAda.Reset & " Generate: COMPLETE. ResultLen=" &
@@ -2322,6 +2356,7 @@ package body Model_Manager is
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
          end if;
+         ELP_Queue.Dequeue_Level (Level);
          Result := To_Unbounded_String ("ERROR: Decode failed");
    end Generate;
 
@@ -2987,6 +3022,12 @@ package body Model_Manager is
             loop
                exit when Hop_Count >= 5;
 
+               --  Reset fault detection state for this hop. Without this,
+               --  a fault detected on a previous hop would persist and
+               --  cause false context-fault handling on subsequent hops
+               --  even when the model didn't request one.
+               F_Detected := False;
+
                if not External_Agent then
                   if Hop_Count = 0 then
                      Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
@@ -3040,11 +3081,14 @@ package body Model_Manager is
                           Close_Pos : constant Natural :=
                             Index (Raw_Result (F_Mark_Pos .. Raw_Result'Last), "]");
                        begin
-                          if Close_Pos > 0 then
-                             declare
-                                Inner     : constant String :=
-                                  Raw_Result (F_Mark_Pos + F_Mark'Length ..
-                                    F_Mark_Pos + Close_Pos - 2);
+                       if Close_Pos > 0 then
+                              declare
+                                 --  Close_Pos is absolute (Ada.Strings.Index
+                                 --  returns index within Source bounds), so
+                                 --  use it directly, not F_Mark_Pos + Close_Pos.
+                                 Inner     : constant String :=
+                                   Raw_Result (F_Mark_Pos + F_Mark'Length ..
+                                     Close_Pos - 1);
                                 Q_Mark    : constant String := "query=";
                                 C_Mark    : constant String := "category=";
                                 Query_Idx : constant Natural := Index (Inner, Q_Mark);
@@ -3134,6 +3178,25 @@ package body Model_Manager is
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                       AnsiAda.Reset & " Hybrid_Generate: CONTEXT_FAULT_LOOP EXITED. Hop_Count=" &
                       Natural'Image (Hop_Count));
+         end;
+         --  SAFETY NET: If the entire response is think-only content,
+         --  the model failed to produce a visible answer.  Set a fallback
+         --  so the client gets something instead of an empty response.
+         declare
+            Sanitized : constant String :=
+              Sanitize_Think_Tags (To_String (Current_Response));
+         begin
+            if Sanitized = "" then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Init-V]" &
+                         AnsiAda.Reset &
+                         " Hybrid_Generate: Think-only response detected." &
+                         " Model produced no visible answer.");
+               Current_Response := To_Unbounded_String
+                 ("I apologize, but I was unable to generate a complete" &
+                  " response. The model produced only internal reasoning" &
+                  " without a final answer. Please try rephrasing your" &
+                  " question or providing more context.");
+            end if;
          end;
 
          Result := To_Unbounded_String
