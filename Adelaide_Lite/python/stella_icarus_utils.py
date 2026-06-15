@@ -363,15 +363,25 @@ class StellaIcarusAdaDaemonManager:
             finally:
                 # This block runs after the process has terminated, either cleanly or by crashing.
                 if process:
-                    logger.warning(
-                        f"[{thread_name}] Daemon process terminated unexpectedly (RC: {process.returncode}).")
+                    rc = process.returncode
+                    if rc == 0:
+                        logger.info(
+                            f"[{thread_name}] Daemon process exited cleanly (RC: 0).")
+                    else:
+                        logger.warning(
+                            f"[{thread_name}] Daemon process terminated unexpectedly (RC: {rc}).")
 
                 with self._lock:
                     project["process"] = None
 
-            # If the stop event was set, break the loop cleanly. Otherwise, it was a failure.
+            # If the stop event was set, break the loop cleanly.
             if stop_event.is_set():
                 logger.info(f"[{thread_name}] Stop event received. Exiting management thread.")
+                break
+
+            # If exit was clean (RC:0), no need to retry — exit the loop.
+            if process and process.returncode == 0:
+                logger.info(f"[{thread_name}] Clean exit (RC:0). No retry needed.")
                 break
 
             # --- MODIFICATION: Log INOP Error and Wait Before Retrying ---
