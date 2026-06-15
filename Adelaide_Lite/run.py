@@ -369,8 +369,6 @@ def calculate_hash(file_paths):
 def cleanup(signum=None, frame=None):
     print("\n[*] Shutting down background processes...")
     # Write shutdown flag so watchdog knows this was an intentional stop
-    # and does NOT restart the server.  The watchdog checks for this file
-    # before calling Restart_Server and exits cleanly if it exists.
     shutdown_flag = os.path.join(BASE_DIR, "run", ".shutdown_requested")
     try:
         os.makedirs(os.path.dirname(shutdown_flag), exist_ok=True)
@@ -378,14 +376,47 @@ def cleanup(signum=None, frame=None):
             f.write(f"pid={os.getpid()}\n")
     except Exception:
         pass
-    if daemon_process and daemon_process.poll() is None:
-        daemon_process.terminate()
-    if server_process and server_process.poll() is None:
-        server_process.terminate()
-    # DO NOT kill watchdog here — it has its own restart logic.
-    # If the server crashes, the watchdog detects it and relaunches.
-    # The .shutdown_requested flag prevents restart on intentional stop.
-    sys.exit(0)
+
+    # Collect PIDs to kill directly — do NOT rely on proc.terminate()
+    # inside a signal handler (can deadlock with main thread's proc.wait()).
+    pids_to_kill = []
+    for proc in [daemon_process, server_process]:
+        if proc and proc.poll() is None:
+            pids_to_kill.append((proc.pid, proc.args[0] if proc.args else "unknown"))
+
+    # Send SIGTERM first, then SIGKILL after 2s grace period
+    SIGTERM = signal.SIGTERM
+    SIGKILL = signal.SIGKILL
+
+    for pid, name in pids_to_kill:
+        print(f"[*] Sending SIGTERM to {name} (PID {pid})...")
+        try:
+            os.kill(pid, SIGTERM)
+        except ProcessLookupError:
+            pass
+
+    # Give 2 seconds for graceful shutdown
+    time.sleep(2.0)
+
+    for pid, name in pids_to_kill:
+        try:
+            # Check if still alive
+            os.kill(pid, 0)
+            print(f"[*] PID {pid} still alive, sending SIGKILL...")
+            os.kill(pid, SIGKILL)
+        except ProcessLookupError:
+            print(f"[*] PID {pid} exited cleanly.")
+
+    # Force-kill any remaining zombie processes via process group
+    for proc in [daemon_process, server_process]:
+        if proc:
+            try:
+                os.killpg(os.getpgid(proc.pid), SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+
+    print("[*] Cleanup complete.")
+    os._exit(0)
 
 signal.signal(signal.SIGINT, cleanup)
 signal.signal(signal.SIGTERM, cleanup)

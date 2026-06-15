@@ -1043,21 +1043,23 @@ package body Model_Manager is
       return Score;
    end Grade_Response_Quality;
 
-   procedure Push_Chunk
-     (Stream     : Streaming_Queue.Queue_Access;
-      Session_ID : String;
-      Str_Piece  : String)
-   is
-      pragma Unreferenced (Session_ID);
-   begin
-      if Stream /= null then
-         Ada.Text_IO.Put_Line
-           ("Push_Chunk called with: " &
-            Str_Piece (Str_Piece'First ..
-              Natural'Min (Str_Piece'Last, Str_Piece'First + 20)));
-         Stream.Push (Str_Piece);
-      end if;
-   end Push_Chunk;
+    procedure Push_Chunk
+      (Stream     : Streaming_Queue.Queue_Access;
+       Session_ID : String;
+       Str_Piece  : String)
+    is
+       pragma Unreferenced (Session_ID);
+    begin
+       if Stream /= null then
+          if Str_Piece'Length > 1 then
+             Ada.Text_IO.Put_Line
+               ("Push_Chunk called with: " &
+                Str_Piece (Str_Piece'First ..
+                  Natural'Min (Str_Piece'Last, Str_Piece'First + 20)));
+          end if;
+          Stream.Push (Str_Piece);
+       end if;
+    end Push_Chunk;
 
    function Generator_Callback (Prompt : String) return String is
    begin
@@ -1574,18 +1576,24 @@ package body Model_Manager is
              Parser.Sanitize_Buffer := Null_Unbounded_String;
              Parser.In_Think_Block := True;
              return;
-          elsif Buf = Close_Tag_A or else Buf = Close_Tag_B then
-             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) &
-                       "[StreamParse-V]" & AnsiAda.Reset &
-                       " THINK_CLOSE detected. In_Think_Block -> False" &
-                       " Orch_Think_Open=" & Boolean'Image (Parser.Orch_Think_Open));
-             Parser.Sanitize_Buffer := Null_Unbounded_String;
-             Parser.In_Think_Block := False;
-             if Parser.Orch_Think_Open then
-                Parser.Orch_Think_Open := False;
-             end if;
-             return;
+           elsif Buf = Close_Tag_A or else Buf = Close_Tag_B then
+              --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) &
+                        "[StreamParse-V]" & AnsiAda.Reset &
+                        " THINK_CLOSE detected. In_Think_Block -> False" &
+                        " Orch_Think_Open=" & Boolean'Image (Parser.Orch_Think_Open));
+              Parser.Sanitize_Buffer := Null_Unbounded_String;
+              Parser.In_Think_Block := False;
+              --  Do NOT push `</think>` here. The emulated streaming section
+              --  in Hybrid_Generate will push `</think>` after Generate
+              --  returns. Pushing it here would create a duplicate closing
+              --  tag on the wire. Just clear the Orch_Think_Open flag so
+              --  the emulated streaming knows the orchestration think block
+              --  was closed during generation.
+              if Parser.Orch_Think_Open then
+                 Parser.Orch_Think_Open := False;
+              end if;
+              return;
           elsif Buf = Resp_Tag then
              --  [VITAL-DO-NOT-REMOVE] Mandated by user.
              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) &
@@ -1714,29 +1722,35 @@ package body Model_Manager is
             end;
          end if;
 
-         -- Stream content out, but SILENCE the think block entirely
-         if not Parser.In_Think_Block then
-            --  Batch output: accumulate characters in Output_Buffer and
-            --  flush in bulk. This eliminates per-character JSON construction
-            --  overhead in the streaming queue (was ~500 JSON constructions
-            --  for a 500-char response, now ~4 for 128-char batches).
-            if Buf'Length > 0 then
-               Append (Parser.Output_Buffer, Buf);
-            end if;
-            if Length (Parser.Output_Buffer) >= 128 then
-               declare
-                  Flush_Str : constant String :=
-                    To_String (Parser.Output_Buffer);
-               begin
-                  Put_Line
-                    (AnsiAda.Foreground (AnsiAda.Grey) & "[StreamParse-V]" &
-                     AnsiAda.Reset & " BATCH_PUSH Len=" &
-                     Natural'Image (Flush_Str'Length));
-                  delay 0.003;
-                  Push_Chunk (Stream, Session_ID, Flush_Str);
-               end;
-               Parser.Output_Buffer := Null_Unbounded_String;
-            end if;
+          -- Stream content out, but SILENCE the think block entirely
+          if not Parser.In_Think_Block then
+             --  Flush on newlines so the client gets line-by-line incremental
+             --  updates.  Accumulate in Output_Buffer, push when we see a
+             --  newline or when the buffer exceeds 256 chars (safety limit).
+             Append (Parser.Output_Buffer, Buf);
+             declare
+                OB : constant String := To_String (Parser.Output_Buffer);
+                Last_NL : Integer := 0;
+             begin
+                --  Scan for the last newline in the buffer
+                for I in reverse OB'Range loop
+                   if OB (I) = Character'Val (10) then  -- LF
+                      Last_NL := I;
+                      exit;
+                   end if;
+                end loop;
+                if Last_NL > 0 then
+                   --  Push everything up to and including the last newline
+                   Push_Chunk (Stream, Session_ID, OB (OB'First .. Last_NL));
+                   --  Keep the remainder (after the newline) in the buffer
+                   Parser.Output_Buffer :=
+                      To_Unbounded_String (OB (Last_NL + 1 .. OB'Last));
+                elsif OB'Length > 256 then
+                   --  Safety: flush even without a newline if buffer is large
+                   Push_Chunk (Stream, Session_ID, OB);
+                   Parser.Output_Buffer := Null_Unbounded_String;
+                end if;
+             end;
          else
             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
             if Buf'Length > 0 then
@@ -1967,7 +1981,8 @@ package body Model_Manager is
       Orch_Think_Open : Boolean := False;
       Level           : ELP_Level := ELP1;
       Virtual_Tokens  : Cached_Token_Access := null;
-      Virtual_Tok_Len : Natural := 0)
+      Virtual_Tok_Len : Natural := 0;
+      Release_Model   : Boolean := True)
    is
       Success  : Boolean;
       Vocab    : Llama_Vocab;
@@ -2352,11 +2367,19 @@ package body Model_Manager is
 
       Llama_Sampler_Free (Sampler);
       Free_Tokens (Tokens);
-      Models (Kind).In_Use := False;
+
+      --  RELEASE_MODEL GUARD: When Release_Model is False (called from
+      --  Hybrid_Generate), keep In_Use := True so the Idle_Monitor won't
+      --  unload the model mid-use.  But ALWAYS release the ELP lock and
+      --  dequeue the queue level — these serialize FFI access between
+      --  concurrent tasks and will deadlock if held across Generate calls.
+      Models (Kind).In_Use := (not Release_Model);  --  Keep True when retained
 
       --  [VITAL-DO-NOT-REMOVE] Mandated by user.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
-                AnsiAda.Reset & " Generate: Releasing model. Kind=" & Kind'Img);
+                AnsiAda.Reset & " Generate: " &
+                (if Release_Model then "Releasing" else "Retaining") &
+                " model. Kind=" & Kind'Img);
       if Level = ELP0 then
          Priority_Model_Gate.Release_ELP0 (Kind);
       else
@@ -2372,7 +2395,12 @@ package body Model_Manager is
          if Tokens /= null then
             Free_Tokens (Tokens);
          end if;
-         Models (Kind).In_Use := False;
+         --  Always release ELP lock and dequeue, even on error path.
+         --  When Release_Model is False, Hybrid_Generate's exception
+         --  handler is responsible for clearing In_Use.
+         if Release_Model then
+            Models (Kind).In_Use := False;
+         end if;
          if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Kind);
          else
@@ -2670,7 +2698,8 @@ package body Model_Manager is
                   Stream          => null,
                   Level           => Level,
                   Virtual_Tokens  => Cached_Virtual_Tokens,
-                  Virtual_Tok_Len => Cached_Virtual_Len);
+                  Virtual_Tok_Len => Cached_Virtual_Len,
+                  Release_Model   => False);
             end;
 
             declare
@@ -2789,7 +2818,8 @@ package body Model_Manager is
                 Get_Router_Prompt,
                 Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
                 null, False, Level,
-                Cached_Virtual_Tokens, Cached_Virtual_Len);
+                Cached_Virtual_Tokens, Cached_Virtual_Len,
+                Release_Model => False);
              --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                        AnsiAda.Reset & " Hybrid_Generate: Hop" &
@@ -3079,7 +3109,8 @@ package body Model_Manager is
                    Orch_Think_Open => (Hop_Count = 0),
                    Level           => Level,
                    Virtual_Tokens  => Cached_Virtual_Tokens,
-                   Virtual_Tok_Len => Cached_Virtual_Len);
+                   Virtual_Tok_Len => Cached_Virtual_Len,
+                   Release_Model   => False);
                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                  Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                            AnsiAda.Reset & " Hybrid_Generate: Final Generate returned. Len=" &
@@ -3345,50 +3376,38 @@ package body Model_Manager is
          end;
       end if;
 
-      --  EMULATED STREAMING (300 tok/s simulation)
-      --  The model's response was already streamed token-by-token through
-      --  the stream parser during Generate (Process_And_Push_Chunk). The
-      --  parser pushed content to the queue inside the `<think>` block.
-      --  This emulated streaming loop does TWO things:
-      --
-      --  1. Pushes `</think>` to close the think block
-      --  2. Pushes the visible response text AFTER `</think>`
-      --
-      --  DUPLICATION IS INTENTIONAL (DO NOT REMOVE): The response content
-      --  appears both inside `<think>` (from Generate token streaming) AND
-      --  after `</think>` (from this emulation). This is required for the
-      --  client-side "status quo" field to decode the response correctly.
-      --  Removing the re-emission would break status quo field decoding.
-      --
-      --  The 300 tok/s simulation delay ensures the closing tag and the
-      --  re-emitted response arrive after all chunks have been flushed by
-      --  AWS, making the stream appear to flow at a human-readable pace.
-      if not External_Agent and then Stream /= null then
-         declare
-            Sim_TPS      : constant Float := 300.0;
-            --  Calculate delay proportional to response length to simulate
-            --  300 tok/s streaming. Short responses get minimal delay.
-            Resp_Text    : constant String :=
-              Sanitize_Think_Tags (To_String (Current_Response));
-            Resp_Len     : constant Natural := Resp_Text'Length;
-            Delay_Time   : constant Duration :=
-              Duration (Float (Resp_Len) / Sim_TPS);
-         begin
-            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                      AnsiAda.Reset & " Hybrid_Generate: Waiting " &
-                      Duration'Image (Delay_Time) & "s for 300 tok/s sim.");
-            delay Delay_Time;
+       --  EMULATED STREAMING
+       --  The model's response was already streamed token-by-token through
+       --  the stream parser during Generate (Process_And_Push_Chunk). Each
+       --  character outside a think block was pushed immediately to the
+       --  queue via Push_Chunk. This emulated streaming section pushes
+       --  ONLY the closing `</think>` tag to close the orchestration think block.
+       --  The response text is NOT re-emitted here to avoid duplication.
+       --
+       --  The 300 tok/s simulation delay ensures the closing tag arrives
+       --  after all generated chunks have been flushed by AWS.
+       if not External_Agent and then Stream /= null then
+          declare
+             Sim_TPS      : constant Float := 300.0;
+             Resp_Text    : constant String :=
+               Sanitize_Think_Tags (To_String (Current_Response));
+             Resp_Len     : constant Natural := Resp_Text'Length;
+             Delay_Time   : constant Duration :=
+               Duration (Float (Resp_Len) / Sim_TPS);
+          begin
              --  [VITAL-DO-NOT-REMOVE] Mandated by user.
              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                       AnsiAda.Reset & " Hybrid_Generate: STREAMING COMPLETE.");
-             --  [DUPLICATION IS INTENTIONAL] Pushing `</think>` first, then
-             --  re-emitting the visible response for status quo decoding.
-             Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
-             if Resp_Text /= "" then
-                Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
-             end if;
-         end;
+                       AnsiAda.Reset & " Hybrid_Generate: Waiting " &
+                       Duration'Image (Delay_Time) & "s for 300 tok/s sim.");
+             delay Delay_Time;
+              --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                        AnsiAda.Reset & " Hybrid_Generate: STREAMING COMPLETE.");
+              --  Push `</think>` to close the orchestration think block.
+              --  The response text was already streamed char-by-char during
+              --  Generate, so we do NOT re-emit it here to avoid duplication.
+              Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
+          end;
       elsif External_Agent and then Stream /= null then
          declare
             Resp_Text : constant String := To_String (Result);
@@ -3399,8 +3418,32 @@ package body Model_Manager is
             Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
          end;
       end if;
+
+      --  RELEASE MODEL: Generate was called with Release_Model => False,
+      --  so the model is still loaded and the ELP lock is still held.
+      --  Release now that ALL post-processing is complete.
+      Models (Qwen_9B).In_Use := False;
+      if Level = ELP0 then
+         Priority_Model_Gate.Release_ELP0 (Qwen_9B);
+      else
+         Priority_Model_Gate.Release_ELP1 (Qwen_9B);
+      end if;
+      ELP_Queue.Dequeue_Level (Level);
+
    exception
       when E : others =>
+         --  Also release model on error path
+         begin
+            Models (Qwen_9B).In_Use := False;
+            if Level = ELP0 then
+               Priority_Model_Gate.Release_ELP0 (Qwen_9B);
+            else
+               Priority_Model_Gate.Release_ELP1 (Qwen_9B);
+            end if;
+            ELP_Queue.Dequeue_Level (Level);
+         exception
+            when others => null;
+         end;
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
            "[Hybrid]" & AnsiAda.Reset & " Error: " &
            Ada.Exceptions.Exception_Message (E));

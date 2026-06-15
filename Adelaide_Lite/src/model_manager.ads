@@ -67,7 +67,13 @@ package Model_Manager is
       --  then Prompt is tokenized into the remaining slots.  This
       --  avoids re-tokenizing the same facts on every context fault hop.
       Virtual_Tokens  : Cached_Token_Access := null;
-      Virtual_Tok_Len : Natural := 0);
+      Virtual_Tok_Len : Natural := 0;
+      --  When False, Generate does NOT release In_Use or the ELP lock.
+      --  The caller (Hybrid_Generate) is responsible for releasing the
+      --  model after all post-processing is complete.  This prevents the
+      --  Idle_Monitor from unloading the model while Hybrid_Generate is
+      --  still executing tool calls, streaming, etc.
+      Release_Model   : Boolean := True);
 
    --  Perform multi-hop reasoning
    procedure Hybrid_Generate

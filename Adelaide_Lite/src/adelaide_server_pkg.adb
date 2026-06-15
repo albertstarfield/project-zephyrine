@@ -174,6 +174,8 @@ package body Adelaide_Server_Pkg is
    end Wrap_Response;
 
    task type Generator_Task is
+       pragma Storage_Size (256 * 1024 * 1024);  --  256 MB storage pool
+       pragma Task_Stack_Size (32 * 1024 * 1024); --  32 MB thread stack (llama.cpp tokenize needs deep C stack)
        entry Start
          (Prompt : String; Model_Name : String;
           Format : Streaming_Queue.Format_Type;
