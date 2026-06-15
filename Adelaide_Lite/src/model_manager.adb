@@ -2235,6 +2235,13 @@ package body Model_Manager is
 
       Parser.Orch_Think_Open := Orch_Think_Open;
 
+      --  Accumulator buffer for verbose logging: instead of printing each
+      --  token individually, we accumulate and dump the full buffer periodically
+      --  so you can see the response building up in real time.
+      declare
+         Accum_Buffer : Unbounded_String := Null_Unbounded_String;
+         Accum_Count  : Natural := 0;
+      begin
       for I in 1 .. 2048 loop
          if Level = ELP0 and then Should_Abort_ELP0 then
             Put_Line ("[ELP0-ABORT-LOOP] Aborting " & Kind'Img &
@@ -2254,6 +2261,13 @@ package body Model_Manager is
                          AnsiAda.Reset & " Generate: EOG token at iteration " &
                          Natural'Image (I) & ". Total tokens=" &
                          Natural'Image (I - 1));
+               --  Dump final accumulated buffer
+               if Length (Accum_Buffer) > 0 then
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                            AnsiAda.Reset & " Generate: BUFFER [" &
+                            Natural'Image (Length (Accum_Buffer)) & " chars] " &
+                            To_String (Accum_Buffer));
+               end if;
                exit;
             end if;
             Len := Llama_Token_To_Piece
@@ -2268,16 +2282,23 @@ package body Model_Manager is
                   end loop;
 
                   if Stream /= null then
-                     --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-                     Put_Line
-                       (AnsiAda.Foreground (AnsiAda.Grey) & "[Gen-V]" &
-                        AnsiAda.Reset & " Generate: Token " &
-                        Natural'Image (I) & " Len=" & Natural'Image (Natural (Len)) &
-                        " Text=" &
-                        Str_Piece (Str_Piece'First ..
-                          Natural'Min (Str_Piece'Last, Str_Piece'First + 20)));
                      Process_And_Push_Chunk
                        (Stream, Session_ID, Parser, Str_Piece);
+                  end if;
+
+                  --  Accumulate for verbose logging
+                  Append (Accum_Buffer, Str_Piece);
+                  Accum_Count := Accum_Count + 1;
+
+                  --  Dump every 20 tokens or on newline
+                  if Accum_Count mod 20 = 0 or else
+                    (Len > 0 and then Piece (1) = Character'Val (10))
+                  then
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                               AnsiAda.Reset & " Generate: BUFFER [" &
+                               Natural'Image (Length (Accum_Buffer)) & " chars] " &
+                               To_String (Accum_Buffer));
+                     Accum_Buffer := Null_Unbounded_String;
                   end if;
                end;
             end if;
@@ -2298,11 +2319,12 @@ package body Model_Manager is
                   Append (Result, " [ABORTED:" & Ret'Img & "]");
                   exit;
                end if;
-            end;
-         end;
-       end loop;
+             end;
+          end;
+        end loop;
+      end; -- Accum_Buffer declare block
 
-       --  AUTO-CLOSE UNCLOSED THINK BLOCK:
+        --  AUTO-CLOSE UNCLOSED THINK BLOCK:
        --  If the model hit EOG while In_Think_Block was still True,
        --  it never output `</think>`. This means:
        --    1. The entire response content is inside `<think>` (silenced)
