@@ -62,6 +62,7 @@ package body Knowledge_Manager is
 
    task Proactive_Cache_Task is
       pragma Storage_Size (128 * 1024 * 1024);
+      pragma Task_Stack_Size (16 * 1024 * 1024);  --  16 MB thread stack (llama.cpp tokenize needs deep C stack)
       entry Start;
    end Proactive_Cache_Task;
 
@@ -298,14 +299,26 @@ package body Knowledge_Manager is
                if Kind (Entry_D) = Directory then
                   Crawl_Directory (Full);
                else
-                  --  Check if it is a text file or C/Ada source
-                  if Index (Name, ".adb") > 0 or else
-                    Index (Name, ".ads") > 0 or else
-                    Index (Name, ".c") > 0 or else
-                    Index (Name, ".h") > 0 or else
-                    Index (Name, ".txt") > 0 or else
-                    Index (Name, ".md") > 0
-                  then
+                   --  Check if it is a text file or C/Ada source
+                   --  FIX: Use exact suffix check (Ada.Strings fixed-length).
+                   --  Previously used Index (substring search) which matched
+                   --  .css for .c, .html for .h, .js for .s, etc. causing
+                   --  the crawler to index compiled frontend dist/ bundles.
+                   declare
+                      N_Len : constant Natural := Name'Length;
+                      function Has_Suffix (Suf : String) return Boolean is
+                        (N_Len > Suf'Length and then
+                         Name (Name'Last - Suf'Length + 1 .. Name'Last) = Suf);
+                   begin
+                   if Has_Suffix (".adb") or else
+                     Has_Suffix (".ads") or else
+                     Has_Suffix (".c") or else
+                     Has_Suffix (".h") or else
+                     Has_Suffix (".txt") or else
+                     Has_Suffix (".md") or else
+                     Has_Suffix (".py") or else
+                     Has_Suffix (".json")
+                   then
                      declare
                         File_Content : Unbounded_String;
                         File_H       : File_Type;
@@ -351,9 +364,10 @@ package body Knowledge_Manager is
                                  Close (File_H);
                               end if;
                         end;
-                     end;
-                  end if;
-               end if;
+                      end;
+                   end if;
+                   end; -- Has_Suffix declare block
+                end if;
             end if;
          end;
       end loop;

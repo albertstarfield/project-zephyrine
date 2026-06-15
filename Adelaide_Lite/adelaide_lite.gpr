@@ -138,7 +138,12 @@ project Adelaide_Lite is
 
     package Linker is
        -- Patch Note: SDK path is now resolved dynamically using the SDKROOT environment variable.
+       -- Stack size: 32 MB for all threads (main + worker).  macOS default pthread
+       -- stack is 512 KB which is too small for llama.cpp tokenize (allocates large
+       -- C arrays on the stack).  This flag sets the main thread stack; worker
+       -- thread stacks are set via pragma Task_Stack_Size in Ada source.
        for Switches ("Ada") use (
+           "-Wl,-stack_size,0x2000000",
            "-L" & project'Project_Dir & "../moonshine/build/core",
            "-lmoonshine",
            "-L" & project'Project_Dir & "../llama.cpp/build/src",
