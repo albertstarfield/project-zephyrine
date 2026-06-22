@@ -199,6 +199,112 @@ package body KV_Cache_Manager is
    Active_Save : Save_Task_Access := null;
 
    --  ============================================================================
+   --  TRICK 6: BACKGROUND EVICTION TASK
+   --  ============================================================================
+   --  WHY: Evict old cache files in background, never block on save.
+   --  Keeps at most Max_Cache_Files files on disk.
+
+   Max_Cache_Files : constant := 10;
+
+   task type Eviction_Task is
+      entry Start;
+   end Eviction_Task;
+
+   task body Eviction_Task is
+      Search_Result : Ada.Directories.Search_Type;
+      Dir_Entry     : Ada.Directories.Directory_Entry_Type;
+      Count         : Natural := 0;
+      Deleted       : Natural := 0;
+   begin
+      accept Start;
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: logs eviction task start.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
+                AnsiAda.Reset & "+BACKGROUND Eviction_Task: started");
+
+      --  Wait a bit for saves to complete
+      delay 2.0;
+
+      --  Count files in cache directory
+      if Ada.Directories.Exists (Cache_Dir) then
+         Ada.Directories.Start_Search
+           (Search_Result, Cache_Dir, "*.bin");
+
+         while Ada.Directories.More_Entries (Search_Result) loop
+            Ada.Directories.Get_Next_Entry (Search_Result, Dir_Entry);
+            Count := Count + 1;
+         end loop;
+
+         Ada.Directories.End_Search (Search_Result);
+
+         --  If too many files, delete oldest
+         if Count > Max_Cache_Files then
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Verbose: logs eviction needed.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &
+                      AnsiAda.Reset & "+BACKGROUND Eviction_Task: evicting old files, count=" &
+                      Natural'Image (Count));
+
+            --  Delete oldest files (by modification time)
+            --  For now, just delete the first files we find
+            Ada.Directories.Start_Search
+              (Search_Result, Cache_Dir, "*.bin");
+
+            while Ada.Directories.More_Entries (Search_Result) loop
+               Ada.Directories.Get_Next_Entry (Search_Result, Dir_Entry);
+
+               --  Delete until we're under the limit
+               if Count - Deleted <= Max_Cache_Files then
+                  exit;
+               end if;
+
+               --  Delete this file
+               declare
+                  Entry_Name : constant String :=
+                    Ada.Directories.Simple_Name (Dir_Entry);
+                  Entry_Path : constant String :=
+                    Cache_Dir & Entry_Name;
+               begin
+                  Ada.Directories.Delete_File (Entry_Path);
+                  Deleted := Deleted + 1;
+
+                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                  --  Verbose: logs file deletion.
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[KV-Cache]" &
+                            AnsiAda.Reset & "+BACKGROUND Eviction_Task: deleted " &
+                            Entry_Name);
+               end;
+            end loop;
+
+            Ada.Directories.End_Search (Search_Result);
+
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Verbose: confirms eviction complete.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
+                      AnsiAda.Reset & "+BACKGROUND Eviction_Task: COMPLETE, evicted " &
+                      Natural'Image (Deleted) & " files");
+         else
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Verbose: logs no eviction needed.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
+                      AnsiAda.Reset & "+BACKGROUND Eviction_Task: no eviction needed, count=" &
+                      Natural'Image (Count));
+         end if;
+      end if;
+
+   exception
+      when others =>
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs eviction task exception (non-fatal).
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
+                   AnsiAda.Reset & "+BACKGROUND Eviction_Task: EXCEPTION (non-fatal)");
+   end Eviction_Task;
+
+   type Eviction_Task_Access is access Eviction_Task;
+   Active_Eviction : Eviction_Task_Access := null;
+
+   --  ============================================================================
    --  PUBLIC API
    --  ============================================================================
 
@@ -262,6 +368,13 @@ package body KV_Cache_Manager is
          --  WHY: Non-blocking, returns immediately.
          Active_Save := new Save_Task;
          Active_Save.Start (Context, Tokens, N_Tokens, File_Path);
+
+         --  TRICK 6: Spawn background eviction task (TRICK 6)
+         --  WHY: Evict old files in background, never block on save
+         if Active_Eviction = null then
+            Active_Eviction := new Eviction_Task;
+            Active_Eviction.Start;
+         end if;
 
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          --  Verbose: confirms async save scheduled.
