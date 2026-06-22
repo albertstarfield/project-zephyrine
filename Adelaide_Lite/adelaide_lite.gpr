@@ -117,7 +117,7 @@ project Adelaide_Lite is
          null;
    end case;
 
-   type Backend_Type is ("metal", "cuda", "vulkan", "none");
+   type Backend_Type is ("metal", "cuda", "vulkan", "sycl", "none");
    GGML_Backend : Backend_Type := external ("GGML_BACKEND", "metal");
 
    package Compiler is
@@ -205,6 +205,8 @@ project Adelaide_Lite is
             Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-cuda/libggml-cuda.a", "-lcublas", "-lcudart");
          when "vulkan" =>
             Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-vulkan/libggml-vulkan.a", "-lvulkan");
+         when "sycl" =>
+            Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-sycl/libggml-sycl.a", "-lsycl");
          when "none" =>
             null;
       end case;
