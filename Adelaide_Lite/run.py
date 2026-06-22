@@ -434,6 +434,8 @@ def main():
     elif platform.system() == "Linux":
         if shutil.which("nvcc") or shutil.which("nvidia-smi"):
             ggml_backend = "cuda"
+        elif shutil.which("sycl-ls") or os.environ.get("ONEAPI_ROOT"):
+            ggml_backend = "sycl"
         else:
             ggml_backend = "vulkan"
     os.environ["GGML_BACKEND"] = ggml_backend
@@ -511,6 +513,9 @@ def main():
             elif ggml_backend == "cuda":
                 cmake_flags.append("-DGGML_CUDA=ON")
                 print(f"[GGML] [{time.strftime('%H:%M:%S')}] CUDA GPU: ENABLED")
+            elif ggml_backend == "sycl":
+                cmake_flags.append("-DGGML_SYCL=ON")
+                print(f"[GGML] [{time.strftime('%H:%M:%S')}] SYCL/oneAPI GPU: ENABLED")
             elif ggml_backend == "vulkan":
                 cmake_flags.append("-DGGML_VULKAN=ON")
                 print(f"[GGML] [{time.strftime('%H:%M:%S')}] Vulkan GPU: ENABLED")
@@ -582,6 +587,9 @@ def main():
             elif ggml_backend == "cuda":
                 print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CUDA GPU acceleration: ENABLED")
                 cmake_flags.append("-DGGML_CUDA=ON")
+            elif ggml_backend == "sycl":
+                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] SYCL/oneAPI GPU acceleration: ENABLED")
+                cmake_flags.append("-DGGML_SYCL=ON")
             elif ggml_backend == "vulkan":
                 print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Vulkan GPU acceleration: ENABLED")
                 cmake_flags.append("-DGGML_VULKAN=ON")
