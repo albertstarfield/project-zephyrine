@@ -134,9 +134,15 @@ project Adelaide_Lite is
 
    package Binder is
       --  [VITAL-DO-NOT-REMOVE] Set default Ada task stack to 16 MB.
-      --  macOS default pthread stacks (512KB) overflow during
-      --  llama_init_from_model's stderr logging (fprintf uses deep stack).
+      --  macOS default pthread stacks (~512KB) overflow during
+      --  llama_init_from_model's stderr logging. fprintf() uses deep C stack
+      --  for format buffering, causing SIGSEGV → STORAGE_ERROR : stack overflow.
+      --  CRASH LOG (2026-06-22):
+      --    llama_init_from_model → llama_log_internal → _vsnprintf → __vfprintf
+      --    → SIGSEGV at __vfprintf + 3604 (stack overflow in format buffer)
       --  -d8m = debug flags, -D16384 = 16 MB default stack for all tasks (in KB).
+      --  This is a SAFETY NET. Individual tasks should also set Task_Stack_Size
+      --  pragma for explicit control (see knowledge_manager.adb Native_Crawl_Task).
       for Switches ("Ada") use ("-d8m", "-D16384");
    end Binder;
 

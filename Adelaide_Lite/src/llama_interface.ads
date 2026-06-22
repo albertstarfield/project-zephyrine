@@ -62,13 +62,28 @@ package Llama_Interface is
    end record;
    pragma Convention (C, Llama_Model_Params);
 
+   --  [VITAL-DO-NOT-REMOVE] Llama_Context_Params MUST match llama.h exactly.
+   --  FFI struct layout mismatch causes silent corruption — fields after the
+   --  missing one shift by 4 bytes (uint32_t size). The crash manifests as:
+   --    ggml.c: GGML_ASSERT(type >= 0 && type < GGML_TYPE_COUNT) failed
+   --  because Type_K/Type_V end up at wrong offsets, writing garbage into
+   --  the type enum fields. The C code reads invalid ggml_type values.
+   --  CRASH LOG (2026-06-22, llama.cpp b9757):
+   --    N_Outputs_Max was missing between N_Rs_Seq and N_Threads.
+   --    This shifted EVERY subsequent field by 4 bytes:
+   --    - Ada Type_K at offset 96, C type_k at offset 100
+   --    - Ada Embeddings at offset 120, C embeddings at offset 124
+   --    Result: KV cache creation reads garbage type → assertion failure
+   --  FIX: Added N_Outputs_Max and Ctx_Other to match llama.h b9757 layout.
+   --  When updating llama.cpp, ALWAYS diff llama_context_params in llama.h
+   --  against this record and add/remove fields to match exactly.
    type Llama_Context_Params is record
       N_Ctx           : unsigned;
       N_Batch         : unsigned;
       N_Ubatch        : unsigned;
       N_Seq_Max       : unsigned;
       N_Rs_Seq        : unsigned;
-      N_Outputs_Max   : unsigned;     -- [VITAL-DO-NOT-REMOVE] Must match C struct layout!
+      N_Outputs_Max   : unsigned;     -- [VITAL-DO-NOT-REMOVE] See comment block above.
       N_Threads       : int;
       N_Threads_Batch : int;
 
@@ -105,7 +120,12 @@ package Llama_Interface is
 
       Samplers    : System.Address;
       N_Samplers  : size_t;
-      Ctx_Other   : System.Address;  -- [VITAL-DO-NOT-REMOVE] Must match C struct layout!
+      --  [VITAL-DO-NOT-REMOVE] Ctx_Other is the last field in llama.h's
+      --  llama_context_params struct (b9757). Without it, the Ada struct
+      --  is smaller than the C struct. While this doesn't shift other fields,
+      --  it means llama_context_default_params() fills more bytes than we
+      --  have storage for, which could corrupt memory if the struct grows.
+      Ctx_Other   : System.Address;
    end record;
    pragma Convention (C, Llama_Context_Params);
 
