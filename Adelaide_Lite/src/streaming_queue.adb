@@ -253,11 +253,10 @@ package body Streaming_Queue is
                     Stream_Element (Character'Pos (Item (Integer (I))));
                end loop;
             end;
-            --  Return immediately after receiving any data so the AWS
-            --  framework can flush it to the client right away. Without
-            --  this, the loop blocks on the next Pop waiting for more
-            --  data, starving the client for minutes.
-            exit;
+            --  We removed the premature `exit;` here. A short read in Ada streams
+            --  signals EOF to the AWS framework, which prematurely terminates the
+            --  HTTP connection. The buffer will fill naturally or flush when Closed.
+            --  The Keep_Alive task ensures it fills every ~3s if generation stalls.
          end if;
 
          exit when Current_Last = Target_Last or else Is_Closed;
