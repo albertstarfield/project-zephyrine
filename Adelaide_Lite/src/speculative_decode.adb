@@ -19,9 +19,15 @@ pragma SPARK_Mode (Off);
 --  - Output quality identical to target-only generation
 --  ============================================================================
 
+--  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  Verbose logging with uptime timestamps for debugging speculative decoding.
+--  Each log entry includes module tag [Speculative] and uptime offset for
+--  correlating with other subsystem logs during generation.
+with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Ada.Real_Time; use Ada.Real_Time;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
@@ -40,6 +46,12 @@ package body Speculative_Decode is
    Draft_Context    : Llama_Interface.Llama_Context := Null_Context;
    Draft_Loaded     : Boolean := False;
 
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  Capture start time for uptime calculation in log messages.
+   --  This timestamp is used to calculate relative offsets like "+15.378s"
+   --  for correlating Speculative operations with other subsystem logs.
+   Init_Start_Time : Ada.Real_Time.Time;
+
    --  ============================================================================
    --  INITIALIZATION
    --  ============================================================================
@@ -48,12 +60,26 @@ package body Speculative_Decode is
       Model_Params  : Llama_Interface.Llama_Model_Params;
       Context_Params : Llama_Interface.Llama_Context_Params;
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Capture start time for uptime calculation in log messages.
+      Init_Start_Time := Ada.Real_Time.Clock;
+
       if Draft_Loaded then
-         Put_Line ("[Speculative] Draft model already loaded");
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs draft model already loaded.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Init_Draft_Model: draft model already loaded");
          return;
       end if;
 
-      Put_Line ("[Speculative] Loading draft model: Qwen3.5-0.8B...");
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: logs draft model load attempt.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Init_Draft_Model ENTERED: loading Qwen3.5-0.8B...");
 
       --  Initialize model parameters
       Model_Params := Llama_Interface.Llama_Model_Default_Params;
@@ -70,9 +96,21 @@ package body Speculative_Decode is
       end;
 
       if Draft_Model = Null_Model then
-         Put_Line ("[Speculative] WARNING: Failed to load draft model");
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs draft model load failure.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Init_Draft_Model FAILED: could not load draft model");
          return;
       end if;
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms draft model loaded, now creating context.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Init_Draft_Model: draft model loaded, creating context...");
 
       --  Initialize context parameters
       Context_Params := Llama_Interface.Llama_Context_Default_Params;
@@ -85,18 +123,34 @@ package body Speculative_Decode is
         (Draft_Model, Context_Params);
 
       if Draft_Context = Null_Context then
-         Put_Line ("[Speculative] WARNING: Failed to create draft context");
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs draft context creation failure.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Init_Draft_Model FAILED: could not create draft context");
          Llama_Interface.Llama_Model_Free (Draft_Model);
          Draft_Model := Null_Model;
          return;
       end if;
 
       Draft_Loaded := True;
-      Put_Line ("[Speculative] Draft model loaded successfully");
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms draft model initialization complete.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Init_Draft_Model COMPLETE: Qwen3.5-0.8B ready for speculative decoding");
 
    exception
       when others =>
-         Put_Line ("[Speculative] ERROR: Exception loading draft model");
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs unexpected exception during draft model init.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Init_Draft_Model EXCEPTION: unexpected error");
          if Draft_Context /= Null_Context then
             Llama_Interface.Llama_Free (Draft_Context);
             Draft_Context := Null_Context;
@@ -111,10 +165,21 @@ package body Speculative_Decode is
    procedure Release_Draft_Model is
    begin
       if not Draft_Loaded then
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs release attempt when draft model not loaded.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Release_Draft_Model: draft model not loaded");
          return;
       end if;
 
-      Put_Line ("[Speculative] Releasing draft model...");
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: logs draft model release attempt.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Release_Draft_Model ENTERED: releasing draft model...");
 
       if Draft_Context /= Null_Context then
          Llama_Interface.Llama_Free (Draft_Context);
@@ -127,7 +192,13 @@ package body Speculative_Decode is
       end if;
 
       Draft_Loaded := False;
-      Put_Line ("[Speculative] Draft model released");
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms draft model release complete.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Release_Draft_Model COMPLETE: draft model released");
    end Release_Draft_Model;
 
    function Is_Draft_Model_Loaded return Boolean is
@@ -148,6 +219,14 @@ package body Speculative_Decode is
       use type Interfaces.C.size_t;
       Accepted_Count : Interfaces.C.size_t := 0;
    begin
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: logs verification attempt with token count.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Verify_Draft_Tokens: verifying " &
+                Interfaces.C.size_t'Image (N_Draft) & " tokens");
+
       --  TODO: Implement proper verification using target model logits
       --  For now, accept all draft tokens (simplified implementation)
       --  In production:
@@ -158,7 +237,12 @@ package body Speculative_Decode is
 
       Accepted_Count := N_Draft;  -- Accept all for now
 
-      Put_Line ("[Speculative] Verified " &
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms verification complete with accepted count.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Verify_Draft_Tokens COMPLETE: accepted " &
                 Interfaces.C.size_t'Image (Accepted_Count) &
                 " / " & Interfaces.C.size_t'Image (N_Draft) & " tokens");
 
@@ -196,12 +280,25 @@ package body Speculative_Decode is
       Accepted      : Interfaces.C.size_t;
 
    begin
-      Put_Line ("[Speculative] Starting speculative generation");
-      Put_Line ("[Speculative] Prompt: " & Prompt);
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: logs speculative generation start with prompt preview.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Generate_Speculative ENTERED: prompt=" &
+                Prompt (1 .. Integer'Min (Prompt'Length, 50)) &
+                "... max_tokens=" & Positive'Image (Max_Tokens));
 
       --  Get vocabulary for tokenization
       Vocab := Llama_Interface.Llama_Model_Get_Vocab
         (Model_Manager.Get_Model (Qwen_4B));  -- Use target model's vocab
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: logs tokenization attempt.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Generate_Speculative: tokenizing prompt...");
 
       --  Tokenize prompt
       declare
@@ -218,15 +315,32 @@ package body Speculative_Decode is
       Free (Prompt_C);
 
       if N_Tokens <= 0 then
-         Put_Line ("[Speculative] ERROR: Tokenization failed");
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs tokenization failure.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Generate_Speculative FAILED: tokenization failed");
          return "";
       end if;
 
-      Put_Line ("[Speculative] Tokenized prompt: " &
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms tokenization complete with token count.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Generate_Speculative: tokenized prompt: " &
                 Interfaces.C.int'Image (N_Tokens) & " tokens");
 
       --  Main speculative generation loop
       while not Done and then Tokens_Gen < Max_Tokens loop
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs draft phase start.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Generate_Speculative: DRAFT PHASE - generating candidate tokens...");
+
          --  STEP 1: Draft Phase - Generate N tokens with draft model
          declare
             Draft_Tokens_Arr : array (1 .. Max_Draft_Tokens) of aliased Llama_Interface.Llama_Token;
@@ -243,21 +357,46 @@ package body Speculative_Decode is
             end loop;
          end;
 
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs verify phase start.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Generate_Speculative: VERIFY PHASE - verifying with target model...");
+
          --  STEP 2: Verify Phase - Verify with target model
          Accepted := Verify_Draft_Tokens
            (Draft_Buf, N_Draft, Target_Context);
+
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs accept phase start.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Generate_Speculative: ACCEPT PHASE - accepting " &
+                   Interfaces.C.size_t'Image (Accepted) & " tokens...");
 
          --  STEP 3: Accept Phase - Keep accepted tokens
          if Accepted > 0 then
             --  TODO: Actually add accepted tokens to context
             --  For now, just count them
             Tokens_Gen := Tokens_Gen + Natural (Accepted);
-            Put_Line ("[Speculative] Accepted " &
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Verbose: logs successful acceptance.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Speculative]" &
+                      AnsiAda.Reset & "+" &
+                      Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                      "s Generate_Speculative: accepted " &
                       Interfaces.C.size_t'Image (Accepted) & " tokens");
          else
             --  All rejected - fall back to single token from target
             Tokens_Gen := Tokens_Gen + 1;
-            Put_Line ("[Speculative] All draft tokens rejected, using target");
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Verbose: logs rejection and fallback to target.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Speculative]" &
+                      AnsiAda.Reset & "+" &
+                      Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                      "s Generate_Speculative: all draft tokens rejected, using target");
          end if;
 
          --  Check if we should stop
@@ -265,6 +404,14 @@ package body Speculative_Decode is
             Done := True;
          end if;
       end loop;
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: logs generation complete with total token count.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Speculative]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Generate_Speculative COMPLETE: " &
+                Natural'Image (Tokens_Gen) & " tokens generated");
 
       --  Cleanup
       if Release_Target then
@@ -275,14 +422,16 @@ package body Speculative_Decode is
          Release_Draft_Model;
       end if;
 
-      Put_Line ("[Speculative] Generation complete: " &
-                Natural'Image (Tokens_Gen) & " tokens");
-
       return To_String (Generated);
 
    exception
       when others =>
-         Put_Line ("[Speculative] ERROR: Exception during generation");
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs unexpected exception during generation.
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                   AnsiAda.Reset & "+" &
+                   Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s Generate_Speculative EXCEPTION: unexpected error");
          Free (Prompt_C);
          return "";
    end Generate_Speculative;
