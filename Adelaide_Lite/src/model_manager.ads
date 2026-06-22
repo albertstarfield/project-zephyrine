@@ -3,6 +3,7 @@ with Llama_Interface;
 with Mtmd_Interface;
 with Math_Utils;
 with Streaming_Queue;
+with KV_Cache_Manager;
 with System;
 with Interfaces.C;
 with Ada.Unchecked_Deallocation;
@@ -50,6 +51,19 @@ package Model_Manager is
    --  Returns Null_Mtmd_Context if MMProj is not loaded
    function Get_Mtmd_Context
      (Kind : Model_Type) return Mtmd_Interface.Mtmd_Context;
+
+   --  KV CACHE SSD SPILLOVER
+   --  Save KV cache to SSD after generation
+   procedure Save_KV_Cache_To_SSD
+     (Kind     : Model_Type;
+      Tokens   : System.Address;
+      N_Tokens : Interfaces.C.size_t);
+
+   --  Load KV cache from SSD if available
+   function Load_KV_Cache_From_SSD
+     (Kind     : Model_Type;
+      Tokens   : out System.Address;
+      N_Tokens : out Interfaces.C.size_t) return Boolean;
 
    --  Perform inference
    procedure Generate
