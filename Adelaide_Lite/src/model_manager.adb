@@ -2265,13 +2265,16 @@ package body Model_Manager is
                     ("ERROR: Decode failed (" & Ret'Img & ")");
                   return;
                end if;
-               Tokens_Left := Tokens_Left - To_Decode;
-               Current_Pos := Current_Pos + To_Decode;
-            end;
-         end loop;
-      end;
+                Tokens_Left := Tokens_Left - To_Decode;
+                Current_Pos := Current_Pos + To_Decode;
+             end;
+          end loop;
+       end;
 
-      S_Params := Llama_Sampler_Chain_Default_Params;
+       --  Record prefill metrics for cache performance tracking
+       KV_Cache_Manager.Record_Prefill (Interfaces.C.size_t (N_Toks));
+
+       S_Params := Llama_Sampler_Chain_Default_Params;
       Sampler := Llama_Sampler_Chain_Init (S_Params);
       Llama_Sampler_Chain_Add
         (Sampler, Llama_Sampler_Init_Penalties (64, 1.1, 0.1, 0.1));
