@@ -283,12 +283,12 @@ package body Model_Manager is
    type Owner_Array is array (Model_Type) of ELP_Level;
    type Busy_Array is array (Model_Type) of Boolean;
 
-   protected Metal_Lock_Object is
+   protected Accel_Lock_Object is
       entry Acquire;
       procedure Release;
    private
       Busy : Boolean := False;
-   end Metal_Lock_Object;
+   end Accel_Lock_Object;
 
    --  PRIORITY MODEL GATE:
    --  Manages access to the model contexts.
@@ -313,7 +313,7 @@ package body Model_Manager is
       Battery_Level     : Natural := 100;
    end Priority_Model_Gate;
 
-   protected body Metal_Lock_Object is
+   protected body Accel_Lock_Object is
       entry Acquire when not Busy is
       begin
          Busy := True;
@@ -322,7 +322,7 @@ package body Model_Manager is
       begin
          Busy := False;
       end Release;
-   end Metal_Lock_Object;
+   end Accel_Lock_Object;
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
    --  Init_Start_Time: Captured when Model_Manager.Initialize is called.
@@ -1159,15 +1159,15 @@ package body Model_Manager is
       Priority_Model_Gate.Wait_For_ELP1_Idle;
    end Wait_For_ELP1_Idle;
 
-   procedure Acquire_Metal_Lock is
+   procedure Acquire_Accel_Lock is
    begin
-      Metal_Lock_Object.Acquire;
-   end Acquire_Metal_Lock;
+      Accel_Lock_Object.Acquire;
+   end Acquire_Accel_Lock;
 
-   procedure Release_Metal_Lock is
+   procedure Release_Accel_Lock is
    begin
-      Metal_Lock_Object.Release;
-   end Release_Metal_Lock;
+      Accel_Lock_Object.Release;
+   end Release_Accel_Lock;
 
    procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
    begin
@@ -1463,7 +1463,7 @@ package body Model_Manager is
       Tokens := new Token_Array (1 .. 4096);
 
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-      Acquire_Metal_Lock;
+      Acquire_Accel_Lock;
       if Kratos.Guard_Enter = 0 then
          N_Toks := Llama_Tokenize
            (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address,
@@ -1473,7 +1473,7 @@ package body Model_Manager is
          Kratos.Log_Crash;
          N_Toks := -1;
       end if;
-      Release_Metal_Lock;
+      Release_Accel_Lock;
 
       Put_Line ("[Tokenize-Debug] Model:" & Kind'Img &
                 " Prompt_Len:" & Clean_P'Length'Img &
@@ -1546,7 +1546,7 @@ package body Model_Manager is
             begin
                --  KRATOS CRASH GUARD: llama_decode is wrapped in
                --  Guard_Enter/Guard_Exit. See QUIRK-M01.
-               Acquire_Metal_Lock;
+               Acquire_Accel_Lock;
                if Kratos.Guard_Enter = 0 then
                   Dec_Result := Llama_Decode (Models (Kind).Context, B);
                   Kratos.Guard_Exit;
@@ -1554,7 +1554,7 @@ package body Model_Manager is
                   Kratos.Log_Crash;
                   Dec_Result := -1;
                end if;
-               Release_Metal_Lock;
+               Release_Accel_Lock;
 
                if Dec_Result /= 0 then
                   --  DECODE FAILED: Skip this batch, don't unload the model.
@@ -1620,9 +1620,9 @@ package body Model_Manager is
              (Interfaces.C.size_t (Dim),
               Interfaces.C.size_t (Result'Length)));
       begin
-         Acquire_Metal_Lock;
+         Acquire_Accel_Lock;
          Ptr := Llama_Get_Embeddings (Models (Kind).Context);
-         Release_Metal_Lock;
+         Release_Accel_Lock;
 
          if Copy_Count > 0 and then Ptr /= Null_Address then
             declare
@@ -2434,6 +2434,7 @@ package body Model_Manager is
                    (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
                Ret : int;
             begin
+               Acquire_Accel_Lock;
                if Kratos.Guard_Enter = 0 then
                   Ret := Llama_Decode (Models (Kind).Context, B);
                   Kratos.Guard_Exit;
@@ -2441,6 +2442,7 @@ package body Model_Manager is
                   Kratos.Log_Crash;
                   Ret := -1;
                end if;
+               Release_Accel_Lock;
                if Ret /= 0 then
                   Free_Tokens (Tokens);
                   Models (Kind).In_Use := False;
@@ -2546,6 +2548,7 @@ package body Model_Manager is
                  Llama_Batch_Get_One (Token'Address, 1);
                Ret : int;
             begin
+               Acquire_Accel_Lock;
                if Kratos.Guard_Enter = 0 then
                   Ret := Llama_Decode (Models (Kind).Context, B);
                   Kratos.Guard_Exit;
@@ -2553,6 +2556,7 @@ package body Model_Manager is
                   Kratos.Log_Crash;
                   Ret := -1;
                end if;
+               Release_Accel_Lock;
                if Ret /= 0 then
                   Append (Result, " [ABORTED:" & Ret'Img & "]");
                   exit;
@@ -2853,7 +2857,9 @@ package body Model_Manager is
                        Llama_Batch_Get_One (Draft_Token'Address, 1);
                      Ret   : Interfaces.C.int;
                   begin
+                     Acquire_Accel_Lock;
                      Ret := Llama_Interface.Llama_Decode (Draft_Context, Batch);
+                     Release_Accel_Lock;
                      if Ret /= 0 then
                         Put_Line ("[Speculative] Draft decode failed, ret=" &
                                   Interfaces.C.int'Image (Ret));
@@ -2879,7 +2885,9 @@ package body Model_Manager is
                   Target_Token : Llama_Interface.Llama_Token;
                begin
                   --  Decode with target model
+                  Acquire_Accel_Lock;
                   Ret := Llama_Interface.Llama_Decode (Models (Kind).Context, Batch);
+                  Release_Accel_Lock;
 
                   if Ret = 0 then
                      --  Sample from target model to see what it would choose
@@ -2957,7 +2965,9 @@ package body Model_Manager is
                         Llama_Batch_Get_One (Target_Token'Address, 1);
                      Ret   : Interfaces.C.int;
                   begin
+                     Acquire_Accel_Lock;
                      Ret := Llama_Interface.Llama_Decode (Models (Kind).Context, Batch);
+                     Release_Accel_Lock;
                      if Ret /= 0 then
                         Put_Line ("[Speculative] Target decode failed, ret=" &
                                   Interfaces.C.int'Image (Ret));

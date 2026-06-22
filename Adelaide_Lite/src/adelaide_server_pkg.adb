@@ -170,6 +170,9 @@ package body Adelaide_Server_Pkg is
                                    "GET, POST, OPTIONS");
       AWS.Response.Set.Add_Header (Result, "Access-Control-Allow-Headers",
                                    "Content-Type, Authorization");
+      --  Standard Server-Sent Events (SSE) headers required by strict clients like Msty
+      AWS.Response.Set.Add_Header (Result, "Cache-Control", "no-cache");
+      AWS.Response.Set.Add_Header (Result, "Connection", "keep-alive");
       return Result;
    end Wrap_Response;
 

@@ -203,8 +203,8 @@ package Model_Manager is
    --  interleave, corrupting buffer metadata (malloc error: "pointer being
    --  freed was not allocated" at address 0x1). Fix: serialize all
    --  llama_decode + llama_get_embeddings calls through this entry barrier.
-   procedure Acquire_Metal_Lock;
-   procedure Release_Metal_Lock;
+   procedure Acquire_Accel_Lock;
+   procedure Release_Accel_Lock;
 
    Current_WCET : Duration := 0.0;
    Current_WCET_ELP0 : Duration := 0.0;
