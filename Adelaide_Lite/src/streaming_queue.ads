@@ -18,6 +18,7 @@ package Streaming_Queue is
       Closed    : Boolean := False;
       Format    : Format_Type := Raw;
       Model_ID  : Unbounded_String := Null_Unbounded_String;
+      First_Chunk : Boolean := True;
    end Queue;
 
    type Queue_Access is access all Queue;

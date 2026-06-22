@@ -68,6 +68,10 @@ package body Streaming_Queue is
                     GNATCOLL.JSON.Empty_Array;
                begin
                   GNATCOLL.JSON.Set_Field (D_Val, "content", Item);
+                  if First_Chunk then
+                     GNATCOLL.JSON.Set_Field (D_Val, "role", "assistant");
+                     First_Chunk := False;
+                  end if;
                   GNATCOLL.JSON.Set_Field (Choice, "delta", D_Val);
                   GNATCOLL.JSON.Set_Field (Choice, "index", Integer'(0));
                   GNATCOLL.JSON.Append (Arr, Choice);
