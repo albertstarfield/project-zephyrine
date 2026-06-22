@@ -645,7 +645,11 @@ package body Model_Manager is
             Model_Size_Bytes := Ada.Directories.Size (Model_File);
          end if;
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
-                   "[LoadModel]" & AnsiAda.Reset &
+                   "[Uptime]+" &
+                   Trim(Duration'Image(
+                     Ada.Real_Time.To_Duration(
+                       Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                   "s [LoadModel]" & AnsiAda.Reset &
                    " Loading " & Model_Type'Image (Kind) &
                    " | N_CTX=" & Actual_Ctx'Img &
                    " | File=" &
@@ -837,8 +841,14 @@ package body Model_Manager is
                   declare
                      Saved_Stderr : constant int := Sys_Dup (2);
                   begin
-                     Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) & "[LoadModel]" &
-                               AnsiAda.Reset & " Phase 1/2: Reading weights from disk...");
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                               "[Uptime]+" &
+                               Trim(Duration'Image(
+                                 Ada.Real_Time.To_Duration(
+                                   Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                               "s [LoadModel]" &
+                               AnsiAda.Reset &
+                               " Phase 1/2: Reading weights from disk...");
                      Model_Load_Start := Ada.Real_Time.Clock;
                      begin
                         Models (Kind).Model :=
@@ -885,7 +895,11 @@ package body Model_Manager is
                              end;
                           end if;
                          Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
-                                   "[LoadModel]" & AnsiAda.Reset &
+                                   "[Uptime]+" &
+                                   Trim(Duration'Image(
+                                     Ada.Real_Time.To_Duration(
+                                       Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                                   "s [LoadModel]" & AnsiAda.Reset &
                                    " Phase 1/2 COMPLETE: weights loaded" &
                                    " | " & Natural'Image (Load_ms) & "ms" &
                                    " | Disk: " &
@@ -933,8 +947,14 @@ package body Model_Manager is
          declare
             Ctx_Init_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
          begin
-            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) & "[LoadModel]" &
-                      AnsiAda.Reset & " Phase 2/2: Creating context + KV cache...");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[Uptime]+" &
+                      Trim(Duration'Image(
+                        Ada.Real_Time.To_Duration(
+                          Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                      "s [LoadModel]" &
+                      AnsiAda.Reset &
+                      " Phase 2/2: Creating context + KV cache...");
             --  [DO NOT REMOVE] Suppress llama.cpp stderr during context init.
             --  llama_context, llama_kv_cache, ggml_metal lines go to stderr.
             declare
@@ -954,12 +974,24 @@ package body Model_Manager is
                Ctx_ms   : constant Natural := Natural (Ctx_Dur * 1000.0);
             begin
                if Models (Kind).Context /= Null_Context then
-                  Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[LoadModel]" &
-                            AnsiAda.Reset & " Phase 2/2 COMPLETE: context ready" &
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                            "[Uptime]+" &
+                            Trim(Duration'Image(
+                              Ada.Real_Time.To_Duration(
+                                Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                            "s [LoadModel]" &
+                            AnsiAda.Reset &
+                            " Phase 2/2 COMPLETE: context ready" &
                             " | " & Natural'Image (Ctx_ms) & "ms");
                else
-                  Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[LoadModel]" &
-                            AnsiAda.Reset & " Phase 2/2 FAILED: context creation returned null" &
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
+                            "[Uptime]+" &
+                            Trim(Duration'Image(
+                              Ada.Real_Time.To_Duration(
+                                Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                            "s [LoadModel]" &
+                            AnsiAda.Reset &
+                            " Phase 2/2 FAILED: context creation returned null" &
                             " | " & Natural'Image (Ctx_ms) & "ms");
                end if;
             end;
