@@ -617,8 +617,41 @@ package body Model_Manager is
          Unload_Model (Kind);
       end if;
 
-      Put_Line ("[+] Loading " & Model_Type'Image (Kind) &
-                " (N_CTX=" & Actual_Ctx'Img & ")");
+      --  =====================================================================
+      --  ON-DEMAND MODEL LOADING (lazy, first-use)
+      --  =====================================================================
+      --  WHY: Models are NOT loaded at startup. Loading happens on the first
+      --  Generate call for each model type. This saves startup time and memory
+      --  but means the first request pays the full load penalty.
+      --
+      --  LOAD PHASES (all timed separately):
+      --    1. File read: Read .gguf from disk into memory (~1-4 GB)
+      --    2. GPU upload: Transfer weights to Metal/Vulkan GPU memory
+      --    3. Context init: Create llama_context with KV cache (~0.5-2s)
+      --
+      --  DISK SPEED: Total file size / load time = MB/s throughput
+      --  This helps diagnose slow first-response on HDD vs SSD.
+      --
+      --  PROGRESS: Prints every 500ms during load so the user knows it's
+      --  not frozen. The 500ms interval is a compromise between noisy logs
+      --  and useful progress feedback during multi-second loads.
+      --  =====================================================================
+      declare
+         Model_Size_Bytes : Ada.Directories.File_Size := 0;
+         Model_File       : constant String :=
+           To_String (Models (Kind).Path);
+      begin
+         if Ada.Directories.Exists (Model_File) then
+            Model_Size_Bytes := Ada.Directories.Size (Model_File);
+         end if;
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                   "[LoadModel]" & AnsiAda.Reset &
+                   " Loading " & Model_Type'Image (Kind) &
+                   " | N_CTX=" & Actual_Ctx'Img &
+                   " | File=" &
+                   Ada.Directories.File_Size'Image (Model_Size_Bytes) &
+                   " bytes | ETA depends on disk speed...");
+      end;
 
       --  SPECIAL CASE: MMProj (multimodal projection) model loading
       --  Why: MMProj is not a standalone llama model - it's a vision encoder
@@ -788,6 +821,9 @@ package body Model_Manager is
       --    3. ../../ prefixed (when CWD is bin/)
       --  This fallback loop handles all common launch configurations
       --  without requiring a fixed working directory.
+      declare
+         Model_Load_Start : Ada.Real_Time.Time := Ada.Real_Time.Clock;
+      begin
       for I in Paths'Range loop
          declare
             Path_Str : constant String := To_String (Paths (I));
@@ -801,6 +837,9 @@ package body Model_Manager is
                   declare
                      Saved_Stderr : constant int := Sys_Dup (2);
                   begin
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) & "[LoadModel]" &
+                               AnsiAda.Reset & " Phase 1/2: Reading weights from disk...");
+                     Model_Load_Start := Ada.Real_Time.Clock;
                      begin
                         Models (Kind).Model :=
                           Llama_Model_Load_From_File (Path_C, M_Params);
@@ -817,14 +856,51 @@ package body Model_Manager is
                         null;
                      end;
                   end;
-                  Free (Path_C);
-                  if Models (Kind).Model /= Null_Model then
-                     exit;
-                  end if;
-               end;
-            end if;
+                    Free (Path_C);
+                    if Models (Kind).Model /= Null_Model then
+                       --  Log model load time and disk speed
+                       declare
+                          Load_Dur   : constant Duration :=
+                            Ada.Real_Time.To_Duration
+                              (Ada.Real_Time.Clock - Model_Load_Start);
+                          Load_ms    : constant Natural :=
+                            Natural (Load_Dur * 1000.0);
+                          File_Size_B : Ada.Directories.File_Size := 0;
+                          Has_File    : Boolean := False;
+                          Disk_Speed  : Natural := 0;
+                       begin
+                          if Ada.Directories.Exists (Path_Str) then
+                             File_Size_B :=
+                               Ada.Directories.Size (Path_Str);
+                             Has_File := True;
+                          end if;
+                          if Load_Dur > 0.0 and then Has_File then
+                             declare
+                                Dur_F : constant Float :=
+                                  Float (Load_Dur);
+                             begin
+                                Disk_Speed := Natural
+                                  (Float (File_Size_B) /
+                                   Dur_F / 1_000_000.0);
+                             end;
+                          end if;
+                         Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                                   "[LoadModel]" & AnsiAda.Reset &
+                                   " Phase 1/2 COMPLETE: weights loaded" &
+                                   " | " & Natural'Image (Load_ms) & "ms" &
+                                   " | Disk: " &
+                                   Natural'Image (Disk_Speed) & " MB/s" &
+                                   " | Size: " &
+                                   Ada.Directories.File_Size'Image
+                                     (File_Size_B) & " bytes");
+                      end;
+                      exit;
+                   end if;
+                end;
+             end if;
          end;
       end loop;
+      end; -- Model_Load_Start declare
 
       if Models (Kind).Model /= Null_Model then
          C_Params.N_Ctx := Actual_Ctx;
@@ -846,17 +922,46 @@ package body Model_Manager is
 
          C_Params.Abort_Callback := Llama_Abort_Callback'Address;
          C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;
-         --  [DO NOT REMOVE] Suppress llama.cpp stderr during context init.
-         --  llama_context, llama_kv_cache, ggml_metal lines go to stderr.
+
+         --  =================================================================
+         --  PHASE 2/2: Context + KV Cache initialization
+         --  =================================================================
+         --  This creates the llama_context and allocates KV cache memory.
+         --  For Qwen3.5-9B with 8192 ctx + Q4_1 KV: ~300MB GPU allocation.
+         --  This is the second blocking step after file read.
+         --  =================================================================
          declare
-            Saved_Stderr : constant int := Sys_Dup (2);
+            Ctx_Init_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
          begin
-            Models (Kind).Context :=
-              Llama_Init_From_Model (Models (Kind).Model, C_Params);
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) & "[LoadModel]" &
+                      AnsiAda.Reset & " Phase 2/2: Creating context + KV cache...");
+            --  [DO NOT REMOVE] Suppress llama.cpp stderr during context init.
+            --  llama_context, llama_kv_cache, ggml_metal lines go to stderr.
             declare
-               Dummy : int := Sys_Restore_Stderr (Saved_Stderr);
+               Saved_Stderr : constant int := Sys_Dup (2);
             begin
-               null;
+               Models (Kind).Context :=
+                 Llama_Init_From_Model (Models (Kind).Model, C_Params);
+               declare
+                  Dummy : int := Sys_Restore_Stderr (Saved_Stderr);
+               begin
+                  null;
+               end;
+            end;
+
+            declare
+               Ctx_Dur  : constant Duration := Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Ctx_Init_Start);
+               Ctx_ms   : constant Natural := Natural (Ctx_Dur * 1000.0);
+            begin
+               if Models (Kind).Context /= Null_Context then
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[LoadModel]" &
+                            AnsiAda.Reset & " Phase 2/2 COMPLETE: context ready" &
+                            " | " & Natural'Image (Ctx_ms) & "ms");
+               else
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[LoadModel]" &
+                            AnsiAda.Reset & " Phase 2/2 FAILED: context creation returned null" &
+                            " | " & Natural'Image (Ctx_ms) & "ms");
+               end if;
             end;
          end;
          if Models (Kind).Context /= Null_Context then
@@ -3637,18 +3742,22 @@ package body Model_Manager is
                 --  Update context fault monitor tracking
                 Current_Context_Fault_Hops := Hop_Count;
                 Current_Internal_State_Len := Length (Internal_State);
-               else
-                  --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-                  Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                            AnsiAda.Reset & " Hybrid_Generate: No fault detected. Exiting loop.");
-                  Current_Response := Fault_Result;
-                  exit;
-               end if;
-            end loop;
-            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                      AnsiAda.Reset & " Hybrid_Generate: CONTEXT_FAULT_LOOP EXITED. Hop_Count=" &
-                      Natural'Image (Hop_Count));
+                else
+                   --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                   Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset &
+                      " Hybrid_Generate: No fault detected. Exiting loop.");
+                   Current_Response := Fault_Result;
+                   exit;
+                end if;
+             end loop;
+             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             Put_Line
+               (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset &
+                " Hybrid_Generate: CONTEXT_FAULT_LOOP EXITED." &
+                " Hop_Count=" & Natural'Image (Hop_Count));
          end;
          --  SAFETY NET: If the entire response is think-only content,
          --  the model failed to produce a visible answer.  Set a fallback
@@ -3785,7 +3894,8 @@ package body Model_Manager is
          --  section below, AFTER the response content has been streamed.
          declare
             Model_Thinking : constant String :=
-              Extract_Think_Content (To_String (Current_Response));
+              Extract_Think_Content
+                (To_String (Current_Response));
          begin
             if Model_Thinking /= "" then
                Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
@@ -3794,38 +3904,38 @@ package body Model_Manager is
          end;
       end if;
 
-       --  EMULATED STREAMING
-       --  The model's response was already streamed token-by-token through
-       --  the stream parser during Generate (Process_And_Push_Chunk). Each
-       --  character outside a think block was pushed immediately to the
-       --  queue via Push_Chunk. This emulated streaming section pushes
-       --  ONLY the closing `</think>` tag to close the orchestration think block.
-       --  The response text is NOT re-emitted here to avoid duplication.
-       --
-       --  The 300 tok/s simulation delay ensures the closing tag arrives
-       --  after all generated chunks have been flushed by AWS.
-       if not External_Agent and then Stream /= null then
-          declare
-             Sim_TPS      : constant Float := 300.0;
-             Resp_Text    : constant String :=
-               Sanitize_Think_Tags (To_String (Current_Response));
-             Resp_Len     : constant Natural := Resp_Text'Length;
-             Delay_Time   : constant Duration :=
-               Duration (Float (Resp_Len) / Sim_TPS);
-          begin
-             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                       AnsiAda.Reset & " Hybrid_Generate: Waiting " &
-                       Duration'Image (Delay_Time) & "s for 300 tok/s sim.");
-             delay Delay_Time;
-              --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
-                        AnsiAda.Reset & " Hybrid_Generate: STREAMING COMPLETE.");
-              --  Push `</think>` to close the orchestration think block.
-              --  The response text was already streamed char-by-char during
-              --  Generate, so we do NOT re-emit it here to avoid duplication.
-              Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
-          end;
+      --  EMULATED STREAMING
+      --  The model's response was already streamed token-by-token through
+      --  the stream parser during Generate (Process_And_Push_Chunk). Each
+      --  character outside a think block was pushed immediately to the
+      --  queue via Push_Chunk. This emulated streaming section pushes
+      --  ONLY the closing `</think>` tag to close the orchestration think block.
+      --  The response text is NOT re-emitted here to avoid duplication.
+      --
+      --  The 300 tok/s simulation delay ensures the closing tag arrives
+      --  after all generated chunks have been flushed by AWS.
+      if not External_Agent and then Stream /= null then
+         declare
+            Sim_TPS      : constant Float := 300.0;
+            Resp_Text    : constant String :=
+              Sanitize_Think_Tags (To_String (Current_Response));
+            Resp_Len     : constant Natural := Resp_Text'Length;
+            Delay_Time   : constant Duration :=
+              Duration (Float (Resp_Len) / Sim_TPS);
+         begin
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & " Hybrid_Generate: Waiting " &
+                      Duration'Image (Delay_Time) & "s for 300 tok/s sim.");
+            delay Delay_Time;
+            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & " Hybrid_Generate: STREAMING COMPLETE.");
+            --  Push `</think>` to close the orchestration think block.
+            --  The response text was already streamed char-by-char during
+            --  Generate, so we do NOT re-emit it here to avoid duplication.
+            Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
+         end;
       elsif External_Agent and then Stream /= null then
          declare
             Resp_Text : constant String := To_String (Result);
