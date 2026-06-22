@@ -544,10 +544,13 @@ package body Model_Manager is
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 6/7 ELP_Queue.Initialize DONE.");
 
-      --  Start Virtual Context Monitor (prints every 5s)
-      if not Context_Monitor'Terminated then
-         Context_Monitor.Start;
-      end if;
+       --  Start Virtual Context Monitor (prints every 5s)
+       if not Context_Monitor'Terminated then
+          Context_Monitor.Start;
+       end if;
+
+       --  Initialize KV Cache Manager for SSD spillover
+       KV_Cache_Manager.Initialize;
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Model paths are set here.  None of these load models from disk.
@@ -3457,6 +3460,57 @@ package body Model_Manager is
          end if;
          Result := To_Unbounded_String ("ERROR: Generate failed");
    end Hybrid_Generate;
+
+   --  KV CACHE SSD SPILLOVER
+   --  Save KV cache to SSD after generation
+   procedure Save_KV_Cache_To_SSD
+     (Kind     : Model_Type;
+      Tokens   : System.Address;
+      N_Tokens : Interfaces.C.size_t)
+   is
+      Success    : Boolean;
+      Prompt_Hash : constant String :=
+        KV_Cache_Manager.Hash_Tokens (Tokens, N_Tokens);
+      File_Path  : constant String :=
+        KV_Cache_Manager.Cache_Dir & Prompt_Hash & ".bin";
+   begin
+      if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context then
+         KV_Cache_Manager.Save_To_SSD
+           (Models (Kind).Context, Tokens, N_Tokens, File_Path, Success);
+         if Success then
+            Put_Line ("[KV-Cache] Saved " & Model_Type'Image (Kind) &
+                      " cache to SSD (" &
+                      Interfaces.C.size_t'Image (N_Tokens) & " tokens)");
+         end if;
+      end if;
+   exception
+      when others =>
+         null;  -- Don't crash on cache save failure
+   end Save_KV_Cache_To_SSD;
+
+   --  Load KV cache from SSD if available
+   function Load_KV_Cache_From_SSD
+     (Kind     : Model_Type;
+      Tokens   : out System.Address;
+      N_Tokens : out Interfaces.C.size_t) return Boolean
+   is
+      Success    : Boolean;
+   begin
+      Tokens := System.Null_Address;
+      N_Tokens := 0;
+
+      if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context then
+         --  Try to load from SSD (would need prompt hash from previous session)
+         --  For now, return False until we implement prompt tracking
+         Success := False;
+      else
+         Success := False;
+      end if;
+      return Success;
+   exception
+      when others =>
+         return False;
+   end Load_KV_Cache_From_SSD;
 
 begin
    Initialize;
