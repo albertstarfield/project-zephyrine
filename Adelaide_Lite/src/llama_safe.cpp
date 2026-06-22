@@ -256,8 +256,9 @@ extern "C" {
                                                               size_t len) {
         if (!ctx || !buf || len == 0) return nullptr;
         try {
-            return (mtmd_bitmap_handle)mtmd_helper_bitmap_init_from_buf(
-                (mtmd_context*)ctx, buf, len);
+            auto wrapper = mtmd_helper_bitmap_init_from_buf(
+                (mtmd_context*)ctx, buf, len, false);
+            return (mtmd_bitmap_handle)wrapper.bitmap;
         } catch (const std::exception& e) {
             std::cerr << "Caught C++ exception in mtmd_helper_bitmap_init_from_buf: " << e.what() << std::endl;
             return nullptr;

@@ -442,19 +442,118 @@ def main():
         print("[*] Changes detected, checking downloads and rebuilding...")
         threads = str(os.cpu_count() or 4)
         
-        # Check and clone llama.cpp
-        llama_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "llama.cpp"))
-        if not os.path.exists(llama_dir):
-            print("[*] Cloning llama.cpp...")
-            subprocess.run(["git", "clone", "--depth=1", "https://github.com/ggerganov/llama.cpp.git", llama_dir], check=False)
-        else:
-            print("[*] llama.cpp already exists, skipping clone.")
+        # =====================================================================
+        # ggml: git submodule → compile from source
+        # =====================================================================
+        # [VITAL-DO-NOT-REMOVE] NEVER use Homebrew's ggml.
+        # Homebrew ggml 0.15.2 has a bug in Qwen3.5's Gated Delta Net:
+        #   GGML_ASSERT(state->ne[0] == S_v) failed  (ggml.c:6252)
+        # This crashes during llama_decode. The assertion path showed
+        # /private/tmp/ggml-20260619-5335-xzehaz/ggml-0.15.2/ which is
+        # the HOMEBREW-built copy, not our locally-built one.
+        # LM Studio runs Qwen3.5 on llama.cpp (not just MLX) and does
+        # NOT have this bug — they bundle their own ggml build.
+        # FIX: Clone ggml as a git submodule, compile from source, link
+        # against our local build only. RPATH ensures runtime never
+        # picks up Homebrew's ggml.
+        # =====================================================================
+        ggml_submodule = os.path.abspath(os.path.join(BASE_DIR, "vendor", "ggml"))
+        ggml_build_dir = os.path.join(ggml_submodule, "build")
+        ggml_lib = os.path.join(ggml_build_dir, "bin", "libggml.dylib")
+        ggml_start = time.time()
 
-        # Ensure llama.cpp is built
+        # Init/update submodule
+        if not os.path.exists(os.path.join(ggml_submodule, ".git")) and \
+           not os.path.exists(os.path.join(ggml_submodule, "CMakeLists.txt")):
+            print(f"[GGML] [{time.strftime('%H:%M:%S')}] Initializing ggml submodule...")
+            result = subprocess.run(
+                ["git", "submodule", "update", "--init", "--recursive",
+                 "Adelaide_Lite/vendor/ggml"],
+                cwd=os.path.dirname(BASE_DIR), check=False,
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                print(f"[GGML] [{time.strftime('%H:%M:%S')}] Submodule init FAILED: {result.stderr[-300:]}")
+        else:
+            print(f"[GGML] [{time.strftime('%H:%M:%S')}] Fetching latest ggml...")
+            subprocess.run(["git", "fetch", "origin"], cwd=ggml_submodule,
+                           check=False, capture_output=True)
+            subprocess.run(["git", "pull", "--ff-only"], cwd=ggml_submodule,
+                           check=False, capture_output=True)
+
+        ggml_ver = subprocess.run(
+            ["git", "describe", "--tags"], cwd=ggml_submodule,
+            capture_output=True, text=True
+        ).stdout.strip()
+        print(f"[GGML] [{time.strftime('%H:%M:%S')}] Version: {ggml_ver}")
+
+        # Build ggml if needed
+        if not os.path.exists(ggml_lib):
+            print(f"[GGML] [{time.strftime('%H:%M:%S')}] Building ggml from source...")
+            os.makedirs(ggml_build_dir, exist_ok=True)
+            cmake_flags = ["cmake", "-B", "build", "-DGGML_NATIVE=ON",
+                           "-DCMAKE_BUILD_TYPE=Release"]
+            if platform.system() == "Darwin" and platform.machine() == "arm64":
+                cmake_flags.append("-DGGML_METAL=ON")
+                print(f"[GGML] [{time.strftime('%H:%M:%S')}] Metal GPU: ENABLED")
+            result = subprocess.run(cmake_flags, cwd=ggml_submodule,
+                                    check=False, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"[GGML] [{time.strftime('%H:%M:%S')}] CMake FAILED: {result.stderr[-500:]}")
+            else:
+                result = subprocess.run(
+                    ["cmake", "--build", "build", "--config", "Release", "-j"],
+                    cwd=ggml_submodule, check=False, capture_output=True, text=True
+                )
+                ggml_elapsed = time.time() - ggml_start
+                if result.returncode == 0:
+                    print(f"[GGML] [{time.strftime('%H:%M:%S')}] Build SUCCESS in {ggml_elapsed:.1f}s")
+                else:
+                    print(f"[GGML] [{time.strftime('%H:%M:%S')}] Build FAILED: {result.stderr[-500:]}")
+        else:
+            ggml_elapsed = time.time() - ggml_start
+            print(f"[GGML] [{time.strftime('%H:%M:%S')}] Library exists ({ggml_elapsed:.1f}s)")
+
+        # =====================================================================
+        # llama.cpp: clone → fetch+pull latest → rebuild if updated
+        # =====================================================================
+        # We always fetch+pull so we get the latest fixes.
+        # llama.cpp builds its own ggml in-tree for compilation, but at
+        # RUNTIME we use our separately-built ggml via RPATH (see GPR file).
+        llama_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "llama.cpp"))
         llama_build_dir = os.path.join(llama_dir, "build")
-        llama_lib = os.path.join(llama_build_dir, "src", "libllama.a")
+        llama_lib = os.path.join(llama_build_dir, "bin", "libllama.dylib")
         llama_start = time.time()
-        if not os.path.exists(llama_lib):
+
+        if not os.path.exists(llama_dir):
+            print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Cloning llama.cpp...")
+            subprocess.run(
+                ["git", "clone", "https://github.com/ggml-org/llama.cpp.git", llama_dir],
+                check=False
+            )
+            needs_build = True
+        else:
+            old_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=llama_dir,
+                capture_output=True, text=True
+            ).stdout.strip()
+            print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Fetching latest llama.cpp...")
+            subprocess.run(["git", "fetch", "origin"], cwd=llama_dir, check=False,
+                           capture_output=True)
+            subprocess.run(["git", "pull", "--ff-only"], cwd=llama_dir, check=False,
+                           capture_output=True)
+            new_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=llama_dir,
+                capture_output=True, text=True
+            ).stdout.strip()
+            needs_build = (old_head != new_head) or not os.path.exists(llama_lib)
+            if old_head != new_head:
+                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Updated: {old_head[:8]} → {new_head[:8]}")
+            else:
+                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Already up to date ({new_head[:8]})")
+
+        # Build if needed (new clone, update, or missing lib)
+        if needs_build:
             print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Building llama.cpp...")
             print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake flags: -DGGML_NATIVE=ON -DLLAMA_BUILD_TOOLS=ON")
             if platform.system() == "Darwin" and platform.machine() == "arm64":
@@ -483,15 +582,10 @@ def main():
             print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Library exists, skipping build")
         
         # Ensure mtmd (multimodal) library is built
-        # Why: The mtmd library provides CLIP vision encoding for multimodal support.
-        #      It's built as a separate target from llama.cpp and must be linked
-        #      into adelaide_server for image processing to work.
-        mtmd_lib = os.path.join(llama_build_dir, "tools", "mtmd", "libmtmd.a")
+        mtmd_lib = os.path.join(llama_build_dir, "bin", "libmtmd.dylib")
         mtmd_start = time.time()
         if not os.path.exists(mtmd_lib):
             print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Building mtmd (multimodal) library...")
-            print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Target: {mtmd_lib}")
-            print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Running: cmake --build build --target mtmd -j")
             result = subprocess.run(["cmake", "--build", "build", "--target", "mtmd", "-j"], cwd=llama_dir, check=False, capture_output=True, text=True)
             mtmd_elapsed = time.time() - mtmd_start
             if result.returncode == 0:

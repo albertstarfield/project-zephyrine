@@ -1,0 +1,3 @@
+[submodule "Adelaide_Lite/vendor/ggml"]
+	path = Adelaide_Lite/vendor/ggml
+	url = https://github.com/ggml-org/ggml.git
