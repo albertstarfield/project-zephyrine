@@ -150,8 +150,9 @@ Unlike oMLX's non-autoregressive DFlash, llama.cpp's speculative decoding uses s
 | `speculative_decode.adb` | New file — Implementation |
 
 ### Status: COMPLETED
-- Commit: `b225713`
+- Commit: `b225713` (initial), `9ce77e4` (proper verification)
 - Build passes with no errors
+- Proper draft token verification implemented
 - Ready for production use
 
 ---
