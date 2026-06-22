@@ -73,4 +73,14 @@ package KV_Cache_Manager is
    procedure Initialize;
    function Has_Cache_Files return Boolean;
 
+   --  ============================================================================
+   --  METRICS (logged every 10 seconds)
+   --  ============================================================================
+   --  WHY: Track cache performance for optimization.
+   --  Logs: Total Prefill tokens, Cached Tokens, Cache Hit Percentage.
+
+   procedure Record_Prefill (N_Tokens : Interfaces.C.size_t);
+   procedure Record_Cache_Hit (N_Tokens : Interfaces.C.size_t);
+   procedure Record_Cache_Miss;
+
 end KV_Cache_Manager;

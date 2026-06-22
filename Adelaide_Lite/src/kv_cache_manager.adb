@@ -55,6 +55,99 @@ package body KV_Cache_Manager is
    Init_Start_Time : Ada.Real_Time.Time;
 
    --  ============================================================================
+   --  METRICS COUNTERS
+   --  ============================================================================
+   --  WHY: Track cache performance for optimization.
+
+   Total_Prefill_Tokens : Interfaces.C.size_t := 0;
+   Cached_Tokens        : Interfaces.C.size_t := 0;
+   Cache_Hits           : Interfaces.C.size_t := 0;
+   Cache_Misses         : Interfaces.C.size_t := 0;
+
+   --  ============================================================================
+   --  METRICS LOGGING TASK (every 10 seconds)
+   --  ============================================================================
+   --  WHY: Periodic metrics for monitoring cache performance.
+
+   task Metrics_Logger is
+      entry Start;
+      entry Stop;
+   end Metrics_Logger;
+
+   task body Metrics_Logger is
+      use type Interfaces.C.size_t;
+      Running    : Boolean := True;
+      Start_Time : Ada.Real_Time.Time;
+      Uptime     : Duration;
+   begin
+      accept Start;
+
+      Start_Time := Ada.Real_Time.Clock;
+
+      while Running loop
+         --  Wait 10 seconds between logs
+         select
+            accept Stop do
+               Running := False;
+            end Stop;
+         or
+            delay 10.0;
+         end select;
+
+         if Running then
+            --  Calculate uptime
+            Uptime := Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Start_Time);
+
+            --  Calculate cache hit percentage
+            declare
+               Total_Requests : constant Interfaces.C.size_t := Cache_Hits + Cache_Misses;
+               Hit_Percentage : Float := 0.0;
+            begin
+               if Total_Requests > 0 then
+                  Hit_Percentage := Float (Cache_Hits) * 100.0 / Float (Total_Requests);
+               end if;
+
+               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+               --  Verbose: logs metrics every 10 seconds.
+               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) & "[TimeUptime]" &
+                         AnsiAda.Reset & "+" &
+                         Trim(Duration'Image(Uptime), Both) &
+                         "s [KV-Cache Metrics]" &
+                         " Total Prefill tokens: " & Interfaces.C.size_t'Image (Total_Prefill_Tokens) &
+                         " | Cached Tokens: " & Interfaces.C.size_t'Image (Cached_Tokens) &
+                         " | Cache Hit Percentage: " & Float'Image (Hit_Percentage) & "%");
+            end;
+         end if;
+      end loop;
+
+   exception
+      when others =>
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  Verbose: logs metrics logger exception (non-fatal).
+         null;  -- Don't crash on metrics failure
+   end Metrics_Logger;
+
+   --  ============================================================================
+   --  METRICS RECORDING PROCEDURES
+   --  ============================================================================
+
+   procedure Record_Prefill (N_Tokens : Interfaces.C.size_t) is
+   begin
+      Total_Prefill_Tokens := Total_Prefill_Tokens + N_Tokens;
+   end Record_Prefill;
+
+   procedure Record_Cache_Hit (N_Tokens : Interfaces.C.size_t) is
+   begin
+      Cached_Tokens := Cached_Tokens + N_Tokens;
+      Cache_Hits := Cache_Hits + 1;
+   end Record_Cache_Hit;
+
+   procedure Record_Cache_Miss is
+   begin
+      Cache_Misses := Cache_Misses + 1;
+   end Record_Cache_Miss;
+
+   --  ============================================================================
    --  TRICK 3: PRE-PATH CACHE
    --  ============================================================================
    --  WHY: Directory scans are SLOW on HDD (50-200ms).
@@ -335,6 +428,16 @@ package body KV_Cache_Manager is
       --  TRICK 5: BACKGROUND EVICTION
       --  WHY: Evict old files in background, never block on save
       --  NOTE: Eviction task spawned in Save_To_SSD_Async (not at init)
+
+      --  Start metrics logger (every 10 seconds)
+      Metrics_Logger.Start;
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: confirms metrics logger started.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
+                AnsiAda.Reset & "+" &
+                Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                "s Initialize: metrics logger started (10s interval)");
    end Initialize;
 
    procedure Save_To_SSD_Async
@@ -425,12 +528,14 @@ package body KV_Cache_Manager is
 
                if Success then
                   Found := True;
+                  Record_Cache_Hit (N_Tokens);
                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                   --  Verbose: confirms lazy load success.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
                             AnsiAda.Reset & "+Load_From_SSD_Lazy: SUCCESS loaded " &
                             Interfaces.C.size_t'Image (N_Tokens) & " tokens");
                else
+                  Record_Cache_Miss;
                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                   --  Verbose: logs lazy load failure.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
@@ -481,6 +586,7 @@ package body KV_Cache_Manager is
 
                   if Success then
                      Found := True;
+                     Record_Cache_Hit (N_Tokens);
                      --  Cache this path for next time (TRICK 3)
                      Cache_Last_Path (Path);
 
@@ -490,6 +596,7 @@ package body KV_Cache_Manager is
                                AnsiAda.Reset & "+Load_From_SSD_Lazy: SUCCESS loaded " &
                                Interfaces.C.size_t'Image (N_Tokens) & " tokens");
                   else
+                     Record_Cache_Miss;
                      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                      --  Verbose: logs lazy load failure.
                      Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
@@ -504,6 +611,7 @@ package body KV_Cache_Manager is
       end if;
 
       if not Found then
+         Record_Cache_Miss;
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          --  Verbose: logs no cache files found.
          Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &
