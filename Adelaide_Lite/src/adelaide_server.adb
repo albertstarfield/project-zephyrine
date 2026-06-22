@@ -827,12 +827,12 @@ begin
                Shutdown_Manager.Shutdown_Status.Request;
                Watchdog_Manager.AWS_Server_Monitor.Deactivate;
 
-               --  Save all KV caches to disk before shutdown
-               --  This ensures cache persists across server restarts
+               --  KV Cache: No blocking save at shutdown
+               --  WHY: Background async saves will complete or die with process
+               --  This ensures instant shutdown (no waiting for disk I/O)
                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
                          "[Shutdown]" & AnsiAda.Reset &
-                         " Saving KV caches to disk...");
-               KV_Cache_Manager.Save_All_On_Shutdown;
+                         " KV Cache: async saves will complete in background...");
 
                --  Write clean exit reason (not a crash)
                Watchdog_IPC.Write_Exit_Reason
