@@ -212,12 +212,30 @@ package body Speculative_Decode is
 
    function Verify_Draft_Tokens
      (Draft_Tokens    : System.Address;
-      N_Draft         : Interfaces.C.size_t;
-      Target_Context  : Llama_Interface.Llama_Context)
-      return Interfaces.C.size_t
+       N_Draft         : Interfaces.C.size_t;
+       Target_Context  : Llama_Interface.Llama_Context)
+       return Interfaces.C.size_t
    is
       use type Interfaces.C.size_t;
       Accepted_Count : Interfaces.C.size_t := 0;
+
+      --  Cast System.Address to access array of Llama_Token
+      type Token_Array is array (Positive range <>) of aliased Llama_Interface.Llama_Token;
+      type Token_Array_Access is access Token_Array;
+      for Token_Array_Access'Size use System'Address_Size;
+
+      Tokens_Access : Token_Array_Access;
+      for Tokens_Access'Address use Draft_Tokens;
+
+      --  Get vocabulary for the target model
+      Vocab : constant Llama_Interface.Llama_Vocab :=
+        Llama_Interface.Llama_Model_Get_Vocab
+          (Model_Manager.Get_Model (Qwen_4B));
+
+      --  Sampler for target model
+      Sampler_Params : Llama_Interface.Llama_Sampler_Chain_Params;
+      Sampler        : Llama_Interface.Llama_Sampler;
+
    begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: logs verification attempt with token count.
@@ -227,15 +245,107 @@ package body Speculative_Decode is
                 "s Verify_Draft_Tokens: verifying " &
                 Interfaces.C.size_t'Image (N_Draft) & " tokens");
 
-      --  TODO: Implement proper verification using target model logits
-      --  For now, accept all draft tokens (simplified implementation)
-      --  In production:
-      --    1. Process all N_Draft tokens with target model
-      --    2. Compare logit distributions
-      --    3. Accept tokens where target agrees with draft
-      --    4. Resample from target distribution where they disagree
+      --  Initialize sampler for target model (greedy for verification)
+      Sampler_Params := Llama_Interface.Llama_Sampler_Chain_Default_Params;
+      Sampler := Llama_Interface.Llama_Sampler_Chain_Init (Sampler_Params);
+      Llama_Interface.Llama_Sampler_Chain_Add (Sampler, Llama_Interface.Llama_Sampler_Init_Greedy);
 
-      Accepted_Count := N_Draft;  -- Accept all for now
+      --  Process each draft token with target model and verify
+      for I in 1 .. Integer (N_Draft) loop
+         declare
+            Draft_Token : constant Llama_Interface.Llama_Token :=
+              Tokens_Access (I);
+
+            --  Create a batch with this single token
+            Batch : constant Llama_Interface.Llama_Batch :=
+              Llama_Interface.Llama_Batch_Get_One (Draft_Token'Address, 1);
+
+            --  Decode with target model
+            Ret : Interfaces.C.int;
+
+            --  Get logits after decode
+            Logits_Ptr : System.Address;
+            type Logit_Array is array (Natural range <>) of Interfaces.C.float;
+            type Logit_Array_Access is access Logit_Array;
+            for Logit_Array_Access'Size use System'Address_Size;
+
+            Logits_Access : Logit_Array_Access;
+            N_Vocab       : Interfaces.C.int;
+
+            --  Sample from target model to get what it would choose
+            Target_Token : Llama_Interface.Llama_Token;
+
+         begin
+            --  Decode the draft token with target model
+            Ret := Llama_Interface.Llama_Decode (Target_Context, Batch);
+
+            if Ret = 0 then
+               --  Get logits from target model
+               Logits_Ptr := Llama_Interface.Llama_Get_Logits (Target_Context);
+
+               if Logits_Ptr /= System.Null_Address then
+                  --  Cast to logit array
+                  Logits_Access := Logit_Array_Access (Logits_Ptr);
+
+                  --  Get vocabulary size
+                  N_Vocab := Llama_Interface.Llama_N_Vocab
+                    (Model_Manager.Get_Model (Qwen_4B));
+
+                  --  Sample from target model to see what it would choose
+                  Target_Token := Llama_Interface.Llama_Sampler_Sample
+                    (Sampler, Target_Context, -1);
+
+                  --  Compare: if target chose same token, accept
+                  if Target_Token = Draft_Token then
+                     Accepted_Count := Accepted_Count + 1;
+                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                     --  Verbose: logs acceptance of draft token.
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Speculative]" &
+                               AnsiAda.Reset & "+" &
+                               Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                               "s Verify_Draft_Tokens: ACCEPT token " &
+                               Interfaces.C.int'Image (Interfaces.C.int (I)) &
+                               " (draft=" & Llama_Interface.Llama_Token'Image (Draft_Token) &
+                               " target=" & Llama_Interface.Llama_Token'Image (Target_Token) & ")");
+                  else
+                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                     --  Verbose: logs rejection of draft token.
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Speculative]" &
+                               AnsiAda.Reset & "+" &
+                               Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                               "s Verify_Draft_Tokens: REJECT token " &
+                               Interfaces.C.int'Image (Interfaces.C.int (I)) &
+                               " (draft=" & Llama_Interface.Llama_Token'Image (Draft_Token) &
+                               " target=" & Llama_Interface.Llama_Token'Image (Target_Token) & ")");
+                     --  Stop at first rejection (standard speculative decoding)
+                     exit;
+                  end if;
+               else
+                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                  --  Verbose: logs null logits pointer.
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                            AnsiAda.Reset & "+" &
+                            Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                            "s Verify_Draft_Tokens: null logits pointer at token " &
+                            Interfaces.C.int'Image (Interfaces.C.int (I)));
+                  exit;
+               end if;
+            else
+               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+               --  Verbose: logs decode failure.
+               Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                         AnsiAda.Reset & "+" &
+                         Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                         "s Verify_Draft_Tokens: decode failed at token " &
+                         Interfaces.C.int'Image (Interfaces.C.int (I)) &
+                         " ret=" & Interfaces.C.int'Image (Ret));
+               exit;
+            end if;
+         end;
+      end loop;
+
+      --  Free sampler
+      Llama_Interface.Llama_Sampler_Free (Sampler);
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: confirms verification complete with accepted count.
@@ -255,11 +365,11 @@ package body Speculative_Decode is
 
    function Generate_Speculative
      (Prompt          : String;
-      Max_Tokens      : Positive;
-      Target_Context  : Llama_Interface.Llama_Context;
-      Draft_Context   : Llama_Interface.Llama_Context;
-      Release_Target  : Boolean := False;
-      Release_Draft   : Boolean := False) return String
+       Max_Tokens      : Positive;
+       Target_Context  : Llama_Interface.Llama_Context;
+       Draft_Context   : Llama_Interface.Llama_Context;
+       Release_Target  : Boolean := False;
+       Release_Draft   : Boolean := False) return String
    is
       use type Interfaces.C.size_t;
 
@@ -278,6 +388,14 @@ package body Speculative_Decode is
       Draft_Buf     : System.Address;
       N_Draft       : Interfaces.C.size_t;
       Accepted      : Interfaces.C.size_t;
+
+      --  Sampler for draft model
+      Draft_Sampler_Params : Llama_Interface.Llama_Sampler_Chain_Params;
+      Draft_Sampler        : Llama_Interface.Llama_Sampler;
+
+      --  Sampler for target model
+      Target_Sampler_Params : Llama_Interface.Llama_Sampler_Chain_Params;
+      Target_Sampler        : Llama_Interface.Llama_Sampler;
 
    begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -332,6 +450,17 @@ package body Speculative_Decode is
                 "s Generate_Speculative: tokenized prompt: " &
                 Interfaces.C.int'Image (N_Tokens) & " tokens");
 
+      --  Initialize samplers
+      --  Draft model: greedy for fast candidate generation
+      Draft_Sampler_Params := Llama_Interface.Llama_Sampler_Chain_Default_Params;
+      Draft_Sampler := Llama_Interface.Llama_Sampler_Chain_Init (Draft_Sampler_Params);
+      Llama_Interface.Llama_Sampler_Chain_Add (Draft_Sampler, Llama_Interface.Llama_Sampler_Init_Greedy);
+
+      --  Target model: greedy for verification
+      Target_Sampler_Params := Llama_Interface.Llama_Sampler_Chain_Default_Params;
+      Target_Sampler := Llama_Interface.Llama_Sampler_Chain_Init (Target_Sampler_Params);
+      Llama_Interface.Llama_Sampler_Chain_Add (Target_Sampler, Llama_Interface.Llama_Sampler_Init_Greedy);
+
       --  Main speculative generation loop
       while not Done and then Tokens_Gen < Max_Tokens loop
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -344,17 +473,65 @@ package body Speculative_Decode is
          --  STEP 1: Draft Phase - Generate N tokens with draft model
          declare
             Draft_Tokens_Arr : array (1 .. Max_Draft_Tokens) of aliased Llama_Interface.Llama_Token;
+            Draft_N_Toks     : Natural := 0;
          begin
             Draft_Buf := Draft_Tokens_Arr'Address;
             N_Draft := 0;
 
-            --  Generate draft tokens (simplified - in production use draft model's decode)
+            --  Generate draft tokens using draft model
             for I in 1 .. Max_Draft_Tokens loop
-               --  TODO: Call draft model's decode to get next token
-               --  For now, just simulate draft tokens
-               Draft_Tokens_Arr (I) := Llama_Interface.Llama_Token (100 + I);  -- Placeholder
-               N_Draft := N_Draft + 1;
+               --  Sample from draft model
+               declare
+                  Draft_Token : constant Llama_Interface.Llama_Token :=
+                    Llama_Interface.Llama_Sampler_Sample
+                      (Draft_Sampler, Draft_Context, -1);
+               begin
+                  --  Check for end of generation
+                  if Llama_Interface.Llama_Vocab_Is_Eog (Vocab, Draft_Token) then
+                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                     --  Verbose: logs draft model EOG.
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Speculative]" &
+                               AnsiAda.Reset & "+" &
+                               Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                               "s Generate_Speculative: draft model hit EOG at token " &
+                               Natural'Image (I));
+                     exit;
+                  end if;
+
+                  --  Store draft token
+                  Draft_Tokens_Arr (I) := Draft_Token;
+                  Draft_N_Toks := Draft_N_Toks + 1;
+
+                  --  Decode with draft model to update its KV cache
+                  declare
+                     Batch : constant Llama_Interface.Llama_Batch :=
+                       Llama_Interface.Llama_Batch_Get_One (Draft_Token'Address, 1);
+                     Ret   : Interfaces.C.int;
+                  begin
+                     Ret := Llama_Interface.Llama_Decode (Draft_Context, Batch);
+                     if Ret /= 0 then
+                        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                        --  Verbose: logs draft model decode failure.
+                        Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                                  AnsiAda.Reset & "+" &
+                                  Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                                  "s Generate_Speculative: draft decode failed ret=" &
+                                  Interfaces.C.int'Image (Ret));
+                        exit;
+                     end if;
+                  end;
+               end;
             end loop;
+
+            N_Draft := Interfaces.C.size_t (Draft_N_Toks);
+
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Verbose: logs draft phase complete with token count.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Speculative]" &
+                      AnsiAda.Reset & "+" &
+                      Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                      "s Generate_Speculative: DRAFT PHASE COMPLETE - generated " &
+                      Interfaces.C.size_t'Image (N_Draft) & " tokens");
          end;
 
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -378,8 +555,52 @@ package body Speculative_Decode is
 
          --  STEP 3: Accept Phase - Keep accepted tokens
          if Accepted > 0 then
-            --  TODO: Actually add accepted tokens to context
-            --  For now, just count them
+            --  Add accepted tokens to generated text
+            declare
+               type Token_Array is array (Positive range <>) of aliased Llama_Interface.Llama_Token;
+               type Token_Array_Access is access Token_Array;
+               for Token_Array_Access'Size use System'Address_Size;
+
+               Tokens_Access : Token_Array_Access;
+               for Tokens_Access'Address use Draft_Buf;
+
+               Piece : array (1 .. 256) of aliased Character;
+               Len   : Interfaces.C.int;
+            begin
+               Tokens_Access := Token_Array_Access (Draft_Buf);
+
+               for I in 1 .. Integer (Accepted) loop
+                  --  Convert token to piece
+                  Len := Llama_Interface.Llama_Token_To_Piece
+                    (Vocab, Tokens_Access (I), Piece (1)'Address, 256, 0, True);
+
+                  if Len > 0 then
+                     for J in 1 .. Integer (Len) loop
+                        Append (Generated, Piece (J));
+                     end loop;
+                  end if;
+
+                  --  Decode with target model to update its KV cache
+                  declare
+                     Batch : constant Llama_Interface.Llama_Batch :=
+                       Llama_Interface.Llama_Batch_Get_One (Tokens_Access (I)'Address, 1);
+                     Ret   : Interfaces.C.int;
+                  begin
+                     Ret := Llama_Interface.Llama_Decode (Target_Context, Batch);
+                     if Ret /= 0 then
+                        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                        --  Verbose: logs target model decode failure.
+                        Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                                  AnsiAda.Reset & "+" &
+                                  Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                                  "s Generate_Speculative: target decode failed ret=" &
+                                  Interfaces.C.int'Image (Ret));
+                        exit;
+                     end if;
+                  end;
+               end loop;
+            end;
+
             Tokens_Gen := Tokens_Gen + Natural (Accepted);
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
             --  Verbose: logs successful acceptance.
@@ -390,6 +611,44 @@ package body Speculative_Decode is
                       Interfaces.C.size_t'Image (Accepted) & " tokens");
          else
             --  All rejected - fall back to single token from target
+            --  Sample from target model to get the correct token
+            declare
+               Target_Token : constant Llama_Interface.Llama_Token :=
+                 Llama_Interface.Llama_Sampler_Sample
+                   (Target_Sampler, Target_Context, -1);
+
+               Piece : array (1 .. 256) of aliased Character;
+               Len   : Interfaces.C.int;
+            begin
+               --  Convert token to piece
+               Len := Llama_Interface.Llama_Token_To_Piece
+                 (Vocab, Target_Token, Piece (1)'Address, 256, 0, True);
+
+               if Len > 0 then
+                  for J in 1 .. Integer (Len) loop
+                     Append (Generated, Piece (J));
+                  end loop;
+               end if;
+
+               --  Decode with target model to update its KV cache
+               declare
+                  Batch : constant Llama_Interface.Llama_Batch :=
+                    Llama_Interface.Llama_Batch_Get_One (Target_Token'Address, 1);
+                  Ret   : Interfaces.C.int;
+               begin
+                  Ret := Llama_Interface.Llama_Decode (Target_Context, Batch);
+                  if Ret /= 0 then
+                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                     --  Verbose: logs target model decode failure.
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Speculative]" &
+                               AnsiAda.Reset & "+" &
+                               Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                               "s Generate_Speculative: target decode failed ret=" &
+                               Interfaces.C.int'Image (Ret));
+                  end if;
+               end;
+            end;
+
             Tokens_Gen := Tokens_Gen + 1;
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
             --  Verbose: logs rejection and fallback to target.
@@ -404,6 +663,10 @@ package body Speculative_Decode is
             Done := True;
          end if;
       end loop;
+
+      --  Free samplers
+      Llama_Interface.Llama_Sampler_Free (Draft_Sampler);
+      Llama_Interface.Llama_Sampler_Free (Target_Sampler);
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: logs generation complete with total token count.
@@ -433,6 +696,8 @@ package body Speculative_Decode is
                    Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
                    "s Generate_Speculative EXCEPTION: unexpected error");
          Free (Prompt_C);
+         Llama_Interface.Llama_Sampler_Free (Draft_Sampler);
+         Llama_Interface.Llama_Sampler_Free (Target_Sampler);
          return "";
    end Generate_Speculative;
 
