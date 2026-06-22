@@ -133,7 +133,11 @@ project Adelaide_Lite is
    end Compiler;
 
    package Binder is
-      for Switches ("Ada") use ("-d8m");
+      --  [VITAL-DO-NOT-REMOVE] Set default Ada task stack to 16 MB.
+      --  macOS default pthread stacks (512KB) overflow during
+      --  llama_init_from_model's stderr logging (fprintf uses deep stack).
+      --  -d8m = debug flags, -D16384 = 16 MB default stack for all tasks (in KB).
+      for Switches ("Ada") use ("-d8m", "-D16384");
    end Binder;
 
      package Linker is

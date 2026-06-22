@@ -42,6 +42,7 @@ package body Knowledge_Manager is
 
    task Native_Crawl_Task is
       pragma Storage_Size (128 * 1024 * 1024);
+      pragma Task_Stack_Size (16 * 1024 * 1024);  --  16 MB thread stack (llama_init_from_model needs deep C stack)
       entry Start;
    end Native_Crawl_Task;
 

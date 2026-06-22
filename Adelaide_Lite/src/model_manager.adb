@@ -937,19 +937,25 @@ package body Model_Manager is
          C_Params.N_Ubatch := 512;
          C_Params.N_Threads := 8;
          C_Params.N_Threads_Batch := 8;
-         --  [DO NOT REMOVE] Q4_1 KV cache: 4-bit quantized KV cache saves
-         --  ~75% memory vs F16.  On 16GB M2 Pro, this is the difference
-         --  between fitting Qwen3.5-9B + 8192 ctx and OOM SIGTERM.
-         --  Quality loss is minimal for KV cache (activations, not weights).
-         C_Params.Type_K := GGML_TYPE_Q4_1;
-         C_Params.Type_V := GGML_TYPE_Q4_1;
-         --  [DO NOT REMOVE] Flash attention for Q4_1 KV + Qwen3.5.
-         --  Qwen3.5 uses native delta net recurrent attention. With proper
-         --  defaults from llama_context_default_params(), flash_attn should
-         --  work correctly because the model architecture fields are set
-         --  properly. The previous crash was caused by zero-filled defaults,
-         --  not flash_attn itself.
-         C_Params.Flash_Attn_Type := 1;
+
+         --  [VITAL-DO-NOT-REMOVE] Model-specific KV cache and flash attention.
+         --  Embedding model: F16 KV, no flash_attn, GPU (N_Gpu_Layers=-1).
+         --  The previous crash was NOT a Metal threading issue — it was an
+         --  Ada task stack overflow (Native_Crawl_Task had no Task_Stack_Size
+         --  pragma, defaulting to ~2MB). Fixed by adding Task_Stack_Size to
+         --  16MB in knowledge_manager.adb. LM Studio runs embedding on GPU.
+         --  Chat model (Qwen3.5-9B): Q4_1 KV + flash_attn=1 + GPU.
+         if Kind = Qwen_Embedding then
+            C_Params.Type_K := GGML_TYPE_F16;
+            C_Params.Type_V := GGML_TYPE_F16;
+            C_Params.Flash_Attn_Type := 0;
+            M_Params.N_Gpu_Layers := -1;    -- GPU for embedding (LM Studio does it)
+         else
+            C_Params.Type_K := GGML_TYPE_Q4_1;
+            C_Params.Type_V := GGML_TYPE_Q4_1;
+            C_Params.Flash_Attn_Type := 1;
+            M_Params.N_Gpu_Layers := -1;    -- GPU for 9B
+         end if;
 
          C_Params.Abort_Callback := Llama_Abort_Callback'Address;
          C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;

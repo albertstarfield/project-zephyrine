@@ -68,6 +68,7 @@ package Llama_Interface is
       N_Ubatch        : unsigned;
       N_Seq_Max       : unsigned;
       N_Rs_Seq        : unsigned;
+      N_Outputs_Max   : unsigned;     -- [VITAL-DO-NOT-REMOVE] Must match C struct layout!
       N_Threads       : int;
       N_Threads_Batch : int;
 
@@ -104,6 +105,7 @@ package Llama_Interface is
 
       Samplers    : System.Address;
       N_Samplers  : size_t;
+      Ctx_Other   : System.Address;  -- [VITAL-DO-NOT-REMOVE] Must match C struct layout!
    end record;
    pragma Convention (C, Llama_Context_Params);
 
