@@ -1426,6 +1426,33 @@ package body Model_Manager is
       Put_Line ("[Embedding-Debug] Input (" & Clean_P'Length'Img &
                 " chars): " & Clean_P);
       Flush;
+
+      --  [QUIRK-M10] Fix 2: Reject code-like content before tokenization
+      --  Calculate density of special chars that crash the ggml-metal kernel
+      if Clean_P'Length > 0 then
+         declare
+            Specials : Natural := 0;
+            Density  : Float;
+         begin
+            for I in Clean_P'Range loop
+               if Clean_P (I) = '{' or else Clean_P (I) = '}' or else
+                  Clean_P (I) = ';' or else Clean_P (I) = ':' or else
+                  Clean_P (I) = '@' or else Clean_P (I) = '/' or else
+                  Clean_P (I) = '\'
+               then
+                  Specials := Specials + 1;
+               end if;
+            end loop;
+            Density := Float (Specials) / Float (Clean_P'Length);
+            if Density > 0.1 then
+               Put_Line ("[Embedding-Debug] Skipping high-density code block (Density: " &
+                         Density'Img & ") to prevent Metal crash Code 5");
+               Length := 0;
+               Free (Prompt_C);
+               return;
+            end if;
+         end;
+      end if;
       --  --[Debug] DO NOT REMOVE: Descriptive source tracking
       ELP_Queue.Enqueue (Level, Kind, Source);
       if Level = ELP0 then
@@ -1575,9 +1602,18 @@ package body Model_Manager is
                      Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
                                "[FATAL] " & Max_Consecutive'Img &
                                " consecutive decode failures. " &
-                               "Unloading model." & AnsiAda.Reset);
+                               "Orphaning poisoned context to prevent SIGTRAP." & AnsiAda.Reset);
                      delay 1.0;  -- Brief cooldown for GPU driver
-                     Unload_Model (Kind);
+
+                     --  [QUIRK-M10] We cannot call Unload_Model here. The Metal
+                     --  GPU backend is poisoned. Calling Llama_Free invokes
+                     --  ggml_metal_free which tries to synchronize and aborts
+                     --  the entire server process (SIGTRAP 5). We MUST leak it.
+                     Models (Kind).Context := Null_Context;
+                     Models (Kind).Model := Null_Model;
+                     Models (Kind).Loaded := False;
+                     Models (Kind).Current_Ctx := 0;
+
                      Free_Tokens (Tokens);
                      Models (Kind).In_Use := False;
                      if Level = ELP0 then
@@ -2451,6 +2487,16 @@ package body Model_Manager is
                   else
                      Priority_Model_Gate.Release_ELP1 (Kind);
                   end if;
+
+                  --  [QUIRK-M10] We cannot call Unload_Model here. The Metal
+                  --  GPU backend is poisoned. Calling Llama_Free invokes
+                  --  ggml_metal_free which tries to synchronize and aborts
+                  --  the entire server process (SIGTRAP 5). We MUST leak it.
+                  Models (Kind).Context := Null_Context;
+                  Models (Kind).Model := Null_Model;
+                  Models (Kind).Loaded := False;
+                  Models (Kind).Current_Ctx := 0;
+
                   Result := To_Unbounded_String
                     ("ERROR: Decode failed (" & Ret'Img & ")");
                   return;
@@ -2559,6 +2605,13 @@ package body Model_Manager is
                Release_Accel_Lock;
                if Ret /= 0 then
                   Append (Result, " [ABORTED:" & Ret'Img & "]");
+
+                  --  [QUIRK-M10] Orphan poisoned context to prevent SIGTRAP
+                  Models (Kind).Context := Null_Context;
+                  Models (Kind).Model := Null_Model;
+                  Models (Kind).Loaded := False;
+                  Models (Kind).Current_Ctx := 0;
+
                   exit;
                end if;
              end;
