@@ -51,6 +51,7 @@ with Ada.Streams.Stream_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Moonshine_Interface;
 with ELP_Queue;
+with KV_Cache_Manager;
 with Interfaces.C; use Interfaces.C;
 
 --  ===========================================================================
@@ -825,6 +826,13 @@ begin
                --  Signal all Ada tasks to stop
                Shutdown_Manager.Shutdown_Status.Request;
                Watchdog_Manager.AWS_Server_Monitor.Deactivate;
+
+               --  Save all KV caches to disk before shutdown
+               --  This ensures cache persists across server restarts
+               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                         "[Shutdown]" & AnsiAda.Reset &
+                         " Saving KV caches to disk...");
+               KV_Cache_Manager.Save_All_On_Shutdown;
 
                --  Write clean exit reason (not a crash)
                Watchdog_IPC.Write_Exit_Reason

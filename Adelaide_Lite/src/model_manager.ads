@@ -68,26 +68,57 @@ package Model_Manager is
    --  Perform inference
    procedure Generate
      (Kind            : Model_Type;
-      Prompt          : String;
-      Result          : out Unbounded_String;
-      Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
-      Session_ID      : String := "";
-      Requested_Ctx   : Positive := 4096;
-      Stream          : Streaming_Queue.Queue_Access := null;
-      Orch_Think_Open : Boolean := False;
-      Level           : ELP_Level := ELP1;
-      --  VIRTUAL CTX PAGING: pre-tokenized Internal_State tokens.
-      --  When provided, these are written to the token array FIRST,
-      --  then Prompt is tokenized into the remaining slots.  This
-      --  avoids re-tokenizing the same facts on every context fault hop.
-      Virtual_Tokens  : Cached_Token_Access := null;
-      Virtual_Tok_Len : Natural := 0;
-      --  When False, Generate does NOT release In_Use or the ELP lock.
-      --  The caller (Hybrid_Generate) is responsible for releasing the
-      --  model after all post-processing is complete.  This prevents the
-      --  Idle_Monitor from unloading the model while Hybrid_Generate is
-      --  still executing tool calls, streaming, etc.
-      Release_Model   : Boolean := True);
+       Prompt          : String;
+       Result          : out Unbounded_String;
+       Images          : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+       Session_ID      : String := "";
+       Requested_Ctx   : Positive := 4096;
+       Stream          : Streaming_Queue.Queue_Access := null;
+       Orch_Think_Open : Boolean := False;
+       Level           : ELP_Level := ELP1;
+       --  VIRTUAL CTX PAGING: pre-tokenized Internal_State tokens.
+       --  When provided, these are written to the token array FIRST,
+       --  then Prompt is tokenized into the remaining slots.  This
+       --  avoids re-tokenizing the same facts on every context fault hop.
+       Virtual_Tokens  : Cached_Token_Access := null;
+       Virtual_Tok_Len : Natural := 0;
+       --  When False, Generate does NOT release In_Use or the ELP lock.
+       --  The caller (Hybrid_Generate) is responsible for releasing the
+       --  model after all post-processing is complete.  This prevents the
+       --  Idle_Monitor from unloading the model while Hybrid_Generate is
+       --  still executing tool calls, streaming, etc.
+       Release_Model   : Boolean := True);
+
+   --  ============================================================================
+   --  SPECULATIVE DECODING
+   --  ============================================================================
+   --  WHY THIS EXISTS:
+   --  Speculative decoding accelerates LLM inference by using a smaller,
+   --  faster "draft" model (Qwen3.5-0.8B) to generate candidate tokens,
+   --  then verifying them in parallel with the larger "target" model.
+   --  This provides 2-3x speedup for text generation.
+   --
+   --  HOW IT WORKS:
+   --    1. Draft Model generates N candidate tokens quickly
+   --    2. Target Model verifies all N tokens in parallel
+   --    3. Accept matching prefix, resample rest from target distribution
+   --    4. Repeat until generation complete
+   --
+   --  DRAFT MODEL:
+   --  - Qwen3.5-0.8B (not 0.5B from oMLX)
+   --  - Faster inference, lower quality, used only for candidates
+   --  - Must be compatible with target model's tokenizer
+   --  ============================================================================
+
+   --  Generate tokens using speculative decoding
+   --  WHY: Accelerates generation by using draft model for candidates.
+   procedure Generate_Speculative
+     (Kind            : Model_Type;
+       Prompt          : String;
+       Result          : out Unbounded_String;
+       Max_Tokens      : Positive := 2048;
+       Level           : ELP_Level := ELP1;
+       Release_Model   : Boolean := True);
 
    --  Perform multi-hop reasoning
    procedure Hybrid_Generate
