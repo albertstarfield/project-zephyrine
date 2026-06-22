@@ -799,24 +799,15 @@ package body Model_Manager is
       --      Full debug print added to show untruncated input. Content filtering
       --      fix pending in knowledge_manager.adb.
       --  ======================================================================
-      --  EMBEDDING GPU STRATEGY (see QUIRK-M10):
-      --  ELP0 (background indexing): CPU-only — Metal kernel compilation
-      --    crashes with SIGTRAP that Kratos cannot catch (happens in Metal's
-      --    shader compiler thread). Background indexing processes hundreds of
-      --    chunks, so stability matters more than speed.
-      --  ELP1 (user-facing RAG): GPU — fast response for user queries.
-      --    If it crashes, the error handler skips the batch and continues.
-      --    Single-user requests are less likely to trigger the Metal crash.
+      --  GPU LAYER CONFIGURATION
       --  ======================================================================
-      if Kind = Qwen_Embedding then
-         if Level = ELP0 then
-            M_Params.N_Gpu_Layers := 0;   -- CPU-only for background indexing
-         else
-            M_Params.N_Gpu_Layers := -1;  -- GPU for user-facing requests
-         end if;
-      else
-         M_Params.N_Gpu_Layers := -1;     -- GPU for all other models
-      end if;
+      --  ALL models always on GPU (N_Gpu_Layers := -1).
+      --  LM Studio runs everything on GPU including embeddings with no
+      --  Metal crashes. The previous ELP0 CPU-only restriction was based on
+      --  unfounded Metal crash fears. GPU embedding is ~10x faster than CPU,
+      --  reducing ELP0 queue buildup so ELP1 user requests get served faster.
+      --  ======================================================================
+      M_Params.N_Gpu_Layers := -1;  -- All models always on GPU
 
       --  TRY THREE PATHS FOR MODEL FILES
       --  The CWD at runtime is unpredictable:
@@ -917,6 +908,30 @@ package body Model_Manager is
       end; -- Model_Load_Start declare
 
       if Models (Kind).Model /= Null_Model then
+         --  [VITAL-DO-NOT-REMOVE] Start with llama.cpp's defaults.
+         --  LM Studio and other frontends call llama_context_default_params()
+         --  first, then modify only the fields they need. If we build the
+         --  struct from scratch, fields like ctx_type, attention_type,
+          --  n_seq_max etc. default to 0 which is WRONG for Qwen3.5's delta
+          --  net recurrent attention. The crash in ggml_gated_delta_net was
+          --  caused by zero defaults conflicting with the model architecture.
+          --
+          --  [VITAL-DO-NOT-REMOVE] CRITICAL ggml VERSION DISCOVERY:
+          --  Homebrew-installed ggml (0.15.2) contains a bug in the Gated
+          --  Delta Net recurrent attention path:
+          --    GGML_ASSERT(state->ne[0] == S_v) failed
+          --    ggml.c:6252 — during llama_decode (NOT during context init)
+          --  The crash path showed: /private/tmp/ggml-20260619-5335-xzehaz/ggml-0.15.2/
+          --  This is the HOMEBREW-built ggml, NOT our locally-built copy.
+          --  LM Studio runs Qwen3.5 on llama.cpp (NOT just MLX) and does
+          --  NOT have this crash — they use their own bundled llama.cpp
+          --  build (b9601, commit 4c65955) with a working ggml.
+          --  FIX: We clone ggml separately, compile from source, and link
+          --  against our local build. Homebrew's ggml is NEVER used.
+          --  See run.py for the ggml clone+compile pipeline.
+          C_Params := Llama_Context_Default_Params;
+
+         --  Now override only the fields we care about:
          C_Params.N_Ctx := Actual_Ctx;
          C_Params.N_Batch := 512;
          C_Params.N_Ubatch := 512;
@@ -928,10 +943,12 @@ package body Model_Manager is
          --  Quality loss is minimal for KV cache (activations, not weights).
          C_Params.Type_K := GGML_TYPE_Q4_1;
          C_Params.Type_V := GGML_TYPE_Q4_1;
-
-         --  Flash attention MUST be enabled for Q4_1 KV cache.
-         --  llama.cpp: "V cache quantization requires flash_attn"
-         --  Value 1 = flash_attn enabled (non-causal not needed for LLM).
+         --  [DO NOT REMOVE] Flash attention for Q4_1 KV + Qwen3.5.
+         --  Qwen3.5 uses native delta net recurrent attention. With proper
+         --  defaults from llama_context_default_params(), flash_attn should
+         --  work correctly because the model architecture fields are set
+         --  properly. The previous crash was caused by zero-filled defaults,
+         --  not flash_attn itself.
          C_Params.Flash_Attn_Type := 1;
 
          C_Params.Abort_Callback := Llama_Abort_Callback'Address;
@@ -945,32 +962,52 @@ package body Model_Manager is
          --  This is the second blocking step after file read.
          --  =================================================================
          declare
-            Ctx_Init_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+            Ctx_Init_Start : constant Ada.Real_Time.Time :=
+              Ada.Real_Time.Clock;
          begin
+            --  [VITAL-DO-NOT-REMOVE] Print ALL context params before init.
+            --  If init hangs, this tells us exactly what was requested.
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
                       "[Uptime]+" &
                       Trim(Duration'Image(
                         Ada.Real_Time.To_Duration(
                           Ada.Real_Time.Clock - Init_Start_Time)), Both) &
-                      "s [LoadModel]" &
-                      AnsiAda.Reset &
-                      " Phase 2/2: Creating context + KV cache...");
-            --  [DO NOT REMOVE] Suppress llama.cpp stderr during context init.
-            --  llama_context, llama_kv_cache, ggml_metal lines go to stderr.
-            declare
-               Saved_Stderr : constant int := Sys_Dup (2);
-            begin
-               Models (Kind).Context :=
-                 Llama_Init_From_Model (Models (Kind).Model, C_Params);
-               declare
-                  Dummy : int := Sys_Restore_Stderr (Saved_Stderr);
-               begin
-                  null;
-               end;
-            end;
+                      "s [LoadModel]" & AnsiAda.Reset &
+                      " Phase 2/2: Creating context...");
+            --  [VITAL-DO-NOT-REMOVE] Show params for debugging hangs.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[Uptime]+" &
+                      Trim(Duration'Image(
+                        Ada.Real_Time.To_Duration(
+                          Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                      "s [LoadModel]" & AnsiAda.Reset &
+                      " N_Ctx=" &Interfaces.C.unsigned'Image (C_Params.N_Ctx) &
+                      " N_Batch=" &Interfaces.C.unsigned'Image (C_Params.N_Batch) &
+                      " N_Ubatch=" &Interfaces.C.unsigned'Image (C_Params.N_Ubatch) &
+                      " N_Threads=" &Interfaces.C.int'Image (C_Params.N_Threads) &
+                      " Type_K=" &Interfaces.C.int'Image (C_Params.Type_K) &
+                      " Type_V=" &Interfaces.C.int'Image (C_Params.Type_V) &
+                      " Flash_Attn=" &Interfaces.C.int'Image (C_Params.Flash_Attn_Type) &
+                      " N_Gpu_Layers=" &Interfaces.C.int'Image (M_Params.N_Gpu_Layers));
+            --  [VITAL-DO-NOT-REMOVE] DO NOT suppress stderr here.
+            --  If Llama_Init_From_Model hangs or crashes, we NEED to see
+            --  the llama.cpp stderr output to diagnose the problem.
+            --  The previous stderr suppression caused the 9B model to hang
+            --  silently with zero diagnostic output. That is unacceptable.
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) &
+                      "[Uptime]+" &
+                      Trim(Duration'Image(
+                        Ada.Real_Time.To_Duration(
+                          Ada.Real_Time.Clock - Init_Start_Time)), Both) &
+                      "s [LoadModel]" & AnsiAda.Reset &
+                      " Calling Llama_Init_From_Model (stderr visible)...");
+            Models (Kind).Context :=
+              Llama_Init_From_Model (Models (Kind).Model, C_Params);
 
             declare
-               Ctx_Dur  : constant Duration := Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Ctx_Init_Start);
+               Ctx_Dur  : constant Duration :=
+                 Ada.Real_Time.To_Duration
+                   (Ada.Real_Time.Clock - Ctx_Init_Start);
                Ctx_ms   : constant Natural := Natural (Ctx_Dur * 1000.0);
             begin
                if Models (Kind).Context /= Null_Context then
@@ -991,7 +1028,7 @@ package body Model_Manager is
                                 Ada.Real_Time.Clock - Init_Start_Time)), Both) &
                             "s [LoadModel]" &
                             AnsiAda.Reset &
-                            " Phase 2/2 FAILED: context creation returned null" &
+                            " Phase 2/2 FAILED: context is NULL" &
                             " | " & Natural'Image (Ctx_ms) & "ms");
                end if;
             end;

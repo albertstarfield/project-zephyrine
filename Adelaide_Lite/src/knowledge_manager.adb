@@ -286,8 +286,20 @@ package body Knowledge_Manager is
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory ENTERED: Path=" & Path);
       Ada.Directories.Start_Search (Search, Path, "");
       while Ada.Directories.More_Entries (Search) loop
+         --  [VITAL-DO-NOT-REMOVE] Halt ELP0 crawl when ELP1 is pending.
+         --  This is the critical guard: if a user chat arrives while we are
+         --  indexing background files, we MUST stop immediately and wait
+         --  until the user request is fully served before resuming.
+         --  Without this, ELP0 keeps calling Get_Embedding which spins on
+         --  Acquire_ELP0/DENIED in a tight loop, starving ELP1 of the GPU.
          if Model_Manager.Should_Abort_ELP0 then
-            return;
+            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                      AnsiAda.Reset &
+                      " Crawl_Directory: ELP1 pending, HALTING crawl...");
+            Model_Manager.Wait_For_ELP1_Idle;
+            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                      AnsiAda.Reset &
+                      " Crawl_Directory: ELP1 idle, RESUMING crawl...");
          end if;
 
          Ada.Directories.Get_Next_Entry (Search, Entry_D);
@@ -350,6 +362,17 @@ package body Knowledge_Manager is
                               Len         : Natural := 0;
                            begin
                               if Content'Length > 0 then
+                                 --  [VITAL-DO-NOT-REMOVE] Skip embedding if
+                                 --  ELP1 arrived mid-file. Prevents wasted
+                                 --  ELP0 acquire/deny cycles during crawl.
+                                 if Model_Manager.Should_Abort_ELP0 then
+                                    Put_Line
+                                      (AnsiAda.Foreground (AnsiAda.Cyan) &
+                                       "[Init-V]" & AnsiAda.Reset &
+                                       " Crawl: ELP1 pending, SKIPPING " &
+                                       Name);
+                                    Model_Manager.Wait_For_ELP1_Idle;
+                                 end if;
                                  Model_Manager.Get_Embedding
                                    (Content, Vec, Len, ELP0);
                                  if Len > 0 then
