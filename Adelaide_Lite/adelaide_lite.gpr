@@ -117,69 +117,98 @@ project Adelaide_Lite is
          null;
    end case;
 
+   type Backend_Type is ("metal", "cuda", "vulkan", "none");
+   GGML_Backend : Backend_Type := external ("GGML_BACKEND", "metal");
+
    package Compiler is
-      for Default_Switches ("Ada") use
-        Adelaide_Lite_Config.Ada_Compiler_Switches &
-        ("-gnat2022", "-gnatX", "-mmacosx-version-min=15.0");
-       for Default_Switches ("C++") use
-         ("-I" & project'Project_Dir & "../llama.cpp/include", 
-          "-I" & project'Project_Dir & "../llama.cpp/ggml/include",
-          "-I" & project'Project_Dir & "../llama.cpp/tools/mtmd",
-          "-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
-          "-std=c++17", "-mmacosx-version-min=15.0");
-      for Default_Switches ("C") use
-        ("-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
-         "-mmacosx-version-min=15.0");
+      case Adelaide_Lite_Config.Alire_Host_OS is
+         when "macos" =>
+            for Default_Switches ("Ada") use
+              Adelaide_Lite_Config.Ada_Compiler_Switches &
+              ("-gnat2022", "-gnatX", "-mmacosx-version-min=15.0");
+            for Default_Switches ("C++") use
+              ("-I" & project'Project_Dir & "../llama.cpp/include", 
+               "-I" & project'Project_Dir & "../llama.cpp/ggml/include",
+               "-I" & project'Project_Dir & "../llama.cpp/tools/mtmd",
+               "-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
+               "-std=c++17", "-mmacosx-version-min=15.0");
+            for Default_Switches ("C") use
+              ("-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
+               "-mmacosx-version-min=15.0");
+         when "linux" =>
+            for Default_Switches ("Ada") use
+              Adelaide_Lite_Config.Ada_Compiler_Switches &
+              ("-gnat2022", "-gnatX");
+            for Default_Switches ("C++") use
+              ("-I" & project'Project_Dir & "../llama.cpp/include", 
+               "-I" & project'Project_Dir & "../llama.cpp/ggml/include",
+               "-I" & project'Project_Dir & "../llama.cpp/tools/mtmd",
+               "-std=c++17", "-march=native");
+            for Default_Switches ("C") use
+              ("-march=native");
+         when others =>
+            for Default_Switches ("Ada") use
+              Adelaide_Lite_Config.Ada_Compiler_Switches &
+              ("-gnat2022", "-gnatX");
+      end case;
    end Compiler;
 
    package Binder is
       --  [VITAL-DO-NOT-REMOVE] Set default Ada task stack to 16 MB.
-      --  macOS default pthread stacks (~512KB) overflow during
-      --  llama_init_from_model's stderr logging. fprintf() uses deep C stack
-      --  for format buffering, causing SIGSEGV → STORAGE_ERROR : stack overflow.
-      --  CRASH LOG (2026-06-22):
-      --    llama_init_from_model → llama_log_internal → _vsnprintf → __vfprintf
-      --    → SIGSEGV at __vfprintf + 3604 (stack overflow in format buffer)
-      --  -d8m = debug flags, -D16384 = 16 MB default stack for all tasks (in KB).
-      --  This is a SAFETY NET. Individual tasks should also set Task_Stack_Size
-      --  pragma for explicit control (see knowledge_manager.adb Native_Crawl_Task).
       for Switches ("Ada") use ("-d8m", "-D16384");
    end Binder;
 
-     package Linker is
-        -- [VITAL-DO-NOT-REMOVE] NEVER use Homebrew's ggml.
-        -- Homebrew ggml 0.15.2 has a Qwen3.5 Gated Delta Net assertion bug.
-        -- We compile ggml from source (git submodule in vendor/ggml) and
-        -- llama.cpp from source (../llama.cpp). All linking uses local builds.
-        -- See model_manager.adb for the full discovery log.
-        --
-        -- NOTE: We use full paths to .a files instead of -L/-l because macOS
-        -- ld64 has a quirk where -llama is parsed as -l lama (searching for
-        -- liblama.a instead of libllama.a). Full paths avoid this entirely.
-        for Switches ("Ada") use (
-            "-Wl,-stack_size,0x2000000",
-            "-L" & project'Project_Dir & "../moonshine/build/core",
-            "-lmoonshine",
-            project'Project_Dir & "../llama.cpp/build/src/libllama.a",
-            project'Project_Dir & "../llama.cpp/build/ggml/src/libggml.a",
-            project'Project_Dir & "../llama.cpp/build/ggml/src/libggml-base.a",
-            project'Project_Dir & "../llama.cpp/build/ggml/src/libggml-cpu.a",
-            project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-metal/libggml-metal.a",
-            project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-blas/libggml-blas.a",
-            project'Project_Dir & "../llama.cpp/build/tools/mtmd/libmtmd.a",
-            "-L/opt/homebrew/opt/sqlite/lib",
-            "-lsqlite3",
-          "-Wl,-syslibroot," & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
-          "-F" & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk") & "/System/Library/Frameworks",
-          "-mmacosx-version-min=15.0",
-          "-framework", "Accelerate",
-          "-framework", "Metal",
-          "-framework", "Foundation",
-          "-lc++",
-           project'Object_Dir & "/llama_safe.o",
-           project'Object_Dir & "/stderr_suppress.o",
-           project'Object_Dir & "/shutdown_handler.o",
-           project'Object_Dir & "/kratos_signal.o"
+   package Linker is
+      Base_Linker_Flags := (
+         "-Wl,-stack_size,0x2000000",
+         "-L" & project'Project_Dir & "../moonshine/build/core",
+         "-lmoonshine",
+         project'Project_Dir & "../llama.cpp/build/src/libllama.a",
+         project'Project_Dir & "../llama.cpp/build/ggml/src/libggml.a",
+         project'Project_Dir & "../llama.cpp/build/ggml/src/libggml-base.a",
+         project'Project_Dir & "../llama.cpp/build/ggml/src/libggml-cpu.a",
+         project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-blas/libggml-blas.a",
+         project'Project_Dir & "../llama.cpp/build/tools/mtmd/libmtmd.a",
+         "-lsqlite3",
+         "-lc++",
+         project'Object_Dir & "/llama_safe.o",
+         project'Object_Dir & "/stderr_suppress.o",
+         project'Object_Dir & "/shutdown_handler.o",
+         project'Object_Dir & "/kratos_signal.o"
       );
+
+      Platform_Flags := ();
+      case Adelaide_Lite_Config.Alire_Host_OS is
+         when "macos" =>
+            Platform_Flags := (
+               "-L/opt/homebrew/opt/sqlite/lib",
+               "-Wl,-syslibroot," & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
+               "-F" & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk") & "/System/Library/Frameworks",
+               "-mmacosx-version-min=15.0",
+               "-framework", "Accelerate",
+               "-framework", "Metal",
+               "-framework", "Foundation"
+            );
+         when "linux" =>
+            Platform_Flags := (
+               "-lblas", "-llapack", "-lstdc++"
+            );
+         when others =>
+            null;
+      end case;
+
+      Backend_Flags := ();
+      case GGML_Backend is
+         when "metal" =>
+            Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-metal/libggml-metal.a");
+         when "cuda" =>
+            Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-cuda/libggml-cuda.a", "-lcublas", "-lcudart");
+         when "vulkan" =>
+            Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-vulkan/libggml-vulkan.a", "-lvulkan");
+         when "none" =>
+            null;
+      end case;
+
+      for Switches ("Ada") use Base_Linker_Flags & Platform_Flags & Backend_Flags;
    end Linker;
 end Adelaide_Lite;

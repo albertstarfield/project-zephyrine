@@ -427,6 +427,18 @@ def main():
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
     start_time = int(time.time() * 1000)
 
+    # Detect Platform and Backend
+    ggml_backend = "none"
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+        ggml_backend = "metal"
+    elif platform.system() == "Linux":
+        if shutil.which("nvcc") or shutil.which("nvidia-smi"):
+            ggml_backend = "cuda"
+        else:
+            ggml_backend = "vulkan"
+    os.environ["GGML_BACKEND"] = ggml_backend
+    print(f"[*] Detected Platform: {platform.system()} | Selected Backend: {ggml_backend.upper()}")
+
     # Calculate Current Hash
     current_hash = calculate_hash(get_files_to_hash())
     hash_file = os.path.join(BASE_DIR, ".build_hash")
@@ -493,9 +505,15 @@ def main():
             os.makedirs(ggml_build_dir, exist_ok=True)
             cmake_flags = ["cmake", "-B", "build", "-DGGML_NATIVE=ON",
                            "-DCMAKE_BUILD_TYPE=Release"]
-            if platform.system() == "Darwin" and platform.machine() == "arm64":
+            if ggml_backend == "metal":
                 cmake_flags.append("-DGGML_METAL=ON")
                 print(f"[GGML] [{time.strftime('%H:%M:%S')}] Metal GPU: ENABLED")
+            elif ggml_backend == "cuda":
+                cmake_flags.append("-DGGML_CUDA=ON")
+                print(f"[GGML] [{time.strftime('%H:%M:%S')}] CUDA GPU: ENABLED")
+            elif ggml_backend == "vulkan":
+                cmake_flags.append("-DGGML_VULKAN=ON")
+                print(f"[GGML] [{time.strftime('%H:%M:%S')}] Vulkan GPU: ENABLED")
             result = subprocess.run(cmake_flags, cwd=ggml_submodule,
                                     check=False, capture_output=True, text=True)
             if result.returncode != 0:
@@ -556,12 +574,17 @@ def main():
         if needs_build:
             print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Building llama.cpp...")
             print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake flags: -DGGML_NATIVE=ON -DLLAMA_BUILD_TOOLS=ON")
-            if platform.system() == "Darwin" and platform.machine() == "arm64":
-                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Metal GPU acceleration: ENABLED")
             os.makedirs(llama_build_dir, exist_ok=True)
             cmake_flags = ["cmake", "-B", "build", "-DGGML_NATIVE=ON", "-DLLAMA_BUILD_TOOLS=ON"]
-            if platform.system() == "Darwin" and platform.machine() == "arm64":
+            if ggml_backend == "metal":
+                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Metal GPU acceleration: ENABLED")
                 cmake_flags.append("-DGGML_METAL=ON")
+            elif ggml_backend == "cuda":
+                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CUDA GPU acceleration: ENABLED")
+                cmake_flags.append("-DGGML_CUDA=ON")
+            elif ggml_backend == "vulkan":
+                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Vulkan GPU acceleration: ENABLED")
+                cmake_flags.append("-DGGML_VULKAN=ON")
             result = subprocess.run(cmake_flags, cwd=llama_dir, check=False, capture_output=True, text=True)
             if result.returncode != 0:
                 print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake configure FAILED")
