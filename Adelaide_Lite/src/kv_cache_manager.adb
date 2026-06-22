@@ -334,7 +334,7 @@ package body KV_Cache_Manager is
 
       --  TRICK 5: BACKGROUND EVICTION
       --  WHY: Evict old files in background, never block on save
-      --  TODO: Spawn background eviction task
+      --  NOTE: Eviction task spawned in Save_To_SSD_Async (not at init)
    end Initialize;
 
    procedure Save_To_SSD_Async

@@ -2611,41 +2611,183 @@ package body Model_Manager is
       Put_Line ("[Speculative] Tokenized prompt: " & int'Image (N_Tokens) &
                 " tokens");
 
-      --  Main speculative generation loop
-      while not Done and then Tokens_Gen < Max_Tokens loop
-         --  STEP 1: Draft Phase - Generate N tokens with draft model
-         N_Draft := 0;
+      --  Initialize samplers for draft and target models
+      declare
+         Draft_Sampler_Params : Llama_Interface.Llama_Sampler_Chain_Params;
+         Draft_Sampler        : Llama_Interface.Llama_Sampler;
+         Target_Sampler_Params : Llama_Interface.Llama_Sampler_Chain_Params;
+         Target_Sampler        : Llama_Interface.Llama_Sampler;
+         Vocab                : Llama_Interface.Llama_Vocab;
+      begin
+         --  Get vocabulary for tokenization
+         Vocab := Llama_Interface.Llama_Model_Get_Vocab (Models (Kind).Model);
 
-         --  Generate draft tokens using draft model
-         for I in 1 .. Max_Draft loop
-            --  TODO: Actually call draft model's decode to get next token
-            --  For now, simulate draft tokens (placeholder)
-            Draft_Toks (I) := Llama_Interface.Llama_Token (100 + I);
-            N_Draft := N_Draft + 1;
+         --  Initialize draft sampler (greedy for fast candidate generation)
+         Draft_Sampler_Params := Llama_Interface.Llama_Sampler_Chain_Default_Params;
+         Draft_Sampler := Llama_Interface.Llama_Sampler_Chain_Init (Draft_Sampler_Params);
+         Llama_Interface.Llama_Sampler_Chain_Add (Draft_Sampler, Llama_Interface.Llama_Sampler_Init_Greedy);
+
+         --  Initialize target sampler (greedy for verification)
+         Target_Sampler_Params := Llama_Interface.Llama_Sampler_Chain_Default_Params;
+         Target_Sampler := Llama_Interface.Llama_Sampler_Chain_Init (Target_Sampler_Params);
+         Llama_Interface.Llama_Sampler_Chain_Add (Target_Sampler, Llama_Interface.Llama_Sampler_Init_Greedy);
+
+         --  Main speculative generation loop
+         while not Done and then Tokens_Gen < Max_Tokens loop
+            --  STEP 1: Draft Phase - Generate N tokens with draft model
+            N_Draft := 0;
+
+            --  Generate draft tokens using draft model
+            for I in 1 .. Max_Draft loop
+               --  Sample from draft model
+               declare
+                  Draft_Token : constant Llama_Interface.Llama_Token :=
+                    Llama_Interface.Llama_Sampler_Sample
+                      (Draft_Sampler, Draft_Context, -1);
+               begin
+                  --  Check for end of generation
+                  if Llama_Interface.Llama_Vocab_Is_Eog (Vocab, Draft_Token) then
+                     Put_Line ("[Speculative] Draft model hit EOG at token " &
+                               Natural'Image (I));
+                     exit;
+                  end if;
+
+                  --  Store draft token
+                  Draft_Toks (I) := Draft_Token;
+                  N_Draft := N_Draft + 1;
+
+                  --  Decode with draft model to update its KV cache
+                  declare
+                     Batch : constant Llama_Interface.Llama_Batch :=
+                       Llama_Batch_Get_One (Draft_Token'Address, 1);
+                     Ret   : Interfaces.C.int;
+                  begin
+                     Ret := Llama_Interface.Llama_Decode (Draft_Context, Batch);
+                     if Ret /= 0 then
+                        Put_Line ("[Speculative] Draft decode failed, ret=" &
+                                  Interfaces.C.int'Image (Ret));
+                        exit;
+                     end if;
+                  end;
+               end;
+            end loop;
+
+            Put_Line ("[Speculative] Draft phase complete: " &
+                      Natural'Image (N_Draft) & " tokens generated");
+
+            --  STEP 2: Verify Phase - Verify with target model
+            Accepted := 0;
+
+            --  Verify each draft token with target model
+            for I in 1 .. N_Draft loop
+               declare
+                  Draft_Token : constant Llama_Interface.Llama_Token := Draft_Toks (I);
+                  Batch       : constant Llama_Interface.Llama_Batch :=
+                     Llama_Batch_Get_One (Draft_Token'Address, 1);
+                  Ret         : Interfaces.C.int;
+                  Target_Token : Llama_Interface.Llama_Token;
+               begin
+                  --  Decode with target model
+                  Ret := Llama_Interface.Llama_Decode (Models (Kind).Context, Batch);
+
+                  if Ret = 0 then
+                     --  Sample from target model to see what it would choose
+                     Target_Token := Llama_Interface.Llama_Sampler_Sample
+                       (Target_Sampler, Models (Kind).Context, -1);
+
+                     --  Compare: if target chose same token, accept
+                     if Target_Token = Draft_Token then
+                        Accepted := Accepted + 1;
+                        Put_Line ("[Speculative] ACCEPT token " &
+                                  Natural'Image (I) &
+                                  " (draft=" & Llama_Interface.Llama_Token'Image (Draft_Token) &
+                                  " target=" & Llama_Interface.Llama_Token'Image (Target_Token) & ")");
+                     else
+                        Put_Line ("[Speculative] REJECT token " &
+                                  Natural'Image (I) &
+                                  " (draft=" & Llama_Interface.Llama_Token'Image (Draft_Token) &
+                                  " target=" & Llama_Interface.Llama_Token'Image (Target_Token) & ")");
+                        --  Stop at first rejection (standard speculative decoding)
+                        exit;
+                     end if;
+                  else
+                     Put_Line ("[Speculative] Target decode failed, ret=" &
+                               Interfaces.C.int'Image (Ret));
+                     exit;
+                  end if;
+               end;
+            end loop;
+
+            --  STEP 3: Accept Phase - Keep accepted tokens
+            if Accepted > 0 then
+               --  Add accepted tokens to generated text
+               for I in 1 .. Accepted loop
+                  declare
+                     Piece : array (1 .. 256) of aliased Character;
+                     Len   : Interfaces.C.int;
+                  begin
+                     --  Convert token to piece
+                     Len := Llama_Interface.Llama_Token_To_Piece
+                       (Vocab, Draft_Toks (I), Piece (1)'Address, 256, 0, True);
+
+                     if Len > 0 then
+                        for J in 1 .. Integer (Len) loop
+                           Append (Generated, Piece (J));
+                        end loop;
+                     end if;
+                  end;
+               end loop;
+
+               Tokens_Gen := Tokens_Gen + Accepted;
+               Put_Line ("[Speculative] Accepted " &
+                         Natural'Image (Accepted) & " tokens");
+            else
+               --  All rejected - fall back to single token from target
+               declare
+                  Target_Token : constant Llama_Interface.Llama_Token :=
+                    Llama_Interface.Llama_Sampler_Sample
+                      (Target_Sampler, Models (Kind).Context, -1);
+                  Piece : array (1 .. 256) of aliased Character;
+                  Len   : Interfaces.C.int;
+               begin
+                  --  Convert token to piece
+                  Len := Llama_Interface.Llama_Token_To_Piece
+                    (Vocab, Target_Token, Piece (1)'Address, 256, 0, True);
+
+                  if Len > 0 then
+                     for J in 1 .. Integer (Len) loop
+                        Append (Generated, Piece (J));
+                     end loop;
+                  end if;
+
+                  --  Decode with target model to update its KV cache
+                  declare
+                     Batch : constant Llama_Interface.Llama_Batch :=
+                        Llama_Batch_Get_One (Target_Token'Address, 1);
+                     Ret   : Interfaces.C.int;
+                  begin
+                     Ret := Llama_Interface.Llama_Decode (Models (Kind).Context, Batch);
+                     if Ret /= 0 then
+                        Put_Line ("[Speculative] Target decode failed, ret=" &
+                                  Interfaces.C.int'Image (Ret));
+                     end if;
+                  end;
+               end;
+
+               Tokens_Gen := Tokens_Gen + 1;
+               Put_Line ("[Speculative] All draft tokens rejected, using target");
+            end if;
+
+            --  Check if we should stop
+            if Tokens_Gen >= Max_Tokens then
+               Done := True;
+            end if;
          end loop;
 
-         --  STEP 2: Verify Phase - Verify with target model
-         --  TODO: Implement proper verification using target model logits
-         --  For now, accept all draft tokens (simplified implementation)
-         Accepted := N_Draft;
-
-         --  STEP 3: Accept Phase - Keep accepted tokens
-         if Accepted > 0 then
-            --  TODO: Actually add accepted tokens to context
-            Tokens_Gen := Tokens_Gen + Accepted;
-            Put_Line ("[Speculative] Accepted " &
-                      Natural'Image (Accepted) & " tokens");
-         else
-            --  All rejected - fall back to single token from target
-            Tokens_Gen := Tokens_Gen + 1;
-            Put_Line ("[Speculative] All draft tokens rejected, using target");
-         end if;
-
-         --  Check if we should stop
-         if Tokens_Gen >= Max_Tokens then
-            Done := True;
-         end if;
-      end loop;
+         --  Free samplers
+         Llama_Interface.Llama_Sampler_Free (Draft_Sampler);
+         Llama_Interface.Llama_Sampler_Free (Target_Sampler);
+      end;
 
       --  Cleanup
       if Release_Model then
