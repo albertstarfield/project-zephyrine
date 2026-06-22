@@ -2083,10 +2083,10 @@ package body Model_Manager is
             Loaded_Count  : Interfaces.C.size_t;
             Cache_Hit     : Boolean;
          begin
-            Cache_Hit := KV_Cache_Manager.Auto_Load
-              (Context    => Models (Kind).Context,
-               Tokens     => Loaded_Tokens,
-               N_Tokens   => Loaded_Count);
+         Cache_Hit := KV_Cache_Manager.Load_From_SSD_Lazy
+               (Context    => Models (Kind).Context,
+                Tokens     => Loaded_Tokens,
+                N_Tokens   => Loaded_Count);
 
             if Cache_Hit then
                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) & "[KV-Cache]" &
@@ -2383,8 +2383,8 @@ package body Model_Manager is
       declare
          Success : Boolean;
       begin
-         --  Save KV cache to SSD
-         KV_Cache_Manager.Auto_Save
+         --  Save KV cache to SSD (ASYNC, non-blocking)
+         KV_Cache_Manager.Save_To_SSD_Async
            (Context    => Models (Kind).Context,
             Tokens     => Tokens.all'Address,
             N_Tokens   => Interfaces.C.size_t (N_Toks));
@@ -3738,16 +3738,11 @@ package body Model_Manager is
       Tokens   : System.Address;
       N_Tokens : Interfaces.C.size_t)
    is
-      Success : Boolean;
    begin
       if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context then
-         KV_Cache_Manager.Save_To_SSD
-           (Models (Kind).Context, Tokens, N_Tokens, Success);
-         if Success then
-            Put_Line ("[KV-Cache] Saved " & Model_Type'Image (Kind) &
-                      " cache to SSD (" &
-                      Interfaces.C.size_t'Image (N_Tokens) & " tokens)");
-         end if;
+         --  Save KV cache to SSD (ASYNC, non-blocking)
+         KV_Cache_Manager.Save_To_SSD_Async
+           (Models (Kind).Context, Tokens, N_Tokens);
       end if;
    exception
       when others =>
@@ -3765,7 +3760,8 @@ package body Model_Manager is
       N_Tokens := 0;
 
       if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context then
-         return KV_Cache_Manager.Auto_Load
+         --  Load KV cache from SSD (LAZY, on-demand only)
+         return KV_Cache_Manager.Load_From_SSD_Lazy
            (Models (Kind).Context, Tokens, N_Tokens);
       else
          return False;
