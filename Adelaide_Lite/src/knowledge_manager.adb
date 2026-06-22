@@ -40,9 +40,21 @@ package body Knowledge_Manager is
       entry Start;
    end Thought_Task;
 
+   --  [VITAL-DO-NOT-REMOVE] Native_Crawl_Task calls Load_Model →
+   --  Llama_Init_From_Model, which logs to stderr via llama_log_internal.
+   --  fprintf() uses deep C stack for format buffering. macOS default
+   --  pthread stacks (~512KB) overflow during this call chain, causing:
+   --    STORAGE_ERROR : stack overflow → signal → jorvik_handler → exit
+   --  CRASH LOG (2026-06-22, llama.cpp b9757):
+   --    llama_init_from_model → llama_log_internal → _vsnprintf → __vfprintf
+   --    → SIGSEGV (stack overflow in fprintf's formatting buffer)
+   --  Storage_Size controls HEAP, not stack. Task_Stack_Size controls the
+   --  pthread stack. Without it, the task uses macOS default (~512KB).
+   --  16 MB is sufficient for llama_init_from_model + Metal device init.
+   --  Also set gnatbind -D16384 (in adelaide_lite.gpr) for default stack.
    task Native_Crawl_Task is
       pragma Storage_Size (128 * 1024 * 1024);
-      pragma Task_Stack_Size (16 * 1024 * 1024);  --  16 MB thread stack (llama_init_from_model needs deep C stack)
+      pragma Task_Stack_Size (16 * 1024 * 1024);
       entry Start;
    end Native_Crawl_Task;
 
