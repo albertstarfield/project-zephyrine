@@ -1,37 +1,66 @@
-**/.venv**/
-**/bin/
-**alirevenv**
-**venv**
-**/obj/
-**/ollama_data/
-**/*.log
-**/*.ndjson
-**/*.dat
-**.db**
-**.graphml**
-**__pycache__**
-**__**
-**node_modules**
-**dist**
-**out/
-**build/
+## ============================
+## OS and Editor
+## ============================
+**/.DS_Store
+**/*.swp
+**/*.swo
+**/*~
 
-# Alire and Ada specific
-**/alire/
-**/alirevenv/
+## ============================
+## Build Artifacts (Ada / C / C++)
+## ============================
+**/*.ali
+**/*.o
+**/*.a
 **/obj/
 **/bin/
-**/config/
+**/build/
 
-# Python and Environment
+## ============================
+## Python
+## ============================
 **/.venv**/
 **venv**
 **pyvenv**
+**__pycache__**
+**__**
 **/.ruff_cache/
 **/.cache/
+**/*.pyc
+**/*.pyo
 
-# Project specific volatile
+## ============================
+## Alire / GNAT
+## ============================
+**/alire/
+**/alirevenv/
+**/alire-*/**/alire.toml
+**/config/
+
+## ============================
+## Node / Frontend
+## ============================
+**/node_modules/
+**/dist/
+**/out/
+
+## ============================
+## Re-downloadable / Regenerable
+## ============================
+**/model/
+**/cache/
+**/.hf_cache/
 **/ollama_data/
+**/format.py
+
+## ============================
+## Logs and Temp Files
+## ============================
+**/*.log
+**/*.ndjson
+**/*.dat
+**/*.db**
+**.graphml**
 **.tmp**
 **.pid**
 **.heartbeat**
@@ -44,10 +73,10 @@ agenticinst.txt
 cinst.txt
 **GE**.md
 
-# Volatile build/runtime artifacts
+## ============================
+## Volatile Build/Runtime
+## ============================
 **/.build_hash
 **/.sidecar_port
 **.exit_reason
-**.shutdown_requested
-**/.hf_cache/
-cache/kv/
+**/.shutdown_requested
