@@ -25,7 +25,6 @@ ELP0 semantics:
 import argparse
 import json
 import sys
-import os
 import signal
 import numpy as np
 

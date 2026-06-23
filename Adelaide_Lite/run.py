@@ -791,7 +791,7 @@ def main():
         print("[*] Running Platform Self-Integrity Quality Check (Ruff)...")
         # Run ruff check on the Adelaide_Lite directory
         try:
-            result = subprocess.run([ruff_cmd, "check", BASE_DIR], capture_output=True, text=True)
+            result = subprocess.run([ruff_cmd, "check", BASE_DIR, "--exclude", "vendor/ggml/"], capture_output=True, text=True)
             if result.returncode != 0:
                 print("[!] Self-Integrity Quality Check FAILED.")
                 print(result.stdout)
@@ -826,7 +826,7 @@ def main():
         pyvenv_pyrefly = os.path.join(pyvenv_dir, "bin", "pyrefly")
         if os.path.exists(pyvenv_pyrefly):
             print("[LSH] Running pyrefly type-check on worker...")
-            subprocess.run([pyvenv_pyrefly, lsh_worker], check=False)
+            subprocess.run([pyvenv_pyrefly, "check", lsh_worker], check=False)
         else:
             print("[LSH] pyrefly not found in venv, skipping type-check.")
         # Self-check: ruff lint on worker script
