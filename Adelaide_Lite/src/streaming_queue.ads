@@ -13,6 +13,7 @@ package Streaming_Queue is
       procedure Close;
       function Is_Empty_And_Closed return Boolean;
       procedure Set_Format (F : Format_Type; Model : String := "");
+      function Get_Format return Format_Type;
    private
       Buffer    : Unbounded_String := Null_Unbounded_String;
       Closed    : Boolean := False;

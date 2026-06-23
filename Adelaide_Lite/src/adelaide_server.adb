@@ -578,6 +578,11 @@ begin
          AWS.Config.Set.Server_Port (Conf, Port);
          AWS.Config.Set.Server_Host (Conf, Host);
          AWS.Config.Set.Reuse_Address (Conf, True);
+         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+         --  Set long timeouts so AWS doesn't drop connections while waiting
+         --  for the large QWEN_9B model to load from disk!
+         AWS.Config.Set.Send_Timeout (Conf, 600.0);
+         AWS.Config.Set.Receive_Timeout (Conf, 600.0);
       end;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                 AnsiAda.Reset & "+" &
