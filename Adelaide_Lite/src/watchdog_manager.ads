@@ -23,7 +23,7 @@ package Watchdog_Manager is
    private
       Active        : Boolean := False;
       Start_Time    : Time := Time_Of (0, Time_Span_Zero);
-      Current_Model : Model_Type := Qwen_0_8B;
+      Current_Model : Model_Type := Snowball_Enaga_ShortNetworkAnswer;
       Aborted       : Boolean := False;
    end Inference_Monitor;
 
