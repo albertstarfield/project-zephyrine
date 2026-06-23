@@ -85,11 +85,20 @@ package body Database_Manager is
             Execute (Main_DB_Ptr.all,
                     "ALTER TABLE response_cache ADD COLUMN last_hit_time " &
                     "DATETIME DEFAULT CURRENT_TIMESTAMP");
-         exception
-            when others => null; -- Columns already exist
-         end;
+          exception
+             when others => null; -- Columns already exist
+          end;
 
-         Lit_DB_Ptr := new Ada_Sqlite3.Database'(Open (Lit_DB_File));
+          --  LSH column for response_cache (QRNN speculation context)
+          begin
+             Execute (Main_DB_Ptr.all,
+                     "ALTER TABLE response_cache ADD COLUMN lsh_hash " &
+                     "INTEGER DEFAULT -1");
+          exception
+             when others => null; -- Column already exists
+          end;
+
+          Lit_DB_Ptr := new Ada_Sqlite3.Database'(Open (Lit_DB_File));
 
          --  Chunks table for literature
          Execute (Lit_DB_Ptr.all,
@@ -101,7 +110,16 @@ package body Database_Manager is
                   "hash TEXT," &
                   "indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
-         --  Graph table for relationships
+          --  LSH column for chunks (QRNN speculation context)
+          begin
+             Execute (Lit_DB_Ptr.all,
+                     "ALTER TABLE chunks ADD COLUMN lsh_hash " &
+                     "INTEGER DEFAULT -1");
+          exception
+             when others => null; -- Column already exists
+          end;
+
+          --  Graph table for relationships
          Execute (Lit_DB_Ptr.all,
                   "CREATE TABLE IF NOT EXISTS knowledge_graph (" &
                   "id INTEGER PRIMARY KEY AUTOINCREMENT," &
@@ -677,6 +695,189 @@ package body Database_Manager is
    exception
       when others => null;
    end Get_Random_Literature_Chunk;
+
+   -----------------------------
+   -- Search_Interaction_By_LSH --
+   -----------------------------
+   procedure Search_Interaction_By_LSH
+     (Hash      : Integer;
+      Tolerance : Integer;
+      Results   : out Chunk_Array;
+      Count     : out Natural)
+   is
+      Idx : Positive := Results'First;
+      --  Precompute all hash values within Hamming distance Tolerance
+      --  For small Tolerance (0..3) this is fast; we generate candidates
+      --  by flipping up to Tolerance bits.
+      type Hash_Array is array (Positive range <>) of Integer;
+      Max_Candidates : constant Positive := 1024; -- 2^10 = 1024 max, but we limit
+      Candidates     : Hash_Array (1 .. 1024);
+      NCand          : Natural := 0;
+   begin
+      Count := 0;
+      if Main_DB_Ptr = null then
+         return;
+      end if;
+
+      --  Generate all hashes within Hamming distance Tolerance.
+      --  For Tolerance=2: 1 (exact) + 10 (1-bit) + 45 (2-bit) = 56 candidates.
+      for Cand in 0 .. 1023 loop
+         declare
+            Dist : Natural := 0;
+            V1   : Natural := Cand;
+            V2   : Natural := Hash;
+            Done : Boolean := False;
+         begin
+            for Bit in 0 .. 9 loop
+               if (V1 mod 2) /= (V2 mod 2) then
+                  Dist := Dist + 1;
+                  if Dist > Tolerance then
+                     Done := True;
+                     exit;
+                  end if;
+               end if;
+               V1 := V1 / 2;
+               V2 := V2 / 2;
+            end loop;
+            if not Done then
+               NCand := NCand + 1;
+               Candidates (NCand) := Cand;
+            end if;
+         end;
+      end loop;
+
+      if NCand = 0 then
+         return;
+      end if;
+
+      for C in 1 .. NCand loop
+         if Idx > Results'Last then
+            exit;
+         end if;
+         declare
+            Inner_Stmt : Statement := Prepare
+              (Main_DB_Ptr.all,
+               "SELECT prompt, response FROM response_cache " &
+               "WHERE lsh_hash = ? AND prompt IS NOT NULL " &
+               "ORDER BY timestamp DESC LIMIT 1");
+         begin
+            Bind_Int (Inner_Stmt, 1, Candidates (C));
+            if Step (Inner_Stmt) = ROW then
+               declare
+                  Prompt_Str : constant String := Column_Text (Inner_Stmt, 0);
+                  Resp_Str   : constant String := Column_Text (Inner_Stmt, 1);
+               begin
+                  Results (Idx).File_Path :=
+                    To_Unbounded_String ("Speculation:Interaction");
+                  Results (Idx).Content   :=
+                    To_Unbounded_String
+                      ("User: " & Prompt_Str & ASCII.LF &
+                       "Adelaide: " & Resp_Str);
+                  Results (Idx).Score := 1.0;
+                  Idx := Idx + 1;
+                  Count := Count + 1;
+               end;
+            end if;
+         end;
+      end loop;
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      if Count > 0 then
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Green) &
+                   "[Memory][LSH]" & AnsiAda.Reset &
+                   " Found " & Natural'Image (Count) &
+                   " interaction(s) by LSH hash (Tolerance=" &
+                   Integer'Image (Tolerance) & ").");
+      end if;
+   exception
+      when others => null;
+   end Search_Interaction_By_LSH;
+
+   ----------------------------
+   -- Search_Literature_By_LSH --
+   ----------------------------
+   procedure Search_Literature_By_LSH
+     (Hash      : Integer;
+      Tolerance : Integer;
+      Results   : out Chunk_Array;
+      Count     : out Natural)
+   is
+       Idx : Positive := Results'First;
+       type Hash_Array is array (Positive range <>) of Integer;
+       Max_Candidates : constant Positive := 1024;
+       Candidates     : Hash_Array (1 .. 1024);
+       NCand          : Natural := 0;
+   begin
+      Count := 0;
+      if Lit_DB_Ptr = null then
+         return;
+      end if;
+
+      --  Generate all hashes within Hamming distance Tolerance
+      for Cand in 0 .. 1023 loop
+         declare
+            Dist : Natural := 0;
+            V1   : Natural := Cand;
+            V2   : Natural := Hash;
+            Done : Boolean := False;
+         begin
+            for Bit in 0 .. 9 loop
+               if (V1 mod 2) /= (V2 mod 2) then
+                  Dist := Dist + 1;
+                  if Dist > Tolerance then
+                     Done := True;
+                     exit;
+                  end if;
+               end if;
+               V1 := V1 / 2;
+               V2 := V2 / 2;
+            end loop;
+            if not Done then
+               NCand := NCand + 1;
+               Candidates (NCand) := Cand;
+            end if;
+         end;
+      end loop;
+
+      if NCand = 0 then
+         return;
+      end if;
+
+      for C in 1 .. NCand loop
+         if Idx > Results'Last then
+            exit;
+         end if;
+         declare
+            Inner_Stmt : Statement := Prepare
+              (Lit_DB_Ptr.all,
+               "SELECT file_path, content FROM chunks " &
+               "WHERE lsh_hash = ? AND content IS NOT NULL " &
+               "LIMIT 1");
+         begin
+            Bind_Int (Inner_Stmt, 1, Candidates (C));
+            if Step (Inner_Stmt) = ROW then
+               Results (Idx).File_Path :=
+                 To_Unbounded_String (Column_Text (Inner_Stmt, 0));
+               Results (Idx).Content   :=
+                 To_Unbounded_String (Column_Text (Inner_Stmt, 1));
+               Results (Idx).Score := 1.0;
+               Idx := Idx + 1;
+               Count := Count + 1;
+            end if;
+         end;
+      end loop;
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      if Count > 0 then
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Green) &
+                   "[Memory][LSH]" & AnsiAda.Reset &
+                   " Found " & Natural'Image (Count) &
+                   " literature chunk(s) by LSH hash (Tolerance=" &
+                   Integer'Image (Tolerance) & ").");
+      end if;
+   exception
+      when others => null;
+   end Search_Literature_By_LSH;
 
    procedure Close is
    begin

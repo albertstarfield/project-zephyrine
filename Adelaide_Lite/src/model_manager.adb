@@ -6,6 +6,7 @@ with Ada.Strings.Fixed;    use Ada.Strings.Fixed;
 with Ada.Calendar;
 use type Ada.Calendar.Time;
 with Database_Manager;
+with LSH_Hash;
 with Tool_Manager;
 with Scheduler_Manager;
 with Llama_Interface;      use Llama_Interface;
@@ -4163,6 +4164,148 @@ package body Model_Manager is
                     & "system prompt unchanged.");
             end if;
         end;
+
+        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+        --  ELP0 Speculation Context: QRNN LSH-based retrieval for background thought.
+        --  Only activates during ELP0 to inject <SpeculationContextGuidance_*> blocks
+        --  after <memory_*> blocks. Uses 10-bit LSH hash (tolerance=2 Hamming distance)
+        --  via Python sidecar subprocess for quantum-evolved QRNN hash quality.
+        if Level = ELP0 then
+            declare
+                LSH_Uptime  : constant String :=
+                   Ada.Strings.Fixed.Trim
+                      (Duration'Image
+                          (Ada.Real_Time.To_Duration
+                              (Ada.Real_Time.Clock - Init_Start_Time)),
+                       Ada.Strings.Both);
+                LSH_Acq_OK  : Boolean;
+                LSH_Hash_Value : Integer;
+                Spec_Int_Results : Database_Manager.Chunk_Array (1 .. 5);
+                Spec_Lit_Results : Database_Manager.Chunk_Array (1 .. 5);
+                Spec_Int_Count   : Natural := 0;
+                Spec_Lit_Count   : Natural := 0;
+                Spec_Tolerance   : constant Integer := 2;
+            begin
+                --  Acquire ELP0 gate for QRNN LSH computation (atomic ELP0)
+                Priority_Model_Gate.Acquire_ELP0 (LSH_QRNN) (LSH_Acq_OK);
+                if not LSH_Acq_OK then
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Red)
+                        & "[LSH]"
+                        & AnsiAda.Reset
+                        & " QRNN worker: ELP0 acquire FAILED (Preempted) [+"
+                        & LSH_Uptime & "s].");
+                else
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                        & "[LSH]"
+                        & AnsiAda.Reset
+                        & " QRNN worker: ELP0 acquired. Computing hash [+"
+                        & LSH_Uptime & "s].");
+
+                    --  Compute 10-bit LSH hash from embedding via Python sidecar
+                    LSH_Hash_Value := LSH_Hash.Compute
+                        (Emb_Vec (1 .. Emb_Len), Emb_Len);
+
+                    if LSH_Hash_Value >= 0 then
+                        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                            & "[LSH]"
+                            & AnsiAda.Reset
+                            & " Hash=" & Integer'Image (LSH_Hash_Value)
+                            & " Searching speculation context [+"
+                            & LSH_Uptime & "s].");
+
+                        --  Search interaction cache by LSH (tolerance=2 Hamming)
+                        Database_Manager.Search_Interaction_By_LSH
+                            (LSH_Hash_Value, Spec_Tolerance,
+                             Spec_Int_Results, Spec_Int_Count);
+
+                        --  Search literature chunks by LSH
+                        Database_Manager.Search_Literature_By_LSH
+                            (LSH_Hash_Value, Spec_Tolerance,
+                             Spec_Lit_Results, Spec_Lit_Count);
+
+                        --  Inject <SpeculationContextGuidance_Interaction>
+                        if Spec_Int_Count > 0 then
+                            for S in 1 .. Spec_Int_Count loop
+                                Append (Whimsical_Adelaide,
+                                        ASCII.LF & ASCII.LF
+                                        & "<SpeculationContextGuidance_Interaction>"
+                                        & ASCII.LF
+                                        & Sanitize_Memory_Content
+                                             (To_String
+                                                 (Spec_Int_Results (S).Content))
+                                        & ASCII.LF
+                                        & "</SpeculationContextGuidance_Interaction>");
+                            end loop;
+                            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Light_Green)
+                                & "[LSH]"
+                                & AnsiAda.Reset
+                                & " Injected" & Natural'Image (Spec_Int_Count)
+                                & " speculation interaction(s) [+"
+                                & LSH_Uptime & "s].");
+                        end if;
+
+                        --  Inject <SpeculationContextGuidance_Literature>
+                        if Spec_Lit_Count > 0 then
+                            for S in 1 .. Spec_Lit_Count loop
+                                Append (Whimsical_Adelaide,
+                                        ASCII.LF & ASCII.LF
+                                        & "<SpeculationContextGuidance_Literature>"
+                                        & ASCII.LF
+                                        & Sanitize_Memory_Content
+                                             (To_String
+                                                 (Spec_Lit_Results (S).Content))
+                                        & ASCII.LF
+                                        & "</SpeculationContextGuidance_Literature>");
+                            end loop;
+                            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Light_Green)
+                                & "[LSH]"
+                                & AnsiAda.Reset
+                                & " Injected" & Natural'Image (Spec_Lit_Count)
+                                & " speculation literature(s) [+"
+                                & LSH_Uptime & "s].");
+                        end if;
+
+                        if Spec_Int_Count = 0 and Spec_Lit_Count = 0 then
+                            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Grey)
+                                & "[LSH]"
+                                & AnsiAda.Reset
+                                & " No speculation context found within tolerance. [+"
+                                & LSH_Uptime & "s].");
+                        end if;
+                    else
+                        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Red)
+                            & "[LSH]"
+                            & AnsiAda.Reset
+                            & " QRNN worker failed (returned -1) [+"
+                            & LSH_Uptime & "s].");
+                    end if;
+
+                    --  Release ELP0 gate
+                    Priority_Model_Gate.Release_ELP0 (LSH_QRNN);
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                        & "[LSH]"
+                        & AnsiAda.Reset
+                        & " QRNN worker: ELP0 released [+"
+                        & LSH_Uptime & "s].");
+                end if;
+            end;
+        end if;
 
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
         Put_Line

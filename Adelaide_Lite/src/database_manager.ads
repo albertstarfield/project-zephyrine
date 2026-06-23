@@ -55,6 +55,21 @@ package Database_Manager is
       Results   : out Chunk_Array;
       Count     : out Natural);
 
+   --  LSH-based retrieval for Interaction (speculation context, ELP0)
+   --  Finds entries whose 10-bit LSH is within Tolerance Hamming distance.
+   procedure Search_Interaction_By_LSH
+     (Hash      : Integer;
+      Tolerance : Integer;
+      Results   : out Chunk_Array;
+      Count     : out Natural);
+
+   --  LSH-based retrieval for Literature (speculation context, ELP0)
+   procedure Search_Literature_By_LSH
+     (Hash      : Integer;
+      Tolerance : Integer;
+      Results   : out Chunk_Array;
+      Count     : out Natural);
+
    --  Retrieve a random literature chunk for background thinking
    procedure Get_Random_Literature_Chunk
      (Content : out Unbounded_String;
