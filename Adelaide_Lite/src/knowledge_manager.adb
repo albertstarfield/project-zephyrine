@@ -264,8 +264,8 @@ package body Knowledge_Manager is
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task ACCEPTED Start, calling Index_References...");
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
-                AnsiAda.Reset & " Indexing Task Active (Temporarily Disabled).");
-      null; -- Index_References;
+                AnsiAda.Reset & " Indexing Task Active.");
+       Index_References;
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task Index_References DONE.");
    exception

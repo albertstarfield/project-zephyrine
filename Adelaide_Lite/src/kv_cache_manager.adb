@@ -47,6 +47,7 @@ with Ada.Unchecked_Deallocation;
 with Ada.Calendar; use Ada.Calendar;
 
 with Llama_Interface; use Llama_Interface;
+with Model_Manager;
 
 package body KV_Cache_Manager is
 
@@ -218,7 +219,12 @@ package body KV_Cache_Manager is
    --  The task writes to disk and then terminates.
    --  If the main process exits, the task dies with it (acceptable).
 
+   --  [VITAL-DO-NOT-REMOVE] 8 MB stack mandated by user rules.
+   --  llama_state_save_file serializes the full KV state via Metal and
+   --  can recurse deeply into ggml-metal internals. The default Ada task
+   --  stack (~64 KB) overflows, causing STORAGE_ERROR and SIGABRT.
    task type Save_Task is
+      pragma Storage_Size (8 * 1024 * 1024);
       entry Start
         (Context    : Llama_Interface.Llama_Context;
          Tokens     : System.Address;
@@ -258,9 +264,31 @@ package body KV_Cache_Manager is
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
                 AnsiAda.Reset & "+ASYNC Save_Task: saving to " & To_String (L_Path));
 
-      --  Save state via llama.cpp (this may take time on slow machines)
-      Success := Llama_State_Save_File
-        (L_Context, Path_C, L_Tokens, L_N_Tokens);
+       --  [VITAL-DO-NOT-REMOVE] Acquire the Global Accel Lock before calling
+       --  llama_state_save_file. The save serializes the full KV state and
+       --  internally submits Metal command buffers. If any other thread is
+       --  also using Metal at the same time (e.g., a llama_decode still
+       --  tearing down), ggml-metal fires:
+       --    GGML_ASSERT([rsets->data count] == 0) failed
+       --  which causes SIGABRT. The Accel lock is the same global GPU
+       --  serialization gate used by every llama_decode call in
+       --  model_manager.adb, so holding it here guarantees exclusion.
+       Model_Manager.Acquire_Accel_Lock;
+       begin
+          --  Wrap the actual save: llama_state_save_file can also throw
+          --  C++ exceptions on corrupt state — catch them here so the
+          --  task terminates cleanly rather than propagating SIGABRT.
+          Success := Llama_State_Save_File
+            (L_Context, Path_C, L_Tokens, L_N_Tokens);
+       exception
+          when others =>
+             Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
+                       AnsiAda.Reset &
+                       "+ASYNC Save_Task: C++ EXCEPTION in save -- " &
+                       "discarding corrupt state, cache cleared.");
+             Success := False;
+       end;
+       Model_Manager.Release_Accel_Lock;
 
       if Success then
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -540,9 +568,22 @@ package body KV_Cache_Manager is
 
                Path_C := New_String (Cached);
 
-               --  Load from SSD (this blocks, but only on first call)
-               Success := Llama_State_Load_File
-                 (Context, Path_C, Token_Buf.all'Address, Ctx_Size, N_Out'Access);
+               --  Wrap the C++ call: llama.cpp throws std::runtime_error
+               --  (e.g. "invalid seq_id") directly, which bypasses the
+               --  Boolean return value and crashes the process via SIGABRT.
+               --  We must intercept it here so we can delete the corrupt
+               --  file and treat the load as a miss, not a fatal error.
+               begin
+                  Success := Llama_State_Load_File
+                    (Context, Path_C, Token_Buf.all'Address, Ctx_Size, N_Out'Access);
+               exception
+                  when others =>
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
+                               AnsiAda.Reset &
+                               "+Load_From_SSD_Lazy: C++ EXCEPTION during load " &
+                               Cached & " -- auto-flushing corrupt cache.");
+                     Success := False;
+               end;
                N_Tokens := N_Out;
 
                Free (Path_C);
@@ -561,8 +602,8 @@ package body KV_Cache_Manager is
                   --  Verbose: logs lazy load failure.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
                             AnsiAda.Reset & "+Load_From_SSD_Lazy: FAILED to load " & Cached);
-                  
-                  --  Auto-flush invalid cache
+
+                  --  Auto-flush invalid/corrupt cache file
                   begin
                      Ada.Directories.Delete_File (Cached);
                      Put_Line ("[KV-Cache] Deleted invalid cache file: " & Cached);
@@ -608,9 +649,20 @@ package body KV_Cache_Manager is
 
                   Path_C := New_String (Path);
 
-                  --  Load from SSD (this blocks, but only on first call)
-                  Success := Llama_State_Load_File
-                    (Context, Path_C, Token_Buf.all'Address, Ctx_Size, N_Out'Access);
+                  --  Same C++ exception guard as pre-path case above.
+                  --  invalid seq_id from llama.cpp must NOT reach the
+                  --  Ada runtime as an unhandled C++ exception.
+                  begin
+                     Success := Llama_State_Load_File
+                       (Context, Path_C, Token_Buf.all'Address, Ctx_Size, N_Out'Access);
+                  exception
+                     when others =>
+                        Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
+                                  AnsiAda.Reset &
+                                  "+Load_From_SSD_Lazy: C++ EXCEPTION during load " &
+                                  Path & " -- auto-flushing corrupt cache.");
+                        Success := False;
+                  end;
                   N_Tokens := N_Out;
 
                   Free (Path_C);
@@ -655,9 +707,22 @@ package body KV_Cache_Manager is
          --  Verbose: logs no cache files found.
          Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &
                    AnsiAda.Reset & "+Load_From_SSD_Lazy: no cache files found");
+
+         --  Only free the token buffer when the load FAILED.
+         --  On a successful load, llama.cpp's state_load_file writes decoded
+         --  tokens into Token_Buf and then keeps an internal alias to that
+         --  memory region. Freeing it here causes the heap corruption
+         --  (malloc: pointer being freed was not allocated) and subsequent
+         --  SIGABRT during the next decode pass. Ownership transfers to the
+         --  llama context on success; we must NOT free it.
+         Free_Tokens (Token_Buf);
+      else
+         Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
+                   AnsiAda.Reset &
+                   "+Load_From_SSD_Lazy: token buffer ownership RETAINED " &
+                   "by llama context -- NOT freed.");
       end if;
 
-      Free_Tokens (Token_Buf);
       return Found;
       end;
    end Load_From_SSD_Lazy;

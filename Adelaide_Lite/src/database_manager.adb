@@ -234,6 +234,73 @@ package body Database_Manager is
    end Search_Literature;
 
    ------------------------
+   -- Search_Interaction --
+   ------------------------
+   procedure Search_Interaction
+     (Embedding : Math_Utils.Vector;
+      Results   : out Chunk_Array;
+      Count     : out Natural)
+   is
+      use GNATCOLL.JSON;
+      Idx : Positive := Results'First;
+   begin
+      Count := 0;
+      if Main_DB_Ptr = null then
+         return;
+      end if;
+
+      declare
+         Stmt : Statement := Prepare
+           (Main_DB_Ptr.all, "SELECT prompt, response, embedding FROM response_cache");
+      begin
+         while Step (Stmt) = ROW and then Idx <= Results'Last loop
+            declare
+               Prompt_Str : constant String := Column_Text (Stmt, 0);
+               Resp_Str   : constant String := Column_Text (Stmt, 1);
+               Raw_Vec    : constant String := Column_Text (Stmt, 2);
+               JSON_Vec   : constant Read_Result := Read (Raw_Vec);
+            begin
+               if JSON_Vec.Success then
+                  declare
+                     Arr : constant JSON_Array := Get (JSON_Vec.Value);
+                     Len : constant Natural := Length (Arr);
+                     Entry_Vec : Math_Utils.Vector (1 .. Len);
+                  begin
+                     if Len = Embedding'Length then
+                        for I in 1 .. Len loop
+                           Entry_Vec (I) := Get (Get (Arr, I));
+                        end loop;
+
+                        declare
+                           Sim : constant Float :=
+                             Math_Utils.Cosine_Similarity (Embedding, Entry_Vec);
+                        begin
+                           if Sim >= 0.65 then
+                              Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                                                    "[Memory Match]" & AnsiAda.Reset &
+                                                    " Score: " & Sim'Img);
+                              Ada.Text_IO.Put_Line ("   -> User: " & Prompt_Str);
+                              Ada.Text_IO.Put_Line ("   -> Adelaide: " & Resp_Str);
+                              Results (Idx).File_Path :=
+                                To_Unbounded_String ("Interaction");
+                              Results (Idx).Content   :=
+                                To_Unbounded_String ("User: " & Prompt_Str & ASCII.LF & "Adelaide: " & Resp_Str);
+                              Results (Idx).Score     := Sim;
+                              Idx := Idx + 1;
+                              Count := Count + 1;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+      end;
+   exception
+      when others => null;
+   end Search_Interaction;
+
+   ------------------------
    -- Add_Graph_Relation --
    ------------------------
    procedure Add_Graph_Relation
