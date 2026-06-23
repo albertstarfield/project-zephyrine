@@ -171,9 +171,17 @@ package body KV_Cache_Manager is
       return To_String (Cached_Path);
    end Get_Cached_Path;
 
-   function Has_Cached_Path return Boolean is
+   function Has_Cached_Path (Model_ID : String) return Boolean is
+      P : constant String := To_String (Cached_Path);
+      Prefix : constant String := Cache_Dir & Model_ID & "_";
    begin
-      return Cached_Path_Valid;
+      if not Cached_Path_Valid then
+         return False;
+      end if;
+      if P'Length >= Prefix'Length and then P (P'First .. P'First + Prefix'Length - 1) = Prefix then
+         return True;
+      end if;
+      return False;
    end Has_Cached_Path;
 
    --  ============================================================================
@@ -443,7 +451,8 @@ package body KV_Cache_Manager is
    procedure Save_To_SSD_Async
      (Context    : Llama_Interface.Llama_Context;
       Tokens     : System.Address;
-      N_Tokens   : Interfaces.C.size_t)
+      N_Tokens   : Interfaces.C.size_t;
+      Model_ID   : String)
    is
       --  Generate cache key
       Tok_Len : constant Natural := Natural (N_Tokens);
@@ -456,7 +465,7 @@ package body KV_Cache_Manager is
 
       declare
          Prompt_Hash : constant String := Trim (Natural'Image (Hash), Both);
-         File_Path   : constant String := Cache_Dir & Prompt_Hash & ".bin";
+         File_Path   : constant String := Cache_Dir & Model_ID & "_" & Prompt_Hash & ".bin";
       begin
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          --  Verbose: logs async save request.
@@ -489,7 +498,8 @@ package body KV_Cache_Manager is
    function Load_From_SSD_Lazy
      (Context    : Llama_Interface.Llama_Context;
       Tokens     : out System.Address;
-      N_Tokens   : out Interfaces.C.size_t) return Boolean
+      N_Tokens   : out Interfaces.C.size_t;
+      Model_ID   : String) return Boolean
    is
       use Ada.Directories;
 
@@ -501,13 +511,24 @@ package body KV_Cache_Manager is
       Tokens := System.Null_Address;
       N_Tokens := 0;
 
+      declare
+         type Token_Array is array (Positive range <>) of aliased Llama_Interface.Llama_Token;
+         type Token_Array_Access is access Token_Array;
+         procedure Free_Tokens is new Ada.Unchecked_Deallocation
+           (Object => Token_Array,
+            Name   => Token_Array_Access);
+
+         Ctx_Size  : constant Interfaces.C.size_t := Interfaces.C.size_t (Llama_Interface.Llama_N_Ctx (Context));
+         Token_Buf : Token_Array_Access := new Token_Array (1 .. Positive (Ctx_Size));
+      begin
+
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: logs lazy load attempt.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
                 AnsiAda.Reset & "+Load_From_SSD_Lazy: searching for cache...");
 
       --  TRICK 3: Check pre-path cache first (instant, no disk I/O)
-      if Has_Cached_Path then
+      if Has_Cached_Path (Model_ID) then
          declare
             Cached : constant String := Get_Cached_Path;
          begin
@@ -521,7 +542,7 @@ package body KV_Cache_Manager is
 
                --  Load from SSD (this blocks, but only on first call)
                Success := Llama_State_Load_File
-                 (Context, Path_C, Tokens, N_Tokens, N_Out'Access);
+                 (Context, Path_C, Token_Buf.all'Address, Ctx_Size, N_Out'Access);
                N_Tokens := N_Out;
 
                Free (Path_C);
@@ -540,6 +561,14 @@ package body KV_Cache_Manager is
                   --  Verbose: logs lazy load failure.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
                             AnsiAda.Reset & "+Load_From_SSD_Lazy: FAILED to load " & Cached);
+                  
+                  --  Auto-flush invalid cache
+                  begin
+                     Ada.Directories.Delete_File (Cached);
+                     Put_Line ("[KV-Cache] Deleted invalid cache file: " & Cached);
+                  exception
+                     when others => null;
+                  end;
                end if;
             end if;
          end;
@@ -557,6 +586,7 @@ package body KV_Cache_Manager is
             --  Verbose: logs no cache directory.
             Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &
                       AnsiAda.Reset & "+Load_From_SSD_Lazy: no cache directory");
+            Free_Tokens (Token_Buf);
             return False;
          end if;
 
@@ -567,7 +597,8 @@ package body KV_Cache_Manager is
                Path : constant String := Full_Name (Ent);
             begin
                if not Found and then
-                 Name'Length > 4 and then
+                 Name'Length > Model_ID'Length + 5 and then
+                 Name (Name'First .. Name'First + Model_ID'Length) = Model_ID & "_" and then
                  Name (Name'Last - 3 .. Name'Last) = ".bin"
                then
                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -579,7 +610,7 @@ package body KV_Cache_Manager is
 
                   --  Load from SSD (this blocks, but only on first call)
                   Success := Llama_State_Load_File
-                    (Context, Path_C, Tokens, N_Tokens, N_Out'Access);
+                    (Context, Path_C, Token_Buf.all'Address, Ctx_Size, N_Out'Access);
                   N_Tokens := N_Out;
 
                   Free (Path_C);
@@ -601,6 +632,14 @@ package body KV_Cache_Manager is
                      --  Verbose: logs lazy load failure.
                      Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
                                AnsiAda.Reset & "+Load_From_SSD_Lazy: FAILED to load " & Path);
+                     
+                     --  Auto-flush invalid cache
+                     begin
+                        Ada.Directories.Delete_File (Path);
+                        Put_Line ("[KV-Cache] Deleted invalid cache file: " & Path);
+                     exception
+                        when others => null;
+                     end;
                   end if;
                end if;
             end Find_Cache;
@@ -618,7 +657,9 @@ package body KV_Cache_Manager is
                    AnsiAda.Reset & "+Load_From_SSD_Lazy: no cache files found");
       end if;
 
+      Free_Tokens (Token_Buf);
       return Found;
+      end;
    end Load_From_SSD_Lazy;
 
    function Has_Cache_Files return Boolean is
