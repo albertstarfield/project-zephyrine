@@ -49,6 +49,12 @@ package Database_Manager is
       Results   : out Chunk_Array;
       Count     : out Natural);
 
+   --  Semantic Retrieval for Interaction (ELP1)
+   procedure Search_Interaction
+     (Embedding : Math_Utils.Vector;
+      Results   : out Chunk_Array;
+      Count     : out Natural);
+
    --  Retrieve a random literature chunk for background thinking
    procedure Get_Random_Literature_Chunk
      (Content : out Unbounded_String;
