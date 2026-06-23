@@ -236,28 +236,6 @@ package body Adelaide_Server_Pkg is
                "[Dispatch-V]" & AnsiAda.Reset &
                " Generator_Task: Starting Hybrid_Generate...");
 
-         declare
-            task Keep_Alive is
-               entry Stop;
-            end Keep_Alive;
-
-            task body Keep_Alive is
-               Stopped : Boolean := False;
-            begin
-               while not Stopped loop
-                  select
-                     accept Stop do
-                        Stopped := True;
-                     end Stop;
-                  or
-                     delay 0.5;
-                     if QA /= null and then not Is_Ext then
-                        QA.Push (".");
-                     end if;
-                  end select;
-               end loop;
-            end Keep_Alive;
-         begin
             Model_Manager.Hybrid_Generate
               (Prompt         => To_String (P),
                Result         => Res,
@@ -266,9 +244,6 @@ package body Adelaide_Server_Pkg is
                Agentic        => Is_Ag,
                Raw_Prompt     => Is_Raw,
                External_Agent => Is_Ext);
-
-            Keep_Alive.Stop;
-         end;
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
                "[Dispatch-V]" & AnsiAda.Reset &

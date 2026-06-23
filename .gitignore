@@ -50,3 +50,4 @@ cinst.txt
 **.exit_reason
 **.shutdown_requested
 **/.hf_cache/
+cache/kv/

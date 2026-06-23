@@ -469,7 +469,7 @@ package body Model_Manager is
             --  [Linux/Android-Termux] REMOVE this exemption guard to unload
             --  QWEN_0_8B aggressively on memory-constrained devices.
             --  See QUIRK-M03 / QUIRK-S01 for crash details.
-            if Kind = Qwen_0_8B then
+            if Kind = Qwen_0_8B or else Kind = Qwen_9B then
                null;
             elsif Models (Kind).Loaded and then
               not Models (Kind).In_Use and then
@@ -1664,25 +1664,34 @@ package body Model_Manager is
             declare
                Dummy : Address;
             begin
+               Put_Line ("[Debug] Before Memcpy.");
                Dummy := Memcpy (Result (Result'First)'Address, Ptr,
                          Interfaces.C.size_t (Copy_Count) *
                            Interfaces.C.size_t (Float'Size / 8));
+               Put_Line ("[Debug] After Memcpy.");
             end;
-            Length := Copy_Count;
+            Length := Copy_Count; Put_Line("[Debug] Copy_Count done");
          else
             Length := 0;
          end if;
          Free_Tokens (Tokens);
+         Put_Line ("[Debug] Free_Tokens complete.");
          Models (Kind).In_Use := False;
          if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Kind);
+            Put_Line ("[Debug] Priority_Model_Gate.Release_ELP0 complete.");
          else
             Priority_Model_Gate.Release_ELP1 (Kind);
+            Put_Line ("[Debug] Priority_Model_Gate.Release_ELP1 complete.");
          end if;
          ELP_Queue.Dequeue_Level (Level);
+         Put_Line ("[Debug] Get_Single_Embedding DONE successfully.");
       end;
    exception
-      when others =>
+      when E : others =>
+         Put_Line
+           ("[FATAL] Exception in Get_Single_Embedding: " &
+            Ada.Exceptions.Exception_Information (E));
          if Tokens /= null then
             Free_Tokens (Tokens);
          end if;
@@ -2098,63 +2107,38 @@ package body Model_Manager is
    function Sanitize_Think_Tags (Text : String) return String is
       Res : Unbounded_String;
       I   : Positive := Text'First;
+      Close_Idx : constant Natural := Index (Text, "</think>");
+      Open_Idx  : constant Natural := Index (Text, "<think>");
+      In_Think  : Boolean := False;
    begin
+      if Close_Idx > 0 and then (Open_Idx = 0 or else Close_Idx < Open_Idx) then
+         In_Think := True;
+      end if;
+
       while I <= Text'Last loop
-         if I + 9 <= Text'Last and then Text (I .. I + 9) = "<thinking>" then
-            --  Skip everything until closing </thinking>
-            declare
-               Start_Pos : constant Positive := I;
-               Found     : Boolean := False;
-            begin
-               I := I + 10;
-               while I <= Text'Last loop
-                  if I + 10 <= Text'Last and then
-                    Text (I .. I + 10) = "</thinking>"
-                  then
-                     I := I + 11;
-                     Found := True;
-                     exit;
-                  else
-                     I := I + 1;
-                  end if;
-               end loop;
-               --  If not found, backtrack and treat as regular text
-               if not Found then
-                  I := Start_Pos;
-                  Append (Res, Text (I));
-                  I := I + 1;
-               end if;
-            end;
-         elsif I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
-            --  Skip everything until closing </think>
-            declare
-               Start_Pos : constant Positive := I;
-               Found     : Boolean := False;
-            begin
-               I := I + 7;
-               while I <= Text'Last loop
-                  if I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
-                     I := I + 8;
-                     Found := True;
-                     exit;
-                  else
-                     I := I + 1;
-                  end if;
-               end loop;
-               --  If not found, backtrack and treat as regular text
-               if not Found then
-                  I := Start_Pos;
-                  Append (Res, Text (I));
-                  I := I + 1;
-               end if;
-            end;
-         elsif I + 10 <= Text'Last and then
-           Text (I .. I + 10) = "</response>"
-         then
-            I := I + 11;
+         if In_Think then
+            if I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
+               In_Think := False;
+               I := I + 8;
+            elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</thinking>" then
+               In_Think := False;
+               I := I + 11;
+            else
+               I := I + 1;
+            end if;
          else
-            Append (Res, Text (I));
-            I := I + 1;
+            if I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
+               In_Think := True;
+               I := I + 7;
+            elsif I + 9 <= Text'Last and then Text (I .. I + 9) = "<thinking>" then
+               In_Think := True;
+               I := I + 10;
+            elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</response>" then
+               I := I + 11;
+            else
+               Append (Res, Text (I));
+               I := I + 1;
+            end if;
          end if;
       end loop;
       return To_String (Res);
@@ -2163,34 +2147,38 @@ package body Model_Manager is
    function Extract_Think_Content (Text : String) return String is
       Res : Unbounded_String;
       I   : Positive := Text'First;
+      Close_Idx : constant Natural := Index (Text, "</think>");
+      Open_Idx  : constant Natural := Index (Text, "<think>");
+      In_Think  : Boolean := False;
    begin
+      if Close_Idx > 0 and then (Open_Idx = 0 or else Close_Idx < Open_Idx) then
+         In_Think := True;
+      end if;
+
       while I <= Text'Last loop
-         if I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
-            I := I + 7;
-            while I <= Text'Last loop
-               if I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
-                  I := I + 8;
-                  exit;
-               else
-                  Append (Res, Text (I));
-                  I := I + 1;
-               end if;
-            end loop;
-         elsif I + 9 <= Text'Last and then Text (I .. I + 9) = "<thinking>" then
-            I := I + 10;
-            while I <= Text'Last loop
-               if I + 10 <= Text'Last and then
-                 Text (I .. I + 10) = "</thinking>"
-               then
-                  I := I + 11;
-                  exit;
-               else
-                  Append (Res, Text (I));
-                  I := I + 1;
-               end if;
-            end loop;
+         if In_Think then
+            if I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
+               In_Think := False;
+               I := I + 8;
+            elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</thinking>" then
+               In_Think := False;
+               I := I + 11;
+            else
+               Append (Res, Text (I));
+               I := I + 1;
+            end if;
          else
-            I := I + 1;
+            if I + 6 <= Text'Last and then Text (I .. I + 6) = "<think>" then
+               In_Think := True;
+               I := I + 7;
+            elsif I + 9 <= Text'Last and then Text (I .. I + 9) = "<thinking>" then
+               In_Think := True;
+               I := I + 10;
+            elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</response>" then
+               I := I + 11;
+            else
+               I := I + 1;
+            end if;
          end if;
       end loop;
       return To_String (Res);
@@ -2209,7 +2197,8 @@ package body Model_Manager is
       Level           : ELP_Level := ELP1;
       Virtual_Tokens  : Cached_Token_Access := null;
       Virtual_Tok_Len : Natural := 0;
-      Release_Model   : Boolean := True)
+      Release_Model   : Boolean := True;
+      Skip_Gate       : Boolean := False)
    is
       Success  : Boolean;
       Vocab    : Llama_Vocab;
@@ -2228,7 +2217,9 @@ package body Model_Manager is
    begin
       --  [VITAL-DO-NOT-REMOVE] Mandated by user.
       --  --[Debug] DO NOT REMOVE: Descriptive source tracking
-      ELP_Queue.Enqueue (Level, Kind, Source);
+      if not Skip_Gate then
+         ELP_Queue.Enqueue (Level, Kind, Source);
+      end if;
 
       pragma Unreferenced (Images);
       Result := Null_Unbounded_String;
@@ -2243,33 +2234,39 @@ package body Model_Manager is
                 " Prompt_Len=" & Natural'Image (Clean_P'Length));
 
       begin
-          if Level = ELP0 then
-             declare
-                Acq_OK : Boolean;
-             begin
-                Priority_Model_Gate.Acquire_ELP0 (Kind) (Acq_OK);
-                if not Acq_OK then
+          if not Skip_Gate then
+             if Level = ELP0 then
+                declare
+                   Acq_OK : Boolean;
+                begin
+                   Priority_Model_Gate.Acquire_ELP0 (Kind) (Acq_OK);
+                   if not Acq_OK then
+                      --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                      Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V]" &
+                                AnsiAda.Reset & " Generate: ELP0 ACQUIRE FAILED (Preempted)");
+                      ELP_Queue.Dequeue_Level (Level);
+                      Result := To_Unbounded_String ("ERROR: Preempted");
+                      Free (Prompt_C);
+                      return;
+                   end if;
                    --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-                   Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V]" &
-                             AnsiAda.Reset & " Generate: ELP0 ACQUIRE FAILED (Preempted)");
-                   ELP_Queue.Dequeue_Level (Level);
-                   Result := To_Unbounded_String ("ERROR: Preempted");
-                   Free (Prompt_C);
-                   return;
-                end if;
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                             AnsiAda.Reset & " Generate: ELP0 ACQUIRED. Kind=" & Kind'Img);
+                end;
+             else
+                Priority_Model_Gate.Request_ELP1;
                 --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                 Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
-                          AnsiAda.Reset & " Generate: ELP0 ACQUIRED. Kind=" & Kind'Img);
-             end;
+                          AnsiAda.Reset & " Generate: ELP1 REQUESTED. Kind=" & Kind'Img);
+                Priority_Model_Gate.Acquire_ELP1 (Kind);
+                --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
+                          AnsiAda.Reset & " Generate: ELP1 ACQUIRED. Kind=" & Kind'Img);
+             end if;
           else
-             Priority_Model_Gate.Request_ELP1;
-             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+             --  Skip_Gate=True: gate already held by caller (Hybrid_Generate).
              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
-                       AnsiAda.Reset & " Generate: ELP1 REQUESTED. Kind=" & Kind'Img);
-             Priority_Model_Gate.Acquire_ELP1 (Kind);
-             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
-                       AnsiAda.Reset & " Generate: ELP1 ACQUIRED. Kind=" & Kind'Img);
+                       AnsiAda.Reset & " Generate: Skip_Gate=True, bypassing ELP lock.");
           end if;
 
           Load_Model (Kind, Success, Requested_Ctx);
@@ -2682,19 +2679,23 @@ package body Model_Manager is
       --  unload the model mid-use.  But ALWAYS release the ELP lock and
       --  dequeue the queue level — these serialize FFI access between
       --  concurrent tasks and will deadlock if held across Generate calls.
+      --  Exception: Skip_Gate=True callers let Hybrid_Generate manage lock.
       Models (Kind).In_Use := (not Release_Model);  --  Keep True when retained
 
       --  [VITAL-DO-NOT-REMOVE] Mandated by user.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
                 AnsiAda.Reset & " Generate: " &
                 (if Release_Model then "Releasing" else "Retaining") &
-                " model. Kind=" & Kind'Img);
-      if Level = ELP0 then
-         Priority_Model_Gate.Release_ELP0 (Kind);
-      else
-         Priority_Model_Gate.Release_ELP1 (Kind);
+                " model. Kind=" & Kind'Img &
+                " Skip_Gate=" & Boolean'Image (Skip_Gate));
+      if not Skip_Gate then
+         if Level = ELP0 then
+            Priority_Model_Gate.Release_ELP0 (Kind);
+         else
+            Priority_Model_Gate.Release_ELP1 (Kind);
+         end if;
+         ELP_Queue.Dequeue_Level (Level);
       end if;
-      ELP_Queue.Dequeue_Level (Level);
       --  [VITAL-DO-NOT-REMOVE] Mandated by user.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Gen-V]" &
                 AnsiAda.Reset & " Generate: COMPLETE. ResultLen=" &
@@ -2710,12 +2711,14 @@ package body Model_Manager is
          if Release_Model then
             Models (Kind).In_Use := False;
          end if;
-         if Level = ELP0 then
-            Priority_Model_Gate.Release_ELP0 (Kind);
-         else
-            Priority_Model_Gate.Release_ELP1 (Kind);
+         if not Skip_Gate then
+            if Level = ELP0 then
+               Priority_Model_Gate.Release_ELP0 (Kind);
+            else
+               Priority_Model_Gate.Release_ELP1 (Kind);
+            end if;
+            ELP_Queue.Dequeue_Level (Level);
          end if;
-         ELP_Queue.Dequeue_Level (Level);
          Result := To_Unbounded_String ("ERROR: Decode failed");
    end Generate;
 
@@ -3086,12 +3089,14 @@ package body Model_Manager is
    --  the token array, skipping re-tokenization of the same facts.
    procedure Tokenize_And_Cache_Virtual_Ctx
      (Kind   : Model_Type;
-      Text   : String)
+      Text   : String;
+      Level  : ELP_Level)
    is
       Vocab    : Llama_Vocab;
       Text_C   : chars_ptr := New_String (Text);
       Tmp_Toks : Token_Array_Access;
       N_Toks   : int;
+      Success  : Boolean;
    begin
       --  Free old cache
       if Cached_Virtual_Tokens /= null then
@@ -3104,6 +3109,33 @@ package body Model_Manager is
          return;
       end if;
 
+      --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+      --  Acquire gate to prevent Idle_Monitor from unloading the model mid-tokenization
+      if Level = ELP0 then
+         Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
+         if not Success then
+            Free (Text_C);
+            return;
+         end if;
+      else
+         Priority_Model_Gate.Request_ELP1;
+         Priority_Model_Gate.Acquire_ELP1 (Kind);
+      end if;
+
+      Load_Model (Kind, Success, 8192, Level);
+      if not Success then
+         if Level = ELP0 then
+            Priority_Model_Gate.Release_ELP0 (Kind);
+         else
+            Priority_Model_Gate.Release_ELP1 (Kind);
+         end if;
+         Free (Text_C);
+         return;
+      end if;
+
+      Models (Kind).In_Use := True;
+      Models (Kind).Last_Used := Clock;
+
       Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
       --  Allocate temp array for tokenization
       Tmp_Toks := new Token_Array (1 .. 8192);
@@ -3114,6 +3146,12 @@ package body Model_Manager is
 
       if N_Toks <= 0 then
          Free_Tokens (Tmp_Toks);
+         Models (Kind).In_Use := False;
+         if Level = ELP0 then
+            Priority_Model_Gate.Release_ELP0 (Kind);
+         else
+            Priority_Model_Gate.Release_ELP1 (Kind);
+         end if;
          return;
       end if;
 
@@ -3127,6 +3165,13 @@ package body Model_Manager is
 
       Put_Line ("[Paging-VT] Cached" & Cached_Virtual_Len'Img &
                 " virtual ctx tokens from" & Text'Length'Img & " chars");
+
+      Models (Kind).In_Use := False;
+      if Level = ELP0 then
+         Priority_Model_Gate.Release_ELP0 (Kind);
+      else
+         Priority_Model_Gate.Release_ELP1 (Kind);
+      end if;
    end Tokenize_And_Cache_Virtual_Ctx;
 
    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
@@ -3368,7 +3413,8 @@ package body Model_Manager is
                   Level           => Level,
                   Virtual_Tokens  => Cached_Virtual_Tokens,
                   Virtual_Tok_Len => Cached_Virtual_Len,
-                  Release_Model   => False);
+                  Release_Model   => False,
+                  Skip_Gate       => False);
             end;
 
             declare
@@ -3395,7 +3441,7 @@ package body Model_Manager is
                Current_Internal_State_Len := Length (Internal_State);
                --  Re-cache virtual ctx tokens after Internal_State grew
                Tokenize_And_Cache_Virtual_Ctx (Model_Types.Qwen_9B,
-                 "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)));
+                 "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)), Level);
                if not External_Agent then
                   Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                     "[FACTUAL_DATA]: " &
@@ -3488,7 +3534,8 @@ package body Model_Manager is
                 Step_Raw, GNATCOLL.JSON.Empty_Array, Session_ID, 8192,
                 null, False, Level,
                 Cached_Virtual_Tokens, Cached_Virtual_Len,
-                Release_Model => False);
+                Release_Model => False,
+                Skip_Gate     => False);
              --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                        AnsiAda.Reset & " Hybrid_Generate: Hop" &
@@ -3560,7 +3607,7 @@ package body Model_Manager is
                                               Current_Internal_State_Len := Length (Internal_State);
                                               --  Re-cache virtual ctx tokens after Internal_State grew
                                               Tokenize_And_Cache_Virtual_Ctx (Model_Types.Qwen_9B,
-                                                "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)));
+                                                "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)), Level);
                                           exception
                                              when others => null;
                                           end;
@@ -3616,7 +3663,7 @@ package body Model_Manager is
                                         Current_Internal_State_Len := Length (Internal_State);
                                         --  Re-cache virtual ctx tokens after Internal_State grew
                                         Tokenize_And_Cache_Virtual_Ctx (Model_Types.Qwen_9B,
-                                          "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)));
+                                          "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)), Level);
                                         if not External_Agent then
                                            Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
                                              ASCII.LF & "[TOOL (" & T_Name &
@@ -3779,7 +3826,8 @@ package body Model_Manager is
                    Level           => Level,
                    Virtual_Tokens  => Cached_Virtual_Tokens,
                    Virtual_Tok_Len => Cached_Virtual_Len,
-                   Release_Model   => False);
+                   Release_Model   => False,
+                   Skip_Gate       => False);
                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                  Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                            AnsiAda.Reset & " Hybrid_Generate: Final Generate returned. Len=" &
@@ -3876,7 +3924,7 @@ package body Model_Manager is
 
                    --  Re-cache virtual ctx tokens after Internal_State grew
                    Tokenize_And_Cache_Virtual_Ctx (Model_Types.Qwen_9B,
-                     "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)));
+                     "Fact-Check: " & Strip_Base64_Images (To_String (Internal_State)), Level);
 
                    if not External_Agent then
                       Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
@@ -4078,9 +4126,22 @@ package body Model_Manager is
             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                       AnsiAda.Reset & " Hybrid_Generate: STREAMING COMPLETE.");
             --  Push `</think>` to close the orchestration think block.
-            --  The response text was already streamed char-by-char during
-            --  Generate, so we do NOT re-emit it here to avoid duplication.
             Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
+
+            --  Re-emit the final response outside the think block at 200 tok/s
+            --  (approx 800 chars/s = 80 chars per 0.1s).
+            declare
+               Chunk_Size : constant Natural := 80;
+               Pos        : Positive := Resp_Text'First;
+               Last_Pos   : Natural;
+            begin
+               while Pos <= Resp_Text'Last loop
+                  Last_Pos := Natural'Min (Pos + Chunk_Size - 1, Resp_Text'Last);
+                  Push_Chunk (Stream, Session_ID, Resp_Text (Pos .. Last_Pos));
+                  delay 0.1;
+                  Pos := Last_Pos + 1;
+               end loop;
+            end;
          end;
       elsif External_Agent and then Stream /= null then
          declare

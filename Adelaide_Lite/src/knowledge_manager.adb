@@ -264,8 +264,8 @@ package body Knowledge_Manager is
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task ACCEPTED Start, calling Index_References...");
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
-                AnsiAda.Reset & " Indexing Task Active.");
-      Index_References;
+                AnsiAda.Reset & " Indexing Task Active (Temporarily Disabled).");
+      null; -- Index_References;
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task Index_References DONE.");
    exception
@@ -320,7 +320,10 @@ package body Knowledge_Manager is
             Name : constant String := Simple_Name (Entry_D);
             Full : constant String := Full_Name (Entry_D);
          begin
-            if Name /= "." and then Name /= ".." then
+            if Name /= "." and then Name /= ".." and then
+               Name /= "node_modules" and then Name /= ".git" and then
+               Name /= "dist" and then Name /= "build"
+            then
                if Kind (Entry_D) = Directory then
                   Crawl_Directory (Full);
                else
@@ -340,9 +343,7 @@ package body Knowledge_Manager is
                      Has_Suffix (".c") or else
                      Has_Suffix (".h") or else
                      Has_Suffix (".txt") or else
-                     Has_Suffix (".md") or else
-                     Has_Suffix (".py") or else
-                     Has_Suffix (".json")
+                     Has_Suffix (".md")
                    then
                      declare
                         File_Content : Unbounded_String;
@@ -437,7 +438,7 @@ package body Knowledge_Manager is
          --  Verbose: prints AFTER guard passes so we know it unblocked.
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                    AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: Wait_For_ELP1_Idle PASSED, starting crawl...");
-         Crawl_Directory (".");
+         null; -- Crawl_Directory (".");
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                    AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: crawl DONE, sleeping 3600s...");
          delay 3600.0; -- Crawl every hour

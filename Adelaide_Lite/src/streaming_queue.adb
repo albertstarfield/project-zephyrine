@@ -189,8 +189,14 @@ package body Streaming_Queue is
 
       function Is_Empty_And_Closed return Boolean is
       begin
-         return Closed and then Ada.Strings.Unbounded.Length (Buffer) = 0;
+         return Closed and then Length (Buffer) = 0;
       end Is_Empty_And_Closed;
+
+      function Get_Format return Format_Type is
+      begin
+         return Format;
+      end Get_Format;
+
    end Queue;
 
    overriding function End_Of_File (Resource : Response_Stream) return Boolean is
@@ -253,10 +259,9 @@ package body Streaming_Queue is
                     Stream_Element (Character'Pos (Item (Integer (I))));
                end loop;
             end;
-            --  We removed the premature `exit;` here. A short read in Ada streams
-            --  signals EOF to the AWS framework, which prematurely terminates the
-            --  HTTP connection. The buffer will fill naturally or flush when Closed.
-            --  The Keep_Alive task ensures it fills every ~3s if generation stalls.
+
+            --  We block until the buffer is full (or closed) to avoid
+            --  AWS interpreting a short read as EOF.
          end if;
 
          exit when Current_Last = Target_Last or else Is_Closed;

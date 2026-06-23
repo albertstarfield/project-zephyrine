@@ -87,7 +87,13 @@ package Model_Manager is
        --  model after all post-processing is complete.  This prevents the
        --  Idle_Monitor from unloading the model while Hybrid_Generate is
        --  still executing tool calls, streaming, etc.
-       Release_Model   : Boolean := True);
+       Release_Model   : Boolean := True;
+       --  When True, bypasses ELP gate acquire/release entirely.
+       --  Used by Hybrid_Generate for its internal sub-calls (router,
+       --  factual check) which run while the gate is already held.
+       --  Without this, each hop re-acquires an already-locked gate
+       --  causing a deadlock (ELP1 never runs after the first hop).
+       Skip_Gate       : Boolean := False);
 
    --  ============================================================================
    --  SPECULATIVE DECODING
