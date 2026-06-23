@@ -514,7 +514,7 @@ package body Knowledge_Manager is
                   Result      : Unbounded_String;
                begin
                   Model_Manager.Generate
-                    (Kind   => Qwen_0_8B,
+                    (Kind   => Snowball_Enaga_ShortNetworkAnswer,
                      Prompt => Prediction_Prompt,
                      Result => Predicted_Q,
                      Level  => ELP0);

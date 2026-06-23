@@ -41,7 +41,7 @@ package Speculative_Decode is
    Max_Draft_Tokens : constant := 5;
 
    --  Draft model type (must be loaded before speculative decoding)
-   Draft_Model_Type : constant Model_Type := Qwen_0_8B;
+   Draft_Model_Type : constant Model_Type := Snowball_Enaga_ShortNetworkAnswer;
 
    --  ============================================================================
    --  SPECULATIVE DECODING API

@@ -2,7 +2,7 @@ pragma SPARK_Mode (On);
 
 package Model_Types is
 
-   type Model_Type is (Qwen_0_8B, Snowball_Enaga_Orchestrator, Qwen_Embedding, MMProj);
+   type Model_Type is (Snowball_Enaga_ShortNetworkAnswer, Snowball_Enaga_Orchestrator, Qwen_Embedding, MMProj);
 
    --  ELP levels hierarchy:
    --  ELP0: Background Literature Indexing (Lowest Priority)

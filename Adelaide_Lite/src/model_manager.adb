@@ -51,7 +51,7 @@ with Speculative_Cache;
 --  the Idle_Monitor unload loop — the 0.8B model is only ~0.5-0.6GB VRAM
 --  at Q4_K_S and is kept permanently loaded.
 --  LINUX-COMPAT / Android-Termux: On Linux (CUDA/Vulkan) the ggml-metal
---  race does not occur, so the Qwen_0_8B exemption guard should be REMOVED
+--  race does not occur, so the Snowball_Enaga_ShortNetworkAnswer exemption guard should be REMOVED
 --  from Idle_Monitor to allow aggressive model unloading.  Smartphone /
 --  Termux-on-Android targets have very limited RAM (4-8GB) and shared GPU
 --  memory, so ALL models including QWEN_0_8B must be unloaded aggressively
@@ -311,7 +311,7 @@ package body Model_Manager is
 
     type Model_Type_Refs is array (Model_Type) of aliased Model_Type;
     Model_Refs : constant Model_Type_Refs :=
-       [Qwen_0_8B      => Qwen_0_8B,
+       [Snowball_Enaga_ShortNetworkAnswer      => Snowball_Enaga_ShortNetworkAnswer,
         Snowball_Enaga_Orchestrator        => Snowball_Enaga_Orchestrator,
         Qwen_Embedding => Qwen_Embedding,
         MMProj         => MMProj];
@@ -559,7 +559,7 @@ package body Model_Manager is
                 --  [Linux/Android-Termux] REMOVE this exemption guard to unload
                 --  QWEN_0_8B aggressively on memory-constrained devices.
                 --  See QUIRK-M03 / QUIRK-S01 for crash details.
-                if Kind = Qwen_0_8B or else Kind = Snowball_Enaga_Orchestrator then
+                if Kind = Snowball_Enaga_ShortNetworkAnswer or else Kind = Snowball_Enaga_Orchestrator then
                     null;
                 elsif Models (Kind).Loaded
                    and then not Models (Kind).In_Use
@@ -716,7 +716,7 @@ package body Model_Manager is
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
         --  Model paths are set here.  None of these load models from disk.
         --  Loading happens lazily in Load_Model on first use.
-        Models (Qwen_0_8B).Path :=
+        Models (Snowball_Enaga_ShortNetworkAnswer).Path :=
            To_Unbounded_String ("model/qwen3.5/Qwen3.5-0.8B-Q4_K_M.gguf");
         Models (Snowball_Enaga_Orchestrator).Path :=
            To_Unbounded_String ("model/qwen3.5/Mythos9bHybridq4.gguf");
@@ -1432,7 +1432,7 @@ package body Model_Manager is
         elsif Name = "qwen-embedding" or else Name = "adelaide-embedding" then
             return Qwen_Embedding;
         else
-            return Qwen_0_8B;
+            return Snowball_Enaga_ShortNetworkAnswer;
         end if;
     end Get_Kind_For_Model_Name;
 

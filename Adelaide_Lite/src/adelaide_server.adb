@@ -64,7 +64,7 @@ with Interfaces.C; use Interfaces.C;
 --  inactivity, triggering a ggml-metal GPU buffer race.  FIXED [macOS]:
 --  QWEN_0_8B is now exempt from Idle_Monitor unloading and kept permanently
 --  loaded.  LINUX-COMPAT / Android-Termux: On Linux (no ggml-metal) remove
---  the Qwen_0_8B exemption in Idle_Monitor to allow aggressive unloading.
+--  the Snowball_Enaga_ShortNetworkAnswer exemption in Idle_Monitor to allow aggressive unloading.
 --  For smartphone / Termux targets, also consider lowering Idle_Monitor
 --  timeout from 30s to 10-15s for tighter memory pressure response.
 --  See QUIRK-M03 for details.
