@@ -556,13 +556,13 @@ package body Model_Manager is
       --  Model paths are set here.  None of these load models from disk.
       --  Loading happens lazily in Load_Model on first use.
       Models (Qwen_0_8B).Path  := To_Unbounded_String
-        ("llama.cpp/models/qwen3.5/Qwen3.5-0.8B-Q4_K_S.gguf");
+        ("model/qwen3.5/Qwen3.5-0.8B-Q4_K_M.gguf");
       Models (Qwen_9B).Path   := To_Unbounded_String
-        ("llama.cpp/models/qwen3.5/Qwen3.5-9B-UD-Q2_K_XL.gguf");
+        ("model/qwen3.5/Mythos9bHybridq4.gguf");
       Models (Qwen_Embedding).Path := To_Unbounded_String
-        ("llama.cpp/models/qwen3.5/Qwen3-Embedding-0.6B-Q8_0.gguf");
+        ("model/qwen3.5/Qwen3-Embedding-0.6B-Q8_0.gguf");
       Models (MMProj).Path := To_Unbounded_String
-        ("llama.cpp/models/qwen3.5/mmproj-9B-F16.gguf");
+        ("model/qwen3.5/Mythos9bHybridq4-mmproj-fp16.gguf");
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s 7/7 Starting Idle_Monitor...");
@@ -2135,6 +2135,10 @@ package body Model_Manager is
                I := I + 10;
             elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</response>" then
                I := I + 11;
+            elsif I + 7 <= Text'Last and then Text (I .. I + 7) = "</think>" then
+               I := I + 8;
+            elsif I + 10 <= Text'Last and then Text (I .. I + 10) = "</thinking>" then
+               I := I + 11;
             else
                Append (Res, Text (I));
                I := I + 1;
@@ -2307,7 +2311,8 @@ package body Model_Manager is
          Cache_Hit := KV_Cache_Manager.Load_From_SSD_Lazy
                (Context    => Models (Kind).Context,
                 Tokens     => Loaded_Tokens,
-                N_Tokens   => Loaded_Count);
+                N_Tokens   => Loaded_Count,
+                Model_ID   => Kind'Img);
 
             if Cache_Hit then
                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) & "[KV-Cache]" &
@@ -2632,7 +2637,8 @@ package body Model_Manager is
          KV_Cache_Manager.Save_To_SSD_Async
            (Context    => Models (Kind).Context,
             Tokens     => Tokens.all'Address,
-            N_Tokens   => Interfaces.C.size_t (N_Toks));
+            N_Tokens   => Interfaces.C.size_t (N_Toks),
+            Model_ID   => Kind'Img);
 
          --  Clear KV cache from RAM immediately after saving
          --  This ensures minimal RAM usage - only current process in memory
@@ -4128,10 +4134,13 @@ package body Model_Manager is
             --  Push `</think>` to close the orchestration think block.
             Push_Chunk (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
 
-            --  Re-emit the final response outside the think block at 200 tok/s
-            --  (approx 800 chars/s = 80 chars per 0.1s).
+            --  Re-emit the final response outside the think block at 300 tok/s
+            --  (approx 1200 chars/s = 120 chars per 0.1s).
+            --  This is what is supposed to happen: after the think block, the response
+            --  is repeated so that clients (like Msty) which hide the think block
+            --  will still display the final response correctly.
             declare
-               Chunk_Size : constant Natural := 80;
+               Chunk_Size : constant Natural := 120;
                Pos        : Positive := Resp_Text'First;
                Last_Pos   : Natural;
             begin
@@ -4204,7 +4213,10 @@ package body Model_Manager is
       if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context then
          --  Save KV cache to SSD (ASYNC, non-blocking)
          KV_Cache_Manager.Save_To_SSD_Async
-           (Models (Kind).Context, Tokens, N_Tokens);
+           (Context  => Models (Kind).Context,
+            Tokens   => Tokens,
+            N_Tokens => N_Tokens,
+            Model_ID => Kind'Img);
       end if;
    exception
       when others =>
@@ -4224,7 +4236,10 @@ package body Model_Manager is
       if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context then
          --  Load KV cache from SSD (LAZY, on-demand only)
          return KV_Cache_Manager.Load_From_SSD_Lazy
-           (Models (Kind).Context, Tokens, N_Tokens);
+           (Context  => Models (Kind).Context,
+            Tokens   => Tokens,
+            N_Tokens => N_Tokens,
+            Model_ID => Kind'Img);
       else
          return False;
       end if;

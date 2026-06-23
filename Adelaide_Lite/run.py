@@ -702,7 +702,7 @@ def main():
             print("[*] Moonshine models already exist, skipping download.")
 
         # Check and download Qwen models
-        qwen_models_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "llama.cpp", "models", "qwen3.5"))
+        qwen_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model", "qwen3.5"))
         os.makedirs(qwen_models_dir, exist_ok=True)
         
         models_to_download = [
@@ -719,12 +719,12 @@ def main():
                 "output": "Qwen3-Embedding-0.6B-Q8_0.gguf"
             },
             {
-                "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-UD-Q2_K_XL.gguf?download=true",
-                "output": "Qwen3.5-9B-UD-Q2_K_XL.gguf"
+                "url": "https://huggingface.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF/resolve/main/Qwythos-9B-Claude-Mythos-5-1M-MTP-Q4_K_M.gguf?download=true",
+                "output": "Mythos9bHybridq4.gguf"
             },
             {
-                "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/mmproj-F16.gguf?download=true",
-                "output": "mmproj-9B-F16.gguf"
+                "url": "https://huggingface.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF/resolve/main/mmproj-Qwythos-9B-Claude-Mythos-5-1M-f16.gguf?download=true",
+                "output": "Mythos9bHybridq4-mmproj-fp16.gguf"
             }
         ]
         
