@@ -805,6 +805,41 @@ def main():
     else:
         print("[!] Warning: ruff not found in PATH, skipping self-integrity quality check.")
 
+    # =====================================================================
+    # LSH QRNN Worker: Python venv bootstrap + self-check
+    # =====================================================================
+    lsh_reqs = os.path.join(BASE_DIR, "lsh", "requirements-lsh.txt")
+    lsh_worker = os.path.join(BASE_DIR, "lsh", "lsh_qrnn_worker.py")
+    if os.path.exists(lsh_reqs):
+        print("[LSH] Bootstrapping QRNN LSH worker venv...")
+        # Use the shared pyvenv (already created by sidecar, or create if missing)
+        pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
+        pyvenv_python = os.path.join(pyvenv_dir, "bin", "python3")
+        if not os.path.exists(pyvenv_python):
+            print("[LSH] Creating shared Python venv at pyvenv/...")
+            subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
+        # pip install LSH requirements
+        pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip")
+        print("[LSH] Installing requirements-lsh.txt...")
+        subprocess.run([pyvenv_pip, "install", "-r", lsh_reqs], check=False)
+        # Self-check: pyrefly type-check on worker script
+        pyvenv_pyrefly = os.path.join(pyvenv_dir, "bin", "pyrefly")
+        if os.path.exists(pyvenv_pyrefly):
+            print("[LSH] Running pyrefly type-check on worker...")
+            subprocess.run([pyvenv_pyrefly, lsh_worker], check=False)
+        else:
+            print("[LSH] pyrefly not found in venv, skipping type-check.")
+        # Self-check: ruff lint on worker script
+        pyvenv_ruff = os.path.join(pyvenv_dir, "bin", "ruff")
+        if os.path.exists(pyvenv_ruff):
+            print("[LSH] Running ruff lint on worker...")
+            subprocess.run([pyvenv_ruff, "check", lsh_worker], check=False)
+        else:
+            print("[LSH] ruff not found in venv, skipping lint.")
+        print("[LSH] QRNN worker bootstrap complete.")
+    else:
+        print(f"[!] LSH requirements not found at {lsh_reqs}, skipping QRNN worker setup.")
+
     # Handle integrity check flag
     if "--test-build-integrity-check" in sys.argv:
         print("[*] Test build integrity check passed! Exiting without launching services.")
