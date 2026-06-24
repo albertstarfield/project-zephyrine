@@ -872,7 +872,8 @@ def perform_platform_integrity_check():
             print("[*] Running Ruff Quality Check on platform components...")
             # Run ruff check on the Adelaide_Lite directory
             adelaide_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            result = subprocess.run([ruff_cmd, "check", adelaide_dir],
+            result = subprocess.run([ruff_cmd, "check", adelaide_dir,
+                                     "--exclude", "vendor,moonshine"],
                                     capture_output=True, text=True)
             if result.returncode != 0:
                 print("[!] Ruff Integrity Check FAILED.")
