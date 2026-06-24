@@ -313,4 +313,14 @@ function Llama_Sampler_Init_Penalties
    function Llama_Print_System_Info return chars_ptr;
    pragma Import (C, Llama_Print_System_Info, "llama_print_system_info");
 
+   --  ===== GPU MEMORY QUERY =====
+   --  Queries GPU device memory (free/total) through ggml backend.
+   --  Works for ALL backends: Metal (Apple), CUDA (NVIDIA), OneAPI/SYCL (Intel),
+   --  Vulkan (cross-platform), ROCm (AMD), NNA (Qualcomm).
+   --  For CPU-only: returns 0,0 (inapplicable).
+   procedure GPU_Memory_Query
+     (Free_Bytes  : out Interfaces.C.size_t;
+      Total_Bytes : out Interfaces.C.size_t);
+   pragma Import (C, GPU_Memory_Query, "gpu_memory_query");
+
 end Llama_Interface;

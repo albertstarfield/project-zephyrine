@@ -724,6 +724,139 @@ package body Model_Manager is
         end loop;
     end Idle_Monitor;
 
+    --  =========================================================================
+    --  GPU MEMORY MONITOR TASK
+    --  =========================================================================
+    --  Runs every 3 seconds. Queries GPU VRAM across ALL backends
+    --  (Metal, CUDA, OneAPI, SYCL, Vulkan, ROCm).
+    --  Prints free/total MB and dynamic N_GPU_Layers percentage.
+    --  If GPU memory query returns 0,0 (inapplicable on Vulkan/CPU),
+    --  reports "stable" or "UNSTABLE" based on Metal_Backend_Broken flag.
+    --  If unstable (OOM/crash), sets N_GPU_Layers to 0.
+    --  If stable with plenty of VRAM, calculates N_GPU_Layers as percentage.
+    --  Also injects status into <think> block via Push_Orchestration_Direct.
+
+    GPU_Monitor_Interval : constant Duration := 3.0;
+
+    task GPU_Monitor is
+        pragma Storage_Size (512 * 1024);
+        entry Start;
+    end GPU_Monitor;
+
+    task body GPU_Monitor is
+        Free_Bytes  : Interfaces.C.size_t := 0;
+        Total_Bytes : Interfaces.C.size_t := 0;
+        Free_MB     : Natural := 0;
+        Total_MB    : Natural := 0;
+        Percent     : Natural := 0;
+        Next_Check  : Time;
+        Uptime_Sec  : Natural;
+        Status_Str  : Unbounded_String;
+    begin
+        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+        Elab_Trace ("GPU_Monitor task body ENTERED");
+        accept Start;
+        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Blue)
+            & "[Init-V]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s GPU_Monitor task ACCEPTED Start, entering 3s loop.");
+
+        loop
+            Next_Check := Clock + Seconds (3);
+            Uptime_Sec := Natural
+               (Ada.Real_Time.To_Duration (Clock - Init_Start_Time));
+
+            --  Query GPU memory through ggml backend (ALL backends)
+            Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
+
+            if Total_Bytes > 0 then
+                --  GPU memory query WORKS (Metal, CUDA, OneAPI, SYCL, ROCm)
+                Free_MB  := Natural (Free_Bytes / (1024 * 1024));
+                Total_MB := Natural (Total_Bytes / (1024 * 1024));
+
+                if Total_MB > 0 then
+                    Percent := Natural
+                       (Float (Free_MB) * 100.0 / Float (Total_MB));
+                    if Percent > 100 then
+                        Percent := 100;
+                    end if;
+                else
+                    Percent := 0;
+                end if;
+
+                --  Calculate N_GPU_Layers: percentage of free VRAM
+                --  Range: 0 (no GPU) to 100 (all layers on GPU)
+                N_GPU_Layers := Percent;
+
+                --  Update global GPU status
+                GPU_Free_MB   := Free_MB;
+                GPU_Total_MB  := Total_MB;
+                GPU_Percent   := Percent;
+                GPU_Is_Stable := True;
+
+                --  Build status string for PutLine and <think> block
+                Status_Str :=
+                   To_Unbounded_String
+                      ("[GPU-Monitor] [Uptime]+"
+                       & Trim (Natural'Image (Uptime_Sec), Both)
+                       & "s Free=" & Trim (Natural'Image (Free_MB), Both)
+                       & "MB / Total=" & Trim (Natural'Image (Total_MB), Both)
+                       & "MB (" & Trim (Natural'Image (Percent), Both)
+                       & "%) N_GPU_Layers="
+                       & Trim (Natural'Image (N_GPU_Layers), Both));
+
+                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                    & To_String (Status_Str)
+                    & AnsiAda.Reset);
+            else
+                --  GPU memory query INAPPLICABLE (Vulkan without query, CPU-only)
+                --  Report stable/unstable based on Metal backend state
+                if Is_Metal_Broken then
+                    GPU_Is_Stable := False;
+                    N_GPU_Layers  := 0;  -- Force CPU-only on instability
+                    Status_Str :=
+                       To_Unbounded_String
+                          ("[GPU-Monitor] [Uptime]+"
+                           & Trim (Natural'Image (Uptime_Sec), Both)
+                           & "s GPU=INAPPLICABLE Status=UNSTABLE"
+                           & " (OOM/crash detected) N_GPU_Layers=0"
+                           & " -- forcing CPU-only mode");
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Red)
+                        & To_String (Status_Str)
+                        & AnsiAda.Reset);
+                else
+                    GPU_Is_Stable := True;
+                    Status_Str :=
+                       To_Unbounded_String
+                          ("[GPU-Monitor] [Uptime]+"
+                           & Trim (Natural'Image (Uptime_Sec), Both)
+                           & "s GPU=INAPPLICABLE Status=STABLE"
+                           & " N_GPU_Layers="
+                           & Trim (Natural'Image (N_GPU_Layers), Both));
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                        & To_String (Status_Str)
+                        & AnsiAda.Reset);
+                end if;
+            end if;
+
+            delay until Next_Check;
+        end loop;
+    end GPU_Monitor;
+
     function Wrap_ChatML (Sys : String; Msg : String) return String is
     begin
         return
@@ -1019,8 +1152,11 @@ package body Model_Manager is
                      (Ada.Real_Time.To_Duration
                          (Ada.Real_Time.Clock - Init_Start_Time)),
                   Both)
-            & "s ElabTrace 7/7 Starting Idle_Monitor...");
+             & "s ElabTrace 7/7 Starting Idle_Monitor...");
         Idle_Monitor.Start;
+        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+        --  Start GPU memory monitor (queries every 3s across ALL backends)
+        GPU_Monitor.Start;
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
         --  [ElabTrace][+Uptime]: Idle_Monitor started. Initialize COMPLETE.
         Put_Line
@@ -1033,7 +1169,7 @@ package body Model_Manager is
                      (Ada.Real_Time.To_Duration
                          (Ada.Real_Time.Clock - Init_Start_Time)),
                   Both)
-            & "s ElabTrace 7/7 Idle_Monitor.START called -- Initialize COMPLETE");
+            & "s ElabTrace 7/7 Idle_Monitor.START + GPU_Monitor.START called -- Initialize COMPLETE");
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -6083,6 +6219,11 @@ package body Model_Manager is
                       & "Context Faults: " & Natural'Image (Current_Context_Fault_Hops) & ASCII.LF
                       & "Pipeline Level: " & ELP_Level'Image (Level) & ASCII.LF
                       & "Streaming Mode: Emulated 300 tok/s" & ASCII.LF
+                      & "GPU Free: " & Natural'Image (GPU_Free_MB) & "MB / "
+                      & Natural'Image (GPU_Total_MB) & "MB ("
+                      & Natural'Image (GPU_Percent) & "%)" & ASCII.LF
+                      & "N_GPU_Layers: " & Natural'Image (N_GPU_Layers) & "%" & ASCII.LF
+                      & "GPU Stable: " & Boolean'Image (GPU_Is_Stable) & ASCII.LF
                       & "--- END STATISTICS ---";
                 begin
                     Push_Chunk (Stream, Session_ID, Stats_Str);
