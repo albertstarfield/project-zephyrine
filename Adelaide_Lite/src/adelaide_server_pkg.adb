@@ -909,7 +909,15 @@ package body Adelaide_Server_Pkg is
                                "Session: " & To_String (S_ID) & ASCII.LF &
                                "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
                                "Model: " & To_String (Req_Model) & ASCII.LF &
-                               "Status: Request received - starting orchestration..." & ASCII.LF);
+                               "Status: Request received - starting orchestration..." & ASCII.LF &
+                               "Phase: Initializing thought pipeline..." & ASCII.LF &
+                               "Step 1/3: Parsing user intent and context" & ASCII.LF &
+                               "Step 2/3: Loading memory and knowledge context" & ASCII.LF &
+                               "Step 3/3: Generating response with personality" & ASCII.LF &
+                               "Pipeline Architecture: ELP0 (background) -> ELP1 (foreground)" & ASCII.LF &
+                               "Token Budget: Streaming enabled, real-time chunk delivery" & ASCII.LF &
+                               "Memory System: Semantic search + knowledge graph integration" & ASCII.LF &
+                               "Orchestration Mode: Multi-hop reasoning with context faults" & ASCII.LF);
                    end if;
 
                   T.Start (To_String (Prompt), To_String (Req_Model),
