@@ -107,6 +107,18 @@ procedure Adelaide_Server is
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  C import to force unbuffered stdout/stderr.  When run.py launches this
+   --  server via subprocess.Popen(), stdout becomes a pipe (not a terminal).
+   --  C stdio defaults to full buffering (8KB) on pipes, so Ada.Text_IO.Put_Line
+   --  output sits in the C buffer and is never flushed.  The server runs fine
+   --  but is completely invisible — no banner, no init logs, no API responses.
+   --  Call these as the VERY FIRST thing in main(), before any Put_Line.
+   procedure Force_Stdout_Unbuffered;
+   pragma Import (C, Force_Stdout_Unbuffered, "force_stdout_unbuffered");
+   procedure Force_Stderr_Unbuffered;
+   pragma Import (C, Force_Stderr_Unbuffered, "force_stderr_unbuffered");
+
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
    --  ==================================================================
    --  INIT PHASE EPOCH CLOCK
    --  ==================================================================
@@ -209,6 +221,16 @@ procedure Adelaide_Server is
    Retry_Count : Natural := 0;
    Started     : Boolean := False;
 begin
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  CRITICAL: Force unbuffered stdout/stderr BEFORE any Put_Line.
+   --  When run.py launches via subprocess.Popen(), stdout becomes a pipe.
+   --  C stdio defaults to full buffering (8KB) on pipes, so Ada.Text_IO
+   --  output is stuck in the C buffer and never flushed.  This makes the
+   --  server invisible — no banner, no init logs, no API responses.
+   --  This MUST be the absolute first statement in the main block.
+   Force_Stdout_Unbuffered;
+   Force_Stderr_Unbuffered;
+
    declare
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Start_Time: Captured at the very first line of the main block.
