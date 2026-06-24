@@ -759,6 +759,11 @@ package body Model_Manager is
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
         --  Capture start time for uptime calculation.
         Init_Start_Time := Ada.Real_Time.Clock;
+        --  [VITAL-DO-NOT-REMOVE] Initialize Generate_Seed with current time.
+        --  This ensures different output on each retry for think-only responses.
+        Generate_Seed :=
+           Interfaces.C.unsigned
+              (Ada.Calendar.Seconds (Ada.Calendar.Clock));
         --  Verbose init tracing: each print confirms a subsystem completed.
         --  If the server hangs during init, the LAST print before silence
         --  tells you exactly which step is stuck.
@@ -3483,7 +3488,9 @@ package body Model_Manager is
         Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_K (40));
         Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_P (0.9, 1));
         Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Temp (0.7));
-        Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Dist (1234));
+        --  [VITAL-DO-NOT-REMOVE] Use randomized seed instead of hardcoded 1234.
+        --  Seed is incremented on think-only retries to get different output.
+        Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Dist (Generate_Seed));
 
         Parser.Orch_Think_Open := Orch_Think_Open;
 
@@ -5510,6 +5517,90 @@ package body Model_Manager is
                         Virtual_Tok_Len => Cached_Virtual_Len,
                         Release_Model   => False,
                         Skip_Gate       => False);
+
+                    --  =================================================================
+                    --  THINK-ONLY RETRY: If model produced only <think>...</think>
+                    --  with no visible content, retry with randomized seed.
+                    --  Max 2 retries. Stream=null on retries to avoid duplicate output.
+                    --  Blacklist seeds that produce think-only responses.
+                    --  =================================================================
+                    declare
+                        Max_Think_Retries : constant := 2;
+                        Retry_Count       : Natural := 0;
+                        Sanitized_Check   : String :=
+                           Sanitize_Think_Tags (To_String (Fault_Result));
+                    begin
+                        --  Blacklist the initial seed if it produced think-only
+                        if Sanitized_Check = "" then
+                            Database_Manager.Blacklist_Seed
+                               (Natural (Generate_Seed));
+                        end if;
+
+                        while Sanitized_Check = "" and then
+                              Retry_Count < Max_Think_Retries
+                        loop
+                            Retry_Count := Retry_Count + 1;
+
+                            --  [VITAL-DO-NOT-REMOVE] Find next non-blacklisted seed.
+                            --  Skip blacklisted seeds automatically.
+                            loop
+                                Generate_Seed := Generate_Seed + 1;
+                                exit when not Database_Manager.Is_Seed_Blacklisted
+                                   (Natural (Generate_Seed));
+                            end loop;
+
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Yellow)
+                                & "[Init-V]"
+                                & AnsiAda.Reset
+                                & " Hybrid_Generate: THINK-ONLY DETECTED. Retry "
+                                & Natural'Image (Retry_Count) & "/"
+                                & Natural'Image (Max_Think_Retries)
+                                & " with seed="
+                                & Interfaces.C.unsigned'Image (Generate_Seed));
+
+                            --  Retry without streaming (avoids duplicate tokens to client)
+                            Generate
+                               (Kind            => Snowball_Enaga_Orchestrator,
+                                Prompt          => Get_Final_Prompt,
+                                Result          => Fault_Result,
+                                Images          => Images,
+                                Session_ID      => Session_ID,
+                                Requested_Ctx   => 8192,
+                                Stream          => null,
+                                Orch_Think_Open => False,
+                                Level           => Level,
+                                Virtual_Tokens  => Cached_Virtual_Tokens,
+                                Virtual_Tok_Len => Cached_Virtual_Len,
+                                Release_Model   => False,
+                                Skip_Gate       => False);
+
+                            --  Check sanitized result
+                            Sanitized_Check :=
+                               Sanitize_Think_Tags (To_String (Fault_Result));
+
+                            if Sanitized_Check /= "" then
+                                --  Retry produced visible content — stream it to client
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Green)
+                                    & "[Init-V]"
+                                    & AnsiAda.Reset
+                                    & " Hybrid_Generate: RETRY SUCCEEDED. Len="
+                                    & Natural'Image (Length (Fault_Result)));
+                                if Stream /= null then
+                                    Push_Chunk
+                                       (Stream, Session_ID,
+                                        To_String (Fault_Result));
+                                end if;
+                                exit;
+                            else
+                                --  This seed also produced think-only — blacklist it
+                                Database_Manager.Blacklist_Seed
+                                   (Natural (Generate_Seed));
+                            end if;
+                        end loop;
+                    end;
+
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Blue)

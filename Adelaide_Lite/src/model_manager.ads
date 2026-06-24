@@ -276,4 +276,10 @@ package Model_Manager is
    Cached_Virtual_Tokens : Cached_Token_Access := null;
    Cached_Virtual_Len    : Natural := 0;
 
+   --  [VITAL-DO-NOT-REMOVE] Randomized seed for Generate sampler.
+   --  Initialized with Ada.Calendar.Seconds to get different output on
+   --  each retry. Incremented on think-only retries to avoid identical
+   --  degenerate responses.
+   Generate_Seed : Interfaces.C.unsigned := 0;
+
 end Model_Manager;

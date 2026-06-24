@@ -130,6 +130,15 @@ package body Database_Manager is
                   "context TEXT," &
                   "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
+         --  [VITAL-DO-NOT-REMOVE] Seed blacklist table.
+         --  Persists blacklisted seeds across restarts.
+         --  Stored in main DB (not .gitignored file).
+         Execute (Main_DB_Ptr.all,
+                  "CREATE TABLE IF NOT EXISTS seed_blacklist (" &
+                  "seed INTEGER PRIMARY KEY," &
+                  "reason TEXT DEFAULT 'think-only'," &
+                  "blacklisted_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
+
          Done := True;
          Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" &
            AnsiAda.Reset & " Core initialized.");
@@ -878,6 +887,75 @@ package body Database_Manager is
    exception
       when others => null;
    end Search_Literature_By_LSH;
+
+   --  =====================================================================
+   --  SEED BLACKLIST (think-only prevention)
+   --  =====================================================================
+   --  When a seed produces only <think> with no visible content,
+   --  it is blacklisted permanently. Generate skips blacklisted seeds.
+
+   procedure Blacklist_Seed (Seed : Natural) is
+   begin
+      if Main_DB_Ptr = null then
+         return;
+      end if;
+      declare
+         Stmt : Statement := Prepare (Main_DB_Ptr.all,
+                           "INSERT OR IGNORE INTO seed_blacklist (seed, reason) " &
+                           "VALUES (?, 'think-only')");
+      begin
+         Bind_Text (Stmt, 1, Natural'Image (Seed));
+         Step (Stmt);
+         Put_Line
+            (AnsiAda.Foreground (AnsiAda.Yellow)
+             & "[Seed-BL]"
+             & AnsiAda.Reset
+             & " Blacklisted seed " & Natural'Image (Seed)
+             & " (think-only response)");
+      exception
+         when others => null;  -- Non-fatal: blacklist is best-effort
+      end;
+   end Blacklist_Seed;
+
+   function Is_Seed_Blacklisted (Seed : Natural) return Boolean is
+      Result : Boolean := False;
+   begin
+      if Main_DB_Ptr = null then
+         return False;
+      end if;
+      declare
+         Stmt : Statement := Prepare (Main_DB_Ptr.all,
+                           "SELECT COUNT(*) FROM seed_blacklist " &
+                           "WHERE seed = ?");
+      begin
+         Bind_Text (Stmt, 1, Natural'Image (Seed));
+         if Step (Stmt) = ROW then
+            Result := Column_Int (Stmt, 0) > 0;
+         end if;
+      exception
+         when others => Result := False;
+      end;
+      return Result;
+   end Is_Seed_Blacklisted;
+
+   function Get_Blacklist_Size return Natural is
+      Count : Natural := 0;
+   begin
+      if Main_DB_Ptr = null then
+         return 0;
+      end if;
+      declare
+         Stmt : Statement := Prepare (Main_DB_Ptr.all,
+                           "SELECT COUNT(*) FROM seed_blacklist");
+      begin
+         if Step (Stmt) = ROW then
+            Count := Natural (Column_Int (Stmt, 0));
+         end if;
+      exception
+         when others => Count := 0;
+      end;
+      return Count;
+   end Get_Blacklist_Size;
 
    procedure Close is
    begin

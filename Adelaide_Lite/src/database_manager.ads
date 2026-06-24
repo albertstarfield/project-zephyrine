@@ -85,6 +85,13 @@ package Database_Manager is
 
    procedure Export_GraphML (Filename : String);
 
+   --  [VITAL-DO-NOT-REMOVE] Seed blacklist for think-only responses.
+   --  When a seed produces only <think> with no visible content,
+   --  it is blacklisted permanently. Generate skips blacklisted seeds.
+   procedure Blacklist_Seed (Seed : Natural);
+   function Is_Seed_Blacklisted (Seed : Natural) return Boolean;
+   function Get_Blacklist_Size return Natural;
+
    procedure Close;
 
 end Database_Manager;
