@@ -693,15 +693,15 @@ package body Model_Manager is
             Next_Check := Clock + Interval;
             Now := Clock;
             for Kind in Model_Type loop
-                --  [QUIRK-FIX] [macOS] Keep QWEN_0_8B permanently loaded to avoid
-                --  ggml-metal GPU buffer race during Llama_Free/Unload_Model.
-                --  The 0.8B model costs only ~0.5-0.6GB VRAM at Q4_K_S.
-                --  [Linux/Android-Termux] REMOVE this exemption guard to unload
-                --  QWEN_0_8B aggressively on memory-constrained devices.
-                --  See QUIRK-M03 / QUIRK-S01 for crash details.
-                if Kind = Snowball_Enaga_ShortNetworkAnswer or else Kind = Snowball_Enaga_Orchestrator then
-                    null;
-                elsif Models (Kind).Loaded
+                --  [PARALLEL=1 FIX] Removed old exemption guard that kept
+                --  0.8B and 9B models permanently resident in GPU.
+                --  LM Studio works because it loads ONE model at a time.
+                --  Adelaide_Lite crashed because multiple models competed
+                --  for GPU VRAM. The Metal crash (QUIRK-M03) that caused
+                --  this exemption is already fixed by Wait_For_Save + proper
+                --  Unload_Model sequencing in Hybrid_Generate.
+                --  ALL models now unload when idle, just like LM Studio.
+                if Models (Kind).Loaded
                    and then not Models (Kind).In_Use
                    and then (Now - Models (Kind).Last_Used) > Timeout
                 then
@@ -792,17 +792,14 @@ package body Model_Manager is
                     Percent := 0;
                 end if;
 
-                --  Calculate N_GPU_Layers: percentage of free VRAM
-                --  Range: 0 (no GPU) to 100 (all layers on GPU)
-                N_GPU_Layers := Percent;
-
                 --  Update global GPU status
-                GPU_Free_MB   := Free_MB;
-                GPU_Total_MB  := Total_MB;
-                GPU_Percent   := Percent;
-                GPU_Is_Stable := True;
+                GPU_Free_MB       := Free_MB;
+                GPU_Total_MB      := Total_MB;
+                GPU_Layer_Percent := Percent;
+                GPU_Is_Stable     := True;
 
-                --  Build status string for PutLine and <think> block
+                --  Build status string: show free/total, percentage,
+                --  AND the actual GPU_Layer_Count (what Load_Model uses)
                 Status_Str :=
                    To_Unbounded_String
                       ("[GPU-Monitor] [Uptime]+"
@@ -810,8 +807,9 @@ package body Model_Manager is
                        & "s Free=" & Trim (Natural'Image (Free_MB), Both)
                        & "MB / Total=" & Trim (Natural'Image (Total_MB), Both)
                        & "MB (" & Trim (Natural'Image (Percent), Both)
-                       & "%) N_GPU_Layers="
-                       & Trim (Natural'Image (N_GPU_Layers), Both));
+                       & "%) GPU_Layers="
+                       & (if GPU_Layer_Count = -1 then "ALL(-1)"
+                          else Trim (Integer'Image (GPU_Layer_Count), Both)));
 
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                 Put_Line
@@ -823,13 +821,12 @@ package body Model_Manager is
                 --  Report stable/unstable based on Metal backend state
                 if Is_Metal_Broken then
                     GPU_Is_Stable := False;
-                    N_GPU_Layers  := 0;  -- Force CPU-only on instability
                     Status_Str :=
                        To_Unbounded_String
                           ("[GPU-Monitor] [Uptime]+"
                            & Trim (Natural'Image (Uptime_Sec), Both)
                            & "s GPU=INAPPLICABLE Status=UNSTABLE"
-                           & " (OOM/crash detected) N_GPU_Layers=0"
+                           & " (OOM/crash detected) GPU_Layers=0"
                            & " -- forcing CPU-only mode");
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                     Put_Line
@@ -843,8 +840,9 @@ package body Model_Manager is
                           ("[GPU-Monitor] [Uptime]+"
                            & Trim (Natural'Image (Uptime_Sec), Both)
                            & "s GPU=INAPPLICABLE Status=STABLE"
-                           & " N_GPU_Layers="
-                           & Trim (Natural'Image (N_GPU_Layers), Both));
+                           & " GPU_Layers="
+                           & (if GPU_Layer_Count = -1 then "ALL(-1)"
+                              else Trim (Integer'Image (GPU_Layer_Count), Both)));
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -1205,6 +1203,28 @@ package body Model_Manager is
             To_Unbounded_String ("../" & Base_Path),
             To_Unbounded_String ("../../" & Base_Path));
     begin
+        --  [ADAPTIVE GPU RETRY] If we previously fell back from -1 due to OOM,
+        --  check if 3 minutes have passed. If so, retry -1 (all on GPU).
+        --  This auto-probes whether the GPU can handle full offload after
+        --  cooling down (other processes may have freed VRAM).
+        if GPU_Layer_Count /= -1 and then GPU_Last_OOM_Time /= Time_First then
+            declare
+                Elapsed : constant Duration :=
+                   Ada.Real_Time.To_Duration (Clock - GPU_Last_OOM_Time);
+            begin
+                if Elapsed >= GPU_Retry_Interval then
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                        & "[GPU-Adaptive]"
+                        & AnsiAda.Reset
+                        & " 3 min cooldown elapsed. Retrying full GPU (-1)."
+                        & " Was at fallback=" & Integer'Image (GPU_Layer_Count));
+                    GPU_Layer_Count := -1;  -- Retry aggressive
+                end if;
+            end;
+        end if;
+
         Actual_Ctx := unsigned (Requested_Ctx);
         --  Minimum context size is 8192 for stability and headroom.
         --  Smaller contexts (e.g., 4096) caused llama_decode assertion failures
@@ -1613,16 +1633,16 @@ package body Model_Manager is
                 C_Params.Type_K := GGML_TYPE_Q4_1;
                 C_Params.Type_V := GGML_TYPE_Q4_1;
                 C_Params.Flash_Attn_Type := 1;
-                --  [OOM-FIX] N_Gpu_Layers := -1 (all 32 layers on GPU) caused
-                --  Metal OOM at decode position 256. Model weights (5.5GB) +
-                --  KV cache (80MB) + RS buffer (50MB) + compute buffer (250MB)
-                --  = 5.9GB loaded fine, but actual Metal decode at position 256
-                --  needs MORE temporary memory than the 250MB reservation
-                --  (Gated Delta Net fused graphs + Metal command buffers).
-                --  FIX: Keep 24 of 32 layers on GPU (75%), leaving ~1.4GB
-                --  headroom for Metal runtime allocations. 8 layers run on
-                --  CPU (acceptable latency for hybrid recurrent architecture).
-                M_Params.N_Gpu_Layers := 24;
+                --  [ADAPTIVE GPU LAYERS] Start aggressive (-1 = all layers on GPU).
+                --  If OOM, OOM handler sets GPU_Layer_Count to fallback (24).
+                --  After 3 min cooldown, Load_Model retries -1 again.
+                --  This auto-probes whether GPU can handle full offload.
+                if GPU_Layer_Count = -1 then
+                    M_Params.N_Gpu_Layers := -1;  -- Aggressive: all on GPU
+                else
+                    M_Params.N_Gpu_Layers :=
+                       Interfaces.C.int (GPU_Layer_Count);  -- Fallback
+                end if;
             end if;
 
             C_Params.Abort_Callback := Llama_Abort_Callback'Address;
@@ -1743,6 +1763,50 @@ package body Model_Manager is
                 Models (Kind).Loaded := True;
                 Models (Kind).Last_Used := Clock;
                 Models (Kind).Current_Ctx := Actual_Ctx;
+                --  [LM-STYLE KV RESTORE] After creating context, try to
+                --  restore previously saved KV state from disk.
+                --  This is how LM Studio-style one-model-at-a-time works:
+                --  Hop N saves KV + unloads model → Hop N+1 loads model + restores KV.
+                declare
+                    KV_Restored : Boolean;
+                    KV_Tokens   : System.Address;
+                    KV_N_Toks   : Interfaces.C.size_t;
+                begin
+                    KV_Restored := KV_Cache_Manager.Load_From_SSD_Lazy
+                       (Context  => Models (Kind).Context,
+                        Tokens   => KV_Tokens,
+                        N_Tokens => KV_N_Toks,
+                        Model_ID => Kind'Img);
+                    if KV_Restored then
+                        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Green)
+                            & "[Uptime]+"
+                            & Trim
+                                 (Duration'Image
+                                     (Ada.Real_Time.To_Duration
+                                         (Ada.Real_Time.Clock
+                                          - Init_Start_Time)),
+                                  Both)
+                            & "s [LoadModel]"
+                            & AnsiAda.Reset
+                            & " KV restored from disk. Ready for generation.");
+                    else
+                        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                            & "[Uptime]+"
+                            & Trim
+                                 (Duration'Image
+                                     (Ada.Real_Time.To_Duration
+                                         (Ada.Real_Time.Clock
+                                          - Init_Start_Time)),
+                                  Both)
+                            & "s [LoadModel]"
+                            & AnsiAda.Reset
+                            & " No cached KV found. Fresh context.");
+                    end if;
+                end;
                 Success := True;
             else
                 Llama_Model_Free (Models (Kind).Model);
@@ -1789,6 +1853,19 @@ package body Model_Manager is
                 & "=========================================================="
                 & AnsiAda.Reset);
             Mark_Metal_Broken;
+            --  [ADAPTIVE GPU FALLBACK] OOM during load → reduce GPU layers
+            if GPU_Layer_Count = -1 then
+                GPU_Layer_Count   := GPU_Layer_Fallback;
+                GPU_Last_OOM_Time := Ada.Real_Time.Clock;
+                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[GPU-Adaptive]"
+                    & AnsiAda.Reset
+                    & " OOM during load on full GPU (-1). Falling back to"
+                    & Integer'Image (GPU_Layer_Fallback)
+                    & " layers. Will retry -1 in 3 minutes.");
+            end if;
             --  Free partial context if it was created
             if Models (Kind).Context /= Null_Context then
                 Llama_Interface.Llama_Free (Models (Kind).Context);
@@ -3971,6 +4048,20 @@ package body Model_Manager is
                 & "=========================================================="
                 & AnsiAda.Reset);
             Mark_Metal_Broken;
+            --  [ADAPTIVE GPU FALLBACK] OOM → reduce GPU layers, record time.
+            --  Next Load_Model will retry -1 after 3 min cooldown.
+            if GPU_Layer_Count = -1 then
+                GPU_Layer_Count   := GPU_Layer_Fallback;
+                GPU_Last_OOM_Time := Ada.Real_Time.Clock;
+                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[GPU-Adaptive]"
+                    & AnsiAda.Reset
+                    & " OOM on full GPU (-1). Falling back to"
+                    & Integer'Image (GPU_Layer_Fallback)
+                    & " layers. Will retry -1 in 3 minutes.");
+            end if;
             --  Force-unload the model to free VRAM and avoid corrupt state.
             --  [PARALLEL=1] Wait for KV save (if any) before unload
             begin
@@ -5112,7 +5203,7 @@ package body Model_Manager is
                         Level           => Level,
                         Virtual_Tokens  => Cached_Virtual_Tokens,
                         Virtual_Tok_Len => Cached_Virtual_Len,
-                        Release_Model   => False,
+                        Release_Model   => True,
                         Skip_Gate       => False);
                 end;
 
@@ -5287,7 +5378,7 @@ package body Model_Manager is
                     Level,
                     Cached_Virtual_Tokens,
                     Cached_Virtual_Len,
-                    Release_Model => False,
+                    Release_Model => True,
                     Skip_Gate     => False);
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                 Put_Line
@@ -5296,7 +5387,7 @@ package body Model_Manager is
                     & AnsiAda.Reset
                     & " Hybrid_Generate: Hop"
                     & Current_Hop'Img
-                    & " Generate returned. Len="
+                    & " Generate returned (model released). Len="
                     & Natural'Image (Length (Step_Raw)));
 
                 declare
@@ -5735,7 +5826,7 @@ package body Model_Manager is
                         Level           => Level,
                         Virtual_Tokens  => Cached_Virtual_Tokens,
                         Virtual_Tok_Len => Cached_Virtual_Len,
-                        Release_Model   => False,
+                        Release_Model   => True,
                         Skip_Gate       => False);
 
                     --  =================================================================
@@ -5792,7 +5883,7 @@ package body Model_Manager is
                                 Level           => Level,
                                 Virtual_Tokens  => Cached_Virtual_Tokens,
                                 Virtual_Tok_Len => Cached_Virtual_Len,
-                                Release_Model   => False,
+                                Release_Model   => True,
                                 Skip_Gate       => False);
 
                             --  Check sanitized result
@@ -6230,8 +6321,11 @@ package body Model_Manager is
                       & "Streaming Mode: Emulated 300 tok/s" & ASCII.LF
                       & "GPU Free: " & Natural'Image (GPU_Free_MB) & "MB / "
                       & Natural'Image (GPU_Total_MB) & "MB ("
-                      & Natural'Image (GPU_Percent) & "%)" & ASCII.LF
-                      & "N_GPU_Layers: " & Natural'Image (N_GPU_Layers) & "%" & ASCII.LF
+                      & Natural'Image (GPU_Layer_Percent) & "%)" & ASCII.LF
+                      & "GPU Layers: "
+                      & (if GPU_Layer_Count = -1 then "ALL(-1)"
+                         else Integer'Image (GPU_Layer_Count) & "/" & Natural'Image (Total_Model_Layers))
+                      & ASCII.LF
                       & "GPU Stable: " & Boolean'Image (GPU_Is_Stable) & ASCII.LF
                       & "--- END STATISTICS ---";
                 begin
@@ -6289,11 +6383,24 @@ package body Model_Manager is
         ELP_Queue.Dequeue_Level (Level);
 
     exception
-        when E : Storage_Error =>
+         when E : Storage_Error =>
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
             --  Stack overflow during hybrid generation (tool exec, tokenization,
             --  or context fault paging).  Force-unload model and report cleanly.
             --  Mark Metal broken so KV save retries instead of SIGABRT.
+            --  [ADAPTIVE GPU FALLBACK] OOM → reduce GPU layers for next load
+            if GPU_Layer_Count = -1 then
+                GPU_Layer_Count   := GPU_Layer_Fallback;
+                GPU_Last_OOM_Time := Ada.Real_Time.Clock;
+                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[GPU-Adaptive]"
+                    & AnsiAda.Reset
+                    & " OOM in Hybrid_Generate on full GPU (-1). Falling back to"
+                    & Integer'Image (GPU_Layer_Fallback)
+                    & " layers. Will retry -1 in 3 minutes.");
+            end if;
             begin
                 Models (Snowball_Enaga_Orchestrator).In_Use := False;
                 if Level = ELP0 then

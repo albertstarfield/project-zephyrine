@@ -30,6 +30,11 @@ except ImportError:
     ALR_DEFAULT_EXECUTABLE_NAME = "stella_greeting"
     ADA_DAEMON_RETRY_DELAY_SECONDS = 30 # NEW: Fallback value
 
+# [DO NOT REMOVE] Max retry count for daemon processes.
+# After ADA_DAEMON_MAX_RETRIES consecutive failures, stop retrying.
+# This prevents infinite loops when hardware (e.g., MCU socket) is absent.
+ADA_DAEMON_MAX_RETRIES = 3
+
 class StellaIcarusHookManager:
     def __init__(self):
         """
@@ -289,6 +294,7 @@ class StellaIcarusAdaDaemonManager:
         """
         Target function for each daemon's management thread.
         MODIFIED: Now includes a high-availability retry loop on process failure.
+        [DO NOT REMOVE] Added max retry count to prevent infinite loops.
         """
         thread_name = f"AdaDaemon-{project['name']}"
         executable_path = os.path.join(project["path"], "bin", project["executable_name"])
@@ -298,9 +304,18 @@ class StellaIcarusAdaDaemonManager:
             logger.error(f"[{thread_name}] Executable not found, thread will exit permanently: {executable_path}")
             return
 
+        # [DO NOT REMOVE] Track consecutive failures to prevent infinite retry loops.
+        consecutive_failures = 0
+
         # --- MODIFICATION START: High-Availability Loop ---
         while not stop_event.is_set():
-            logger.info(f"[{thread_name}] Attempting to start daemon process: {executable_path}")
+            # [DO NOT REMOVE] Max retry check — stop after ADA_DAEMON_MAX_RETRIES consecutive failures.
+            # This prevents infinite loops when hardware (e.g., MCU socket) is absent.
+            if consecutive_failures >= ADA_DAEMON_MAX_RETRIES:
+                logger.critical(f"[{thread_name}] Stopped retrying after {ADA_DAEMON_MAX_RETRIES} consecutive failures.")
+                break
+
+            logger.info(f"[{thread_name}] Attempting to start daemon process (attempt {consecutive_failures + 1}/{ADA_DAEMON_MAX_RETRIES}): {executable_path}")
             process = None
             try:
                 process = subprocess.Popen(
@@ -382,13 +397,19 @@ class StellaIcarusAdaDaemonManager:
             # If exit was clean (RC:0), no need to retry — exit the loop.
             if process and process.returncode == 0:
                 logger.info(f"[{thread_name}] Clean exit (RC:0). No retry needed.")
+                consecutive_failures = 0  # Reset on success
                 break
+
+            # [DO NOT REMOVE] Track consecutive failures for max retry check.
+            consecutive_failures += 1
 
             # --- MODIFICATION: Log INOP Error and Wait Before Retrying ---
             logger.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             logger.critical(f"!! [INOP ERROR] Ada Daemon '{project['name']}' has failed!                 !!")
             logger.critical(
                 f"!! The system will attempt to restart it in {ADA_DAEMON_RETRY_DELAY_SECONDS} seconds.            !!")
+            logger.critical(
+                f"!! Consecutive failures: {consecutive_failures}/{ADA_DAEMON_MAX_RETRIES}                                        !!")
             logger.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
             # Wait for the specified delay, but allow the stop_event to interrupt the wait
