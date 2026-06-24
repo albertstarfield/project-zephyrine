@@ -914,14 +914,15 @@ package body Adelaide_Server_Pkg is
                                       & "MB free / "
                                       & Ada.Strings.Fixed.Trim (Natural'Image (Model_Manager.GPU_Total_MB), Ada.Strings.Both)
                                       & "MB total ("
-                                      & Ada.Strings.Fixed.Trim (Natural'Image (Model_Manager.GPU_Percent), Ada.Strings.Both)
-                                      & "%) N_GPU_Layers="
-                                      & Ada.Strings.Fixed.Trim (Natural'Image (Model_Manager.N_GPU_Layers), Ada.Strings.Both));
+                                      & Ada.Strings.Fixed.Trim (Natural'Image (Model_Manager.GPU_Layer_Percent), Ada.Strings.Both)
+                                      & "%) GPU_Layers="
+                                      & (if Model_Manager.GPU_Layer_Count = -1 then "ALL(-1)"
+                                         else Ada.Strings.Fixed.Trim (Integer'Image (Model_Manager.GPU_Layer_Count), Ada.Strings.Both)));
                            else
                                if Model_Manager.GPU_Is_Stable then
                                    GPU_Part := To_Unbounded_String ("GPU Status: STABLE (CPU-only)");
                                else
-                                   GPU_Part := To_Unbounded_String ("GPU Status: UNSTABLE (OOM/crash) N_GPU_Layers=0");
+                                   GPU_Part := To_Unbounded_String ("GPU Status: UNSTABLE (OOM/crash) GPU_Layers=0");
                                end if;
                            end if;
                            Q.Push ("<think>" & ASCII.LF &

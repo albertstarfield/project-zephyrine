@@ -8,6 +8,7 @@ with System;
 with Interfaces.C;
 with Ada.Unchecked_Deallocation;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Ada.Real_Time;
 with GNATCOLL.JSON;
 with Model_Types; use Model_Types;
 
@@ -314,15 +315,26 @@ package Model_Manager is
    --  Tracks free/total GPU VRAM across ALL backends (Metal, CUDA, OneAPI,
    --  SYCL, Vulkan, ROCm). If GPU memory query is inapplicable (CPU-only
    --  or Vulkan without memory query), reports "stable" or "UNSTABLE".
-   --  On OOM/crash: flips N_GPU_Layers to 0 to prevent further GPU usage.
-   --  N_GPU_Layers is dynamically calculated as percentage of free VRAM:
-   --    N_GPU_Layers = (Free_MB / Total_MB) * 100, rounded to nearest int.
-   --  Range: 0 (no GPU layers) to 100 (all layers on GPU).
+   --
+   --  ADAPTIVE GPU LAYER STRATEGY:
+   --  1. Start aggressive: GPU_Layer_Count = -1 (ALL layers on GPU)
+   --  2. If OOM → fallback to GPU_Layer_Fallback (24 layers)
+   --  3. Record OOM timestamp
+   --  4. After GPU_Retry_Interval (3 min) → retry -1 (all on GPU)
+   --  5. If OOM again → fallback again → repeat
+   --  This auto-probes whether the GPU can handle full offload, and
+   --  backs off when it can't, recovering automatically.
 
-   GPU_Free_MB  : Natural := 0;  -- Free GPU memory in megabytes
-   GPU_Total_MB : Natural := 0;  -- Total GPU memory in megabytes
-   GPU_Percent  : Natural := 0;  -- Free/Total * 100, rounded
-   GPU_Is_Stable : Boolean := True;  -- False if OOM/crash detected
-   N_GPU_Layers  : Natural := 99;    -- Dynamic: percent of layers on GPU
+   Total_Model_Layers   : constant Natural := 32;  -- Qwen3.5HybridMythos
+   GPU_Layer_Fallback   : constant Integer := 24;  -- Safe fallback (75%)
+   GPU_Retry_Interval   : constant Duration := 180.0;  -- 3 minutes
+
+   GPU_Free_MB          : Natural := 0;    -- Free GPU memory in megabytes
+   GPU_Total_MB         : Natural := 0;    -- Total GPU memory in megabytes
+   GPU_Layer_Percent    : Natural := 0;    -- Free/Total * 100, for display
+   GPU_Is_Stable        : Boolean := True;  -- False if OOM/crash detected
+   GPU_Layer_Count      : Integer := -1;   -- ACTUAL layers on GPU (-1 = all)
+   GPU_Last_OOM_Time    : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
+   --  Time of last OOM. After GPU_Retry_Interval, Load_Model retries -1.
 
 end Model_Manager;
