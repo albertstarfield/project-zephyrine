@@ -168,16 +168,6 @@ function addMessageToUI(msg: Message): string {
   return msgId;
 }
 
-function updateMessageInUI(id: string, newContent: string) {
-    const bubble = document.getElementById(id + '-bubble');
-    if (bubble) {
-        renderMarkdownToElement(bubble, newContent);
-        const chatContainerWrapper = document.getElementById('chat-container');
-        if (chatContainerWrapper) {
-            chatContainerWrapper.scrollTop = chatContainerWrapper.scrollHeight;
-        }
-    }
-}
 
 let currentSessionId: number | null = null;
 
@@ -382,7 +372,6 @@ async function processQueue() {
     if (!text) continue;
 
     const typingId = addTypingIndicator();
-    let assistantMessageId = '';
     let fullContent = '';
 
     try {
@@ -392,9 +381,8 @@ async function processQueue() {
         body: JSON.stringify({ message: text, session_id: currentSessionId })
       });
 
-      removeTypingIndicator(typingId);
-
       if (!response.ok) {
+        removeTypingIndicator(typingId);
         addMessageToUI({ role: 'assistant', content: "Error: " + response.statusText });
         continue;
       }
@@ -403,6 +391,7 @@ async function processQueue() {
       const decoder = new TextDecoder();
 
       if (!reader) {
+          removeTypingIndicator(typingId);
           addMessageToUI({ role: 'assistant', content: "Error: No stream reader available." });
           continue;
       }
@@ -433,18 +422,39 @@ async function processQueue() {
 
             if (content) {
                 fullContent += content;
-                if (!assistantMessageId) {
-                    // First chunk: create message bubble
-                    assistantMessageId = addMessageToUI({ role: 'assistant', content: fullContent });
-                } else {
-                    // Subsequent chunks: update existing bubble
-                    updateMessageInUI(assistantMessageId, fullContent);
+                // Update the typing indicator bubble with actual content
+                const typingEl = document.getElementById(typingId) as HTMLElement | null;
+                if (typingEl) {
+                    const bubble = typingEl.querySelector('.bubble') as HTMLElement | null;
+                    if (bubble) {
+                        renderMarkdownToElement(bubble, fullContent);
+                    }
+                    const chatContainerWrapper = document.getElementById('chat-container');
+                    if (chatContainerWrapper) {
+                        chatContainerWrapper.scrollTop = chatContainerWrapper.scrollHeight;
+                    }
                 }
             }
           } catch (e) {
             console.error("Error parsing stream chunk", e, line);
           }
         }
+      }
+
+      // Stream complete: finalize the message
+      const typingEl = document.getElementById(typingId) as HTMLElement | null;
+      if (typingEl) {
+          // Remove typing-indicator class, keep as normal assistant message
+          typingEl.classList.remove('typing-indicator');
+          typingEl.classList.add('assistant');
+          
+          // If no content was received, show error
+          if (!fullContent) {
+              const bubble = typingEl.querySelector('.bubble') as HTMLElement | null;
+              if (bubble) {
+                  renderMarkdownToElement(bubble, "No response received from backend.");
+              }
+          }
       }
 
     } catch (err) {
