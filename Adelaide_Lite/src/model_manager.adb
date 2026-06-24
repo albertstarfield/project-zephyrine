@@ -2769,6 +2769,20 @@ package body Model_Manager is
         Process_And_Push_Chunk (Stream, Session_ID, Parser, Content);
     end Push_Orchestration_Through_Parser;
 
+    --  PUSH_ORCHESTRATION_DIRECT:
+    --  Pushes orchestration metadata DIRECTLY to the queue, bypassing
+    --  the stream parser silencing. Used for reasoning thoughts and tool
+    --  call reasons that must be visible inside the <think> block.
+    procedure Push_Orchestration_Direct
+       (Stream     : Streaming_Queue.Queue_Access;
+        Session_ID : String;
+        Content    : String) is
+    begin
+        if Stream /= null then
+            Push_Chunk (Stream, Session_ID, Content);
+        end if;
+    end Push_Orchestration_Direct;
+
     procedure Flush_Parser
        (Stream     : Streaming_Queue.Queue_Access;
         Session_ID : String;
@@ -5085,11 +5099,11 @@ package body Model_Manager is
                 begin
                     Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": " & Step);
                     if not External_Agent then
-                        Push_Orchestration_Through_Parser
+                        Push_Orchestration_Direct
                            (Stream,
                             Session_ID,
-                            Orch_Parser,
-                            "[Adelaide Core]: [Thought] I will: "
+                            "[Adelaide Core]: [Thought] Hop "
+                            & Current_Hop'Img & " - I will: "
                             & Sanitize_Orchestration_Output (Step)
                             & ASCII.LF);
                     end if;
@@ -5266,12 +5280,12 @@ package body Model_Manager is
                                                                        (T_Pars));
                                                 begin
                                                     if not External_Agent then
-                                                        Push_Orchestration_Through_Parser
+                                                        Push_Orchestration_Direct
                                                               (Stream,
                                                                Session_ID,
-                                                               Orch_Parser,
-                                                               "[Adelaide Core]: [Thought] "
-                                                               & "Running tool: "
+                                                               "[Adelaide Core]: [Thought] Hop "
+                                                               & Current_Hop'Img
+                                                               & " - Running tool: "
                                                                & Sanitize_Orchestration_Output
                                                                        (T_Name)
                                                                & ASCII.LF);
@@ -5294,14 +5308,15 @@ package body Model_Manager is
                                                                        (Internal_State)),
                                                            Level);
                                                     if not External_Agent then
-                                                        Push_Orchestration_Through_Parser
+                                                        Push_Orchestration_Direct
                                                               (Stream,
                                                                Session_ID,
-                                                               Orch_Parser,
                                                                ASCII.LF
-                                                               & "[TOOL ("
+                                                               & "[Adelaide Core]: [Thought] Hop "
+                                                               & Current_Hop'Img
+                                                               & " - Tool result ("
                                                                & T_Name
-                                                               & ")]: "
+                                                               & "): "
                                                                & Sanitize_Orchestration_Output
                                                                        (To_String
                                                                               (R
@@ -5331,10 +5346,9 @@ package body Model_Manager is
         end loop;
 
         if not External_Agent then
-            Push_Orchestration_Through_Parser
+            Push_Orchestration_Direct
                (Stream,
                 Session_ID,
-                Orch_Parser,
                 "[Adelaide Core]: [Thought] Reasoning complete after "
                 & Current_Hop'Img
                 & " hops."
