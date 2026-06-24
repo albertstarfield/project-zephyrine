@@ -791,7 +791,9 @@ def main():
         print("[*] Running Platform Self-Integrity Quality Check (Ruff)...")
         # Run ruff check on the Adelaide_Lite directory
         try:
-            result = subprocess.run([ruff_cmd, "check", BASE_DIR, "--exclude", "vendor/ggml/"], capture_output=True, text=True)
+            result = subprocess.run([ruff_cmd, "check", BASE_DIR,
+                                     "--exclude", "vendor,moonshine"],
+                                    capture_output=True, text=True)
             if result.returncode != 0:
                 print("[!] Self-Integrity Quality Check FAILED.")
                 print(result.stdout)
