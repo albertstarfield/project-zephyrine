@@ -41,7 +41,7 @@ with Speculative_Cache;
 --  practical stability limit on 16GB hardware; 228K is theoretically
 --  possible but leaves insufficient headroom for model weights + macOS.
 --  Minimum context is 8192 (smaller values cause llama_decode assertion
---  failures with Qwen3.5-9B at Q4_1 KV quantization).
+--  failures with Qwen3.5HybridMythos at Q4_1 KV quantization).
 --
 --  [QUIRK-M03] [macOS] Pre-existing signal crash after QWEN_0_8B release
 --  Observed (2026-06-10): After QWEN_0_8B processes a request and the model
@@ -1067,7 +1067,7 @@ package body Model_Manager is
         Actual_Ctx := unsigned (Requested_Ctx);
         --  Minimum context size is 8192 for stability and headroom.
         --  Smaller contexts (e.g., 4096) caused llama_decode assertion failures
-        --  with Qwen3.5-9B at Q4_1 KV quantization on this hardware.
+        --  with Qwen3.5HybridMythos at Q4_1 KV quantization on this hardware.
         if Actual_Ctx < 8192 then
             Actual_Ctx := 8192;
         end if;
@@ -1081,7 +1081,7 @@ package body Model_Manager is
             --  unnecessary Unload_Model + Load_Model cycles.
             --
             --  QUIRK: llama_context is extremely expensive to create/destroy
-            --  (~2s for Qwen3.5-9B).  Reusing an already-loaded context with
+            --  (~2s for Qwen3.5HybridMythos).  Reusing an already-loaded context with
             --  sufficient capacity saves this cost but means the KV cache from
             --  the previous inference is preserved until the next decode clears
             --  it with Llama_Memory_Clear.
@@ -1453,7 +1453,7 @@ package body Model_Manager is
             --  1) FFI struct missing N_Outputs_Max → Type_K at wrong offset
             --  2) No Task_Stack_Size → fprintf stack overflow in llama_init
             --  3) All models got same params (Q4_1 + flash_attn for embedding)
-            --  Chat model (Qwen3.5-9B): Q4_1 KV + flash_attn=1 + GPU.
+            --  Chat model (Qwen3.5HybridMythos): Q4_1 KV + flash_attn=1 + GPU.
             --  Q4_1 KV saves ~75% memory (fits in 16GB RAM). Flash attn
             --  works because llama_context_default_params() provides correct
             --  defaults for Qwen3.5's delta net recurrent attention.
@@ -1478,7 +1478,7 @@ package body Model_Manager is
             --  PHASE 2/2: Context + KV Cache initialization
             --  =================================================================
             --  This creates the llama_context and allocates KV cache memory.
-            --  For Qwen3.5-9B with 8192 ctx + Q4_1 KV: ~300MB GPU allocation.
+            --  For Qwen3.5HybridMythos with 8192 ctx + Q4_1 KV: ~300MB GPU allocation.
             --  This is the second blocking step after file read.
             --  =================================================================
             declare
