@@ -1613,7 +1613,16 @@ package body Model_Manager is
                 C_Params.Type_K := GGML_TYPE_Q4_1;
                 C_Params.Type_V := GGML_TYPE_Q4_1;
                 C_Params.Flash_Attn_Type := 1;
-                M_Params.N_Gpu_Layers := -1;    -- GPU for 9B
+                --  [OOM-FIX] N_Gpu_Layers := -1 (all 32 layers on GPU) caused
+                --  Metal OOM at decode position 256. Model weights (5.5GB) +
+                --  KV cache (80MB) + RS buffer (50MB) + compute buffer (250MB)
+                --  = 5.9GB loaded fine, but actual Metal decode at position 256
+                --  needs MORE temporary memory than the 250MB reservation
+                --  (Gated Delta Net fused graphs + Metal command buffers).
+                --  FIX: Keep 24 of 32 layers on GPU (75%), leaving ~1.4GB
+                --  headroom for Metal runtime allocations. 8 layers run on
+                --  CPU (acceptable latency for hybrid recurrent architecture).
+                M_Params.N_Gpu_Layers := 24;
             end if;
 
             C_Params.Abort_Callback := Llama_Abort_Callback'Address;
