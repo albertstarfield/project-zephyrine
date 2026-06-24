@@ -17,6 +17,7 @@ with Multimodal_Content_Parser;
 use Multimodal_Content_Parser;
 with AWS.Response.Set;
 with AWS.Messages;
+with AWS.Headers;
 with GNATCOLL.JSON; use GNATCOLL.JSON;
 with Math_Utils;
 with Ada.Containers.Indefinite_Ordered_Maps;
@@ -1009,7 +1010,31 @@ package body Adelaide_Server_Pkg is
                Temperature   : Float := 1.0;
                Claude_Messages : Claude_Client.Claude_Message_Array (1 .. 50);
                Msg_Count     : Natural := 0;
+               API_Key       : Unbounded_String := Null_Unbounded_String;
+               Req_Headers   : AWS.Headers.List;
             begin
+               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+               --  Extract API key from x-api-key header
+               Req_Headers := AWS.Status.Header (Request);
+               API_Key := To_Unbounded_String
+                 (AWS.Headers.Get_Values (Req_Headers, "x-api-key"));
+
+               if Length (API_Key) = 0 then
+                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                  Ada.Text_IO.Put_Line
+                    (AnsiAda.Foreground (AnsiAda.Red)
+                     & "[Claude] ERROR: Missing x-api-key header"
+                     & AnsiAda.Reset);
+                  declare
+                     Err_Obj : constant JSON_Value := Create_Object;
+                  begin
+                     Set_Field (Err_Obj, "type", "error");
+                     Set_Field (Err_Obj, "error_type", "authentication_error");
+                     Set_Field (Err_Obj, "message", "Missing x-api-key header");
+                     return Wrap_Response
+                       (Build_Response (Write (Err_Obj), AWS.Messages.S401, "application/json"));
+                  end;
+               end if;
                if Length (Payload) > 0 then
                   declare
                      Parser_Result : constant GNATCOLL.JSON.Read_Result :=
@@ -1094,7 +1119,7 @@ package body Adelaide_Server_Pkg is
                      Start_Time : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
                      Response   : constant String :=
                        Claude_Client.Send_Message
-                         (API_Key       => String'(Claude_Client.Claude_Base_URL),  --  Placeholder, needs real key
+                         (API_Key       => To_String (API_Key),
                           Model         => To_String (Req_Model),
                           Messages      => Claude_Messages (1 .. Msg_Count),
                           Max_Tokens    => Max_Tokens,
