@@ -69,6 +69,15 @@ package KV_Cache_Manager is
    procedure Prefetch_Cache_File (Path : String);
 
    --  ============================================================================
+   --  WAIT FOR SAVE (blocking, call before Unload_Model)
+   --  ============================================================================
+   --  WHY: The model must stay loaded until the async save completes.
+   --  After Save_To_SSD_Async, call Wait_For_Save to block until the
+   --  background task finishes writing to disk. Then it's safe to unload.
+
+   procedure Wait_For_Save;
+
+   --  ============================================================================
    --  UTILITY
    --  ============================================================================
 

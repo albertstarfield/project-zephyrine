@@ -245,6 +245,7 @@ package body KV_Cache_Manager is
          Tokens     : System.Address;
          N_Tokens   : Interfaces.C.size_t;
          File_Path  : String);
+      entry Wait_Complete;
    end Save_Task;
 
    task body Save_Task is
@@ -358,6 +359,12 @@ package body KV_Cache_Manager is
       end if;
 
       Free (Path_C);
+
+      --  Signal completion: caller can now safely unload the model
+      accept Wait_Complete do
+         null;
+      end Wait_Complete;
+
    exception
       when others =>
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -376,6 +383,26 @@ package body KV_Cache_Manager is
 
    type Save_Task_Access is access Save_Task;
    Active_Save : Save_Task_Access := null;
+
+   --  ============================================================================
+   --  WAIT FOR SAVE (blocking, call before Unload_Model)
+   --  ============================================================================
+   --  WHY: The model must stay loaded until the async save completes.
+   --  After Save_To_SSD_Async, call Wait_For_Save to block until the
+   --  background task finishes writing to disk. Then it's safe to unload.
+
+   procedure Wait_For_Save is
+   begin
+      if Active_Save /= null then
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
+                   AnsiAda.Reset & "+Wait_For_Save: waiting for save task to finish...");
+         Active_Save.Wait_Complete;
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
+                   AnsiAda.Reset & "+Wait_For_Save: save task complete, safe to unload model");
+      end if;
+   end Wait_For_Save;
 
    --  ============================================================================
    --  TRICK 6: BACKGROUND EVICTION TASK

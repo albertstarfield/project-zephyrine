@@ -3818,7 +3818,9 @@ package body Model_Manager is
                 & AnsiAda.Reset);
             Mark_Metal_Broken;
             --  Force-unload the model to free VRAM and avoid corrupt state.
+            --  [PARALLEL=1] Wait for KV save (if any) before unload
             begin
+                KV_Cache_Manager.Wait_For_Save;
                 Unload_Model (Kind);
             exception
                 when others =>
@@ -6095,7 +6097,11 @@ package body Model_Manager is
 
         --  RELEASE MODEL: Generate was called with Release_Model => False,
         --  so the model is still loaded and the ELP lock is still held.
-        --  Release now that ALL post-processing is complete.
+        --  [PARALLEL=1] Wait for async KV save to complete, then UNLOAD
+        --  the model from GPU. This frees VRAM for the next model.
+        --  Flow: Wait_For_Save -> Unload_Model -> release locks.
+        KV_Cache_Manager.Wait_For_Save;
+        Unload_Model (Snowball_Enaga_Orchestrator);
         Models (Snowball_Enaga_Orchestrator).In_Use := False;
         if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Snowball_Enaga_Orchestrator);
@@ -6123,6 +6129,8 @@ package body Model_Manager is
                     null;
             end;
             begin
+                --  [PARALLEL=1] Wait for KV save (if any) before unload
+                KV_Cache_Manager.Wait_For_Save;
                 Unload_Model (Snowball_Enaga_Orchestrator);
             exception
                 when others =>
