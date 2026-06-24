@@ -254,6 +254,7 @@ package body KV_Cache_Manager is
       L_Path       : Unbounded_String;
       Path_C       : chars_ptr;
       Success      : Boolean;
+      Max_Retries  : constant := 6;  -- 6 retries x 5s = 30s cooldown window
    begin
       accept Start
         (Context    : Llama_Interface.Llama_Context;
@@ -279,47 +280,81 @@ package body KV_Cache_Manager is
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
                 AnsiAda.Reset & "+ASYNC Save_Task: saving to " & To_String (L_Path));
 
-       --  [VITAL-DO-NOT-REMOVE] Acquire the Global Accel Lock before calling
-       --  llama_state_save_file. The save serializes the full KV state and
-       --  internally submits Metal command buffers. If any other thread is
-       --  also using Metal at the same time (e.g., a llama_decode still
-       --  tearing down), ggml-metal fires:
-       --    GGML_ASSERT([rsets->data count] == 0) failed
-       --  which causes SIGABRT. The Accel lock is the same global GPU
-       --  serialization gate used by every llama_decode call in
-       --  model_manager.adb, so holding it here guarantees exclusion.
-       Model_Manager.Acquire_Accel_Lock;
-       begin
-          --  Wrap the actual save: llama_state_save_file can also throw
-          --  C++ exceptions on corrupt state — catch them here so the
-          --  task terminates cleanly rather than propagating SIGABRT.
-          Success := Llama_State_Save_File
-            (L_Context, Path_C, L_Tokens, L_N_Tokens);
-       exception
-          when others =>
-             Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
-                       AnsiAda.Reset &
-                       "+ASYNC Save_Task: C++ EXCEPTION in save -- " &
-                       "discarding corrupt state, cache cleared.");
-             Success := False;
-       end;
-       Model_Manager.Release_Accel_Lock;
+      --  ===================================================================
+      --  OPPORTUNISTIC SAVE: Retry loop with backoff when Metal is broken.
+      --  If Metal_Backend_Broken is True, skip immediate save and retry
+      --  every 5s until cooldown expires (30s total). This prevents SIGABRT
+      --  from calling llama_state_save_file on a poisoned Metal backend,
+      --  while still saving the cache after GPU driver recovers.
+      --  ===================================================================
+      for Attempt in 1 .. Max_Retries loop
+         --  Check if Metal backend is broken — skip save if so
+         if Model_Manager.Is_Metal_Broken then
+            Put_Line
+               (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &
+                AnsiAda.Reset & "+ASYNC Save_Task: METAL BROKEN, retry " &
+                Natural'Image (Attempt) & "/" & Natural'Image (Max_Retries) &
+                " in " &
+                Duration'Image (Model_Manager.Metal_OOM_Retry_Secs) & "s");
+            delay Model_Manager.Metal_OOM_Retry_Secs;
+            --  After delay, Is_Metal_Broken will auto-reset if cooldown expired
+         else
+            --  Metal is healthy (or has recovered) — attempt save
+            --  [VITAL-DO-NOT-REMOVE] Acquire the Global Accel Lock before calling
+            --  llama_state_save_file. The save serializes the full KV state and
+            --  internally submits Metal command buffers. If any other thread is
+            --  also using Metal at the same time (e.g., a llama_decode still
+            --  tearing down), ggml-metal fires:
+            --    GGML_ASSERT([rsets->data count] == 0) failed
+            --  which causes SIGABRT. The Accel lock is the same global GPU
+            --  serialization gate used by every llama_decode call in
+            --  model_manager.adb, so holding it here guarantees exclusion.
+            Model_Manager.Acquire_Accel_Lock;
+            begin
+               --  Wrap the actual save: llama_state_save_file can also throw
+               --  C++ exceptions on corrupt state — catch them here so the
+               --  task terminates cleanly rather than propagating SIGABRT.
+               Success := Llama_State_Save_File
+                 (L_Context, Path_C, L_Tokens, L_N_Tokens);
+            exception
+               when others =>
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
+                            AnsiAda.Reset &
+                            "+ASYNC Save_Task: C++ EXCEPTION in save -- " &
+                            "discarding corrupt state, cache cleared.");
+                  Success := False;
+            end;
+            Model_Manager.Release_Accel_Lock;
 
-      if Success then
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-         --  Verbose: confirms async save complete.
-         Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
-                   AnsiAda.Reset & "+ASYNC Save_Task: SUCCESS saved " &
-                   Interfaces.C.size_t'Image (L_N_Tokens) & " tokens");
+            if Success then
+               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+               --  Verbose: confirms async save complete.
+               Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
+                         AnsiAda.Reset & "+ASYNC Save_Task: SUCCESS saved " &
+                         Interfaces.C.size_t'Image (L_N_Tokens) & " tokens");
 
-         --  TRICK 4: Prefetch the file we just saved
-         --  WHY: By next Generate call, file is already in OS page cache
-         Prefetch_Cache_File (To_String (L_Path));
-      else
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-         --  Verbose: logs async save failure.
+               --  TRICK 4: Prefetch the file we just saved
+               --  WHY: By next Generate call, file is already in OS page cache
+               Prefetch_Cache_File (To_String (L_Path));
+               exit;  -- Success, done
+            else
+               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+               --  Verbose: logs async save failure with OOM banner.
+               Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
+                         AnsiAda.Reset & "+ASYNC Save_Task: FAILED (attempt " &
+                         Natural'Image (Attempt) & "/" & Natural'Image (Max_Retries) & ")");
+               if Attempt < Max_Retries then
+                  delay Model_Manager.Metal_OOM_Retry_Secs;
+               end if;
+            end if;
+         end if;
+      end loop;
+
+      --  Final status after all retries exhausted
+      if not Model_Manager.Is_Metal_Broken then
+         --  Metal recovered but save still failed — log final failure
          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
-                   AnsiAda.Reset & "+ASYNC Save_Task: FAILED");
+                   AnsiAda.Reset & "+ASYNC Save_Task: ALL RETRIES EXHAUSTED");
       end if;
 
       Free (Path_C);
