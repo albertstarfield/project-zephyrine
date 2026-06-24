@@ -899,25 +899,48 @@ package body Adelaide_Server_Pkg is
                    if Is_External_Agent then
                       Q.Push ("" & ASCII.LF);
                    else
-                       --  Wrap orchestration metadata in <think> block so it is
+                        --  Wrap orchestration metadata in <think> block so it is
                        --  captured as internal reasoning, not leaked to the client.
                        --  The </think> close is pushed by Hybrid_Generate after all
                        --  thought content and model thinking have been emitted.
-                       Q.Push ("<think>" & ASCII.LF &
-                               "[Adelaide Core Orchestration]" & ASCII.LF &
-                               "Timestamp: " & TS & "Z" & ASCII.LF &
-                               "Session: " & To_String (S_ID) & ASCII.LF &
-                               "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
-                               "Model: " & To_String (Req_Model) & ASCII.LF &
-                               "Status: Request received - starting orchestration..." & ASCII.LF &
-                               "Phase: Initializing thought pipeline..." & ASCII.LF &
-                               "Step 1/3: Parsing user intent and context" & ASCII.LF &
-                               "Step 2/3: Loading memory and knowledge context" & ASCII.LF &
-                               "Step 3/3: Generating response with personality" & ASCII.LF &
-                               "Pipeline Architecture: ELP0 (background) -> ELP1 (foreground)" & ASCII.LF &
-                               "Token Budget: Streaming enabled, real-time chunk delivery" & ASCII.LF &
-                               "Memory System: Semantic search + knowledge graph integration" & ASCII.LF &
-                               "Orchestration Mode: Multi-hop reasoning with context faults" & ASCII.LF);
+                       declare
+                           GPU_Part : Unbounded_String := Null_Unbounded_String;
+                       begin
+                           if Model_Manager.GPU_Total_MB > 0 then
+                               GPU_Part :=
+                                  To_Unbounded_String
+                                     ("GPU Status: "
+                                      & Ada.Strings.Fixed.Trim (Natural'Image (Model_Manager.GPU_Free_MB), Ada.Strings.Both)
+                                      & "MB free / "
+                                      & Ada.Strings.Fixed.Trim (Natural'Image (Model_Manager.GPU_Total_MB), Ada.Strings.Both)
+                                      & "MB total ("
+                                      & Ada.Strings.Fixed.Trim (Natural'Image (Model_Manager.GPU_Percent), Ada.Strings.Both)
+                                      & "%) N_GPU_Layers="
+                                      & Ada.Strings.Fixed.Trim (Natural'Image (Model_Manager.N_GPU_Layers), Ada.Strings.Both));
+                           else
+                               if Model_Manager.GPU_Is_Stable then
+                                   GPU_Part := To_Unbounded_String ("GPU Status: STABLE (CPU-only)");
+                               else
+                                   GPU_Part := To_Unbounded_String ("GPU Status: UNSTABLE (OOM/crash) N_GPU_Layers=0");
+                               end if;
+                           end if;
+                           Q.Push ("<think>" & ASCII.LF &
+                                   "[Adelaide Core Orchestration]" & ASCII.LF &
+                                   "Timestamp: " & TS & "Z" & ASCII.LF &
+                                   "Session: " & To_String (S_ID) & ASCII.LF &
+                                   "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
+                                   "Model: " & To_String (Req_Model) & ASCII.LF &
+                                   "Status: Request received - starting orchestration..." & ASCII.LF &
+                                   "Phase: Initializing thought pipeline..." & ASCII.LF &
+                                   "Step 1/3: Parsing user intent and context" & ASCII.LF &
+                                   "Step 2/3: Loading memory and knowledge context" & ASCII.LF &
+                                   "Step 3/3: Generating response with personality" & ASCII.LF &
+                                   "Pipeline Architecture: ELP0 (background) -> ELP1 (foreground)" & ASCII.LF &
+                                   "Token Budget: Streaming enabled, real-time chunk delivery" & ASCII.LF &
+                                   "Memory System: Semantic search + knowledge graph integration" & ASCII.LF &
+                                   "Orchestration Mode: Multi-hop reasoning with context faults" & ASCII.LF &
+                                   To_String (GPU_Part) & ASCII.LF);
+                       end;
                    end if;
 
                   T.Start (To_String (Prompt), To_String (Req_Model),

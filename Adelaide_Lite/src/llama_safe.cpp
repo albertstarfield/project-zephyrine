@@ -1,6 +1,7 @@
 #include "llama.h"
 #include "mtmd.h"
 #include "mtmd-helper.h"
+#include "ggml-backend.h"
 #include <stdexcept>
 #include <iostream>
 #include <cstring>
@@ -8,6 +9,40 @@
 extern "C" {
     // ===== llama.cpp safe wrappers =====
     
+    // ===== GPU MEMORY QUERY =====
+    // Queries GPU device memory (free/total) through ggml backend.
+    // Returns free and total memory in bytes.
+    // Works for ALL backends: Metal (Apple), CUDA (NVIDIA), OneAPI/SYCL (Intel),
+    // Vulkan (cross-platform), ROCm (AMD), NNA (Qualcomm), etc.
+    // For CPU-only: returns 0,0 (inapplicable - caller should report "stable").
+    void gpu_memory_query(size_t * free_bytes, size_t * total_bytes) {
+        if (!free_bytes || !total_bytes) return;
+        *free_bytes = 0;
+        *total_bytes = 0;
+        try {
+            // Get the first backend registry (index 0 = system default)
+            ggml_backend_reg_t reg = ggml_backend_reg_get(0);
+            if (!reg) return;
+            size_t n_devices = ggml_backend_reg_dev_count(reg);
+            if (n_devices == 0) return;
+            // Find the first GPU-type device (not CPU)
+            // This covers Metal (Apple), CUDA (NVIDIA), OneAPI/SYCL (Intel),
+            // Vulkan (cross-platform), ROCm (AMD), NNA (Qualcomm), etc.
+            for (size_t i = 0; i < n_devices; i++) {
+                ggml_backend_dev_t dev = ggml_backend_reg_dev_get(reg, i);
+                if (!dev) continue;
+                enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
+                if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU ||
+                    dev_type == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+                    ggml_backend_dev_memory(dev, free_bytes, total_bytes);
+                    return;
+                }
+            }
+        } catch (...) {
+            *free_bytes = 0;
+            *total_bytes = 0;
+        }
+    }
     struct llama_model * llama_model_load_from_file_safe(const char * path_model, struct llama_model_params params) {
         try {
             return llama_model_load_from_file(path_model, params);

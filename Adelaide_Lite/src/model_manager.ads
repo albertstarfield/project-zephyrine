@@ -308,4 +308,21 @@ package Model_Manager is
    --  degenerate responses.
    Generate_Seed : Interfaces.C.unsigned := 0;
 
+   --  =========================================================================
+   --  GPU MEMORY MONITOR (printed every 3s by GPU_Monitor task)
+   --  =========================================================================
+   --  Tracks free/total GPU VRAM across ALL backends (Metal, CUDA, OneAPI,
+   --  SYCL, Vulkan, ROCm). If GPU memory query is inapplicable (CPU-only
+   --  or Vulkan without memory query), reports "stable" or "UNSTABLE".
+   --  On OOM/crash: flips N_GPU_Layers to 0 to prevent further GPU usage.
+   --  N_GPU_Layers is dynamically calculated as percentage of free VRAM:
+   --    N_GPU_Layers = (Free_MB / Total_MB) * 100, rounded to nearest int.
+   --  Range: 0 (no GPU layers) to 100 (all layers on GPU).
+
+   GPU_Free_MB  : Natural := 0;  -- Free GPU memory in megabytes
+   GPU_Total_MB : Natural := 0;  -- Total GPU memory in megabytes
+   GPU_Percent  : Natural := 0;  -- Free/Total * 100, rounded
+   GPU_Is_Stable : Boolean := True;  -- False if OOM/crash detected
+   N_GPU_Layers  : Natural := 99;    -- Dynamic: percent of layers on GPU
+
 end Model_Manager;
