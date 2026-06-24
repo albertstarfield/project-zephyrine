@@ -1047,12 +1047,17 @@ package body Model_Manager is
             & "s Model_Manager.Initialize COMPLETE.");
     end Initialize;
 
-    procedure Load_Model
-       (Kind          : Model_Type;
-        Success       : out Boolean;
-        Requested_Ctx : Positive := 4096;
-        Level         : ELP_Level := ELP1)
-    is
+     procedure Load_Model
+        (Kind          : Model_Type;
+         Success       : out Boolean;
+         Requested_Ctx : Positive := 4096;
+         Level         : ELP_Level := ELP1)
+     is
+        --  [PARALLEL=1] Before calling Load_Model, ensure NO OTHER model is
+        --  loaded. Only one model can occupy GPU memory at a time. If another
+        --  model is loaded, call Unload_Model on it FIRST, or this call will
+        --  Metal OOM. The calling code (Get_Single_Embedding, Hybrid_Generate)
+        --  is responsible for enforcing this invariant.
         M_Params   : Llama_Model_Params := Llama_Model_Default_Params;
         C_Params   : Llama_Context_Params := Llama_Context_Default_Params;
         Actual_Ctx : unsigned;
@@ -1437,8 +1442,12 @@ package body Model_Manager is
 
             --  Now override only the fields we care about:
             C_Params.N_Ctx := Actual_Ctx;
-            C_Params.N_Batch := 512;
-            C_Params.N_Ubatch := 512;
+            --  [MEMORY-FIX] Reduced from 512 to 256 to prevent Metal OOM.
+            --  512 batch + 512 ubatch = ~256MB compute buffers on Metal.
+            --  256 batch + 256 ubatch = ~64MB compute buffers on Metal.
+            --  LM Studio uses adaptive batching; we use fixed. Smaller is safer.
+            C_Params.N_Batch := 256;
+            C_Params.N_Ubatch := 256;
             C_Params.N_Threads := 8;
             C_Params.N_Threads_Batch := 8;
 
@@ -1666,6 +1675,11 @@ package body Model_Manager is
             Success := False;
     end Load_Model;
 
+    --  [PARALLEL=1] Unload_Model frees ALL GPU memory for this model:
+    --  - Llama_Free releases the context (KV cache + compute buffers)
+    --  - Llama_Model_Free releases the model weights from GPU
+    --  After this call, the model is completely gone from GPU memory.
+    --  This is REQUIRED before loading another model (parallel=1 constraint).
     procedure Unload_Model (Kind : Model_Type) is
     begin
         if Models (Kind).Loaded then
@@ -2375,38 +2389,46 @@ package body Model_Manager is
             else
                 Length := 0;
             end if;
-            Free_Tokens (Tokens);
-            Put_Line ("[Debug] Free_Tokens complete.");
-            Models (Kind).In_Use := False;
-            if Level = ELP0 then
-                Priority_Model_Gate.Release_ELP0 (Kind);
-                Put_Line
-                   ("[Debug] Priority_Model_Gate.Release_ELP0 complete.");
-            else
-                Priority_Model_Gate.Release_ELP1 (Kind);
-                Put_Line
-                   ("[Debug] Priority_Model_Gate.Release_ELP1 complete.");
-            end if;
-            ELP_Queue.Dequeue_Level (Level);
-            Put_Line ("[Debug] Get_Single_Embedding DONE successfully.");
+             Free_Tokens (Tokens);
+             Put_Line ("[Debug] Free_Tokens complete.");
+             Models (Kind).In_Use := False;
+             --  [PARALLEL=1 FIX] Unload embedding model from GPU immediately
+             --  after use. Only ONE model can be in GPU memory at a time.
+             --  If we don't unload, the embedding model (~1GB) stays resident
+             --  and the 9B chat model OOMs when it tries to allocate KV +
+             --  compute buffers on top of it.
+             Unload_Model (Kind);
+             if Level = ELP0 then
+                 Priority_Model_Gate.Release_ELP0 (Kind);
+                 Put_Line
+                    ("[Debug] Priority_Model_Gate.Release_ELP0 complete.");
+             else
+                 Priority_Model_Gate.Release_ELP1 (Kind);
+                 Put_Line
+                    ("[Debug] Priority_Model_Gate.Release_ELP1 complete.");
+             end if;
+             ELP_Queue.Dequeue_Level (Level);
+             Put_Line ("[Debug] Get_Single_Embedding DONE successfully.");
         end;
-    exception
-        when E : others =>
-            Put_Line
-               ("[FATAL] Exception in Get_Single_Embedding: "
-                & Ada.Exceptions.Exception_Information (E));
-            if Tokens /= null then
-                Free_Tokens (Tokens);
-            end if;
-            Models (Kind).In_Use := False;
-            if Level = ELP0 then
-                Priority_Model_Gate.Release_ELP0 (Kind);
-            else
-                Priority_Model_Gate.Release_ELP1 (Kind);
-            end if;
-            ELP_Queue.Dequeue_Level (Level);
-            Length := 0;
-    end Get_Single_Embedding;
+     exception
+         when E : others =>
+             Put_Line
+                ("[FATAL] Exception in Get_Single_Embedding: "
+                 & Ada.Exceptions.Exception_Information (E));
+             if Tokens /= null then
+                 Free_Tokens (Tokens);
+             end if;
+             Models (Kind).In_Use := False;
+             --  [PARALLEL=1 FIX] Unload on error too — don't leave broken model in GPU
+             Unload_Model (Kind);
+             if Level = ELP0 then
+                 Priority_Model_Gate.Release_ELP0 (Kind);
+             else
+                 Priority_Model_Gate.Release_ELP1 (Kind);
+             end if;
+             ELP_Queue.Dequeue_Level (Level);
+             Length := 0;
+     end Get_Single_Embedding;
     --  GET EMBEDDING (WITH CHUNKING > 800 CHARS)
 
     procedure Get_Embedding
@@ -4371,6 +4393,15 @@ package body Model_Manager is
     end Tokenize_And_Cache_Virtual_Ctx;
 
     --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
+    --
+    --  [PARALLEL=1] This procedure loads the chat model, generates a response,
+    --  and must UNLOAD the chat model before returning. The caller (dispatch)
+    --  ensures the embedding model was already unloaded before calling this.
+    --  Flow:
+    --    1. Caller: Get_Embedding loads embedding model → computes → UNLOADS
+    --    2. This procedure: Load_Model(chat) → generate → UNLOAD_Model(chat)
+    --    3. Only ONE model is in GPU memory at any point in this flow.
+    --
     procedure Hybrid_Generate
        (Prompt         : String;
         Result         : out Unbounded_String;

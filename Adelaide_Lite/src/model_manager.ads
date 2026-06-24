@@ -13,6 +13,32 @@ with Model_Types; use Model_Types;
 
 package Model_Manager is
 
+   --  =========================================================================
+   --  PARALLEL=1 CONSTRAINT (CRITICAL — READ BEFORE MODIFYING MODEL LIFECYCLE)
+   --  =========================================================================
+   --  This server runs with parallel=1. This means:
+   --    - Only ONE model can be loaded in GPU memory at any time.
+   --    - If 2 models are loaded simultaneously, Metal OOM occurs because:
+   --      Model A weights + Model B weights + KV cache + compute buffers
+   --      exceeds available GPU VRAM (typically 8-16GB on Apple Silicon).
+   --    - The embedding model (~1GB) MUST be fully unloaded (model + context
+   --      freed from GPU) BEFORE the chat model (5.8GB) loads.
+   --    - The chat model MUST be fully unloaded BEFORE the embedding model
+   --      loads for the next request.
+   --
+   --  Queue Processing Flow:
+   --    1. User sends request
+   --    2. Get_Embedding loads embedding model → computes vector → UNLOADS
+   --    3. Hybrid_Generate loads chat model → generates response → UNLOADS
+   --    4. Only then can the next request start loading its model
+   --
+   --  ELP0 (background) and ELP1 (foreground) share the same GPU.
+   --  ELP0 tasks are preempted when ELP1 arrives (Priority_Model_Gate).
+   --  Both must follow the one-model-at-a-time rule.
+   --
+   --  VIOLATION = Metal OOM = server crash = you get killed.
+   --  =========================================================================
+
    --  Token array type for virtual context paging cache
    subtype Cached_Token is Interfaces.C.int;
    type Cached_Token_Array is array (Positive range <>) of Cached_Token;
