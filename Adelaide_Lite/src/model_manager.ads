@@ -318,15 +318,18 @@ package Model_Manager is
    --
    --  ADAPTIVE GPU LAYER STRATEGY:
    --  1. Start aggressive: GPU_Layer_Count = -1 (ALL layers on GPU)
-   --  2. If OOM → fallback to GPU_Layer_Fallback (24 layers)
+   --  2. If OOM → fallback: remove 25% of current layers
+   --     e.g. 32 → 24 → 18 → 14 → 10 → 8 → ...
    --  3. Record OOM timestamp
-   --  4. After GPU_Retry_Interval (3 min) → retry -1 (all on GPU)
-   --  5. If OOM again → fallback again → repeat
+   --  4. After GPU_Retry_Interval (3 min) → reset to -1 (all on GPU)
+   --  5. If OOM again → progressive fallback again → repeat
    --  This auto-probes whether the GPU can handle full offload, and
-   --  backs off when it can't, recovering automatically.
+   --  backs off progressively when it can't, recovering automatically.
 
    Total_Model_Layers   : constant Natural := 32;  -- Qwen3.5HybridMythos
-   GPU_Layer_Fallback   : constant Integer := 24;  -- Safe fallback (75%)
+   GPU_Layer_Fallback   : constant Integer := 24;  -- Initial fallback (75%)
+   GPU_Layer_Min        : constant Integer := 8;   -- Minimum layers on GPU
+   GPU_Layer_Step       : constant Integer := 1;   -- 25% reduction each OOM
    GPU_Retry_Interval   : constant Duration := 180.0;  -- 3 minutes
 
    GPU_Free_MB          : Natural := 0;    -- Free GPU memory in megabytes
