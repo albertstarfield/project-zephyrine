@@ -1853,19 +1853,53 @@ package body Model_Manager is
                 & "=========================================================="
                 & AnsiAda.Reset);
             Mark_Metal_Broken;
-            --  [ADAPTIVE GPU FALLBACK] OOM during load → reduce GPU layers
-            if GPU_Layer_Count = -1 then
-                GPU_Layer_Count   := GPU_Layer_Fallback;
-                GPU_Last_OOM_Time := Ada.Real_Time.Clock;
-                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Yellow)
-                    & "[GPU-Adaptive]"
-                    & AnsiAda.Reset
-                    & " OOM during load on full GPU (-1). Falling back to"
-                    & Integer'Image (GPU_Layer_Fallback)
-                    & " layers. Will retry -1 in 3 minutes.");
-            end if;
+            --  [ADAPTIVE GPU FALLBACK] OOM during load → progressive layer reduction
+            --  Math: remove 25% of current layers each OOM
+            --  -1 → 32 → 24 → 18 → 14 → 10 → 8 → 8 (min)
+            --  After GPU_Retry_Interval (3 min) → reset to -1
+            declare
+                Old_Count : constant Integer := GPU_Layer_Count;
+                New_Count : Integer;
+            begin
+                if GPU_Layer_Count = -1 then
+                    --  First OOM: go from ALL to fallback (75%)
+                    New_Count := GPU_Layer_Fallback;
+                elsif GPU_Layer_Count > GPU_Layer_Min then
+                    --  Progressive: remove 25% of current (min 1 layer)
+                    New_Count := GPU_Layer_Count -
+                                 Integer'Max (1, GPU_Layer_Count / 4);
+                    --  Don't go below minimum
+                    if New_Count < GPU_Layer_Min then
+                        New_Count := GPU_Layer_Min;
+                    end if;
+                else
+                    --  Already at minimum, can't reduce further
+                    New_Count := GPU_Layer_Count;
+                end if;
+
+                if New_Count /= Old_Count then
+                    GPU_Layer_Count   := New_Count;
+                    GPU_Last_OOM_Time := Ada.Real_Time.Clock;
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Yellow)
+                        & "[GPU-Adaptive]"
+                        & AnsiAda.Reset
+                        & " OOM during load. Layers:"
+                        & Integer'Image (Old_Count) & " -> "
+                        & Integer'Image (New_Count)
+                        & ". Retry -1 in 3 minutes.");
+                else
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Yellow)
+                        & "[GPU-Adaptive]"
+                        & AnsiAda.Reset
+                        & " OOM but already at minimum layers"
+                        & Integer'Image (GPU_Layer_Count)
+                        & ". Waiting 3 min to retry -1.");
+                end if;
+            end;
             --  Free partial context if it was created
             if Models (Kind).Context /= Null_Context then
                 Llama_Interface.Llama_Free (Models (Kind).Context);
@@ -4048,20 +4082,48 @@ package body Model_Manager is
                 & "=========================================================="
                 & AnsiAda.Reset);
             Mark_Metal_Broken;
-            --  [ADAPTIVE GPU FALLBACK] OOM → reduce GPU layers, record time.
-            --  Next Load_Model will retry -1 after 3 min cooldown.
-            if GPU_Layer_Count = -1 then
-                GPU_Layer_Count   := GPU_Layer_Fallback;
-                GPU_Last_OOM_Time := Ada.Real_Time.Clock;
-                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Yellow)
-                    & "[GPU-Adaptive]"
-                    & AnsiAda.Reset
-                    & " OOM on full GPU (-1). Falling back to"
-                    & Integer'Image (GPU_Layer_Fallback)
-                    & " layers. Will retry -1 in 3 minutes.");
-            end if;
+            --  [ADAPTIVE GPU FALLBACK] OOM during decode → progressive layer reduction
+            --  Same math as Load_Model: 25% reduction each OOM
+            --  -1 → 32 → 24 → 18 → 14 → 10 → 8 → 8 (min)
+            declare
+                Old_Count : constant Integer := GPU_Layer_Count;
+                New_Count : Integer;
+            begin
+                if GPU_Layer_Count = -1 then
+                    New_Count := GPU_Layer_Fallback;
+                elsif GPU_Layer_Count > GPU_Layer_Min then
+                    New_Count := GPU_Layer_Count -
+                                 Integer'Max (1, GPU_Layer_Count / 4);
+                    if New_Count < GPU_Layer_Min then
+                        New_Count := GPU_Layer_Min;
+                    end if;
+                else
+                    New_Count := GPU_Layer_Count;
+                end if;
+
+                if New_Count /= Old_Count then
+                    GPU_Layer_Count   := New_Count;
+                    GPU_Last_OOM_Time := Ada.Real_Time.Clock;
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Yellow)
+                        & "[GPU-Adaptive]"
+                        & AnsiAda.Reset
+                        & " OOM during decode. Layers:"
+                        & Integer'Image (Old_Count) & " -> "
+                        & Integer'Image (New_Count)
+                        & ". Retry -1 in 3 minutes.");
+                else
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Yellow)
+                        & "[GPU-Adaptive]"
+                        & AnsiAda.Reset
+                        & " OOM but already at minimum layers"
+                        & Integer'Image (GPU_Layer_Count)
+                        & ". Waiting 3 min to retry -1.");
+                end if;
+            end;
             --  Force-unload the model to free VRAM and avoid corrupt state.
             --  [PARALLEL=1] Wait for KV save (if any) before unload
             begin
