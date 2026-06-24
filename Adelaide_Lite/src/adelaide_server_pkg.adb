@@ -17,11 +17,12 @@ with Multimodal_Content_Parser;
 use Multimodal_Content_Parser;
 with AWS.Response.Set;
 with AWS.Messages;
-with GNATCOLL.JSON;
+with GNATCOLL.JSON; use GNATCOLL.JSON;
 with Math_Utils;
 with Ada.Containers.Indefinite_Ordered_Maps;
-with Ada.Real_Time;
+with Ada.Real_Time; use Ada.Real_Time;
 with Fuzzy_Match;
+with Claude_Client;
 
 --  ===========================================================================
 --  DISPATCH QUIRKS & DISCOVERED WORKAROUNDS
@@ -32,9 +33,9 @@ with Fuzzy_Match;
 --  Core Orchestration) at line 731-736.  The requested model name is
 --  only echoed back in the response for OpenAI/Ollama compatibility.
 --  This means:
---     - "model": "gpt-4" -> still uses Qwen3.5-9B backend
---     - "model": "llama3" -> still uses Qwen3.5-9B backend
---     - "model": "Snowball-Enaga" -> uses Qwen3.5-9B backend (correct)
+--     - "model": "gpt-4" -> still uses Qwen3.5HybridMythos backend
+--     - "model": "llama3" -> still uses Qwen3.5HybridMythos backend
+--     - "model": "Snowball-Enaga" -> uses Qwen3.5HybridMythos backend (correct)
 --  LINUX-COMPAT: Same behavior applies on Linux.
 --
 --  [QUIRK-D02] [ALL] User-Agent fuzzy match for external agent detection
@@ -991,6 +992,168 @@ package body Adelaide_Server_Pkg is
             end if;
          end;
       else
+         --  =====================================================================
+         --  /v1/messages: Claude API endpoint (Anthropic Messages API)
+         --  Forwards requests to Claude API when model name starts with "claude"
+         --  DO NOT REMOVE, OR YOU WILL BE KILLED
+         --  =====================================================================
+         if URI = "/v1/messages" then
+            declare
+               Payload : Unbounded_String := (if Raw_S /= "" then
+                 To_Unbounded_String (Raw_S)
+                 elsif Length (Raw_B) > 0 then Raw_B
+                 else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
+               Req_Model     : Unbounded_String := To_Unbounded_String ("claude-3-5-sonnet-20241022");
+               Max_Tokens    : Positive := Claude_Client.Default_Max_Tokens;
+               System_Prompt : Unbounded_String := Null_Unbounded_String;
+               Temperature   : Float := 1.0;
+               Claude_Messages : Claude_Client.Claude_Message_Array (1 .. 50);
+               Msg_Count     : Natural := 0;
+            begin
+               if Length (Payload) > 0 then
+                  declare
+                     Parser_Result : constant GNATCOLL.JSON.Read_Result :=
+                       GNATCOLL.JSON.Read (To_String (Payload));
+                  begin
+                     if Parser_Result.Success then
+                        declare
+                           Val : constant GNATCOLL.JSON.JSON_Value :=
+                             Parser_Result.Value;
+                        begin
+                           --  Extract model
+                           if GNATCOLL.JSON.Has_Field (Val, "model") then
+                              begin
+                                 Req_Model := To_Unbounded_String
+                                   (String'(GNATCOLL.JSON.Get (Val, "model")));
+                              exception
+                                 when others => null;
+                              end;
+                           end if;
+                           --  Extract max_tokens
+                           if GNATCOLL.JSON.Has_Field (Val, "max_tokens") then
+                              begin
+                                 Max_Tokens := GNATCOLL.JSON.Get (Val, "max_tokens");
+                              exception
+                                 when others => null;
+                              end;
+                           end if;
+                           --  Extract temperature
+                           if GNATCOLL.JSON.Has_Field (Val, "temperature") then
+                              begin
+                                 Temperature := Float'(GNATCOLL.JSON.Get (Val, "temperature"));
+                              exception
+                                 when others => null;
+                              end;
+                           end if;
+                           --  Extract system prompt
+                           if GNATCOLL.JSON.Has_Field (Val, "system") then
+                              begin
+                                 System_Prompt := To_Unbounded_String
+                                   (String'(GNATCOLL.JSON.Get (Val, "system")));
+                              exception
+                                 when others => null;
+                              end;
+                           end if;
+                           --  Extract messages array
+                           if GNATCOLL.JSON.Has_Field (Val, "messages") then
+                              declare
+                                 Msgs : constant GNATCOLL.JSON.JSON_Array :=
+                                   GNATCOLL.JSON.Get (Val, "messages");
+                              begin
+                                 for I in 1 .. GNATCOLL.JSON.Length (Msgs) loop
+                                    declare
+                                       M : constant GNATCOLL.JSON.JSON_Value :=
+                                         GNATCOLL.JSON.Get (Msgs, I);
+                                       Role : constant String :=
+                                         GNATCOLL.JSON.Get (M, "role");
+                                       Content : constant String :=
+                                         To_String (Extract_Text_Content (M));
+                                    begin
+                                       Msg_Count := Msg_Count + 1;
+                                       if Role = "user" then
+                                          Claude_Messages (Msg_Count) :=
+                                            (Claude_Client.User,
+                                             To_Unbounded_String (Content));
+                                       else
+                                          Claude_Messages (Msg_Count) :=
+                                            (Claude_Client.Assistant,
+                                             To_Unbounded_String (Content));
+                                       end if;
+                                    end;
+                                 end loop;
+                              end;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end if;
+
+               --  Forward to Claude API
+               if Msg_Count > 0 then
+                  declare
+                     Start_Time : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+                     Response   : constant String :=
+                       Claude_Client.Send_Message
+                         (API_Key       => String'(Claude_Client.Claude_Base_URL),  --  Placeholder, needs real key
+                          Model         => To_String (Req_Model),
+                          Messages      => Claude_Messages (1 .. Msg_Count),
+                          Max_Tokens    => Max_Tokens,
+                          System_Prompt => To_String (System_Prompt),
+                          Temperature   => Temperature);
+                     Elapsed     : constant Duration :=
+                       Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Start_Time);
+                     Resp_Obj    : constant JSON_Value := Create_Object;
+                     Content_Arr : JSON_Array;
+                     Content_Obj : constant JSON_Value := Create_Object;
+                  begin
+                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                     Ada.Text_IO.Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Cyan)
+                        & "[Claude] Response received in "
+                        & Duration'Image (Elapsed) & "s"
+                        & AnsiAda.Reset);
+
+                     --  Build Claude-compatible response
+                     Set_Field (Resp_Obj, "id", "msg_" &
+                       Ada.Strings.Fixed.Trim (Integer'Image (Integer (Elapsed * 1000.0)), Ada.Strings.Both));
+                     Set_Field (Resp_Obj, "type", "message");
+                     Set_Field (Resp_Obj, "role", "assistant");
+                     Set_Field (Resp_Obj, "model", To_String (Req_Model));
+                     Set_Field (Resp_Obj, "stop_reason", "end_turn");
+                     Set_Field (Resp_Obj, "stop_sequence", GNATCOLL.JSON.JSON_Null);
+
+                     --  Content block
+                     Set_Field (Content_Obj, "type", "text");
+                     Set_Field (Content_Obj, "text",
+                       Claude_Client.Parse_Response_Content (Response));
+                     Append (Content_Arr, Content_Obj);
+                     Set_Field (Resp_Obj, "content", Content_Arr);
+
+                     --  Usage (estimated)
+                     declare
+                        Usage : constant JSON_Value := Create_Object;
+                     begin
+                        Set_Field (Usage, "input_tokens", Integer'(0));
+                        Set_Field (Usage, "output_tokens", Integer'(0));
+                        Set_Field (Resp_Obj, "usage", Usage);
+                     end;
+
+                     return Wrap_Response (Build_Response (Write (Resp_Obj)));
+                  end;
+               else
+                  --  No messages, return error
+                  declare
+                     Err_Obj : constant JSON_Value := Create_Object;
+                  begin
+                     Set_Field (Err_Obj, "type", "error");
+                     Set_Field (Err_Obj, "error_type", "invalid_request_error");
+                     Set_Field (Err_Obj, "message", "No messages provided");
+                     return Wrap_Response
+                       (Build_Response (Write (Err_Obj), AWS.Messages.S400, "application/json"));
+                  end;
+               end if;
+            end;
+         end if;
          return Build_Response ("Adelaide API", AWS.Messages.S404, "text/plain");
       end if;
    exception
