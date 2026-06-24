@@ -212,6 +212,31 @@ package Model_Manager is
    procedure Acquire_Accel_Lock;
    procedure Release_Accel_Lock;
 
+   --  [VITAL-DO-NOT-REMOVE] Metal backend health flag — OPPORTUNISTIC.
+   --  Set to True when llama_decode returns -3 (OOM) or any Metal error
+   --  that poisons the backend. KV Cache save task checks this flag before
+   --  calling llama_state_save_file — calling it on a poisoned Metal backend
+   --  causes SIGBUS → GNAT exception → exit() → ggml_metal_device_free →
+   --  GGML_ASSERT([rsets->data count] == 0) → SIGABRT kills the server.
+   --
+   --  OPPORTUNISTIC: Flag auto-resets after Metal_OOM_Cooldown_Secs (30s).
+   --  The save task retries every Metal_OOM_Retry_Secs (5s) until the
+   --  cooldown expires, then tries again. This way:
+   --    1. Immediate save is skipped (prevents SIGABRT)
+   --    2. After 30s, GPU driver has time to recover
+   --    3. Save retries automatically — no data loss
+   Metal_Backend_Broken    : Boolean := False;
+   Metal_OOM_Trigger_Time  : Duration := 0.0;  -- Time when OOM was detected
+   Metal_OOM_Cooldown_Secs : constant Duration := 30.0;  -- Reset after 30s
+   Metal_OOM_Retry_Secs    : constant Duration := 5.0;   -- Retry every 5s
+
+   --  Check if Metal backend is still broken or has recovered.
+   --  Auto-resets Metal_Backend_Broken after cooldown expires.
+   function Is_Metal_Broken return Boolean;
+
+   --  Mark Metal backend as broken (called on OOM decode failure).
+   procedure Mark_Metal_Broken;
+
    Current_WCET : Duration := 0.0;
    Current_WCET_ELP0 : Duration := 0.0;
    Current_WCET_ELP1 : Duration := 0.0;

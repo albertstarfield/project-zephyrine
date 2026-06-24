@@ -1608,6 +1608,28 @@ package body Model_Manager is
                 & AnsiAda.Reset
                 & " Exception: "
                 & Ada.Exceptions.Exception_Information (E));
+            --  [VITAL-DO-NOT-REMOVE] OOM banner — red, unmissable.
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "=========================================================="
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "  !!! OUT OF MEMORY !!!  (STORAGE_ERROR)"
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "  Metal backend poisoned. KV save will RETRY."
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "  Connection NOT dropped. Server continues."
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "=========================================================="
+                & AnsiAda.Reset);
+            Mark_Metal_Broken;
             --  Free partial context if it was created
             if Models (Kind).Context /= Null_Context then
                 Llama_Interface.Llama_Free (Models (Kind).Context);
@@ -1751,6 +1773,47 @@ package body Model_Manager is
     begin
         Accel_Lock_Object.Release;
     end Release_Accel_Lock;
+
+    --  [VITAL-DO-NOT-REMOVE] Metal backend health — OPPORTUNISTIC.
+    --  Mark_Metal_Broken: Called when llama_decode returns -3 (OOM).
+    --  Records the current elapsed time for cooldown tracking.
+    procedure Mark_Metal_Broken is
+    begin
+        Metal_Backend_Broken := True;
+        Metal_OOM_Trigger_Time :=
+           Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Start_Time);
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Red)
+            & "[OOM] "
+            & AnsiAda.Reset
+            & "METAL BACKEND POISONED. KV save will RETRY every "
+            & Duration'Image (Metal_OOM_Retry_Secs) & "s for "
+            & Duration'Image (Metal_OOM_Cooldown_Secs) & "s cooldown.");
+    end Mark_Metal_Broken;
+
+    --  [VITAL-DO-NOT-REMOVE] Metal backend health — OPPORTUNISTIC.
+    --  Is_Metal_Broken: Returns True if Metal is still in cooldown.
+    --  Auto-resets Metal_Backend_Broken after Metal_OOM_Cooldown_Secs.
+    --  This allows the save task to retry after GPU driver recovers.
+    function Is_Metal_Broken return Boolean is
+        Now     : constant Duration :=
+           Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Start_Time);
+        Elapsed : constant Duration := Now - Metal_OOM_Trigger_Time;
+    begin
+        if Metal_Backend_Broken and then Elapsed >= Metal_OOM_Cooldown_Secs then
+            --  Cooldown expired — GPU driver should have recovered.
+            --  Reset flag and log recovery.
+            Metal_Backend_Broken := False;
+            Put_Line
+               (AnsiAda.Foreground (AnsiAda.Green)
+                & "[OOM] "
+                & AnsiAda.Reset
+                & "METAL BACKEND RECOVERED after "
+                & Duration'Image (Elapsed) & "s cooldown. Retrying save.");
+            return False;
+        end if;
+        return Metal_Backend_Broken;
+    end Is_Metal_Broken;
 
     procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
     begin
@@ -3528,6 +3591,17 @@ package body Model_Manager is
                         if Ret /= 0 then
                             Append (Result, " [ABORTED:" & Ret'Img & "]");
 
+                            --  [VITAL-DO-NOT-REMOVE] OOM detection.
+                            --  When llama_decode returns -3, Metal is in error state
+                            --  (kIOGPUCommandBufferCallbackErrorOutOfMemory). Any
+                            --  subsequent llama_state_save_file call will SIGBUS →
+                            --  GNAT exception → exit() → ggml_metal_device_free →
+                            --  GGML_ASSERT([rsets->data count] == 0) → SIGABRT.
+                            --  Mark metal broken (opportunistic: auto-resets after 30s).
+                            if Ret = -3 then
+                                Mark_Metal_Broken;
+                            end if;
+
                             --  [QUIRK-M10] Orphan poisoned context to prevent SIGTRAP
                             Models (Kind).Context := Null_Context;
                             Models (Kind).Model := Null_Model;
@@ -3550,30 +3624,45 @@ package body Model_Manager is
         --    2. Cache persists across server restarts (fastest response)
         --    3. Next request loads from SSD instead of recomputing
         --  =====================================================================
-        declare
-            Success : Boolean;
-        begin
-            --  Save KV cache to SSD (ASYNC, non-blocking)
-            KV_Cache_Manager.Save_To_SSD_Async
-               (Context  => Models (Kind).Context,
-                Tokens   => Tokens.all'Address,
-                N_Tokens => Interfaces.C.size_t (N_Toks),
-                Model_ID => Kind'Img);
+        --
+        --  [VITAL-DO-NOT-REMOVE] Guard against null context.
+        --  When decode fails (Ret /= 0), the context is orphaned (Null_Context).
+        --  Calling Save_To_SSD_Async or Llama_Memory_Clear on Null_Context
+        --  causes SIGSEGV → SIGABRT. Skip KV cache operations entirely.
+        if Models (Kind).Context /= Null_Context then
+            declare
+                Success : Boolean;
+            begin
+                --  Save KV cache to SSD (ASYNC, non-blocking)
+                KV_Cache_Manager.Save_To_SSD_Async
+                   (Context  => Models (Kind).Context,
+                    Tokens   => Tokens.all'Address,
+                    N_Tokens => Interfaces.C.size_t (N_Toks),
+                    Model_ID => Kind'Img);
 
-            --  Clear KV cache from RAM immediately after saving
-            --  This ensures minimal RAM usage - only current process in memory
-            Llama_Interface.Llama_Memory_Clear
-               (Llama_Interface.Llama_Get_Memory (Models (Kind).Context),
-                False);
+                --  Clear KV cache from RAM immediately after saving
+                --  This ensures minimal RAM usage - only current process in memory
+                Llama_Interface.Llama_Memory_Clear
+                   (Llama_Interface.Llama_Get_Memory (Models (Kind).Context),
+                    False);
 
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                    & "[KV-Cache]"
+                    & AnsiAda.Reset
+                    & " Saved to disk and cleared from RAM ("
+                    & Interfaces.C.size_t'Image (Interfaces.C.size_t (N_Toks))
+                    & " tokens)");
+            end;
+        else
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Context was orphaned due to decode failure. Skip KV cache save.
             Put_Line
-               (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+               (AnsiAda.Foreground (AnsiAda.Yellow)
                 & "[KV-Cache]"
                 & AnsiAda.Reset
-                & " Saved to disk and cleared from RAM ("
-                & Interfaces.C.size_t'Image (Interfaces.C.size_t (N_Toks))
-                & " tokens)");
-        end;
+                & " SKIP save: context orphaned (decode failed)");
+        end if;
 
         --  AUTO-CLOSE UNCLOSED THINK BLOCK:
         --  If the model hit EOG while In_Think_Block was still True,
@@ -3650,6 +3739,7 @@ package body Model_Manager is
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
             --  Stack overflow during generation (model load, tokenize, or decode).
             --  Log the full exception info and clean up without crashing.
+            --  Mark Metal broken so KV save retries instead of SIGABRT.
             Ada.Text_IO.Put_Line
                (AnsiAda.Foreground (AnsiAda.Red)
                 & "[Gen-FATAL]"
@@ -3662,6 +3752,28 @@ package body Model_Manager is
                 & AnsiAda.Reset
                 & " Exception: "
                 & Ada.Exceptions.Exception_Information (E));
+            --  [VITAL-DO-NOT-REMOVE] OOM banner — red, unmissable.
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "=========================================================="
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "  !!! OUT OF MEMORY !!!  (STORAGE_ERROR)"
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "  Metal backend poisoned. KV save will RETRY."
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "  Connection NOT dropped. Server continues."
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "=========================================================="
+                & AnsiAda.Reset);
+            Mark_Metal_Broken;
             --  Force-unload the model to free VRAM and avoid corrupt state.
             begin
                 Unload_Model (Kind);
@@ -3684,7 +3796,7 @@ package body Model_Manager is
             end if;
             Result :=
                To_Unbounded_String
-                  ("ERROR: Stack overflow in Generate -- model unloaded");
+                  ("ERROR: Out of Memory (STORAGE_ERROR) -- model unloaded, connection kept alive");
         when others =>
             if Tokens /= null then
                 Free_Tokens (Tokens);
@@ -5840,6 +5952,7 @@ package body Model_Manager is
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
             --  Stack overflow during hybrid generation (tool exec, tokenization,
             --  or context fault paging).  Force-unload model and report cleanly.
+            --  Mark Metal broken so KV save retries instead of SIGABRT.
             begin
                 Models (Snowball_Enaga_Orchestrator).In_Use := False;
                 if Level = ELP0 then
@@ -5869,13 +5982,35 @@ package body Model_Manager is
                 & AnsiAda.Reset
                 & " Exception: "
                 & Ada.Exceptions.Exception_Information (E));
+            --  [VITAL-DO-NOT-REMOVE] OOM banner — red, unmissable.
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "=========================================================="
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "  !!! OUT OF MEMORY !!!  (STORAGE_ERROR)"
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "  Metal backend poisoned. KV save will RETRY."
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "  Connection NOT dropped. Server continues."
+                & AnsiAda.Reset);
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "=========================================================="
+                & AnsiAda.Reset);
+            Mark_Metal_Broken;
             if Stream /= null then
                 begin
                     Push_Chunk
                        (Stream,
                         Session_ID,
                         ASCII.LF
-                        & "ERROR: Stack overflow -- model unloaded for safety"
+                        & "ERROR: Out of Memory (STORAGE_ERROR) -- model unloaded, connection kept alive"
                         & ASCII.LF);
                 exception
                     when others =>
@@ -5884,7 +6019,7 @@ package body Model_Manager is
             end if;
             Result :=
                To_Unbounded_String
-                  ("ERROR: Stack overflow in Hybrid_Generate -- model unloaded");
+                  ("ERROR: Out of Memory (STORAGE_ERROR) in Hybrid_Generate -- model unloaded, connection kept alive");
         when E : others =>
             --  Also release model on error path
             begin
