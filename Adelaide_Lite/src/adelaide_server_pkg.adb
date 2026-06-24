@@ -995,9 +995,58 @@ package body Adelaide_Server_Pkg is
       end if;
    exception
       when E : others =>
-         Ada.Text_IO.Put_Line ("Dispatch Error: " &
-           Ada.Exceptions.Exception_Message (E));
-         return Build_Response ("{}", AWS.Messages.S500);
+         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+         --  UNKNOWN/CATEGORIZED ERROR: Dump full exception and red banner.
+         --  Server keeps running and continues serving other requests.
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "=========================================================="
+             & AnsiAda.Reset);
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "  !!! UNKNOWN ERROR / UNCATEGORIZED EXCEPTION !!!"
+             & AnsiAda.Reset);
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "  URI: " & URI
+             & AnsiAda.Reset);
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "  UA: " & UA
+             & AnsiAda.Reset);
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "  Exception: "
+             & Ada.Exceptions.Exception_Name (E)
+             & AnsiAda.Reset);
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "  Message: "
+             & Ada.Exceptions.Exception_Message (E)
+             & AnsiAda.Reset);
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "  Full Trace:"
+             & AnsiAda.Reset);
+         Ada.Text_IO.Put_Line
+            (Ada.Exceptions.Exception_Information (E));
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "=========================================================="
+             & AnsiAda.Reset);
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "  REPORT TO DEVELOPER! Server continues serving."
+             & AnsiAda.Reset);
+         Ada.Text_IO.Put_Line
+            (AnsiAda.Foreground (AnsiAda.Red)
+             & "=========================================================="
+             & AnsiAda.Reset);
+         --  Return error response — server stays alive for next request
+         return Build_Response
+            ("{""error"": ""Unknown error occurred"", ""detail"": """
+             & Ada.Exceptions.Exception_Message (E) & """}",
+             AWS.Messages.S500);
    end;
    exception
    when E : others =>
