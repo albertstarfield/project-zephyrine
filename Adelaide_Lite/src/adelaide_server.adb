@@ -844,62 +844,111 @@ begin
          Alive_Count     : Natural := 0;
       begin
          loop
-            --  [DO NOT REMOVE] Graceful shutdown check (SIGINT/SIGTERM).
-            if Is_Shutdown_Requested /= 0 then
-               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
-                         "[Shutdown]" & AnsiAda.Reset &
-                         " SIGINT/SIGTERM received. Cleaning up...");
+            --  [VITAL-DO-NOT-REMOVE] Catch-all exception handler for heartbeat loop.
+            --  If ANY unknown/uncategorized exception occurs in the main loop,
+            --  dump the full exception info with a red banner and RETRY after 10s.
+            --  Server stays alive and continues serving.
+            begin
+               --  [DO NOT REMOVE] Graceful shutdown check (SIGINT/SIGTERM).
+               if Is_Shutdown_Requested /= 0 then
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                            "[Shutdown]" & AnsiAda.Reset &
+                            " SIGINT/SIGTERM received. Cleaning up...");
 
-               --  Signal all Ada tasks to stop
-               Shutdown_Manager.Shutdown_Status.Request;
-               Watchdog_Manager.AWS_Server_Monitor.Deactivate;
+                  --  Signal all Ada tasks to stop
+                  Shutdown_Manager.Shutdown_Status.Request;
+                  Watchdog_Manager.AWS_Server_Monitor.Deactivate;
 
-               --  KV Cache: No blocking save at shutdown
-               --  WHY: Background async saves will complete or die with process
-               --  This ensures instant shutdown (no waiting for disk I/O)
-               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
-                         "[Shutdown]" & AnsiAda.Reset &
-                         " KV Cache: async saves will complete in background...");
+                  --  KV Cache: No blocking save at shutdown
+                  --  WHY: Background async saves will complete or die with process
+                  --  This ensures instant shutdown (no waiting for disk I/O)
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                            "[Shutdown]" & AnsiAda.Reset &
+                            " KV Cache: async saves will complete in background...");
 
-               --  Write clean exit reason (not a crash)
-               Watchdog_IPC.Write_Exit_Reason
-                 ("Clean Shutdown (SIGINT/SIGTERM)", 0);
-               --  Delete PID file so watchdog doesn't try to restart
-               if Ada.Directories.Exists ("run/adelaide_server.pid") then
-                  Ada.Directories.Delete_File ("run/adelaide_server.pid");
+                  --  Write clean exit reason (not a crash)
+                  Watchdog_IPC.Write_Exit_Reason
+                    ("Clean Shutdown (SIGINT/SIGTERM)", 0);
+                  --  Delete PID file so watchdog doesn't try to restart
+                  if Ada.Directories.Exists ("run/adelaide_server.pid") then
+                     Ada.Directories.Delete_File ("run/adelaide_server.pid");
+                  end if;
+                  if Ada.Directories.Exists ("run/adelaide_server.heartbeat") then
+                     Ada.Directories.Delete_File
+                       ("run/adelaide_server.heartbeat");
+                  end if;
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                            "[Shutdown]" & AnsiAda.Reset &
+                            " Clean shutdown complete.");
+                  return;
                end if;
-               if Ada.Directories.Exists ("run/adelaide_server.heartbeat") then
-                  Ada.Directories.Delete_File
-                    ("run/adelaide_server.heartbeat");
-               end if;
-               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
-                         "[Shutdown]" & AnsiAda.Reset &
-                         " Clean shutdown complete.");
-               return;
-            end if;
 
-            Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
-            Watchdog_IPC.Write_Heartbeat;
-            Heartbeat_Count := Heartbeat_Count + 1;
-            Alive_Count     := Alive_Count + 1;
-            if Alive_Count >= 3 then
-               Alive_Count := 0;
-               Ada.Text_IO.Put_Line
-                 (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Heartbeat]" &
-                   AnsiAda.Reset & " Server alive - uptime " &
-                  Trim (Duration'Image (Ada.Real_Time.To_Duration
-                    (Ada.Real_Time.Clock - Start_Time)), Both) & "s" &
-                  " | API: " & Adelaide_Server_Pkg.Get_Last_API);
-            end if;
-            if Heartbeat_Count >= 5 then
-               Heartbeat_Count := 0;
-               Ada.Text_IO.Put_Line
-                 (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-                  AnsiAda.Reset & " ELP Queue: " &
-                  ELP_Queue.Utilization'Img & "% full (" &
-                  ELP_Queue.Depth'Img & " pending)");
-            end if;
-            delay 1.0;
+               Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
+               Watchdog_IPC.Write_Heartbeat;
+               Heartbeat_Count := Heartbeat_Count + 1;
+               Alive_Count     := Alive_Count + 1;
+               if Alive_Count >= 3 then
+                  Alive_Count := 0;
+                  Ada.Text_IO.Put_Line
+                    (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Heartbeat]" &
+                      AnsiAda.Reset & " Server alive - uptime " &
+                     Trim (Duration'Image (Ada.Real_Time.To_Duration
+                       (Ada.Real_Time.Clock - Start_Time)), Both) & "s" &
+                     " | API: " & Adelaide_Server_Pkg.Get_Last_API);
+               end if;
+               if Heartbeat_Count >= 5 then
+                  Heartbeat_Count := 0;
+                  Ada.Text_IO.Put_Line
+                    (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
+                     AnsiAda.Reset & " ELP Queue: " &
+                     ELP_Queue.Utilization'Img & "% full (" &
+                     ELP_Queue.Depth'Img & " pending)");
+               end if;
+               delay 1.0;
+            exception
+               when E : others =>
+                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                  --  UNKNOWN/CATEGORIZED ERROR: Full exception dump + red banner.
+                  --  Server RETRIES after 10s delay. Never exits.
+                  Ada.Text_IO.Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Red)
+                      & "=========================================================="
+                      & AnsiAda.Reset);
+                  Ada.Text_IO.Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Red)
+                      & "  !!! UNKNOWN ERROR / UNCATEGORIZED EXCEPTION !!!"
+                      & AnsiAda.Reset);
+                  Ada.Text_IO.Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Red)
+                      & "  Exception: "
+                      & Ada.Exceptions.Exception_Name (E)
+                      & AnsiAda.Reset);
+                  Ada.Text_IO.Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Red)
+                      & "  Message: "
+                      & Ada.Exceptions.Exception_Message (E)
+                      & AnsiAda.Reset);
+                  Ada.Text_IO.Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Red)
+                      & "  Full Trace:"
+                      & AnsiAda.Reset);
+                  Ada.Text_IO.Put_Line
+                     (Ada.Exceptions.Exception_Information (E));
+                  Ada.Text_IO.Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Red)
+                      & "=========================================================="
+                      & AnsiAda.Reset);
+                  Ada.Text_IO.Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Red)
+                      & "  REPORT TO DEVELOPER! Retrying in 10s..."
+                      & AnsiAda.Reset);
+                  Ada.Text_IO.Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Red)
+                      & "=========================================================="
+                      & AnsiAda.Reset);
+                  --  Retry with 10s delay — server stays alive
+                  delay 10.0;
+            end;
          end loop;
       end;
 
