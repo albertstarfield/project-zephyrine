@@ -3751,6 +3751,15 @@ package body Model_Manager is
         Models (Kind).In_Use :=
            (not Release_Model);  --  Keep True when retained
 
+        --  [PARALLEL-1] When Release_Model is True, the model is done.
+        --  Wait for any async KV save, then UNLOAD from GPU.
+        --  Without this, the model stays resident (~5.8GB for 9B) and
+        --  blocks the next model from loading (Metal OOM).
+        if Release_Model then
+            KV_Cache_Manager.Wait_For_Save;
+            Unload_Model (Kind);
+        end if;
+
         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -3851,6 +3860,14 @@ package body Model_Manager is
             --  handler is responsible for clearing In_Use.
             if Release_Model then
                 Models (Kind).In_Use := False;
+                --  [PARALLEL-1] Unload on error too
+                begin
+                    KV_Cache_Manager.Wait_For_Save;
+                    Unload_Model (Kind);
+                exception
+                    when others =>
+                        null;
+                end;
             end if;
             if not Skip_Gate then
                 if Level = ELP0 then
@@ -4264,6 +4281,9 @@ package body Model_Manager is
                 end if;
                 ELP_Queue.Dequeue_Level (Level);
             end if;
+            --  [PARALLEL-1] Wait for KV save then unload from GPU
+            KV_Cache_Manager.Wait_For_Save;
+            Unload_Model (Kind);
         end if;
 
         --  Release draft model
@@ -4289,6 +4309,14 @@ package body Model_Manager is
                 Llama_Interface.Llama_Free (Draft_Context);
             end if;
             Free_Tokens (Tokens_Buf);
+            --  [PARALLEL-1] Unload target model on error too
+            begin
+                KV_Cache_Manager.Wait_For_Save;
+                Unload_Model (Kind);
+            exception
+                when others =>
+                    null;
+            end;
             Result :=
                To_Unbounded_String ("ERROR: Exception during generation");
     end Generate_Speculative;
