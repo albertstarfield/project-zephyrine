@@ -23,7 +23,7 @@ with Math_Utils;
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Real_Time; use Ada.Real_Time;
 with Fuzzy_Match;
-with Claude_Client;
+with Claude_Client; use Claude_Client;
 
 --  ===========================================================================
 --  DISPATCH QUIRKS & DISCOVERED WORKAROUNDS
@@ -1113,57 +1113,85 @@ package body Adelaide_Server_Pkg is
                   end;
                end if;
 
-               --  Forward to Claude API
+               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+               --  Convert Claude messages to ChatML and call LOCAL model (Snowball-Enaga)
+               --  Returns response in Claude Messages API format.
                if Msg_Count > 0 then
                   declare
-                     Start_Time : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
-                     Response   : constant String :=
-                       Claude_Client.Send_Message
-                         (API_Key       => To_String (API_Key),
-                          Model         => To_String (Req_Model),
-                          Messages      => Claude_Messages (1 .. Msg_Count),
-                          Max_Tokens    => Max_Tokens,
-                          System_Prompt => To_String (System_Prompt),
-                          Temperature   => Temperature);
-                     Elapsed     : constant Duration :=
-                       Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Start_Time);
-                     Resp_Obj    : constant JSON_Value := Create_Object;
-                     Content_Arr : JSON_Array;
-                     Content_Obj : constant JSON_Value := Create_Object;
+                     Prompt      : Unbounded_String;
+                     Start_Time  : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+                     Result      : Unbounded_String;
+                     Is_Agentic  : Boolean := False;
+                     Is_Raw      : Boolean := True;
                   begin
-                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                     Ada.Text_IO.Put_Line
-                       (AnsiAda.Foreground (AnsiAda.Cyan)
-                        & "[Claude] Response received in "
-                        & Duration'Image (Elapsed) & "s"
-                        & AnsiAda.Reset);
+                     --  Build ChatML prompt from Claude messages
+                     if Length (System_Prompt) > 0 then
+                        Append (Prompt, "im_start" & "system" & ASCII.LF &
+                                To_String (System_Prompt) & "im_end" & ASCII.LF);
+                     end if;
+                     for I in 1 .. Msg_Count loop
+                        declare
+                           M : constant Claude_Client.Claude_Message := Claude_Messages (I);
+                        begin
+                           if M.Role = Claude_Client.User then
+                              Append (Prompt, "im_start" & "user" & ASCII.LF &
+                                      To_String (M.Content) & "im_end" & ASCII.LF);
+                           else
+                              Append (Prompt, "im_start" & "assistant" & ASCII.LF &
+                                      To_String (M.Content) & "im_end" & ASCII.LF);
+                           end if;
+                        end;
+                     end loop;
+                     Append (Prompt, "im_start" & "assistant" & ASCII.LF);
 
-                     --  Build Claude-compatible response
-                     Set_Field (Resp_Obj, "id", "msg_" &
-                       Ada.Strings.Fixed.Trim (Integer'Image (Integer (Elapsed * 1000.0)), Ada.Strings.Both));
-                     Set_Field (Resp_Obj, "type", "message");
-                     Set_Field (Resp_Obj, "role", "assistant");
-                     Set_Field (Resp_Obj, "model", To_String (Req_Model));
-                     Set_Field (Resp_Obj, "stop_reason", "end_turn");
-                     Set_Field (Resp_Obj, "stop_sequence", GNATCOLL.JSON.JSON_Null);
+                     --  Call local Snowball-Enaga model via Hybrid_Generate
+                     Model_Manager.Hybrid_Generate
+                       (Prompt     => To_String (Prompt),
+                        Result     => Result,
+                        Session_ID => "claude-api",
+                        Agentic    => Is_Agentic,
+                        Raw_Prompt => Is_Raw);
 
-                     --  Content block
-                     Set_Field (Content_Obj, "type", "text");
-                     Set_Field (Content_Obj, "text",
-                       Claude_Client.Parse_Response_Content (Response));
-                     Append (Content_Arr, Content_Obj);
-                     Set_Field (Resp_Obj, "content", Content_Arr);
-
-                     --  Usage (estimated)
                      declare
-                        Usage : constant JSON_Value := Create_Object;
+                        Elapsed   : constant Duration :=
+                          Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Start_Time);
+                        Resp_Obj  : constant JSON_Value := Create_Object;
+                        Content_Arr : JSON_Array;
+                        Content_Obj : constant JSON_Value := Create_Object;
                      begin
-                        Set_Field (Usage, "input_tokens", Integer'(0));
-                        Set_Field (Usage, "output_tokens", Integer'(0));
-                        Set_Field (Resp_Obj, "usage", Usage);
-                     end;
+                        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                        Ada.Text_IO.Put_Line
+                          (AnsiAda.Foreground (AnsiAda.Cyan)
+                           & "[Claude] Local model responded in "
+                           & Duration'Image (Elapsed) & "s"
+                           & AnsiAda.Reset);
 
-                     return Wrap_Response (Build_Response (Write (Resp_Obj)));
+                        --  Build Claude-compatible response format
+                        Set_Field (Resp_Obj, "id", "msg_" &
+                          Ada.Strings.Fixed.Trim (Integer'Image (Integer (Elapsed * 1000.0)), Ada.Strings.Both));
+                        Set_Field (Resp_Obj, "type", "message");
+                        Set_Field (Resp_Obj, "role", "assistant");
+                        Set_Field (Resp_Obj, "model", To_String (Req_Model));
+                        Set_Field (Resp_Obj, "stop_reason", "end_turn");
+                        Set_Field (Resp_Obj, "stop_sequence", GNATCOLL.JSON.JSON_Null);
+
+                        --  Content block
+                        Set_Field (Content_Obj, "type", "text");
+                        Set_Field (Content_Obj, "text", To_String (Result));
+                        Append (Content_Arr, Content_Obj);
+                        Set_Field (Resp_Obj, "content", Content_Arr);
+
+                        --  Usage (estimated)
+                        declare
+                           Usage : constant JSON_Value := Create_Object;
+                        begin
+                           Set_Field (Usage, "input_tokens", Integer'(0));
+                           Set_Field (Usage, "output_tokens", Integer'(0));
+                           Set_Field (Resp_Obj, "usage", Usage);
+                        end;
+
+                        return Wrap_Response (Build_Response (Write (Resp_Obj)));
+                     end;
                   end;
                else
                   --  No messages, return error
