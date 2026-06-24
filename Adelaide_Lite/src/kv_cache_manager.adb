@@ -75,13 +75,28 @@ package body KV_Cache_Manager is
       entry Stop;
    end Metrics_Logger;
 
-   task body Metrics_Logger is
-      use type Interfaces.C.size_t;
-      Running    : Boolean := True;
-      Start_Time : Ada.Real_Time.Time;
-      Uptime     : Duration;
-   begin
-      accept Start;
+    task body Metrics_Logger is
+       use type Interfaces.C.size_t;
+       Running    : Boolean := True;
+       Start_Time : Ada.Real_Time.Time;
+       Uptime     : Duration;
+    begin
+       --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+       --  [ElabTrace][+Uptime]: Confirms KV_Cache_Manager Metrics_Logger
+       --  task body entered. If this never prints, KV_Cache_Manager
+       --  task activation deadlocked during elaboration.
+       Put_Line
+          (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+           & "[ElabTrace]"
+           & AnsiAda.Reset
+           & "+"
+           & Trim
+                (Duration'Image
+                    (Ada.Real_Time.To_Duration
+                        (Ada.Real_Time.Clock - Init_Start_Time)),
+                 Both)
+           & "s KV_Cache_Manager.Metrics_Logger task body ENTERED");
+       accept Start;
 
       Start_Time := Ada.Real_Time.Clock;
 

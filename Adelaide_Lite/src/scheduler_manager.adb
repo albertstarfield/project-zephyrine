@@ -2,10 +2,24 @@ pragma SPARK_Mode (Off);
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Containers.Doubly_Linked_Lists;
+with Interfaces.C.Strings;
 with Model_Manager;
 with Model_Types; use Model_Types;
 
 package body Scheduler_Manager is
+
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  [ElabTrace-C]: RAW C trace to confirm Scheduler_Manager body elaboration reached.
+   procedure Elab_Trace (Label : Interfaces.C.Strings.chars_ptr);
+   pragma Import (C, Elab_Trace, "elab_trace_c");
+
+   function Emit_Elab_Trace return Integer is
+   begin
+      Elab_Trace (Interfaces.C.Strings.New_String ("SCHEDULER_MANAGER BODY ELABORATION ENTERED"));
+      return 0;
+   end Emit_Elab_Trace;
+   Diag : constant Integer := Emit_Elab_Trace;
+   pragma Warnings (Off, Diag);
 
    type Scheduled_Event is record
       Trigger_Time : Time;
@@ -51,12 +65,22 @@ package body Scheduler_Manager is
    type Scheduler_Task_Access is access Scheduler_Task_Type;
    Worker : Scheduler_Task_Access := null;
 
-   task body Scheduler_Task_Type is
-      Evt : Scheduled_Event;
-      Has_Evt : Boolean;
-      LLM_Result : Unbounded_String;
-   begin
-      loop
+     task body Scheduler_Task_Type is
+        Evt : Scheduled_Event;
+        Has_Evt : Boolean;
+        LLM_Result : Unbounded_String;
+        Task_Start : constant Time := Clock;
+     begin
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: Confirms Scheduler_Task_Type task body entered.
+        --  If this never prints, Scheduler_Manager task activation deadlocked.
+        Ada.Text_IO.Put_Line
+           ("[ElabTrace] +"
+            & Duration'Image
+                 (Ada.Real_Time.To_Duration
+                     (Ada.Real_Time.Clock - Task_Start))
+            & "s Scheduler_Manager.Scheduler_Task_Type task body ENTERED");
+        loop
          Event_Queue.Get_Next (Evt, Has_Evt);
          if Has_Evt then
             Put_Line ("[Scheduler] Triggering proactive thought: " & To_String (Evt.Prompt));

@@ -850,6 +850,14 @@ def main():
     if "--no-gui" in sys.argv:
         launch_gui = False
 
+    # [DO NOT REMOVE] --no-daemon: Skip the StellaIcarus daemon runner.
+    # The daemon runner retries failed MCU bridge connections every 30s,
+    # flooding the terminal with error messages.  Use this flag when you
+    # want clean server-only output for debugging.
+    launch_daemon = True
+    if "--no-daemon" in sys.argv:
+        launch_daemon = False
+
     # Port/Host: args > env > defaults
     server_host = os.environ.get("ADLAIDE_SERVER_HOST", "0.0.0.0")
     server_port = os.environ.get("ADLAIDE_SERVER_PORT", "11420")
@@ -859,15 +867,24 @@ def main():
         if arg == "--port" and i + 1 < len(sys.argv):
             server_port = sys.argv[i + 1]
 
-    print("[*] Booting StellaIcarus Ada Daemon Manager...")
-    python_cmd = sys.executable
-    daemon_script = os.path.join(BASE_DIR, "python", "stellaicarus_daemon_runner.py")
+    # [DO NOT REMOVE] Verbose launch info for debugging startup issues
+    print(f"[*] [Launch-V] Run.py PID: {os.getpid()}")
+    print(f"[*] [Launch-V] Python executable: {sys.executable}")
+    print(f"[*] [Launch-V] Server host: {server_host}, port: {server_port}")
+    print(f"[*] [Launch-V] Launch GUI: {launch_gui}, Launch daemon: {launch_daemon}")
+
+    if launch_daemon:
+        print("[*] Booting StellaIcarus Ada Daemon Manager...")
+        python_cmd = sys.executable
+        daemon_script = os.path.join(BASE_DIR, "python", "stellaicarus_daemon_runner.py")
     
-    daemon_args = [python_cmd, daemon_script]
-    if daemon_build_flag:
-        daemon_args.append(daemon_build_flag)
-        
-    daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR, start_new_session=True)
+        daemon_args = [python_cmd, daemon_script]
+        if daemon_build_flag:
+            daemon_args.append(daemon_build_flag)
+            
+        daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR, start_new_session=True)
+    else:
+        print("[*] [Launch-V] Skipping daemon runner (--no-daemon)")
 
     print("[*] Booting Adelaide Intelligence Server...")
     end_time = int(time.time() * 1000)
@@ -877,7 +894,12 @@ def main():
     server_path = os.path.join(BASE_DIR, "bin", server_bin)
 
     env = os.environ.copy()
-    
+
+    # [DO NOT REMOVE] Force Python stdout/stderr unbuffered for all subprocesses.
+    # When stdout is a pipe (not a terminal), Python block-buffers output.
+    # This prevents run.py's print() from appearing immediately.
+    env["PYTHONUNBUFFERED"] = "1"
+
     # Architecture-aware Moonshine ONNX runtime path
     #
     # QUIRK: The server binary links against libmoonshine.dylib, which
@@ -908,8 +930,21 @@ def main():
     server_args_file = os.path.join(BASE_DIR, "run", "adelaide_server.args")
     with open(server_args_file, "w") as f:
         f.write(" ".join(server_args))
+
+    # [DO NOT REMOVE] Verbose server launch info
+    print(f"[*] [Launch-V] Server binary: {server_path}")
+    print(f"[*] [Launch-V] Server args: {server_args}")
+    print(f"[*] [Launch-V] Server CWD: {BASE_DIR}")
+    print(f"[*] [Launch-V] DYLD_LIBRARY_PATH: {env.get('DYLD_LIBRARY_PATH', 'NOT SET')}")
+
     server_process = subprocess.Popen([server_path] + server_args, cwd=BASE_DIR, env=env,
                                        start_new_session=True)
+
+    # [DO NOT REMOVE] Verbose PID tracking
+    print(f"[*] [Launch-V] Server PID: {server_process.pid}")
+    print(f"[*] [Launch-V] Server args file: {server_args_file}")
+    print(f"[*] [Launch-V] Server stdout fd: {server_process.stdout}")
+    print(f"[*] [Launch-V] Server stderr fd: {server_process.stderr}")
 
     # Launch external watchdog process (separate binary, monitors server health)
     # [DO NOT REMOVE THIS] LAUNCH GUARD: Set orchestration flag so watchdog

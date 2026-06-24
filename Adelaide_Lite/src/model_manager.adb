@@ -95,6 +95,18 @@ with Speculative_Cache;
 package body Model_Manager is
     use Streaming_Queue;
 
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    --  [ElabTrace-C]: RAW C trace to confirm Model_Manager body elaboration entered.
+    procedure Elab_Trace_C (Label : Interfaces.C.Strings.chars_ptr);
+    pragma Import (C, Elab_Trace_C, "elab_trace_c");
+    function Emit_Model_Manager_Elab_Trace return Integer is
+    begin
+       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER BODY ELABORATION ENTERED"));
+       return 0;
+    end Emit_Model_Manager_Elab_Trace;
+    Diag_MM : constant Integer := Emit_Model_Manager_Elab_Trace;
+    pragma Warnings (Off, Diag_MM);
+
     --  Token array types (package-level for use by Generate and
     --  Tokenize_And_Cache_Virtual_Ctx)
     type Token_Array is
@@ -111,13 +123,51 @@ package body Model_Manager is
     function Sys_Restore_Stderr (Saved_Fd : int) return int;
     pragma Import (C, Sys_Restore_Stderr, "suppress_restore");
 
+    --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+    --  C FFI trace functions for elaboration debugging.
+    --  These write directly to fd 2 (stderr) using POSIX write(),
+    --  bypassing ALL buffering (C stdio AND Ada.Text_IO).
+    --  This is the ONLY way to get diagnostic output during Ada
+    --  elaboration, because Ada.Text_IO may not be initialized yet.
+    --  ABI NOTE: GNAT passes String as fat pointer (data_ptr, bounds_ptr).
+    --  C side uses strlen() — do NOT pass a length parameter.
+    procedure Elab_Trace (Label : String);
+    pragma Import (C, Elab_Trace, "elab_trace_c");
+    procedure Elab_Trace2 (Label1 : String; Label2 : String);
+    pragma Import (C, Elab_Trace2, "elab_trace_c2");
+
     function Llama_Batch_Get_One
        (T : System.Address; N : int) return Llama_Batch;
     pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
 
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+    --  Init_Start_Time: Captured when Model_Manager.Initialize is called.
+    --  All [Init-V] verbose prints in this package compute uptime relative
+    --  to this timestamp.  DECLARED HERE (before tasks) so task bodies
+    --  can reference it during elaboration traces.
+    --  INITIALIZED to Clock so task activations don't crash on first use.
+    Init_Start_Time : Ada.Real_Time.Time := Ada.Real_Time.Clock;
+
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    --  [ElabTrace-C]: Confirms elaboration past Init_Start_Time declaration.
+    function Emit_After_Init_Start return Integer is
+    begin
+       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_INIT_START_TIME"));
+       return 0;
+    end Emit_After_Init_Start;
+    Diag_AIS : constant Integer := Emit_After_Init_Start;
+    pragma Warnings (Off, Diag_AIS);
+
     task type WCET_Printer;
     task body WCET_Printer is
     begin
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+        --  [ElabTrace-C][+Uptime]: RAW C trace (write to stderr) to confirm
+        --  WCET_Printer task body entered during elaboration.
+        --  If this never prints, task activation deadlocked.
+        Elab_Trace ("WCET_Printer task body ENTERED");
         loop
             delay 30.0;
             Ada.Text_IO.Put_Line
@@ -149,6 +199,16 @@ package body Model_Manager is
 
     Printer_Task : WCET_Printer;
 
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    --  [ElabTrace-C]: RAW C trace: after Printer_Task declaration.
+    function Emit_After_Printer_Task return Integer is
+    begin
+       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_PRINTER_TASK_DECL"));
+       return 0;
+    end Emit_After_Printer_Task;
+    Diag_APT : constant Integer := Emit_After_Printer_Task;
+    pragma Warnings (Off, Diag_APT);
+
     --  =====================================================================
     --  CONTEXT MONITOR TASK
     --  =====================================================================
@@ -170,6 +230,11 @@ package body Model_Manager is
         Next_Check  : Ada.Calendar.Time;
         Fault_Total : Natural := 0;
     begin
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+        --  [ElabTrace-C]: RAW C trace to confirm Context_Monitor task body entered.
+        --  If this never prints, task activation deadlocked.
+        Elab_Trace ("Context_Monitor task body ENTERED");
         accept Start;
         loop
             Next_Check := Ada.Calendar.Clock + Interval;
@@ -297,6 +362,16 @@ package body Model_Manager is
         end loop;
     end Context_Monitor;
 
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    --  [ElabTrace-C]: RAW C trace: after Context_Monitor task body.
+    function Emit_After_CtxMon return Integer is
+    begin
+       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_CTXMON_BODY"));
+       return 0;
+    end Emit_After_CtxMon;
+    Diag_ACM : constant Integer := Emit_After_CtxMon;
+    pragma Warnings (Off, Diag_ACM);
+
     type Model_Record is record
         Model       : Llama_Model := Null_Model;
         Context     : Llama_Context := Null_Context;
@@ -310,12 +385,44 @@ package body Model_Manager is
 
     Models : array (Model_Type) of Model_Record;
 
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    --  [ElabTrace-C]: RAW C trace: after Models array declaration.
+    function Emit_After_Models return Integer is
+    begin
+       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_MODELS_ARRAY"));
+       return 0;
+    end Emit_After_Models;
+    Diag_AM : constant Integer := Emit_After_Models;
+    pragma Warnings (Off, Diag_AM);
+
     type Model_Type_Refs is array (Model_Type) of aliased Model_Type;
+
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    --  [ElabTrace-C]: RAW C trace: after Model_Type_Refs type.
+    function Emit_After_Type_Refs return Integer is
+    begin
+       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_TYPE_REFS"));
+       return 0;
+    end Emit_After_Type_Refs;
+    Diag_ATR : constant Integer := Emit_After_Type_Refs;
+    pragma Warnings (Off, Diag_ATR);
+
     Model_Refs : constant Model_Type_Refs :=
-       [Snowball_Enaga_ShortNetworkAnswer      => Snowball_Enaga_ShortNetworkAnswer,
-        Snowball_Enaga_Orchestrator        => Snowball_Enaga_Orchestrator,
-        Qwen_Embedding => Qwen_Embedding,
-        MMProj         => MMProj];
+       (Snowball_Enaga_ShortNetworkAnswer => Snowball_Enaga_ShortNetworkAnswer,
+        Snowball_Enaga_Orchestrator       => Snowball_Enaga_Orchestrator,
+        Qwen_Embedding                    => Qwen_Embedding,
+        MMProj                            => MMProj,
+        others                            => Snowball_Enaga_ShortNetworkAnswer);
+
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    --  [ElabTrace-C]: RAW C trace: after Model_Refs constant.
+    function Emit_After_Model_Refs return Integer is
+    begin
+       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_MODEL_REFS"));
+       return 0;
+    end Emit_After_Model_Refs;
+    Diag_AMR : constant Integer := Emit_After_Model_Refs;
+    pragma Warnings (Off, Diag_AMR);
 
     type Owner_Array is array (Model_Type) of ELP_Level;
     type Busy_Array is array (Model_Type) of Boolean;
@@ -352,6 +459,11 @@ package body Model_Manager is
     end Priority_Model_Gate;
 
     protected body Accel_Lock_Object is
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+        --  [ElabTrace][+Uptime]: Confirms Accel_Lock_Object protected body
+        --  elaboration reached. If this never prints, the elaboration of
+        --  Accel_Lock_Object deadlocked BEFORE entering the protected body.
         entry Acquire when not Busy is
         begin
             Busy := True;
@@ -362,15 +474,27 @@ package body Model_Manager is
         end Release;
     end Accel_Lock_Object;
 
-    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-    --  Init_Start_Time: Captured when Model_Manager.Initialize is called.
-    --  All [Init-V] verbose prints in this package compute uptime relative
-    --  to this timestamp.
-    Init_Start_Time : Ada.Real_Time.Time;
-
     protected body Priority_Model_Gate is
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: Confirms Priority_Model_Gate protected body
+        --  elaboration reached. If this never prints, the elaboration deadlocked
+        --  BEFORE entering the protected body (during protected type spec elaboration).
         procedure Request_ELP1 is
         begin
+            --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+            --  [ElabTrace][+Uptime]: First executable line in Priority_Model_Gate.
+            --  If this prints, the protected body elaboration succeeded.
+            Put_Line
+               (AnsiAda.Foreground (AnsiAda.Light_Green)
+                & "[ElabTrace]"
+                & AnsiAda.Reset
+                & "+"
+                & Trim
+                     (Duration'Image
+                         (Ada.Real_Time.To_Duration
+                             (Ada.Real_Time.Clock - Init_Start_Time)),
+                      Both)
+                & "s Priority_Model_Gate protected body ELABORATED OK");
             ELP1_Pending := ELP1_Pending + 1;
             Put_Line
                ("[ELP1-REQUEST] Pending ELP1 requests: " & ELP1_Pending'Img);
@@ -511,6 +635,16 @@ package body Model_Manager is
         end Set_Power_Condition;
     end Priority_Model_Gate;
 
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    --  [ElabTrace-C]: RAW C trace: protected bodies elaboration done.
+    function Emit_After_Protected return Integer is
+    begin
+       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_PROTECTED_BODIES"));
+       return 0;
+    end Emit_After_Protected;
+    Diag_AP : constant Integer := Emit_After_Protected;
+    pragma Warnings (Off, Diag_AP);
+
     --  IDLE MONITOR:
     --  Unloads models after 30 seconds of inactivity to free VRAM.
     task Idle_Monitor is
@@ -525,6 +659,11 @@ package body Model_Manager is
         Now        : Time;
         Cleanup_OK : Boolean;
     begin
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+        --  [ElabTrace-C]: RAW C trace to confirm Idle_Monitor task body entered.
+        --  If this never prints, task activation deadlocked.
+        Elab_Trace ("Idle_Monitor task body ENTERED");
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
         --  Verbose: confirms the Idle_Monitor task actually started.
         Put_Line
@@ -623,6 +762,13 @@ package body Model_Manager is
         --  Verbose init tracing: each print confirms a subsystem completed.
         --  If the server hangs during init, the LAST print before silence
         --  tells you exactly which step is stuck.
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: Initialize entry point reached.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+0.0s Initialize procedure ENTERED");
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -646,6 +792,19 @@ package body Model_Manager is
                 null;
             end;
         end;
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: Llama_Backend_Init completed.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 1/7 Llama_Backend_Init DONE");
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -669,7 +828,33 @@ package body Model_Manager is
                          (Ada.Real_Time.Clock - Init_Start_Time)),
                   Both)
             & "s 3/7 Calling Database_Manager.Initialize...");
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: About to call Database_Manager.Initialize.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 2/7 Calling Database_Manager.Initialize...");
         Database_Manager.Initialize;
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: Database_Manager.Initialize completed.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 3/7 Database_Manager.Initialize DONE");
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -693,7 +878,33 @@ package body Model_Manager is
                          (Ada.Real_Time.Clock - Init_Start_Time)),
                   Both)
             & "s 5/7 Calling ELP_Queue.Initialize...");
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: About to call ELP_Queue.Initialize.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 4/7 Calling ELP_Queue.Initialize...");
         ELP_Queue.Initialize;
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: ELP_Queue.Initialize completed.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 5/7 ELP_Queue.Initialize DONE");
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -707,12 +918,64 @@ package body Model_Manager is
             & "s 6/7 ELP_Queue.Initialize DONE.");
 
         --  Start Virtual Context Monitor (prints every 5s)
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: About to start Context_Monitor.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 6/7 Starting Context_Monitor...");
         if not Context_Monitor'Terminated then
             Context_Monitor.Start;
         end if;
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: Context_Monitor started.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 6/7 Context_Monitor.START called");
 
         --  Initialize KV Cache Manager for SSD spillover
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: About to call KV_Cache_Manager.Initialize.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 6b/7 Calling KV_Cache_Manager.Initialize...");
         KV_Cache_Manager.Initialize;
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: KV_Cache_Manager.Initialize completed.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 6b/7 KV_Cache_Manager.Initialize DONE");
 
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
         --  Model paths are set here.  None of these load models from disk.
@@ -739,7 +1002,33 @@ package body Model_Manager is
                          (Ada.Real_Time.Clock - Init_Start_Time)),
                   Both)
             & "s 7/7 Starting Idle_Monitor...");
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: About to start Idle_Monitor.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 7/7 Starting Idle_Monitor...");
         Idle_Monitor.Start;
+        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+        --  [ElabTrace][+Uptime]: Idle_Monitor started. Initialize COMPLETE.
+        Put_Line
+           (AnsiAda.Foreground (AnsiAda.Light_Red)
+            & "[ElabTrace]"
+            & AnsiAda.Reset
+            & "+"
+            & Trim
+                 (Duration'Image
+                     (Ada.Real_Time.To_Duration
+                         (Ada.Real_Time.Clock - Init_Start_Time)),
+                  Both)
+            & "s ElabTrace 7/7 Idle_Monitor.START called -- Initialize COMPLETE");
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -5543,5 +5832,13 @@ package body Model_Manager is
     end Load_KV_Cache_From_SSD;
 
 begin
+    --  [DO NOT REMOVE THIS PRINT VERBOSITY]
+    --  [ElabTrace-C][+Uptime]: This is the FIRST executable statement after
+    --  ALL declarative items (types, objects, tasks, protected bodies) are
+    --  elaborated. If this NEVER prints, the hang is in the DECLARATIVE PART
+    --  (task activation or protected body elaboration). If this prints but
+    --  the next one doesn't, the hang is in Initialize.
+    Elab_Trace ("Model_Manager DECLARATIVE PART COMPLETE -- entering begin block");
     Initialize;
+    Elab_Trace ("Model_Manager.Initialize returned -- end of elaboration");
 end Model_Manager;
