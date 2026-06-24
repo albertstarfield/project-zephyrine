@@ -1590,6 +1590,53 @@ package body Model_Manager is
                 Models (Kind).Model := Null_Model;
             end if;
         end if;
+    exception
+        when E : Storage_Error =>
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Stack overflow during model load (reading weights into VRAM
+            --  or creating llama_context).  Clean up partial state so the
+            --  server continues serving other requests.
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "[LoadModel-FATAL]"
+                & AnsiAda.Reset
+                & " STORAGE_ERROR (stack overflow) loading "
+                & Model_Type'Image (Kind));
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "[LoadModel-FATAL]"
+                & AnsiAda.Reset
+                & " Exception: "
+                & Ada.Exceptions.Exception_Information (E));
+            --  Free partial context if it was created
+            if Models (Kind).Context /= Null_Context then
+                Llama_Interface.Llama_Free (Models (Kind).Context);
+                Models (Kind).Context := Null_Context;
+            end if;
+            --  Free partial model if it was loaded
+            if Models (Kind).Model /= Null_Model then
+                Llama_Model_Free (Models (Kind).Model);
+                Models (Kind).Model := Null_Model;
+            end if;
+            Models (Kind).Loaded := False;
+            Success := False;
+        when E : others =>
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "[LoadModel-FATAL]"
+                & AnsiAda.Reset
+                & " Exception loading " & Model_Type'Image (Kind) & ": "
+                & Ada.Exceptions.Exception_Information (E));
+            if Models (Kind).Context /= Null_Context then
+                Llama_Interface.Llama_Free (Models (Kind).Context);
+                Models (Kind).Context := Null_Context;
+            end if;
+            if Models (Kind).Model /= Null_Model then
+                Llama_Model_Free (Models (Kind).Model);
+                Models (Kind).Model := Null_Model;
+            end if;
+            Models (Kind).Loaded := False;
+            Success := False;
     end Load_Model;
 
     procedure Unload_Model (Kind : Model_Type) is
@@ -3596,9 +3643,48 @@ package body Model_Manager is
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Gen-V]"
             & AnsiAda.Reset
-            & " Generate: COMPLETE. ResultLen="
-            & Natural'Image (Length (Result)));
+             & " Generate: COMPLETE. ResultLen="
+             & Natural'Image (Length (Result)));
     exception
+        when E : Storage_Error =>
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Stack overflow during generation (model load, tokenize, or decode).
+            --  Log the full exception info and clean up without crashing.
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "[Gen-FATAL]"
+                & AnsiAda.Reset
+                & " STORAGE_ERROR (stack overflow) in Generate for "
+                & Model_Type'Image (Kind));
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "[Gen-FATAL]"
+                & AnsiAda.Reset
+                & " Exception: "
+                & Ada.Exceptions.Exception_Information (E));
+            --  Force-unload the model to free VRAM and avoid corrupt state.
+            begin
+                Unload_Model (Kind);
+            exception
+                when others =>
+                    null;
+            end;
+            if Tokens /= null then
+                Free_Tokens (Tokens);
+                Tokens := null;
+            end if;
+            --  Always release ELP lock and dequeue, even on error path.
+            if not Skip_Gate then
+                if Level = ELP0 then
+                    Priority_Model_Gate.Release_ELP0 (Kind);
+                else
+                    Priority_Model_Gate.Release_ELP1 (Kind);
+                end if;
+                ELP_Queue.Dequeue_Level (Level);
+            end if;
+            Result :=
+               To_Unbounded_String
+                  ("ERROR: Stack overflow in Generate -- model unloaded");
         when others =>
             if Tokens /= null then
                 Free_Tokens (Tokens);
@@ -5750,6 +5836,55 @@ package body Model_Manager is
         ELP_Queue.Dequeue_Level (Level);
 
     exception
+        when E : Storage_Error =>
+            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+            --  Stack overflow during hybrid generation (tool exec, tokenization,
+            --  or context fault paging).  Force-unload model and report cleanly.
+            begin
+                Models (Snowball_Enaga_Orchestrator).In_Use := False;
+                if Level = ELP0 then
+                    Priority_Model_Gate.Release_ELP0 (Snowball_Enaga_Orchestrator);
+                else
+                    Priority_Model_Gate.Release_ELP1 (Snowball_Enaga_Orchestrator);
+                end if;
+                ELP_Queue.Dequeue_Level (Level);
+            exception
+                when others =>
+                    null;
+            end;
+            begin
+                Unload_Model (Snowball_Enaga_Orchestrator);
+            exception
+                when others =>
+                    null;
+            end;
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "[Hybrid-FATAL]"
+                & AnsiAda.Reset
+                & " STORAGE_ERROR (stack overflow) in Hybrid_Generate");
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "[Hybrid-FATAL]"
+                & AnsiAda.Reset
+                & " Exception: "
+                & Ada.Exceptions.Exception_Information (E));
+            if Stream /= null then
+                begin
+                    Push_Chunk
+                       (Stream,
+                        Session_ID,
+                        ASCII.LF
+                        & "ERROR: Stack overflow -- model unloaded for safety"
+                        & ASCII.LF);
+                exception
+                    when others =>
+                        null;
+                end;
+            end if;
+            Result :=
+               To_Unbounded_String
+                  ("ERROR: Stack overflow in Hybrid_Generate -- model unloaded");
         when E : others =>
             --  Also release model on error path
             begin
