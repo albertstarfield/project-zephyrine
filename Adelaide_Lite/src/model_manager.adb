@@ -5991,6 +5991,27 @@ package body Model_Manager is
                     & "[Init-V]"
                     & AnsiAda.Reset
                     & " Hybrid_Generate: STREAMING COMPLETE.");
+                --  Push statistics to think block before closing tag.
+                --  These provide chunk/token stats and other metrics.
+                declare
+                    Resp_Len   : constant Natural := Resp_Text'Length;
+                    Gen_Elapsed : constant Duration := Ada.Calendar.Clock - T0;
+                    Stats_Str  : constant String :=
+                      ASCII.LF & "--- ORCHESTRATION STATISTICS ---" & ASCII.LF
+                      & "Response Length: " & Natural'Image (Resp_Len) & " chars" & ASCII.LF
+                      & "Response Tokens (est): " & Natural'Image (Resp_Len / 4) & " tokens" & ASCII.LF
+                      & "Generation Time: " & Duration'Image (Gen_Elapsed) & "s" & ASCII.LF
+                      & "Prompt Tokens: " & Natural'Image (Current_Prompt_Tokens) & ASCII.LF
+                      & "Context Capacity: " & Natural'Image (Current_Ctx_Capacity) & " tokens" & ASCII.LF
+                      & "Context Utilization: " & Natural'Image (Current_Prompt_Tokens * 100 / Current_Ctx_Capacity) & "%" & ASCII.LF
+                      & "Reasoning Hops: " & Natural'Image (Current_Hop_Count) & ASCII.LF
+                      & "Context Faults: " & Natural'Image (Current_Context_Fault_Hops) & ASCII.LF
+                      & "Pipeline Level: " & ELP_Level'Image (Level) & ASCII.LF
+                      & "Streaming Mode: Emulated 300 tok/s" & ASCII.LF
+                      & "--- END STATISTICS ---";
+                begin
+                    Push_Chunk (Stream, Session_ID, Stats_Str);
+                end;
                 --  Push `</think>` to close the orchestration think block.
                 Push_Chunk
                    (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
