@@ -3707,14 +3707,19 @@ package body Model_Manager is
             Free (Prompt_C);
 
             --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
-            --  Trigger resize when prompt exceeds 50% of context capacity.
-            --  This prevents hitting 100% overflow mid-generation and gives
-            --  headroom for the model's internal reasoning tokens.
-            if N_Toks > int (Models (Kind).Current_Ctx) / 2 then
+            --  Trigger resize when prompt exceeds 42% of context capacity.
+            --  WHY 42% not 50%: The model needs ~50% headroom for:
+            --    1. Reasoning tokens (<think> blocks consume heavily)
+            --    2. System prompt + memory injection blocks
+            --    3. Multi-hop chain overhead (each hop adds context)
+            --  At 42% we trigger early enough that the resize + re-tokenize
+            --  cycle completes before the model runs out of room.
+            --  Integer math: N_Toks > Current_Ctx * 21 / 50 ≈ 42%
+            if N_Toks > int (Models (Kind).Current_Ctx) * 21 / 50 then
                 Put_Line
                    ("[!] Prompt size ("
                     & N_Toks'Img
-                    & ") exceeds 50% of N_CTX ("
+                    & ") exceeds 42% of N_CTX ("
                     & Models (Kind).Current_Ctx'Img
                     & "). Proactive resize...");
                 declare
