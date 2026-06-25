@@ -890,7 +890,7 @@ def main():
             {
                 "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors?download=true",
                 "output": "clip_l.safetensors",
-                "sha256": "1af8d75852276143798178b90b904db3a2b5baebfc72ed8a45fb9a7126ed8be4"
+                "sha256": "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd"
             },
             # VAE (safetensors, ~335MB — public mirror, BFL repos are gated)
             {
