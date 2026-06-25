@@ -6096,20 +6096,32 @@ package body Model_Manager is
                                 & Interfaces.C.unsigned'Image (Generate_Seed));
 
                             --  Retry without streaming (avoids duplicate tokens to client)
-                            Generate
-                               (Kind            => Snowball_Enaga_Orchestrator,
-                                Prompt          => Get_Final_Prompt,
-                                Result          => Fault_Result,
-                                Images          => Images,
-                                Session_ID      => Session_ID,
-                                Requested_Ctx   => 8192,
-                                Stream          => null,
-                                Orch_Think_Open => False,
-                                Level           => Level,
-                                Virtual_Tokens  => Cached_Virtual_Tokens,
-                                Virtual_Tok_Len => Cached_Virtual_Len,
-                                FreeParallelMemory   => True,
-                                Skip_Gate       => False);
+                            begin
+                                Generate
+                                   (Kind            => Snowball_Enaga_Orchestrator,
+                                    Prompt          => Get_Final_Prompt,
+                                    Result          => Fault_Result,
+                                    Images          => Images,
+                                    Session_ID      => Session_ID,
+                                    Requested_Ctx   => 8192,
+                                    Stream          => null,
+                                    Orch_Think_Open => False,
+                                    Level           => Level,
+                                    Virtual_Tokens  => Cached_Virtual_Tokens,
+                                    Virtual_Tok_Len => Cached_Virtual_Len,
+                                    FreeParallelMemory   => True,
+                                    Skip_Gate       => False);
+                            exception
+                                when others =>
+                                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                                    Put_Line
+                                       (AnsiAda.Foreground (AnsiAda.Red)
+                                        & "[Init-V]"
+                                        & AnsiAda.Reset
+                                        & " Hybrid_Generate: THINK-ONLY RETRY Generate CRASHED -- "
+                                        & "prompt too long from excessive hops. Aborting retry.");
+                                    exit;
+                            end;
 
                             --  Check sanitized result
                             Sanitized_Check :=
@@ -6177,20 +6189,32 @@ package body Model_Manager is
                                 & Interfaces.C.unsigned'Image (Generate_Seed));
 
                             --  Retry without streaming
-                            Generate
-                               (Kind            => Snowball_Enaga_Orchestrator,
-                                Prompt          => Get_Final_Prompt,
-                                Result          => Fault_Result,
-                                Images          => Images,
-                                Session_ID      => Session_ID,
-                                Requested_Ctx   => 8192,
-                                Stream          => null,
-                                Orch_Think_Open => False,
-                                Level           => Level,
-                                Virtual_Tokens  => Cached_Virtual_Tokens,
-                                Virtual_Tok_Len => Cached_Virtual_Len,
-                                FreeParallelMemory => True,
-                                Skip_Gate       => False);
+                            begin
+                                Generate
+                                   (Kind            => Snowball_Enaga_Orchestrator,
+                                    Prompt          => Get_Final_Prompt,
+                                    Result          => Fault_Result,
+                                    Images          => Images,
+                                    Session_ID      => Session_ID,
+                                    Requested_Ctx   => 8192,
+                                    Stream          => null,
+                                    Orch_Think_Open => False,
+                                    Level           => Level,
+                                    Virtual_Tokens  => Cached_Virtual_Tokens,
+                                    Virtual_Tok_Len => Cached_Virtual_Len,
+                                    FreeParallelMemory => True,
+                                    Skip_Gate       => False);
+                            exception
+                                when others =>
+                                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                                    Put_Line
+                                       (AnsiAda.Foreground (AnsiAda.Red)
+                                        & "[Init-V]"
+                                        & AnsiAda.Reset
+                                        & " Hybrid_Generate: REPEAT RETRY Generate CRASHED -- "
+                                        & "prompt too long from excessive hops. Aborting retry.");
+                                    exit;
+                            end;
 
                             Sanitized_Repeat :=
                                Sanitize_Think_Tags (To_String (Fault_Result));
