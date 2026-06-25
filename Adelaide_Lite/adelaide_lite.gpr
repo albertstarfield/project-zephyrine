@@ -130,6 +130,8 @@ project Adelaide_Lite is
               ("-I" & project'Project_Dir & "../llama.cpp/include", 
                "-I" & project'Project_Dir & "../llama.cpp/ggml/include",
                "-I" & project'Project_Dir & "../llama.cpp/tools/mtmd",
+               --  [STABLE-DIFFUSION] Include stable-diffusion.cpp headers
+               "-I" & project'Project_Dir & "../stable-diffusion.cpp/include",
                "-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
                "-std=c++17", "-mmacosx-version-min=15.0");
             for Default_Switches ("C") use
@@ -169,6 +171,8 @@ project Adelaide_Lite is
          project'Project_Dir & "../llama.cpp/build/ggml/src/libggml-cpu.a",
          project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-blas/libggml-blas.a",
          project'Project_Dir & "../llama.cpp/build/tools/mtmd/libmtmd.a",
+         --  [STABLE-DIFFUSION] Link stable-diffusion.cpp for image generation
+         project'Project_Dir & "../stable-diffusion.cpp/build/src/libstable-diffusion.a",
          "-lsqlite3",
          "-lc++",
           project'Object_Dir & "/llama_safe.o",
