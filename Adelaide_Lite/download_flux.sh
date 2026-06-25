@@ -53,7 +53,7 @@ download "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-s
          "flux1-schnell.gguf" 4010296352
 
 # 2. Text encoder t5xxl (Q4_0 GGUF, ~2.9GB = 2924546752 bytes)
-download "https://huggingface.co/Phil2Sat/T5XXL-Unchained-GGUF/resolve/main/t5xxl_fp16_unquantized_Q4_0.gguf?download=true" \
+download "https://huggingface.co/Phil2Sat/T5XXL-Unchained-GGUF/resolve/main/Kaoru8-t5xxl-unchained-Q4_0.gguf?download=true" \
          "flux1-t5xxl.gguf" 2924546752
 
 # 3. CLIP-L text encoder (safetensors, ~246MB)
