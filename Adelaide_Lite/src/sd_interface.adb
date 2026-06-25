@@ -112,11 +112,11 @@ package body SD_Interface is
          Put_Line ("  Clip_Skip:        " & int'Image (Params.Clip_Skip));
          --  Sample params
          Put_Line ("  -- Sample Parameters --");
-         Put_Line ("    Sample_Method:  " & int'Image (Params.Sample_Params.Sample_Method));
+         Put_Line ("    Sample_Method:  " & int'Image (int (Sample_Method_T'Pos (Params.Sample_Params.Sample_Method))));
          Put_Line ("    Sample_Steps:   " & int'Image (Params.Sample_Params.Sample_Steps));
          Put_Line ("    Txt_Cfg:        " &
                    Interfaces.C.C_float'Image (Params.Sample_Params.Txt_Cfg));
-         Put_Line ("    Scheduler:      " & int'Image (Params.Sample_Params.Scheduler));
+         Put_Line ("    Scheduler:      " & int'Image (int (Scheduler_T'Pos (Params.Sample_Params.Scheduler))));
       end if;
       Put_Line ("[SD-Interface] === End Image Generation Parameters ===");
    end Log_Image_Gen_Params;
@@ -127,13 +127,13 @@ package body SD_Interface is
    --  Logs the result of generate_image().
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 
-   procedure Log_Generate_Result (Images   : SD_Image_Access;
-                                   Count    : int;
-                                   Duration : Duration) is
+   procedure Log_Generate_Result (Images      : SD_Image_Access;
+                                   Count       : int;
+                                   Gen_Duration: Duration) is
    begin
       Put_Line ("[SD-Interface] === Generation Result ===");
       Put_Line ("  Images generated: " & int'Image (Count));
-      Put_Line ("  Generation time:  " & Duration'Image (Duration) & "s");
+      Put_Line ("  Generation time:  " & Duration'Image (Gen_Duration) & "s");
       if Images /= null then
          for I in 0 .. Count - 1 loop
             declare
@@ -163,41 +163,41 @@ package body SD_Interface is
    begin
       Put_Line ("[SD-Interface] === Available Sample Methods ===");
       for I in 0 .. 17 loop  -- 0..17 = Euler through Euler_GE
-         Name_Ptr := SD_Sample_Method_Name (I);
+         Name_Ptr := SD_Sample_Method_Name (int (I));
          if Name_Ptr /= Null_Ptr then
-            Put_Line ("  " & int'Image (I) & ": " & Value (Name_Ptr));
+            Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));
          end if;
       end loop;
 
       Put_Line ("[SD-Interface] === Available Schedulers ===");
       for I in 0 .. 12 loop  -- 0..12 = Discrete through Logit_Normal
-         Name_Ptr := SD_Scheduler_Name (I);
+         Name_Ptr := SD_Scheduler_Name (int (I));
          if Name_Ptr /= Null_Ptr then
-            Put_Line ("  " & int'Image (I) & ": " & Value (Name_Ptr));
+            Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));
          end if;
       end loop;
 
       Put_Line ("[SD-Interface] === Available Data Types ===");
       for I in 0 .. 15 loop  -- 0..15 = F32 through Q8_K
-         Name_Ptr := SD_Type_Name (I);
+         Name_Ptr := SD_Type_Name (int (I));
          if Name_Ptr /= Null_Ptr then
-            Put_Line ("  " & int'Image (I) & ": " & Value (Name_Ptr));
+            Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));
          end if;
       end loop;
 
       Put_Line ("[SD-Interface] === Available RNG Types ===");
       for I in 0 .. 2 loop  -- 0..2 = STD_DEFAULT, CUDA, CPU
-         Name_Ptr := SD_RNG_Type_Name (I);
+         Name_Ptr := SD_RNG_Type_Name (int (I));
          if Name_Ptr /= Null_Ptr then
-            Put_Line ("  " & int'Image (I) & ": " & Value (Name_Ptr));
+            Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));
          end if;
       end loop;
 
       Put_Line ("[SD-Interface] === Available Predictions ===");
       for I in 0 .. 5 loop  -- 0..5 = EPS through FLUX2_FLOW_PRED
-         Name_Ptr := SD_Prediction_Name (I);
+         Name_Ptr := SD_Prediction_Name (int (I));
          if Name_Ptr /= Null_Ptr then
-            Put_Line ("  " & int'Image (I) & ": " & Value (Name_Ptr));
+            Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));
          end if;
       end loop;
    end Log_All_Enum_Names;

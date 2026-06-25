@@ -19,7 +19,7 @@ package body SD_Manager is
    function Uptime_String return String is
       use Ada.Real_Time;
       Elapsed : constant Time_Span := Clock - Init_Start_Time;
-      Seconds : constant Integer := To_Duration (Elapsed);
+      Seconds : constant Integer := Integer (To_Duration (Elapsed));
    begin
       return "[" & Integer'Image (Seconds) & "s]";
    end Uptime_String;
@@ -246,6 +246,17 @@ package body SD_Manager is
    --  Implements the two-stage pipeline from project-zephyrine:
    --    Stage 1: FLUX sparse → Stage 2: SD refinement
 
+   --  FFI to C helper for PNG+Base64 encoding
+   function SD_Image_To_Base64_PNG
+     (Image_Data : System.Address;
+      Width      : Interfaces.C.int;
+      Height     : Interfaces.C.int;
+      Channels   : Interfaces.C.int) return Interfaces.C.Strings.chars_ptr;
+   pragma Import (C, SD_Image_To_Base64_PNG, "sd_image_to_base64_png");
+
+   procedure SD_Free_String (Str : Interfaces.C.Strings.chars_ptr);
+   pragma Import (C, SD_Free_String, "sd_free_string");
+
    procedure Generate_Two_Stage
      (Prompt         : String;
       Width          : Integer := 1024;
@@ -255,13 +266,18 @@ package body SD_Manager is
       Flux_Cfg       : Float := 1.0;
       Refine_Enabled : Boolean := True;
       Refine_Steps   : Integer := 8;
-      Refine_Strength: Float := 0.4)
+      Refine_Strength: Float := 0.4;
+      Image_B64      : out Ada.Strings.Unbounded.Unbounded_String;
+      Error_Msg      : out Ada.Strings.Unbounded.Unbounded_String)
    is
+      use Interfaces.C;
       use Interfaces.C.Strings;
-      Stage1_Start : Ada.Real_Time.Time;
-      Stage1_Duration : Duration;
-      Stage2_Start : Ada.Real_Time.Time;
-      Stage2_Duration : Duration;
+      use Ada.Strings.Unbounded;
+      Stage1_Start    : Ada.Real_Time.Time;
+      Stage1_Elapsed  : Ada.Real_Time.Time_Span;
+      Stage2_Start    : Ada.Real_Time.Time;
+      Stage2_Elapsed  : Ada.Real_Time.Time_Span;
+      Last_Image      : SD_Image_Access := null;
    begin
       Put_Line
         (Uptime_String & " [SD-Manager] === Two-Stage Generation ==="
@@ -282,7 +298,6 @@ package body SD_Manager is
          Gen_Params : aliased SD_Img_Gen_Params;
          C_Prompt   : chars_ptr := New_String (Prompt);
          Images     : SD_Image_Access;
-         Count      : int;
       begin
          SD_Img_Gen_Params_Init (Gen_Params'Access);
 
@@ -296,7 +311,7 @@ package body SD_Manager is
          --  FLUX Schnell settings
          Gen_Params.Sample_Params.Sample_Method := Euler;
          Gen_Params.Sample_Params.Sample_Steps  := int (Flux_Steps);
-         Gen_Params.Sample_Params.Txt_Cfg       := interfaces.C.C_float (Flux_Cfg);
+         Gen_Params.Sample_Params.Txt_Cfg       := C_float (Flux_Cfg);
          Gen_Params.Sample_Params.Scheduler     := Simple;
 
          --  Log params
@@ -321,12 +336,12 @@ package body SD_Manager is
          end if;
 
          --  Log result
-         Stage1_Duration := Clock - Stage1_Start;
-         Log_Generate_Result (Images, 1, Stage1_Duration);
+         Stage1_Elapsed := Clock - Stage1_Start;
+         Log_Generate_Result (Images, 1, To_Duration (Stage1_Elapsed));
 
          Put_Line
            (Uptime_String & " [SD-Manager] [Stage-1] Complete in "
-            & Duration'Image (Stage1_Duration) & "s");
+            & Duration'Image (To_Duration (Stage1_Elapsed)) & "s");
 
          --  Free Stage 1 images
          Free_SD_Images (Images, 1);
@@ -364,12 +379,12 @@ package body SD_Manager is
             Refine_Params.Height          := int (Height);
             Refine_Params.Seed            := Seed;
             Refine_Params.Batch_Count     := 1;
-            Refine_Params.Strength        := interfaces.C.C_float (Refine_Strength);
+            Refine_Params.Strength        := C_float (Refine_Strength);
 
             --  Refinement settings (dpmpp2mv2, more steps)
             Refine_Params.Sample_Params.Sample_Method := DPMPP2Mv2;
             Refine_Params.Sample_Params.Sample_Steps  := int (Refine_Steps);
-            Refine_Params.Sample_Params.Txt_Cfg       := interfaces.C.C_float (7.0);
+            Refine_Params.Sample_Params.Txt_Cfg       := C_float (7.0);
             Refine_Params.Sample_Params.Scheduler     := Karras;
 
             --  Log params
@@ -395,15 +410,15 @@ package body SD_Manager is
             end if;
 
             --  Log result
-            Stage2_Duration := Clock - Stage2_Start;
-            Log_Generate_Result (Images, 1, Stage2_Duration);
+            Stage2_Elapsed := Clock - Stage2_Start;
+            Log_Generate_Result (Images, 1, To_Duration (Stage2_Elapsed));
 
             Put_Line
               (Uptime_String & " [SD-Manager] [Stage-2] Complete in "
-               & Duration'Image (Stage2_Duration) & "s");
+               & Duration'Image (To_Duration (Stage2_Elapsed)) & "s");
 
-            --  Free Stage 2 images
-            Free_SD_Images (Images, 1);
+            --  Keep reference for Base64 conversion after freeing images
+            Last_Image := Images;
          end;
 
          --  ==================================================================
@@ -416,6 +431,43 @@ package body SD_Manager is
       else
          Put_Line
            (Uptime_String & " [SD-Manager] Refinement disabled, skipping Stage 2.");
+      end if;
+
+      --  ====================================================================
+      --  CONVERT TO BASE64 PNG via C helper
+      --  ====================================================================
+      if Last_Image /= null then
+         declare
+            Img     : constant SD_Image := Last_Image.all;
+            C_Result: chars_ptr;
+         begin
+            Put_Line
+              (Uptime_String & " [SD-Manager] Converting to Base64 PNG..."
+               & " W=" & unsigned'Image (Img.Width)
+               & " H=" & unsigned'Image (Img.Height)
+               & " Ch=" & unsigned'Image (Img.Channel));
+
+            C_Result := SD_Image_To_Base64_PNG
+              (Img.Data,
+               int (Img.Width),
+               int (Img.Height),
+               int (Img.Channel));
+
+            if C_Result /= Null_Ptr then
+               Image_B64 := To_Unbounded_String (Value (C_Result));
+               Put_Line
+                 (Uptime_String & " [SD-Manager] Base64 conversion complete."
+                  & " Length=" & Integer'Image (Length (Image_B64)));
+               SD_Free_String (C_Result);
+            else
+               Error_Msg := To_Unbounded_String ("Base64 conversion failed");
+               Put_Line
+                 (Uptime_String & " [SD-Manager] [ERROR] Base64 conversion returned null!");
+            end if;
+         end;
+
+         --  Free the SD images after conversion
+         Free_SD_Images (Last_Image, 1);
       end if;
 
       Put_Line
@@ -436,26 +488,11 @@ package body SD_Manager is
       Free_Refiner_Context;
 
       --  Free path strings
-      if Flux_Diffusion_Path /= null then
-         Free (Flux_Diffusion_Path);
-         Flux_Diffusion_Path := null;
-      end if;
-      if Flux_Clip_L_Path /= null then
-         Free (Flux_Clip_L_Path);
-         Flux_Clip_L_Path := null;
-      end if;
-      if Flux_T5XXL_Path /= null then
-         Free (Flux_T5XXL_Path);
-         Flux_T5XXL_Path := null;
-      end if;
-      if Flux_VAE_Path /= null then
-         Free (Flux_VAE_Path);
-         Flux_VAE_Path := null;
-      end if;
-      if Refiner_Model_Path /= null then
-         Free (Refiner_Model_Path);
-         Refiner_Model_Path := null;
-      end if;
+      Flux_Diffusion_Path := null;
+      Flux_Clip_L_Path := null;
+      Flux_T5XXL_Path := null;
+      Flux_VAE_Path := null;
+      Refiner_Model_Path := null;
 
       Is_Initialized := False;
 

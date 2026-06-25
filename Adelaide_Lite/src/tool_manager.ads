@@ -10,4 +10,10 @@ package Tool_Manager is
 
    function Execute_Tool (Name : String; Params : String) return Tool_Result;
 
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  Execute the "imagine" tool directly via SD_Manager (no Python sidecar).
+   --  Returns the Base64-encoded PNG image data.
+   --  Called from Hybrid_Generate when the model outputs [ACTION: imagine(prompt)].
+   function Execute_Imagine_Tool (Prompt : String) return Tool_Result;
+
 end Tool_Manager;

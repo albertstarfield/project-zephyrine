@@ -37,6 +37,7 @@ pragma SPARK_Mode (Off);
 
 with SD_Interface; use SD_Interface;
 with Ada.Real_Time; use Ada.Real_Time;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package SD_Manager is
 
@@ -58,11 +59,11 @@ package SD_Manager is
    Refiner_Ctx     : SD_Ctx := Null_SD_Ctx;
 
    --  Model file paths (set during Initialize)
-   Flux_Diffusion_Path : access constant String := null;
-   Flux_Clip_L_Path    : access constant String := null;
-   Flux_T5XXL_Path     : access constant String := null;
-   Flux_VAE_Path       : access constant String := null;
-   Refiner_Model_Path  : access constant String := null;
+   Flux_Diffusion_Path : access String := null;
+   Flux_Clip_L_Path    : access String := null;
+   Flux_T5XXL_Path     : access String := null;
+   Flux_VAE_Path       : access String := null;
+   Refiner_Model_Path  : access String := null;
 
    --  ============================================================================
    --  INITIALIZATION
@@ -108,6 +109,7 @@ package SD_Manager is
    --  Generate image with two-stage pipeline
    --  Stage 1: FLUX sparse (2-4 steps) → Stage 2: SD refinement (8+ steps)
    --  FreeParallelMemory between stages (unload FLUX, load refinement)
+   --  Returns Base64-encoded PNG image data
    procedure Generate_Two_Stage
      (Prompt         : String;
       Width          : Integer := 1024;
@@ -119,7 +121,10 @@ package SD_Manager is
       --  Refinement Stage 2 params
       Refine_Enabled : Boolean := True;
       Refine_Steps   : Integer := 8;
-      Refine_Strength: Float := 0.4);
+      Refine_Strength: Float := 0.4;
+      --  Output
+      Image_B64      : out Ada.Strings.Unbounded.Unbounded_String;
+      Error_Msg      : out Ada.Strings.Unbounded.Unbounded_String);
 
    --  ============================================================================
    --  CLEANUP

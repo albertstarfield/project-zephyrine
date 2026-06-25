@@ -4,6 +4,7 @@ with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNAT.OS_Lib;
 with GNAT.Expect;
+with SD_Manager;
 
 package body Tool_Manager is
 
@@ -62,5 +63,56 @@ package body Tool_Manager is
          Result.Output := To_Unbounded_String ("Error executing tool");
          return Result;
    end Execute_Tool;
+
+   --  ============================================================================
+   --  IMAGINE TOOL: Direct Ada call to SD_Manager (no Python sidecar)
+   --  ============================================================================
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  Called from Hybrid_Generate when the model outputs [ACTION: imagine(prompt)].
+   --  Generates an image using the two-stage FLUX + SD refinement pipeline.
+   --  Returns the Base64-encoded PNG as the tool output.
+
+   function Execute_Imagine_Tool (Prompt : String) return Tool_Result is
+      Image_B64 : Unbounded_String := Null_Unbounded_String;
+      Error_Msg : Unbounded_String := Null_Unbounded_String;
+      Result    : Tool_Result := (Success => False,
+                                  Output  => Null_Unbounded_String);
+   begin
+      Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Tool-Imagine]" &
+                AnsiAda.Reset & " Generating image for: " &
+                Prompt (Prompt'First .. Integer'Min (Prompt'First + 79, Prompt'Last)));
+
+      SD_Manager.Generate_Two_Stage
+        (Prompt         => Prompt,
+         Width          => 1024,
+         Height         => 1024,
+         Seed           => -1,
+         Flux_Steps     => 4,
+         Flux_Cfg       => 1.0,
+         Refine_Enabled => True,
+         Refine_Steps   => 8,
+         Refine_Strength => 0.4,
+         Image_B64      => Image_B64,
+         Error_Msg      => Error_Msg);
+
+      if Length (Error_Msg) > 0 then
+         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Tool-Imagine] ERROR: " &
+                   AnsiAda.Reset & To_String (Error_Msg));
+         Result.Output := To_Unbounded_String ("Error: " & To_String (Error_Msg));
+         return Result;
+      end if;
+
+      if Length (Image_B64) > 0 then
+         Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Tool-Imagine]" &
+                   AnsiAda.Reset & " Image generated. Base64 length=" &
+                   Integer'Image (Length (Image_B64)));
+         Result.Success := True;
+         Result.Output := Image_B64;
+      else
+         Result.Output := To_Unbounded_String ("Error: Image generation returned empty");
+      end if;
+
+      return Result;
+   end Execute_Imagine_Tool;
 
 end Tool_Manager;
