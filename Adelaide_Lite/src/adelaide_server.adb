@@ -303,7 +303,7 @@ begin
       --  ----------------------------------------------------------------
       declare
          GGUF_Path : constant String :=
-           "model/qwen3.5/Mythos9bHybridq4.gguf";
+           "model/Mythos9bHybridq4.gguf";
          --  Target: 1GB = 1024 * 1024 * 1024 bytes
          Target_Bytes : constant Long_Long_Integer := 1024 * 1024 * 1024;
          --  Read in 1MB chunks to avoid huge stack allocations
