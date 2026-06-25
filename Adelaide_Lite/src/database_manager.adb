@@ -43,6 +43,12 @@ package body Database_Manager is
 
          Main_DB_Ptr := new Ada_Sqlite3.Database'(Open (DB_File));
 
+         --  Set busy timeout: wait up to 5 seconds for a locked DB
+         --  before returning SQLITE_BUSY. Without this, concurrent writes
+         --  from background tasks (KV save, ELP0 crawl) cause immediate
+         --  SQLITE_BUSY errors on Set_System_State.
+         Execute (Main_DB_Ptr.all, "PRAGMA busy_timeout = 5000;");
+
          --  Memories table
          Execute (Main_DB_Ptr.all,
                   "CREATE TABLE IF NOT EXISTS memories (" &
