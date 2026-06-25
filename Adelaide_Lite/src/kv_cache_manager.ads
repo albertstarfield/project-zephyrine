@@ -32,11 +32,12 @@ package KV_Cache_Manager is
    --  WHY: Never block on disk I/O during request handling.
    --  Background task saves to disk while we return response instantly.
 
-   procedure Save_To_SSD_Async
-     (Context    : Llama_Interface.Llama_Context;
-      Tokens     : System.Address;
-      N_Tokens   : Interfaces.C.size_t;
-      Model_ID   : String);
+    procedure Save_To_SSD_Async
+      (Context    : Llama_Interface.Llama_Context;
+       Tokens     : System.Address;
+       N_Tokens   : Interfaces.C.size_t;
+       Model_ID   : String;
+       Session_ID : String);
 
    --  ============================================================================
    --  LAZY LOAD (on-demand only)
@@ -44,11 +45,12 @@ package KV_Cache_Manager is
    --  WHY: Don't load at startup - only load when Generate is called.
    --  Use pre-path cache to skip directory scan when possible.
 
-   function Load_From_SSD_Lazy
-     (Context    : Llama_Interface.Llama_Context;
-      Tokens     : out System.Address;
-      N_Tokens   : out Interfaces.C.size_t;
-      Model_ID   : String) return Boolean;
+    function Load_From_SSD_Lazy
+      (Context    : Llama_Interface.Llama_Context;
+       Tokens     : out System.Address;
+       N_Tokens   : out Interfaces.C.size_t;
+       Model_ID   : String;
+       Session_ID : String) return Boolean;
 
    --  ============================================================================
    --  PRE-PATH CACHE (blackmagic trick #1)
@@ -58,7 +60,7 @@ package KV_Cache_Manager is
 
    procedure Cache_Last_Path (Path : String);
    function Get_Cached_Path return String;
-   function Has_Cached_Path (Model_ID : String) return Boolean;
+   function Has_Cached_Path (Model_ID : String; Session_ID : String) return Boolean;
 
    --  ============================================================================
    --  PREFETCH (blackmagic trick #2)
