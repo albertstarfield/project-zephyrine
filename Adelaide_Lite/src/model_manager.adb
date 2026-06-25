@@ -299,7 +299,7 @@ package body Model_Manager is
 
                 --  Virtual Context: accumulated factual data (Internal_State)
                 --  This is the data paged in from tool results across hops
-                --  Capacity is 2^63 (Virtual Context Model)
+                --  Capacity is 2^63 = 9223372036854775807 (Virtual Context Model)
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                     & "[CtxMonitor]"
@@ -309,7 +309,7 @@ package body Model_Manager is
                     & " bytes / "
                     & Natural'Image (VC_Tokens)
                     & " ~tokens"
-                    & " out of 2^63"
+                    & " out of 9223372036854775807"
                     & " ("
                     & Natural'Image (VC_Ctx_Pct)
                     & "% of LLM window)");
