@@ -990,6 +990,10 @@ def main():
 
         # Note for future agents: The user strictly wants Alire to use the local alirevenv
         alr_cmd = "alr.exe" if platform.system() == "Windows" else "alr"
+        # Update version.ads with current git hash before building
+        version_script = os.path.join(BASE_DIR, "scripts", "update_version.sh")
+        if os.path.exists(version_script):
+            subprocess.run(["bash", version_script], cwd=BASE_DIR, check=False)
         subprocess.run([alr_cmd, "build"], env=env, cwd=BASE_DIR, check=True)
         
         print("[*] Building Vite Frontend for Sidecar UI...")

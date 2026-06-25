@@ -25,8 +25,10 @@ with Ada.Real_Time; use Ada.Real_Time;
 with Fuzzy_Match;
 with Claude_Client; use Claude_Client;
 with SD_Manager;
+
 with Ada.Directories;
 
+with Version;
 --  ===========================================================================
 --  DISPATCH QUIRKS & DISCOVERED WORKAROUNDS
 --  ===========================================================================
@@ -484,7 +486,7 @@ package body Adelaide_Server_Pkg is
       end;
 
       if URI = "/api/version" then
-         return Build_Response ("{""version"": ""Project-Zephyrine-0.27""}");
+         return Build_Response ("{""version"": """ & Version.Full_Version & """}");
       end if;
 
       --  Ollama stub: /api/show (POST) - show model info
