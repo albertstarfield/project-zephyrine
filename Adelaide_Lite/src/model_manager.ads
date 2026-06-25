@@ -114,7 +114,13 @@ package Model_Manager is
        --  model after all post-processing is complete.  This prevents the
        --  Idle_Monitor from unloading the model while Hybrid_Generate is
        --  still executing tool calls, streaming, etc.
-       Release_Model   : Boolean := True;
+       --  [FREE-PARALLEL-MEMORY] When True, free ALL GPU memory for this model
+       --  after generation completes. This is NOT just for LLM models — it
+       --  applies to any heavy GPU component: Stable Diffusion Flux, LSH/QRNN
+       --  hash workers, database memory, embedding models, etc. The idea is
+       --  LM Studio-style: one component at a time, clean load/use/unload.
+       --  When False, keep the component resident for the next hop (Hybrid_Generate).
+       FreeParallelMemory : Boolean := True;
        --  When True, bypasses ELP gate acquire/release entirely.
        --  Used by Hybrid_Generate for its internal sub-calls (router,
        --  factual check) which run while the gate is already held.
@@ -151,7 +157,7 @@ package Model_Manager is
        Result          : out Unbounded_String;
        Max_Tokens      : Positive := 2048;
        Level           : ELP_Level := ELP1;
-       Release_Model   : Boolean := True);
+        FreeParallelMemory : Boolean := True);
 
    --  Perform multi-hop reasoning
    procedure Hybrid_Generate
