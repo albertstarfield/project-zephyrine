@@ -3328,6 +3328,82 @@ package body Model_Manager is
         return To_String (Res);
     end Sanitize_Think_Tags;
 
+    --  ============================================================================
+    --  REPEATING RESPONSE DETECTOR
+    --  ============================================================================
+    --  WHY: After first response, model can get stuck producing identical
+    --  sentences/phrases in a loop. Detect this and flag for retry.
+    --  Algorithm: split into sentences (by '.' '!' '?' newline), count
+    --  occurrences. If any sentence (min 20 chars) appears 3+ times → repeating.
+    --  Also detects very short responses (< 50 chars) that are just noise.
+    --  ============================================================================
+
+    function Is_Repeating_Response (Text : String) return Boolean is
+        --  Split text into sentences and check for repetitions
+        type Sentence_Array is array (1 .. 64) of Unbounded_String;
+        Sentences  : Sentence_Array;
+        N_Sentences : Natural := 0;
+        I          : Positive := Text'First;
+        Sent_Start : Positive;
+        Max_Sentences : constant := 64;
+    begin
+        --  Very short responses are not "repeating" — they're just empty
+        if Text'Length < 50 then
+            return False;
+        end if;
+
+        --  Split into sentences
+        while I <= Text'Last and then N_Sentences < Max_Sentences loop
+            --  Skip whitespace at sentence boundary
+            while I <= Text'Last and then (Text (I) = ' ' or else Text (I) = ASCII.LF) loop
+                I := I + 1;
+            end loop;
+            exit when I > Text'Last;
+
+            Sent_Start := I;
+            --  Find end of sentence
+            while I <= Text'Last loop
+                if Text (I) = '.' or else Text (I) = '!' or else Text (I) = '?'
+                   or else Text (I) = ASCII.LF
+                then
+                    I := I + 1;
+                    exit;
+                end if;
+                I := I + 1;
+            end loop;
+
+            --  Store sentence (trimmed)
+            if I > Sent_Start then
+                N_Sentences := N_Sentences + 1;
+                Sentences (N_Sentences) :=
+                   To_Unbounded_String (Text (Sent_Start .. I - 1));
+            end if;
+        end loop;
+
+        --  Check for repetitions: any sentence (>= 20 chars) appearing 3+ times
+        if N_Sentences >= 3 then
+            for S in 1 .. N_Sentences loop
+                declare
+                    Sent    : constant String := To_String (Sentences (S));
+                    Count   : Natural := 0;
+                begin
+                    if Sent'Length >= 20 then
+                        for J in 1 .. N_Sentences loop
+                            if To_String (Sentences (J)) = Sent then
+                                Count := Count + 1;
+                            end if;
+                        end loop;
+                        if Count >= 3 then
+                            return True;
+                        end if;
+                    end if;
+                end;
+            end loop;
+        end if;
+
+        return False;
+    end Is_Repeating_Response;
+
     function Extract_Think_Content (Text : String) return String is
         Res       : Unbounded_String;
         I         : Positive := Text'First;
@@ -6054,6 +6130,86 @@ package body Model_Manager is
                                 exit;
                             else
                                 --  This seed also produced think-only — blacklist it
+                                Database_Manager.Blacklist_Seed
+                                   (Natural (Generate_Seed));
+                            end if;
+                        end loop;
+                    end;
+
+                    --  =================================================================
+                    --  REPEATING RESPONSE RETRY: If model produced repeating sentences
+                    --  (same sentence 3+ times), retry with randomized seed.
+                    --  Max 2 retries. Blacklist seeds that produce repeating output.
+                    --  =================================================================
+                    declare
+                        Max_Repeat_Retries : constant := 2;
+                        Repeat_Retry_Count : Natural := 0;
+                        Sanitized_Repeat   : String :=
+                           Sanitize_Think_Tags (To_String (Fault_Result));
+                    begin
+                        --  Check for repeating response
+                        if Is_Repeating_Response (Sanitized_Repeat) then
+                            Database_Manager.Blacklist_Seed
+                               (Natural (Generate_Seed));
+                        end if;
+
+                        while Is_Repeating_Response (Sanitized_Repeat) and then
+                              Repeat_Retry_Count < Max_Repeat_Retries
+                        loop
+                            Repeat_Retry_Count := Repeat_Retry_Count + 1;
+
+                            --  Find next non-blacklisted seed
+                            loop
+                                Generate_Seed := Generate_Seed + 1;
+                                exit when not Database_Manager.Is_Seed_Blacklisted
+                                   (Natural (Generate_Seed));
+                            end loop;
+
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Yellow)
+                                & "[Init-V]"
+                                & AnsiAda.Reset
+                                & " Hybrid_Generate: REPEATING RESPONSE DETECTED. Retry "
+                                & Natural'Image (Repeat_Retry_Count) & "/"
+                                & Natural'Image (Max_Repeat_Retries)
+                                & " with seed="
+                                & Interfaces.C.unsigned'Image (Generate_Seed));
+
+                            --  Retry without streaming
+                            Generate
+                               (Kind            => Snowball_Enaga_Orchestrator,
+                                Prompt          => Get_Final_Prompt,
+                                Result          => Fault_Result,
+                                Images          => Images,
+                                Session_ID      => Session_ID,
+                                Requested_Ctx   => 8192,
+                                Stream          => null,
+                                Orch_Think_Open => False,
+                                Level           => Level,
+                                Virtual_Tokens  => Cached_Virtual_Tokens,
+                                Virtual_Tok_Len => Cached_Virtual_Len,
+                                FreeParallelMemory => True,
+                                Skip_Gate       => False);
+
+                            Sanitized_Repeat :=
+                               Sanitize_Think_Tags (To_String (Fault_Result));
+
+                            if not Is_Repeating_Response (Sanitized_Repeat) then
+                                --  Retry produced non-repeating content — stream it
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Green)
+                                    & "[Init-V]"
+                                    & AnsiAda.Reset
+                                    & " Hybrid_Generate: REPEAT RETRY SUCCEEDED. Len="
+                                    & Natural'Image (Length (Fault_Result)));
+                                if Stream /= null then
+                                    Push_Chunk
+                                       (Stream, Session_ID,
+                                        To_String (Fault_Result));
+                                end if;
+                                exit;
+                            else
+                                --  This seed also produced repeating — blacklist it
                                 Database_Manager.Blacklist_Seed
                                    (Natural (Generate_Seed));
                             end if;
