@@ -940,7 +940,7 @@ def main():
                         return True
                     else:
                         print(f"[!] SHA256 MISMATCH: expected={expected_sha256} actual={actual_sha256}")
-                        print(f"[!] Corrupted download, deleting and retrying...")
+                        print("[!] Corrupted download, deleting and retrying...")
                         os.remove(output_path)
                         time.sleep(5)
                         continue
