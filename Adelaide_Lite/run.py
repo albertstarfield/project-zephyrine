@@ -701,35 +701,91 @@ def main():
         else:
             print("[*] Moonshine models already exist, skipping download.")
 
-        # Check and clone stable-diffusion-cpp (FLUX image generation backend)
-        sd_cpp_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "stable-diffusion-cpp"))
-        if not os.path.exists(sd_cpp_dir):
-            print("[*] Cloning stable-diffusion-cpp...")
-            subprocess.run(["git", "clone", "--depth=1", "https://github.com/leejet/stable-diffusion.cpp.git", sd_cpp_dir], check=False)
-        else:
-            print("[*] stable-diffusion-cpp already exists, skipping clone.")
-
-        # Build stable-diffusion-cpp Python bindings
-        sd_cpp_pkg = os.path.join(sd_cpp_dir, "stable_diffusion_cpp")
+        # =====================================================================
+        # stable-diffusion.cpp: clone → fetch+pull latest → init ggml → build
+        # =====================================================================
+        # [VITAL-DO-NOT-REMOVE] FLUX Schnell image generation backend.
+        # Builds a static library (libstable_diffusion.a) for Ada FFI linkage.
+        # The ggml submodule within stable-diffusion.cpp must be initialized
+        # before cmake can configure — it provides the compute graph runtime.
+        sd_cpp_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "stable-diffusion.cpp"))
         sd_cpp_built = os.path.join(sd_cpp_dir, "build")
-        sd_cpp_lib = os.path.join(sd_cpp_built, "lib", "libstable_diffusion.dylib") if platform.system() == "Darwin" else os.path.join(sd_cpp_built, "lib", "libstable_diffusion.so")
-        if not os.path.exists(sd_cpp_lib):
-            print("[*] Building stable-diffusion-cpp...")
-            os.makedirs(sd_cpp_built, exist_ok=True)
-            subprocess.run(["cmake", "..", "-DSD_BUILD_PYTHON=ON"], cwd=sd_cpp_built, check=False)
-            subprocess.run(["make", f"-j{threads}"], cwd=sd_cpp_built, check=False)
-        else:
-            print("[*] stable-diffusion-cpp library exists, skipping build.")
+        sd_cpp_lib_static = os.path.join(sd_cpp_built, "libstable-diffusion.a")
+        sd_cpp_lib_shared = os.path.join(sd_cpp_built, "libstable-diffusion.dylib") if platform.system() == "Darwin" else os.path.join(sd_cpp_built, "libstable-diffusion.so")
+        sd_cpp_start = time.time()
 
-        # Install stable-diffusion-cpp Python package
-        sd_cpp_pip_marker = os.path.join(sd_cpp_built, ".pip_installed")
-        if not os.path.exists(sd_cpp_pip_marker) and os.path.isdir(sd_cpp_pkg):
-            print("[*] Installing stable-diffusion-cpp Python package...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "-e", sd_cpp_pkg], check=False)
-            with open(sd_cpp_pip_marker, "w") as f:
-                f.write("installed")
+        if not os.path.exists(sd_cpp_dir):
+            print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Cloning stable-diffusion.cpp...")
+            subprocess.run(
+                ["git", "clone", "--depth=1", "https://github.com/leejet/stable-diffusion.cpp.git", sd_cpp_dir],
+                check=False
+            )
+            needs_build = True
         else:
-            print("[*] stable-diffusion-cpp Python package already installed, skipping.")
+            old_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=sd_cpp_dir,
+                capture_output=True, text=True
+            ).stdout.strip()
+            print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Fetching latest stable-diffusion.cpp...")
+            subprocess.run(["git", "fetch", "origin"], cwd=sd_cpp_dir, check=False,
+                           capture_output=True)
+            subprocess.run(["git", "pull", "--ff-only"], cwd=sd_cpp_dir, check=False,
+                           capture_output=True)
+            new_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=sd_cpp_dir,
+                capture_output=True, text=True
+            ).stdout.strip()
+            needs_build = (old_head != new_head) or not (os.path.exists(sd_cpp_lib_static) or os.path.exists(sd_cpp_lib_shared))
+            if old_head != new_head:
+                print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Updated: {old_head[:8]} → {new_head[:8]}")
+            else:
+                print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Already up to date ({new_head[:8]})")
+
+        # Init stable-diffusion.cpp's own ggml submodule (required for cmake)
+        sd_ggml_sub = os.path.join(sd_cpp_dir, "ggml")
+        sd_ggml_cmakelists = os.path.join(sd_ggml_sub, "CMakeLists.txt")
+        if not os.path.exists(sd_ggml_cmakelists):
+            print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Initializing ggml submodule inside stable-diffusion.cpp...")
+            subprocess.run(
+                ["git", "submodule", "update", "--init", "--recursive"],
+                cwd=sd_cpp_dir, check=False, capture_output=True
+            )
+
+        # Build static library for Ada FFI linkage
+        if needs_build or not (os.path.exists(sd_cpp_lib_static) or os.path.exists(sd_cpp_lib_shared)):
+            print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Building stable-diffusion.cpp (static lib)...")
+            os.makedirs(sd_cpp_built, exist_ok=True)
+            cmake_flags = ["cmake", "..", "-DCMAKE_BUILD_TYPE=Release", "-DSD_BUILD_EXAMPLES=OFF"]
+            if ggml_backend == "metal":
+                cmake_flags.append("-DGGML_METAL=ON")
+            elif ggml_backend == "cuda":
+                cmake_flags.append("-DGGML_CUDA=ON")
+            result = subprocess.run(cmake_flags, cwd=sd_cpp_built, check=False, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] CMake FAILED: {result.stderr[-500:]}")
+            else:
+                result = subprocess.run(
+                    ["cmake", "--build", ".", "--config", "Release", "-j"],
+                    cwd=sd_cpp_built, check=False, capture_output=True, text=True
+                )
+                sd_elapsed = time.time() - sd_cpp_start
+                if result.returncode == 0:
+                    # Verify the library was created
+                    if os.path.exists(sd_cpp_lib_static):
+                        sd_size = os.path.getsize(sd_cpp_lib_static)
+                        print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Build SUCCESS in {sd_elapsed:.1f}s ({sd_size:,} bytes)")
+                    elif os.path.exists(sd_cpp_lib_shared):
+                        sd_size = os.path.getsize(sd_cpp_lib_shared)
+                        print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Build SUCCESS (shared) in {sd_elapsed:.1f}s ({sd_size:,} bytes)")
+                    else:
+                        print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Build completed but library not found at expected path")
+                else:
+                    print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Build FAILED in {sd_elapsed:.1f}s")
+                    if result.stderr:
+                        print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] stderr: {result.stderr[-500:]}")
+        else:
+            sd_elapsed = time.time() - sd_cpp_start
+            print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Library exists ({sd_elapsed:.1f}s), skipping build")
 
         # Check and download Qwen models
         qwen_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model"))
@@ -784,27 +840,45 @@ def main():
             print("[*] Downloading Kokoro voices...")
             subprocess.run(["wget", "-q", "--show-progress", "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"], cwd=kokoro_models_dir, check=False)
 
-        # Check and download FLUX Schnell models (Stable Diffusion image generation)
+        # =====================================================================
+        # FLUX Schnell models (stable-diffusion.cpp image generation)
+        # =====================================================================
+        # [VITAL-DO-NOT-REMOVE] FLUX needs 4 components:
+        #   1. Diffusion model (.gguf) — the main UNet transformer
+        #   2. VAE (.safetensors) — encodes/decodes latent space
+        #   3. clip_l (.safetensors) — text encoder (CLIP)
+        #   4. t5xxl (.safetensors) — text encoder (T5-XXL)
+        # Only the diffusion model is GGUF. VAE and text encoders are safetensors.
+        # Source repos:
+        #   Diffusion: leejet/FLUX.1-schnell-gguf (preconverted GGUF)
+        #   VAE:       black-forest-labs/FLUX.1-dev (ae.safetensors)
+        #   Text Enc:  comfyanonymous/flux_text_encoders (clip_l + t5xxl)
+        # Reference: stable-diffusion.cpp/docs/flux.md
         flux_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model"))
         os.makedirs(flux_models_dir, exist_ok=True)
 
         flux_models_to_download = [
+            # Diffusion model Q2_K (~4GB) — fits 9B-class VRAM budget
             {
-                "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q4_K_M.gguf?download=true",
+                "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q2_K.gguf?download=true",
                 "output": "flux1-schnell.gguf"
             },
+            # T5-XXL text encoder Q4_0 GGUF (~2.9GB) — small enough for VRAM
             {
-                "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-clip_l-Q8_0.gguf?download=true",
-                "output": "flux1-clip_l.gguf"
-            },
-            {
-                "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-t5xxl-Q8_0.gguf?download=true",
+                "url": "https://huggingface.co/Phil2Sat/T5XXL-Unchained-GGUF/resolve/main/Kaoru8-t5xxl-unchained-Q4_0.gguf?download=true",
                 "output": "flux1-t5xxl.gguf"
             },
+            # CLIP-L text encoder (safetensors, ~246MB — small, always fits)
             {
-                "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-ae-Q8_0.gguf?download=true",
-                "output": "flux1-ae.gguf"
+                "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors?download=true",
+                "output": "flux1-clip_l.safetensors"
             },
+            # VAE (safetensors, ~335MB — small, always fits)
+            {
+                "url": "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors?download=true",
+                "output": "flux1-ae.safetensors"
+            },
+            # SD 1.5 refinement model (for img2img refinement pass)
             {
                 "url": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf?download=true",
                 "output": "sd-refinement.gguf"
@@ -813,14 +887,37 @@ def main():
 
         for model in flux_models_to_download:
             target_path = os.path.join(flux_models_dir, model["output"])
-            if not os.path.exists(target_path):
-                print(f"[*] Downloading {model['output']} (FLUX Schnell)...")
-                if aria2c_cmd:
-                    subprocess.run([aria2c_cmd, "-x", "16", "-s", "16", "-k", "1M", model["url"], "-o", model["output"], "-d", flux_models_dir], check=True)
+            if os.path.exists(target_path):
+                expected_size = {"flux1-schnell.gguf": 4_010_296_352,
+                                 "flux1-t5xxl.gguf": 2_924_546_752}.get(model["output"], 0)
+                actual_size = os.path.getsize(target_path)
+                if expected_size == 0 or actual_size >= expected_size * 0.95:
+                    print(f"[*] {model['output']} already exists ({actual_size:,} bytes), skipping.")
+                    continue
                 else:
-                    subprocess.run(["wget", "-q", "--show-progress", model["url"], "-O", target_path], check=True)
-            else:
-                print(f"[*] {model['output']} already exists, skipping.")
+                    print(f"[*] {model['output']} incomplete ({actual_size:,}/{expected_size:,}), resuming...")
+
+            # Infinite retry with resume — wget -c continues partial downloads
+            max_retries = 0  # 0 = infinite
+            attempt = 0
+            while True:
+                attempt += 1
+                label = f"attempt #{attempt}" if max_retries == 0 else f"attempt {attempt}/{max_retries}"
+                print(f"[*] Downloading {model['output']} ({label})...")
+                result = subprocess.run(
+                    ["wget", "-c", "-t", "0", "--timeout=30", "--waitretry=5",
+                     "--show-progress", model["url"], "-O", target_path],
+                    check=False, timeout=None
+                )
+                if result.returncode == 0:
+                    print(f"[+] {model['output']} downloaded successfully.")
+                    break
+                # wget returns 8 = server error, 4 = network failure, etc — all retryable
+                print(f"[!] wget failed (code {result.returncode}), retrying in 5s...")
+                time.sleep(5)
+                if max_retries > 0 and attempt >= max_retries:
+                    print(f"[!] {model['output']} failed after {max_retries} attempts, continuing...")
+                    break
 
         # Ensure Deno Playwright Chromium is installed
         print("[*] Installing Playwright Chromium binary for Deno crawler...")
