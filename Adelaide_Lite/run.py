@@ -702,7 +702,7 @@ def main():
             print("[*] Moonshine models already exist, skipping download.")
 
         # Check and download Qwen models
-        qwen_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model", "qwen3.5"))
+        qwen_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model"))
         os.makedirs(qwen_models_dir, exist_ok=True)
         
         models_to_download = [
@@ -725,6 +725,10 @@ def main():
             {
                 "url": "https://huggingface.co/empero-ai/Qwythos-9B-Claude-Mythos-5-1M-GGUF/resolve/main/mmproj-Qwythos-9B-Claude-Mythos-5-1M-f16.gguf?download=true",
                 "output": "Mythos9bHybridq4-mmproj-fp16.gguf"
+            },
+            {
+                "url": "https://huggingface.co/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF/resolve/main/qwen3-reranker-0.6b-q8_0.gguf?download=true",
+                "output": "Qwen3-Reranker-0.6B-Q8_0.gguf"
             }
         ]
         

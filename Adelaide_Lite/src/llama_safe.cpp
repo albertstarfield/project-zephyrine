@@ -310,4 +310,12 @@ extern "C" {
                 (const mtmd_input_chunks*)chunks, idx);
         } catch (...) { return nullptr; }
     }
+
+    // ===== FLOAT AT ADDRESS =====
+    // Read a single float from a raw memory address.
+    // Used by reranker to read llama_get_embeddings_seq output.
+    float read_float_at_address(const void * addr) {
+        if (!addr) return -1.0e9f;
+        return *(const float *)addr;
+    }
 }

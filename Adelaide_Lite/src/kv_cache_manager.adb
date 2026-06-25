@@ -365,15 +365,22 @@ package body KV_Cache_Manager is
          null;
       end Wait_Complete;
 
-   exception
-      when others =>
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-         --  Verbose: logs async save exception (non-fatal).
-         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
-                   AnsiAda.Reset & "+ASYNC Save_Task: EXCEPTION (non-fatal)");
-         if Path_C /= Null_Ptr then
-            Free (Path_C);
-         end if;
+    exception
+       when others =>
+          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+          --  Verbose: logs async save exception (non-fatal).
+          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
+                    AnsiAda.Reset & "+ASYNC Save_Task: EXCEPTION (non-fatal)");
+          if Path_C /= Null_Ptr then
+             Free (Path_C);
+          end if;
+          --  [CRITICAL-FIX] Must open Wait_Complete even on exception path.
+          --  If the task terminates without opening this accept, any caller
+          --  in Wait_For_Save that calls Wait_Complete gets TASKING_ERROR
+          --  (s-tasren.adb:377) because the task has already terminated.
+          accept Wait_Complete do
+             null;
+          end Wait_Complete;
    end Save_Task;
 
    --  ============================================================================

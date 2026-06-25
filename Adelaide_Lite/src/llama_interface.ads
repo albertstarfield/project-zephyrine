@@ -323,4 +323,32 @@ function Llama_Sampler_Init_Penalties
       Total_Bytes : out Interfaces.C.size_t);
    pragma Import (C, GPU_Memory_Query, "gpu_memory_query");
 
+   --  ===== RERANKING API =====
+   --  When Pooling_Type = LLAMA_POOLING_TYPE_RANK (4), llama.cpp attaches
+   --  a classification head to the graph for reranking models like
+   --  Qwen3-Reranker-0.6B. After decode, llama_get_embeddings_seq returns
+   --  float[n_cls_out] with relevance scores per sequence.
+   --
+   --  Usage:
+   --    1. Load reranker model with Pooling_Type => 4 (RANK)
+   --    2. Tokenize "query\t\tdocument" pairs
+   --    3. llama_decode each pair
+   --    4. llama_get_embeddings_seq returns float[n_cls_out] (score)
+   --
+   function Llama_Get_Embeddings_Seq
+     (Context : Llama_Context;
+      Seq_Id  : Interfaces.C.int) return System.Address;
+   pragma Import (C, Llama_Get_Embeddings_Seq, "llama_get_embeddings_seq");
+
+   --  Returns number of classifier outputs for reranking models.
+   --  Undefined for non-classifier models.
+   function Llama_Model_N_Cls_Out
+     (Model : Llama_Model) return Interfaces.C.unsigned;
+   pragma Import (C, Llama_Model_N_Cls_Out, "llama_model_n_cls_out");
+
+   --  Returns the pooling type of the context.
+   function Llama_Pooling_Type
+     (Context : Llama_Context) return Interfaces.C.int;
+   pragma Import (C, Llama_Pooling_Type, "llama_pooling_type");
+
 end Llama_Interface;

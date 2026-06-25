@@ -87,7 +87,7 @@ package body Speculative_Decode is
 
       --  Load draft model from file
       declare
-         Model_Path : constant String := "models/qwen3.5-0.8b.gguf";
+         Model_Path : constant String := "model/Qwen3.5-0.8B-Q4_K_M.gguf";
          Path_C     : chars_ptr := New_String (Model_Path);
       begin
          Draft_Model := Llama_Interface.Llama_Model_Load_From_File

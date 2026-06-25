@@ -6,6 +6,7 @@ with Ada.Strings.Fixed;    use Ada.Strings.Fixed;
 with Ada.Calendar;
 use type Ada.Calendar.Time;
 with Database_Manager;
+with Reranker;
 with LSH_Hash;
 with Tool_Manager;
 with Scheduler_Manager;
@@ -1117,15 +1118,15 @@ package body Model_Manager is
         --  Model paths are set here.  None of these load models from disk.
         --  Loading happens lazily in Load_Model on first use.
         Models (Snowball_Enaga_ShortNetworkAnswer).Path :=
-           To_Unbounded_String ("model/qwen3.5/Qwen3.5-0.8B-Q4_K_M.gguf");
+           To_Unbounded_String ("model/Qwen3.5-0.8B-Q4_K_M.gguf");
         Models (Snowball_Enaga_Orchestrator).Path :=
-           To_Unbounded_String ("model/qwen3.5/Mythos9bHybridq4.gguf");
+           To_Unbounded_String ("model/Mythos9bHybridq4.gguf");
         Models (Qwen_Embedding).Path :=
            To_Unbounded_String
-              ("model/qwen3.5/Qwen3-Embedding-0.6B-Q8_0.gguf");
+              ("model/Qwen3-Embedding-0.6B-Q8_0.gguf");
         Models (MMProj).Path :=
            To_Unbounded_String
-              ("model/qwen3.5/Mythos9bHybridq4-mmproj-fp16.gguf");
+              ("model/Mythos9bHybridq4-mmproj-fp16.gguf");
 
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -4263,7 +4264,7 @@ package body Model_Manager is
 
             --  Load draft model
             declare
-                Draft_Path  : constant String := "models/qwen3.5-0.8b.gguf";
+                Draft_Path  : constant String := "model/Qwen3.5-0.8B-Q4_K_M.gguf";
                 Path_C      : chars_ptr := New_String (Draft_Path);
                 Draft_Model : Llama_Interface.Llama_Model;
             begin
@@ -4955,13 +4956,16 @@ package body Model_Manager is
         --  Placing memory in the system prompt (rather than Internal_State /
         --  virtual ctx) means the model treats these blocks as authoritative
         --  background the same way it treats its own identity and rules.
-        --  We only append a block when the cosine similarity threshold is met
-        --  (>= 0.65 inside Search_Interaction / Search_Literature) so irrelevant
-        --  memories are silently skipped and do not bloat the context.
+        --
+        --  [RERANKER] Search returns top-N candidates by cosine similarity.
+        --  Reranker then scores each candidate by semantic relevance.
+        --  Top-1 reranked result is injected. This gives precision on top
+        --  of recall — the key to high-quality memory injection.
         declare
-            Lit_Results : Database_Manager.Chunk_Array (1 .. 1);
+            Search_Cap  : constant := 10;  -- Fetch top-10 candidates
+            Lit_Results : Database_Manager.Chunk_Array (1 .. Search_Cap);
             Lit_Count   : Natural;
-            Int_Results : Database_Manager.Chunk_Array (1 .. 1);
+            Int_Results : Database_Manager.Chunk_Array (1 .. Search_Cap);
             Int_Count   : Natural;
             Uptime_Str  : constant String :=
                Ada.Strings.Fixed.Trim
@@ -4971,28 +4975,55 @@ package body Model_Manager is
                    Ada.Strings.Both);
             Got_Memory  : Boolean := False;
         begin
-            --  1. Interaction memory: most recent similar past conversation.
+            --  1. Interaction memory: search top-10, rerank, inject top-1.
             Database_Manager.Search_Interaction
                (Emb_Vec (1 .. Emb_Len), Int_Results, Int_Count);
             if Int_Count > 0 then
-                Got_Memory := True;
-                --  Append as a clearly labelled section in the system prompt
-                --  so the model knows it is prior context, not live user input.
-                Append (Whimsical_Adelaide,
-                        ASCII.LF
-                        & ASCII.LF
-                        & "<memory_interaction>"
-                        & ASCII.LF
-                        & Sanitize_Memory_Content
-                             (To_String (Int_Results (1).Content))
-                        & ASCII.LF
-                        & "</memory_interaction>");
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Light_Green)
-                    & "[Memory]"
-                    & AnsiAda.Reset
-                    & " Injected interaction memory into system prompt [+"
-                    & Uptime_Str & "s].");
+                --  [RERANKER] Rerank candidates by semantic relevance
+                declare
+                    Best_Idx   : Natural := 1;
+                    Best_Score : Float := -1.0e9;
+                    Rerank_Ready : Boolean;
+                begin
+                    Reranker.Initialize (Rerank_Ready);
+                    if Rerank_Ready and Int_Count > 1 then
+                        --  Build closure to access Int_Results by index
+                        declare
+                            function Get_Doc (Idx : Natural) return String is
+                            begin
+                                return To_String (Int_Results (Idx).Content);
+                            end Get_Doc;
+                        begin
+                            Reranker.Rerank_Scores
+                              (                               Query        => Prompt,
+                               Doc_Contents => Get_Doc'Access,
+                               N_Docs       => Int_Count,
+                               Top_K        => 1,
+                               Best_Idx     => Best_Idx,
+                               Best_Score   => Best_Score);
+                        end;
+                    else
+                        Best_Idx := 1;  -- Fallback to top-1 by cosine
+                    end if;
+
+                    Got_Memory := True;
+                    Append (Whimsical_Adelaide,
+                            ASCII.LF
+                            & ASCII.LF
+                            & "<memory_interaction>"
+                            & ASCII.LF
+                            & Sanitize_Memory_Content
+                                 (To_String (Int_Results (Best_Idx).Content))
+                            & ASCII.LF
+                            & "</memory_interaction>");
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Green)
+                        & "[Memory]"
+                        & AnsiAda.Reset
+                        & " Injected interaction memory (reranked #" &
+                        Natural'Image (Best_Idx) & ") into system prompt [+"
+                        & Uptime_Str & "s].");
+                end;
                 if not External_Agent then
                     Push_Orchestration_Through_Parser
                        (Stream, Session_ID, Orch_Parser,
@@ -5002,26 +5033,54 @@ package body Model_Manager is
                 end if;
             end if;
 
-            --  2. Literature memory: most relevant indexed document chunk.
+            --  2. Literature memory: search top-10, rerank, inject top-1.
             Database_Manager.Search_Literature
                (Emb_Vec (1 .. Emb_Len), Lit_Results, Lit_Count);
             if Lit_Count > 0 then
-                Got_Memory := True;
-                Append (Whimsical_Adelaide,
-                        ASCII.LF
-                        & ASCII.LF
-                        & "<memory_literature>"
-                        & ASCII.LF
-                        & Sanitize_Memory_Content
-                             (To_String (Lit_Results (1).Content))
-                        & ASCII.LF
-                        & "</memory_literature>");
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Light_Green)
-                    & "[Memory]"
-                    & AnsiAda.Reset
-                    & " Injected literature memory into system prompt [+"
-                    & Uptime_Str & "s].");
+                --  [RERANKER] Rerank literature candidates
+                declare
+                    Best_Idx   : Natural := 1;
+                    Best_Score : Float := -1.0e9;
+                    Rerank_Ready : Boolean;
+                begin
+                    Reranker.Initialize (Rerank_Ready);
+                    if Rerank_Ready and Lit_Count > 1 then
+                        declare
+                            function Get_Doc (Idx : Natural) return String is
+                            begin
+                                return To_String (Lit_Results (Idx).Content);
+                            end Get_Doc;
+                        begin
+                            Reranker.Rerank_Scores
+                              (                               Query        => Prompt,
+                               Doc_Contents => Get_Doc'Access,
+                               N_Docs       => Lit_Count,
+                               Top_K        => 1,
+                               Best_Idx     => Best_Idx,
+                               Best_Score   => Best_Score);
+                        end;
+                    else
+                        Best_Idx := 1;
+                    end if;
+
+                    Got_Memory := True;
+                    Append (Whimsical_Adelaide,
+                            ASCII.LF
+                            & ASCII.LF
+                            & "<memory_literature>"
+                            & ASCII.LF
+                            & Sanitize_Memory_Content
+                                 (To_String (Lit_Results (Best_Idx).Content))
+                            & ASCII.LF
+                            & "</memory_literature>");
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Green)
+                        & "[Memory]"
+                        & AnsiAda.Reset
+                        & " Injected literature memory (reranked #" &
+                        Natural'Image (Best_Idx) & ") into system prompt [+"
+                        & Uptime_Str & "s].");
+                end;
                 if not External_Agent then
                     Push_Orchestration_Through_Parser
                        (Stream, Session_ID, Orch_Parser,
@@ -6444,8 +6503,19 @@ package body Model_Manager is
         --  Wait for async save to complete, then UNLOAD from GPU.
         --  This frees VRAM for the next component (LM Studio pattern).
         --  Flow: Wait_For_Save -> Unload_Model -> release locks.
-        KV_Cache_Manager.Wait_For_Save;
-        Unload_Model (Snowball_Enaga_Orchestrator);
+        --
+        --  [CRITICAL-FIX] Skip if the last hop's Generate already called
+        --  FreeParallelMemory=True, which does Wait_For_Save + Unload_Model.
+        --  Calling Wait_For_Save on a terminated Save_Task raises TASKING_ERROR
+        --  (s-tasren.adb:377). Check if the model is still loaded first.
+        if Models (Snowball_Enaga_Orchestrator).Loaded
+          and then Models (Snowball_Enaga_Orchestrator).Context /= Null_Context
+        then
+            --  Model still loaded — last hop did NOT free memory (FreeParallelMemory=False)
+            --  Do the cleanup now.
+            KV_Cache_Manager.Wait_For_Save;
+            Unload_Model (Snowball_Enaga_Orchestrator);
+        end if;
         Models (Snowball_Enaga_Orchestrator).In_Use := False;
         if Level = ELP0 then
             Priority_Model_Gate.Release_ELP0 (Snowball_Enaga_Orchestrator);
@@ -6556,24 +6626,49 @@ package body Model_Manager is
                 when others =>
                     null;
             end;
+            --  [CRITICAL-FIX] Log the full exception with trace info
             Ada.Text_IO.Put_Line
                (AnsiAda.Foreground (AnsiAda.Red)
                 & "[Hybrid]"
                 & AnsiAda.Reset
                 & " Error: "
                 & Ada.Exceptions.Exception_Message (E));
-            if Stream /= null then
-                begin
-                    Push_Chunk
-                       (Stream,
-                        Session_ID,
-                        ASCII.LF & "ERROR: Generate failed" & ASCII.LF);
-                exception
-                    when others =>
-                        null;
-                end;
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Red)
+                & "[Hybrid]"
+                & AnsiAda.Reset
+                & " Trace: "
+                & Ada.Exceptions.Exception_Information (E));
+            --  [CRITICAL-FIX] If generation already succeeded (Result is not
+            --  empty and not an error string), DO NOT overwrite it with the
+            --  error message. A transient Tasking_Error during cleanup (KV
+            --  save, model unload) must not destroy a good response.
+            if Length (Result) = 0
+              or else (Index (Result, "ERROR:") = 1)
+            then
+                --  Generation truly failed — set error result
+                if Stream /= null then
+                    begin
+                        Push_Chunk
+                           (Stream,
+                            Session_ID,
+                            ASCII.LF & "ERROR: Generate failed" & ASCII.LF);
+                    exception
+                        when others =>
+                            null;
+                    end;
+                end if;
+                Result := To_Unbounded_String ("ERROR: Generate failed");
+            else
+                --  Generation succeeded — keep the good result, just log warning
+                Ada.Text_IO.Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[Hybrid]"
+                    & AnsiAda.Reset
+                    & " WARNING: Cleanup error after successful generation"
+                    & " (ResultLen=" & Natural'Image (Length (Result)) & ")."
+                    & " Result preserved.");
             end if;
-            Result := To_Unbounded_String ("ERROR: Generate failed");
     end Hybrid_Generate;
 
     --  KV CACHE SSD SPILLOVER
