@@ -3386,7 +3386,7 @@ package body Model_Manager is
         Level           : ELP_Level := ELP1;
         Virtual_Tokens  : Cached_Token_Access := null;
         Virtual_Tok_Len : Natural := 0;
-        Release_Model   : Boolean := True;
+        FreeParallelMemory   : Boolean := True;
         Skip_Gate       : Boolean := False)
     is
         Success  : Boolean;
@@ -3998,20 +3998,28 @@ package body Model_Manager is
         Llama_Sampler_Free (Sampler);
         Free_Tokens (Tokens);
 
-        --  RELEASE_MODEL GUARD: When Release_Model is False (called from
-        --  Hybrid_Generate), keep In_Use := True so the Idle_Monitor won't
-        --  unload the model mid-use.  But ALWAYS release the ELP lock and
-        --  dequeue the queue level — these serialize FFI access between
-        --  concurrent tasks and will deadlock if held across Generate calls.
-        --  Exception: Skip_Gate=True callers let Hybrid_Generate manage lock.
+        --  [FREE-PARALLEL-MEMORY] When FreeParallelMemory is False (called
+        --  from Hybrid_Generate), keep In_Use := True so the Idle_Monitor
+        --  won't unload the component mid-use. But ALWAYS release the ELP
+        --  lock and dequeue the queue level.
+        --
+        --  WHY "FreeParallelMemory" NOT "Release_Model":
+        --  This controls freeing of ANY heavy GPU-resident component,
+        --  not just LLM models. Future components:
+        --    - Stable Diffusion Flux (image gen, ~4GB VRAM)
+        --    - LSH/QRNN hash workers (Python sidecar, GPU-accelerated)
+        --    - Database memory (vector embeddings, index caches)
+        --    - Embedding models (Qwen3-Embedding, ~0.6GB)
+        --  Principle: LM Studio-style one-component-at-a-time.
+        --  Load -> Use -> FreeParallelMemory=True -> Unload -> Next.
         Models (Kind).In_Use :=
-           (not Release_Model);  --  Keep True when retained
+           (not FreeParallelMemory);  --  Keep True when retained
 
-        --  [PARALLEL-1] When Release_Model is True, the model is done.
-        --  Wait for any async KV save, then UNLOAD from GPU.
-        --  Without this, the model stays resident (~5.8GB for 9B) and
-        --  blocks the next model from loading (Metal OOM).
-        if Release_Model then
+        --  [FREE-PARALLEL-MEMORY] When FreeParallelMemory is True, the
+        --  component is done. Wait for any async save, then UNLOAD from GPU.
+        --  Without this, the component stays resident (~5.8GB for 9B model,
+        --  ~4GB for SD Flux, etc.) and blocks the next component from loading.
+        if FreeParallelMemory then
             KV_Cache_Manager.Wait_For_Save;
             Unload_Model (Kind);
         end if;
@@ -4022,7 +4030,8 @@ package body Model_Manager is
             & "[Gen-V]"
             & AnsiAda.Reset
             & " Generate: "
-            & (if Release_Model then "Releasing" else "Retaining")
+            & (if FreeParallelMemory then "FreeParallelMemory=True (unload)"
+               else "FreeParallelMemory=False (retain)")
             & " model. Kind="
             & Kind'Img
             & " Skip_Gate="
@@ -4154,9 +4163,9 @@ package body Model_Manager is
                 Free_Tokens (Tokens);
             end if;
             --  Always release ELP lock and dequeue, even on error path.
-            --  When Release_Model is False, Hybrid_Generate's exception
+            --  When FreeParallelMemory is False, Hybrid_Generate's exception
             --  handler is responsible for clearing In_Use.
-            if Release_Model then
+            if FreeParallelMemory then
                 Models (Kind).In_Use := False;
                 --  [PARALLEL-1] Unload on error too
                 begin
@@ -4205,7 +4214,7 @@ package body Model_Manager is
         Result        : out Unbounded_String;
         Max_Tokens    : Positive := 2048;
         Level         : ELP_Level := ELP1;
-        Release_Model : Boolean := True)
+        FreeParallelMemory : Boolean := True)
     is
         use type Interfaces.C.size_t;
 
@@ -4570,7 +4579,7 @@ package body Model_Manager is
         end;
 
         --  Cleanup
-        if Release_Model then
+        if FreeParallelMemory then
             if Models (Kind).Loaded then
                 if Level = ELP0 then
                     Priority_Model_Gate.Release_ELP0 (Kind);
@@ -5265,7 +5274,7 @@ package body Model_Manager is
                         Level           => Level,
                         Virtual_Tokens  => Cached_Virtual_Tokens,
                         Virtual_Tok_Len => Cached_Virtual_Len,
-                        Release_Model   => True,
+                        FreeParallelMemory   => True,
                         Skip_Gate       => False);
                 end;
 
@@ -5440,7 +5449,7 @@ package body Model_Manager is
                     Level,
                     Cached_Virtual_Tokens,
                     Cached_Virtual_Len,
-                    Release_Model => True,
+                    FreeParallelMemory => True,
                     Skip_Gate     => False);
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                 Put_Line
@@ -5888,7 +5897,7 @@ package body Model_Manager is
                         Level           => Level,
                         Virtual_Tokens  => Cached_Virtual_Tokens,
                         Virtual_Tok_Len => Cached_Virtual_Len,
-                        Release_Model   => True,
+                        FreeParallelMemory   => True,
                         Skip_Gate       => False);
 
                     --  =================================================================
@@ -5945,7 +5954,7 @@ package body Model_Manager is
                                 Level           => Level,
                                 Virtual_Tokens  => Cached_Virtual_Tokens,
                                 Virtual_Tok_Len => Cached_Virtual_Len,
-                                Release_Model   => True,
+                                FreeParallelMemory   => True,
                                 Skip_Gate       => False);
 
                             --  Check sanitized result
@@ -6429,10 +6438,11 @@ package body Model_Manager is
             end;
         end if;
 
-        --  RELEASE MODEL: Generate was called with Release_Model => False,
-        --  so the model is still loaded and the ELP lock is still held.
-        --  [PARALLEL=1] Wait for async KV save to complete, then UNLOAD
-        --  the model from GPU. This frees VRAM for the next model.
+        --  [FREE-PARALLEL-MEMORY] Hybrid_Generate called with
+        --  FreeParallelMemory => False during hops, but now at the end
+        --  of Hybrid_Generate, we must unload the component.
+        --  Wait for async save to complete, then UNLOAD from GPU.
+        --  This frees VRAM for the next component (LM Studio pattern).
         --  Flow: Wait_For_Save -> Unload_Model -> release locks.
         KV_Cache_Manager.Wait_For_Save;
         Unload_Model (Snowball_Enaga_Orchestrator);
@@ -6533,7 +6543,7 @@ package body Model_Manager is
                To_Unbounded_String
                   ("ERROR: Out of Memory (STORAGE_ERROR) in Hybrid_Generate -- model unloaded, connection kept alive");
         when E : others =>
-            --  Also release model on error path
+            --  [FREE-PARALLEL-MEMORY] Free GPU on error path too
             begin
                 Models (Snowball_Enaga_Orchestrator).In_Use := False;
                 if Level = ELP0 then
