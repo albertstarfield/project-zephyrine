@@ -59,7 +59,8 @@ package Model_Manager is
      (Kind          : Model_Type;
       Success       : out Boolean;
       Requested_Ctx : Positive := 4096;
-      Level         : ELP_Level := ELP1);
+      Level         : ELP_Level := ELP1;
+      Session_ID    : String := "");
 
    procedure Unload_Model (Kind : Model_Type);
 
@@ -79,18 +80,20 @@ package Model_Manager is
    function Get_Mtmd_Context
      (Kind : Model_Type) return Mtmd_Interface.Mtmd_Context;
 
-   --  KV CACHE SSD SPILLOVER
-   --  Save KV cache to SSD after generation
-   procedure Save_KV_Cache_To_SSD
-     (Kind     : Model_Type;
-      Tokens   : System.Address;
-      N_Tokens : Interfaces.C.size_t);
+    --  KV CACHE SSD SPILLOVER
+    --  Save KV cache to SSD after generation
+    procedure Save_KV_Cache_To_SSD
+      (Kind       : Model_Type;
+       Tokens     : System.Address;
+       N_Tokens   : Interfaces.C.size_t;
+       Session_ID : String);
 
-   --  Load KV cache from SSD if available
-   function Load_KV_Cache_From_SSD
-     (Kind     : Model_Type;
-      Tokens   : out System.Address;
-      N_Tokens : out Interfaces.C.size_t) return Boolean;
+    --  Load KV cache from SSD if available
+    function Load_KV_Cache_From_SSD
+      (Kind       : Model_Type;
+       Tokens     : out System.Address;
+       N_Tokens   : out Interfaces.C.size_t;
+       Session_ID : String) return Boolean;
 
    --  Perform inference
    procedure Generate

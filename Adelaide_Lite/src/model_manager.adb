@@ -1188,7 +1188,8 @@ package body Model_Manager is
         (Kind          : Model_Type;
          Success       : out Boolean;
          Requested_Ctx : Positive := 4096;
-         Level         : ELP_Level := ELP1)
+         Level         : ELP_Level := ELP1;
+         Session_ID    : String := "")
      is
         --  [PARALLEL=1] Before calling Load_Model, ensure NO OTHER model is
         --  loaded. Only one model can occupy GPU memory at a time. If another
@@ -1776,10 +1777,11 @@ package body Model_Manager is
                     KV_N_Toks   : Interfaces.C.size_t;
                 begin
                     KV_Restored := KV_Cache_Manager.Load_From_SSD_Lazy
-                       (Context  => Models (Kind).Context,
-                        Tokens   => KV_Tokens,
-                        N_Tokens => KV_N_Toks,
-                        Model_ID => Kind'Img);
+                       (Context    => Models (Kind).Context,
+                        Tokens     => KV_Tokens,
+                        N_Tokens   => KV_N_Toks,
+                        Model_ID   => Kind'Img,
+                        Session_ID => Session_ID);
                     if KV_Restored then
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                         Put_Line
@@ -3487,7 +3489,7 @@ package body Model_Manager is
                     & " Generate: Skip_Gate=True, bypassing ELP lock.");
             end if;
 
-            Load_Model (Kind, Success, Requested_Ctx);
+            Load_Model (Kind, Success, Requested_Ctx, Session_ID => Session_ID);
             if not Success then
                 --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                 Put_Line
@@ -3531,10 +3533,11 @@ package body Model_Manager is
             begin
                 Cache_Hit :=
                    KV_Cache_Manager.Load_From_SSD_Lazy
-                      (Context  => Models (Kind).Context,
-                       Tokens   => Loaded_Tokens,
-                       N_Tokens => Loaded_Count,
-                       Model_ID => Kind'Img);
+                      (Context    => Models (Kind).Context,
+                       Tokens     => Loaded_Tokens,
+                       N_Tokens   => Loaded_Count,
+                       Model_ID   => Kind'Img,
+                       Session_ID => Session_ID);
 
                 if Cache_Hit then
                     Put_Line
@@ -3631,19 +3634,22 @@ package body Model_Manager is
             Free (Prompt_C);
 
             --  DYNAMIC CONTEXT RESIZE (JIT STRATEGY):
-            if N_Toks > int (Models (Kind).Current_Ctx) then
+            --  Trigger resize when prompt exceeds 50% of context capacity.
+            --  This prevents hitting 100% overflow mid-generation and gives
+            --  headroom for the model's internal reasoning tokens.
+            if N_Toks > int (Models (Kind).Current_Ctx) / 2 then
                 Put_Line
                    ("[!] Prompt size ("
                     & N_Toks'Img
-                    & ") exceeds N_CTX ("
+                    & ") exceeds 50% of N_CTX ("
                     & Models (Kind).Current_Ctx'Img
-                    & "). Resizing...");
+                    & "). Proactive resize...");
                 declare
                     Rounded_Ctx : constant unsigned :=
                        ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
                 begin
                     Free_Tokens (Tokens);
-                    Load_Model (Kind, Success, Positive (Rounded_Ctx));
+                    Load_Model (Kind, Success, Positive (Rounded_Ctx), Session_ID => Session_ID);
                     if not Success then
                         Result := To_Unbounded_String ("ERROR: Resize failed");
                         if Level = ELP0 then
@@ -3937,10 +3943,11 @@ package body Model_Manager is
             begin
                 --  Save KV cache to SSD (ASYNC, non-blocking)
                 KV_Cache_Manager.Save_To_SSD_Async
-                   (Context  => Models (Kind).Context,
-                    Tokens   => Tokens.all'Address,
-                    N_Tokens => Interfaces.C.size_t (N_Toks),
-                    Model_ID => Kind'Img);
+                   (Context    => Models (Kind).Context,
+                    Tokens     => Tokens.all'Address,
+                    N_Tokens   => Interfaces.C.size_t (N_Toks),
+                    Model_ID   => Kind'Img,
+                    Session_ID => Session_ID);
 
                 --  Clear KV cache from RAM immediately after saving
                 --  This ensures minimal RAM usage - only current process in memory
@@ -6721,21 +6728,23 @@ package body Model_Manager is
     end Hybrid_Generate;
 
     --  KV CACHE SSD SPILLOVER
-    --  Save KV cache to SSD after generation
-    procedure Save_KV_Cache_To_SSD
-       (Kind     : Model_Type;
-        Tokens   : System.Address;
-        N_Tokens : Interfaces.C.size_t) is
-    begin
-        if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context
-        then
-            --  Save KV cache to SSD (ASYNC, non-blocking)
-            KV_Cache_Manager.Save_To_SSD_Async
-               (Context  => Models (Kind).Context,
-                Tokens   => Tokens,
-                N_Tokens => N_Tokens,
-                Model_ID => Kind'Img);
-        end if;
+     --  Save KV cache to SSD after generation
+     procedure Save_KV_Cache_To_SSD
+        (Kind       : Model_Type;
+         Tokens     : System.Address;
+         N_Tokens   : Interfaces.C.size_t;
+         Session_ID : String) is
+     begin
+         if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context
+         then
+             --  Save KV cache to SSD (ASYNC, non-blocking)
+             KV_Cache_Manager.Save_To_SSD_Async
+                (Context    => Models (Kind).Context,
+                 Tokens     => Tokens,
+                 N_Tokens   => N_Tokens,
+                 Model_ID   => Kind'Img,
+                 Session_ID => Session_ID);
+         end if;
     exception
         when others =>
             null;  -- Don't crash on cache save failure
@@ -6743,9 +6752,10 @@ package body Model_Manager is
 
     --  Load KV cache from SSD if available
     function Load_KV_Cache_From_SSD
-       (Kind     : Model_Type;
-        Tokens   : out System.Address;
-        N_Tokens : out Interfaces.C.size_t) return Boolean is
+       (Kind       : Model_Type;
+        Tokens     : out System.Address;
+        N_Tokens   : out Interfaces.C.size_t;
+        Session_ID : String) return Boolean is
     begin
         Tokens := System.Null_Address;
         N_Tokens := 0;
@@ -6755,10 +6765,11 @@ package body Model_Manager is
             --  Load KV cache from SSD (LAZY, on-demand only)
             return
                KV_Cache_Manager.Load_From_SSD_Lazy
-                  (Context  => Models (Kind).Context,
-                   Tokens   => Tokens,
-                   N_Tokens => N_Tokens,
-                   Model_ID => Kind'Img);
+                  (Context    => Models (Kind).Context,
+                   Tokens     => Tokens,
+                   N_Tokens   => N_Tokens,
+                   Model_ID   => Kind'Img,
+                   Session_ID => Session_ID);
         else
             return False;
         end if;

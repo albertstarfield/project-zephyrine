@@ -187,9 +187,9 @@ package body KV_Cache_Manager is
       return To_String (Cached_Path);
    end Get_Cached_Path;
 
-   function Has_Cached_Path (Model_ID : String) return Boolean is
+   function Has_Cached_Path (Model_ID : String; Session_ID : String) return Boolean is
       P : constant String := To_String (Cached_Path);
-      Prefix : constant String := Cache_Dir & Model_ID & "_";
+      Prefix : constant String := Cache_Dir & Model_ID & "_" & Session_ID & "_";
    begin
       if not Cached_Path_Valid then
          return False;
@@ -564,20 +564,13 @@ package body KV_Cache_Manager is
      (Context    : Llama_Interface.Llama_Context;
       Tokens     : System.Address;
       N_Tokens   : Interfaces.C.size_t;
-      Model_ID   : String)
+      Model_ID   : String;
+      Session_ID : String)
    is
-      --  Generate cache key
-      Tok_Len : constant Natural := Natural (N_Tokens);
-      Hash    : Natural := 0;
    begin
-      --  Simple hash for cache key
-      for I in 1 .. Integer'Min (Tok_Len, 128) loop
-         Hash := (Hash * 31 + I) mod 1000000;
-      end loop;
-
       declare
-         Prompt_Hash : constant String := Trim (Natural'Image (Hash), Both);
-         File_Path   : constant String := Cache_Dir & Model_ID & "_" & Prompt_Hash & ".bin";
+         --  KV cache keyed by session: each client session gets its own cache
+         File_Path : constant String := Cache_Dir & Model_ID & "_" & Session_ID & ".bin";
       begin
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          --  Verbose: logs async save request.
@@ -611,7 +604,8 @@ package body KV_Cache_Manager is
      (Context    : Llama_Interface.Llama_Context;
       Tokens     : out System.Address;
       N_Tokens   : out Interfaces.C.size_t;
-      Model_ID   : String) return Boolean
+      Model_ID   : String;
+      Session_ID : String) return Boolean
    is
       use Ada.Directories;
 
@@ -640,7 +634,7 @@ package body KV_Cache_Manager is
                 AnsiAda.Reset & "+Load_From_SSD_Lazy: searching for cache...");
 
       --  TRICK 3: Check pre-path cache first (instant, no disk I/O)
-      if Has_Cached_Path (Model_ID) then
+      if Has_Cached_Path (Model_ID, Session_ID) then
          declare
             Cached : constant String := Get_Cached_Path;
          begin
@@ -717,15 +711,16 @@ package body KV_Cache_Manager is
 
          --  Search for cache files
          declare
-            procedure Find_Cache (Ent : Directory_Entry_Type) is
-               Name : constant String := Simple_Name (Ent);
-               Path : constant String := Full_Name (Ent);
-            begin
-               if not Found and then
-                 Name'Length > Model_ID'Length + 5 and then
-                 Name (Name'First .. Name'First + Model_ID'Length) = Model_ID & "_" and then
-                 Name (Name'Last - 3 .. Name'Last) = ".bin"
-               then
+             procedure Find_Cache (Ent : Directory_Entry_Type) is
+                Name     : constant String := Simple_Name (Ent);
+                Path     : constant String := Full_Name (Ent);
+                Prefix   : constant String := Model_ID & "_" & Session_ID & "_";
+             begin
+                if not Found and then
+                  Name'Length > Prefix'Length + 4 and then
+                  Name (Name'First .. Name'First + Prefix'Length - 1) = Prefix and then
+                  Name (Name'Last - 3 .. Name'Last) = ".bin"
+                then
                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                   --  Verbose: logs cache file found.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
