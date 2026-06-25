@@ -53,6 +53,7 @@ with Moonshine_Interface;
 with ELP_Queue;
 with KV_Cache_Manager;
 with Interfaces.C; use Interfaces.C;
+with SD_Manager;
 
 --  ===========================================================================
 --  SERVER QUIRKS & DISCOVERED WORKAROUNDS
@@ -533,6 +534,25 @@ begin
                 Trim (Duration'Image (Ada.Real_Time.To_Duration
                   (Ada.Real_Time.Clock - Start_Time)), Both) &
                 "s STEP 4 DONE: Watchdog_IPC.Init returned.");
+
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Verbose: wraps SD_Manager.Initialize for image generation.
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 4.5: Calling SD_Manager.Initialize...");
+      SD_Manager.Initialize
+        (Flux_Diffusion => "model/flux1-schnell.gguf",
+         Flux_Clip_L    => "model/clip_l.safetensors",
+         Flux_T5XXL     => "model/flux1-t5xxl.gguf",
+         Flux_VAE       => "model/ae.safetensors",
+         Refiner_Model  => "model/sd-refinement.gguf");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 4.5 DONE: SD_Manager.Initialize returned.");
 
       --  ==================================================================
       --  STEP 5: Start ELP0 background tasks BEFORE HTTP bind

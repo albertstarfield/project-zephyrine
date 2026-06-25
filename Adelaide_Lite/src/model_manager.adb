@@ -5347,24 +5347,22 @@ package body Model_Manager is
                     R       : constant Tool_Manager.Tool_Result :=
                        Tool_Manager.Execute_Tool ("searchglobalref", Final_Q);
                 begin
-                    if not External_Agent then
-                        Push_Orchestration_Through_Parser
-                           (Stream,
-                            Session_ID,
-                            Orch_Parser,
-                            "[Adelaide Core]: [Thought] Searching knowledge "
-                            & "base for: "
-                            & Trim (Final_Q, Ada.Strings.Both)
-                            & "..."
-                            & ASCII.LF);
-                        Push_Orchestration_Through_Parser
-                           (Stream,
-                            Session_ID,
-                            Orch_Parser,
-                            "[Adelaide Core]: [Thought] Found relevant context "
-                            & "from knowledge base."
-                            & ASCII.LF);
-                    end if;
+                    Push_Orchestration_Through_Parser
+                       (Stream,
+                        Session_ID,
+                        Orch_Parser,
+                        "[Adelaide Core]: [Thought] Searching knowledge "
+                        & "base for: "
+                        & Trim (Final_Q, Ada.Strings.Both)
+                        & "..."
+                        & ASCII.LF);
+                    Push_Orchestration_Through_Parser
+                       (Stream,
+                        Session_ID,
+                        Orch_Parser,
+                        "[Adelaide Core]: [Thought] Found relevant context "
+                        & "from knowledge base."
+                        & ASCII.LF);
                     Append
                        (Internal_State,
                         "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
@@ -5387,7 +5385,7 @@ package body Model_Manager is
                     end if;
                 end;
             end;
-        end if;
+         end if;
 
         loop
             if Level = ELP0 and then Should_Abort_ELP0 then
@@ -5396,18 +5394,20 @@ package body Model_Manager is
                 return;
             end if;
 
-            declare
-                Router_Sys   : constant String :=
-                   "You are the Router. You decide if a tool is needed. "
-                   & "If the user says hello or greets you, output [FINISH]. "
-                   & "If you need to search, use [ACTION: search(query)]. "
-                   & "If you need to read a file, use [ACTION: cat(filename)]. "
-                   & "If you need to calculate math, use [ACTION: math(expr)]. "
-                   & "If you need to execute code, use [ACTION: code(python)]. "
-                   & "If you want to schedule a proactive thought for later, "
-                   & "use [ACTION: schedule(seconds, query)]. "
-                   & "If you are done, output [FINISH]. "
-                   & "Output ONLY the tag.";
+             declare
+                 Router_Sys   : constant String :=
+                    "You are the Router. You decide if a tool is needed. "
+                    & "If the user says hello or greets you, output [FINISH]. "
+                    & "If you need to search, use [ACTION: search(query)]. "
+                    & "If you need to read a file, use [ACTION: cat(filename)]. "
+                    & "If you need to calculate math, use [ACTION: math(expr)]. "
+                    & "If you need to execute code, use [ACTION: code(python)]. "
+                    & "If you want to schedule a proactive thought for later, "
+                    & "use [ACTION: schedule(seconds, query)]. "
+                    & "If you need to generate an image from your imagination, "
+                    & "use [ACTION: imagine(description)]. "
+                    & "If you are done, output [FINISH]. "
+                    & "Output ONLY the tag.";
                 --  Strip base64 images from router context to prevent tokenization
                 --  failure. The 9B router cannot handle massive base64 blobs.
                 --  User stream still receives full output with images.
@@ -5700,11 +5700,20 @@ package body Model_Manager is
                                                     R :
                                                        constant Tool_Manager
                                                                    .Tool_Result :=
-                                                          Tool_Manager
-                                                             .Execute_Tool
-                                                                (T_Name,
-                                                                 Sanitize_Think_Tags
-                                                                       (T_Pars));
+                                                          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                                                          --  IMAGINE TOOL: Direct Ada call to SD_Manager.
+                                                          --  When the model outputs [ACTION: imagine(prompt)],
+                                                          --  generate an image via two-stage FLUX+SD pipeline
+                                                          --  and store it in the database for VLM retrieval.
+                                                          (if T_Name = "imagine" then
+                                                             Tool_Manager.Execute_Imagine_Tool
+                                                               (Sanitize_Think_Tags (T_Pars))
+                                                          else
+                                                             Tool_Manager
+                                                                .Execute_Tool
+                                                                   (T_Name,
+                                                                    Sanitize_Think_Tags
+                                                                          (T_Pars)));
                                                 begin
                                                     if not External_Agent then
                                                         Push_Orchestration_Direct
@@ -6160,7 +6169,45 @@ package body Model_Manager is
                                     & ASCII.LF);
                             end if;
 
-                            if C_Str = "graph" then
+                            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                            --  CONTEXT FAULT IMAGINE: When the model's <thinking>
+                            --  emits [CONTEXT_FAULT:query=X category=imagine],
+                            --  generate an image via the two-stage SD pipeline
+                            --  and store it for VLM retrieval.
+                            if C_Str = "imagine" then
+                                R := Tool_Manager.Execute_Imagine_Tool (Q_Str);
+                                --  Store the imagined image in the database
+                                if R.Success and then Length (R.Output) > 100 then
+                                    declare
+                                        Img_LSH : Integer := -1;
+                                    begin
+                                        begin
+                                            declare
+                                                Emb_Vec : Math_Utils.Vector (1 .. 1024);
+                                                Emb_Len : Natural;
+                                             begin
+                                                 Get_Embedding (Q_Str, Emb_Vec, Emb_Len);
+                                                Img_LSH := LSH_Hash.Compute (Emb_Vec (1 .. Emb_Len), Emb_Len);
+                                            end;
+                                        exception
+                                            when others => Img_LSH := -1;
+                                        end;
+                                        Database_Manager.Store_Imagined_Image
+                                          (Prompt    => Q_Str,
+                                           Image_B64 => To_String (R.Output),
+                                           LSH_Hash  => Img_LSH);
+                                        Put_Line
+                                          (AnsiAda.Foreground (AnsiAda.Cyan) & "[CtxFault-Imagine]" &
+                                           AnsiAda.Reset & " Stored imagined image. LSH=" &
+                                           Integer'Image (Img_LSH));
+                                    end;
+                                end if;
+                                Append
+                                   (Internal_State,
+                                    "[IMAGINED_IMAGE]: "
+                                    & To_String (R.Output)
+                                    & ASCII.LF);
+                            elsif C_Str = "graph" then
                                 R :=
                                    Tool_Manager.Execute_Tool
                                       ("searchglobalref", "graph: " & Q_Str);

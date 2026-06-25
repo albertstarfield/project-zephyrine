@@ -502,8 +502,22 @@ package SD_Interface is
 
    --  --- Free results ---
    procedure Free_SD_Images (Images : SD_Image_Access;
-                              Count  : int);
+                             Count  : int);
    pragma Import (C, Free_SD_Images, "free_sd_images");
+
+   --  --- PNG encoding (miniz/tdefl) ---
+   --  Write raw image data to PNG in memory (returns malloc'd buffer, caller must free with mz_free)
+   function Tdefl_Write_Image_To_PNG_File_In_Memory
+     (PImage   : System.Address;
+      W        : int;
+      H        : int;
+      Num_Chans: int;
+      PLen_Out : access size_t) return System.Address;
+   pragma Import (C, Tdefl_Write_Image_To_PNG_File_In_Memory, "tdefl_write_image_to_png_file_in_memory");
+
+   --  Free buffer allocated by tdefl_write_image_to_png_file_in_memory
+   procedure Mz_Free (P : System.Address);
+   pragma Import (C, Mz_Free, "mz_free");
 
    --  --- Enum name lookups (for verbose logging) ---
    function SD_Type_Name (T : int) return chars_ptr;
@@ -559,9 +573,9 @@ package SD_Interface is
    procedure Log_Image_Gen_Params (Params : access SD_Img_Gen_Params);
 
    --  Log the result of generate_image()
-   procedure Log_Generate_Result (Images   : SD_Image_Access;
-                                   Count    : int;
-                                   Duration : Duration);
+   procedure Log_Generate_Result (Images      : SD_Image_Access;
+                                   Count       : int;
+                                   Gen_Duration: Duration);
 
    --  Log all available enum names from the C library
    procedure Log_All_Enum_Names;

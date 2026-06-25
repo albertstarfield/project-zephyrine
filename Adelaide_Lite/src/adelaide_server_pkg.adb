@@ -9,7 +9,7 @@ with Ada.Exceptions;
 with Ada.Streams;
 with Kokoro_Interface;
 with Moonshine_Interface;
-with Interfaces;
+with Interfaces; use Interfaces;
 with Model_Manager;
 with Streaming_Queue;
 use Streaming_Queue;
@@ -24,6 +24,8 @@ with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Real_Time; use Ada.Real_Time;
 with Fuzzy_Match;
 with Claude_Client; use Claude_Client;
+with SD_Manager;
+with Ada.Directories;
 
 --  ===========================================================================
 --  DISPATCH QUIRKS & DISCOVERED WORKAROUNDS
@@ -104,6 +106,59 @@ package body Adelaide_Server_Pkg is
       Element_Type => Streaming_Queue.Queue_Access);
 
    Active_Sessions : Session_Maps.Map;
+
+   --  ===========================================================================
+   --  VIRTUAL CONTEXT SIZE: models/ + database literature + database interaction
+   --  The "size" field in /api/tags and /api/ps exposes the total knowledge
+   --  footprint. Virtual Context Model = 2^63 (theoretical maximum).
+   --  ===========================================================================
+   --  2^63 in Ada: shift 1 left by 63 bits
+   Virtual_Context_Max : constant Unsigned_64 :=
+      16#7FFFFFFFFFFFFFFF#;
+
+   function Calculate_Total_Knowledge_Size return Unsigned_64 is
+      use Ada.Directories;
+      Total : Unsigned_64 := 0;
+      Search : Search_Type;
+      Dir_Ent : Directory_Entry_Type;
+   begin
+      --  1. All files in model/ directory
+      if Exists ("model") then
+         Start_Search (Search, "model", "*");
+         while More_Entries (Search) loop
+            Get_Next_Entry (Search, Dir_Ent);
+            if Kind (Dir_Ent) = Ordinary_File then
+               Total := Total + Unsigned_64 (Size (Dir_Ent));
+            end if;
+         end loop;
+         End_Search (Search);
+      end if;
+      --  2. Literature + interaction databases
+      if Exists ("UI_Database") then
+         Start_Search (Search, "UI_Database", "*");
+         while More_Entries (Search) loop
+            Get_Next_Entry (Search, Dir_Ent);
+            if Kind (Dir_Ent) = Ordinary_File then
+               Total := Total + Unsigned_64 (Size (Dir_Ent));
+            end if;
+         end loop;
+         End_Search (Search);
+      end if;
+      --  3. KV cache state
+      if Exists ("cache") then
+         Start_Search (Search, "cache", "*");
+         while More_Entries (Search) loop
+            Get_Next_Entry (Search, Dir_Ent);
+            if Kind (Dir_Ent) = Ordinary_File then
+               Total := Total + Unsigned_64 (Size (Dir_Ent));
+            end if;
+         end loop;
+         End_Search (Search);
+      end if;
+      return Total;
+   exception
+      when others => return Total;
+   end Calculate_Total_Knowledge_Size;
 
    procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is
    begin
@@ -408,6 +463,16 @@ package body Adelaide_Server_Pkg is
          return Wrap_Response (Build_Response (""));
       end if;
 
+      --  Ollama heartbeat: HEAD / (checkServerHeartbeat sends HEAD /)
+      if URI = "/" and then Method = "HEAD" then
+         return Build_Response ("");
+      end if;
+
+      --  Root GET returns friendly status
+      if URI = "/" and then Method = "GET" then
+         return Build_Response ("Adelaide API");
+      end if;
+
       --  Health check: any endpoint with ?ping=true returns alive status
       declare
          Ping_Param : constant String := AWS.Status.Parameter (Request, "ping");
@@ -422,20 +487,87 @@ package body Adelaide_Server_Pkg is
          return Build_Response ("{""version"": ""Project-Zephyrine-0.27""}");
       end if;
 
+      --  Ollama stub: /api/show (POST) - show model info
+      if URI = "/api/show" and then Method = "POST" then
+         return Build_Response
+           ("{""modelfile"": ""FROM Snowball-Enaga"", "
+            & """parameters"": """", "
+            & """template"": """", "
+            & """details"": {"
+            & """parent_model"": """", "
+            & """format"": ""gguf"", "
+            & """family"": ""Snowball-Enaga"", "
+            & """families"": [""Snowball-Enaga""], "
+            & """parameter_size"": ""9B"", "
+            & """quantization_level"": ""Q4_1""}, "
+            & """model_info"": {"
+            & """general.architecture"": ""snowball"", "
+            & """general.parameter_size"": ""9B"", "
+            & """general.quantization_level"": ""Q4_1""}}");
+      end if;
+
+      --  Ollama stub: /api/create (POST) - create model from Modelfile (stub)
+      if URI = "/api/create" and then Method = "POST" then
+         return Build_Response
+           ("{""status"": ""success"", "
+            & """done"": true}");
+      end if;
+
+      --  Ollama stub: /api/pull (POST) - pull model (stub, always success)
+      if URI = "/api/pull" and then Method = "POST" then
+         return Build_Response
+           ("{""status"": ""success"", "
+            & """digest"": ""adelaide-snowball-enaga-local"", "
+            & """total"": 0, "
+            & """completed"": 0}");
+      end if;
+
+      --  Ollama stub: /api/push (POST) - push model (stub)
+      if URI = "/api/push" and then Method = "POST" then
+         return Build_Response
+           ("{""status"": ""success"", "
+            & """total"": 0, "
+            & """completed"": 0}");
+      end if;
+
+      --  Ollama stub: /api/copy (POST) - copy model (stub)
+      if URI = "/api/copy" and then Method = "POST" then
+         return Build_Response
+           ("{""status"": ""success""}");
+      end if;
+
+      --  Ollama stub: /api/delete (DELETE) - remove model (stub)
+      if URI = "/api/delete" and then Method = "DELETE" then
+         return Build_Response
+           ("{""status"": ""success""}");
+      end if;
+
+      --  Ollama stub: /api/signin (POST) - sign in (stub)
+      if URI = "/api/signin" and then Method = "POST" then
+         return Build_Response
+           ("{""status"": ""success""}");
+      end if;
+
+      --  Ollama stub: /api/signout (POST) - sign out (stub)
+      if URI = "/api/signout" and then Method = "POST" then
+         return Build_Response
+           ("{""status"": ""success""}");
+      end if;
+
       if URI = "/v1/audio/transcriptions" then
          declare
             use GNATCOLL.JSON;
             R : constant JSON_Value := Create_Object;
             Raw_Payload : constant Ada.Streams.Stream_Element_Array :=
               AWS.Status.Binary_Data (Request);
-            Num_Floats : constant Interfaces.Unsigned_64 :=
-              Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
+            Num_Floats : constant Unsigned_64 :=
+              Unsigned_64 (Raw_Payload'Length / 4);
             type Float_Array is array (1 .. Natural (Num_Floats)) of
               aliased Float;
             Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
 
             Transcript : Unbounded_String;
-            use type Interfaces.Unsigned_64;
+            use type Unsigned_64;
          begin
             if Num_Floats > 0 then
                Transcript := To_Unbounded_String
@@ -462,8 +594,8 @@ package body Adelaide_Server_Pkg is
              Vision_Context_Param : constant String :=
                AWS.Status.Parameter (Request, "vision_context_b64");
              
-             Num_Floats : constant Interfaces.Unsigned_64 :=
-               Interfaces.Unsigned_64 (Raw_Payload'Length / 4);
+             Num_Floats : constant Unsigned_64 :=
+               Unsigned_64 (Raw_Payload'Length / 4);
              type Float_Array is array (1 .. Natural (Num_Floats)) of
                aliased Float;
              Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
@@ -475,7 +607,7 @@ package body Adelaide_Server_Pkg is
              -- Convert vision context param to unbounded string if provided
              Vision_Context_From_Param : Unbounded_String;
 
-             use type Interfaces.Unsigned_64;
+             use type Unsigned_64;
              use type Ada.Real_Time.Time;
           begin
             Vision_Context_From_Param := To_Unbounded_String (Vision_Context_Param);
@@ -597,9 +729,29 @@ package body Adelaide_Server_Pkg is
       end if;
 
       if URI = "/api/ps" then
-         return Build_Response ("{""models"": [{""name"": ""metamodel-ELP0"", " &
-           """size"": 0, ""size_vram"": 0}, {""name"": ""metamodel-ELP1"", " &
-           """size"": 0, ""size_vram"": 0}]}");
+         --  Ollama /api/ps requires: name, model, size, digest, details, expires_at, size_vram
+         --  Size = total knowledge footprint (models + databases + cache)
+         declare
+            Total_Size : constant Unsigned_64 :=
+               Calculate_Total_Knowledge_Size;
+         begin
+            return Build_Response
+              ("{""models"": [{"
+               & """name"": ""Snowball-Enaga:latest"", "
+               & """model"": ""Snowball-Enaga:latest"", "
+               & """size"": " & Unsigned_64'Image (Total_Size) & ", "
+               & """digest"": ""adelaide-snowball-enaga-local"", "
+               & """details"": {"
+               & """parent_model"": """", "
+               & """format"": ""gguf"", "
+               & """family"": ""Snowball-Enaga"", "
+               & """families"": [""Snowball-Enaga""], "
+               & """parameter_size"": ""9B"", "
+               & """quantization_level"": ""Q4_1""}, "
+               & """expires_at"": ""2099-12-31T23:59:59.000000000+00:00"", "
+               & """size_vram"": " & Unsigned_64'Image (Total_Size)
+               & "}]}");
+         end;
       end if;
 
       if URI = "/api/telemetry" then
@@ -642,7 +794,28 @@ package body Adelaide_Server_Pkg is
 
       if URI = "/api/tags" or else URI = "/v1/models" then
          if URI = "/api/tags" then
-            return Wrap_Response (Build_Response ("{""models"": [{""name"": ""Snowball-Enaga""}]}"));
+            --  Ollama /api/tags requires: name, model, modified_at, size, digest, details
+            declare
+               Total_Size : constant Unsigned_64 :=
+                  Calculate_Total_Knowledge_Size;
+            begin
+               return Wrap_Response
+                 (Build_Response
+                    ("{""models"": [{"
+                     & """name"": ""Snowball-Enaga:latest"", "
+                     & """model"": ""Snowball-Enaga:latest"", "
+                     & """modified_at"": ""2026-01-01T00:00:00.000000000+00:00"", "
+                     & """size"": " & Unsigned_64'Image (Total_Size) & ", "
+                     & """digest"": ""adelaide-snowball-enaga-local"", "
+                     & """details"": {"
+                     & """parent_model"": """", "
+                     & """format"": ""gguf"", "
+                     & """family"": ""Snowball-Enaga"", "
+                     & """families"": [""Snowball-Enaga""], "
+                     & """parameter_size"": ""9B"", "
+                     & """quantization_level"": ""Q4_1""}"
+                     & "}]}"));
+            end;
          else
             return Wrap_Response (Build_Response ("{""object"": ""list"", ""data"": [{""id"": ""Snowball-Enaga"", ""object"": ""model"", ""created"": 1686935002, ""owned_by"": ""adelaide""}]}"));
          end if;
@@ -1236,10 +1409,211 @@ package body Adelaide_Server_Pkg is
                      return Wrap_Response
                        (Build_Response (Write (Err_Obj), AWS.Messages.S400, "application/json"));
                   end;
-               end if;
-            end;
-         end if;
-         return Build_Response ("Adelaide API", AWS.Messages.S404, "text/plain");
+                end if;
+             end;
+          end if;
+
+          --  =====================================================================
+          --  /v1/images/generations: OpenAI-compatible image generation endpoint
+          --  Two-stage pipeline: FLUX sparse → SD refinement
+          --  DO NOT REMOVE, OR YOU WILL BE KILLED
+          --  =====================================================================
+          if URI = "/v1/images/generations" then
+             declare
+                Payload : Unbounded_String := (if Raw_S /= "" then
+                  To_Unbounded_String (Raw_S)
+                  elsif Length (Raw_B) > 0 then Raw_B
+                  else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
+                Req_Model   : Unbounded_String := To_Unbounded_String ("flux-schnell");
+                Prompt      : Unbounded_String := Null_Unbounded_String;
+                N_Images    : Integer := 1;
+                Width       : Integer := 1024;
+                Height      : Integer := 1024;
+                Seed        : Long_Long_Integer := -1;
+                Quality     : Unbounded_String := To_Unbounded_String ("standard");
+                Style       : Unbounded_String := To_Unbounded_String ("vivid");
+                Response_Fmt: Unbounded_String := To_Unbounded_String ("b64_json");
+                Image_B64   : Unbounded_String := Null_Unbounded_String;
+                Error_Msg   : Unbounded_String := Null_Unbounded_String;
+                Img_Obj     : JSON_Value;
+                Data_Arr    : JSON_Value;
+                Resp_Obj    : JSON_Value;
+             begin
+                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                --  Parse request body
+                if Length (Payload) > 0 then
+                   declare
+                      Parser_Result : constant GNATCOLL.JSON.Read_Result :=
+                        GNATCOLL.JSON.Read (To_String (Payload));
+                   begin
+                      if Parser_Result.Success then
+                         declare
+                            Val : constant GNATCOLL.JSON.JSON_Value :=
+                              Parser_Result.Value;
+                         begin
+                            --  Extract prompt (required)
+                            if GNATCOLL.JSON.Has_Field (Val, "prompt") then
+                               begin
+                                  Prompt := To_Unbounded_String
+                                    (String'(GNATCOLL.JSON.Get (Val, "prompt")));
+                               exception
+                                  when others => null;
+                               end;
+                            end if;
+                            --  Extract model
+                            if GNATCOLL.JSON.Has_Field (Val, "model") then
+                               begin
+                                  Req_Model := To_Unbounded_String
+                                    (String'(GNATCOLL.JSON.Get (Val, "model")));
+                               exception
+                                  when others => null;
+                               end;
+                            end if;
+                            --  Extract n (number of images)
+                            if GNATCOLL.JSON.Has_Field (Val, "n") then
+                               begin
+                                  N_Images := Integer'(GNATCOLL.JSON.Get (Val, "n"));
+                               exception
+                                  when others => null;
+                               end;
+                            end if;
+                            --  Extract size (WxH format)
+                            if GNATCOLL.JSON.Has_Field (Val, "size") then
+                               declare
+                                  Size_Str : constant String :=
+                                    String'(GNATCOLL.JSON.Get (Val, "size"));
+                                  X_Pos    : Natural;
+                               begin
+                                  X_Pos := Ada.Strings.Fixed.Index (Size_Str, "x");
+                                  if X_Pos > 0 then
+                                     Width := Integer'Value (Size_Str (Size_Str'First .. X_Pos - 1));
+                                     Height := Integer'Value (Size_Str (X_Pos + 1 .. Size_Str'Last));
+                                  end if;
+                               exception
+                                  when others => null;
+                               end;
+                            end if;
+                            --  Extract seed
+                            if GNATCOLL.JSON.Has_Field (Val, "seed") then
+                               begin
+                                  Seed := Long_Long_Integer (Integer'(GNATCOLL.JSON.Get (Val, "seed")));
+                               exception
+                                  when others => null;
+                               end;
+                            end if;
+                            --  Extract quality
+                            if GNATCOLL.JSON.Has_Field (Val, "quality") then
+                               begin
+                                  Quality := To_Unbounded_String
+                                    (String'(GNATCOLL.JSON.Get (Val, "quality")));
+                               exception
+                                  when others => null;
+                               end;
+                            end if;
+                            --  Extract style
+                            if GNATCOLL.JSON.Has_Field (Val, "style") then
+                               begin
+                                  Style := To_Unbounded_String
+                                    (String'(GNATCOLL.JSON.Get (Val, "style")));
+                               exception
+                                  when others => null;
+                               end;
+                            end if;
+                            --  Extract response_format
+                            if GNATCOLL.JSON.Has_Field (Val, "response_format") then
+                               begin
+                                  Response_Fmt := To_Unbounded_String
+                                    (String'(GNATCOLL.JSON.Get (Val, "response_format")));
+                               exception
+                                  when others => null;
+                               end;
+                            end if;
+                         end;
+                      end if;
+                   end;
+                end if;
+
+                --  Validate prompt
+                if Length (Prompt) = 0 then
+                   declare
+                      Err_Obj : constant JSON_Value := Create_Object;
+                   begin
+                      Set_Field (Err_Obj, "error", "Missing required parameter: prompt");
+                      return Wrap_Response
+                        (Build_Response (Write (Err_Obj), AWS.Messages.S400, "application/json"));
+                   end;
+                end if;
+
+                --  Log request
+                Ada.Text_IO.Put_Line
+                  (AnsiAda.Foreground (AnsiAda.Cyan)
+                   & "[ImgGen] New image generation request"
+                   & AnsiAda.Reset);
+                Ada.Text_IO.Put_Line
+                  (AnsiAda.Foreground (AnsiAda.Cyan)
+                   & "[ImgGen]   Prompt: " & To_String (Prompt)
+                   & AnsiAda.Reset);
+                Ada.Text_IO.Put_Line
+                  (AnsiAda.Foreground (AnsiAda.Cyan)
+                   & "[ImgGen]   Size: " & Integer'Image (Width) & "x" & Integer'Image (Height)
+                   & " Seed: " & Long_Long_Integer'Image (Seed)
+                   & AnsiAda.Reset);
+
+                --  Generate image using two-stage pipeline
+                SD_Manager.Generate_Two_Stage
+                  (Prompt         => To_String (Prompt),
+                   Width          => Width,
+                   Height         => Height,
+                   Seed           => Seed,
+                   Flux_Steps     => (if Quality = "hd" then 8 else 4),
+                   Flux_Cfg       => 1.0,
+                   Refine_Enabled => (Quality = "hd"),
+                   Refine_Steps   => 8,
+                   Refine_Strength => 0.4,
+                   Image_B64      => Image_B64,
+                   Error_Msg      => Error_Msg);
+
+                --  Check for errors
+                if Length (Error_Msg) > 0 then
+                   declare
+                      Err_Obj : constant JSON_Value := Create_Object;
+                   begin
+                      Set_Field (Err_Obj, "error", To_String (Error_Msg));
+                      return Wrap_Response
+                        (Build_Response (Write (Err_Obj), AWS.Messages.S500, "application/json"));
+                   end;
+                end if;
+
+                --  Build OpenAI-compatible response
+                Resp_Obj := Create_Object;
+                Set_Field (Resp_Obj, "created", Integer (Ada.Calendar.Seconds (Ada.Calendar.Clock)));
+
+                --  Build data array with image objects
+                Img_Obj := Create_Object;
+                if Response_Fmt = "b64_json" then
+                   Set_Field (Img_Obj, "b64_json", To_String (Image_B64));
+                else
+                   --  URL format not supported, return b64_json as fallback
+                   Set_Field (Img_Obj, "b64_json", To_String (Image_B64));
+                end if;
+                Set_Field (Img_Obj, "revised_prompt", To_String (Prompt));
+
+                --  GNATCOLL.JSON workaround: wrap in object with "0" key
+                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                Data_Arr := Create_Object;
+                Set_Field (Data_Arr, "0", Img_Obj);
+                Set_Field (Resp_Obj, "data", Data_Arr);
+
+                Ada.Text_IO.Put_Line
+                  (AnsiAda.Foreground (AnsiAda.Green)
+                   & "[ImgGen] Image generation complete. Returning Base64 response."
+                   & AnsiAda.Reset);
+
+                return Wrap_Response (Build_Response (Write (Resp_Obj)));
+             end;
+          end if;
+
+          return Build_Response ("Adelaide API", AWS.Messages.S404, "text/plain");
       end if;
    exception
       when E : others =>

@@ -179,7 +179,8 @@ project Adelaide_Lite is
           project'Object_Dir & "/stderr_suppress.o",
           project'Object_Dir & "/stdout_unbuffer.o",
           project'Object_Dir & "/shutdown_handler.o",
-          project'Object_Dir & "/kratos_signal.o"
+          project'Object_Dir & "/kratos_signal.o",
+          project'Object_Dir & "/sd_helper.o"
       );
 
       Platform_Flags := ();
