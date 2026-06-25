@@ -102,8 +102,10 @@ package body Model_Manager is
     pragma Import (C, Elab_Trace_C, "elab_trace_c");
     function Emit_Model_Manager_Elab_Trace return Integer is
     begin
-       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER BODY ELABORATION ENTERED"));
-       return 0;
+        Elab_Trace_C
+           (Interfaces.C.Strings.New_String
+               ("MODEL_MANAGER BODY ELABORATION ENTERED"));
+        return 0;
     end Emit_Model_Manager_Elab_Trace;
     Diag_MM : constant Integer := Emit_Model_Manager_Elab_Trace;
     pragma Warnings (Off, Diag_MM);
@@ -154,8 +156,10 @@ package body Model_Manager is
     --  [ElabTrace-C]: Confirms elaboration past Init_Start_Time declaration.
     function Emit_After_Init_Start return Integer is
     begin
-       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_INIT_START_TIME"));
-       return 0;
+        Elab_Trace_C
+           (Interfaces.C.Strings.New_String
+               ("MODEL_MANAGER: AFTER_INIT_START_TIME"));
+        return 0;
     end Emit_After_Init_Start;
     Diag_AIS : constant Integer := Emit_After_Init_Start;
     pragma Warnings (Off, Diag_AIS);
@@ -204,8 +208,10 @@ package body Model_Manager is
     --  [ElabTrace-C]: RAW C trace: after Printer_Task declaration.
     function Emit_After_Printer_Task return Integer is
     begin
-       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_PRINTER_TASK_DECL"));
-       return 0;
+        Elab_Trace_C
+           (Interfaces.C.Strings.New_String
+               ("MODEL_MANAGER: AFTER_PRINTER_TASK_DECL"));
+        return 0;
     end Emit_After_Printer_Task;
     Diag_APT : constant Integer := Emit_After_Printer_Task;
     pragma Warnings (Off, Diag_APT);
@@ -369,8 +375,10 @@ package body Model_Manager is
     --  [ElabTrace-C]: RAW C trace: after Context_Monitor task body.
     function Emit_After_CtxMon return Integer is
     begin
-       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_CTXMON_BODY"));
-       return 0;
+        Elab_Trace_C
+           (Interfaces.C.Strings.New_String
+               ("MODEL_MANAGER: AFTER_CTXMON_BODY"));
+        return 0;
     end Emit_After_CtxMon;
     Diag_ACM : constant Integer := Emit_After_CtxMon;
     pragma Warnings (Off, Diag_ACM);
@@ -392,8 +400,10 @@ package body Model_Manager is
     --  [ElabTrace-C]: RAW C trace: after Models array declaration.
     function Emit_After_Models return Integer is
     begin
-       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_MODELS_ARRAY"));
-       return 0;
+        Elab_Trace_C
+           (Interfaces.C.Strings.New_String
+               ("MODEL_MANAGER: AFTER_MODELS_ARRAY"));
+        return 0;
     end Emit_After_Models;
     Diag_AM : constant Integer := Emit_After_Models;
     pragma Warnings (Off, Diag_AM);
@@ -404,8 +414,10 @@ package body Model_Manager is
     --  [ElabTrace-C]: RAW C trace: after Model_Type_Refs type.
     function Emit_After_Type_Refs return Integer is
     begin
-       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_TYPE_REFS"));
-       return 0;
+        Elab_Trace_C
+           (Interfaces.C.Strings.New_String
+               ("MODEL_MANAGER: AFTER_TYPE_REFS"));
+        return 0;
     end Emit_After_Type_Refs;
     Diag_ATR : constant Integer := Emit_After_Type_Refs;
     pragma Warnings (Off, Diag_ATR);
@@ -415,14 +427,17 @@ package body Model_Manager is
         Snowball_Enaga_Orchestrator       => Snowball_Enaga_Orchestrator,
         Qwen_Embedding                    => Qwen_Embedding,
         MMProj                            => MMProj,
-        others                            => Snowball_Enaga_ShortNetworkAnswer);
+        others                            =>
+           Snowball_Enaga_ShortNetworkAnswer);
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
     --  [ElabTrace-C]: RAW C trace: after Model_Refs constant.
     function Emit_After_Model_Refs return Integer is
     begin
-       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_MODEL_REFS"));
-       return 0;
+        Elab_Trace_C
+           (Interfaces.C.Strings.New_String
+               ("MODEL_MANAGER: AFTER_MODEL_REFS"));
+        return 0;
     end Emit_After_Model_Refs;
     Diag_AMR : constant Integer := Emit_After_Model_Refs;
     pragma Warnings (Off, Diag_AMR);
@@ -642,8 +657,10 @@ package body Model_Manager is
     --  [ElabTrace-C]: RAW C trace: protected bodies elaboration done.
     function Emit_After_Protected return Integer is
     begin
-       Elab_Trace_C (Interfaces.C.Strings.New_String ("MODEL_MANAGER: AFTER_PROTECTED_BODIES"));
-       return 0;
+        Elab_Trace_C
+           (Interfaces.C.Strings.New_String
+               ("MODEL_MANAGER: AFTER_PROTECTED_BODIES"));
+        return 0;
     end Emit_After_Protected;
     Diag_AP : constant Integer := Emit_After_Protected;
     pragma Warnings (Off, Diag_AP);
@@ -774,20 +791,20 @@ package body Model_Manager is
 
         loop
             Next_Check := Clock + Seconds (3);
-            Uptime_Sec := Natural
-               (Ada.Real_Time.To_Duration (Clock - Init_Start_Time));
+            Uptime_Sec :=
+               Natural (Ada.Real_Time.To_Duration (Clock - Init_Start_Time));
 
             --  Query GPU memory through ggml backend (ALL backends)
             Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
 
             if Total_Bytes > 0 then
                 --  GPU memory query WORKS (Metal, CUDA, OneAPI, SYCL, ROCm)
-                Free_MB  := Natural (Free_Bytes / (1024 * 1024));
+                Free_MB := Natural (Free_Bytes / (1024 * 1024));
                 Total_MB := Natural (Total_Bytes / (1024 * 1024));
 
                 if Total_MB > 0 then
-                    Percent := Natural
-                       (Float (Free_MB) * 100.0 / Float (Total_MB));
+                    Percent :=
+                       Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
                     if Percent > 100 then
                         Percent := 100;
                     end if;
@@ -796,23 +813,27 @@ package body Model_Manager is
                 end if;
 
                 --  Update global GPU status
-                GPU_Free_MB       := Free_MB;
-                GPU_Total_MB      := Total_MB;
+                GPU_Free_MB := Free_MB;
+                GPU_Total_MB := Total_MB;
                 GPU_Layer_Percent := Percent;
-                GPU_Is_Stable     := True;
+                GPU_Is_Stable := True;
 
                 --  Build status string: show free/total, percentage,
-                --  AND the actual GPU_Layer_Count (what Load_Model uses)
+                --  AND the actual Acceleration_Silicon_Layer (what Load_Model uses)
                 Status_Str :=
                    To_Unbounded_String
-                      ("[GPU-Monitor] [Uptime]+"
+                      ("[Tensor-Accelerator-Monitor] [Uptime]+"
                        & Trim (Natural'Image (Uptime_Sec), Both)
-                       & "s Free=" & Trim (Natural'Image (Free_MB), Both)
-                       & "MB / Total=" & Trim (Natural'Image (Total_MB), Both)
-                       & "MB (" & Trim (Natural'Image (Percent), Both)
-                       & "%) GPU_Layers="
-                       & (if GPU_Layer_Count = -1 then "ALL(-1)"
-                          else Trim (Integer'Image (GPU_Layer_Count), Both)));
+                       & "s Free="
+                       & Trim (Natural'Image (Free_MB), Both)
+                       & "MB / Total="
+                       & Trim (Natural'Image (Total_MB), Both)
+                       & "MB ("
+                       & Trim (Natural'Image (Percent), Both)
+                       & "%) Tensor_Layers="
+                       & (if Acceleration_Silicon_Layer = -1
+                          then "ALL(-1)"
+                          else Trim (Integer'Image (Acceleration_Silicon_Layer), Both)));
 
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                 Put_Line
@@ -826,10 +847,10 @@ package body Model_Manager is
                     GPU_Is_Stable := False;
                     Status_Str :=
                        To_Unbounded_String
-                          ("[GPU-Monitor] [Uptime]+"
+                          ("[Tensor-Accelerator-Monitor] [Uptime]+"
                            & Trim (Natural'Image (Uptime_Sec), Both)
                            & "s GPU=INAPPLICABLE Status=UNSTABLE"
-                           & " (OOM/crash detected) GPU_Layers=0"
+                           & " (OOM/crash detected) Tensor_Layers=0"
                            & " -- forcing CPU-only mode");
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                     Put_Line
@@ -840,12 +861,15 @@ package body Model_Manager is
                     GPU_Is_Stable := True;
                     Status_Str :=
                        To_Unbounded_String
-                          ("[GPU-Monitor] [Uptime]+"
+                          ("[Tensor-Accelerator-Monitor] [Uptime]+"
                            & Trim (Natural'Image (Uptime_Sec), Both)
                            & "s GPU=INAPPLICABLE Status=STABLE"
-                           & " GPU_Layers="
-                           & (if GPU_Layer_Count = -1 then "ALL(-1)"
-                              else Trim (Integer'Image (GPU_Layer_Count), Both)));
+                           & " Tensor_Layers="
+                           & (if Acceleration_Silicon_Layer = -1
+                              then "ALL(-1)"
+                              else
+                                 Trim
+                                    (Integer'Image (Acceleration_Silicon_Layer), Both)));
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -875,6 +899,9 @@ package body Model_Manager is
            & ASCII.LF;
     end Wrap_ChatML;
 
+    procedure Tokenize_And_Cache_Virtual_Ctx
+       (Kind : Model_Type; Text : String; Level : ELP_Level);
+
     Initialized : Boolean := False;
 
     procedure Initialize is
@@ -896,8 +923,7 @@ package body Model_Manager is
         --  [VITAL-DO-NOT-REMOVE] Initialize Generate_Seed with current time.
         --  This ensures different output on each retry for think-only responses.
         Generate_Seed :=
-           Interfaces.C.unsigned
-              (Ada.Calendar.Seconds (Ada.Calendar.Clock));
+           Interfaces.C.unsigned (Ada.Calendar.Seconds (Ada.Calendar.Clock));
         --  Verbose init tracing: each print confirms a subsystem completed.
         --  If the server hangs during init, the LAST print before silence
         --  tells you exactly which step is stuck.
@@ -1005,6 +1031,25 @@ package body Model_Manager is
                          (Ada.Real_Time.Clock - Init_Start_Time)),
                   Both)
             & "s 4/7 Database_Manager.Initialize DONE.");
+
+        declare
+            Saved_State : constant String := Database_Manager.Get_System_State ("Internal_State");
+        begin
+            Internal_State := To_Unbounded_String (Saved_State);
+            Current_Internal_State_Len := Length (Internal_State);
+            if Current_Internal_State_Len > 0 then
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                    & "[Init-V]"
+                    & AnsiAda.Reset
+                    & " Loaded Internal_State from DB ("
+                    & Current_Internal_State_Len'Img & " chars)");
+                Tokenize_And_Cache_Virtual_Ctx
+                   (Model_Types.Snowball_Enaga_Orchestrator,
+                    Saved_State,
+                    ELP1);
+            end if;
+        end;
 
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -1124,11 +1169,9 @@ package body Model_Manager is
         Models (Snowball_Enaga_Orchestrator).Path :=
            To_Unbounded_String ("model/Mythos9bHybridq4.gguf");
         Models (Qwen_Embedding).Path :=
-           To_Unbounded_String
-              ("model/Qwen3-Embedding-0.6B-Q8_0.gguf");
+           To_Unbounded_String ("model/Qwen3-Embedding-0.6B-Q8_0.gguf");
         Models (MMProj).Path :=
-           To_Unbounded_String
-              ("model/Mythos9bHybridq4-mmproj-fp16.gguf");
+           To_Unbounded_String ("model/Mythos9bHybridq4-mmproj-fp16.gguf");
 
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -1153,7 +1196,7 @@ package body Model_Manager is
                      (Ada.Real_Time.To_Duration
                          (Ada.Real_Time.Clock - Init_Start_Time)),
                   Both)
-             & "s ElabTrace 7/7 Starting Idle_Monitor...");
+            & "s ElabTrace 7/7 Starting Idle_Monitor...");
         Idle_Monitor.Start;
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
         --  Start GPU memory monitor (queries every 3s across ALL backends)
@@ -1184,12 +1227,12 @@ package body Model_Manager is
             & "s Model_Manager.Initialize COMPLETE.");
     end Initialize;
 
-     procedure Load_Model
-        (Kind          : Model_Type;
-         Success       : out Boolean;
-         Requested_Ctx : Positive := 4096;
-         Level         : ELP_Level := ELP1)
-     is
+    procedure Load_Model
+       (Kind          : Model_Type;
+        Success       : out Boolean;
+        Requested_Ctx : Positive := 4096;
+        Level         : ELP_Level := ELP1)
+    is
         --  [PARALLEL=1] Before calling Load_Model, ensure NO OTHER model is
         --  loaded. Only one model can occupy GPU memory at a time. If another
         --  model is loaded, call Unload_Model on it FIRST, or this call will
@@ -1210,7 +1253,7 @@ package body Model_Manager is
         --  check if 3 minutes have passed. If so, retry -1 (all on GPU).
         --  This auto-probes whether the GPU can handle full offload after
         --  cooling down (other processes may have freed VRAM).
-        if GPU_Layer_Count /= -1 and then GPU_Last_OOM_Time /= Time_First then
+        if Acceleration_Silicon_Layer /= -1 and then GPU_Last_OOM_Time /= Time_First then
             declare
                 Elapsed : constant Duration :=
                    Ada.Real_Time.To_Duration (Clock - GPU_Last_OOM_Time);
@@ -1222,8 +1265,10 @@ package body Model_Manager is
                         & "[GPU-Adaptive]"
                         & AnsiAda.Reset
                         & " 3 min cooldown elapsed. Retrying full GPU (-1)."
-                        & " Was at fallback=" & Integer'Image (GPU_Layer_Count));
-                    GPU_Layer_Count := -1;  -- Retry aggressive
+                        & " Was at fallback="
+                        & Integer'Image (Acceleration_Silicon_Layer));
+                    Acceleration_Silicon_Layer := -1;  -- Retry aggressive
+
                 end if;
             end;
         end if;
@@ -1312,7 +1357,8 @@ package body Model_Manager is
         if Kind = MMProj then
             --  MMProj requires the text model to be loaded first
             if not Models (Snowball_Enaga_Orchestrator).Loaded then
-                Put_Line ("[!] MMProj requires Snowball_Enaga_Orchestrator to be loaded first");
+                Put_Line
+                   ("[!] MMProj requires Snowball_Enaga_Orchestrator to be loaded first");
                 Success := False;
                 return;
             end if;
@@ -1332,7 +1378,9 @@ package body Model_Manager is
                                 Models (Kind).Mtmd_Ctx :=
                                    Mtmd_Init_From_File_Safe
                                       (Path_C,
-                                       System.Address (Models (Snowball_Enaga_Orchestrator).Model),
+                                       System.Address
+                                          (Models (Snowball_Enaga_Orchestrator)
+                                              .Model),
                                        True,
                                        8);
                             exception
@@ -1637,14 +1685,15 @@ package body Model_Manager is
                 C_Params.Type_V := GGML_TYPE_Q4_1;
                 C_Params.Flash_Attn_Type := 1;
                 --  [ADAPTIVE GPU LAYERS] Start aggressive (-1 = all layers on GPU).
-                --  If OOM, OOM handler sets GPU_Layer_Count to fallback (24).
+                --  If OOM, OOM handler sets Acceleration_Silicon_Layer to fallback (24).
                 --  After 3 min cooldown, Load_Model retries -1 again.
                 --  This auto-probes whether GPU can handle full offload.
-                if GPU_Layer_Count = -1 then
+                if Acceleration_Silicon_Layer = -1 then
                     M_Params.N_Gpu_Layers := -1;  -- Aggressive: all on GPU
+
                 else
                     M_Params.N_Gpu_Layers :=
-                       Interfaces.C.int (GPU_Layer_Count);  -- Fallback
+                       Interfaces.C.int (Acceleration_Silicon_Layer);  -- Fallback
                 end if;
             end if;
 
@@ -1775,11 +1824,12 @@ package body Model_Manager is
                     KV_Tokens   : System.Address;
                     KV_N_Toks   : Interfaces.C.size_t;
                 begin
-                    KV_Restored := KV_Cache_Manager.Load_From_SSD_Lazy
-                       (Context  => Models (Kind).Context,
-                        Tokens   => KV_Tokens,
-                        N_Tokens => KV_N_Toks,
-                        Model_ID => Kind'Img);
+                    KV_Restored :=
+                       KV_Cache_Manager.Load_From_SSD_Lazy
+                          (Context  => Models (Kind).Context,
+                           Tokens   => KV_Tokens,
+                           N_Tokens => KV_N_Toks,
+                           Model_ID => Kind'Img);
                     if KV_Restored then
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                         Put_Line
@@ -1861,27 +1911,27 @@ package body Model_Manager is
             --  -1 → 32 → 24 → 18 → 14 → 10 → 8 → 8 (min)
             --  After GPU_Retry_Interval (3 min) → reset to -1
             declare
-                Old_Count : constant Integer := GPU_Layer_Count;
+                Old_Count : constant Integer := Acceleration_Silicon_Layer;
                 New_Count : Integer;
             begin
-                if GPU_Layer_Count = -1 then
+                if Acceleration_Silicon_Layer = -1 then
                     --  First OOM: go from ALL to fallback (75%)
                     New_Count := GPU_Layer_Fallback;
-                elsif GPU_Layer_Count > GPU_Layer_Min then
+                elsif Acceleration_Silicon_Layer > GPU_Layer_Min then
                     --  Progressive: remove 25% of current (min 1 layer)
-                    New_Count := GPU_Layer_Count -
-                                 Integer'Max (1, GPU_Layer_Count / 4);
+                    New_Count :=
+                       Acceleration_Silicon_Layer - Integer'Max (1, Acceleration_Silicon_Layer / 4);
                     --  Don't go below minimum
                     if New_Count < GPU_Layer_Min then
                         New_Count := GPU_Layer_Min;
                     end if;
                 else
                     --  Already at minimum, can't reduce further
-                    New_Count := GPU_Layer_Count;
+                    New_Count := Acceleration_Silicon_Layer;
                 end if;
 
                 if New_Count /= Old_Count then
-                    GPU_Layer_Count   := New_Count;
+                    Acceleration_Silicon_Layer := New_Count;
                     GPU_Last_OOM_Time := Ada.Real_Time.Clock;
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                     Put_Line
@@ -1889,7 +1939,8 @@ package body Model_Manager is
                         & "[GPU-Adaptive]"
                         & AnsiAda.Reset
                         & " OOM during load. Layers:"
-                        & Integer'Image (Old_Count) & " -> "
+                        & Integer'Image (Old_Count)
+                        & " -> "
                         & Integer'Image (New_Count)
                         & ". Retry -1 in 3 minutes.");
                 else
@@ -1899,7 +1950,7 @@ package body Model_Manager is
                         & "[GPU-Adaptive]"
                         & AnsiAda.Reset
                         & " OOM but already at minimum layers"
-                        & Integer'Image (GPU_Layer_Count)
+                        & Integer'Image (Acceleration_Silicon_Layer)
                         & ". Waiting 3 min to retry -1.");
                 end if;
             end;
@@ -1920,7 +1971,9 @@ package body Model_Manager is
                (AnsiAda.Foreground (AnsiAda.Red)
                 & "[LoadModel-FATAL]"
                 & AnsiAda.Reset
-                & " Exception loading " & Model_Type'Image (Kind) & ": "
+                & " Exception loading "
+                & Model_Type'Image (Kind)
+                & ": "
                 & Ada.Exceptions.Exception_Information (E));
             if Models (Kind).Context /= Null_Context then
                 Llama_Interface.Llama_Free (Models (Kind).Context);
@@ -2065,8 +2118,10 @@ package body Model_Manager is
             & "[OOM] "
             & AnsiAda.Reset
             & "METAL BACKEND POISONED. KV save will RETRY every "
-            & Duration'Image (Metal_OOM_Retry_Secs) & "s for "
-            & Duration'Image (Metal_OOM_Cooldown_Secs) & "s cooldown.");
+            & Duration'Image (Metal_OOM_Retry_Secs)
+            & "s for "
+            & Duration'Image (Metal_OOM_Cooldown_Secs)
+            & "s cooldown.");
     end Mark_Metal_Broken;
 
     --  [VITAL-DO-NOT-REMOVE] Metal backend health — OPPORTUNISTIC.
@@ -2078,7 +2133,8 @@ package body Model_Manager is
            Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Start_Time);
         Elapsed : constant Duration := Now - Metal_OOM_Trigger_Time;
     begin
-        if Metal_Backend_Broken and then Elapsed >= Metal_OOM_Cooldown_Secs then
+        if Metal_Backend_Broken and then Elapsed >= Metal_OOM_Cooldown_Secs
+        then
             --  Cooldown expired — GPU driver should have recovered.
             --  Reset flag and log recovery.
             Metal_Backend_Broken := False;
@@ -2087,7 +2143,8 @@ package body Model_Manager is
                 & "[OOM] "
                 & AnsiAda.Reset
                 & "METAL BACKEND RECOVERED after "
-                & Duration'Image (Elapsed) & "s cooldown. Retrying save.");
+                & Duration'Image (Elapsed)
+                & "s cooldown. Retrying save.");
             return False;
         end if;
         return Metal_Backend_Broken;
@@ -2189,12 +2246,14 @@ package body Model_Manager is
     begin
         for I in S'Range loop
             Val := Character'Pos (S (I));
-            --  Keep only: \t (9), \n (10), \r (13), and printable ASCII (32-126)
-            --  Strip control chars, DEL (127), and all non-ASCII (128+)
+            --  Keep only: \t (9), \n (10), \r (13), printable ASCII (32-126),
+            --  and all UTF-8 multi-byte sequences (128+)
+            --  Strip ASCII control chars (0-31 except \t\n\r) and DEL (127)
             if Val = 9
                or else Val = 10
                or else Val = 13
                or else (Val >= 32 and Val <= 126)
+               or else Val >= 128
             then
                 Append (Res, S (I));
             end if;
@@ -2648,46 +2707,46 @@ package body Model_Manager is
             else
                 Length := 0;
             end if;
-             Free_Tokens (Tokens);
-             Put_Line ("[Debug] Free_Tokens complete.");
-             Models (Kind).In_Use := False;
-             --  [PARALLEL=1 FIX] Unload embedding model from GPU immediately
-             --  after use. Only ONE model can be in GPU memory at a time.
-             --  If we don't unload, the embedding model (~1GB) stays resident
-             --  and the 9B chat model OOMs when it tries to allocate KV +
-             --  compute buffers on top of it.
-             Unload_Model (Kind);
-             if Level = ELP0 then
-                 Priority_Model_Gate.Release_ELP0 (Kind);
-                 Put_Line
-                    ("[Debug] Priority_Model_Gate.Release_ELP0 complete.");
-             else
-                 Priority_Model_Gate.Release_ELP1 (Kind);
-                 Put_Line
-                    ("[Debug] Priority_Model_Gate.Release_ELP1 complete.");
-             end if;
-             ELP_Queue.Dequeue_Level (Level);
-             Put_Line ("[Debug] Get_Single_Embedding DONE successfully.");
+            Free_Tokens (Tokens);
+            Put_Line ("[Debug] Free_Tokens complete.");
+            Models (Kind).In_Use := False;
+            --  [PARALLEL=1 FIX] Unload embedding model from GPU immediately
+            --  after use. Only ONE model can be in GPU memory at a time.
+            --  If we don't unload, the embedding model (~1GB) stays resident
+            --  and the 9B chat model OOMs when it tries to allocate KV +
+            --  compute buffers on top of it.
+            Unload_Model (Kind);
+            if Level = ELP0 then
+                Priority_Model_Gate.Release_ELP0 (Kind);
+                Put_Line
+                   ("[Debug] Priority_Model_Gate.Release_ELP0 complete.");
+            else
+                Priority_Model_Gate.Release_ELP1 (Kind);
+                Put_Line
+                   ("[Debug] Priority_Model_Gate.Release_ELP1 complete.");
+            end if;
+            ELP_Queue.Dequeue_Level (Level);
+            Put_Line ("[Debug] Get_Single_Embedding DONE successfully.");
         end;
-     exception
-         when E : others =>
-             Put_Line
-                ("[FATAL] Exception in Get_Single_Embedding: "
-                 & Ada.Exceptions.Exception_Information (E));
-             if Tokens /= null then
-                 Free_Tokens (Tokens);
-             end if;
-             Models (Kind).In_Use := False;
-             --  [PARALLEL=1 FIX] Unload on error too — don't leave broken model in GPU
-             Unload_Model (Kind);
-             if Level = ELP0 then
-                 Priority_Model_Gate.Release_ELP0 (Kind);
-             else
-                 Priority_Model_Gate.Release_ELP1 (Kind);
-             end if;
-             ELP_Queue.Dequeue_Level (Level);
-             Length := 0;
-     end Get_Single_Embedding;
+    exception
+        when E : others =>
+            Put_Line
+               ("[FATAL] Exception in Get_Single_Embedding: "
+                & Ada.Exceptions.Exception_Information (E));
+            if Tokens /= null then
+                Free_Tokens (Tokens);
+            end if;
+            Models (Kind).In_Use := False;
+            --  [PARALLEL=1 FIX] Unload on error too — don't leave broken model in GPU
+            Unload_Model (Kind);
+            if Level = ELP0 then
+                Priority_Model_Gate.Release_ELP0 (Kind);
+            else
+                Priority_Model_Gate.Release_ELP1 (Kind);
+            end if;
+            ELP_Queue.Dequeue_Level (Level);
+            Length := 0;
+    end Get_Single_Embedding;
     --  GET EMBEDDING (WITH CHUNKING > 800 CHARS)
 
     procedure Get_Embedding
@@ -2758,6 +2817,7 @@ package body Model_Manager is
         Fault_Query     : Unbounded_String := Null_Unbounded_String;
         Fault_Category  : Unbounded_String := Null_Unbounded_String;
         Output_Buffer   : Unbounded_String := Null_Unbounded_String;
+        Stop_Triggered  : Boolean := False;
     end record;
 
     function Is_Prefix (S, Tag : String) return Boolean is
@@ -2779,6 +2839,7 @@ package body Model_Manager is
         Close_Tag_A : constant String := "</thinking>";
         Close_Tag_B : constant String := "</think>";
         Resp_Tag    : constant String := "</response>";
+        ChatML_End  : constant String := "<|im_end|>";
     begin
         --  [VITAL-DO-NOT-REMOVE] Mandated by user for token flow visibility.
         --  [StreamParse-V] Shows every character entering the parser
@@ -2830,6 +2891,16 @@ package body Model_Manager is
                     & " RESP_CLOSE detected.");
                 Parser.Sanitize_Buffer := Null_Unbounded_String;
                 return;
+            elsif Buf = ChatML_End then
+                --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                    & "[StreamParse-V]"
+                    & AnsiAda.Reset
+                    & " ChatML <|im_end|> detected! Stopping generation.");
+                Parser.Sanitize_Buffer := Null_Unbounded_String;
+                Parser.Stop_Triggered := True;
+                return;
             end if;
 
             -- If current buffer is potential prefix of any tag, wait for more.
@@ -2838,6 +2909,7 @@ package body Model_Manager is
                or else Is_Prefix (Buf, Close_Tag_A)
                or else Is_Prefix (Buf, Close_Tag_B)
                or else Is_Prefix (Buf, Resp_Tag)
+               or else Is_Prefix (Buf, ChatML_End)
             then
                 return;
             end if;
@@ -3182,8 +3254,9 @@ package body Model_Manager is
         --  Helper: check if Text (I .. I + Len - 1) equals Tag
         function Match (Tag : String) return Boolean is
         begin
-            return I + Tag'Length - 1 <= Text'Last
-                   and then Text (I .. I + Tag'Length - 1) = Tag;
+            return
+               I + Tag'Length - 1 <= Text'Last
+               and then Text (I .. I + Tag'Length - 1) = Tag;
         end Match;
     begin
         --  Bootstrap: if text starts inside a think block (orphaned close
@@ -3235,8 +3308,8 @@ package body Model_Manager is
                 elsif Match ("<|im_sep|>") then
                     I := I + 10;
                 --  Neutralise raw role markers that could inject fake turns
-                elsif Match ("assistant") and then
-                      (I = Text'First or else Text (I - 1) = ASCII.LF)
+                elsif Match ("assistant")
+                   and then (I = Text'First or else Text (I - 1) = ASCII.LF)
                 then
                     --  Skip the role word; the newline before it stays
                     I := I + 9;
@@ -3264,8 +3337,8 @@ package body Model_Manager is
                     Append (Clean, Raw (J));
                 end if;
             end loop;
-            return Ada.Strings.Fixed.Trim
-                      (To_String (Clean), Ada.Strings.Both);
+            return
+               Ada.Strings.Fixed.Trim (To_String (Clean), Ada.Strings.Both);
         end;
     end Sanitize_Memory_Content;
 
@@ -3339,10 +3412,10 @@ package body Model_Manager is
     function Is_Repeating_Response (Text : String) return Boolean is
         --  Split text into sentences and check for repetitions
         type Sentence_Array is array (1 .. 64) of Unbounded_String;
-        Sentences  : Sentence_Array;
-        N_Sentences : Natural := 0;
-        I          : Positive := Text'First;
-        Sent_Start : Positive;
+        Sentences     : Sentence_Array;
+        N_Sentences   : Natural := 0;
+        I             : Positive := Text'First;
+        Sent_Start    : Positive;
         Max_Sentences : constant := 64;
     begin
         --  Very short responses are not "repeating" — they're just empty
@@ -3353,7 +3426,9 @@ package body Model_Manager is
         --  Split into sentences
         while I <= Text'Last and then N_Sentences < Max_Sentences loop
             --  Skip whitespace at sentence boundary
-            while I <= Text'Last and then (Text (I) = ' ' or else Text (I) = ASCII.LF) loop
+            while I <= Text'Last
+               and then (Text (I) = ' ' or else Text (I) = ASCII.LF)
+            loop
                 I := I + 1;
             end loop;
             exit when I > Text'Last;
@@ -3361,7 +3436,9 @@ package body Model_Manager is
             Sent_Start := I;
             --  Find end of sentence
             while I <= Text'Last loop
-                if Text (I) = '.' or else Text (I) = '!' or else Text (I) = '?'
+                if Text (I) = '.'
+                   or else Text (I) = '!'
+                   or else Text (I) = '?'
                    or else Text (I) = ASCII.LF
                 then
                     I := I + 1;
@@ -3382,8 +3459,8 @@ package body Model_Manager is
         if N_Sentences >= 3 then
             for S in 1 .. N_Sentences loop
                 declare
-                    Sent    : constant String := To_String (Sentences (S));
-                    Count   : Natural := 0;
+                    Sent  : constant String := To_String (Sentences (S));
+                    Count : Natural := 0;
                 begin
                     if Sent'Length >= 20 then
                         for J in 1 .. N_Sentences loop
@@ -3453,20 +3530,20 @@ package body Model_Manager is
 
     --  GENERATE (CORE GGUF INFERENCE WITH PREEMPTION SUPPORT)
     procedure Generate
-       (Kind            : Model_Type;
-        Prompt          : String;
-        Result          : out Unbounded_String;
-        Images          : GNATCOLL.JSON.JSON_Array :=
+       (Kind               : Model_Type;
+        Prompt             : String;
+        Result             : out Unbounded_String;
+        Images             : GNATCOLL.JSON.JSON_Array :=
            GNATCOLL.JSON.Empty_Array;
-        Session_ID      : String := "";
-        Requested_Ctx   : Positive := 4096;
-        Stream          : Streaming_Queue.Queue_Access := null;
-        Orch_Think_Open : Boolean := False;
-        Level           : ELP_Level := ELP1;
-        Virtual_Tokens  : Cached_Token_Access := null;
-        Virtual_Tok_Len : Natural := 0;
-        FreeParallelMemory   : Boolean := True;
-        Skip_Gate       : Boolean := False)
+        Session_ID         : String := "";
+        Requested_Ctx      : Positive := 4096;
+        Stream             : Streaming_Queue.Queue_Access := null;
+        Orch_Think_Open    : Boolean := False;
+        Level              : ELP_Level := ELP1;
+        Virtual_Tokens     : Cached_Token_Access := null;
+        Virtual_Tok_Len    : Natural := 0;
+        FreeParallelMemory : Boolean := True;
+        Skip_Gate          : Boolean := False)
     is
         Success  : Boolean;
         Vocab    : Llama_Vocab;
@@ -3723,9 +3800,23 @@ package body Model_Manager is
                     & Models (Kind).Current_Ctx'Img
                     & "). Proactive resize...");
                 declare
-                    Rounded_Ctx : constant unsigned :=
-                       ((unsigned (N_Toks) + 512 + 8191) / 8192) * 8192;
+                    Target_Ctx  : constant unsigned := unsigned (N_Toks) * 50 / 21 + 512;
+                    Rounded_Ctx : unsigned;
                 begin
+                    --  Dynamic Context Adjustment Binning & GPU Wind-back
+                    if Target_Ctx <= 8192 then
+                        Rounded_Ctx := 8192;
+                        Acceleration_Silicon_Layer := -1;
+                    elsif Target_Ctx <= 16384 then
+                        Rounded_Ctx := 16384;
+                        Acceleration_Silicon_Layer := 24;
+                    elsif Target_Ctx <= 32768 then
+                        Rounded_Ctx := 32768;
+                        Acceleration_Silicon_Layer := 16;
+                    else
+                        Rounded_Ctx := 128000;
+                        Acceleration_Silicon_Layer := 8;
+                    end if;
                     Free_Tokens (Tokens);
                     Load_Model (Kind, Success, Positive (Rounded_Ctx));
                     if not Success then
@@ -3869,7 +3960,8 @@ package body Model_Manager is
         Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Temp (0.7));
         --  [VITAL-DO-NOT-REMOVE] Use randomized seed instead of hardcoded 1234.
         --  Seed is incremented on think-only retries to get different output.
-        Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Dist (Generate_Seed));
+        Llama_Sampler_Chain_Add
+           (Sampler, Llama_Sampler_Init_Dist (Generate_Seed));
 
         Parser.Orch_Think_Open := Orch_Think_Open;
 
@@ -3935,6 +4027,10 @@ package body Model_Manager is
                             if Stream /= null then
                                 Process_And_Push_Chunk
                                    (Stream, Session_ID, Parser, Str_Piece);
+                            end if;
+
+                            if Parser.Stop_Triggered then
+                                exit;
                             end if;
 
                             --  Accumulate for verbose logging
@@ -4117,7 +4213,8 @@ package body Model_Manager is
             & "[Gen-V]"
             & AnsiAda.Reset
             & " Generate: "
-            & (if FreeParallelMemory then "FreeParallelMemory=True (unload)"
+            & (if FreeParallelMemory
+               then "FreeParallelMemory=True (unload)"
                else "FreeParallelMemory=False (retain)")
             & " model. Kind="
             & Kind'Img
@@ -4136,8 +4233,8 @@ package body Model_Manager is
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Gen-V]"
             & AnsiAda.Reset
-             & " Generate: COMPLETE. ResultLen="
-             & Natural'Image (Length (Result)));
+            & " Generate: COMPLETE. ResultLen="
+            & Natural'Image (Length (Result)));
     exception
         when E : Storage_Error =>
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -4182,23 +4279,23 @@ package body Model_Manager is
             --  Same math as Load_Model: 25% reduction each OOM
             --  -1 → 32 → 24 → 18 → 14 → 10 → 8 → 8 (min)
             declare
-                Old_Count : constant Integer := GPU_Layer_Count;
+                Old_Count : constant Integer := Acceleration_Silicon_Layer;
                 New_Count : Integer;
             begin
-                if GPU_Layer_Count = -1 then
+                if Acceleration_Silicon_Layer = -1 then
                     New_Count := GPU_Layer_Fallback;
-                elsif GPU_Layer_Count > GPU_Layer_Min then
-                    New_Count := GPU_Layer_Count -
-                                 Integer'Max (1, GPU_Layer_Count / 4);
+                elsif Acceleration_Silicon_Layer > GPU_Layer_Min then
+                    New_Count :=
+                       Acceleration_Silicon_Layer - Integer'Max (1, Acceleration_Silicon_Layer / 4);
                     if New_Count < GPU_Layer_Min then
                         New_Count := GPU_Layer_Min;
                     end if;
                 else
-                    New_Count := GPU_Layer_Count;
+                    New_Count := Acceleration_Silicon_Layer;
                 end if;
 
                 if New_Count /= Old_Count then
-                    GPU_Layer_Count   := New_Count;
+                    Acceleration_Silicon_Layer := New_Count;
                     GPU_Last_OOM_Time := Ada.Real_Time.Clock;
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                     Put_Line
@@ -4206,7 +4303,8 @@ package body Model_Manager is
                         & "[GPU-Adaptive]"
                         & AnsiAda.Reset
                         & " OOM during decode. Layers:"
-                        & Integer'Image (Old_Count) & " -> "
+                        & Integer'Image (Old_Count)
+                        & " -> "
                         & Integer'Image (New_Count)
                         & ". Retry -1 in 3 minutes.");
                 else
@@ -4216,7 +4314,7 @@ package body Model_Manager is
                         & "[GPU-Adaptive]"
                         & AnsiAda.Reset
                         & " OOM but already at minimum layers"
-                        & Integer'Image (GPU_Layer_Count)
+                        & Integer'Image (Acceleration_Silicon_Layer)
                         & ". Waiting 3 min to retry -1.");
                 end if;
             end;
@@ -4296,11 +4394,11 @@ package body Model_Manager is
     --  ============================================================================
 
     procedure Generate_Speculative
-       (Kind          : Model_Type;
-        Prompt        : String;
-        Result        : out Unbounded_String;
-        Max_Tokens    : Positive := 2048;
-        Level         : ELP_Level := ELP1;
+       (Kind               : Model_Type;
+        Prompt             : String;
+        Result             : out Unbounded_String;
+        Max_Tokens         : Positive := 2048;
+        Level              : ELP_Level := ELP1;
         FreeParallelMemory : Boolean := True)
     is
         use type Interfaces.C.size_t;
@@ -4350,7 +4448,8 @@ package body Model_Manager is
 
             --  Load draft model
             declare
-                Draft_Path  : constant String := "model/Qwen3.5-0.8B-Q4_K_M.gguf";
+                Draft_Path  : constant String :=
+                   "model/Qwen3.5-0.8B-Q4_K_M.gguf";
                 Path_C      : chars_ptr := New_String (Draft_Path);
                 Draft_Model : Llama_Interface.Llama_Model;
             begin
@@ -4859,7 +4958,8 @@ package body Model_Manager is
                & "and objective, not universal pessimistic. Most of what people "
                & "call 'reality' is just constraints; reality is a ceiling to "
                & "break through, not a hard stop. Stay critical, but always "
-               & "offer creative, wild ideas that might just work. "
+               & "Think about Murphy Law anything could go wrong will go wrong! "
+               & "offer creative, wild ideas that might just work for solution. "
                & "During your reasoning inside <think>, you can request additional "
                & "context by writing: [CONTEXT_FAULT: query=<search terms> "
                & "category=<knowledge|graph|files>] "
@@ -4868,7 +4968,6 @@ package body Model_Manager is
                & "The system will fetch relevant context and it will be available "
                & "to you in the next reasoning hop.");
 
-        Internal_State   : Unbounded_String := Null_Unbounded_String;
         Current_Response : Unbounded_String;
         Current_Hop      : Positive := 1;
         T0, T1           : Ada.Calendar.Time;
@@ -5067,8 +5166,8 @@ package body Model_Manager is
             if Int_Count > 0 then
                 --  [RERANKER] Rerank candidates by semantic relevance
                 declare
-                    Best_Idx   : Natural := 1;
-                    Best_Score : Float := -1.0e9;
+                    Best_Idx     : Natural := 1;
+                    Best_Score   : Float := -1.0e9;
                     Rerank_Ready : Boolean;
                 begin
                     Reranker.Initialize (Rerank_Ready);
@@ -5081,40 +5180,47 @@ package body Model_Manager is
                             end Get_Doc;
                         begin
                             Reranker.Rerank_Scores
-                              (                               Query        => Prompt,
-                               Doc_Contents => Get_Doc'Access,
-                               N_Docs       => Int_Count,
-                               Top_K        => 1,
-                               Best_Idx     => Best_Idx,
-                               Best_Score   => Best_Score);
+                               (Query        => Prompt,
+                                Doc_Contents => Get_Doc'Access,
+                                N_Docs       => Int_Count,
+                                Top_K        => 1,
+                                Best_Idx     => Best_Idx,
+                                Best_Score   => Best_Score);
                         end;
                     else
                         Best_Idx := 1;  -- Fallback to top-1 by cosine
                     end if;
 
                     Got_Memory := True;
-                    Append (Whimsical_Adelaide,
-                            ASCII.LF
-                            & ASCII.LF
-                            & "<memory_interaction>"
-                            & ASCII.LF
-                            & Sanitize_Memory_Content
-                                 (To_String (Int_Results (Best_Idx).Content))
-                            & ASCII.LF
-                            & "</memory_interaction>");
+                    Append
+                       (Whimsical_Adelaide,
+                        ASCII.LF
+                        & ASCII.LF
+                        & "<memory_interaction>"
+                        & ASCII.LF
+                        & Sanitize_Memory_Content
+                             (To_String (Int_Results (Best_Idx).Content))
+                        & ASCII.LF
+                        & "</memory_interaction>");
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Green)
                         & "[Memory]"
                         & AnsiAda.Reset
-                        & " Injected interaction memory (reranked #" &
-                        Natural'Image (Best_Idx) & ") into system prompt [+"
-                        & Uptime_Str & "s].");
+                        & " Injected interaction memory (reranked #"
+                        & Natural'Image (Best_Idx)
+                        & ") into system prompt [+"
+                        & Uptime_Str
+                        & "s].");
                 end;
                 if not External_Agent then
                     Push_Orchestration_Through_Parser
-                       (Stream, Session_ID, Orch_Parser,
+                       (Stream,
+                        Session_ID,
+                        Orch_Parser,
                         "[Adelaide Core]: [Thought] Interaction memory injected "
-                        & "into system prompt [+" & Uptime_Str & "s]."
+                        & "into system prompt [+"
+                        & Uptime_Str
+                        & "s]."
                         & ASCII.LF);
                 end if;
             end if;
@@ -5125,8 +5231,8 @@ package body Model_Manager is
             if Lit_Count > 0 then
                 --  [RERANKER] Rerank literature candidates
                 declare
-                    Best_Idx   : Natural := 1;
-                    Best_Score : Float := -1.0e9;
+                    Best_Idx     : Natural := 1;
+                    Best_Score   : Float := -1.0e9;
                     Rerank_Ready : Boolean;
                 begin
                     Reranker.Initialize (Rerank_Ready);
@@ -5138,40 +5244,47 @@ package body Model_Manager is
                             end Get_Doc;
                         begin
                             Reranker.Rerank_Scores
-                              (                               Query        => Prompt,
-                               Doc_Contents => Get_Doc'Access,
-                               N_Docs       => Lit_Count,
-                               Top_K        => 1,
-                               Best_Idx     => Best_Idx,
-                               Best_Score   => Best_Score);
+                               (Query        => Prompt,
+                                Doc_Contents => Get_Doc'Access,
+                                N_Docs       => Lit_Count,
+                                Top_K        => 1,
+                                Best_Idx     => Best_Idx,
+                                Best_Score   => Best_Score);
                         end;
                     else
                         Best_Idx := 1;
                     end if;
 
                     Got_Memory := True;
-                    Append (Whimsical_Adelaide,
-                            ASCII.LF
-                            & ASCII.LF
-                            & "<memory_literature>"
-                            & ASCII.LF
-                            & Sanitize_Memory_Content
-                                 (To_String (Lit_Results (Best_Idx).Content))
-                            & ASCII.LF
-                            & "</memory_literature>");
+                    Append
+                       (Whimsical_Adelaide,
+                        ASCII.LF
+                        & ASCII.LF
+                        & "<memory_literature>"
+                        & ASCII.LF
+                        & Sanitize_Memory_Content
+                             (To_String (Lit_Results (Best_Idx).Content))
+                        & ASCII.LF
+                        & "</memory_literature>");
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Green)
                         & "[Memory]"
                         & AnsiAda.Reset
-                        & " Injected literature memory (reranked #" &
-                        Natural'Image (Best_Idx) & ") into system prompt [+"
-                        & Uptime_Str & "s].");
+                        & " Injected literature memory (reranked #"
+                        & Natural'Image (Best_Idx)
+                        & ") into system prompt [+"
+                        & Uptime_Str
+                        & "s].");
                 end;
                 if not External_Agent then
                     Push_Orchestration_Through_Parser
-                       (Stream, Session_ID, Orch_Parser,
+                       (Stream,
+                        Session_ID,
+                        Orch_Parser,
                         "[Adelaide Core]: [Thought] Literature memory injected "
-                        & "into system prompt [+" & Uptime_Str & "s]."
+                        & "into system prompt [+"
+                        & Uptime_Str
+                        & "s]."
                         & ASCII.LF);
                 end if;
             end if;
@@ -5193,14 +5306,14 @@ package body Model_Manager is
         --  via Python sidecar subprocess for quantum-evolved QRNN hash quality.
         if Level = ELP0 then
             declare
-                LSH_Uptime  : constant String :=
+                LSH_Uptime       : constant String :=
                    Ada.Strings.Fixed.Trim
                       (Duration'Image
                           (Ada.Real_Time.To_Duration
                               (Ada.Real_Time.Clock - Init_Start_Time)),
                        Ada.Strings.Both);
-                LSH_Acq_OK  : Boolean;
-                LSH_Hash_Value : Integer;
+                LSH_Acq_OK       : Boolean;
+                LSH_Hash_Value   : Integer;
                 Spec_Int_Results : Database_Manager.Chunk_Array (1 .. 5);
                 Spec_Lit_Results : Database_Manager.Chunk_Array (1 .. 5);
                 Spec_Int_Count   : Natural := 0;
@@ -5216,7 +5329,8 @@ package body Model_Manager is
                         & "[LSH]"
                         & AnsiAda.Reset
                         & " QRNN worker: ELP0 acquire FAILED (Preempted) [+"
-                        & LSH_Uptime & "s].");
+                        & LSH_Uptime
+                        & "s].");
                 else
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                     Put_Line
@@ -5224,11 +5338,12 @@ package body Model_Manager is
                         & "[LSH]"
                         & AnsiAda.Reset
                         & " QRNN worker: ELP0 acquired. Computing hash [+"
-                        & LSH_Uptime & "s].");
+                        & LSH_Uptime
+                        & "s].");
 
                     --  Compute 10-bit LSH hash from embedding via Python sidecar
-                    LSH_Hash_Value := LSH_Hash.Compute
-                        (Emb_Vec (1 .. Emb_Len), Emb_Len);
+                    LSH_Hash_Value :=
+                       LSH_Hash.Compute (Emb_Vec (1 .. Emb_Len), Emb_Len);
 
                     if LSH_Hash_Value >= 0 then
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -5236,64 +5351,78 @@ package body Model_Manager is
                            (AnsiAda.Foreground (AnsiAda.Light_Blue)
                             & "[LSH]"
                             & AnsiAda.Reset
-                            & " Hash=" & Integer'Image (LSH_Hash_Value)
+                            & " Hash="
+                            & Integer'Image (LSH_Hash_Value)
                             & " Searching speculation context [+"
-                            & LSH_Uptime & "s].");
+                            & LSH_Uptime
+                            & "s].");
 
                         --  Search interaction cache by LSH (tolerance=2 Hamming)
                         Database_Manager.Search_Interaction_By_LSH
-                            (LSH_Hash_Value, Spec_Tolerance,
-                             Spec_Int_Results, Spec_Int_Count);
+                           (LSH_Hash_Value,
+                            Spec_Tolerance,
+                            Spec_Int_Results,
+                            Spec_Int_Count);
 
                         --  Search literature chunks by LSH
                         Database_Manager.Search_Literature_By_LSH
-                            (LSH_Hash_Value, Spec_Tolerance,
-                             Spec_Lit_Results, Spec_Lit_Count);
+                           (LSH_Hash_Value,
+                            Spec_Tolerance,
+                            Spec_Lit_Results,
+                            Spec_Lit_Count);
 
                         --  Inject <SpeculationContextGuidance_Interaction>
                         if Spec_Int_Count > 0 then
                             for S in 1 .. Spec_Int_Count loop
-                                Append (Whimsical_Adelaide,
-                                        ASCII.LF & ASCII.LF
-                                        & "<SpeculationContextGuidance_Interaction>"
-                                        & ASCII.LF
-                                        & Sanitize_Memory_Content
-                                             (To_String
-                                                 (Spec_Int_Results (S).Content))
-                                        & ASCII.LF
-                                        & "</SpeculationContextGuidance_Interaction>");
+                                Append
+                                   (Whimsical_Adelaide,
+                                    ASCII.LF
+                                    & ASCII.LF
+                                    & "<SpeculationContextGuidance_Interaction>"
+                                    & ASCII.LF
+                                    & Sanitize_Memory_Content
+                                         (To_String
+                                             (Spec_Int_Results (S).Content))
+                                    & ASCII.LF
+                                    & "</SpeculationContextGuidance_Interaction>");
                             end loop;
                             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Light_Green)
                                 & "[LSH]"
                                 & AnsiAda.Reset
-                                & " Injected" & Natural'Image (Spec_Int_Count)
+                                & " Injected"
+                                & Natural'Image (Spec_Int_Count)
                                 & " speculation interaction(s) [+"
-                                & LSH_Uptime & "s].");
+                                & LSH_Uptime
+                                & "s].");
                         end if;
 
                         --  Inject <SpeculationContextGuidance_Literature>
                         if Spec_Lit_Count > 0 then
                             for S in 1 .. Spec_Lit_Count loop
-                                Append (Whimsical_Adelaide,
-                                        ASCII.LF & ASCII.LF
-                                        & "<SpeculationContextGuidance_Literature>"
-                                        & ASCII.LF
-                                        & Sanitize_Memory_Content
-                                             (To_String
-                                                 (Spec_Lit_Results (S).Content))
-                                        & ASCII.LF
-                                        & "</SpeculationContextGuidance_Literature>");
+                                Append
+                                   (Whimsical_Adelaide,
+                                    ASCII.LF
+                                    & ASCII.LF
+                                    & "<SpeculationContextGuidance_Literature>"
+                                    & ASCII.LF
+                                    & Sanitize_Memory_Content
+                                         (To_String
+                                             (Spec_Lit_Results (S).Content))
+                                    & ASCII.LF
+                                    & "</SpeculationContextGuidance_Literature>");
                             end loop;
                             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Light_Green)
                                 & "[LSH]"
                                 & AnsiAda.Reset
-                                & " Injected" & Natural'Image (Spec_Lit_Count)
+                                & " Injected"
+                                & Natural'Image (Spec_Lit_Count)
                                 & " speculation literature(s) [+"
-                                & LSH_Uptime & "s].");
+                                & LSH_Uptime
+                                & "s].");
                         end if;
 
                         if Spec_Int_Count = 0 and Spec_Lit_Count = 0 then
@@ -5303,7 +5432,8 @@ package body Model_Manager is
                                 & "[LSH]"
                                 & AnsiAda.Reset
                                 & " No speculation context found within tolerance. [+"
-                                & LSH_Uptime & "s].");
+                                & LSH_Uptime
+                                & "s].");
                         end if;
                     else
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -5312,7 +5442,8 @@ package body Model_Manager is
                             & "[LSH]"
                             & AnsiAda.Reset
                             & " QRNN worker failed (returned -1) [+"
-                            & LSH_Uptime & "s].");
+                            & LSH_Uptime
+                            & "s].");
                     end if;
 
                     --  Release ELP0 gate
@@ -5323,7 +5454,8 @@ package body Model_Manager is
                         & "[LSH]"
                         & AnsiAda.Reset
                         & " QRNN worker: ELP0 released [+"
-                        & LSH_Uptime & "s].");
+                        & LSH_Uptime
+                        & "s].");
                 end if;
             end;
         end if;
@@ -5412,15 +5544,15 @@ package body Model_Manager is
                         Last_Heartbeat := Now;
                     end if;
                     Model_Manager.Generate
-                       (Kind            => Snowball_Enaga_Orchestrator,
-                        Prompt          => Actual_Prompt,
-                        Result          => Gen_Q,
-                        Stream          => null,
-                        Level           => Level,
-                        Virtual_Tokens  => Cached_Virtual_Tokens,
-                        Virtual_Tok_Len => Cached_Virtual_Len,
-                        FreeParallelMemory   => True,
-                        Skip_Gate       => False);
+                       (Kind               => Snowball_Enaga_Orchestrator,
+                        Prompt             => Actual_Prompt,
+                        Result             => Gen_Q,
+                        Stream             => null,
+                        Level              => Level,
+                        Virtual_Tokens     => Cached_Virtual_Tokens,
+                        Virtual_Tok_Len    => Cached_Virtual_Len,
+                        FreeParallelMemory => True,
+                        Skip_Gate          => False);
                 end;
 
                 declare
@@ -5453,6 +5585,7 @@ package body Model_Manager is
                        (Internal_State,
                         "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
                     Current_Internal_State_Len := Length (Internal_State);
+                    Database_Manager.Set_System_State ("Internal_State", To_String (Internal_State));
                     --  Re-cache virtual ctx tokens after Internal_State grew
                     Tokenize_And_Cache_Virtual_Ctx
                        (Model_Types.Snowball_Enaga_Orchestrator,
@@ -5471,7 +5604,7 @@ package body Model_Manager is
                     end if;
                 end;
             end;
-         end if;
+        end if;
 
         loop
             if Level = ELP0 and then Should_Abort_ELP0 then
@@ -5480,20 +5613,20 @@ package body Model_Manager is
                 return;
             end if;
 
-             declare
-                 Router_Sys   : constant String :=
-                    "You are the Router. You decide if a tool is needed. "
-                    & "If the user says hello or greets you, output [FINISH]. "
-                    & "If you need to search, use [ACTION: search(query)]. "
-                    & "If you need to read a file, use [ACTION: cat(filename)]. "
-                    & "If you need to calculate math, use [ACTION: math(expr)]. "
-                    & "If you need to execute code, use [ACTION: code(python)]. "
-                    & "If you want to schedule a proactive thought for later, "
-                    & "use [ACTION: schedule(seconds, query)]. "
-                    & "If you need to generate an image from your imagination, "
-                    & "use [ACTION: imagine(description)]. "
-                    & "If you are done, output [FINISH]. "
-                    & "Output ONLY the tag.";
+            declare
+                Router_Sys   : constant String :=
+                   "You are the Router. You decide if a tool is needed. "
+                   & "If the user says hello or greets you, output [FINISH]. "
+                   & "If you need to search, use [ACTION: search(query)]. "
+                   & "If you need to read a file, use [ACTION: cat(filename)]. "
+                   & "If you need to calculate math, use [ACTION: math(expr)]. "
+                   & "If you need to execute code, use [ACTION: code(python)]. "
+                   & "If you want to schedule a proactive thought for later, "
+                   & "use [ACTION: schedule(seconds, query)]. "
+                   & "If you need to generate an image from your imagination, "
+                   & "use [ACTION: imagine(description)]. "
+                   & "If you are done, output [FINISH]. "
+                   & "Output ONLY the tag.";
                 --  Strip base64 images from router context to prevent tokenization
                 --  failure. The 9B router cannot handle massive base64 blobs.
                 --  User stream still receives full output with images.
@@ -5595,7 +5728,7 @@ package body Model_Manager is
                     Cached_Virtual_Tokens,
                     Cached_Virtual_Len,
                     FreeParallelMemory => True,
-                    Skip_Gate     => False);
+                    Skip_Gate          => False);
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -5616,7 +5749,8 @@ package body Model_Manager is
                            (Stream,
                             Session_ID,
                             "[Adelaide Core]: [Thought] Hop "
-                            & Current_Hop'Img & " - I will: "
+                            & Current_Hop'Img
+                            & " - I will: "
                             & Sanitize_Orchestration_Output (Step)
                             & ASCII.LF);
                     end if;
@@ -5710,6 +5844,7 @@ package body Model_Manager is
                                                             Current_Internal_State_Len :=
                                                                Length
                                                                   (Internal_State);
+                                                            Database_Manager.Set_System_State ("Internal_State", To_String (Internal_State));
                                                             --  Re-cache virtual ctx tokens after Internal_State grew
                                                             Tokenize_And_Cache_Virtual_Ctx
                                                                   (Model_Types
@@ -5786,20 +5921,24 @@ package body Model_Manager is
                                                     R :
                                                        constant Tool_Manager
                                                                    .Tool_Result :=
-                                                          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                                                          --  IMAGINE TOOL: Direct Ada call to SD_Manager.
-                                                          --  When the model outputs [ACTION: imagine(prompt)],
-                                                          --  generate an image via two-stage FLUX+SD pipeline
-                                                          --  and store it in the database for VLM retrieval.
-                                                          (if T_Name = "imagine" then
-                                                             Tool_Manager.Execute_Imagine_Tool
-                                                               (Sanitize_Think_Tags (T_Pars))
-                                                          else
-                                                             Tool_Manager
-                                                                .Execute_Tool
-                                                                   (T_Name,
-                                                                    Sanitize_Think_Tags
-                                                                          (T_Pars)));
+                                                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                                                    --  IMAGINE TOOL: Direct Ada call to SD_Manager.
+                                                    --  When the model outputs [ACTION: imagine(prompt)],
+                                                    --  generate an image via two-stage FLUX+SD pipeline
+                                                    --  and store it in the database for VLM retrieval.
+                                                          (if T_Name
+                                                              = "imagine"
+                                                           then
+                                                              Tool_Manager
+                                                                 .Execute_Imagine_Tool
+                                                                    (Sanitize_Think_Tags
+                                                                           (T_Pars))
+                                                           else
+                                                              Tool_Manager
+                                                                 .Execute_Tool
+                                                                    (T_Name,
+                                                                     Sanitize_Think_Tags
+                                                                           (T_Pars)));
                                                 begin
                                                     if not External_Agent then
                                                         Push_Orchestration_Direct
@@ -5821,9 +5960,11 @@ package body Model_Manager is
                                                         & ASCII.LF);
                                                     Current_Internal_State_Len :=
                                                        Length (Internal_State);
+                                                    Database_Manager.Set_System_State ("Internal_State", To_String (Internal_State));
                                                     --  Re-cache virtual ctx tokens after Internal_State grew
                                                     Tokenize_And_Cache_Virtual_Ctx
-                                                          (Model_Types.Snowball_Enaga_Orchestrator,
+                                                          (Model_Types
+                                                              .Snowball_Enaga_Orchestrator,
                                                            "Fact-Check: "
                                                            & Strip_Base64_Images
                                                                    (To_String
@@ -5957,7 +6098,8 @@ package body Model_Manager is
                                             (To_String (Internal_State)));
                             else
                                 return
-                                   Wrap_ChatML (To_String (Whimsical_Adelaide), Prompt);
+                                   Wrap_ChatML
+                                      (To_String (Whimsical_Adelaide), Prompt);
                             end if;
                         end if;
                     end;
@@ -5973,7 +6115,9 @@ package body Model_Manager is
                                & Strip_Base64_Images
                                     (To_String (Internal_State)));
                     else
-                        return Wrap_ChatML (To_String (Whimsical_Adelaide), Prompt);
+                        return
+                           Wrap_ChatML
+                              (To_String (Whimsical_Adelaide), Prompt);
                     end if;
                 end if;
             end Get_Final_Prompt;
@@ -6040,19 +6184,19 @@ package body Model_Manager is
                         & " Len="
                         & Natural'Image (Get_Final_Prompt'Length));
                     Generate
-                       (Kind            => Snowball_Enaga_Orchestrator,
-                        Prompt          => Get_Final_Prompt,
-                        Result          => Fault_Result,
-                        Images          => Images,
-                        Session_ID      => Session_ID,
-                        Requested_Ctx   => 8192,
-                        Stream          => Stream,
-                        Orch_Think_Open => (Hop_Count = 0),
-                        Level           => Level,
-                        Virtual_Tokens  => Cached_Virtual_Tokens,
-                        Virtual_Tok_Len => Cached_Virtual_Len,
-                        FreeParallelMemory   => True,
-                        Skip_Gate       => False);
+                       (Kind               => Snowball_Enaga_Orchestrator,
+                        Prompt             => Get_Final_Prompt,
+                        Result             => Fault_Result,
+                        Images             => Images,
+                        Session_ID         => Session_ID,
+                        Requested_Ctx      => 8192,
+                        Stream             => Stream,
+                        Orch_Think_Open    => (Hop_Count = 0),
+                        Level              => Level,
+                        Virtual_Tokens     => Cached_Virtual_Tokens,
+                        Virtual_Tok_Len    => Cached_Virtual_Len,
+                        FreeParallelMemory => True,
+                        Skip_Gate          => False);
 
                     --  =================================================================
                     --  THINK-ONLY RETRY: If model produced only <think>...</think>
@@ -6072,8 +6216,8 @@ package body Model_Manager is
                                (Natural (Generate_Seed));
                         end if;
 
-                        while Sanitized_Check = "" and then
-                              Retry_Count < Max_Think_Retries
+                        while Sanitized_Check = ""
+                           and then Retry_Count < Max_Think_Retries
                         loop
                             Retry_Count := Retry_Count + 1;
 
@@ -6081,8 +6225,9 @@ package body Model_Manager is
                             --  Skip blacklisted seeds automatically.
                             loop
                                 Generate_Seed := Generate_Seed + 1;
-                                exit when not Database_Manager.Is_Seed_Blacklisted
-                                   (Natural (Generate_Seed));
+                                exit when
+                                   not Database_Manager.Is_Seed_Blacklisted
+                                          (Natural (Generate_Seed));
                             end loop;
 
                             Put_Line
@@ -6090,7 +6235,8 @@ package body Model_Manager is
                                 & "[Init-V]"
                                 & AnsiAda.Reset
                                 & " Hybrid_Generate: THINK-ONLY DETECTED. Retry "
-                                & Natural'Image (Retry_Count) & "/"
+                                & Natural'Image (Retry_Count)
+                                & "/"
                                 & Natural'Image (Max_Think_Retries)
                                 & " with seed="
                                 & Interfaces.C.unsigned'Image (Generate_Seed));
@@ -6098,19 +6244,21 @@ package body Model_Manager is
                             --  Retry without streaming (avoids duplicate tokens to client)
                             begin
                                 Generate
-                                   (Kind            => Snowball_Enaga_Orchestrator,
-                                    Prompt          => Get_Final_Prompt,
-                                    Result          => Fault_Result,
-                                    Images          => Images,
-                                    Session_ID      => Session_ID,
-                                    Requested_Ctx   => 8192,
-                                    Stream          => null,
-                                    Orch_Think_Open => False,
-                                    Level           => Level,
-                                    Virtual_Tokens  => Cached_Virtual_Tokens,
-                                    Virtual_Tok_Len => Cached_Virtual_Len,
-                                    FreeParallelMemory   => True,
-                                    Skip_Gate       => False);
+                                   (Kind               =>
+                                       Snowball_Enaga_Orchestrator,
+                                    Prompt             => Get_Final_Prompt,
+                                    Result             => Fault_Result,
+                                    Images             => Images,
+                                    Session_ID         => Session_ID,
+                                    Requested_Ctx      => 8192,
+                                    Stream             => null,
+                                    Orch_Think_Open    => False,
+                                    Level              => Level,
+                                    Virtual_Tokens     =>
+                                       Cached_Virtual_Tokens,
+                                    Virtual_Tok_Len    => Cached_Virtual_Len,
+                                    FreeParallelMemory => True,
+                                    Skip_Gate          => False);
                             exception
                                 when others =>
                                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -6137,7 +6285,8 @@ package body Model_Manager is
                                     & Natural'Image (Length (Fault_Result)));
                                 if Stream /= null then
                                     Push_Chunk
-                                       (Stream, Session_ID,
+                                       (Stream,
+                                        Session_ID,
                                         To_String (Fault_Result));
                                 end if;
                                 exit;
@@ -6166,16 +6315,17 @@ package body Model_Manager is
                                (Natural (Generate_Seed));
                         end if;
 
-                        while Is_Repeating_Response (Sanitized_Repeat) and then
-                              Repeat_Retry_Count < Max_Repeat_Retries
+                        while Is_Repeating_Response (Sanitized_Repeat)
+                           and then Repeat_Retry_Count < Max_Repeat_Retries
                         loop
                             Repeat_Retry_Count := Repeat_Retry_Count + 1;
 
                             --  Find next non-blacklisted seed
                             loop
                                 Generate_Seed := Generate_Seed + 1;
-                                exit when not Database_Manager.Is_Seed_Blacklisted
-                                   (Natural (Generate_Seed));
+                                exit when
+                                   not Database_Manager.Is_Seed_Blacklisted
+                                          (Natural (Generate_Seed));
                             end loop;
 
                             Put_Line
@@ -6183,7 +6333,8 @@ package body Model_Manager is
                                 & "[Init-V]"
                                 & AnsiAda.Reset
                                 & " Hybrid_Generate: REPEATING RESPONSE DETECTED. Retry "
-                                & Natural'Image (Repeat_Retry_Count) & "/"
+                                & Natural'Image (Repeat_Retry_Count)
+                                & "/"
                                 & Natural'Image (Max_Repeat_Retries)
                                 & " with seed="
                                 & Interfaces.C.unsigned'Image (Generate_Seed));
@@ -6191,19 +6342,21 @@ package body Model_Manager is
                             --  Retry without streaming
                             begin
                                 Generate
-                                   (Kind            => Snowball_Enaga_Orchestrator,
-                                    Prompt          => Get_Final_Prompt,
-                                    Result          => Fault_Result,
-                                    Images          => Images,
-                                    Session_ID      => Session_ID,
-                                    Requested_Ctx   => 8192,
-                                    Stream          => null,
-                                    Orch_Think_Open => False,
-                                    Level           => Level,
-                                    Virtual_Tokens  => Cached_Virtual_Tokens,
-                                    Virtual_Tok_Len => Cached_Virtual_Len,
+                                   (Kind               =>
+                                       Snowball_Enaga_Orchestrator,
+                                    Prompt             => Get_Final_Prompt,
+                                    Result             => Fault_Result,
+                                    Images             => Images,
+                                    Session_ID         => Session_ID,
+                                    Requested_Ctx      => 8192,
+                                    Stream             => null,
+                                    Orch_Think_Open    => False,
+                                    Level              => Level,
+                                    Virtual_Tokens     =>
+                                       Cached_Virtual_Tokens,
+                                    Virtual_Tok_Len    => Cached_Virtual_Len,
                                     FreeParallelMemory => True,
-                                    Skip_Gate       => False);
+                                    Skip_Gate          => False);
                             exception
                                 when others =>
                                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -6219,7 +6372,8 @@ package body Model_Manager is
                             Sanitized_Repeat :=
                                Sanitize_Think_Tags (To_String (Fault_Result));
 
-                            if not Is_Repeating_Response (Sanitized_Repeat) then
+                            if not Is_Repeating_Response (Sanitized_Repeat)
+                            then
                                 --  Retry produced non-repeating content — stream it
                                 Put_Line
                                    (AnsiAda.Foreground (AnsiAda.Green)
@@ -6229,7 +6383,8 @@ package body Model_Manager is
                                     & Natural'Image (Length (Fault_Result)));
                                 if Stream /= null then
                                     Push_Chunk
-                                       (Stream, Session_ID,
+                                       (Stream,
+                                        Session_ID,
                                         To_String (Fault_Result));
                                 end if;
                                 exit;
@@ -6367,29 +6522,39 @@ package body Model_Manager is
                             if C_Str = "imagine" then
                                 R := Tool_Manager.Execute_Imagine_Tool (Q_Str);
                                 --  Store the imagined image in the database
-                                if R.Success and then Length (R.Output) > 100 then
+                                if R.Success and then Length (R.Output) > 100
+                                then
                                     declare
                                         Img_LSH : Integer := -1;
                                     begin
                                         begin
                                             declare
-                                                Emb_Vec : Math_Utils.Vector (1 .. 1024);
+                                                Emb_Vec :
+                                                   Math_Utils.Vector
+                                                      (1 .. 1024);
                                                 Emb_Len : Natural;
-                                             begin
-                                                 Get_Embedding (Q_Str, Emb_Vec, Emb_Len);
-                                                Img_LSH := LSH_Hash.Compute (Emb_Vec (1 .. Emb_Len), Emb_Len);
+                                            begin
+                                                Get_Embedding
+                                                   (Q_Str, Emb_Vec, Emb_Len);
+                                                Img_LSH :=
+                                                   LSH_Hash.Compute
+                                                      (Emb_Vec (1 .. Emb_Len),
+                                                       Emb_Len);
                                             end;
                                         exception
-                                            when others => Img_LSH := -1;
+                                            when others =>
+                                                Img_LSH := -1;
                                         end;
                                         Database_Manager.Store_Imagined_Image
-                                          (Prompt    => Q_Str,
-                                           Image_B64 => To_String (R.Output),
-                                           LSH_Hash  => Img_LSH);
+                                           (Prompt    => Q_Str,
+                                            Image_B64 => To_String (R.Output),
+                                            LSH_Hash  => Img_LSH);
                                         Put_Line
-                                          (AnsiAda.Foreground (AnsiAda.Cyan) & "[CtxFault-Imagine]" &
-                                           AnsiAda.Reset & " Stored imagined image. LSH=" &
-                                           Integer'Image (Img_LSH));
+                                           (AnsiAda.Foreground (AnsiAda.Cyan)
+                                            & "[CtxFault-Imagine]"
+                                            & AnsiAda.Reset
+                                            & " Stored imagined image. LSH="
+                                            & Integer'Image (Img_LSH));
                                     end;
                                 end if;
                                 Append
@@ -6435,6 +6600,7 @@ package body Model_Manager is
                         --  Update context fault monitor tracking
                         Current_Context_Fault_Hops := Hop_Count;
                         Current_Internal_State_Len := Length (Internal_State);
+                        Database_Manager.Set_System_State ("Internal_State", To_String (Internal_State));
                     else
                         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                         Put_Line
@@ -6672,29 +6838,69 @@ package body Model_Manager is
                 --  Push statistics to think block before closing tag.
                 --  These provide chunk/token stats and other metrics.
                 declare
-                    Resp_Len   : constant Natural := Resp_Text'Length;
+                    Resp_Len    : constant Natural := Resp_Text'Length;
                     Gen_Elapsed : constant Duration := Ada.Calendar.Clock - T0;
-                    Stats_Str  : constant String :=
-                      ASCII.LF & "--- ORCHESTRATION STATISTICS ---" & ASCII.LF
-                      & "Response Length: " & Natural'Image (Resp_Len) & " chars" & ASCII.LF
-                      & "Response Tokens (est): " & Natural'Image (Resp_Len / 4) & " tokens" & ASCII.LF
-                      & "Generation Time: " & Duration'Image (Gen_Elapsed) & "s" & ASCII.LF
-                      & "Prompt Tokens: " & Natural'Image (Current_Prompt_Tokens) & ASCII.LF
-                      & "Context Capacity: " & Natural'Image (Current_Ctx_Capacity) & " tokens" & ASCII.LF
-                      & "Context Utilization: " & Natural'Image (Current_Prompt_Tokens * 100 / Current_Ctx_Capacity) & "%" & ASCII.LF
-                      & "Reasoning Hops: " & Natural'Image (Current_Hop_Count) & ASCII.LF
-                      & "Context Faults: " & Natural'Image (Current_Context_Fault_Hops) & ASCII.LF
-                      & "Pipeline Level: " & ELP_Level'Image (Level) & ASCII.LF
-                      & "Streaming Mode: Emulated 300 tok/s" & ASCII.LF
-                      & "GPU Free: " & Natural'Image (GPU_Free_MB) & "MB / "
-                      & Natural'Image (GPU_Total_MB) & "MB ("
-                      & Natural'Image (GPU_Layer_Percent) & "%)" & ASCII.LF
-                      & "GPU Layers: "
-                      & (if GPU_Layer_Count = -1 then "ALL(-1)"
-                         else Integer'Image (GPU_Layer_Count) & "/" & Natural'Image (Total_Model_Layers))
-                      & ASCII.LF
-                      & "GPU Stable: " & Boolean'Image (GPU_Is_Stable) & ASCII.LF
-                      & "--- END STATISTICS ---";
+                    Stats_Str   : constant String :=
+                       ASCII.LF
+                       & "--- ORCHESTRATION STATISTICS ---"
+                       & ASCII.LF
+                       & "Response Length: "
+                       & Natural'Image (Resp_Len)
+                       & " chars"
+                       & ASCII.LF
+                       & "Response Tokens (est): "
+                       & Natural'Image (Resp_Len / 4)
+                       & " tokens"
+                       & ASCII.LF
+                       & "Generation Time: "
+                       & Duration'Image (Gen_Elapsed)
+                       & "s"
+                       & ASCII.LF
+                       & "Prompt Tokens: "
+                       & Natural'Image (Current_Prompt_Tokens)
+                       & ASCII.LF
+                       & "Context Capacity: "
+                       & Natural'Image (Current_Ctx_Capacity)
+                       & " tokens"
+                       & ASCII.LF
+                       & "Context Utilization: "
+                       & Natural'Image
+                            (Current_Prompt_Tokens
+                             * 100
+                             / Current_Ctx_Capacity)
+                       & "%"
+                       & ASCII.LF
+                       & "Reasoning Hops: "
+                       & Natural'Image (Current_Hop_Count)
+                       & ASCII.LF
+                       & "Context Faults: "
+                       & Natural'Image (Current_Context_Fault_Hops)
+                       & ASCII.LF
+                       & "Pipeline Level: "
+                       & ELP_Level'Image (Level)
+                       & ASCII.LF
+                       & "Streaming Mode: Emulated 300 tok/s"
+                       & ASCII.LF
+                       & "GPU Free: "
+                       & Natural'Image (GPU_Free_MB)
+                       & "MB / "
+                       & Natural'Image (GPU_Total_MB)
+                       & "MB ("
+                       & Natural'Image (GPU_Layer_Percent)
+                       & "%)"
+                       & ASCII.LF
+                       & "GPU Layers: "
+                       & (if Acceleration_Silicon_Layer = -1
+                          then "ALL(-1)"
+                          else
+                             Integer'Image (Acceleration_Silicon_Layer)
+                             & "/"
+                             & Natural'Image (Total_Model_Layers))
+                       & ASCII.LF
+                       & "GPU Stable: "
+                       & Boolean'Image (GPU_Is_Stable)
+                       & ASCII.LF
+                       & "--- END STATISTICS ---";
                 begin
                     Push_Chunk (Stream, Session_ID, Stats_Str);
                 end;
@@ -6746,7 +6952,8 @@ package body Model_Manager is
         --  Calling Wait_For_Save on a terminated Save_Task raises TASKING_ERROR
         --  (s-tasren.adb:377). Check if the model is still loaded first.
         if Models (Snowball_Enaga_Orchestrator).Loaded
-          and then Models (Snowball_Enaga_Orchestrator).Context /= Null_Context
+           and then
+              Models (Snowball_Enaga_Orchestrator).Context /= Null_Context
         then
             --  Model still loaded — last hop did NOT free memory (FreeParallelMemory=False)
             --  Do the cleanup now.
@@ -6762,14 +6969,14 @@ package body Model_Manager is
         ELP_Queue.Dequeue_Level (Level);
 
     exception
-         when E : Storage_Error =>
+        when E : Storage_Error =>
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
             --  Stack overflow during hybrid generation (tool exec, tokenization,
             --  or context fault paging).  Force-unload model and report cleanly.
             --  Mark Metal broken so KV save retries instead of SIGABRT.
             --  [ADAPTIVE GPU FALLBACK] OOM → reduce GPU layers for next load
-            if GPU_Layer_Count = -1 then
-                GPU_Layer_Count   := GPU_Layer_Fallback;
+            if Acceleration_Silicon_Layer = -1 then
+                Acceleration_Silicon_Layer := GPU_Layer_Fallback;
                 GPU_Last_OOM_Time := Ada.Real_Time.Clock;
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                 Put_Line
@@ -6783,9 +6990,11 @@ package body Model_Manager is
             begin
                 Models (Snowball_Enaga_Orchestrator).In_Use := False;
                 if Level = ELP0 then
-                    Priority_Model_Gate.Release_ELP0 (Snowball_Enaga_Orchestrator);
+                    Priority_Model_Gate.Release_ELP0
+                       (Snowball_Enaga_Orchestrator);
                 else
-                    Priority_Model_Gate.Release_ELP1 (Snowball_Enaga_Orchestrator);
+                    Priority_Model_Gate.Release_ELP1
+                       (Snowball_Enaga_Orchestrator);
                 end if;
                 ELP_Queue.Dequeue_Level (Level);
             exception
@@ -6854,9 +7063,11 @@ package body Model_Manager is
             begin
                 Models (Snowball_Enaga_Orchestrator).In_Use := False;
                 if Level = ELP0 then
-                    Priority_Model_Gate.Release_ELP0 (Snowball_Enaga_Orchestrator);
+                    Priority_Model_Gate.Release_ELP0
+                       (Snowball_Enaga_Orchestrator);
                 else
-                    Priority_Model_Gate.Release_ELP1 (Snowball_Enaga_Orchestrator);
+                    Priority_Model_Gate.Release_ELP1
+                       (Snowball_Enaga_Orchestrator);
                 end if;
                 ELP_Queue.Dequeue_Level (Level);
             exception
@@ -6880,9 +7091,7 @@ package body Model_Manager is
             --  empty and not an error string), DO NOT overwrite it with the
             --  error message. A transient Tasking_Error during cleanup (KV
             --  save, model unload) must not destroy a good response.
-            if Length (Result) = 0
-              or else (Index (Result, "ERROR:") = 1)
-            then
+            if Length (Result) = 0 or else (Index (Result, "ERROR:") = 1) then
                 --  Generation truly failed — set error result
                 if Stream /= null then
                     begin
@@ -6903,27 +7112,29 @@ package body Model_Manager is
                     & "[Hybrid]"
                     & AnsiAda.Reset
                     & " WARNING: Cleanup error after successful generation"
-                    & " (ResultLen=" & Natural'Image (Length (Result)) & ")."
+                    & " (ResultLen="
+                    & Natural'Image (Length (Result))
+                    & ")."
                     & " Result preserved.");
             end if;
     end Hybrid_Generate;
 
     --  KV CACHE SSD SPILLOVER
-     --  Save KV cache to SSD after generation
-     procedure Save_KV_Cache_To_SSD
-        (Kind     : Model_Type;
-         Tokens   : System.Address;
-         N_Tokens : Interfaces.C.size_t) is
-     begin
-         if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context
-         then
-             --  Save KV cache to SSD (ASYNC, non-blocking)
-             KV_Cache_Manager.Save_To_SSD_Async
-                (Context  => Models (Kind).Context,
-                 Tokens   => Tokens,
-                 N_Tokens => N_Tokens,
-                 Model_ID => Kind'Img);
-         end if;
+    --  Save KV cache to SSD after generation
+    procedure Save_KV_Cache_To_SSD
+       (Kind     : Model_Type;
+        Tokens   : System.Address;
+        N_Tokens : Interfaces.C.size_t) is
+    begin
+        if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context
+        then
+            --  Save KV cache to SSD (ASYNC, non-blocking)
+            KV_Cache_Manager.Save_To_SSD_Async
+               (Context  => Models (Kind).Context,
+                Tokens   => Tokens,
+                N_Tokens => N_Tokens,
+                Model_ID => Kind'Img);
+        end if;
     exception
         when others =>
             null;  -- Don't crash on cache save failure
@@ -6962,7 +7173,8 @@ begin
     --  elaborated. If this NEVER prints, the hang is in the DECLARATIVE PART
     --  (task activation or protected body elaboration). If this prints but
     --  the next one doesn't, the hang is in Initialize.
-    Elab_Trace ("Model_Manager DECLARATIVE PART COMPLETE -- entering begin block");
+    Elab_Trace
+       ("Model_Manager DECLARATIVE PART COMPLETE -- entering begin block");
     Initialize;
     Elab_Trace ("Model_Manager.Initialize returned -- end of elaboration");
 end Model_Manager;

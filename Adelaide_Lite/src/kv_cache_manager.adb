@@ -48,6 +48,7 @@ with Ada.Calendar; use Ada.Calendar;
 
 with Llama_Interface; use Llama_Interface;
 with Model_Manager;
+with Database_Manager;
 
 package body KV_Cache_Manager is
 
@@ -132,6 +133,12 @@ package body KV_Cache_Manager is
                          " Total Prefill tokens: " & Interfaces.C.size_t'Image (Total_Prefill_Tokens) &
                          " | Cached Tokens: " & Interfaces.C.size_t'Image (Cached_Tokens) &
                          " | Cache Hit Percentage: " & Float'Image (Hit_Percentage) & "%");
+
+               --  Persist metrics to Database
+               Database_Manager.Set_System_State ("Total_Prefill_Tokens", Trim (Interfaces.C.size_t'Image (Total_Prefill_Tokens), Both));
+               Database_Manager.Set_System_State ("Cached_Tokens", Trim (Interfaces.C.size_t'Image (Cached_Tokens), Both));
+               Database_Manager.Set_System_State ("Cache_Hits", Trim (Interfaces.C.size_t'Image (Cache_Hits), Both));
+               Database_Manager.Set_System_State ("Cache_Misses", Trim (Interfaces.C.size_t'Image (Cache_Misses), Both));
             end;
          end if;
       end loop;
@@ -526,6 +533,21 @@ package body KV_Cache_Manager is
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Capture start time for uptime logging.
       Init_Start_Time := Ada.Real_Time.Clock;
+
+      declare
+         S_Prefill : constant String := Database_Manager.Get_System_State ("Total_Prefill_Tokens", "0");
+         S_Cached  : constant String := Database_Manager.Get_System_State ("Cached_Tokens", "0");
+         S_Hits    : constant String := Database_Manager.Get_System_State ("Cache_Hits", "0");
+         S_Misses  : constant String := Database_Manager.Get_System_State ("Cache_Misses", "0");
+      begin
+         Total_Prefill_Tokens := Interfaces.C.size_t'Value (S_Prefill);
+         Cached_Tokens        := Interfaces.C.size_t'Value (S_Cached);
+         Cache_Hits           := Interfaces.C.size_t'Value (S_Hits);
+         Cache_Misses         := Interfaces.C.size_t'Value (S_Misses);
+      exception
+         when others =>
+            null; -- Keep defaults if parse fails
+      end;
 
       --  Create cache directory if it doesn't exist (fast, non-blocking)
       if not Ada.Directories.Exists (Cache_Dir) then

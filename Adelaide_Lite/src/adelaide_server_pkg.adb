@@ -1108,8 +1108,8 @@ package body Adelaide_Server_Pkg is
                                       & "MB total ("
                                       & Ada.Strings.Fixed.Trim (Natural'Image (Model_Manager.GPU_Layer_Percent), Ada.Strings.Both)
                                       & "%) GPU_Layers="
-                                      & (if Model_Manager.GPU_Layer_Count = -1 then "ALL(-1)"
-                                         else Ada.Strings.Fixed.Trim (Integer'Image (Model_Manager.GPU_Layer_Count), Ada.Strings.Both)));
+                                      & (if Model_Manager.Acceleration_Silicon_Layer = -1 then "ALL(-1)"
+                                         else Ada.Strings.Fixed.Trim (Integer'Image (Model_Manager.Acceleration_Silicon_Layer), Ada.Strings.Both)));
                            else
                                if Model_Manager.GPU_Is_Stable then
                                    GPU_Part := To_Unbounded_String ("GPU Status: STABLE (CPU-only)");

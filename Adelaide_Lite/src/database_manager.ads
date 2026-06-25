@@ -6,6 +6,9 @@ package Database_Manager is
 
    procedure Initialize;
 
+   procedure Set_System_State (Key : String; Value : String);
+   function Get_System_State (Key : String; Default : String := "") return String;
+
    --  Scaling parameter for Salience (S = HitFrequency / (1 + Alpha * DeltaT))
    Alpha : constant Float := 0.0001;
 
