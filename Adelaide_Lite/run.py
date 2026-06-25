@@ -885,12 +885,12 @@ def main():
             # CLIP-L text encoder (safetensors, ~246MB — small, always fits)
             {
                 "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors?download=true",
-                "output": "flux1-clip_l.safetensors"
+                "output": "clip_l.safetensors"
             },
             # VAE (safetensors, ~335MB — public mirror, BFL repos are gated)
             {
                 "url": "https://huggingface.co/ffxvs/vae-flux/resolve/main/ae.safetensors?download=true",
-                "output": "flux1-ae.safetensors"
+                "output": "ae.safetensors"
             },
             # SD refinement model (~1.9GB — Stage 2 img2img upscale after FLUX sparse output)
             # Architecture: FLUX Q2_K sparse → add noise → SD refinement upscale
@@ -904,7 +904,9 @@ def main():
             target_path = os.path.join(flux_models_dir, model["output"])
             if os.path.exists(target_path):
                 expected_size = {"flux1-schnell.gguf": 4_010_296_352,
-                                 "flux1-t5xxl.gguf": 2_924_546_752}.get(model["output"], 0)
+                                 "flux1-t5xxl.gguf": 2_924_546_752,
+                                 "clip_l.safetensors": 246_144_152,
+                                 "ae.safetensors": 335_304_388}.get(model["output"], 0)
                 actual_size = os.path.getsize(target_path)
                 if expected_size == 0 or actual_size >= expected_size * 0.95:
                     print(f"[*] {model['output']} already exists ({actual_size:,} bytes), skipping.")
