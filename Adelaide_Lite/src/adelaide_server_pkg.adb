@@ -913,12 +913,14 @@ package body Adelaide_Server_Pkg is
             Is_Streaming : Boolean := False;
             Is_Agentic : Boolean := False;
             Is_Raw_Prompt : Boolean := False;
+            Parser_Success : Boolean := False;
          begin
             if Length (Payload) > 0 then
                declare
                   Parser_Result : constant GNATCOLL.JSON.Read_Result :=
                     GNATCOLL.JSON.Read (To_String (Payload));
                begin
+                  Parser_Success := Parser_Result.Success;
                   if Parser_Result.Success then
                      declare
                         Val : constant GNATCOLL.JSON.JSON_Value :=
@@ -1020,13 +1022,28 @@ package body Adelaide_Server_Pkg is
                end;
             end if;
 
-            if Length (Prompt) = 0 and then Length (Payload) > 0 then
-               Prompt := Payload; -- Fallback if parsing fails or fields missing
+            --  Fallback: if JSON parsing failed entirely (Payload was not JSON),
+            --  use raw payload as prompt. But if prompt field existed and was
+            --  empty (warm-up), do NOT fall back to payload.
+            if Length (Prompt) = 0
+               and then Length (Payload) > 0
+               and then not Parser_Success
+            then
+               Prompt := Payload;
             end if;
 
             if Length (Prompt) = 0 then
-               return Build_Response ("{""response"": """"}",
-                                      AWS.Messages.S200);
+               --  Ollama warm-up: "ollama run" with no input skips processing
+               --  Return immediately without loading model
+               return Build_Response
+                 ("{""model"": ""Snowball-Enaga:latest"", "
+                  & """response"": """", "
+                  & """done"": true, "
+                  & """total_duration"": 0, "
+                  & """load_duration"": 0, "
+                  & """prompt_eval_count"": 0, "
+                  & """eval_count"": 0}",
+                  AWS.Messages.S200);
             end if;
 
             --  ENFORCEMENT: We ignore the client-requested model for the actual inference
