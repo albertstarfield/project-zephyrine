@@ -308,6 +308,7 @@ package Model_Manager is
    --  paying the tokenization cost again.
    Cached_Virtual_Tokens : Cached_Token_Access := null;
    Cached_Virtual_Len    : Natural := 0;
+   Internal_State        : Unbounded_String := Null_Unbounded_String;
 
    --  [VITAL-DO-NOT-REMOVE] Randomized seed for Generate sampler.
    --  Initialized with Ada.Calendar.Seconds to get different output on
@@ -323,7 +324,7 @@ package Model_Manager is
    --  or Vulkan without memory query), reports "stable" or "UNSTABLE".
    --
    --  ADAPTIVE GPU LAYER STRATEGY:
-   --  1. Start aggressive: GPU_Layer_Count = -1 (ALL layers on GPU)
+   --  1. Start aggressive: Acceleration_Silicon_Layer = -1 (ALL layers on GPU)
    --  2. If OOM → fallback: remove 25% of current layers
    --     e.g. 32 → 24 → 18 → 14 → 10 → 8 → ...
    --  3. Record OOM timestamp
@@ -342,7 +343,7 @@ package Model_Manager is
    GPU_Total_MB         : Natural := 0;    -- Total GPU memory in megabytes
    GPU_Layer_Percent    : Natural := 0;    -- Free/Total * 100, for display
    GPU_Is_Stable        : Boolean := True;  -- False if OOM/crash detected
-   GPU_Layer_Count      : Integer := -1;   -- ACTUAL layers on GPU (-1 = all)
+   Acceleration_Silicon_Layer      : Integer := -1;   -- ACTUAL layers on GPU (-1 = all)
    GPU_Last_OOM_Time    : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
    --  Time of last OOM. After GPU_Retry_Interval, Load_Model retries -1.
 

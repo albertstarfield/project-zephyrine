@@ -11,6 +11,11 @@ import shutil
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 
+# Enforce Huggingface cache location
+os.environ["HF_HOME"] = os.path.join(BASE_DIR, "model")
+os.environ["HF_HUB_CACHE"] = os.path.join(BASE_DIR, "model")
+os.environ["TRANSFORMERS_CACHE"] = os.path.join(BASE_DIR, "model")
+
 # ANSI Color Codes
 RST  = "\033[0m"
 BOLD = "\033[1m"
@@ -306,7 +311,7 @@ if platform.system() == "Windows":
     sys.exit(1)
 
 # Set HF_HOME so huggingface caches locally in the project directory
-os.environ["HF_HOME"] = os.path.join(BASE_DIR, ".hf_cache")
+os.environ["HF_HOME"] = os.path.join(BASE_DIR, "model")
 os.makedirs(os.environ["HF_HOME"], exist_ok=True)
 
 # Globals to keep track of background processes

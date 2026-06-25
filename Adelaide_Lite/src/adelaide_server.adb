@@ -239,6 +239,12 @@ begin
       Start_Time : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
    begin
       --  ==================================================================
+      --  ENFORCE ENVIRONMENT
+      --  ==================================================================
+      Ada.Environment_Variables.Set 
+        ("HF_HOME", Ada.Directories.Current_Directory & "/model");
+
+      --  ==================================================================
       --  SINGLE-INSTANCE LOCK (FIRST CHECK)
       --  ==================================================================
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]

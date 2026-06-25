@@ -54,6 +54,12 @@ package body Database_Manager is
                   "last_hit_time DATETIME DEFAULT CURRENT_TIMESTAMP," &
                   "image_b64 TEXT)");
 
+         --  System State table
+         Execute (Main_DB_Ptr.all,
+                  "CREATE TABLE IF NOT EXISTS system_state (" &
+                  "key TEXT PRIMARY KEY," &
+                  "value TEXT)");
+
          begin
             Execute (Main_DB_Ptr.all,
                     "ALTER TABLE memories ADD COLUMN hit_count " &
@@ -186,6 +192,56 @@ package body Database_Manager is
            AnsiAda.Reset & " Critical Init Error: " &
            Ada.Exceptions.Exception_Message (E));
    end Initialize;
+
+   ----------------------
+   -- Set_System_State --
+   ----------------------
+   procedure Set_System_State (Key : String; Value : String) is
+   begin
+      if Main_DB_Ptr = null then
+         return;
+      end if;
+      declare
+         Stmt : Statement := Prepare (Main_DB_Ptr.all,
+            "INSERT INTO system_state (key, value) VALUES (?, ?) " &
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value");
+      begin
+         Bind_Text (Stmt, 1, Key);
+         Bind_Text (Stmt, 2, Value);
+         Step (Stmt);
+      end;
+   exception
+      when E : others =>
+         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" &
+           AnsiAda.Reset & " Set_System_State Error (" & Key & "): " &
+           Ada.Exceptions.Exception_Message (E));
+   end Set_System_State;
+
+   ----------------------
+   -- Get_System_State --
+   ----------------------
+   function Get_System_State (Key : String; Default : String := "") return String is
+      Result : Unbounded_String := To_Unbounded_String (Default);
+   begin
+      if Main_DB_Ptr = null then
+         return Default;
+      end if;
+      declare
+         Stmt : Statement := Prepare (Main_DB_Ptr.all, "SELECT value FROM system_state WHERE key = ?");
+      begin
+         Bind_Text (Stmt, 1, Key);
+         if Step (Stmt) = Row then
+            Result := To_Unbounded_String (Column_Text (Stmt, 0));
+         end if;
+      end;
+      return To_String (Result);
+   exception
+      when E : others =>
+         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" &
+           AnsiAda.Reset & " Get_System_State Error (" & Key & "): " &
+           Ada.Exceptions.Exception_Message (E));
+         return Default;
+   end Get_System_State;
 
    --------------------------
    -- Add_Literature_Chunk --

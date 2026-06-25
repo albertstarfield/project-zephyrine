@@ -276,20 +276,32 @@ procedure Adelaide_Watchdog is
         "[Watchdog] Server (PID" & Integer'Image (Old_Pid) &
         ") is dead or frozen. Restarting...");
 
-      --  Kill old process if still hanging around
-      if Old_Pid > 0 and then Is_Process_Alive (Old_Pid) then
-         Put_Line (Standard_Error,
-           "[Watchdog] Sending SIGTERM to old PID" &
-           Integer'Image (Old_Pid));
-         if Sys_Kill (Old_Pid, 15) /= 0 then    --  SIGTERM
-            declare
-               Unused_Result : Integer;
-            begin
-               Unused_Result := Sys_Kill (Old_Pid, 9);  --  SIGKILL
-            end;
-         end if;
-         delay 1.0;
-      end if;
+       --  Kill old process if still hanging around
+       if Old_Pid > 0 and then Is_Process_Alive (Old_Pid) then
+          Put_Line (Standard_Error,
+            "[Watchdog] Sending SIGTERM to old PID" &
+            Integer'Image (Old_Pid));
+          declare
+             Unused_Result : Integer;
+             Wait_Loops    : Integer := 0;
+          begin
+             Unused_Result := Sys_Kill (Old_Pid, 15);  --  SIGTERM
+             --  Wait up to 5 seconds for it to exit
+             while Wait_Loops < 5 and then Is_Process_Alive (Old_Pid) loop
+                delay 1.0;
+                Wait_Loops := Wait_Loops + 1;
+             end loop;
+             
+             --  If still alive, force kill
+             if Is_Process_Alive (Old_Pid) then
+                Put_Line (Standard_Error,
+                  "[Watchdog] Process ignored SIGTERM. Sending SIGKILL to PID" &
+                  Integer'Image (Old_Pid));
+                Unused_Result := Sys_Kill (Old_Pid, 9);  --  SIGKILL
+                delay 1.0;
+             end if;
+          end;
+       end if;
 
       --  Prefer alr exec for proper library paths (DYLD_LIBRARY_PATH etc.)
       Alr := Locate_Exec_On_Path ("alr");
@@ -328,6 +340,11 @@ procedure Adelaide_Watchdog is
 
       Put_Line (Standard_Error,
         "[Watchdog] Spawning: " & Cmd.all);
+
+      --  Delete stale heartbeat so the new server doesn't bypass Check_Single_Instance
+      if Exists (HB_File) then
+         Delete_File (HB_File);
+      end if;
 
       --  Start server as a background (non-blocking) process
       New_Pid := Non_Blocking_Spawn (Cmd.all, Args (1 .. N_Args));
