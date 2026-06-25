@@ -2,6 +2,12 @@
 # download_flux.sh — Resilient FLUX model downloader with infinite retry
 # Resumes interrupted downloads, chains all FLUX components automatically.
 # Safe to run multiple times — skips completed files.
+#
+# TWO-STAGE IMAGE GENERATION ARCHITECTURE:
+#   STAGE 1: FLUX Schnell Q2_K (sparse, fast, low quality) — 2-4 steps
+#   STAGE 2: SD Refinement (img2img upscale, high quality) — 8+ steps
+#   Flow: FLUX sparse → add noise → SD refinement upscale
+#   Memory: ~8.8GB total (FLUX 4GB + t5xxl 2.9GB + SD refinement 1.9GB)
 
 set -euo pipefail
 MODEL_DIR="$(cd "$(dirname "$0")" && pwd)/model"
@@ -60,13 +66,13 @@ download "https://huggingface.co/Phil2Sat/T5XXL-Unchained-GGUF/resolve/main/Kaor
 download "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors?download=true" \
          "clip_l.safetensors" 0
 
-# 4. VAE (safetensors, ~335MB)
-download "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors?download=true" \
-         "ae.safetensors" 0
+# 4. VAE (safetensors, ~335MB — public mirror, BFL repos are gated)
+download "https://huggingface.co/ffxvs/vae-flux/resolve/main/ae.safetensors?download=true" \
+         "ae.safetensors" 335304388
 
-# 5. SD refinement model (~1.9GB)
-download "https://huggingface.co/stabilityai/stable-diffusion-3-medium/resolve/main/sd3_medium.safetensors?download=true" \
-         "sd-refinement.safetensors" 0
+# 5. SD refinement model (~1.9GB — Stage 2 img2img upscale after FLUX sparse output)
+download "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf?download=true" \
+         "sd-refinement.gguf" 0
 
 echo ""
 echo "=== All FLUX models downloaded ==="
