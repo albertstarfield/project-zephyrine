@@ -701,6 +701,36 @@ def main():
         else:
             print("[*] Moonshine models already exist, skipping download.")
 
+        # Check and clone stable-diffusion-cpp (FLUX image generation backend)
+        sd_cpp_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "stable-diffusion-cpp"))
+        if not os.path.exists(sd_cpp_dir):
+            print("[*] Cloning stable-diffusion-cpp...")
+            subprocess.run(["git", "clone", "--depth=1", "https://github.com/leejet/stable-diffusion.cpp.git", sd_cpp_dir], check=False)
+        else:
+            print("[*] stable-diffusion-cpp already exists, skipping clone.")
+
+        # Build stable-diffusion-cpp Python bindings
+        sd_cpp_pkg = os.path.join(sd_cpp_dir, "stable_diffusion_cpp")
+        sd_cpp_built = os.path.join(sd_cpp_dir, "build")
+        sd_cpp_lib = os.path.join(sd_cpp_built, "lib", "libstable_diffusion.dylib") if platform.system() == "Darwin" else os.path.join(sd_cpp_built, "lib", "libstable_diffusion.so")
+        if not os.path.exists(sd_cpp_lib):
+            print("[*] Building stable-diffusion-cpp...")
+            os.makedirs(sd_cpp_built, exist_ok=True)
+            subprocess.run(["cmake", "..", "-DSD_BUILD_PYTHON=ON"], cwd=sd_cpp_built, check=False)
+            subprocess.run(["make", f"-j{threads}"], cwd=sd_cpp_built, check=False)
+        else:
+            print("[*] stable-diffusion-cpp library exists, skipping build.")
+
+        # Install stable-diffusion-cpp Python package
+        sd_cpp_pip_marker = os.path.join(sd_cpp_built, ".pip_installed")
+        if not os.path.exists(sd_cpp_pip_marker) and os.path.isdir(sd_cpp_pkg):
+            print("[*] Installing stable-diffusion-cpp Python package...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "-e", sd_cpp_pkg], check=False)
+            with open(sd_cpp_pip_marker, "w") as f:
+                f.write("installed")
+        else:
+            print("[*] stable-diffusion-cpp Python package already installed, skipping.")
+
         # Check and download Qwen models
         qwen_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model"))
         os.makedirs(qwen_models_dir, exist_ok=True)
@@ -753,6 +783,40 @@ def main():
         if not os.path.exists(kokoro_voices):
             print("[*] Downloading Kokoro voices...")
             subprocess.run(["wget", "-q", "--show-progress", "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"], cwd=kokoro_models_dir, check=False)
+
+        # Check and download FLUX Schnell models (Stable Diffusion image generation)
+        flux_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model"))
+        os.makedirs(flux_models_dir, exist_ok=True)
+
+        flux_models_to_download = [
+            {
+                "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q4_K_M.gguf?download=true",
+                "output": "flux1-schnell.gguf"
+            },
+            {
+                "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-clip_l-Q8_0.gguf?download=true",
+                "output": "flux1-clip_l.gguf"
+            },
+            {
+                "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-t5xxl-Q8_0.gguf?download=true",
+                "output": "flux1-t5xxl.gguf"
+            },
+            {
+                "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-ae-Q8_0.gguf?download=true",
+                "output": "flux1-ae.gguf"
+            }
+        ]
+
+        for model in flux_models_to_download:
+            target_path = os.path.join(flux_models_dir, model["output"])
+            if not os.path.exists(target_path):
+                print(f"[*] Downloading {model['output']} (FLUX Schnell)...")
+                if aria2c_cmd:
+                    subprocess.run([aria2c_cmd, "-x", "16", "-s", "16", "-k", "1M", model["url"], "-o", model["output"], "-d", flux_models_dir], check=True)
+                else:
+                    subprocess.run(["wget", "-q", "--show-progress", model["url"], "-O", target_path], check=True)
+            else:
+                print(f"[*] {model['output']} already exists, skipping.")
 
         # Ensure Deno Playwright Chromium is installed
         print("[*] Installing Playwright Chromium binary for Deno crawler...")
