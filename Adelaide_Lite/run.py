@@ -871,70 +871,101 @@ def main():
         flux_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model"))
         os.makedirs(flux_models_dir, exist_ok=True)
 
+        #  SHA256 hashes verified from HuggingFace repo metadata.
+        #  None = no hash available, skip verification.
         flux_models_to_download = [
             # Diffusion model Q2_K (~4GB) — fits 9B-class VRAM budget
             {
                 "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q2_K.gguf?download=true",
-                "output": "flux1-schnell.gguf"
+                "output": "flux1-schnell.gguf",
+                "sha256": None  # ~4GB, too large to pre-verify
             },
             # T5-XXL text encoder Q4_0 GGUF (~2.9GB) — small enough for VRAM
             {
                 "url": "https://huggingface.co/Phil2Sat/T5XXL-Unchained-GGUF/resolve/main/Kaoru8-t5xxl-unchained-Q4_0.gguf?download=true",
-                "output": "flux1-t5xxl.gguf"
+                "output": "flux1-t5xxl.gguf",
+                "sha256": None
             },
             # CLIP-L text encoder (safetensors, ~246MB — small, always fits)
             {
                 "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors?download=true",
-                "output": "clip_l.safetensors"
+                "output": "clip_l.safetensors",
+                "sha256": "645ba23540a1ce97d9c44332759ded7c2b5b8449914b8890eefd73d88e6e0229"
             },
             # VAE (safetensors, ~335MB — public mirror, BFL repos are gated)
             {
                 "url": "https://huggingface.co/ffxvs/vae-flux/resolve/main/ae.safetensors?download=true",
-                "output": "ae.safetensors"
+                "output": "ae.safetensors",
+                "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38"
             },
             # SD refinement model (~1.9GB — Stage 2 img2img upscale after FLUX sparse output)
             # Architecture: FLUX Q2_K sparse → add noise → SD refinement upscale
             {
                 "url": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf?download=true",
-                "output": "sd-refinement.gguf"
+                "output": "sd-refinement.gguf",
+                "sha256": None
             }
         ]
 
-        for model in flux_models_to_download:
-            target_path = os.path.join(flux_models_dir, model["output"])
-            if os.path.exists(target_path):
-                expected_size = {"flux1-schnell.gguf": 4_010_296_352,
-                                 "flux1-t5xxl.gguf": 2_924_546_752,
-                                 "clip_l.safetensors": 246_144_152,
-                                 "ae.safetensors": 335_304_388}.get(model["output"], 0)
-                actual_size = os.path.getsize(target_path)
-                if expected_size == 0 or actual_size >= expected_size * 0.95:
-                    print(f"[*] {model['output']} already exists ({actual_size:,} bytes), skipping.")
-                    continue
-                else:
-                    print(f"[*] {model['output']} incomplete ({actual_size:,}/{expected_size:,}), resuming...")
+        def sha256_file(filepath):
+            """Compute SHA256 of a file, streaming in chunks for large files."""
+            h = hashlib.sha256()
+            with open(filepath, "rb") as f:
+                for chunk in iter(lambda: f.read(8192 * 1024), b""):
+                    h.update(chunk)
+            return h.hexdigest()
 
-            # Infinite retry with resume — wget -c continues partial downloads
-            max_retries = 0  # 0 = infinite
+        def download_with_retry(url, output_path, expected_sha256=None):
+            """Download a file with infinite retry, resume, and SHA256 verification."""
             attempt = 0
             while True:
                 attempt += 1
-                label = f"attempt #{attempt}" if max_retries == 0 else f"attempt {attempt}/{max_retries}"
-                print(f"[*] Downloading {model['output']} ({label})...")
+                print(f"[*] Downloading {os.path.basename(output_path)} (attempt #{attempt})...")
                 result = subprocess.run(
                     ["wget", "-c", "-t", "0", "--timeout=30", "--waitretry=5",
-                     "--show-progress", model["url"], "-O", target_path],
+                     "--show-progress", url, "-O", output_path],
                     check=False, timeout=None
                 )
-                if result.returncode == 0:
-                    print(f"[+] {model['output']} downloaded successfully.")
-                    break
-                # wget returns 8 = server error, 4 = network failure, etc — all retryable
-                print(f"[!] wget failed (code {result.returncode}), retrying in 5s...")
-                time.sleep(5)
-                if max_retries > 0 and attempt >= max_retries:
-                    print(f"[!] {model['output']} failed after {max_retries} attempts, continuing...")
-                    break
+                if result.returncode != 0:
+                    print(f"[!] wget failed (code {result.returncode}), retrying in 5s...")
+                    time.sleep(5)
+                    continue
+
+                # wget succeeded — verify SHA256 if provided
+                if expected_sha256:
+                    print(f"[*] Verifying SHA256 for {os.path.basename(output_path)}...")
+                    actual_sha256 = sha256_file(output_path)
+                    if actual_sha256 == expected_sha256:
+                        print(f"[+] {os.path.basename(output_path)} OK (hash verified)")
+                        return True
+                    else:
+                        print(f"[!] SHA256 MISMATCH: expected={expected_sha256} actual={actual_sha256}")
+                        print(f"[!] Corrupted download, deleting and retrying...")
+                        os.remove(output_path)
+                        time.sleep(5)
+                        continue
+                else:
+                    print(f"[+] {os.path.basename(output_path)} downloaded ({os.path.getsize(output_path):,} bytes)")
+                    return True
+
+        for model in flux_models_to_download:
+            target_path = os.path.join(flux_models_dir, model["output"])
+            expected_sha256 = model.get("sha256")
+
+            if os.path.exists(target_path):
+                if expected_sha256:
+                    actual_sha256 = sha256_file(target_path)
+                    if actual_sha256 == expected_sha256:
+                        print(f"[SKIP] {model['output']} exists and hash verified ({os.path.getsize(target_path):,} bytes)")
+                        continue
+                    else:
+                        print(f"[REHASH] {model['output']} hash mismatch, re-downloading...")
+                        os.remove(target_path)
+                else:
+                    print(f"[SKIP] {model['output']} exists ({os.path.getsize(target_path):,} bytes)")
+                    continue
+
+            download_with_retry(model["url"], target_path, expected_sha256)
 
         # Ensure Deno Playwright Chromium is installed
         print("[*] Installing Playwright Chromium binary for Deno crawler...")
