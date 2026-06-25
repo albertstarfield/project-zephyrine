@@ -804,6 +804,10 @@ def main():
             {
                 "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-ae-Q8_0.gguf?download=true",
                 "output": "flux1-ae.gguf"
+            },
+            {
+                "url": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf?download=true",
+                "output": "sd-refinement.gguf"
             }
         ]
 
