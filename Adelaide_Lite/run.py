@@ -843,17 +843,31 @@ def main():
         # =====================================================================
         # FLUX Schnell models (stable-diffusion.cpp image generation)
         # =====================================================================
-        # [VITAL-DO-NOT-REMOVE] FLUX needs 4 components:
-        #   1. Diffusion model (.gguf) — the main UNet transformer
-        #   2. VAE (.safetensors) — encodes/decodes latent space
-        #   3. clip_l (.safetensors) — text encoder (CLIP)
-        #   4. t5xxl (.safetensors) — text encoder (T5-XXL)
-        # Only the diffusion model is GGUF. VAE and text encoders are safetensors.
+        # [VITAL-DO-NOT-REMOVE] TWO-STAGE IMAGE GENERATION ARCHITECTURE:
+        #
+        #   STAGE 1: FLUX Schnell Q2_K (sparse, fast, low quality)
+        #     - Diffusion model: flux1-schnell.gguf (~4GB GGUF)
+        #     - Text encoders: clip_l.safetensors + t5xxl Q4_0 GGUF (~2.9GB)
+        #     - VAE: ae.safetensors (~335MB)
+        #     - Output: sparse/draft image (2-4 steps, CFG 1.0)
+        #
+        #   STAGE 2: SD Refinement (img2img upscale, high quality)
+        #     - Model: sd-refinement.gguf (~1.9GB, SD 1.5 pruned)
+        #     - Input: Stage 1 output + added noise (strength ~0.4)
+        #     - Output: refined/final image (dpmpp2mv2, 8+ steps)
+        #     - Prompt: "Masterpiece, Amazing, 4k, " + original_prompt + ", highly detailed..."
+        #
+        #   Memory budget: FLUX Q2_K (~4GB) + t5xxl Q4_0 (~2.9GB) + SD refinement (~1.9GB)
+        #   = ~8.8GB total (fits 9B-class VRAM with swap)
+        #
         # Source repos:
-        #   Diffusion: leejet/FLUX.1-schnell-gguf (preconverted GGUF)
-        #   VAE:       black-forest-labs/FLUX.1-dev (ae.safetensors)
-        #   Text Enc:  comfyanonymous/flux_text_encoders (clip_l + t5xxl)
+        #   Diffusion: city96/FLUX.1-schnell-gguf (preconverted GGUF)
+        #   T5-XXL:    Phil2Sat/T5XXL-Unchained-GGUF (Q4_0, smallest GGUF t5xxl)
+        #   CLIP-L:    comfyanonymous/flux_text_encoders (safetensors)
+        #   VAE:       ffxvs/vae-flux (public mirror, BFL repos are gated)
+        #   Refinement: second-state/stable-diffusion-v1-5-GGUF (SD 1.5 Q8_0)
         # Reference: stable-diffusion.cpp/docs/flux.md
+        #            project-zephyrine imagination_worker.py (two-stage pipeline)
         flux_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model"))
         os.makedirs(flux_models_dir, exist_ok=True)
 
@@ -873,12 +887,13 @@ def main():
                 "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors?download=true",
                 "output": "flux1-clip_l.safetensors"
             },
-            # VAE (safetensors, ~335MB — small, always fits)
+            # VAE (safetensors, ~335MB — public mirror, BFL repos are gated)
             {
-                "url": "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors?download=true",
+                "url": "https://huggingface.co/ffxvs/vae-flux/resolve/main/ae.safetensors?download=true",
                 "output": "flux1-ae.safetensors"
             },
-            # SD 1.5 refinement model (for img2img refinement pass)
+            # SD refinement model (~1.9GB — Stage 2 img2img upscale after FLUX sparse output)
+            # Architecture: FLUX Q2_K sparse → add noise → SD refinement upscale
             {
                 "url": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q8_0.gguf?download=true",
                 "output": "sd-refinement.gguf"
