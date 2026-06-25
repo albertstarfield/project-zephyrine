@@ -172,7 +172,7 @@ project Adelaide_Lite is
          project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-blas/libggml-blas.a",
          project'Project_Dir & "../llama.cpp/build/tools/mtmd/libmtmd.a",
          --  [STABLE-DIFFUSION] Link stable-diffusion.cpp for image generation
-         project'Project_Dir & "../stable-diffusion.cpp/build/src/libstable-diffusion.a",
+         project'Project_Dir & "../stable-diffusion.cpp/build/libstable-diffusion.a",
          "-lsqlite3",
          "-lc++",
           project'Object_Dir & "/llama_safe.o",
