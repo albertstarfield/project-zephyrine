@@ -62,8 +62,49 @@ All inference flows through a single serial queue (parallelism = 1) to prevent h
 
 Adelaide maintains compatibility with standard communication dialects to ease integration.
 
-*   **The OpenAI Mask (`/v1/*`):** Full compatibility layer for `/v1/chat/completions` and `/v1/models`. Future implementations will expand this to full stateful Assistant APIs routed directly into the local SQLite memory graph.
-*   **The Ollama Mask (`/api/*`):** Direct proxy and multiplexing for local inference endpoints (`/api/chat`, `/api/generate`), allowing Zephy to wrap and manage local models seamlessly.
+#### Ollama-Compatible Endpoints (`/api/*`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/chat` | POST | Chat completion (Ollama format) |
+| `/api/generate` | POST | Text generation (Ollama format) |
+| `/api/tags` | GET | List available models |
+| `/api/ps` | GET | Show loaded models |
+| `/api/show` | POST | Show model information |
+| `/api/version` | GET | Show server version |
+| `/api/create` | POST | Create model (stub) |
+| `/api/pull` | POST | Pull model (stub) |
+| `/api/push` | POST | Push model (stub) |
+| `/api/copy` | POST | Copy model (stub) |
+| `/api/delete` | DELETE | Delete model (stub) |
+| `/api/signin` | POST | Sign in (stub) |
+| `/api/signout` | POST | Sign out (stub) |
+| `/api/embeddings` | POST | Generate embeddings |
+| `/api/embed` | POST | Generate embeddings (alias) |
+| `/api/power` | GET | Health check endpoint |
+| `/api/telemetry` | GET | Server telemetry and stats |
+| `/api/ZenithRoutine` | GET | Zenith routine status |
+| `/api/agenticZephyHandlessMode` | POST | Handless mode (voice I/O) |
+
+#### OpenAI-Compatible Endpoints (`/v1/*`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | Chat completion (OpenAI format) |
+| `/v1/completions` | POST | Text completion (OpenAI format) |
+| `/v1/models` | GET | List available models |
+| `/v1/embeddings` | POST | Generate embeddings |
+| `/v1/messages` | POST | Claude API compatible messages |
+| `/v1/audio/transcriptions` | POST | Audio transcription (STT) |
+| `/v1/audio/speech` | POST | Text-to-speech (TTS) |
+| `/v1/images/generations` | POST | Image generation |
+
+#### Server Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | HEAD | Heartbeat check |
+| `/` | GET | Server info |
 
 ### 🚀 Prerequisites and Quick Start
 
@@ -71,25 +112,52 @@ Adelaide is designed to be highly portable but requires a specific set of tools 
 
 #### Requirements
 *   **Alire (Ada LIbrary REpository):** Required to resolve Ada dependencies and build the core executable.
-*   **Deno:** Required for running the stealth web-scraper sidecars. Deno ensures all JavaScript/TypeScript dependencies are sandboxed and natively cached without requiring a full Node.js installation.
 *   **Python 3.10+:** Required as the primary orchestrator for complex embedding mathematical operations and SQLite Knowledge Graph interfacing.
-*   **PyMuPDF (`fitz`):** For local document indexing and extraction.
+*   **OpenSSL:** Required for HTTPS support (self-signed certificate generation).
+*   **Git:** Required for version control and submodule management.
 
 #### Installation
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/albertstarfield/Adelaide_Lite
-    cd Adelaide_Lite
+    git clone https://github.com/albertstarfield/OpenIntellegentiaPlatform
+    cd OpenIntellegentiaPlatform
     ```
 
 2.  **Run the Initialization Script:**
-    The `run.sh` script is designed to handle the Ada compilation, Deno setup, and repository cloning (such as `llama.cpp` and `supertonic`) automatically.
+    The `run.py` script is designed to handle the Ada compilation, Python venv setup, and repository cloning (such as `llama.cpp` and `stable-diffusion.cpp`) automatically.
     ```bash
-    ./run.sh
+    cd Adelaide_Lite
+    python3 run.py
     ```
 
-    *The script will automatically fetch Ada Web Server (AWS) packages via Alire, install the Deno Playwright Chromium binaries, and start the local API listener on port `11420`.*
+    *The script will automatically fetch Ada Web Server (AWS) packages via Alire, build llama.cpp and stable-diffusion.cpp from source, generate SSL certificates, and start the local API listener on port `11420` (HTTP) and `11421` (HTTPS).*
+
+#### Available Tools
+
+Adelaide includes a comprehensive agentic toolset for code manipulation and system operations:
+
+| Tool | Command | Description |
+|------|---------|-------------|
+| **search** | `[ACTION: search(query)]` | Search knowledge base |
+| **cat** | `[ACTION: cat(filename)]` | Read file contents |
+| **file_edit** | `[ACTION: file_edit(read file)]` | Edit/write files |
+| **dir** | `[ACTION: dir(ls path)]` | Directory operations |
+| **grep** | `[ACTION: grep(pattern)]` | Search file contents |
+| **git** | `[ACTION: git(status)]` | Git operations |
+| **build** | `[ACTION: build(ada)]` | Build/compile projects |
+| **test** | `[ACTION: test(pytest)]` | Run tests |
+| **package** | `[ACTION: package(install)]` | Install system packages |
+| **review** | `[ACTION: review(file)]` | Code review |
+| **security** | `[ACTION: security(scan)]` | Security scanning |
+| **issue** | `[ACTION: issue(create)]` | GitHub issue management |
+| **todo** | `[ACTION: todo(add task)]` | Task management |
+| **kill** | `[ACTION: kill(pid)]` | Process management |
+| **hook** | `[ACTION: hook(list)]` | Hook system |
+| **math** | `[ACTION: math(expr)]` | Math calculations |
+| **code** | `[ACTION: code(python)]` | Execute Python code |
+| **schedule** | `[ACTION: schedule(sec, query)]` | Schedule proactive thoughts |
+| **imagine** | `[ACTION: imagine(desc)]` | Generate images |
 
 ## Warning
 > A Warning to Adelaide users newcomers
