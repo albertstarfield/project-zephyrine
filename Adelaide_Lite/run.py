@@ -1344,6 +1344,25 @@ def main():
                 [watchdog_path], cwd=BASE_DIR, env=watchdog_env,
                 stdout=wlog, stderr=subprocess.STDOUT,
                 start_new_session=True)
+        
+        def watchdog_monitor(path, w_env, log_path):
+            global watchdog_process
+            while True:
+                w_exit = watchdog_process.wait()
+                if os.path.exists(os.path.join(BASE_DIR, "run", ".shutdown_requested")):
+                    break
+                if w_exit in (0, 9, -9):
+                    break
+                print(f"\n[*] Watchdog crashed (code {w_exit})! Relaunching instantly...")
+                with open(log_path, "a") as wlog2:
+                    watchdog_process = subprocess.Popen(
+                        [path], cwd=BASE_DIR, env=w_env,
+                        stdout=wlog2, stderr=subprocess.STDOUT,
+                        start_new_session=True)
+        
+        import threading
+        t = threading.Thread(target=watchdog_monitor, args=(watchdog_path, watchdog_env, watchdog_log), daemon=True)
+        t.start()
     else:
         print("[!] Watchdog binary not found at", watchdog_path, "- skipping")
 
@@ -1414,8 +1433,12 @@ def main():
             subprocess.run([sidecar_python, "sidecar_ui.py"], cwd=ui_dir)
     else:
         try:
-            exit_code = server_process.wait()
-            if exit_code != 0:
+            while True:
+                exit_code = server_process.wait()
+                if exit_code in (0, 9, -9):
+                    print(f"\n[*] Server exited cleanly or via SIGKILL (code: {exit_code})")
+                    break
+
                 import signal
                 if exit_code < 0:
                     sig_val = -exit_code
@@ -1582,8 +1605,17 @@ def main():
                     print("[!] matplotlib not installed — skipping crash plot (pip install matplotlib)")
                 except Exception as e:
                     print(f"[!] Failed to generate crash plot: {e}")
-            else:
-                print("\n[*] Server exited cleanly (code: 0)")
+
+                print("\n[*] Relaunching server instantly (JMP back Rebounce back)...")
+                tee_process = subprocess.Popen(
+                    ["tee", "-a", current_log_path],
+                    stdin=subprocess.PIPE,
+                    start_new_session=True
+                )
+                server_process = subprocess.Popen([server_path] + server_args, cwd=BASE_DIR, env=env,
+                                                  stdout=tee_process.stdin, stderr=subprocess.STDOUT,
+                                                  start_new_session=True)
+                print(f"[*] [Launch-V] Server PID (relaunch): {server_process.pid}")
         except KeyboardInterrupt:
             print("\n[*] Keyboard interrupt received. Shutting down...")
             pass
