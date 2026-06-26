@@ -94,7 +94,7 @@ Adelaide maintains compatibility with standard communication dialects to ease in
 | `/v1/completions` | POST | Text completion (OpenAI format) |
 | `/v1/models` | GET | List available models |
 | `/v1/embeddings` | POST | Generate embeddings |
-| `/v1/messages` | POST | Claude API compatible messages |
+| `/v1/messages` | POST | Messages (Claude API format) |
 | `/v1/audio/transcriptions` | POST | Audio transcription (STT) |
 | `/v1/audio/speech` | POST | Text-to-speech (TTS) |
 | `/v1/images/generations` | POST | Image generation |
@@ -132,32 +132,6 @@ Adelaide is designed to be highly portable but requires a specific set of tools 
     ```
 
     *The script will automatically fetch Ada Web Server (AWS) packages via Alire, build llama.cpp and stable-diffusion.cpp from source, generate SSL certificates, and start the local API listener on port `11420` (HTTP) and `11421` (HTTPS).*
-
-#### Available Tools
-
-Adelaide includes a comprehensive agentic toolset for code manipulation and system operations:
-
-| Tool | Command | Description |
-|------|---------|-------------|
-| **search** | `[ACTION: search(query)]` | Search knowledge base |
-| **cat** | `[ACTION: cat(filename)]` | Read file contents |
-| **file_edit** | `[ACTION: file_edit(read file)]` | Edit/write files |
-| **dir** | `[ACTION: dir(ls path)]` | Directory operations |
-| **grep** | `[ACTION: grep(pattern)]` | Search file contents |
-| **git** | `[ACTION: git(status)]` | Git operations |
-| **build** | `[ACTION: build(ada)]` | Build/compile projects |
-| **test** | `[ACTION: test(pytest)]` | Run tests |
-| **package** | `[ACTION: package(install)]` | Install system packages |
-| **review** | `[ACTION: review(file)]` | Code review |
-| **security** | `[ACTION: security(scan)]` | Security scanning |
-| **issue** | `[ACTION: issue(create)]` | GitHub issue management |
-| **todo** | `[ACTION: todo(add task)]` | Task management |
-| **kill** | `[ACTION: kill(pid)]` | Process management |
-| **hook** | `[ACTION: hook(list)]` | Hook system |
-| **math** | `[ACTION: math(expr)]` | Math calculations |
-| **code** | `[ACTION: code(python)]` | Execute Python code |
-| **schedule** | `[ACTION: schedule(sec, query)]` | Schedule proactive thoughts |
-| **imagine** | `[ACTION: imagine(desc)]` | Generate images |
 
 ## Warning
 > A Warning to Adelaide users newcomers
