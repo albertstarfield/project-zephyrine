@@ -369,18 +369,17 @@ package body Model_Manager is
                   if Total_Bytes > 0 then
                      Free_MB := Natural (Free_Bytes / (1024 * 1024));
                      Total_MB := Natural (Total_Bytes / (1024 * 1024));
-                     --  [MEMORY TRACKING] Log memory usage after query
-                     declare
-                         -- Estimate: 10MB per cycle for monitoring overhead (adjust as needed)
-                         Est_Used_MB : constant Integer := Cycle_Count * 10;
-                         Free_Pct : constant Natural := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
-                     begin
-                         Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                                 & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
-                                 & " | Est_Mem_Used=" & Est_Used_MB'Img & "MB" 
-                                 & " | Free_MB=" & Free_MB'Img & "MB" 
-                                 & " | Free_Pct=" & Free_Pct'Img & "%"
-                                 & AnsiAda.Reset);
+                      --  [MEMORY TRACKING] Log memory usage after query
+                      declare
+                          -- Estimate: 10MB per cycle for monitoring overhead (adjust as needed)
+                          Est_Used_MB : constant Integer := Cycle_Count * 10;
+                          Free_Pct : constant Natural := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
+                      begin
+                          Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                                  & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
+                                  & " | Est_Mem_Used=" & Est_Used_MB'Img & "MB" 
+                                  & " | Free_Pct=" & Free_Pct'Img & "%"
+                                  & AnsiAda.Reset);
                      end;
                      
                      if Total_MB > 0 then
@@ -450,7 +449,7 @@ package body Model_Manager is
                                 & (if Acceleration_Silicon_Layer = -1
                                    then "ALL(-1)"
                                    else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
-                                & " | Reason:", AnsiAda.Reset);
+                                 & " | Reason:" & AnsiAda.Reset);
                             
                             --  Add specific reason for inapplicable state
                             if Free_Bytes = 0 and Total_Bytes = 0 then
