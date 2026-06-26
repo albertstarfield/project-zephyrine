@@ -293,9 +293,9 @@ package Model_Manager is
    --  the tokenized prompt + KV cache for attention.
    --  Context Fault: Model requests additional context mid-generation via
    --  [CONTEXT_FAULT: query=... category=...]. Each fault adds a "hop".
-   Current_Context_Fault_Hops : Natural := 0;
+   Current_Context_Fault_JMPs : Natural := 0;
    Current_Internal_State_Len : Natural := 0;
-   Current_Hop_Count          : Natural := 0;
+   Current_JMP_Count          : Natural := 0;
    --  Token tracking for context window utilization
    Current_Prompt_Tokens      : Natural := 0;   -- actual tokens in prompt
    Current_Ctx_Capacity       : Natural := 8192; -- llama context window size

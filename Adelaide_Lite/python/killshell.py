@@ -30,7 +30,7 @@ def run_cmd(cmd):
             timeout=10
         )
         return result.stdout + result.stderr
-    except:
+    except Exception:
         return "ERROR: Command failed"
 
 
@@ -77,7 +77,7 @@ def main():
             output = run_cmd(["ps", "aux"])
             # Filter by pattern
             lines = output.split("\n")
-            filtered = [l for l in lines if pattern.lower() in l.lower()]
+            filtered = [line for line in lines if pattern.lower() in line.lower()]
             print("\n".join(filtered))
         else:
             output = run_cmd(["ps", "aux"])

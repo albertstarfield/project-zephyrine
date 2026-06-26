@@ -17,7 +17,6 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 
 import subprocess
 import sys
-import os
 
 
 def run_gh(args):
