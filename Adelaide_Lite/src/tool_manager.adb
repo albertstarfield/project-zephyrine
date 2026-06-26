@@ -57,6 +57,10 @@ package body Tool_Manager is
          Full_Cmd := To_Unbounded_String ("python/security.py");
       elsif Name = "hook" then
          Full_Cmd := To_Unbounded_String ("python/hook.py");
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  PACKAGE TOOL: Install system packages (apt, brew, pacman, winget, etc.)
+      elsif Name = "package" or else Name = "install" or else Name = "pkg" then
+         Full_Cmd := To_Unbounded_String ("python/package.py");
       else
          Free (Path);
          Result.Output := To_Unbounded_String ("Error: Unknown tool " & Name);

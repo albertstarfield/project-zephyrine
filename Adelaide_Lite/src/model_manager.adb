@@ -5652,6 +5652,8 @@ package body Model_Manager is
                    & "If you need to create an issue, use [ACTION: issue(create title body)]. "
                    & "If you need to review code, use [ACTION: review(file filename)]. "
                    & "If you need to scan for security, use [ACTION: security(scan path)]. "
+                   & "If you need to install a system package, use [ACTION: package(install name)]. "
+                   & "If you need to uninstall a package, use [ACTION: package(uninstall name)]. "
                    & "If you are done, output [FINISH]. "
                    & "Output ONLY the tag.";
                 --  Strip base64 images from router context to prevent tokenization
