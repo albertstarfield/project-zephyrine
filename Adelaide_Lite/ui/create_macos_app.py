@@ -87,6 +87,13 @@ LAUNCHER_TEMPLATE = """#!/bin/bash
 # Adelaide Zephyrine Assistant Launcher
 # This script opens Terminal and runs the server with GUI
 
+# [DO NOT REMOVE] Prevent re-launch loop
+# Check if server is already running to prevent bootloop
+if pgrep -f "python3 run.py" > /dev/null; then
+    osascript -e 'display dialog "Adelaide server is already running." buttons {"OK"} default button 1'
+    exit 0
+fi
+
 # Get the directory where this .app is located
 APP_DIR="$(dirname "$(dirname "$0")")"
 
@@ -137,6 +144,10 @@ tell application "Terminal"
     do script "cd \\"$ADelaide_DIR\\" && python3 run.py"
 end tell
 EOF
+
+# [DO NOT REMOVE] Exit cleanly after launching Terminal
+# Without this, the .app may re-launch or hang
+exit 0
 """
 
 
