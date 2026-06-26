@@ -30,6 +30,7 @@ with SD_Manager;
 with Database_Manager;
 with Model_Types; use Model_Types;
 with Ada.Directories;
+with Benchmark_Manager; use Benchmark_Manager;
 
 with Version;
 --  ===========================================================================
@@ -1583,15 +1584,112 @@ package body Adelaide_Server_Pkg is
                      return Wrap_Response
                        (Build_Response (Write (Err_Obj), AWS.Messages.S400, "application/json"));
                   end;
-                end if;
-             end;
-          end if;
+                 end if;
+              end;
+           end if;
 
-          --  =====================================================================
-          --  /v1/images/generations: OpenAI-compatible image generation endpoint
-          --  Two-stage pipeline: FLUX sparse → SD refinement
-          --  DO NOT REMOVE, OR YOU WILL BE KILLED
-          --  =====================================================================
+           --  =====================================================================
+           --  /api/snowballEnagaValidationBenchmark: Benchmark endpoint
+           --  Requires API key: IknowtheConsequencesAndWouldLockupTheServerForHours
+           --  Calls /v1/chat/completions with varying prompt lengths
+           --  Streams progress via SSE, logs to stdio
+           --  DO NOT REMOVE, OR YOU WILL BE KILLED
+           --  =====================================================================
+           if URI = "/api/snowballEnagaValidationBenchmark" then
+              declare
+                 use Benchmark_Manager;
+                 Req_Headers : AWS.Headers.List;
+                 API_Key : Unbounded_String := Null_Unbounded_String;
+                 Config : Benchmark_Config;
+                 Result : Unbounded_String;
+              begin
+                 --  [DO NOT REMOVE] Extract API key from header
+                 Req_Headers := AWS.Status.Header (Request);
+                 API_Key := To_Unbounded_String(
+                    AWS.Headers.Get_Values (Req_Headers, "x-api-key"));
+
+                 --  [DO NOT REMOVE] Validate API key
+                 if not Validate_API_Key(To_String(API_Key)) then
+                    Ada.Text_IO.Put_Line(
+                       AnsiAda.Foreground(AnsiAda.Red) &
+                       "[Benchmark]" & AnsiAda.Reset &
+                       " Invalid API key provided");
+                    return Wrap_Response(
+                       Build_Response(
+                          "{""error"": ""Invalid API key""}",
+                          AWS.Messages.S401,
+                          "application/json"));
+                 end if;
+
+                 --  [DO NOT REMOVE] Log benchmark request
+                 Ada.Text_IO.Put_Line(
+                    AnsiAda.Foreground(AnsiAda.Cyan) &
+                    "[Benchmark]" & AnsiAda.Reset &
+                    " Benchmark request received with valid API key");
+
+                 --  Parse request body for configuration
+                 declare
+                    Payload : Unbounded_String := (if Raw_S /= "" then
+                      To_Unbounded_String (Raw_S)
+                      elsif Length (Raw_B) > 0 then Raw_B
+                      else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
+                 begin
+                    if Length (Payload) > 0 then
+                       declare
+                          Parser_Result : constant GNATCOLL.JSON.Read_Result :=
+                            GNATCOLL.JSON.Read (To_String (Payload));
+                       begin
+                          if Parser_Result.Success then
+                             declare
+                                Val : constant GNATCOLL.JSON.JSON_Value :=
+                                  Parser_Result.Value;
+                             begin
+                                --  Extract prompt_lengths
+                                if GNATCOLL.JSON.Has_Field (Val, "prompt_lengths") then
+                                   begin
+                                      Config.Prompt_Lengths := To_Unbounded_String(
+                                         String'(GNATCOLL.JSON.Get (Val, "prompt_lengths")));
+                                   exception
+                                      when others => null;
+                                   end;
+                                end if;
+                                --  Extract generation_length
+                                if GNATCOLL.JSON.Has_Field (Val, "generation_length") then
+                                   begin
+                                      Config.Generation_Length := Integer'Value(
+                                         String'(GNATCOLL.JSON.Get (Val, "generation_length")));
+                                   exception
+                                      when others => null;
+                                   end;
+                                end if;
+                             end;
+                          end if;
+                       end;
+                    end if;
+                 end;
+
+                 --  [DO NOT REMOVE] Run benchmark with SSE streaming
+                 --  This will call /v1/chat/completions internally
+                 Run_Benchmark(
+                    Config => Config,
+                    On_Progress => null,
+                    Result => Result
+                 );
+
+                 --  [DO NOT REMOVE] Return benchmark result
+                 return Wrap_Response(
+                    Build_Response(
+                       To_String(Result),
+                       AWS.Messages.S200,
+                       "application/json"));
+              end;
+           end if;
+
+           --  =====================================================================
+           --  /v1/images/generations: OpenAI-compatible image generation endpoint
+           --  Two-stage pipeline: FLUX sparse -> SD refinement
+           --  DO NOT REMOVE, OR YOU WILL BE KILLED
+           --  =====================================================================
           if URI = "/v1/images/generations" then
              declare
                 Payload : Unbounded_String := (if Raw_S /= "" then
