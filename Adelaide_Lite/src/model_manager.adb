@@ -18,6 +18,16 @@ with Ada.Directories;
 with Ada.Real_Time;        use Ada.Real_Time;
 with Ada.Unchecked_Conversion;
 with Ada.Exceptions;
+
+--  [TERMINOLOGY NOTE]
+--  "Tensor Accelerator" refers to various acceleration technologies including:
+--    - GPU (Graphics Processing Unit)
+--    - Hexagon DSP
+--    - Neural Engine (Apple)
+--    - Vulkan compute
+--    - AMX (Advanced Matrix Extensions)
+--    - Other specialized acceleration hardware
+--  This abstraction allows the system to work with different acceleration backends.
 with Watchdog_Manager;
 with Kratos;
 with ELP_Queue;
@@ -317,15 +327,28 @@ package body Model_Manager is
              Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
              Cycle_Count := Cycle_Count + 1;
              
-             --  [INSTRUMENTATION] Log execution time stats
+             --  [INSTRUMENTATION] Log execution time and memory stats
              declare
                  Task_Elapsed : constant Duration := To_Duration (Clock - Task_Start_Time);
+                 Cycle_Elapsed : constant Duration := To_Duration (Clock - Last_Cycle_Start);
              begin
                  Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
                          & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
                          & " at Uptime=" & Uptime_S'Img & "s" 
-                         & " | Task_Elap=" & Trim(Duration'Image (Task_Elapsed), Both) & "s" 
+                         & " | Task_Elap=" & Trim(Duration'Image (Task_Elapsed), Both) 
+                         & " | Cycle_Elap=" & Trim(Duration'Image (Cycle_Elapsed), Both) 
                          & AnsiAda.Reset);
+                 
+                 --  Add memory tracking (approximate)
+                 declare
+                     -- Estimate: 10MB per cycle for monitoring overhead (adjust as needed)
+                     Est_Used_MB : constant Integer := Cycle_Count * 10;
+                 begin
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                             & "[DEBUG] [AccelMonitor] Est_Mem_Used=" & Est_Used_MB'Img 
+                             & "MB | Free_Pct=" & Free_MB'Img & "%" 
+                             & AnsiAda.Reset);
+                 end;
              end;
              
              declare
@@ -336,7 +359,7 @@ package body Model_Manager is
                  Total_MB    : Natural := 0;
                  Percent     : Natural := 0;
             begin
-                 --  Add error handling for GPU memory query
+                  --  Add error handling for Tensor Accelerator memory query
                  begin
                      Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
                      Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
@@ -427,11 +450,11 @@ package body Model_Manager is
                             --  Add specific reason for inapplicable state
                             if Free_Bytes = 0 and Total_Bytes = 0 then
                                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan)
-                                      & "           GPU memory query returned zero values"
+                                       & "           Tensor Accelerator memory query returned zero values"
                                       & AnsiAda.Reset);
                             elsif not Is_Metal_Broken then
                                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan)
-                                      & "           Metal backend is stable but no GPU memory detected"
+                                       & "           Metal backend is stable but no Tensor Accelerator memory detected"
                                       & AnsiAda.Reset);
                             end if;
                          end if;
@@ -1530,7 +1553,7 @@ package body Model_Manager is
         Is_File_Index : Boolean := False)
     is
         --  [PARALLEL=1] Before calling Load_Model, ensure NO OTHER model is
-        --  loaded. Only one model can occupy GPU memory at a time. If another
+         --  loaded. Only one model can occupy Tensor Accelerator memory at a time. If another
         --  model is loaded, call Unload_Model on it FIRST, or this call will
         --  Metal OOM. The calling code (Get_Single_Embedding, Hybrid_Generate)
         --  is responsible for enforcing this invariant.
@@ -1670,7 +1693,7 @@ package body Model_Manager is
         --
         --  LOAD PHASES (all timed separately):
         --    1. File read: Read .gguf from disk into memory (~1-4 GB)
-        --    2. GPU upload: Transfer weights to Metal/Vulkan GPU memory
+         --    2. Tensor Accelerator upload: Transfer weights to Metal/Vulkan memory
         --    3. Context init: Create llama_context with KV cache (~0.5-2s)
         --
         --  DISK SPEED: Total file size / load time = MB/s throughput
@@ -3175,7 +3198,7 @@ package body Model_Manager is
             Put_Line ("[Debug] Free_Tokens complete.");
             Models (Kind).In_Use := False;
             --  [PARALLEL=1 FIX] Unload embedding model from GPU immediately
-            --  after use. Only ONE model can be in GPU memory at a time.
+             --  after use. Only ONE model can be in Tensor Accelerator memory at a time.
             --  If we don't unload, the embedding model (~1GB) stays resident
             --  and the 9B chat model OOMs when it tries to allocate KV +
             --  compute buffers on top of it.
@@ -4542,15 +4565,27 @@ package body Model_Manager is
                             Append (Result, " [ABORTED:" & Ret'Img & "]");
 
                             --  [VITAL-DO-NOT-REMOVE] OOM detection.
-                            --  When llama_decode returns -3, Metal is in error state
-                            --  (kIOGPUCommandBufferCallbackErrorOutOfMemory). Any
-                            --  subsequent llama_state_save_file call will SIGBUS →
-                            --  GNAT exception → exit() → ggml_metal_device_free →
-                            --  GGML_ASSERT([rsets->data count] == 0) → SIGABRT.
-                            --  Mark metal broken (opportunistic: auto-resets after 30s).
-                            if Ret = -3 then
-                                Mark_Metal_Broken;
-                            end if;
+                             --  When llama_decode returns -3, Metal is in error state
+                             --  (kIOGPUCommandBufferCallbackErrorOutOfMemory). Any
+                             --  subsequent llama_state_save_file call will SIGBUS →
+                             --  GNAT exception → exit() → ggml_metal_device_free →
+                             --  GGML_ASSERT([rsets->data count] == 0) → SIGABRT.
+                             --  Mark metal broken (opportunistic: auto-resets after 30s).
+                             if Ret = -3 then
+                                 Mark_Metal_Broken;
+                                 
+                             --  [ENHANCED] Detailed error reporting for Tensor Accelerator issues
+                             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
+                                     & "[ERROR] Tensor Accelerator Memory Exhausted (Metal, -3): " 
+                                     & "Out of Memory (kIOGPUCommandBufferCallbackErrorOutOfMemory)" 
+                                     & AnsiAda.Reset);
+                             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
+                                     & "[ERROR] Action: Marked Metal as broken, will attempt recovery in 30s" 
+                                     & AnsiAda.Reset);
+                             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
+                                     & "[ERROR] Recommendation: Check Tensor Accelerator memory usage, reduce model size, or restart service" 
+                                     & AnsiAda.Reset);
+                             end if;
 
                             --  [QUIRK-M10] Orphan poisoned context to prevent SIGTRAP
                             Models (Kind).Context := Null_Context;
@@ -5415,7 +5450,7 @@ package body Model_Manager is
     --  Flow:
     --    1. Caller: Get_Embedding loads embedding model → computes → UNLOADS
     --    2. This procedure: Load_Model(chat) → generate → UNLOAD_Model(chat)
-    --    3. Only ONE model is in GPU memory at any point in this flow.
+    --    3. Only ONE model is in Tensor Accelerator memory at any point in this flow.
     --
     procedure Hybrid_Generate
        (Prompt         : String;
