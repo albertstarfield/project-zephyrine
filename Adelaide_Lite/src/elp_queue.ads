@@ -1,20 +1,38 @@
 pragma SPARK_Mode (Off);
---  ELP Queue — Unified serial queue for all priority levels
---
---  Architecture: "Volatus Damarae"
---  A departure from the Python-centric orchestration of Project Zephyrine.
---  This Ada-native queue manages four Elevated Level Privilege priorities:
---    ELP0: Deep cognitive reasoning (background indexing) — preemptible
---    ELP1: High-priority real-time inference (user-facing generation)
---    ELP2: Stella-Icarus Deterministic API response
---    ELP3: Deterministic light task — 1ms fixed nanosecond WCET
---
---  Serial processing prevents heap corruption from concurrent llama.cpp
---  FFI calls on shared contexts.
---  Capacity: 2^63 (effectively unlimited).
---  Priority: ELP3 > ELP2 > ELP1 > ELP0
---
---  Every 5 seconds, a monitor task prints queue depth as 0%-100%.
+ --  ELP Queue — Priority-based task queue for model execution requests
+ --
+ --  Architecture: "Volatus Damarae"
+ --  A departure from the Python-centric orchestration of Project Zephyrine.
+ --  This Ada-native queue manages four Elevated Level Privilege (ELP) priorities:
+ --    
+ --  Priority Levels (Highest to Lowest):
+ --    ELP1: User-facing tasks (chat, API responses) — HIGH priority
+ --         - Always preempts ELP0 tasks
+ --         - Uses priority gate acquisition to ensure responsiveness
+ --    ELP0: Background tasks (indexing, pre-warming) — NORMAL priority
+ --         - Can be preempted by ELP1 tasks
+ --         - Runs only when no user tasks are pending
+ --    ELP2: Stella-Icarus Deterministic API response — LOW priority
+ --    ELP3: Deterministic light task — LOWEST priority (1ms fixed WCET)
+ --
+ --  Priority Rules:
+ --    1. ELP1 tasks always take precedence over ELP0 tasks
+ --    2. When an ELP1 request arrives, any pending ELP0 tasks are blocked
+ --    3. Background tasks (ELP0) can only run when:
+ --         a) No user tasks (ELP1) are pending
+ --         b) No user tasks (ELP1) are active
+ --         c) Model is not busy
+ --
+ --  Implementation Notes:
+ --    - Serial processing prevents heap corruption from concurrent llama.cpp FFI calls
+ --    - Capacity: 2^63 (effectively unlimited)
+ --    - Priority is enforced through both the queue and the Priority_Model_Gate
+ --    - Monitor task reports queue state every 5 seconds
+ --
+ --  Fixed Issues:
+ --    - ELP0 tasks could incorrectly acquire priority over pending ELP1 tasks
+ --    - Priority escalation now works properly when user requests arrive
+ --    - Background tasks properly yield to user-facing work
 
 with Model_Types; use Model_Types;
 with Interfaces; use Interfaces;
