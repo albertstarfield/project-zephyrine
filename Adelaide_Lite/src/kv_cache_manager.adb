@@ -412,6 +412,10 @@ package body KV_Cache_Manager is
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
                    AnsiAda.Reset & "+Wait_For_Save: waiting for save task to finish...");
          Active_Save.Wait_Complete;
+         --  [CRITICAL-FIX] Null out Active_Save after task completes.
+         --  Without this, the NEXT request calls Wait_Complete on a
+         --  terminated task, which raises TASKING_ERROR (s-tasren.adb:377).
+         Active_Save := null;
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
                    AnsiAda.Reset & "+Wait_For_Save: save task complete, safe to unload model");
