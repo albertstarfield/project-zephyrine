@@ -1281,6 +1281,11 @@ def main():
             launched_from_app = os.environ.get("ADELAIDE_LAUNCHED_FROM_APP") == "1"
             in_terminal = os.environ.get("TERM_SESSION_ID") is not None
             
+            # [DO NOT REMOVE] Clear stale flag after reading
+            # Prevents false positives if flag persists in shell environment
+            if launched_from_app:
+                os.environ.pop("ADELAIDE_LAUNCHED_FROM_APP", None)
+            
             if launched_from_app or in_terminal:
                 # Already in Terminal or launched from .app - launch sidecar directly (no .app)
                 print("[*] Running in Terminal - launching sidecar directly...")
