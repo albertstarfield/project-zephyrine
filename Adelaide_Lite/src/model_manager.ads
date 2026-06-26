@@ -1,14 +1,14 @@
 pragma SPARK_Mode (Off);
-with Llama_Interface;
-with Mtmd_Interface;
-with Math_Utils;
+with Llama_Interface;     use Llama_Interface;
+with Mtmd_Interface;    use Mtmd_Interface;
+with Math_Utils;         use Math_Utils;
 with Streaming_Queue;
 with KV_Cache_Manager;
 with System;
-with Interfaces.C;
+with Interfaces.C;     use Interfaces.C;
 with Ada.Unchecked_Deallocation;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
-with Ada.Real_Time;
+with Ada.Real_Time;    use Ada.Real_Time;
 with GNATCOLL.JSON;
 with Model_Types; use Model_Types;
 
@@ -340,12 +340,41 @@ package Model_Manager is
    GPU_Layer_Step       : constant Integer := 1;   -- 25% reduction each OOM
    GPU_Retry_Interval   : constant Duration := 180.0;  -- 3 minutes
 
-   GPU_Free_MB          : Natural := 0;    -- Free GPU memory in megabytes
-   GPU_Total_MB         : Natural := 0;    -- Total GPU memory in megabytes
-   GPU_Layer_Percent    : Natural := 0;    -- Free/Total * 100, for display
-   GPU_Is_Stable        : Boolean := True;  -- False if OOM/crash detected
-   Acceleration_Silicon_Layer      : Integer := -1;   -- ACTUAL layers on GPU (-1 = all)
-   GPU_Last_OOM_Time    : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
-   --  Time of last OOM. After GPU_Retry_Interval, Load_Model retries -1.
+    GPU_Free_MB          : Natural := 0;    -- Free GPU memory in megabytes
+    GPU_Total_MB         : Natural := 0;    -- Total GPU memory in megabytes
+    GPU_Layer_Percent    : Natural := 0;    -- Free/Total * 100, for display
+    GPU_Is_Stable        : Boolean := True;  -- False if OOM/crash detected
+    Acceleration_Silicon_Layer      : Integer := -1;   -- ACTUAL layers on GPU (-1 = all)
+    GPU_Last_OOM_Time    : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
+    --  Time of last OOM. After GPU_Retry_Interval, Load_Model retries -1.
+
+    --  Model record type
+    type Model_Record is record
+        Model       : Llama_Model := Null_Model;
+        Context     : Llama_Context := Null_Context;
+        Mtmd_Ctx    : Mtmd_Interface.Mtmd_Context := Null_Mtmd_Context;
+        Path        : Unbounded_String;
+        Loaded      : Boolean := False;
+        In_Use      : Boolean := False;
+        Last_Used   : Time := Time_First;
+        Current_Ctx : unsigned := 0;
+        Warm_Cached : Boolean := False;  -- True if in warm cache (not fully unloaded)
+        Warm_Cache_Time : Time := Time_First;  -- When it was cached
+    end record;
+
+    --  Array of model records for each model type
+    Models : array (Model_Type) of Model_Record;
+
+    --  [OPTIMIZATION-M02] Function to check if model is available (loaded or warm cached)
+    function Is_Model_Available (Kind : Model_Type) return Boolean;
+
+    --  [OPTIMIZATION-M02] Helper function to access model state
+    function Get_Model_State (Kind : Model_Type) return Model_Record;
+
+    --  [OPTIMIZATION-M02] Warm cache time-to-live: 30 seconds
+    --  Models stay in warm cache for this duration after "unload"
+    --  This reduces the frequency of cold starts for frequently used models
+    --  This constant is used in model_manager.adb body
+    Warm_Cache_TTL : constant Duration := 30.0;
 
 end Model_Manager;
