@@ -20,7 +20,6 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 
 import subprocess
 import sys
-import os
 
 
 def run_git(args):
@@ -64,7 +63,7 @@ def main():
         print(run_git(["pull"]))
     elif cmd == "log":
         n = args[0] if args else "10"
-        print(run_git(["log", f"--oneline", f"-{n}"]))
+        print(run_git(["log", "--oneline", f"-{n}"]))
     elif cmd == "branch":
         print(run_git(["branch", "-a"]))
     elif cmd == "checkout":

@@ -12,7 +12,6 @@ Commands:
 DO NOT REMOVE, OR YOU WILL BE KILLED
 """
 
-import subprocess
 import sys
 import os
 import re
@@ -64,7 +63,7 @@ def scan_file(filepath):
         with open(filepath, "r") as f:
             content = f.read()
             lines = content.split("\n")
-    except:
+    except Exception:
         return issues
     
     for i, line in enumerate(lines, 1):

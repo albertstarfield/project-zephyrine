@@ -29,7 +29,7 @@ def run_command(cmd):
             timeout=60
         )
         return result.stdout
-    except:
+    except Exception:
         return ""
 
 
@@ -41,7 +41,7 @@ def security_check(filepath):
         with open(filepath, "r") as f:
             content = f.read()
             lines = content.split("\n")
-    except:
+    except Exception:
         return ["ERROR: Cannot read file"]
     
     # Security patterns
@@ -74,7 +74,7 @@ def quality_check(filepath):
     try:
         with open(filepath, "r") as f:
             lines = f.readlines()
-    except:
+    except Exception:
         return ["ERROR: Cannot read file"]
     
     # Quality patterns

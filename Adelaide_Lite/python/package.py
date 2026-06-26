@@ -77,7 +77,7 @@ def cmd_exists(cmd):
             text=True
         )
         return result.returncode == 0
-    except:
+    except Exception:
         return False
 
 

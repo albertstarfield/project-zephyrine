@@ -247,8 +247,8 @@ package body Model_Manager is
             Next_Check := Ada.Calendar.Clock + Interval;
 
             --  Aggregate context fault hops across all active sessions
-            --  (Current_Context_Fault_Hops is updated by Hybrid_Generate)
-            Fault_Total := Current_Context_Fault_Hops;
+            --  (Current_Context_Fault_JMPs is updated by Hybrid_Generate)
+            Fault_Total := Current_Context_Fault_JMPs;
 
             declare
                 --  Virtual Context (2^63) metrics from ELP Queue
@@ -343,7 +343,7 @@ package body Model_Manager is
                     & Natural'Image (Cur_Division)
                     & " /"
                     & Natural'Image (Max_Divisions)
-                    & " | Hops="
+                    & " | JMPs="
                     & Natural'Image (Fault_Total)
                     & "/5");
 
@@ -358,7 +358,7 @@ package body Model_Manager is
                     & " | Page="
                     & (if Fault_Total = 0
                        then "INITIAL"
-                       else "HOP" & Natural'Image (Fault_Total)));
+                       else "JMP" & Natural'Image (Fault_Total)));
 
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Cyan)
@@ -1826,7 +1826,7 @@ package body Model_Manager is
                 --  [LM-STYLE KV RESTORE] After creating context, try to
                 --  restore previously saved KV state from disk.
                 --  This is how LM Studio-style one-model-at-a-time works:
-                --  Hop N saves KV + unloads model → Hop N+1 loads model + restores KV.
+                --  JMP N saves KV + unloads model → JMP N+1 loads model + restores KV.
                 declare
                     KV_Restored : Boolean;
                     KV_Tokens   : System.Address;
@@ -4926,7 +4926,10 @@ package body Model_Manager is
         end if;
     end Tokenize_And_Cache_Virtual_Ctx;
 
-    --  HYBRID_GENERATE (MULTI-HOP REASONING PIPELINE)
+    --  HYBRID_GENERATE (MULTI-JMP REASONING PIPELINE)
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  JMP stands for "reasoning Hop" - the number of tool execution cycles
+   --  the model goes through before producing a final answer.
     --
     --  [PARALLEL=1] This procedure loads the chat model, generates a response,
     --  and must UNLOAD the chat model before returning. The caller (dispatch)
@@ -4980,7 +4983,7 @@ package body Model_Manager is
                & "to you in the next reasoning hop.");
 
         Current_Response : Unbounded_String;
-        Current_Hop      : Positive := 1;
+        Current_JMP      : Positive := 1;
         T0, T1           : Ada.Calendar.Time;
         Last_Heartbeat   : Ada.Calendar.Time := Ada.Calendar.Clock;
         Emb_Vec          : Math_Utils.Vector (1 .. 1536) := [others => 0.0];
@@ -4991,9 +4994,9 @@ package body Model_Manager is
         Orch_Parser      : Stream_Parser_State;
     begin
         --  Reset context fault tracking for this request
-        Current_Context_Fault_Hops := 0;
+        Current_Context_Fault_JMPs := 0;
         Current_Internal_State_Len := 0;
-        Current_Hop_Count := 0;
+        Current_JMP_Count := 0;
         Current_Prompt_Tokens := 0;
         Current_Ctx_Capacity := 8192;
         --  Reset virtual ctx token cache for this request
@@ -5712,8 +5715,8 @@ package body Model_Manager is
                        (Stream,
                         Session_ID,
                         Orch_Parser,
-                        "[Adelaide Core]: [Thought] Deciding next action (Hop"
-                        & Current_Hop'Img
+                        "[Adelaide Core]: [Thought] Deciding next action (JMP"
+                        & Current_JMP'Img
                         & ")..."
                         & ASCII.LF);
                 end if;
@@ -5736,16 +5739,16 @@ package body Model_Manager is
                     end if;
                 end;
                 Put_Line
-                   (" [Hybrid] Hop"
-                    & Current_Hop'Img
+                   (" [Hybrid] JMP"
+                    & Current_JMP'Img
                     & ": Decision routing...");
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Blue)
                     & "[Init-V]"
                     & AnsiAda.Reset
-                    & " Hybrid_Generate: Hop"
-                    & Current_Hop'Img
+                    & " Hybrid_Generate: JMP"
+                    & Current_JMP'Img
                     & " calling Generate for router...");
                 Generate
                    (Snowball_Enaga_Orchestrator,
@@ -5766,8 +5769,8 @@ package body Model_Manager is
                    (AnsiAda.Foreground (AnsiAda.Light_Blue)
                     & "[Init-V]"
                     & AnsiAda.Reset
-                    & " Hybrid_Generate: Hop"
-                    & Current_Hop'Img
+                    & " Hybrid_Generate: JMP"
+                    & Current_JMP'Img
                     & " Generate returned (model released). Len="
                     & Natural'Image (Length (Step_Raw)));
 
@@ -5775,13 +5778,13 @@ package body Model_Manager is
                     Step : constant String :=
                        Trim (To_String (Step_Raw), Ada.Strings.Both);
                 begin
-                    Put_Line (" [Hybrid] Hop" & Current_Hop'Img & ": " & Step);
+                    Put_Line (" [Hybrid] JMP" & Current_JMP'Img & ": " & Step);
                     if not External_Agent then
                         Push_Orchestration_Direct
                            (Stream,
                             Session_ID,
-                            "[Adelaide Core]: [Thought] Hop "
-                            & Current_Hop'Img
+                            "[Adelaide Core]: [Thought] JMP "
+                            & Current_JMP'Img
                             & " - I will: "
                             & Sanitize_Orchestration_Output (Step)
                             & ASCII.LF);
@@ -5976,8 +5979,8 @@ package body Model_Manager is
                                                         Push_Orchestration_Direct
                                                               (Stream,
                                                                Session_ID,
-                                                               "[Adelaide Core]: [Thought] Hop "
-                                                               & Current_Hop'Img
+                                                               "[Adelaide Core]: [Thought] JMP "
+                                                               & Current_JMP'Img
                                                                & " - Running tool: "
                                                                & Sanitize_Orchestration_Output
                                                                        (T_Name)
@@ -6007,8 +6010,8 @@ package body Model_Manager is
                                                               (Stream,
                                                                Session_ID,
                                                                ASCII.LF
-                                                               & "[Adelaide Core]: [Thought] Hop "
-                                                               & Current_Hop'Img
+                                                               & "[Adelaide Core]: [Thought] JMP "
+                                                               & Current_JMP'Img
                                                                & " - Tool result ("
                                                                & T_Name
                                                                & "): "
@@ -6034,10 +6037,10 @@ package body Model_Manager is
                     end if;
                 end;
             end;
-            Current_Hop := Current_Hop + 1;
+            Current_JMP := Current_JMP + 1;
             --  Update context fault monitor tracking
-            Current_Hop_Count := Current_Hop;
-            exit when Current_Hop > 5;
+            Current_JMP_Count := Current_JMP;
+            exit when Current_JMP > 5;
         end loop;
 
         if not External_Agent then
@@ -6045,7 +6048,7 @@ package body Model_Manager is
                (Stream,
                 Session_ID,
                 "[Adelaide Core]: [Thought] Reasoning complete after "
-                & Current_Hop'Img
+                & Current_JMP'Img
                 & " hops."
                 & ASCII.LF);
         end if;
@@ -6166,7 +6169,7 @@ package body Model_Manager is
                 F_Detected   : Boolean := False;
                 F_Query      : Unbounded_String;
                 F_Category   : Unbounded_String;
-                Hop_Count    : Natural := 0;
+                JMP_Count    : Natural := 0;
                 Fault_Result : Unbounded_String;
             begin
                 --  [VITAL-DO-NOT-REMOVE] Mandated by user.
@@ -6176,7 +6179,7 @@ package body Model_Manager is
                     & AnsiAda.Reset
                     & " Hybrid_Generate: CONTEXT_FAULT_LOOP ENTERED.");
                 loop
-                    exit when Hop_Count >= 5;
+                    exit when JMP_Count >= 5;
 
                     --  Reset fault detection state for this hop. Without this,
                     --  a fault detected on a previous hop would persist and
@@ -6185,7 +6188,7 @@ package body Model_Manager is
                     F_Detected := False;
 
                     if not External_Agent then
-                        if Hop_Count = 0 then
+                        if JMP_Count = 0 then
                             Push_Orchestration_Through_Parser
                                (Stream,
                                 Session_ID,
@@ -6200,7 +6203,7 @@ package body Model_Manager is
                                 Orch_Parser,
                                 "[Adelaide Core]: [Thought] Continuing reasoning "
                                 & "(hop"
-                                & Natural'Image (Hop_Count + 1)
+                                & Natural'Image (JMP_Count + 1)
                                 & ")..."
                                 & ASCII.LF);
                         end if;
@@ -6211,8 +6214,8 @@ package body Model_Manager is
                        (AnsiAda.Foreground (AnsiAda.Light_Blue)
                         & "[Init-V]"
                         & AnsiAda.Reset
-                        & " Hybrid_Generate: Final generation. Hop="
-                        & Natural'Image (Hop_Count)
+                        & " Hybrid_Generate: Final generation. JMP="
+                        & Natural'Image (JMP_Count)
                         & " Len="
                         & Natural'Image (Get_Final_Prompt'Length));
                     Generate
@@ -6223,7 +6226,7 @@ package body Model_Manager is
                         Session_ID         => Session_ID,
                         Requested_Ctx      => 8192,
                         Stream             => Stream,
-                        Orch_Think_Open    => (Hop_Count = 0),
+                        Orch_Think_Open    => (JMP_Count = 0),
                         Level              => Level,
                         Virtual_Tokens     => Cached_Virtual_Tokens,
                         Virtual_Tok_Len    => Cached_Virtual_Len,
@@ -6523,8 +6526,8 @@ package body Model_Manager is
                         & AnsiAda.Reset
                         & " Hybrid_Generate: F_Detected="
                         & Boolean'Image (F_Detected)
-                        & " Hop_Count="
-                        & Natural'Image (Hop_Count));
+                        & " JMP_Count="
+                        & Natural'Image (JMP_Count));
 
                     if F_Detected then
                         declare
@@ -6628,9 +6631,9 @@ package body Model_Manager is
                                     & ASCII.LF);
                             end if;
                         end;
-                        Hop_Count := Hop_Count + 1;
+                        JMP_Count := JMP_Count + 1;
                         --  Update context fault monitor tracking
-                        Current_Context_Fault_Hops := Hop_Count;
+                        Current_Context_Fault_JMPs := JMP_Count;
                         Current_Internal_State_Len := Length (Internal_State);
                         Database_Manager.Set_System_State ("Internal_State", To_String (Internal_State));
                     else
@@ -6650,8 +6653,8 @@ package body Model_Manager is
                     & "[Init-V]"
                     & AnsiAda.Reset
                     & " Hybrid_Generate: CONTEXT_FAULT_LOOP EXITED."
-                    & " Hop_Count="
-                    & Natural'Image (Hop_Count));
+                    & " JMP_Count="
+                    & Natural'Image (JMP_Count));
             end;
             --  SAFETY NET: If the entire response is think-only content,
             --  the model failed to produce a visible answer.  Set a fallback
@@ -6902,11 +6905,11 @@ package body Model_Manager is
                              / Current_Ctx_Capacity)
                        & "%"
                        & ASCII.LF
-                       & "Reasoning Hops: "
-                       & Natural'Image (Current_Hop_Count)
+                       & "JMPs: "
+                       & Natural'Image (Current_JMP_Count)
                        & ASCII.LF
                        & "Context Faults: "
-                       & Natural'Image (Current_Context_Fault_Hops)
+                       & Natural'Image (Current_Context_Fault_JMPs)
                        & ASCII.LF
                        & "Pipeline Level: "
                        & ELP_Level'Image (Level)

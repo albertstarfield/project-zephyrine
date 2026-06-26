@@ -21,7 +21,6 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 
 import subprocess
 import sys
-import os
 import re
 
 
@@ -114,7 +113,7 @@ def main():
                 timeout=30
             )
             print(result.stdout if result.stdout else "No matches found")
-        except:
+        except Exception:
             print("ERROR: Grep failed")
 
     elif cmd == "files":
@@ -134,7 +133,7 @@ def main():
                 timeout=30
             )
             print(result.stdout if result.stdout else "No matching files")
-        except:
+        except Exception:
             print("ERROR: Grep failed")
 
     else:
