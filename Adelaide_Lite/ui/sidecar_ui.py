@@ -961,6 +961,19 @@ if __name__ == "__main__":
     server_thread = threading.Thread(target=run_server, args=(ui_port,), daemon=True)
     server_thread.start()
 
+    # [DO NOT REMOVE] macOS App Bundle for Microphone/Camera/Screen Capture Permissions
+    # On macOS, pywebview needs a proper .app bundle with Info.plist to request
+    # microphone, camera, and screen capture permissions. Without this, WebKit
+    # will block getUserMedia() calls silently.
+    #
+    # The Info.plist must contain:
+    #   NSMicrophoneUsageDescription - "Adelaide needs microphone access for voice interaction"
+    #   NSCameraUsageDescription - "Adelaide needs camera access for visual context"
+    #   NSScreenCaptureUsageDescription - "Adelaide needs screen capture for visual context"
+    #
+    # For development, we use pywebview debug mode which may prompt for permissions.
+    # For production, package as .app bundle using py2app or create manually.
+
     # Launch PyWebview native window
     window = webview.create_window(
         "Adelaide Zephyrine Assistant",

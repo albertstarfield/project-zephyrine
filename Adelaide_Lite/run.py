@@ -1266,7 +1266,25 @@ def main():
         else:
             sidecar_python = python_cmd
             
-        subprocess.run([sidecar_python, "sidecar_ui.py"], cwd=ui_dir)
+        # [DO NOT REMOVE] macOS .app bundle for microphone/camera/screen capture permissions
+        # On Darwin, create a proper .app bundle with Info.plist containing
+        # NSMicrophoneUsageDescription, NSCameraUsageDescription, and
+        # NSScreenCaptureUsageDescription for hardware access permissions.
+        if sys.platform == "darwin":
+            app_bundle_path = os.path.join(BASE_DIR, "run", "Adelaide.app")
+            create_app_script = os.path.join(ui_dir, "create_macos_app.py")
+            
+            # Create .app bundle if it doesn't exist
+            if not os.path.exists(app_bundle_path):
+                print("[*] Creating macOS .app bundle for microphone/camera permissions...")
+                subprocess.run([sidecar_python, create_app_script, "--output", app_bundle_path], cwd=ui_dir)
+            
+            # Launch via .app bundle for proper permissions
+            print(f"[*] Launching Adelaide.app for hardware access...")
+            subprocess.run(["open", app_bundle_path])
+        else:
+            # Non-Darwin: launch directly
+            subprocess.run([sidecar_python, "sidecar_ui.py"], cwd=ui_dir)
     else:
         try:
             exit_code = server_process.wait()
