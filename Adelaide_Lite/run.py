@@ -1270,8 +1270,9 @@ def main():
         # On Darwin, create a proper .app bundle with Info.plist containing
         # NSMicrophoneUsageDescription, NSCameraUsageDescription, and
         # NSScreenCaptureUsageDescription for hardware access permissions.
+        # The .app launches Terminal and runs the server with GUI.
         if sys.platform == "darwin":
-            app_bundle_path = os.path.join(BASE_DIR, "run", "Adelaide.app")
+            app_bundle_path = os.path.join(BASE_DIR, "run", "Adelaide Zephyrine Assistant.app")
             create_app_script = os.path.join(ui_dir, "create_macos_app.py")
             
             # Create .app bundle if it doesn't exist
@@ -1280,7 +1281,7 @@ def main():
                 subprocess.run([sidecar_python, create_app_script, "--output", app_bundle_path], cwd=ui_dir)
             
             # Launch via .app bundle for proper permissions
-            print(f"[*] Launching Adelaide.app for hardware access...")
+            print(f"[*] Launching Adelaide Zephyrine Assistant.app for hardware access...")
             subprocess.run(["open", app_bundle_path])
         else:
             # Non-Darwin: launch directly
