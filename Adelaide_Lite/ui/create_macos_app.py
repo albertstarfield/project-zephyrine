@@ -90,6 +90,11 @@ LAUNCHER_TEMPLATE = """#!/bin/bash
 # Get the directory where this .app is located
 APP_DIR="$(dirname "$(dirname "$0")")"
 
+# [DO NOT REMOVE] Use BASE_DIR/run for temp files, not /tmp
+# This ensures temp files are in the project directory, not system temp
+RUN_DIR="$HOME/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/run"
+mkdir -p "$RUN_DIR"
+
 # Try to find Adelaide_Lite directory
 # Check common locations relative to .app
 SEARCH_DIRS=(
@@ -110,12 +115,14 @@ for dir in "${SEARCH_DIRS[@]}"; do
 done
 
 if [ -z "$ADelaide_DIR" ]; then
-    # Ask user to select directory
+    # Ask user to select directory, store temp file in BASE_DIR/run
+    TEMP_FILE="$RUN_DIR/adelaide_dir_select.txt"
     osascript -e 'tell application "Finder"
         set dir to POSIX path of (choose folder with prompt "Select Adelaide_Lite directory")
         return dir
-    end tell' > /tmp/adelaide_dir.txt
-    ADelaide_DIR=$(cat /tmp/adelaide_dir.txt | tr -d '\n')
+    end tell' > "$TEMP_FILE"
+    ADelaide_DIR=$(cat "$TEMP_FILE" | tr -d '\n')
+    rm -f "$TEMP_FILE"
 fi
 
 if [ -z "$ADelaide_DIR" ]; then
