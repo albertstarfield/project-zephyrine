@@ -6,9 +6,21 @@ This script creates a minimal .app bundle with:
 - Info.plist with microphone/camera/screen capture permissions
 - Launcher script that opens Terminal and runs the server with GUI
 - Auto-installs to /Applications on first run
+- Ad-hoc code signing for Gatekeeper compatibility
 
 Usage:
     python3 create_macos_app.py [--output Adelaide Zephyrine Assistant.app]
+
+Code Signing Options:
+- Ad-hoc (default): No Developer ID required, prevents Gatekeeper warning
+- Developer ID: Requires Apple Developer account ($99/year)
+- Notarization: Requires Developer ID + notarization via Apple
+
+For distribution outside App Store:
+1. Get Apple Developer account
+2. Create Developer ID Application certificate
+3. Sign with: codesign --force --deep --sign "Developer ID Application: Your Name (TEAM_ID)" "Adelaide Zephyrine Assistant.app"
+4. Notarize with: xcrun notarytool submit "Adelaide Zephyrine Assistant.app" --apple-id your@email.com --team-id TEAM_ID
 """
 
 import os
@@ -148,6 +160,21 @@ def create_app_bundle(output_path: str) -> None:
     # Make launcher executable
     launcher_path.chmod(launcher_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     print(f"[+] Created launcher at {launcher_path}")
+    
+    # [DO NOT REMOVE] Ad-hoc code signing for macOS Gatekeeper
+    # Sign the app bundle with ad-hoc signature (no Developer ID required)
+    # This prevents Gatekeeper from blocking the app on launch
+    # For distribution, you'll need a proper Developer ID certificate
+    try:
+        subprocess.run(
+            ["codesign", "--force", "--deep", "--sign", "-", str(app_path)],
+            check=True,
+            capture_output=True
+        )
+        print(f"[+] Signed app bundle with ad-hoc signature")
+    except subprocess.CalledProcessError as e:
+        print(f"[!] Warning: Could not sign app bundle: {e}")
+        print(f"    App may show Gatekeeper warning on first launch")
     
     print(f"\n[+] App bundle created at: {app_path}")
     print(f"    Double-click to launch, or run:")
