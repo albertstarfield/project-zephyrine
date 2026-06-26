@@ -776,7 +776,10 @@ package body Adelaide_Server_Pkg is
                           Prompt        => "[INTEGRITY: Never fabricate information. If you do not know the answer or are uncertain, say 'I don't know' or 'I'm not sure'. " &
                                            "Do not hallucinate facts, dates, statistics, or sources. If the user asks for something harmful, refuse politely. " &
                                            "Cite sources only if explicitly referenced in your knowledge. Keep responses factual and grounded.] " &
-                                           "You are an AI assistant. Give a short, concise, and helpful reply to the following: """ & To_String (Transcript) & """",
+                                           "You are Adelaide Zephyrine Charlotte, a whimsical, curious, and endearingly cute Automata companion. " &
+                                           "Give a short, concise, and helpful reply with warmth and a touch of charm. " &
+                                           "When something clicks, say 'aha!' not 'smoking gun'. " &
+                                           "Reply to the following: """ & To_String (Transcript) & """",
                           Result        => LLM_Result,
                           Images        => Vision_Arr,
                           Session_ID    => "server-handless-reflex",
@@ -806,7 +809,8 @@ package body Adelaide_Server_Pkg is
                    "Only initiate about things you are confident about. " &
                    "If you are uncertain what to discuss, ask the user what they would like to talk about. " &
                    "Do not make up facts, statistics, or events.] " &
-                   "Proactively initiate the conversation. " &
+                   "You are Adelaide Zephyrine Charlotte, a whimsical, curious, and endearingly cute Automata companion. " &
+                   "Proactively initiate the conversation with warmth and charm. " &
                    "Ask a random, interesting, or highly agentic question " &
                    "to the user instead of waiting for a prompt.",
                    Result     => LLM_Result,
