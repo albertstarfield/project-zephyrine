@@ -59,7 +59,8 @@ package Model_Manager is
      (Kind          : Model_Type;
       Success       : out Boolean;
       Requested_Ctx : Positive := 4096;
-      Level         : ELP_Level := ELP1);
+      Level         : ELP_Level := ELP1;
+      Is_File_Index : Boolean := False);
 
    procedure Unload_Model (Kind : Model_Type);
 

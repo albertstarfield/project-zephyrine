@@ -43,6 +43,57 @@ extern "C" {
             *total_bytes = 0;
         }
     }
+
+    // ===== CPU MEMORY QUERY =====
+    // Queries CPU memory (free/total) through macOS host_statistics64 and sysctl.
+    // Returns free and total memory in bytes.
+    #ifdef __APPLE__
+    // [DO NOT REMOVE] Specific XNU Fix for GCC compiling macOS SDK mach headers.
+    // Apple's xnu_static_assert macros in <mach/message.h> rely on C11's _Static_assert
+    // which causes syntax errors in C++ mode under GCC. We map it to C++'s static_assert.
+    #ifndef _Static_assert
+    #define _Static_assert(x, y) static_assert(x, y)
+    #endif
+    #include <sys/types.h>
+    #include <sys/sysctl.h>
+    #include <mach/mach.h>
+    #include <mach/host_info.h>
+    #include <mach/mach_host.h>
+    void cpu_memory_query(size_t * free_bytes, size_t * total_bytes) {
+        if (!free_bytes || !total_bytes) return;
+        *free_bytes = 0;
+        *total_bytes = 0;
+        try {
+            // Get total physical memory via sysctl
+            int mib[2];
+            mib[0] = CTL_HW;
+            mib[1] = HW_MEMSIZE;
+            uint64_t total_mem = 0;
+            size_t len = sizeof(total_mem);
+            if (sysctl(mib, 2, &total_mem, &len, NULL, 0) == 0) {
+                *total_bytes = (size_t)total_mem;
+            }
+            // Get free memory via host_statistics64
+            mach_port_t host = mach_host_self();
+            vm_statistics64_data_t vm_stat;
+            mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+            if (host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&vm_stat, &count) == KERN_SUCCESS) {
+                // free_pages + speculative_pages are available without paging
+                uint64_t free_mem = ((uint64_t)vm_stat.free_count + vm_stat.speculative_count) * vm_page_size;
+                *free_bytes = (size_t)free_mem;
+            }
+        } catch (...) {
+            *free_bytes = 0;
+            *total_bytes = 0;
+        }
+    }
+    #else
+    // Non-Apple platforms: return 0,0 (inapplicable)
+    void cpu_memory_query(size_t * free_bytes, size_t * total_bytes) {
+        if (free_bytes) *free_bytes = 0;
+        if (total_bytes) *total_bytes = 0;
+    }
+    #endif
     struct llama_model * llama_model_load_from_file_safe(const char * path_model, struct llama_model_params params) {
         try {
             return llama_model_load_from_file(path_model, params);

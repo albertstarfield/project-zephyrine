@@ -323,6 +323,14 @@ function Llama_Sampler_Init_Penalties
       Total_Bytes : out Interfaces.C.size_t);
    pragma Import (C, GPU_Memory_Query, "gpu_memory_query");
 
+   --  ===== CPU MEMORY QUERY =====
+   --  Returns free and total CPU memory in bytes.
+   --  Uses macOS host_statistics64 for free memory and sysctl for total.
+   procedure CPU_Memory_Query
+     (Free_Bytes  : out Interfaces.C.size_t;
+      Total_Bytes : out Interfaces.C.size_t);
+   pragma Import (C, CPU_Memory_Query, "cpu_memory_query");
+
    --  ===== RERANKING API =====
    --  When Pooling_Type = LLAMA_POOLING_TYPE_RANK (4), llama.cpp attaches
    --  a classification head to the graph for reranking models like

@@ -1342,37 +1342,50 @@ package body Adelaide_Server_Pkg is
              --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-             --  STRING RESPONSE CACHE: Check cache before model inference
-             --  O(1) lookup, instant response for repeated/simple queries
-             --  Branch prediction: single if-check, no random branching
-             declare
-                Cached : constant String := Response_Cache.Lookup (To_String (Prompt));
-             begin
-                if Cached'Length > 0 then
-                   --  CACHE HIT: Return cached response instantly
-                   Result := To_Unbounded_String (Cached);
-                   Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
-                             "[Response-Cache]" & AnsiAda.Reset &
-                             " HIT for prompt (" & Natural'Image (To_String (Prompt)'Length) &
-                             " chars) | Hits=" & Natural'Image (Response_Cache.Hit_Count) &
-                             " Misses=" & Natural'Image (Response_Cache.Miss_Count));
-                else
-                   --  CACHE MISS: Call model inference, then cache the result
-                   Model_Manager.Hybrid_Generate
-                     (Prompt     => To_String (Prompt),
-                      Result     => Result,
-                      Session_ID => To_String (S_ID),
-                      Agentic    => Is_Agentic,
-                      Raw_Prompt => Is_Raw_Prompt);
+             if Is_External_Agent then
+                --  BYPASS CACHE: Dynamic responses for external agents
+                Model_Manager.Hybrid_Generate
+                  (Prompt     => To_String (Prompt),
+                   Result     => Result,
+                   Session_ID => To_String (S_ID),
+                   Agentic    => Is_Agentic,
+                   Raw_Prompt => Is_Raw_Prompt);
+                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                          "[Response-Cache]" & AnsiAda.Reset &
+                          " BYPASS (External Agent) for prompt (" & Natural'Image (To_String (Prompt)'Length) &
+                          " chars)");
+             else
+                --  STRING RESPONSE CACHE: Check cache before model inference
+                --  O(1) lookup, instant response for repeated/simple queries
+                declare
+                   Cached : constant String := Response_Cache.Lookup (To_String (Prompt));
+                begin
+                   if Cached'Length > 0 then
+                      --  CACHE HIT: Return cached response instantly
+                      Result := To_Unbounded_String (Cached);
+                      Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                                "[Response-Cache]" & AnsiAda.Reset &
+                                " HIT for prompt (" & Natural'Image (To_String (Prompt)'Length) &
+                                " chars) | Hits=" & Natural'Image (Response_Cache.Hit_Count) &
+                                " Misses=" & Natural'Image (Response_Cache.Miss_Count));
+                   else
+                      --  CACHE MISS: Call model inference, then cache the result
+                      Model_Manager.Hybrid_Generate
+                        (Prompt     => To_String (Prompt),
+                         Result     => Result,
+                         Session_ID => To_String (S_ID),
+                         Agentic    => Is_Agentic,
+                         Raw_Prompt => Is_Raw_Prompt);
 
-                   --  Store result in cache for future lookups
-                   Response_Cache.Store (To_String (Prompt), To_String (Result));
-                   Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
-                             "[Response-Cache]" & AnsiAda.Reset &
-                             " MISS for prompt (" & Natural'Image (To_String (Prompt)'Length) &
-                             " chars) | Entries=" & Natural'Image (Response_Cache.Entry_Count));
-                end if;
-             end;
+                      --  Store result in cache for future lookups
+                      Response_Cache.Store (To_String (Prompt), To_String (Result));
+                      Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                                "[Response-Cache]" & AnsiAda.Reset &
+                                " MISS for prompt (" & Natural'Image (To_String (Prompt)'Length) &
+                                " chars) | Entries=" & Natural'Image (Response_Cache.Entry_Count));
+                   end if;
+                end;
+             end if;
 
                declare
                   use GNATCOLL.JSON;

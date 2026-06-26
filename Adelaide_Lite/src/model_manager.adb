@@ -173,7 +173,7 @@ package body Model_Manager is
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-    --  WCET Monitor Task — prints every 250ms, appends CSV to run/wcet.csv
+    --  WCET Monitor Task — prints every 1s, appends CSV to run/wcet.csv
     task WCET_Monitor is
         entry Start;
     end WCET_Monitor;
@@ -195,7 +195,7 @@ package body Model_Manager is
                 Ada.Text_IO.Put_Line (CSV_File, "uptime_s,pipeline_ns,elp0_ns,elp1_ns,elp2_ns,elp3_ns");
         end;
         loop
-            delay until Last_Print + Milliseconds (250);
+            delay until Last_Print + Milliseconds (1000);
             Last_Print := Clock;
             Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
             --  Print to terminal
@@ -244,7 +244,7 @@ package body Model_Manager is
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-    --  Acceleration Monitor Task — prints every 100ms, appends CSV to run/acceleration.csv
+    --  Acceleration Monitor Task — prints every 10s, appends CSV to run/acceleration.csv
     task Acceleration_Monitor is
         entry Start;
     end Acceleration_Monitor;
@@ -266,7 +266,7 @@ package body Model_Manager is
                 Ada.Text_IO.Put_Line (CSV_File, "uptime_s,free_mb,total_mb,percent,tensor_layers,metal_broken");
         end;
         loop
-            delay until Last_Print + Milliseconds (100);
+            delay until Last_Print + Milliseconds (10000);
             Last_Print := Clock;
             Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
             declare
@@ -349,6 +349,77 @@ package body Model_Manager is
         end loop;
     end Acceleration_Monitor;
 
+    --  =====================================================================
+    --  CPU MEMORY MONITOR TASK
+    --  =====================================================================
+    --  Reports CPU usage and free memory percentage every 10s.
+    --  CSV output: run/cpu_memory.csv
+    --  Format: uptime_s,free_mb,total_mb,percent
+    --  =====================================================================
+    task CPU_Monitor is
+        entry Start;
+    end CPU_Monitor;
+
+    task body CPU_Monitor is
+        use Ada.Real_Time;
+        CSV_File   : Ada.Text_IO.File_Type;
+        Last_Print : Time := Time_First;
+        Uptime_S   : Long_Long_Integer;
+    begin
+        Elab_Trace ("CPU_Monitor task body ENTERED");
+        accept Start;
+        --  Open CSV for append
+        begin
+            Ada.Text_IO.Open (CSV_File, Ada.Text_IO.Append_File, "run/cpu_memory.csv");
+        exception
+            when Ada.Text_IO.Name_Error =>
+                Ada.Text_IO.Create (CSV_File, Ada.Text_IO.Append_File, "run/cpu_memory.csv");
+                Ada.Text_IO.Put_Line (CSV_File, "uptime_s,free_mb,total_mb,percent");
+        end;
+        loop
+            delay until Last_Print + Milliseconds (10000);
+            Last_Print := Clock;
+            Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
+            declare
+                use Interfaces.C;
+                Free_Bytes  : size_t := 0;
+                Total_Bytes : size_t := 0;
+                Free_MB     : Natural := 0;
+                Total_MB    : Natural := 0;
+                Percent     : Natural := 0;
+            begin
+                Llama_Interface.CPU_Memory_Query (Free_Bytes, Total_Bytes);
+                if Total_Bytes > 0 then
+                    Free_MB := Natural (Free_Bytes / (1024 * 1024));
+                    Total_MB := Natural (Total_Bytes / (1024 * 1024));
+                    if Total_MB > 0 then
+                        Percent := Natural (Float (Total_MB - Free_MB) * 100.0 / Float (Total_MB));
+                        if Percent > 100 then Percent := 100; end if;
+                    end if;
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                        & "[CPU-Memory-Monitor] [Uptime]+"
+                        & Trim (Natural'Image (Natural (Uptime_S)), Both)
+                        & "s Free="
+                        & Trim (Natural'Image (Free_MB), Both)
+                        & "MB / Total="
+                        & Trim (Natural'Image (Total_MB), Both)
+                        & "MB ("
+                        & Trim (Natural'Image (Percent), Both)
+                        & "% Used)"
+                        & AnsiAda.Reset);
+                    Ada.Text_IO.Put_Line
+                       (CSV_File,
+                        Long_Long_Integer'Image (Uptime_S) & ","
+                        & Natural'Image (Free_MB) & ","
+                        & Natural'Image (Total_MB) & ","
+                        & Natural'Image (Percent));
+                end if;
+                Ada.Text_IO.Flush (CSV_File);
+            end;
+        end loop;
+    end CPU_Monitor;
+
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -380,7 +451,7 @@ package body Model_Manager is
     end Context_Monitor;
 
     task body Context_Monitor is
-        Interval    : constant Duration := 0.5;
+        Interval    : constant Duration := 5.0;
         Next_Check  : Ada.Calendar.Time;
         Fault_Total : Natural := 0;
     begin
@@ -437,7 +508,7 @@ package body Model_Manager is
                    (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                     & "[CtxMonitor]"
                     & AnsiAda.Reset
-                     & " === VIRTUAL CONTEXT STATUS (500ms) ===");
+                     & " === VIRTUAL CONTEXT STATUS (5s) ===");
 
                 --  ELP Queue: request depth (synthetic 2^63 capacity)
                 Put_Line
@@ -1188,6 +1259,9 @@ package body Model_Manager is
         if not Acceleration_Monitor'Terminated then
             Acceleration_Monitor.Start;
         end if;
+        if not CPU_Monitor'Terminated then
+            CPU_Monitor.Start;
+        end if;
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
         --  [ElabTrace][+Uptime]: Context_Monitor started.
         Put_Line
@@ -1289,7 +1363,8 @@ package body Model_Manager is
        (Kind          : Model_Type;
         Success       : out Boolean;
         Requested_Ctx : Positive := 4096;
-        Level         : ELP_Level := ELP1)
+        Level         : ELP_Level := ELP1;
+        Is_File_Index : Boolean := False)
     is
         --  [PARALLEL=1] Before calling Load_Model, ensure NO OTHER model is
         --  loaded. Only one model can occupy GPU memory at a time. If another
@@ -1558,13 +1633,23 @@ package body Model_Manager is
         --  ======================================================================
         --  GPU LAYER CONFIGURATION
         --  ======================================================================
-        --  ALL models always on GPU (N_Gpu_Layers := -1).
-        --  LM Studio runs everything on GPU including embeddings with no
-        --  Metal crashes. The previous ELP0 CPU-only restriction was based on
-        --  unfounded Metal crash fears. GPU embedding is ~10x faster than CPU,
-        --  reducing ELP0 queue buildup so ELP1 user requests get served faster.
-        --  ======================================================================
-        M_Params.N_Gpu_Layers := -1;  -- All models always on GPU
+        if Kind = Qwen_Embedding then
+            --  [ADAPTIVE GPU LAYERS FOR EMBEDDING]
+            --  File literature index -> CPU-only to avoid Metal OOM
+            --  during sustained burst crawl.
+            if Is_File_Index then
+                M_Params.N_Gpu_Layers := 0;  -- CPU-only for file indexing
+            else
+                M_Params.N_Gpu_Layers := -1;  -- GPU for all other ops
+            end if;
+        else
+            --  [ADAPTIVE GPU LAYERS FOR LLM]
+            if Acceleration_Silicon_Layer = -1 then
+                M_Params.N_Gpu_Layers := -1;  -- Aggressive: all on GPU
+            else
+                M_Params.N_Gpu_Layers := Interfaces.C.int (Acceleration_Silicon_Layer);  -- Fallback
+            end if;
+        end if;
 
         --  TRY THREE PATHS FOR MODEL FILES
         --  The CWD at runtime is unpredictable:
@@ -1738,24 +1823,10 @@ package body Model_Manager is
                 C_Params.Type_K := GGML_TYPE_F16;
                 C_Params.Type_V := GGML_TYPE_F16;
                 C_Params.Flash_Attn_Type := 0;
-                M_Params.N_Gpu_Layers :=
-                   -1;    -- GPU for embedding (LM Studio does it)
-
             else
                 C_Params.Type_K := GGML_TYPE_Q4_1;
                 C_Params.Type_V := GGML_TYPE_Q4_1;
                 C_Params.Flash_Attn_Type := 1;
-                --  [ADAPTIVE GPU LAYERS] Start aggressive (-1 = all layers on GPU).
-                --  If OOM, OOM handler sets Acceleration_Silicon_Layer to fallback (24).
-                --  After 3 min cooldown, Load_Model retries -1 again.
-                --  This auto-probes whether GPU can handle full offload.
-                if Acceleration_Silicon_Layer = -1 then
-                    M_Params.N_Gpu_Layers := -1;  -- Aggressive: all on GPU
-
-                else
-                    M_Params.N_Gpu_Layers :=
-                       Interfaces.C.int (Acceleration_Silicon_Layer);  -- Fallback
-                end if;
             end if;
 
             C_Params.Abort_Callback := Llama_Abort_Callback'Address;
@@ -1812,6 +1883,22 @@ package body Model_Manager is
                     & Interfaces.C.int'Image (C_Params.Flash_Attn_Type)
                     & " N_Gpu_Layers="
                     & Interfaces.C.int'Image (M_Params.N_Gpu_Layers));
+                --  [ADAPTIVE GPU LOG] Show embedding-specific GPU layer choice
+                if Kind = Qwen_Embedding then
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                        & "[Uptime]+"
+                        & Trim
+                             (Duration'Image
+                                 (Ada.Real_Time.To_Duration
+                                     (Ada.Real_Time.Clock - Init_Start_Time)),
+                              Both)
+                        & "s [LoadModel]"
+                        & AnsiAda.Reset
+                        & " Embedding GPU: "
+                        & (if Is_File_Index then "CPU-only (file index)"
+                           else "GPU (accelerator API)"));
+                end if;
                 --  [VITAL-DO-NOT-REMOVE] DO NOT suppress stderr here.
                 --  If Llama_Init_From_Model hangs or crashes, we NEED to see
                 --  the llama.cpp stderr output to diagnose the problem.
@@ -2541,12 +2628,30 @@ package body Model_Manager is
                 Free (Prompt_C);
                 return;
             end if;
+            --  [VITAL-DO-NOT-REMOVE] ELP1 PREEMPTION CHECKPOINT #1:
+            --  Re-check BEFORE Load_Model. Load_Model is a multi-second
+            --  blocking call (model read + context creation). If ELP1 arrived
+            --  between Acquire_ELP0 returning and here, we must drop NOW —
+            --  the abort callback cannot fire until AFTER context exists.
+            --  This is the PRIMARY cause of the 5-minute Hello latency:
+            --  ELP0 holds the gate, starts loading a CPU model (no Metal,
+            --  no abort hook), and ELP1 is stuck waiting the entire time.
+            if Priority_Model_Gate.Should_Abort then
+                Put_Line
+                   ("[ELP0-PREEMPT] Pre-Load abort: ELP1 arrived. "
+                    & "Releasing gate before Load_Model.");
+                Priority_Model_Gate.Release_ELP0 (Kind);
+                ELP_Queue.Dequeue_Level (Level);
+                Length := 0;
+                Free (Prompt_C);
+                return;
+            end if;
         else
             Priority_Model_Gate.Request_ELP1;
             Priority_Model_Gate.Acquire_ELP1 (Kind);
         end if;
 
-        Load_Model (Kind, Success, 1024, Level);
+        Load_Model (Kind, Success, 1024, Level, Level = ELP0);
         if not Success then
             if Level = ELP0 then
                 Priority_Model_Gate.Release_ELP0 (Kind);
@@ -2734,6 +2839,21 @@ package body Model_Manager is
                         Consecutive_Failures := 0;
                         Tokens_Left := Tokens_Left - To_Decode;
                         Current_Pos := Current_Pos + To_Decode;
+
+                        --  [VITAL-DO-NOT-REMOVE] ELP1 PREEMPTION CHECKPOINT #2:
+                        --  After each successful decode batch, check if ELP1
+                        --  arrived. The abort callback fires INSIDE llama_decode
+                        --  but only on the NEXT batch, causing a full 256-token
+                        --  batch delay per chunk. Exit immediately here so ELP1
+                        --  gets the GPU without waiting for the next iteration.
+                        if Level = ELP0
+                           and then Priority_Model_Gate.Should_Abort
+                        then
+                            Put_Line
+                               ("[ELP0-PREEMPT] Mid-decode abort: "
+                                & "ELP1 pending, breaking decode loop.");
+                            exit;
+                        end if;
                     end if;
                 end;
             end loop;
@@ -4939,7 +5059,7 @@ package body Model_Manager is
             Embed_Ctx : constant Positive :=
                (if Kind = Qwen_Embedding then 1024 else 8192);
         begin
-            Load_Model (Kind, Success, Embed_Ctx, Level);
+            Load_Model (Kind, Success, Embed_Ctx, Level, False);
         end;
         if not Success then
             if Level = ELP0 then
