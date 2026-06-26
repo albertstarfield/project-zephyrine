@@ -21,12 +21,12 @@ with Ada.Exceptions;
 
 --  [TERMINOLOGY NOTE]
 --  "Tensor Accelerator" refers to various acceleration technologies including:
---    - GPU (Graphics Processing Unit)
---    - Hexagon DSP
---    - Neural Engine (Apple)
---    - Vulkan compute
---    - AMX (Advanced Matrix Extensions)
---    - Other specialized acceleration hardware
+--    - GPGPU (General-Purpose GPU): Graphics processors used for parallel computing
+--    - NPU (Neural Processing Unit): Specialized hardware for neural network operations
+--    - DSP (Digital Signal Processor): Optimized for signal processing tasks
+--    - AMX (Advanced Matrix Extensions): High-bit matrix SIMD coprocessor in x86 CPUs
+--    - Vulkan compute: Cross-platform compute API for acceleration
+--    - Other acceleration hardware: Specialized coprocessors for AI workloads
 --  This abstraction allows the system to work with different acceleration backends.
 with Watchdog_Manager;
 with Kratos;
@@ -339,16 +339,7 @@ package body Model_Manager is
                          & " | Cycle_Elap=" & Trim(Duration'Image (Cycle_Elapsed), Both) 
                          & AnsiAda.Reset);
                  
-                 --  Add memory tracking (approximate)
-                 declare
-                     -- Estimate: 10MB per cycle for monitoring overhead (adjust as needed)
-                     Est_Used_MB : constant Integer := Cycle_Count * 10;
-                 begin
-                     Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                             & "[DEBUG] [AccelMonitor] Est_Mem_Used=" & Est_Used_MB'Img 
-                             & "MB | Free_Pct=" & Free_MB'Img & "%" 
-                             & AnsiAda.Reset);
-                 end;
+                 --  [MEMORY TRACKING] This will be handled after the GPU query
              end;
              
              declare
@@ -362,25 +353,39 @@ package body Model_Manager is
                   --  Add error handling for Tensor Accelerator memory query
                  begin
                      Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
-                     Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                             & "[DEBUG] [AccelMonitor] GPU_Memory_Query returned Free_Bytes=" 
-                             & size_t'Image (Free_Bytes) & ", Total_Bytes=" 
-                             & size_t'Image (Total_Bytes) & AnsiAda.Reset);
+                      Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                              & "[DEBUG] [AccelMonitor] Tensor_Accelerator_Memory_Query returned Free_Bytes=" 
+                              & size_t'Image (Free_Bytes) & ", Total_Bytes=" 
+                              & size_t'Image (Total_Bytes) & AnsiAda.Reset);
                  exception
                      when others =>
                          Free_Bytes := 0;
                          Total_Bytes := 0;
-                         Put_Line (AnsiAda.Foreground (AnsiAda.Red)
-                                 & "[ERROR] [AccelMonitor] GPU_Memory_Query failed with exception" 
-                                 & AnsiAda.Reset);
+                          Put_Line (AnsiAda.Foreground (AnsiAda.Red)
+                                  & "[ERROR] [AccelMonitor] Tensor_Accelerator_Memory_Query failed with exception" 
+                                  & AnsiAda.Reset);
                  end;
                  
-                 if Total_Bytes > 0 then
-                    Free_MB := Natural (Free_Bytes / (1024 * 1024));
-                    Total_MB := Natural (Total_Bytes / (1024 * 1024));
-                    if Total_MB > 0 then
-                        Percent := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
-                        if Percent > 100 then Percent := 100; end if;
+                  if Total_Bytes > 0 then
+                     Free_MB := Natural (Free_Bytes / (1024 * 1024));
+                     Total_MB := Natural (Total_Bytes / (1024 * 1024));
+                     --  [MEMORY TRACKING] Log memory usage after query
+                     declare
+                         -- Estimate: 10MB per cycle for monitoring overhead (adjust as needed)
+                         Est_Used_MB : constant Integer := Cycle_Count * 10;
+                         Free_Pct : constant Natural := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
+                     begin
+                         Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                                 & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
+                                 & " | Est_Mem_Used=" & Est_Used_MB'Img & "MB" 
+                                 & " | Free_MB=" & Free_MB'Img & "MB" 
+                                 & " | Free_Pct=" & Free_Pct'Img & "%"
+                                 & AnsiAda.Reset);
+                     end;
+                     
+                     if Total_MB > 0 then
+                         Percent := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
+                         if Percent > 100 then Percent := 100; end if;
                     end if;
                     GPU_Free_MB := Free_MB;
                     GPU_Total_MB := Total_MB;
