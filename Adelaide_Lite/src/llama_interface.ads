@@ -161,9 +161,14 @@ package Llama_Interface is
    procedure Llama_Model_Free (Model : Llama_Model);
    pragma Import (C, Llama_Model_Free, "llama_model_free");
 
-   function Llama_Init_From_Model
-     (Model : Llama_Model; Params : Llama_Context_Params) return Llama_Context;
-   pragma Import (C, Llama_Init_From_Model, "llama_init_from_model");
+    function Llama_Init_From_Model
+      (Model : Llama_Model; Params : Llama_Context_Params) return Llama_Context;
+    pragma Import (C, Llama_Init_From_Model, "llama_init_from_model");
+
+    function Llama_Init_From_Model_Safe
+      (Model : Llama_Model; Params : Llama_Context_Params) return Llama_Context;
+    pragma Import (C, Llama_Init_From_Model_Safe, "llama_init_from_model_safe");
+
 
    procedure Llama_Free (Context : Llama_Context);
    pragma Import (C, Llama_Free, "llama_free");

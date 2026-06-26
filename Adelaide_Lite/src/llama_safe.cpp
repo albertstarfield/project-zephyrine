@@ -5,6 +5,34 @@
 #include <stdexcept>
 #include <iostream>
 #include <cstring>
+#include <chrono>
+#include <iomanip>
+
+// ===== PROFILING UTILITIES =====
+static auto process_start = std::chrono::steady_clock::now();
+
+static void profile_log(const char* msg) {
+    auto now = std::chrono::steady_clock::now();
+    auto uptime_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - process_start).count();
+    double uptime_s = uptime_ms / 1000.0;
+    std::cout << "[Profiling] [Uptime]+" << std::fixed << std::setprecision(3) << uptime_s << "s " << msg << std::endl;
+}
+
+struct ProfileScope {
+    const char* name;
+    std::chrono::steady_clock::time_point start;
+    ProfileScope(const char* n) : name(n), start(std::chrono::steady_clock::now()) {
+        std::string msg = std::string("ENTER ") + name;
+        profile_log(msg.c_str());
+    }
+    ~ProfileScope() {
+        auto end = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+        double uptime_s = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - process_start).count() / 1000.0;
+        std::cout << "[Profiling] [Uptime]+" << std::fixed << std::setprecision(3) 
+                  << uptime_s << "s " << name << " DONE (" << elapsed << "ms)" << std::endl;
+    }
+};
 
 extern "C" {
     // ===== llama.cpp safe wrappers =====
@@ -95,6 +123,7 @@ extern "C" {
     }
     #endif
     struct llama_model * llama_model_load_from_file_safe(const char * path_model, struct llama_model_params params) {
+        ProfileScope scope("llama_model_load_from_file_safe");
         try {
             return llama_model_load_from_file(path_model, params);
         } catch (const std::exception& e) {
@@ -102,6 +131,19 @@ extern "C" {
             return nullptr;
         } catch (...) {
             std::cerr << "Caught unknown C++ exception in llama_model_load_from_file" << std::endl;
+            return nullptr;
+        }
+    }
+
+    struct llama_context * llama_init_from_model_safe(struct llama_model * model, struct llama_context_params params) {
+        ProfileScope scope("llama_init_from_model_safe");
+        try {
+            return llama_init_from_model(model, params);
+        } catch (const std::exception& e) {
+            std::cerr << "Caught C++ exception in llama_init_from_model: " << e.what() << std::endl;
+            return nullptr;
+        } catch (...) {
+            std::cerr << "Caught unknown C++ exception in llama_init_from_model" << std::endl;
             return nullptr;
         }
     }
@@ -137,6 +179,7 @@ extern "C" {
                                                   const struct llama_model * text_model,
                                                   bool use_gpu,
                                                   int n_threads) {
+        ProfileScope scope("mtmd_init_from_file_safe");
         try {
             struct mtmd_context_params params = mtmd_context_params_default();
             params.use_gpu = use_gpu;
