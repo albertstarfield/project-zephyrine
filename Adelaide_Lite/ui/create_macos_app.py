@@ -24,7 +24,6 @@ For distribution outside App Store:
 """
 
 import os
-import sys
 import argparse
 import stat
 import subprocess
@@ -171,14 +170,14 @@ def create_app_bundle(output_path: str) -> None:
             check=True,
             capture_output=True
         )
-        print(f"[+] Signed app bundle with ad-hoc signature")
+        print("[+] Signed app bundle with ad-hoc signature")
     except subprocess.CalledProcessError as e:
         print(f"[!] Warning: Could not sign app bundle: {e}")
-        print(f"    App may show Gatekeeper warning on first launch")
+        print("    App may show Gatekeeper warning on first launch")
     
     print(f"\n[+] App bundle created at: {app_path}")
-    print(f"    Double-click to launch, or run:")
-    print(f"    open \\"{app_path}\\"")
+    print("    Double-click to launch, or run:")
+    print(f'    open "{app_path}"')
 
 
 def install_to_applications(app_path: str) -> str:
@@ -199,7 +198,7 @@ def install_to_applications(app_path: str) -> str:
         return dest_path
     except subprocess.CalledProcessError as e:
         print(f"[!] Failed to install to /Applications: {e}")
-        print(f"    You may need to run with sudo or drag manually to Applications")
+        print("    You may need to run with sudo or drag manually to Applications")
         return app_path
 
 
