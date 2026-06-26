@@ -645,15 +645,31 @@ package body Adelaide_Server_Pkg is
                aliased Float;
              Audio_Floats : Float_Array with Import, Address => Raw_Payload'Address;
 
-             Transcript : Unbounded_String;
-             LLM_Result : Unbounded_String;
-             T_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
-             
-             -- Convert vision context param to unbounded string if provided
-             Vision_Context_From_Param : Unbounded_String;
+              Transcript : Unbounded_String;
+              LLM_Result : Unbounded_String;
+              T_Start : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+              
+              -- Convert vision context param to unbounded string if provided
+              Vision_Context_From_Param : Unbounded_String;
 
-             use type Unsigned_64;
-             use type Ada.Real_Time.Time;
+              -- [DO NOT REMOVE] Handless Pipeline Timing Estimates:
+              -- Stage 1 (VAD Check):        10-50ms   Unix socket to adelaide_vad.sock
+              -- Stage 2 (STT/Moonshine):     100-300ms Audio -> Text, Tiny Streaming model
+              -- Stage 3 (Intent Classify):   100-200ms 0.8B model, 1024 ctx, YES/NO only
+              -- Stage 4 (Reflex Reply):      200-400ms 0.8B model, 1024 ctx, short answer
+              -- Stage 5 (TTS/Kokoro):        300-800ms Python sidecar spawn + inference
+              --
+              -- Total End-to-End Estimates:
+              --   Cold start (model not loaded): ~1.0-1.5s
+              --   Warm (0.8B in memory):         ~0.7-1.2s
+              --   KV cache hit:                  ~0.5-0.8s
+              --   Best case: 500ms (warm, cache hit, fast disk)
+              --   Typical:   800-1000ms
+              --   Worst case: 1500ms (cold start, slow TTS)
+              -- Model load penalty: ~288ms disk (0.8B at 1847 MB/s)
+
+              use type Unsigned_64;
+              use type Ada.Real_Time.Time;
           begin
             Vision_Context_From_Param := To_Unbounded_String (Vision_Context_Param);
             Handless_Stage := To_Unbounded_String ("Transcribing...");
