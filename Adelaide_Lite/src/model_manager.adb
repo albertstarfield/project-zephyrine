@@ -5654,6 +5654,9 @@ package body Model_Manager is
                    & "If you need to scan for security, use [ACTION: security(scan path)]. "
                    & "If you need to install a system package, use [ACTION: package(install name)]. "
                    & "If you need to uninstall a package, use [ACTION: package(uninstall name)]. "
+                   & "If you need to search file contents, use [ACTION: grep(pattern path)]. "
+                   & "If you need to manage tasks, use [ACTION: todo(add task)]. "
+                   & "If you need to kill a process, use [ACTION: kill(pid)]. "
                    & "If you are done, output [FINISH]. "
                    & "Output ONLY the tag.";
                 --  Strip base64 images from router context to prevent tokenization
