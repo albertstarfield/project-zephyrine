@@ -100,6 +100,9 @@ procedure Adelaide_Server is
 
    function Get_Port return Natural;
    function Get_Host return String;
+   function Get_SSL_Cert_Path return String;
+   function Get_SSL_Key_Path return String;
+   function Use_HTTPS return Boolean;
 
    --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
    procedure Install_Shutdown_Handlers;
@@ -176,10 +179,12 @@ procedure Adelaide_Server is
    end Init_Clock_Task;
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-   --  AWS HTTP server handle and configuration object.
-   --  Conf is populated from AWS defaults then overridden with our port/host.
-   WS   : AWS.Server.HTTP;
-   Conf : AWS.Config.Object := AWS.Config.Get_Current;
+   --  AWS HTTP server handles and configuration objects.
+   --  Dual-port hosting: HTTP on default port, HTTPS on default+1.
+   WS_HTTP   : AWS.Server.HTTP;
+   WS_HTTPS  : AWS.Server.HTTP;
+   Conf_HTTP  : AWS.Config.Object := AWS.Config.Get_Current;
+   Conf_HTTPS : AWS.Config.Object := AWS.Config.Get_Current;
 
    --  Port/Host resolution: args > env vars > defaults
    function Get_Port return Natural is
@@ -212,6 +217,36 @@ procedure Adelaide_Server is
       end if;
       return "0.0.0.0";
    end Get_Host;
+
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  SSL certificate and key file paths.
+   --  Default location: run/ssl/adelaide-server.crt and .key
+   --  Can be overridden via ADLAIDE_SSL_CERT and ADLAIDE_SSL_KEY env vars.
+   function Get_SSL_Cert_Path return String is
+   begin
+      if Ada.Environment_Variables.Exists ("ADLAIDE_SSL_CERT") then
+         return Ada.Environment_Variables.Value ("ADLAIDE_SSL_CERT");
+      end if;
+      return Ada.Directories.Current_Directory & "/run/ssl/adelaide-server.crt";
+   end Get_SSL_Cert_Path;
+
+   function Get_SSL_Key_Path return String is
+   begin
+      if Ada.Environment_Variables.Exists ("ADLAIDE_SSL_KEY") then
+         return Ada.Environment_Variables.Value ("ADLAIDE_SSL_KEY");
+      end if;
+      return Ada.Directories.Current_Directory & "/run/ssl/adelaide-server.key";
+   end Get_SSL_Key_Path;
+
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  Use_HTTPS: Returns True if SSL certificate exists.
+   --  This allows the server to automatically enable HTTPS when certs are
+   --  available, while still supporting plain HTTP as fallback.
+   function Use_HTTPS return Boolean is
+   begin
+      return Ada.Directories.Exists (Get_SSL_Cert_Path)
+        and then Ada.Directories.Exists (Get_SSL_Key_Path);
+   end Use_HTTPS;
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
    --  Max_Retries: How many times we attempt to bind port 11420 before
@@ -614,23 +649,71 @@ begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
       --  Verbose: wraps HTTP server config and bind.
       declare
-         Port : constant Natural := Get_Port;
-         Host : constant String := Get_Host;
+         HTTP_Port  : constant Natural := Get_Port;
+         HTTPS_Port : constant Natural := HTTP_Port + 1;
+         Host       : constant String := Get_Host;
+         SSL_Avail  : constant Boolean := Use_HTTPS;
       begin
+         --  ==================================================================
+         --  HTTP Server Config (port 11420)
+         --  ==================================================================
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                    AnsiAda.Reset & "+" &
                    Trim (Duration'Image (Ada.Real_Time.To_Duration
                      (Ada.Real_Time.Clock - Start_Time)), Both) &
-                   "s STEP 6: Configuring AWS HTTP server on " & Host & ":" &
-                   Natural'Image (Port) & "...");
-         AWS.Config.Set.Server_Port (Conf, Port);
-         AWS.Config.Set.Server_Host (Conf, Host);
-         AWS.Config.Set.Reuse_Address (Conf, True);
+                   "s STEP 6: Configuring HTTP on " & Host & ":" &
+                   Natural'Image (HTTP_Port) & "...");
+         AWS.Config.Set.Server_Port (Conf_HTTP, HTTP_Port);
+         AWS.Config.Set.Server_Host (Conf_HTTP, Host);
+         AWS.Config.Set.Reuse_Address (Conf_HTTP, True);
+         AWS.Config.Set.Security (Conf_HTTP, False);
          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
          --  Set long timeouts so AWS doesn't drop connections while waiting
          --  for the large QWEN_9B model to load from disk!
-         AWS.Config.Set.Send_Timeout (Conf, 600.0);
-         AWS.Config.Set.Receive_Timeout (Conf, 600.0);
+         AWS.Config.Set.Send_Timeout (Conf_HTTP, 600.0);
+         AWS.Config.Set.Receive_Timeout (Conf_HTTP, 600.0);
+
+         --  ==================================================================
+         --  HTTPS Server Config (port 11421)
+         --  ==================================================================
+         if SSL_Avail then
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & "+" &
+                      Trim (Duration'Image (Ada.Real_Time.To_Duration
+                        (Ada.Real_Time.Clock - Start_Time)), Both) &
+                      "s STEP 6: Configuring HTTPS on " & Host & ":" &
+                      Natural'Image (HTTPS_Port) & "...");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & "+" &
+                      Trim (Duration'Image (Ada.Real_Time.To_Duration
+                        (Ada.Real_Time.Clock - Start_Time)), Both) &
+                      "s STEP 6: Certificate: " & Get_SSL_Cert_Path);
+            Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                      AnsiAda.Reset & "+" &
+                      Trim (Duration'Image (Ada.Real_Time.To_Duration
+                        (Ada.Real_Time.Clock - Start_Time)), Both) &
+                      "s STEP 6: Key: " & Get_SSL_Key_Path);
+            AWS.Config.Set.Server_Port (Conf_HTTPS, HTTPS_Port);
+            AWS.Config.Set.Server_Host (Conf_HTTPS, Host);
+            AWS.Config.Set.Reuse_Address (Conf_HTTPS, True);
+            AWS.Config.Set.Security (Conf_HTTPS, True);
+            AWS.Config.Set.Server_Certificate (Conf_HTTPS, Get_SSL_Cert_Path);
+            AWS.Config.Set.Server_Key (Conf_HTTPS, Get_SSL_Key_Path);
+            AWS.Config.Set.Check_Certificate (Conf_HTTPS, False);
+            AWS.Config.Set.Send_Timeout (Conf_HTTPS, 600.0);
+            AWS.Config.Set.Receive_Timeout (Conf_HTTPS, 600.0);
+         else
+            Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Init-V]" &
+                      AnsiAda.Reset & "+" &
+                      Trim (Duration'Image (Ada.Real_Time.To_Duration
+                        (Ada.Real_Time.Clock - Start_Time)), Both) &
+                      "s STEP 6: No SSL certificate. HTTP only.");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Init-V]" &
+                      AnsiAda.Reset & "+" &
+                      Trim (Duration'Image (Ada.Real_Time.To_Duration
+                        (Ada.Real_Time.Clock - Start_Time)), Both) &
+                      "s STEP 6: Run 'python scripts/generate_cert.py' for HTTPS.");
+         end if;
       end;
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                 AnsiAda.Reset & "+" &
@@ -639,46 +722,65 @@ begin
                 "s STEP 6: AWS config set. Entering bind retry loop...");
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  Read back the configured port so we can use it in the health
-      --  ping URL and log messages.  This ensures we always ping the
-      --  correct port, even if the default changes in the future.
+      --  Dual-port bind: HTTP on port 11420, HTTPS on port 11421.
+      --  AWS.Server.Start can fail if:
+      --    a) Another process holds the port (stale server from crash)
+      --    b) The OS hasn't released the socket yet (TIME_WAIT)
+      --    c) A firewall or SELinux policy blocks the bind
+      --  We retry up to Max_Retries times with a 2-second delay between
+      --  attempts.  If all retries fail, we print [BUGCHECK] and exit.
       declare
-         Server_Port : constant Natural := AWS.Config.Server_Port (Conf);
+         HTTP_Port  : constant Natural := Get_Port;
+         HTTPS_Port : constant Natural := HTTP_Port + 1;
       begin
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                    AnsiAda.Reset &
                    " Adelaide-Lite Server starting on port" &
-                   Natural'Image (Server_Port) & "...");
+                   Natural'Image (HTTP_Port) & " (HTTP)" &
+                   (if Use_HTTPS then ", port" & Natural'Image (HTTPS_Port) & " (HTTPS)" else "") &
+                   "...");
 
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-         --  Port binding with retry loop.
-         --  AWS.Server.Start can fail if:
-         --    a) Another process holds the port (stale server from crash)
-         --    b) The OS hasn't released the socket yet (TIME_WAIT)
-         --    c) A firewall or SELinux policy blocks the bind
-         --  We retry up to Max_Retries times with a 2-second delay between
-         --  attempts.  If all retries fail, we print [BUGCHECK] and exit.
          while not Started and then Retry_Count < Max_Retries loop
             begin
+               --  Start HTTP server
                AWS.Server.Start
-                 (Web_Server => WS,
+                 (Web_Server => WS_HTTP,
                   Callback   => Adelaide_Server_Pkg.Dispatch'Access,
-                  Config     => Conf);
+                  Config     => Conf_HTTP);
                Started := True;
-               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-               --  Verbose: confirms port bind succeeded.
                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                          AnsiAda.Reset & "+" &
                          Trim (Duration'Image (Ada.Real_Time.To_Duration
                            (Ada.Real_Time.Clock - Start_Time)), Both) &
-                         "s STEP 6 DONE: AWS.Server.Start SUCCEEDED on port" &
-                         Natural'Image (Server_Port) & ".");
+                         "s STEP 6: HTTP server SUCCEEDED on port" &
+                         Natural'Image (HTTP_Port) & ".");
+
+               --  Start HTTPS server if SSL is available
+               if Use_HTTPS then
+                  AWS.Server.Start
+                    (Web_Server => WS_HTTPS,
+                     Callback   => Adelaide_Server_Pkg.Dispatch'Access,
+                     Config     => Conf_HTTPS);
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                            AnsiAda.Reset & "+" &
+                            Trim (Duration'Image (Ada.Real_Time.To_Duration
+                              (Ada.Real_Time.Clock - Start_Time)), Both) &
+                            "s STEP 6: HTTPS server SUCCEEDED on port" &
+                            Natural'Image (HTTPS_Port) & ".");
+               end if;
+
+               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                         AnsiAda.Reset & "+" &
+                         Trim (Duration'Image (Ada.Real_Time.To_Duration
+                           (Ada.Real_Time.Clock - Start_Time)), Both) &
+                         "s STEP 6 DONE: All servers started.");
+
             exception
                when E : others =>
                   Retry_Count := Retry_Count + 1;
                   if Retry_Count < Max_Retries then
                      Put_Line
-                       ("[Warning] Port" & Natural'Image (Server_Port) &
+                       ("[Warning] Port" & Natural'Image (HTTP_Port) &
                         " might be bound. Retrying in 2 seconds (" &
                         Natural'Image (Retry_Count) & "/" &
                         Natural'Image (Max_Retries) & ")...");
@@ -689,7 +791,7 @@ begin
                      --  red so it's visible in scrollback.
                      Put_Line (Character'Val (27) & "[31m" &
                                "[BUGCHECK] Failed to bind to port" &
-                               Natural'Image (Server_Port) & ": " &
+                               Natural'Image (HTTP_Port) & ": " &
                                Ada.Exceptions.Exception_Message (E) &
                                Character'Val (27) & "[0m");
                      Ada.Command_Line.Set_Exit_Status
@@ -738,9 +840,10 @@ begin
 
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
             --  Health_URL: The endpoint we ping.  /api/power is lightweight.
+            --  Always ping HTTP (port 11420) — it's always available.
             Health_URL : constant String :=
               "http://127.0.0.1:" &
-              Trim (Natural'Image (Server_Port), Ada.Strings.Both) &
+              Trim (Natural'Image (Get_Port), Ada.Strings.Both) &
               "/api/power";
          begin
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -784,9 +887,9 @@ begin
                                Natural'Image (Ping_Count) & ". Status=" &
                                AWS.Response.Status_Code (Response)'Img);
                      Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
-                              "[Watchdog]" & AnsiAda.Reset &
-                               " Health ping OK -- server responding on port" &
-                               Natural'Image (Server_Port) & ".");
+                               "[Watchdog]" & AnsiAda.Reset &
+                                " Health ping OK -- server responding on port" &
+                                Natural'Image (Get_Port) & ".");
                      exit;
                   end if;
                exception
@@ -868,7 +971,46 @@ begin
       declare
          Heartbeat_Count : Natural := 0;
          Alive_Count     : Natural := 0;
+         Access_Count    : Natural := 0;
+         GUI_Mode        : constant Boolean :=
+           Ada.Environment_Variables.Exists ("ADLAIDE_GUI_MODE")
+           and then Ada.Environment_Variables.Value ("ADLAIDE_GUI_MODE") = "1";
       begin
+         --  [DO NOT REMOVE] Print initial access info on startup
+         declare
+            HTTP_Port  : constant Natural := Get_Port;
+            HTTPS_Port : constant Natural := HTTP_Port + 1;
+         begin
+            Put_Line ("");
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                      "==========================================================" &
+                      AnsiAda.Reset);
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                      "  Adelaide Lite Server - Access Info" &
+                      AnsiAda.Reset);
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                      "==========================================================" &
+                      AnsiAda.Reset);
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                      "  HTTP:  http://localhost:" &
+                      Natural'Image (HTTP_Port) &
+                      AnsiAda.Reset);
+            if Use_HTTPS then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                         "  HTTPS: https://localhost:" &
+                         Natural'Image (HTTPS_Port) &
+                         AnsiAda.Reset);
+            end if;
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                      "  GUI:   " &
+                      (if GUI_Mode then "ENABLED (sidecar running)" else "DISABLED (--no-gui)") &
+                      AnsiAda.Reset);
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                      "==========================================================" &
+                      AnsiAda.Reset);
+            Put_Line ("");
+         end;
+
          loop
             --  [VITAL-DO-NOT-REMOVE] Catch-all exception handler for heartbeat loop.
             --  If ANY unknown/uncategorized exception occurs in the main loop,
@@ -929,6 +1071,26 @@ begin
                      AnsiAda.Reset & " ELP Queue: " &
                      ELP_Queue.Utilization'Img & "% full (" &
                      ELP_Queue.Depth'Img & " pending)");
+               end if;
+
+               --  [DO NOT REMOVE] Print access info every 10 seconds
+               Access_Count := Access_Count + 1;
+               if Access_Count >= 10 then
+                  Access_Count := 0;
+                  declare
+                     HTTP_Port  : constant Natural := Get_Port;
+                     HTTPS_Port : constant Natural := HTTP_Port + 1;
+                  begin
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                               "[Access]" & AnsiAda.Reset &
+                               " HTTP: http://localhost:" &
+                               Natural'Image (HTTP_Port) &
+                               (if Use_HTTPS then
+                                  " | HTTPS: https://localhost:" &
+                                  Natural'Image (HTTPS_Port)
+                                else "") &
+                               (if GUI_Mode then " | GUI: ON" else " | GUI: OFF"));
+                  end;
                end if;
                delay 1.0;
             exception
