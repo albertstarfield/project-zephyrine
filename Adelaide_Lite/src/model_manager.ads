@@ -317,7 +317,7 @@ package Model_Manager is
    Generate_Seed : Interfaces.C.unsigned := 0;
 
    --  =========================================================================
-   --  GPU MEMORY MONITOR (printed every 3s by GPU_Monitor task)
+   --  GPU MEMORY MONITOR (printed every 100ms by Print_GPU_Memory_Sync)
    --  =========================================================================
    --  Tracks free/total GPU VRAM across ALL backends (Metal, CUDA, OneAPI,
    --  SYCL, Vulkan, ROCm). If GPU memory query is inapplicable (CPU-only

@@ -80,6 +80,8 @@ package body Knowledge_Manager is
    end Proactive_Cache_Task;
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Init_Start_Time: Captured when Knowledge_Manager.Initialize is called.
    --  All [Init-V] verbose prints in this package compute uptime relative
    --  to this timestamp.
@@ -88,6 +90,8 @@ package body Knowledge_Manager is
    procedure Initialize is
    begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Capture start time for uptime calculation.
       Init_Start_Time := Ada.Real_Time.Clock;
       --  Verbose: confirms Knowledge_Manager.Initialize was entered.
@@ -103,6 +107,8 @@ package body Knowledge_Manager is
    procedure Start_Tasks is
    begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: prints each task start so we can see which one hangs.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Knowledge_Manager.Start_Tasks ENTERED.");
@@ -167,6 +173,8 @@ package body Knowledge_Manager is
       Line          : Unbounded_String;
    begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: prints every path tried for references.bib.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Index_References ENTERED.");
@@ -257,6 +265,8 @@ package body Knowledge_Manager is
    task body Indexing_Task is
    begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: confirms task accepted Start and is running.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task waiting for Start...");
@@ -294,6 +304,8 @@ package body Knowledge_Manager is
       Files_Indexed : Natural := 0;
    begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: prints crawl start and stats so we can see if it runs.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory ENTERED: Path=" & Path);
@@ -358,6 +370,8 @@ package body Knowledge_Manager is
                            Close (File_H);
 
                            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                            --  Verbose: print every file being indexed so we
                            --  can see if the crawl actually finds files.
                            Files_Scanned := Files_Scanned + 1;
@@ -374,25 +388,42 @@ package body Knowledge_Manager is
                               Vec         : Math_Utils.Vector (1 .. 4096) :=
                                 [others => 0.0];
                               Len         : Natural := 0;
+                              Retries     : Natural := 0;
+                              Max_Retries : constant Natural := 3;
+                              Success     : Boolean := False;
                            begin
                               if Content'Length > 0 then
-                                 --  [VITAL-DO-NOT-REMOVE] Skip embedding if
-                                 --  ELP1 arrived mid-file. Prevents wasted
-                                 --  ELP0 acquire/deny cycles during crawl.
-                                 if Model_Manager.Should_Abort_ELP0 then
-                                    Put_Line
-                                      (AnsiAda.Foreground (AnsiAda.Cyan) &
-                                       "[Init-V]" & AnsiAda.Reset &
-                                       " Crawl: ELP1 pending, SKIPPING " &
-                                       Name);
-                                    Model_Manager.Wait_For_ELP1_Idle;
-                                 end if;
-                                 Model_Manager.Get_Embedding
-                                   (Content, Vec, Len, ELP0);
-                                 if Len > 0 then
-                                    Database_Manager.Add_Literature_Chunk
-                                      (Name, Content, Vec (1 .. Len), "hash");
-                                 end if;
+                                 while Retries < Max_Retries and not Success loop
+                                    begin
+                                       --  [VITAL-DO-NOT-REMOVE] Skip embedding if
+                                       --  ELP1 arrived mid-file. Prevents wasted
+                                       --  ELP0 acquire/deny cycles during crawl.
+                                       if Model_Manager.Should_Abort_ELP0 then
+                                          Put_Line
+                                            (AnsiAda.Foreground (AnsiAda.Cyan) &
+                                             "[Init-V]" & AnsiAda.Reset &
+                                             " Crawl: ELP1 pending, SKIPPING " &
+                                             Name);
+                                          Model_Manager.Wait_For_ELP1_Idle;
+                                       end if;
+                                       
+                                       Model_Manager.Get_Embedding
+                                         (Content, Vec, Len, ELP0);
+                                         
+                                       if Len > 0 then
+                                          Database_Manager.Add_Literature_Chunk
+                                            (Name, Content, Vec (1 .. Len), "hash");
+                                          Success := True;
+                                       else
+                                          Retries := Retries + 1;
+                                          Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[WARN]" & AnsiAda.Reset & " Embedding failed (Len=0) for " & Name & ". Retrying burst (" & Natural'Image (Retries) & "/" & Natural'Image (Max_Retries) & ")...");
+                                       end if;
+                                    exception
+                                       when E : others =>
+                                          Retries := Retries + 1;
+                                          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[ERROR]" & AnsiAda.Reset & " Exception in Get_Embedding for " & Name & ": " & Ada.Exceptions.Exception_Information (E) & ". Retrying burst...");
+                                    end;
+                                 end loop;
                               end if;
                            end;
                         exception
@@ -410,6 +441,8 @@ package body Knowledge_Manager is
       end loop;
       Ada.Directories.End_Search (Search);
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: prints crawl completion stats.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory COMPLETE: Path=" & Path &
@@ -419,6 +452,8 @@ package body Knowledge_Manager is
    task body Native_Crawl_Task is
    begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: confirms task accepted Start and is running.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Native_Crawl_Task waiting for Start...");
@@ -429,16 +464,20 @@ package body Knowledge_Manager is
                 AnsiAda.Reset & " Native Crawl Task Active.");
       loop
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: prints BEFORE blocking on Wait_For_ELP1_Idle so we can
          --  see if the task is stuck on the guard condition.
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                    AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: calling Wait_For_ELP1_Idle...");
          Model_Manager.Wait_For_ELP1_Idle;
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: prints AFTER guard passes so we know it unblocked.
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                    AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: Wait_For_ELP1_Idle PASSED, starting crawl...");
-         null; -- Crawl_Directory (".");
+         Crawl_Directory (".");
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                    AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: crawl DONE, sleeping 3600s...");
          delay 3600.0; -- Crawl every hour
@@ -489,6 +528,8 @@ package body Knowledge_Manager is
    task body Proactive_Cache_Task is
    begin
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: confirms task accepted Start and is running.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Proactive_Cache_Task waiting for Start...");

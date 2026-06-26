@@ -32,6 +32,7 @@ package Accuracy_Benchmark_Manager is
       Correct : Boolean := False;
       Expected : Unbounded_String;
       Predicted : Unbounded_String;
+      Raw_Response : Unbounded_String;
       Time_Seconds : Float := 0.0;
    end record;
 
@@ -41,13 +42,22 @@ package Accuracy_Benchmark_Manager is
       Accuracy : Float := 0.0;
       Total_Questions : Natural := 0;
       Correct_Count : Natural := 0;
+      Failed_Count : Natural := 0;
       Time_Seconds : Float := 0.0;
+      Failed_Question : Question_Result;
+      Failed_Message : Unbounded_String;
    end record;
+
+   --  Benchmark failure exception
+   --  Raised when any answer is unparseable or incorrect
+   --  Complete stop - no tolerance for failures
+   Benchmark_Failure : exception;
 
    --  Validate API key
    function Validate_API_Key (Key : String) return Boolean;
 
    --  Run accuracy benchmark
+   --  RAISES Benchmark_Failure if any answer is unparseable
    procedure Run_Accuracy_Benchmark (
       Benchmark : Benchmark_Type;
       Sample_Size : Natural := 0;  -- 0 = full dataset
@@ -55,11 +65,12 @@ package Accuracy_Benchmark_Manager is
       Result : out Benchmark_Result
    );
 
-   --  Download dataset from HuggingFace
+   --  Load bundled dataset from local JSONL file (OMLX pattern)
    function Download_Dataset (
       Repo_Id : String;
-      Filename : String;
-      Cache_Dir : String
+      Subset  : String;
+      Cache_Dir : String;
+      Split   : String := "test"
    ) return String;
 
    --  Call model chat endpoint

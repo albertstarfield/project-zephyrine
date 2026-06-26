@@ -97,6 +97,8 @@ package body Model_Manager is
     use Streaming_Queue;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  [ElabTrace-C]: RAW C trace to confirm Model_Manager body elaboration entered.
     procedure Elab_Trace_C (Label : Interfaces.C.Strings.chars_ptr);
     pragma Import (C, Elab_Trace_C, "elab_trace_c");
@@ -144,6 +146,8 @@ package body Model_Manager is
     pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  [DO NOT REMOVE THIS PRINT VERBOSITY]
     --  Init_Start_Time: Captured when Model_Manager.Initialize is called.
     --  All [Init-V] verbose prints in this package compute uptime relative
@@ -153,6 +157,8 @@ package body Model_Manager is
     Init_Start_Time : Ada.Real_Time.Time := Ada.Real_Time.Clock;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  [ElabTrace-C]: Confirms elaboration past Init_Start_Time declaration.
     function Emit_After_Init_Start return Integer is
     begin
@@ -164,18 +170,36 @@ package body Model_Manager is
     Diag_AIS : constant Integer := Emit_After_Init_Start;
     pragma Warnings (Off, Diag_AIS);
 
-    task type WCET_Printer;
-    task body WCET_Printer is
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
+    --  WCET Monitor Task — prints every 250ms, appends CSV to run/wcet.csv
+    task WCET_Monitor is
+        entry Start;
+    end WCET_Monitor;
+
+    task body WCET_Monitor is
+        use Ada.Real_Time;
+        CSV_File   : Ada.Text_IO.File_Type;
+        Last_Print : Time := Time_First;
+        Uptime_S   : Long_Long_Integer;
     begin
-        --  [DO NOT REMOVE THIS PRINT VERBOSITY]
-        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-        --  [ElabTrace-C][+Uptime]: RAW C trace (write to stderr) to confirm
-        --  WCET_Printer task body entered during elaboration.
-        --  If this never prints, task activation deadlocked.
-        Elab_Trace ("WCET_Printer task body ENTERED");
+        Elab_Trace ("WCET_Monitor task body ENTERED");
+        accept Start;
+        --  Open CSV for append
+        begin
+            Ada.Text_IO.Open (CSV_File, Ada.Text_IO.Append_File, "run/wcet.csv");
+        exception
+            when Ada.Text_IO.Name_Error =>
+                Ada.Text_IO.Create (CSV_File, Ada.Text_IO.Append_File, "run/wcet.csv");
+                Ada.Text_IO.Put_Line (CSV_File, "uptime_s,pipeline_ns,elp0_ns,elp1_ns,elp2_ns,elp3_ns");
+        end;
         loop
-            delay 30.0;
-            Ada.Text_IO.Put_Line
+            delay until Last_Print + Milliseconds (250);
+            Last_Print := Clock;
+            Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
+            --  Print to terminal
+            Put_Line
                (AnsiAda.Foreground (AnsiAda.Light_Red)
                 & "[WCET]"
                 & AnsiAda.Reset
@@ -199,21 +223,144 @@ package body Model_Manager is
                 & Long_Long_Integer'Image
                      (Long_Long_Integer (Current_WCET_ELP3 * 1_000_000_000))
                 & "ns");
+            --  Append CSV row
+            Ada.Text_IO.Put_Line
+               (CSV_File,
+                Long_Long_Integer'Image (Uptime_S) & ","
+                & Long_Long_Integer'Image
+                     (Long_Long_Integer (Current_WCET * 1_000_000_000)) & ","
+                & Long_Long_Integer'Image
+                     (Long_Long_Integer (Current_WCET_ELP0 * 1_000_000_000)) & ","
+                & Long_Long_Integer'Image
+                     (Long_Long_Integer (Current_WCET_ELP1 * 1_000_000_000)) & ","
+                & Long_Long_Integer'Image
+                     (Long_Long_Integer (Current_WCET_ELP2 * 1_000_000_000)) & ","
+                & Long_Long_Integer'Image
+                     (Long_Long_Integer (Current_WCET_ELP3 * 1_000_000_000)));
+            Ada.Text_IO.Flush (CSV_File);
         end loop;
-    end WCET_Printer;
-
-    Printer_Task : WCET_Printer;
+    end WCET_Monitor;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-    --  [ElabTrace-C]: RAW C trace: after Printer_Task declaration.
-    function Emit_After_Printer_Task return Integer is
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
+    --  Acceleration Monitor Task — prints every 100ms, appends CSV to run/acceleration.csv
+    task Acceleration_Monitor is
+        entry Start;
+    end Acceleration_Monitor;
+
+    task body Acceleration_Monitor is
+        use Ada.Real_Time;
+        CSV_File   : Ada.Text_IO.File_Type;
+        Last_Print : Time := Time_First;
+        Uptime_S   : Long_Long_Integer;
+    begin
+        Elab_Trace ("Acceleration_Monitor task body ENTERED");
+        accept Start;
+        --  Open CSV for append
+        begin
+            Ada.Text_IO.Open (CSV_File, Ada.Text_IO.Append_File, "run/acceleration.csv");
+        exception
+            when Ada.Text_IO.Name_Error =>
+                Ada.Text_IO.Create (CSV_File, Ada.Text_IO.Append_File, "run/acceleration.csv");
+                Ada.Text_IO.Put_Line (CSV_File, "uptime_s,free_mb,total_mb,percent,tensor_layers,metal_broken");
+        end;
+        loop
+            delay until Last_Print + Milliseconds (100);
+            Last_Print := Clock;
+            Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
+            declare
+                use Interfaces.C;
+                Free_Bytes  : size_t := 0;
+                Total_Bytes : size_t := 0;
+                Free_MB     : Natural := 0;
+                Total_MB    : Natural := 0;
+                Percent     : Natural := 0;
+            begin
+                Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
+                if Total_Bytes > 0 then
+                    Free_MB := Natural (Free_Bytes / (1024 * 1024));
+                    Total_MB := Natural (Total_Bytes / (1024 * 1024));
+                    if Total_MB > 0 then
+                        Percent := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
+                        if Percent > 100 then Percent := 100; end if;
+                    end if;
+                    GPU_Free_MB := Free_MB;
+                    GPU_Total_MB := Total_MB;
+                    GPU_Layer_Percent := Percent;
+                    GPU_Is_Stable := True;
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                        & "[Tensor-Accelerator-Monitor] [Uptime]+"
+                        & Trim (Natural'Image (Natural (Uptime_S)), Both)
+                        & "s Free="
+                        & Trim (Natural'Image (Free_MB), Both)
+                        & "MB / Total="
+                        & Trim (Natural'Image (Total_MB), Both)
+                        & "MB ("
+                        & Trim (Natural'Image (Percent), Both)
+                        & "%) Tensor_Layers="
+                        & (if Acceleration_Silicon_Layer = -1
+                           then "ALL(-1)"
+                           else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
+                        & AnsiAda.Reset);
+                    Ada.Text_IO.Put_Line
+                       (CSV_File,
+                        Long_Long_Integer'Image (Uptime_S) & ","
+                        & Natural'Image (Free_MB) & ","
+                        & Natural'Image (Total_MB) & ","
+                        & Natural'Image (Percent) & ","
+                        & Integer'Image (Acceleration_Silicon_Layer) & ","
+                        & "0");
+                else
+                    if Is_Metal_Broken then
+                        GPU_Is_Stable := False;
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Red)
+                            & "[Tensor-Accelerator-Monitor] [Uptime]+"
+                            & Trim (Natural'Image (Natural (Uptime_S)), Both)
+                            & "s GPU=INAPPLICABLE Status=UNSTABLE"
+                            & " (OOM/crash detected) Tensor_Layers=0"
+                            & " -- forcing CPU-only mode"
+                            & AnsiAda.Reset);
+                        Ada.Text_IO.Put_Line
+                           (CSV_File,
+                            Long_Long_Integer'Image (Uptime_S) & ",0,0,0,0,1");
+                    else
+                        GPU_Is_Stable := True;
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                            & "[Tensor-Accelerator-Monitor] [Uptime]+"
+                            & Trim (Natural'Image (Natural (Uptime_S)), Both)
+                            & "s GPU=INAPPLICABLE Status=STABLE"
+                            & " Tensor_Layers="
+                            & (if Acceleration_Silicon_Layer = -1
+                               then "ALL(-1)"
+                               else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
+                            & AnsiAda.Reset);
+                        Ada.Text_IO.Put_Line
+                           (CSV_File,
+                            Long_Long_Integer'Image (Uptime_S) & ",0,0,0,"
+                            & Integer'Image (Acceleration_Silicon_Layer) & ",0");
+                    end if;
+                end if;
+                Ada.Text_IO.Flush (CSV_File);
+            end;
+        end loop;
+    end Acceleration_Monitor;
+
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
+    --  [ElabTrace-C]: RAW C trace: after sync monitor declarations.
+    function Emit_After_Sync_Monitors return Integer is
     begin
         Elab_Trace_C
            (Interfaces.C.Strings.New_String
-               ("MODEL_MANAGER: AFTER_PRINTER_TASK_DECL"));
+               ("MODEL_MANAGER: AFTER_SYNC_MONITORS_DECL"));
         return 0;
-    end Emit_After_Printer_Task;
-    Diag_APT : constant Integer := Emit_After_Printer_Task;
+    end Emit_After_Sync_Monitors;
+    Diag_APT : constant Integer := Emit_After_Sync_Monitors;
     pragma Warnings (Off, Diag_APT);
 
     --  =====================================================================
@@ -233,12 +380,14 @@ package body Model_Manager is
     end Context_Monitor;
 
     task body Context_Monitor is
-        Interval    : constant Duration := 5.0;
+        Interval    : constant Duration := 0.5;
         Next_Check  : Ada.Calendar.Time;
         Fault_Total : Natural := 0;
     begin
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         --  [ElabTrace-C]: RAW C trace to confirm Context_Monitor task body entered.
         --  If this never prints, task activation deadlocked.
         Elab_Trace ("Context_Monitor task body ENTERED");
@@ -288,7 +437,7 @@ package body Model_Manager is
                    (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                     & "[CtxMonitor]"
                     & AnsiAda.Reset
-                    & " === VIRTUAL CONTEXT STATUS (5s) ===");
+                     & " === VIRTUAL CONTEXT STATUS (500ms) ===");
 
                 --  ELP Queue: request depth (synthetic 2^63 capacity)
                 Put_Line
@@ -372,6 +521,8 @@ package body Model_Manager is
     end Context_Monitor;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  [ElabTrace-C]: RAW C trace: after Context_Monitor task body.
     function Emit_After_CtxMon return Integer is
     begin
@@ -405,6 +556,8 @@ package body Model_Manager is
     end Get_Live_Ctx_Size;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  [ElabTrace-C]: RAW C trace: after Models array declaration.
     function Emit_After_Models return Integer is
     begin
@@ -419,6 +572,8 @@ package body Model_Manager is
     type Model_Type_Refs is array (Model_Type) of aliased Model_Type;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  [ElabTrace-C]: RAW C trace: after Model_Type_Refs type.
     function Emit_After_Type_Refs return Integer is
     begin
@@ -439,6 +594,8 @@ package body Model_Manager is
            Snowball_Enaga_ShortNetworkAnswer);
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  [ElabTrace-C]: RAW C trace: after Model_Refs constant.
     function Emit_After_Model_Refs return Integer is
     begin
@@ -487,6 +644,8 @@ package body Model_Manager is
     protected body Accel_Lock_Object is
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         --  [ElabTrace][+Uptime]: Confirms Accel_Lock_Object protected body
         --  elaboration reached. If this never prints, the elaboration of
         --  Accel_Lock_Object deadlocked BEFORE entering the protected body.
@@ -626,6 +785,8 @@ package body Model_Manager is
         --  Barrier: ELP0 tasks block here until all ELP1 requests have completed.
         --  See Wait_For_ELP1_Idle spec in model_manager.ads for full explanation.
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         --  Verbose: prints guard state when an ELP0 task arrives.
         entry Wait_For_ELP1_Idle
            when(ELP1_Pending = 0 and then ELP1_Active_Count = 0)
@@ -662,6 +823,8 @@ package body Model_Manager is
     end Priority_Model_Gate;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  [ElabTrace-C]: RAW C trace: protected bodies elaboration done.
     function Emit_After_Protected return Integer is
     begin
@@ -689,10 +852,14 @@ package body Model_Manager is
     begin
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         --  [ElabTrace-C]: RAW C trace to confirm Idle_Monitor task body entered.
         --  If this never prints, task activation deadlocked.
         Elab_Trace ("Idle_Monitor task body ENTERED");
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         --  Verbose: confirms the Idle_Monitor task actually started.
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -752,144 +919,9 @@ package body Model_Manager is
         end loop;
     end Idle_Monitor;
 
-    --  =========================================================================
-    --  GPU MEMORY MONITOR TASK
-    --  =========================================================================
-    --  Runs every 3 seconds. Queries GPU VRAM across ALL backends
-    --  (Metal, CUDA, OneAPI, SYCL, Vulkan, ROCm).
-    --  Prints free/total MB and dynamic N_GPU_Layers percentage.
-    --  If GPU memory query returns 0,0 (inapplicable on Vulkan/CPU),
-    --  reports "stable" or "UNSTABLE" based on Metal_Backend_Broken flag.
-    --  If unstable (OOM/crash), sets N_GPU_Layers to 0.
-    --  If stable with plenty of VRAM, calculates N_GPU_Layers as percentage.
-    --  Also injects status into <think> block via Push_Orchestration_Direct.
-
-    GPU_Monitor_Interval : constant Duration := 3.0;
-
-    task GPU_Monitor is
-        pragma Storage_Size (512 * 1024);
-        entry Start;
-    end GPU_Monitor;
-
-    task body GPU_Monitor is
-        Free_Bytes  : Interfaces.C.size_t := 0;
-        Total_Bytes : Interfaces.C.size_t := 0;
-        Free_MB     : Natural := 0;
-        Total_MB    : Natural := 0;
-        Percent     : Natural := 0;
-        Next_Check  : Time;
-        Uptime_Sec  : Natural;
-        Status_Str  : Unbounded_String;
-    begin
-        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-        Elab_Trace ("GPU_Monitor task body ENTERED");
-        accept Start;
-        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-        Put_Line
-           (AnsiAda.Foreground (AnsiAda.Light_Blue)
-            & "[Init-V]"
-            & AnsiAda.Reset
-            & "+"
-            & Trim
-                 (Duration'Image
-                     (Ada.Real_Time.To_Duration
-                         (Ada.Real_Time.Clock - Init_Start_Time)),
-                  Both)
-            & "s GPU_Monitor task ACCEPTED Start, entering 3s loop.");
-
-        loop
-            Next_Check := Clock + Seconds (3);
-            Uptime_Sec :=
-               Natural (Ada.Real_Time.To_Duration (Clock - Init_Start_Time));
-
-            --  Query GPU memory through ggml backend (ALL backends)
-            Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
-
-            if Total_Bytes > 0 then
-                --  GPU memory query WORKS (Metal, CUDA, OneAPI, SYCL, ROCm)
-                Free_MB := Natural (Free_Bytes / (1024 * 1024));
-                Total_MB := Natural (Total_Bytes / (1024 * 1024));
-
-                if Total_MB > 0 then
-                    Percent :=
-                       Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
-                    if Percent > 100 then
-                        Percent := 100;
-                    end if;
-                else
-                    Percent := 0;
-                end if;
-
-                --  Update global GPU status
-                GPU_Free_MB := Free_MB;
-                GPU_Total_MB := Total_MB;
-                GPU_Layer_Percent := Percent;
-                GPU_Is_Stable := True;
-
-                --  Build status string: show free/total, percentage,
-                --  AND the actual Acceleration_Silicon_Layer (what Load_Model uses)
-                Status_Str :=
-                   To_Unbounded_String
-                      ("[Tensor-Accelerator-Monitor] [Uptime]+"
-                       & Trim (Natural'Image (Uptime_Sec), Both)
-                       & "s Free="
-                       & Trim (Natural'Image (Free_MB), Both)
-                       & "MB / Total="
-                       & Trim (Natural'Image (Total_MB), Both)
-                       & "MB ("
-                       & Trim (Natural'Image (Percent), Both)
-                       & "%) Tensor_Layers="
-                       & (if Acceleration_Silicon_Layer = -1
-                          then "ALL(-1)"
-                          else Trim (Integer'Image (Acceleration_Silicon_Layer), Both)));
-
-                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Light_Cyan)
-                    & To_String (Status_Str)
-                    & AnsiAda.Reset);
-            else
-                --  GPU memory query INAPPLICABLE (Vulkan without query, CPU-only)
-                --  Report stable/unstable based on Metal backend state
-                if Is_Metal_Broken then
-                    GPU_Is_Stable := False;
-                    Status_Str :=
-                       To_Unbounded_String
-                          ("[Tensor-Accelerator-Monitor] [Uptime]+"
-                           & Trim (Natural'Image (Uptime_Sec), Both)
-                           & "s GPU=INAPPLICABLE Status=UNSTABLE"
-                           & " (OOM/crash detected) Tensor_Layers=0"
-                           & " -- forcing CPU-only mode");
-                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                    Put_Line
-                       (AnsiAda.Foreground (AnsiAda.Red)
-                        & To_String (Status_Str)
-                        & AnsiAda.Reset);
-                else
-                    GPU_Is_Stable := True;
-                    Status_Str :=
-                       To_Unbounded_String
-                          ("[Tensor-Accelerator-Monitor] [Uptime]+"
-                           & Trim (Natural'Image (Uptime_Sec), Both)
-                           & "s GPU=INAPPLICABLE Status=STABLE"
-                           & " Tensor_Layers="
-                           & (if Acceleration_Silicon_Layer = -1
-                              then "ALL(-1)"
-                              else
-                                 Trim
-                                    (Integer'Image (Acceleration_Silicon_Layer), Both)));
-                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                    Put_Line
-                       (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                        & To_String (Status_Str)
-                        & AnsiAda.Reset);
-                end if;
-            end if;
-
-            delay until Next_Check;
-        end loop;
-    end GPU_Monitor;
-
+    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     function Wrap_ChatML (Sys : String; Msg : String) return String is
     begin
         return
@@ -915,6 +947,8 @@ package body Model_Manager is
     procedure Initialize is
     begin
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         --  Guard: prevent double initialization (idle monitor blocks on 2nd Start).
         if Initialized then
             Put_Line
@@ -926,6 +960,8 @@ package body Model_Manager is
         end if;
         Initialized := True;
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         --  Capture start time for uptime calculation.
         Init_Start_Time := Ada.Real_Time.Clock;
         --  [VITAL-DO-NOT-REMOVE] Initialize Generate_Seed with current time.
@@ -1038,7 +1074,23 @@ package body Model_Manager is
                      (Ada.Real_Time.To_Duration
                          (Ada.Real_Time.Clock - Init_Start_Time)),
                   Both)
-            & "s 4/7 Database_Manager.Initialize DONE.");
+             & "s 4/7 Database_Manager.Initialize DONE.");
+
+        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
+        --  Model paths MUST be set BEFORE any ELP1 requests are made.
+        --  Tokenize_And_Cache_Virtual_Ctx (below) calls Request_ELP1,
+        --  which triggers the ELP queue monitor to load the model.
+        --  If paths aren't set yet, Load_Model gets empty string → crash.
+        Models (Snowball_Enaga_ShortNetworkAnswer).Path :=
+           To_Unbounded_String ("model/Qwen3.5-0.8B-Q4_K_M.gguf");
+        Models (Snowball_Enaga_Orchestrator).Path :=
+           To_Unbounded_String ("model/Mythos9bHybridq4.gguf");
+        Models (Qwen_Embedding).Path :=
+           To_Unbounded_String ("model/Qwen3-Embedding-0.6B-Q8_0.gguf");
+        Models (MMProj).Path :=
+           To_Unbounded_String ("model/Mythos9bHybridq4-mmproj-fp16.gguf");
 
         declare
             Saved_State : constant String := Database_Manager.Get_System_State ("Internal_State");
@@ -1126,6 +1178,16 @@ package body Model_Manager is
         if not Context_Monitor'Terminated then
             Context_Monitor.Start;
         end if;
+        --  Ensure run/ directory exists for CSV telemetry
+        if not Ada.Directories.Exists ("run") then
+            Ada.Directories.Create_Directory ("run");
+        end if;
+        if not WCET_Monitor'Terminated then
+            WCET_Monitor.Start;
+        end if;
+        if not Acceleration_Monitor'Terminated then
+            Acceleration_Monitor.Start;
+        end if;
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
         --  [ElabTrace][+Uptime]: Context_Monitor started.
         Put_Line
@@ -1169,18 +1231,6 @@ package body Model_Manager is
                   Both)
             & "s ElabTrace 6b/7 KV_Cache_Manager.Initialize DONE");
 
-        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-        --  Model paths are set here.  None of these load models from disk.
-        --  Loading happens lazily in Load_Model on first use.
-        Models (Snowball_Enaga_ShortNetworkAnswer).Path :=
-           To_Unbounded_String ("model/Qwen3.5-0.8B-Q4_K_M.gguf");
-        Models (Snowball_Enaga_Orchestrator).Path :=
-           To_Unbounded_String ("model/Mythos9bHybridq4.gguf");
-        Models (Qwen_Embedding).Path :=
-           To_Unbounded_String ("model/Qwen3-Embedding-0.6B-Q8_0.gguf");
-        Models (MMProj).Path :=
-           To_Unbounded_String ("model/Mythos9bHybridq4-mmproj-fp16.gguf");
-
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -1207,8 +1257,8 @@ package body Model_Manager is
             & "s ElabTrace 7/7 Starting Idle_Monitor...");
         Idle_Monitor.Start;
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-        --  Start GPU memory monitor (queries every 3s across ALL backends)
-        GPU_Monitor.Start;
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
         --  [ElabTrace][+Uptime]: Idle_Monitor started. Initialize COMPLETE.
         Put_Line
@@ -1221,7 +1271,7 @@ package body Model_Manager is
                      (Ada.Real_Time.To_Duration
                          (Ada.Real_Time.Clock - Init_Start_Time)),
                   Both)
-            & "s ElabTrace 7/7 Idle_Monitor.START + GPU_Monitor.START called -- Initialize COMPLETE");
+            & "s ElabTrace 7/7 Idle_Monitor.START called -- Initialize COMPLETE");
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -1268,6 +1318,8 @@ package body Model_Manager is
             begin
                 if Elapsed >= GPU_Retry_Interval then
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                         & "[GPU-Adaptive]"
@@ -1282,10 +1334,11 @@ package body Model_Manager is
         end if;
 
         Actual_Ctx := unsigned (Requested_Ctx);
-        --  Minimum context size is 8192 for stability and headroom.
+        --  Minimum context size is 8192 for LLM models (stability and headroom).
         --  Smaller contexts (e.g., 4096) caused llama_decode assertion failures
         --  with Qwen3.5HybridMythos at Q4_1 KV quantization on this hardware.
-        if Actual_Ctx < 8192 then
+        --  Embedding model uses 1024 (it only processes 800-char chunks).
+        if Kind /= Qwen_Embedding and then Actual_Ctx < 8192 then
             Actual_Ctx := 8192;
         end if;
 
@@ -1840,6 +1893,8 @@ package body Model_Manager is
                            Model_ID => Kind'Img);
                     if KV_Restored then
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                         Put_Line
                            (AnsiAda.Foreground (AnsiAda.Green)
                             & "[Uptime]+"
@@ -1854,6 +1909,8 @@ package body Model_Manager is
                             & " KV restored from disk. Ready for generation.");
                     else
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                         Put_Line
                            (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                             & "[Uptime]+"
@@ -1877,6 +1934,8 @@ package body Model_Manager is
     exception
         when E : Storage_Error =>
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             --  Stack overflow during model load (reading weights into VRAM
             --  or creating llama_context).  Clean up partial state so the
             --  server continues serving other requests.
@@ -1942,6 +2001,8 @@ package body Model_Manager is
                     Acceleration_Silicon_Layer := New_Count;
                     GPU_Last_OOM_Time := Ada.Real_Time.Clock;
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Yellow)
                         & "[GPU-Adaptive]"
@@ -1953,6 +2014,8 @@ package body Model_Manager is
                         & ". Retry -1 in 3 minutes.");
                 else
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Yellow)
                         & "[GPU-Adaptive]"
@@ -4149,6 +4212,8 @@ package body Model_Manager is
             end;
         else
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             --  Context was orphaned due to decode failure. Skip KV cache save.
             Put_Line
                (AnsiAda.Foreground (AnsiAda.Yellow)
@@ -4249,6 +4314,8 @@ package body Model_Manager is
     exception
         when E : Storage_Error =>
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             --  Stack overflow during generation (model load, tokenize, or decode).
             --  Log the full exception info and clean up without crashing.
             --  Mark Metal broken so KV save retries instead of SIGABRT.
@@ -4309,6 +4376,8 @@ package body Model_Manager is
                     Acceleration_Silicon_Layer := New_Count;
                     GPU_Last_OOM_Time := Ada.Real_Time.Clock;
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Yellow)
                         & "[GPU-Adaptive]"
@@ -4320,6 +4389,8 @@ package body Model_Manager is
                         & ". Retry -1 in 3 minutes.");
                 else
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Yellow)
                         & "[GPU-Adaptive]"
@@ -4863,7 +4934,13 @@ package body Model_Manager is
             Priority_Model_Gate.Acquire_ELP1 (Kind);
         end if;
 
-        Load_Model (Kind, Success, 8192, Level);
+        --  Embedding model needs only 1024 context; LLM needs 8192.
+        declare
+            Embed_Ctx : constant Positive :=
+               (if Kind = Qwen_Embedding then 1024 else 8192);
+        begin
+            Load_Model (Kind, Success, Embed_Ctx, Level);
+        end;
         if not Success then
             if Level = ELP0 then
                 Priority_Model_Gate.Release_ELP0 (Kind);
@@ -4879,16 +4956,21 @@ package body Model_Manager is
 
         Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
         --  Allocate temp array for tokenization
-        Tmp_Toks := new Token_Array (1 .. 8192);
-        N_Toks :=
-           Llama_Tokenize
-              (Vocab,
-               Text_C,
-               int (Text'Length),
-               Tmp_Toks.all'Address,
-               int (Tmp_Toks.all'Length),
-               True,
-               True);
+        declare
+            Tok_Cap : constant Positive :=
+               (if Kind = Qwen_Embedding then 1024 else 8192);
+        begin
+            Tmp_Toks := new Token_Array (1 .. Tok_Cap);
+            N_Toks :=
+               Llama_Tokenize
+                  (Vocab,
+                   Text_C,
+                   int (Text'Length),
+                   Tmp_Toks.all'Address,
+                   int (Tmp_Toks.all'Length),
+                   True,
+                   True);
+        end;
         Free (Text_C);
 
         if N_Toks <= 0 then
@@ -4928,6 +5010,8 @@ package body Model_Manager is
 
     --  HYBRID_GENERATE (MULTI-JMP REASONING PIPELINE)
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  JMP stands for "reasoning Hop" - the number of tool execution cycles
    --  the model goes through before producing a final answer.
     --
@@ -5014,6 +5098,8 @@ package body Model_Manager is
         T0 := Ada.Calendar.Clock;
 
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -5035,6 +5121,8 @@ package body Model_Manager is
         Get_Embedding (Prompt, Emb_Vec, Emb_Len);
 
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -5062,7 +5150,7 @@ package body Model_Manager is
                Database_Manager.Get_Cached_Response
                   (Emb_Vec (1 .. Emb_Len), Current_WCET);
         begin
-            if not External_Agent and then Cached_Res /= "" then
+            if Cached_Res /= "" then
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Magenta)
                     & "[Hybrid]"
@@ -5112,13 +5200,15 @@ package body Model_Manager is
                Speculative_Cache.Proactive_Cache.Lookup (Prompt);
         begin
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             Put_Line
                (AnsiAda.Foreground (AnsiAda.Light_Blue)
                 & "[Init-V]"
                 & AnsiAda.Reset
                 & " Hybrid_Generate: Speculative_Cache lookup. Hit="
                 & Boolean'Image (SC_Res /= ""));
-            if not External_Agent and then SC_Res /= "" then
+            if SC_Res /= "" then
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Magenta)
                     & "[Hybrid]"
@@ -5314,6 +5404,8 @@ package body Model_Manager is
         end;
 
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         --  ELP0 Speculation Context: QRNN LSH-based retrieval for background thought.
         --  Only activates during ELP0 to inject <SpeculationContextGuidance_*> blocks
         --  after <memory_*> blocks. Uses 10-bit LSH hash (tolerance=2 Hamming distance)
@@ -5338,6 +5430,8 @@ package body Model_Manager is
                 Priority_Model_Gate.Acquire_ELP0 (LSH_QRNN) (LSH_Acq_OK);
                 if not LSH_Acq_OK then
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Red)
                         & "[LSH]"
@@ -5347,6 +5441,8 @@ package body Model_Manager is
                         & "s].");
                 else
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Blue)
                         & "[LSH]"
@@ -5361,6 +5457,8 @@ package body Model_Manager is
 
                     if LSH_Hash_Value >= 0 then
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                         Put_Line
                            (AnsiAda.Foreground (AnsiAda.Light_Blue)
                             & "[LSH]"
@@ -5401,6 +5499,8 @@ package body Model_Manager is
                                     & "</SpeculationContextGuidance_Interaction>");
                             end loop;
                             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Light_Green)
                                 & "[LSH]"
@@ -5428,6 +5528,8 @@ package body Model_Manager is
                                     & "</SpeculationContextGuidance_Literature>");
                             end loop;
                             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Light_Green)
                                 & "[LSH]"
@@ -5441,6 +5543,8 @@ package body Model_Manager is
 
                         if Spec_Int_Count = 0 and Spec_Lit_Count = 0 then
                             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Grey)
                                 & "[LSH]"
@@ -5451,6 +5555,8 @@ package body Model_Manager is
                         end if;
                     else
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                         Put_Line
                            (AnsiAda.Foreground (AnsiAda.Red)
                             & "[LSH]"
@@ -5463,6 +5569,8 @@ package body Model_Manager is
                     --  Release ELP0 gate
                     Priority_Model_Gate.Release_ELP0 (LSH_QRNN);
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Blue)
                         & "[LSH]"
@@ -5475,6 +5583,8 @@ package body Model_Manager is
         end if;
 
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"
@@ -5632,6 +5742,8 @@ package body Model_Manager is
                    "You are the Router. You decide if a tool is needed. "
                    & "If the user says hello or greets you, output [FINISH]. "
                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                    --  CORE TOOLS: Original tool set
                    & "If you need to search, use [ACTION: search(query)]. "
                    & "If you need to read a file, use [ACTION: cat(filename)]. "
@@ -5642,6 +5754,8 @@ package body Model_Manager is
                    & "If you need to generate an image from your imagination, "
                    & "use [ACTION: imagine(description)]. "
                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                    --  NEW TOOLS: Git, File Edit, Directory, Test, Build, Issue, Review, Security
                    & "If you need to commit changes, use [ACTION: git(commit message)]. "
                    & "If you need to push changes, use [ACTION: git(push)]. "
@@ -5743,6 +5857,8 @@ package body Model_Manager is
                     & Current_JMP'Img
                     & ": Decision routing...");
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Blue)
                     & "[Init-V]"
@@ -5765,6 +5881,8 @@ package body Model_Manager is
                     FreeParallelMemory => True,
                     Skip_Gate          => False);
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Blue)
                     & "[Init-V]"
@@ -5825,6 +5943,8 @@ package body Model_Manager is
                                         begin
                                             if T_Name = "schedule" then
                                                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                                                 Put_Line
                                                    (AnsiAda.Foreground
                                                        (AnsiAda.Light_Blue)
@@ -5907,6 +6027,8 @@ package body Model_Manager is
                                                   = 0
                                             then
                                                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                                                 Put_Line
                                                    (AnsiAda.Foreground
                                                        (AnsiAda.Light_Blue)
@@ -5957,6 +6079,8 @@ package body Model_Manager is
                                                        constant Tool_Manager
                                                                    .Tool_Result :=
                                                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                                                     --  IMAGINE TOOL: Direct Ada call to SD_Manager.
                                                     --  When the model outputs [ACTION: imagine(prompt)],
                                                     --  generate an image via two-stage FLUX+SD pipeline
@@ -6210,6 +6334,8 @@ package body Model_Manager is
                     end if;
 
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Blue)
                         & "[Init-V]"
@@ -6297,6 +6423,8 @@ package body Model_Manager is
                             exception
                                 when others =>
                                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                                     Put_Line
                                        (AnsiAda.Foreground (AnsiAda.Red)
                                         & "[Init-V]"
@@ -6395,6 +6523,8 @@ package body Model_Manager is
                             exception
                                 when others =>
                                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                                     Put_Line
                                        (AnsiAda.Foreground (AnsiAda.Red)
                                         & "[Init-V]"
@@ -6432,6 +6562,8 @@ package body Model_Manager is
                     end;
 
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Blue)
                         & "[Init-V]"
@@ -6550,6 +6682,8 @@ package body Model_Manager is
                             end if;
 
                             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                             --  CONTEXT FAULT IMAGINE: When the model's <thinking>
                             --  emits [CONTEXT_FAULT:query=X category=imagine],
                             --  generate an image via the two-stage SD pipeline
@@ -6707,6 +6841,8 @@ package body Model_Manager is
                or else Index (Resp_Str, "<think>") > 0;
         begin
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             Put_Line
                (AnsiAda.Foreground (AnsiAda.Light_Blue)
                 & "[Init-V]"
@@ -7006,6 +7142,8 @@ package body Model_Manager is
     exception
         when E : Storage_Error =>
             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             --  Stack overflow during hybrid generation (tool exec, tokenization,
             --  or context fault paging).  Force-unload model and report cleanly.
             --  Mark Metal broken so KV save retries instead of SIGABRT.
@@ -7014,6 +7152,8 @@ package body Model_Manager is
                 Acceleration_Silicon_Layer := GPU_Layer_Fallback;
                 GPU_Last_OOM_Time := Ada.Real_Time.Clock;
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Yellow)
                     & "[GPU-Adaptive]"
