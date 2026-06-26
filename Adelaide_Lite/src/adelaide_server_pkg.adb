@@ -741,27 +741,32 @@ package body Adelaide_Server_Pkg is
                       Vision_Context_From_Param := To_Unbounded_String ("");
                    end if;
 
-                   Model_Manager.Generate
-                     (Kind          => Snowball_Enaga_ShortNetworkAnswer,
-                      Prompt        => "Does the following text contain a clear intent directed at an AI assistant, or is it a direct question/command? Answer ONLY 'YES' or 'NO'. Text: """ & To_String (Transcript) & """",
-                      Result        => Intent_Res,
-                      Images        => GNATCOLL.JSON.Empty_Array,
-                      Session_ID    => "intent-classifier",
-                      Requested_Ctx => 1024,
-                      Stream        => null,
-                      Level         => ELP1);
+                    Model_Manager.Generate
+                      (Kind          => Snowball_Enaga_ShortNetworkAnswer,
+                       Prompt        => "[INTEGRITY: Answer ONLY 'YES' or 'NO'. Do not fabricate or infer intent that is not explicitly present in the text.] " &
+                                        "Does the following text contain a clear, actionable intent directed at an AI assistant (a direct question, command, or request requiring a response)? " &
+                                        "Answer ONLY 'YES' or 'NO'. Text: """ & To_String (Transcript) & """",
+                       Result        => Intent_Res,
+                       Images        => GNATCOLL.JSON.Empty_Array,
+                       Session_ID    => "intent-classifier",
+                       Requested_Ctx => 1024,
+                       Stream        => null,
+                       Level         => ELP1);
 
                    if Index (To_String (Intent_Res), "YES") > 0 then
                       Handless_Stage := To_Unbounded_String ("Reflex Replying...");
-                      Model_Manager.Generate
-                        (Kind          => Snowball_Enaga_ShortNetworkAnswer,
-                         Prompt        => "You are an AI assistant. Give a short, concise, and helpful reply to the following: """ & To_String (Transcript) & """",
-                         Result        => LLM_Result,
-                         Images        => Vision_Arr,
-                         Session_ID    => "server-handless-reflex",
-                         Requested_Ctx => 1024,
-                         Stream        => null,
-                         Level         => ELP1);
+                       Model_Manager.Generate
+                         (Kind          => Snowball_Enaga_ShortNetworkAnswer,
+                          Prompt        => "[INTEGRITY: Never fabricate information. If you do not know the answer or are uncertain, say 'I don't know' or 'I'm not sure'. " &
+                                           "Do not hallucinate facts, dates, statistics, or sources. If the user asks for something harmful, refuse politely. " &
+                                           "Cite sources only if explicitly referenced in your knowledge. Keep responses factual and grounded.] " &
+                                           "You are an AI assistant. Give a short, concise, and helpful reply to the following: """ & To_String (Transcript) & """",
+                          Result        => LLM_Result,
+                          Images        => Vision_Arr,
+                          Session_ID    => "server-handless-reflex",
+                          Requested_Ctx => 1024,
+                          Stream        => null,
+                          Level         => ELP1);
 
                       declare
                          Deep_Ptr : Background_Deep_Thought_Task_Access := new Background_Deep_Thought_Task;
@@ -780,14 +785,18 @@ package body Adelaide_Server_Pkg is
                 end;
              else
                Handless_Stage := To_Unbounded_String ("Proactive Initiating...");
-               Model_Manager.Hybrid_Generate
-                 (Prompt     => "Proactively initiate the conversation. " &
-                  "Ask a random, interesting, or highly agentic question " &
-                  "to the user instead of waiting for a prompt.",
-                  Result     => LLM_Result,
-                  Session_ID => "server-handless",
-                  Agentic    => True,
-                  Raw_Prompt => True);
+                Model_Manager.Hybrid_Generate
+                  (Prompt     => "[INTEGRITY: Never fabricate information or hallucinate topics. " &
+                   "Only initiate about things you are confident about. " &
+                   "If you are uncertain what to discuss, ask the user what they would like to talk about. " &
+                   "Do not make up facts, statistics, or events.] " &
+                   "Proactively initiate the conversation. " &
+                   "Ask a random, interesting, or highly agentic question " &
+                   "to the user instead of waiting for a prompt.",
+                   Result     => LLM_Result,
+                   Session_ID => "server-handless",
+                   Agentic    => True,
+                   Raw_Prompt => True);
             end if;
             Handless_Output_Text := LLM_Result;
             Handless_Stage := To_Unbounded_String("Synthesizing...");
