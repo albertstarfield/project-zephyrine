@@ -317,6 +317,7 @@ os.makedirs(os.environ["HF_HOME"], exist_ok=True)
 # Globals to keep track of background processes
 daemon_process = None
 server_process = None
+vad_process = None
 watchdog_process = None
 kokoro_process = None
 
@@ -385,7 +386,7 @@ def cleanup(signum=None, frame=None):
     # Collect PIDs to kill directly — do NOT rely on proc.terminate()
     # inside a signal handler (can deadlock with main thread's proc.wait()).
     pids_to_kill = []
-    for proc in [daemon_process, server_process]:
+    for proc in [daemon_process, server_process, vad_process]:
         if proc and proc.poll() is None:
             pids_to_kill.append((proc.pid, proc.args[0] if proc.args else "unknown"))
 
@@ -413,7 +414,7 @@ def cleanup(signum=None, frame=None):
             print(f"[*] PID {pid} exited cleanly.")
 
     # Force-kill any remaining zombie processes via process group
-    for proc in [daemon_process, server_process]:
+    for proc in [daemon_process, server_process, vad_process]:
         if proc:
             try:
                 os.killpg(os.getpgid(proc.pid), SIGKILL)
@@ -427,7 +428,7 @@ signal.signal(signal.SIGINT, cleanup)
 signal.signal(signal.SIGTERM, cleanup)
 
 def main():
-    global daemon_process, server_process, watchdog_process
+    global daemon_process, server_process, watchdog_process, vad_process
     
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
     start_time = int(time.time() * 1000)
@@ -1068,6 +1069,22 @@ def main():
     else:
         print(f"[!] LSH requirements not found at {lsh_reqs}, skipping QRNN worker setup.")
 
+    # =====================================================================
+    # VAD ONNX Sidecar Worker: Python venv bootstrap
+    # =====================================================================
+    vad_worker_script = os.path.join(BASE_DIR, "vad_component", "vad_worker.py")
+    if os.path.exists(vad_worker_script):
+        print("[VAD] Bootstrapping ONNX VAD worker...")
+        pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
+        pyvenv_python = os.path.join(pyvenv_dir, "bin", "python3") if platform.system() != "Windows" else os.path.join(pyvenv_dir, "Scripts", "python.exe")
+        if not os.path.exists(pyvenv_python):
+            subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
+        pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip") if platform.system() != "Windows" else os.path.join(pyvenv_dir, "Scripts", "pip.exe")
+        
+        print("[VAD] Installing onnxruntime...")
+        subprocess.run([pyvenv_pip, "install", "onnxruntime", "numpy"], check=False)
+        print("[VAD] VAD worker bootstrap complete.")
+
     # Handle integrity check flag
     if "--test-build-integrity-check" in sys.argv:
         print("[*] Test build integrity check passed! Exiting without launching services.")
@@ -1128,6 +1145,9 @@ def main():
     # This prevents run.py's print() from appearing immediately.
     env["PYTHONUNBUFFERED"] = "1"
 
+    # [DO NOT REMOVE] Pass GUI mode flag to server for access info logging.
+    env["ADLAIDE_GUI_MODE"] = "1" if launch_gui else "0"
+
     # Architecture-aware Moonshine ONNX runtime path
     #
     # QUIRK: The server binary links against libmoonshine.dylib, which
@@ -1158,6 +1178,23 @@ def main():
     server_args_file = os.path.join(BASE_DIR, "run", "adelaide_server.args")
     with open(server_args_file, "w") as f:
         f.write(" ".join(server_args))
+
+    # [DO NOT REMOVE] Generate SSL certificate if not exists
+    # This enables HTTPS for secure communication between frontend and backend.
+    cert_script = os.path.join(BASE_DIR, "scripts", "generate_cert.py")
+    if os.path.exists(cert_script):
+        print("[*] Checking SSL certificate...")
+        cert_result = subprocess.run(
+            [sys.executable, cert_script],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True
+        )
+        if cert_result.returncode == 0:
+            print("[*] SSL certificate ready")
+        else:
+            print(f"[!] SSL certificate generation failed: {cert_result.stderr}")
+            print("[!] Falling back to HTTP mode")
 
     # [DO NOT REMOVE] Verbose server launch info
     print(f"[*] [Launch-V] Server binary: {server_path}")
@@ -1206,6 +1243,16 @@ def main():
                 start_new_session=True)
     else:
         print("[!] Watchdog binary not found at", watchdog_path, "- skipping")
+
+    # Launch VAD ONNX Sidecar
+    if os.path.exists(vad_worker_script):
+        print("[*] Booting VAD ONNX Sidecar...")
+        vad_log = os.path.join(BASE_DIR, "run", "vad_worker.log")
+        with open(vad_log, "a") as vlog:
+            vad_process = subprocess.Popen(
+                [pyvenv_python, vad_worker_script], cwd=BASE_DIR, env=env,
+                stdout=vlog, stderr=subprocess.STDOUT,
+                start_new_session=True)
 
     if launch_gui:
         print("[*] Booting Python Sidecar UI...")
