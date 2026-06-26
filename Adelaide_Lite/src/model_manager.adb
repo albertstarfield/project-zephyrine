@@ -277,36 +277,82 @@ package body Model_Manager is
         entry Start;
     end Acceleration_Monitor;
 
-    task body Acceleration_Monitor is
-        use Ada.Real_Time;
-        CSV_File   : Ada.Text_IO.File_Type;
-        Last_Print : Time := Time_First;
-        Uptime_S   : Long_Long_Integer;
-    begin
-        Elab_Trace ("Acceleration_Monitor task body ENTERED");
-        accept Start;
-        --  Open CSV for append
-        begin
-            Ada.Text_IO.Open (CSV_File, Ada.Text_IO.Append_File, "run/acceleration.csv");
-        exception
-            when Ada.Text_IO.Name_Error =>
-                Ada.Text_IO.Create (CSV_File, Ada.Text_IO.Append_File, "run/acceleration.csv");
-                Ada.Text_IO.Put_Line (CSV_File, "uptime_s,free_mb,total_mb,percent,tensor_layers,metal_broken");
-        end;
-        loop
-            delay until Last_Print + Milliseconds (10000);
-            Last_Print := Clock;
-            Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
-            declare
-                use Interfaces.C;
-                Free_Bytes  : size_t := 0;
-                Total_Bytes : size_t := 0;
-                Free_MB     : Natural := 0;
-                Total_MB    : Natural := 0;
-                Percent     : Natural := 0;
+     task body Acceleration_Monitor is
+         use Ada.Real_Time;
+         CSV_File   : Ada.Text_IO.File_Type;
+         Last_Print : Time := Time_First;
+         Uptime_S   : Long_Long_Integer;
+         --  Add a counter for monitoring cycles
+         Cycle_Count : Natural := 0;
+         --  [INSTRUMENTATION] Track execution time
+         Task_Start_Time : constant Time := Clock;
+         Last_Cycle_Start : Time;
+     begin
+         --  [DEBUG] Added detailed monitoring entry log
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                   & "[DEBUG] [AccelMonitor] task body ENTERED" & AnsiAda.Reset);
+         Elab_Trace ("Acceleration_Monitor task body ENTERED");
+         accept Start;
+         --  Open CSV for append
+         begin
+             Ada.Text_IO.Open (CSV_File, Ada.Text_IO.Append_File, "run/acceleration.csv");
+             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                       & "[DEBUG] [AccelMonitor] Opened acceleration.csv for append" & AnsiAda.Reset);
+         exception
+             when Ada.Text_IO.Name_Error =>
+                 Ada.Text_IO.Create (CSV_File, Ada.Text_IO.Append_File, "run/acceleration.csv");
+                 Ada.Text_IO.Put_Line (CSV_File, "uptime_s,free_mb,total_mb,percent,tensor_layers,metal_broken");
+                 Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                           & "[DEBUG] [AccelMonitor] Created new acceleration.csv with headers" & AnsiAda.Reset);
+         end;
+         
+         --  [DEBUG] Log when monitor enters main loop
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                   & "[DEBUG] [AccelMonitor] Entering main monitoring loop" & AnsiAda.Reset);
+         
+         loop
+             delay until Last_Print + Milliseconds (10000);
+             Last_Print := Clock;
+             Last_Cycle_Start := Clock;
+             Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
+             Cycle_Count := Cycle_Count + 1;
+             
+             --  [INSTRUMENTATION] Log execution time stats
+             declare
+                 Task_Elapsed : constant Duration := To_Duration (Clock - Task_Start_Time);
+             begin
+                 Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                         & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
+                         & " at Uptime=" & Uptime_S'Img & "s" 
+                         & " | Task_Elap=" & Trim(Duration'Image (Task_Elapsed), Both) & "s" 
+                         & AnsiAda.Reset);
+             end;
+             
+             declare
+                 use Interfaces.C;
+                 Free_Bytes  : size_t := 0;
+                 Total_Bytes : size_t := 0;
+                 Free_MB     : Natural := 0;
+                 Total_MB    : Natural := 0;
+                 Percent     : Natural := 0;
             begin
-                Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
-                if Total_Bytes > 0 then
+                 --  Add error handling for GPU memory query
+                 begin
+                     Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                             & "[DEBUG] [AccelMonitor] GPU_Memory_Query returned Free_Bytes=" 
+                             & size_t'Image (Free_Bytes) & ", Total_Bytes=" 
+                             & size_t'Image (Total_Bytes) & AnsiAda.Reset);
+                 exception
+                     when others =>
+                         Free_Bytes := 0;
+                         Total_Bytes := 0;
+                         Put_Line (AnsiAda.Foreground (AnsiAda.Red)
+                                 & "[ERROR] [AccelMonitor] GPU_Memory_Query failed with exception" 
+                                 & AnsiAda.Reset);
+                 end;
+                 
+                 if Total_Bytes > 0 then
                     Free_MB := Natural (Free_Bytes / (1024 * 1024));
                     Total_MB := Natural (Total_Bytes / (1024 * 1024));
                     if Total_MB > 0 then
@@ -354,18 +400,41 @@ package body Model_Manager is
                         Ada.Text_IO.Put_Line
                            (CSV_File,
                             Long_Long_Integer'Image (Uptime_S) & ",0,0,0,0,1");
-                    else
-                        GPU_Is_Stable := True;
-                        Put_Line
-                           (AnsiAda.Foreground (AnsiAda.Light_Cyan)
-                            & "[Tensor-Accelerator-Monitor] [Uptime]+"
-                            & Trim (Natural'Image (Natural (Uptime_S)), Both)
-                            & "s GPU=INAPPLICABLE Status=STABLE"
-                            & " Tensor_Layers="
-                            & (if Acceleration_Silicon_Layer = -1
-                               then "ALL(-1)"
-                               else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
-                            & AnsiAda.Reset);
+                     else
+                         GPU_Is_Stable := True;
+                         --  Add more context about why GPU is inapplicable
+                         if Is_Metal_Broken then
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Red)
+                                & "[Tensor-Accelerator-Monitor] [Uptime]+"
+                                & Trim (Natural'Image (Natural (Uptime_S)), Both)
+                                & "s GPU=INAPPLICABLE Status=UNSTABLE"
+                                & " (OOM/crash detected) Tensor_Layers=0"
+                                & " -- forcing CPU-only mode"
+                                & AnsiAda.Reset);
+                         else
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                                & "[Tensor-Accelerator-Monitor] [Uptime]+"
+                                & Trim (Natural'Image (Natural (Uptime_S)), Both)
+                                & "s GPU=INAPPLICABLE Status=STABLE"
+                                & " Tensor_Layers="
+                                & (if Acceleration_Silicon_Layer = -1
+                                   then "ALL(-1)"
+                                   else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
+                                & " | Reason:", AnsiAda.Reset);
+                            
+                            --  Add specific reason for inapplicable state
+                            if Free_Bytes = 0 and Total_Bytes = 0 then
+                               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                                      & "           GPU memory query returned zero values"
+                                      & AnsiAda.Reset);
+                            elsif not Is_Metal_Broken then
+                               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                                      & "           Metal backend is stable but no GPU memory detected"
+                                      & AnsiAda.Reset);
+                            end if;
+                         end if;
                         Ada.Text_IO.Put_Line
                            (CSV_File,
                             Long_Long_Integer'Image (Uptime_S) & ",0,0,0,"
@@ -1337,9 +1406,25 @@ package body Model_Manager is
         if not Acceleration_Monitor'Terminated then
             Acceleration_Monitor.Start;
         end if;
-        if not CPU_Monitor'Terminated then
-            CPU_Monitor.Start;
-        end if;
+         if not CPU_Monitor'Terminated then
+             CPU_Monitor.Start;
+         end if;
+         
+         --  [DEBUG] Print status of all monitor tasks
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                 & "[DEBUG] Monitor Task Status:" & AnsiAda.Reset);
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                 & "[DEBUG]   Context_Monitor'Terminated: " 
+                 & Boolean'Image (Context_Monitor'Terminated) & AnsiAda.Reset);
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                 & "[DEBUG]   WCET_Monitor'Terminated: " 
+                 & Boolean'Image (WCET_Monitor'Terminated) & AnsiAda.Reset);
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                 & "[DEBUG]   Acceleration_Monitor'Terminated: " 
+                 & Boolean'Image (Acceleration_Monitor'Terminated) & AnsiAda.Reset);
+         Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                 & "[DEBUG]   CPU_Monitor'Terminated: " 
+                 & Boolean'Image (CPU_Monitor'Terminated) & AnsiAda.Reset);
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
         --  [ElabTrace][+Uptime]: Context_Monitor started.
         Put_Line
