@@ -287,13 +287,18 @@ package body Model_Manager is
         entry Start;
     end Acceleration_Monitor;
 
-     task body Acceleration_Monitor is
+      task body Acceleration_Monitor is
          use Ada.Real_Time;
          CSV_File   : Ada.Text_IO.File_Type;
          Last_Print : Time := Time_First;
          Uptime_S   : Long_Long_Integer;
-         --  Add a counter for monitoring cycles
          Cycle_Count : Natural := 0;
+         Free_Bytes : size_t := 0;
+         Total_Bytes : size_t := 0;
+         Free_MB : Natural := 0;
+         Total_MB : Natural := 0;
+         Percent : Natural := 0;
+         Is_Critical : Boolean := False;
          --  [INSTRUMENTATION] Track execution time
          Task_Start_Time : constant Time := Clock;
          Last_Cycle_Start : Time;
@@ -351,127 +356,126 @@ package body Model_Manager is
                  Percent     : Natural := 0;
             begin
                   --  Add error handling for Tensor Accelerator memory query
-                 begin
-                     Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
-                      Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                              & "[DEBUG] [AccelMonitor] Tensor_Accelerator_Memory_Query returned Free_Bytes=" 
-                              & size_t'Image (Free_Bytes) & ", Total_Bytes=" 
-                              & size_t'Image (Total_Bytes) & AnsiAda.Reset);
-                 exception
-                     when others =>
-                         Free_Bytes := 0;
-                         Total_Bytes := 0;
-                          Put_Line (AnsiAda.Foreground (AnsiAda.Red)
-                                  & "[ERROR] [AccelMonitor] Tensor_Accelerator_Memory_Query failed with exception" 
-                                  & AnsiAda.Reset);
-                 end;
+                  Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                           & "[DEBUG] [AccelMonitor] Tensor_Accelerator_Memory_Query returned Free_Bytes=" 
+                           & size_t'Image (Free_Bytes) & ", Total_Bytes=" 
+                           & size_t'Image (Total_Bytes) & AnsiAda.Reset);
+                    end;
+                               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow)
+                                       & "[WARNING] [AccelMonitor] Attempted GPU reset after memory query failure" 
+                                       & AnsiAda.Reset);
+
                  
-                  if Total_Bytes > 0 then
-                     Free_MB := Natural (Free_Bytes / (1024 * 1024));
-                     Total_MB := Natural (Total_Bytes / (1024 * 1024));
-                      --  [MEMORY TRACKING] Log memory usage after query
-                      declare
-                          -- Estimate: 10MB per cycle for monitoring overhead (adjust as needed)
-                          Est_Used_MB : constant Integer := Cycle_Count * 10;
-                          Free_Pct : constant Natural := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
-                      begin
-                          Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                                  & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
-                                  & " | Est_Mem_Used=" & Est_Used_MB'Img & "MB" 
-                                  & " | Free_Pct=" & Free_Pct'Img & "%"
-                                  & AnsiAda.Reset);
-                     end;
-                     
-                     if Total_MB > 0 then
-                         Percent := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
-                         if Percent > 100 then Percent := 100; end if;
-                    end if;
-                    GPU_Free_MB := Free_MB;
-                    GPU_Total_MB := Total_MB;
-                    GPU_Layer_Percent := Percent;
-                    GPU_Is_Stable := True;
-                    Put_Line
-                       (AnsiAda.Foreground (AnsiAda.Light_Cyan)
-                        & "[Tensor-Accelerator-Monitor] [Uptime]+"
-                        & Trim (Natural'Image (Natural (Uptime_S)), Both)
-                        & "s Free="
-                        & Trim (Natural'Image (Free_MB), Both)
-                        & "MB / Total="
-                        & Trim (Natural'Image (Total_MB), Both)
-                        & "MB ("
-                        & Trim (Natural'Image (Percent), Both)
-                        & "%) Tensor_Layers="
-                        & (if Acceleration_Silicon_Layer = -1
-                           then "ALL(-1)"
-                           else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
-                        & AnsiAda.Reset);
-                    Ada.Text_IO.Put_Line
-                       (CSV_File,
-                        Long_Long_Integer'Image (Uptime_S) & ","
-                        & Natural'Image (Free_MB) & ","
-                        & Natural'Image (Total_MB) & ","
-                        & Natural'Image (Percent) & ","
-                        & Integer'Image (Acceleration_Silicon_Layer) & ","
-                        & "0");
-                else
-                    if Is_Metal_Broken then
-                        GPU_Is_Stable := False;
-                        Put_Line
-                           (AnsiAda.Foreground (AnsiAda.Red)
-                            & "[Tensor-Accelerator-Monitor] [Uptime]+"
-                            & Trim (Natural'Image (Natural (Uptime_S)), Both)
-                            & "s GPU=INAPPLICABLE Status=UNSTABLE"
-                            & " (OOM/crash detected) Tensor_Layers=0"
-                            & " -- forcing CPU-only mode"
-                            & AnsiAda.Reset);
-                        Ada.Text_IO.Put_Line
-                           (CSV_File,
-                            Long_Long_Integer'Image (Uptime_S) & ",0,0,0,0,1");
-                     else
+                         if Total_Bytes > 0 then
+                          Free_MB := Natural (Free_Bytes / (1024 * 1024));
+                          Total_MB := Natural (Total_Bytes / (1024 * 1024));
+                           --  [MEMORY TRACKING] Log memory usage after query
+                           declare
+                               -- Estimate: 10MB per cycle for monitoring overhead (adjust as needed)
+                               Est_Used_MB : constant Integer := Cycle_Count * 10;
+                               Free_Pct : constant Natural := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
+                               -- Check if we're close to OOM
+                                Is_Critical : constant Boolean := Free_Pct < 10 and then Total_MB > 0;
+                           begin
+                               Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                                       & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
+                                       & " | Est_Mem_Used=" & Est_Used_MB'Img & "MB" 
+                                       & " | Free_Pct=" & Free_Pct'Img & "%"
+                                       & (if Is_Critical then " [CRITICAL]" else "")
+                                       & AnsiAda.Reset);
+                           end;
+
+                          if Total_MB > 0 then
+                              Percent := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
+                          if Percent > 100 then 
+                             Percent := 100;
+                          end if;
+                     end if;
+                         GPU_Free_MB := Free_MB;
+                         GPU_Total_MB := Total_MB;
+                         GPU_Layer_Percent := Percent;
                          GPU_Is_Stable := True;
-                         --  Add more context about why GPU is inapplicable
-                         if Is_Metal_Broken then
-                            Put_Line
-                               (AnsiAda.Foreground (AnsiAda.Red)
-                                & "[Tensor-Accelerator-Monitor] [Uptime]+"
-                                & Trim (Natural'Image (Natural (Uptime_S)), Both)
-                                & "s GPU=INAPPLICABLE Status=UNSTABLE"
-                                & " (OOM/crash detected) Tensor_Layers=0"
-                                & " -- forcing CPU-only mode"
-                                & AnsiAda.Reset);
-                         else
+                         
+                         -- Set metal_broken flag if we're in a critical memory state
+                         declare
+                            Metal_Broken_Flag : constant Integer := (if Is_Critical then 1 else 0);
+                         begin
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                                 & "[Tensor-Accelerator-Monitor] [Uptime]+"
                                 & Trim (Natural'Image (Natural (Uptime_S)), Both)
-                                & "s GPU=INAPPLICABLE Status=STABLE"
-                                & " Tensor_Layers="
+                                & "s Free="
+                                & Trim (Natural'Image (Free_MB), Both)
+                                & "MB / Total="
+                                & Trim (Natural'Image (Total_MB), Both)
+                                & "MB ("
+                                & Trim (Natural'Image (Percent), Both)
+                                & "%) Tensor_Layers="
                                 & (if Acceleration_Silicon_Layer = -1
                                    then "ALL(-1)"
                                    else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
-                                 & " | Reason:" & AnsiAda.Reset);
-                            
-                            --  Add specific reason for inapplicable state
-                            if Free_Bytes = 0 and Total_Bytes = 0 then
-                               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan)
-                                       & "           Tensor Accelerator memory query returned zero values"
-                                      & AnsiAda.Reset);
-                            elsif not Is_Metal_Broken then
-                               Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan)
-                                       & "           Metal backend is stable but no Tensor Accelerator memory detected"
-                                      & AnsiAda.Reset);
-                            end if;
+                                & (if Metal_Broken_Flag = 1 then " [CRITICAL]" else "")
+                                & AnsiAda.Reset);
+                            Ada.Text_IO.Put_Line
+                               (CSV_File,
+                                Long_Long_Integer'Image (Uptime_S) & ","
+                                & Natural'Image (Free_MB) & ","
+                                & Natural'Image (Total_MB) & ","
+                                & Natural'Image (Percent) & ","
+                                & Integer'Image (Acceleration_Silicon_Layer) & ","
+                                & Integer'Image (Metal_Broken_Flag));
+                         end;
+                 else
+                     -- Check for metal_broken state or memory query failure
+                     declare
+                        Metal_Broken_Flag : constant Integer := (if Is_Metal_Broken or else (Free_Bytes = 0 and Total_Bytes = 0) then 1 else 0);
+                     begin
+                         GPU_Is_Stable := not Is_Metal_Broken;
+                         
+                         if Metal_Broken_Flag = 1 then
+                             Put_Line
+                                (AnsiAda.Foreground (AnsiAda.Red)
+                                 & "[Tensor-Accelerator-Monitor] [Uptime]+"
+                                 & Trim (Natural'Image (Natural (Uptime_S)), Both)
+                                 & "s GPU=INAPPLICABLE Status=UNSTABLE"
+                                 & " (OOM/crash detected) Tensor_Layers=0"
+                                 & " -- forcing CPU-only mode"
+                                 & AnsiAda.Reset);
+                             
+                           -- Attempt recovery if this is the first time we've detected the issue
+                              if not Is_Metal_Broken then
+                                 -- Mark as recovered for this cycle
+                                  Metal_Backend_Broken := False;
+                              end if;
+                         else
+                             Put_Line
+                                (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                                 & "[Tensor-Accelerator-Monitor] [Uptime]+"
+                                 & Trim (Natural'Image (Natural (Uptime_S)), Both)
+                                 & "s GPU=INAPPLICABLE Status=STABLE"
+                                 & " Tensor_Layers="
+                                 & (if Acceleration_Silicon_Layer = -1
+                                    then "ALL(-1)"
+                                    else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
+                                  & " | Reason:" & AnsiAda.Reset);
+                              
+                         --  Add specific reason for inapplicable state
+                             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                                     & "           Metal backend is stable but no Tensor Accelerator memory detected"
+                                    & AnsiAda.Reset);
                          end if;
-                        Ada.Text_IO.Put_Line
-                           (CSV_File,
-                            Long_Long_Integer'Image (Uptime_S) & ",0,0,0,"
-                            & Integer'Image (Acceleration_Silicon_Layer) & ",0");
-                    end if;
-                end if;
-                Ada.Text_IO.Flush (CSV_File);
-            end;
-        end loop;
-    end Acceleration_Monitor;
+                         
+                         Ada.Text_IO.Put_Line
+                            (CSV_File,
+                             Long_Long_Integer'Image (Uptime_S) & ",0,0,0,"
+                             & Integer'Image (Acceleration_Silicon_Layer) & ","
+                             & Integer'Image (Metal_Broken_Flag));
+                     end;
+                 Ada.Text_IO.Flush (CSV_File);
+             end if;
+         end loop;
+     end Acceleration_Monitor;
 
     --  =====================================================================
     --  CPU MEMORY MONITOR TASK

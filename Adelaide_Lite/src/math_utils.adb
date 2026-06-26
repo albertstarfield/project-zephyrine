@@ -1,5 +1,6 @@
 pragma SPARK_Mode (On);
-with Ada.Numerics.Long_Elementary_Functions;
+--  SPARK annotations for cosine similarity calculation
+with Ada.Numerics.Long_Elementary_Functions; use Ada.Numerics.Long_Elementary_Functions;
 
 package body Math_Utils is
 
@@ -8,7 +9,6 @@ package body Math_Utils is
         (GNATprove, Intentional, "float overflow check might fail",
          "Mathematical bounds of input float arrays guarantee " &
          "no overflow of Long_Float");
-      use Ada.Numerics.Long_Elementary_Functions;
 
       Dot_Product : Long_Float := 0.0;
       Norm1       : Long_Float := 0.0;
