@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Create macOS .app bundle for Adelaide with proper permissions.
+Create macOS .app bundle for Adelaide Zephyrine Assistant.
 
-This script creates a minimal .app bundle with Info.plist containing
-NSMicrophoneUsageDescription, NSCameraUsageDescription, and
-NSScreenCaptureUsageDescription for microphone, camera, and screen capture access.
+This script creates a minimal .app bundle with:
+- Info.plist with microphone/camera/screen capture permissions
+- Launcher script that opens Terminal and runs the server with GUI
+- Auto-installs to /Applications on first run
 
 Usage:
-    python3 create_macos_app.py [--output Adelaide.app]
-
-The resulting .app bundle can be launched directly or used with py2app.
+    python3 create_macos_app.py [--output Adelaide Zephyrine Assistant.app]
 """
 
 import os
 import sys
 import argparse
 import stat
+import subprocess
 from pathlib import Path
 
 
@@ -24,11 +24,11 @@ INFO_PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Adelaide</string>
+    <string>Adelaide Zephyrine Assistant</string>
     <key>CFBundleDisplayName</key>
     <string>Adelaide Zephyrine Assistant</string>
     <key>CFBundleIdentifier</key>
-    <string>com.zephyrine.adelaide</string>
+    <string>com.zephyrine.adelaide-assistant</string>
     <key>CFBundleVersion</key>
     <string>1.0.0</string>
     <key>CFBundleShortVersionString</key>
@@ -73,32 +73,57 @@ INFO_PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 LAUNCHER_TEMPLATE = """#!/bin/bash
-# Adelaide Launcher Script
-# This script launches Adelaide using the venv Python interpreter
+# Adelaide Zephyrine Assistant Launcher
+# This script opens Terminal and runs the server with GUI
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_DIR="$(dirname "$SCRIPT_DIR")"
-ADelaide_DIR="${APP_DIR}/../../../.."
+# Get the directory where this .app is located
+APP_DIR="$(dirname "$(dirname "$0")")"
 
-# Find venv Python
-VENV_PYTHON="${ADelaide_DIR}/pyvenv/bin/python"
-if [ ! -f "$VENV_PYTHON" ]; then
-    VENV_PYTHON="${ADelaide_DIR}/pyvenv/Scripts/python.exe"
+# Try to find Adelaide_Lite directory
+# Check common locations relative to .app
+SEARCH_DIRS=(
+    "$APP_DIR"
+    "$HOME/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite"
+    "$HOME/OpenIntellegentiaPlatform/Adelaide_Lite"
+    "$HOME/Adelaide_Lite"
+    "$HOME/Desktop/Adelaide_Lite"
+    "$HOME/Documents/Adelaide_Lite"
+)
+
+ADelaide_DIR=""
+for dir in "${SEARCH_DIRS[@]}"; do
+    if [ -f "$dir/run.py" ]; then
+        ADelaide_DIR="$dir"
+        break
+    fi
+done
+
+if [ -z "$ADelaide_DIR" ]; then
+    # Ask user to select directory
+    osascript -e 'tell application "Finder"
+        set dir to POSIX path of (choose folder with prompt "Select Adelaide_Lite directory")
+        return dir
+    end tell' > /tmp/adelaide_dir.txt
+    ADelaide_DIR=$(cat /tmp/adelaide_dir.txt | tr -d '\n')
 fi
 
-if [ ! -f "$VENV_PYTHON" ]; then
-    echo "[!] Venv Python not found. Using system Python."
-    VENV_PYTHON="python3"
+if [ -z "$ADelaide_DIR" ]; then
+    osascript -e 'display dialog "Could not find Adelaide_Lite directory." buttons {"OK"} default button 1'
+    exit 1
 fi
 
-# Launch sidecar UI
-cd "${ADelaide_DIR}/ui"
-exec "$VENV_PYTHON" sidecar_ui.py "$@"
+# Open Terminal and run the server with GUI
+osascript <<EOF
+tell application "Terminal"
+    activate
+    do script "cd \\"$ADelaide_DIR\\" && python3 run.py"
+end tell
+EOF
 """
 
 
 def create_app_bundle(output_path: str) -> None:
-    """Create macOS .app bundle with permissions."""
+    """Create macOS .app bundle with permissions and launcher."""
     app_path = Path(output_path)
     
     # Create directory structure
@@ -126,19 +151,49 @@ def create_app_bundle(output_path: str) -> None:
     
     print(f"\n[+] App bundle created at: {app_path}")
     print(f"    Double-click to launch, or run:")
-    print(f"    open {app_path}")
+    print(f"    open \\"{app_path}\\"")
+
+
+def install_to_applications(app_path: str) -> str:
+    """Install .app bundle to /Applications."""
+    app_name = os.path.basename(app_path)
+    applications_dir = "/Applications"
+    dest_path = os.path.join(applications_dir, app_name)
+    
+    # Check if already installed
+    if os.path.exists(dest_path):
+        print(f"[*] App already installed at {dest_path}")
+        return dest_path
+    
+    # Copy to /Applications
+    try:
+        subprocess.run(["cp", "-R", app_path, dest_path], check=True)
+        print(f"[+] Installed to {dest_path}")
+        return dest_path
+    except subprocess.CalledProcessError as e:
+        print(f"[!] Failed to install to /Applications: {e}")
+        print(f"    You may need to run with sudo or drag manually to Applications")
+        return app_path
 
 
 def main():
     parser = argparse.ArgumentParser(description="Create macOS .app bundle for Adelaide")
     parser.add_argument(
         "--output", "-o",
-        default="Adelaide.app",
-        help="Output path for .app bundle (default: Adelaide.app)"
+        default="Adelaide Zephyrine Assistant.app",
+        help="Output path for .app bundle (default: Adelaide Zephyrine Assistant.app)"
+    )
+    parser.add_argument(
+        "--install", "-i",
+        action="store_true",
+        help="Install to /Applications after creating"
     )
     args = parser.parse_args()
     
     create_app_bundle(args.output)
+    
+    if args.install:
+        install_to_applications(args.output)
 
 
 if __name__ == "__main__":
