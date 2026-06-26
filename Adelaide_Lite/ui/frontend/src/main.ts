@@ -1999,25 +1999,20 @@ async function stopAndSendAgenticVoice() {
     const totalLength = inputBuffer.reduce((acc, val) => acc + val.length, 0);
     const combinedFloats = new Float32Array(totalLength);
     let offset = 0;
-    let sumSquares = 0;
-    
     for (const chunk of inputBuffer) {
         combinedFloats.set(chunk, offset);
-        for (let i = 0; i < chunk.length; i++) {
-            sumSquares += chunk[i] * chunk[i];
-        }
         offset += chunk.length;
     }
     
-    const rms = Math.sqrt(sumSquares / totalLength);
     const vadElem = document.getElementById('hl-vad');
     
-     if (rms < 0.01) {
-         console.log("VAD: No speech detected (RMS: " + rms + ")");
-         if (vadElem) { vadElem.innerText = "No Speech Detected"; vadElem.style.color = "#ef4444"; }
+     if (totalLength < 4000) {
+         console.log("VAD: Audio too short, skipping...");
          inputBuffer = [];
          return; // Skip sending to API
      }
+     
+     if (vadElem) { vadElem.innerText = "Analyzing VAD via Server..."; vadElem.style.color = "#a855f7"; }
      
      // Capture visual context if camera is ready and include it in the agentic request
      let visionContextB64 = "";
@@ -2065,11 +2060,25 @@ async function stopAndSendAgenticVoice() {
             const arrayBuffer = await response.arrayBuffer();
             playPCM(arrayBuffer);
         } else {
-            console.error("Backend Error:", await response.text());
+            const errorText = await response.text();
+            console.error("Backend Error:", errorText);
+            // Show error to user on the visualizer
+            const circle = document.getElementById('audio-visualizer-circle');
+            if (circle) {
+                circle.textContent = errorText.substring(0, 40);
+                circle.style.color = '#ff4444';
+                setTimeout(() => { circle.textContent = ''; circle.style.color = ''; }, 3000);
+            }
         }
         
     } catch (err) {
         console.error("Failed to connect to Ada daemon:", err);
+        const circle = document.getElementById('audio-visualizer-circle');
+        if (circle) {
+            circle.textContent = 'Connection failed';
+            circle.style.color = '#ff4444';
+            setTimeout(() => { circle.textContent = ''; circle.style.color = ''; }, 3000);
+        }
     }
 }
 

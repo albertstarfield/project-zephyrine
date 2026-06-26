@@ -366,7 +366,7 @@ def get_stats(queue_len: int = 0):
         "WCET_mLoop_Hist": engine_stats.wcet_mloop_hist,
 
         "Handless_Stage": engine_stats.handless_stage,
-        "Handless_WCET": engine_stats.handless_wcet,
+        "Handless_WCET_nS": engine_stats.handless_wcet,
         "Handless_Input_Text": engine_stats.handless_input_text,
         "Handless_Output_Text": engine_stats.handless_output_text
     }
