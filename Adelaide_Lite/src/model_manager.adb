@@ -86,12 +86,26 @@ with Speculative_Cache;
 --
 --  [QUIRK-M07] [ALL] Sanitize_Think_Tags backtracking
 --  If a model outputs an opening <think> tag but hits EOG before closing
---  it, the naive sanitizer would strip the entire response until it finds
---  a closing tag that never arrives.  The improved sanitizer uses a
+--  it, the naive sanitizer would strip the entire response until it finds a
+--  closing tag that never arrives.  The improved sanitizer uses a
 --  backtracking mechanism: if a closing tag is not found by the end of
 --  the string, it treats the opening tag as regular text.  This prevents
 --  "empty response" bugs when models fail to close their thinking blocks.
---  ===========================================================================
+--
+--  [QUIRK-M08] [ALL] "GAP Zone" Accelerator Tensor Issue
+--  When an ELP1 (User) request preempts an ELP0 (Background) task, a significant 
+--  gap in GPU utilization (~5%) is observed. This is NOT a bug, but a systemic 
+--  behavior of the dynamic model-swapping architecture.
+--
+--  The "GAP Zone" occurs because the GPU is idle while the CPU and Disk are 
+--  performing the following "Cold Start" sequence:
+--     1. Unloading the previous model (Metal/VRAM cleanup).
+--     2. Reading new model weights from Disk (I/O Bottleneck).
+--     3. Constructing the llama_context and allocating Metal buffers (Setup).
+--
+--  The GPU only reaches high utilization (80-90%) once the "LoadModel" phase
+--  reaches 'Phase 2/2 COMPLETE' and the first inference token is dispatched.
+
 
 package body Model_Manager is
     use Streaming_Queue;
