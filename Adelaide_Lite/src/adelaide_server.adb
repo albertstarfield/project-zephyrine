@@ -103,6 +103,7 @@ procedure Adelaide_Server is
    function Get_SSL_Cert_Path return String;
    function Get_SSL_Key_Path return String;
    function Use_HTTPS return Boolean;
+   function Get_Sidecar_Port return Natural;
 
    --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
    procedure Install_Shutdown_Handlers;
@@ -247,6 +248,34 @@ procedure Adelaide_Server is
       return Ada.Directories.Exists (Get_SSL_Cert_Path)
         and then Ada.Directories.Exists (Get_SSL_Key_Path);
    end Use_HTTPS;
+
+   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+   --  Get_Sidecar_Port: Reads the GUI sidecar port from .sidecar_port file.
+   --  Returns 0 if file doesn't exist (sidecar not running).
+   function Get_Sidecar_Port return Natural is
+      Port_File : constant String :=
+        Ada.Directories.Current_Directory & "/run/.sidecar_port";
+      F : Ada.Text_IO.File_Type;
+      Line : String (1 .. 16);
+      Last : Natural;
+   begin
+      if not Ada.Directories.Exists (Port_File) then
+         return 0;
+      end if;
+      Ada.Text_IO.Open (F, Ada.Text_IO.In_File, Port_File);
+      if not Ada.Text_IO.End_Of_File (F) then
+         Ada.Text_IO.Get_Line (F, Line, Last);
+         Ada.Text_IO.Close (F);
+         if Last > 0 then
+            return Natural'Value (Line (1 .. Last));
+         end if;
+      else
+         Ada.Text_IO.Close (F);
+      end if;
+      return 0;
+   exception
+      when others => return 0;
+   end Get_Sidecar_Port;
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
    --  Max_Retries: How many times we attempt to bind port 11420 before
@@ -972,14 +1001,12 @@ begin
          Heartbeat_Count : Natural := 0;
          Alive_Count     : Natural := 0;
          Access_Count    : Natural := 0;
-         GUI_Mode        : constant Boolean :=
-           Ada.Environment_Variables.Exists ("ADLAIDE_GUI_MODE")
-           and then Ada.Environment_Variables.Value ("ADLAIDE_GUI_MODE") = "1";
       begin
          --  [DO NOT REMOVE] Print initial access info on startup
          declare
-            HTTP_Port  : constant Natural := Get_Port;
-            HTTPS_Port : constant Natural := HTTP_Port + 1;
+            HTTP_Port   : constant Natural := Get_Port;
+            HTTPS_Port  : constant Natural := HTTP_Port + 1;
+            Sidecar_Port : constant Natural := Get_Sidecar_Port;
          begin
             Put_Line ("");
             Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
@@ -992,19 +1019,26 @@ begin
                       "==========================================================" &
                       AnsiAda.Reset);
             Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
-                      "  HTTP:  http://localhost:" &
+                      "  HTTP:    http://localhost:" &
                       Natural'Image (HTTP_Port) &
                       AnsiAda.Reset);
             if Use_HTTPS then
                Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
-                         "  HTTPS: https://localhost:" &
+                         "  HTTPS:   https://localhost:" &
                          Natural'Image (HTTPS_Port) &
                          AnsiAda.Reset);
             end if;
-            Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
-                      "  GUI:   " &
-                      (if GUI_Mode then "ENABLED (sidecar running)" else "DISABLED (--no-gui)") &
-                      AnsiAda.Reset);
+            if Sidecar_Port > 0 then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                         "  GUI:     http://localhost:" &
+                         Natural'Image (Sidecar_Port) &
+                         " (sidecar running)" &
+                         AnsiAda.Reset);
+            else
+               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                         "  GUI:     DISABLED (--no-gui)" &
+                         AnsiAda.Reset);
+            end if;
             Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
                       "==========================================================" &
                       AnsiAda.Reset);
@@ -1078,8 +1112,9 @@ begin
                if Access_Count >= 10 then
                   Access_Count := 0;
                   declare
-                     HTTP_Port  : constant Natural := Get_Port;
-                     HTTPS_Port : constant Natural := HTTP_Port + 1;
+                     HTTP_Port   : constant Natural := Get_Port;
+                     HTTPS_Port  : constant Natural := HTTP_Port + 1;
+                     Sidecar_Port : constant Natural := Get_Sidecar_Port;
                   begin
                      Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
                                "[Access]" & AnsiAda.Reset &
@@ -1089,7 +1124,11 @@ begin
                                   " | HTTPS: https://localhost:" &
                                   Natural'Image (HTTPS_Port)
                                 else "") &
-                               (if GUI_Mode then " | GUI: ON" else " | GUI: OFF"));
+                               (if Sidecar_Port > 0 then
+                                  " | GUI: http://localhost:" &
+                                  Natural'Image (Sidecar_Port)
+                                else
+                                  " | GUI: OFF"));
                   end;
                end if;
                delay 1.0;
