@@ -138,10 +138,11 @@ if [ -z "$ADelaide_DIR" ]; then
 fi
 
 # Open Terminal and run the server with GUI
+# Set ADELAIDE_LAUNCHED_FROM_APP flag so run.py knows we're from .app
 osascript <<EOF
 tell application "Terminal"
     activate
-    do script "cd \\"$ADelaide_DIR\\" && python3 run.py"
+    do script "cd \\"$ADelaide_DIR\\" && ADELAIDE_LAUNCHED_FROM_APP=1 python3 run.py"
 end tell
 EOF
 

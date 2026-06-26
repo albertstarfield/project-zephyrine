@@ -1271,18 +1271,33 @@ def main():
         # NSMicrophoneUsageDescription, NSCameraUsageDescription, and
         # NSScreenCaptureUsageDescription for hardware access permissions.
         # The .app launches Terminal and runs the server with GUI.
+        #
+        # IMPORTANT: Only launch .app if NOT already running in Terminal.
+        # If launched from Terminal, just run sidecar_ui.py directly to avoid bootloop.
         if sys.platform == "darwin":
-            app_bundle_path = os.path.join(BASE_DIR, "run", "Adelaide Zephyrine Assistant.app")
-            create_app_script = os.path.join(ui_dir, "create_macos_app.py")
+            # Check if we're already in a Terminal session or launched from .app
+            # ADELAIDE_LAUNCHED_FROM_APP is set by .app launcher script
+            # TERM_SESSION_ID is set by bash/zsh when in terminal
+            launched_from_app = os.environ.get("ADELAIDE_LAUNCHED_FROM_APP") == "1"
+            in_terminal = os.environ.get("TERM_SESSION_ID") is not None
             
-            # Create .app bundle if it doesn't exist
-            if not os.path.exists(app_bundle_path):
-                print("[*] Creating macOS .app bundle for microphone/camera permissions...")
-                subprocess.run([sidecar_python, create_app_script, "--output", app_bundle_path], cwd=ui_dir)
-            
-            # Launch via .app bundle for proper permissions
-            print(f"[*] Launching Adelaide Zephyrine Assistant.app for hardware access...")
-            subprocess.run(["open", app_bundle_path])
+            if launched_from_app or in_terminal:
+                # Already in Terminal or launched from .app - launch sidecar directly (no .app)
+                print("[*] Running in Terminal - launching sidecar directly...")
+                subprocess.run([sidecar_python, "sidecar_ui.py"], cwd=ui_dir)
+            else:
+                # Not in Terminal (e.g., launched from Finder) - use .app
+                app_bundle_path = os.path.join(BASE_DIR, "run", "Adelaide Zephyrine Assistant.app")
+                create_app_script = os.path.join(ui_dir, "create_macos_app.py")
+                
+                # Create .app bundle if it doesn't exist
+                if not os.path.exists(app_bundle_path):
+                    print("[*] Creating macOS .app bundle for microphone/camera permissions...")
+                    subprocess.run([sidecar_python, create_app_script, "--output", app_bundle_path], cwd=ui_dir)
+                
+                # Launch via .app bundle for proper permissions
+                print("[*] Launching Adelaide Zephyrine Assistant.app for hardware access...")
+                subprocess.run(["open", app_bundle_path])
         else:
             # Non-Darwin: launch directly
             subprocess.run([sidecar_python, "sidecar_ui.py"], cwd=ui_dir)
