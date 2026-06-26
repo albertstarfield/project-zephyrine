@@ -396,6 +396,14 @@ package body Model_Manager is
 
     Models : array (Model_Type) of Model_Record;
 
+    --  Live context size reader for CtxMonitor.
+    --  Returns current context capacity from the model record,
+    --  reflecting any dynamic resize that has occurred.
+    function Get_Live_Ctx_Size return Natural is
+    begin
+        return Natural (Models (Snowball_Enaga_Orchestrator).Current_Ctx);
+    end Get_Live_Ctx_Size;
+
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
     --  [ElabTrace-C]: RAW C trace: after Models array declaration.
     function Emit_After_Models return Integer is
@@ -3847,6 +3855,9 @@ package body Model_Manager is
                            True,
                            True);
                     Free (Prompt_C);
+
+                    --  Update CtxMonitor with new context size after resize
+                    Current_Ctx_Capacity := Natural (Models (Kind).Current_Ctx);
                 end;
             end if;
         exception
