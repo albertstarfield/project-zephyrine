@@ -212,6 +212,89 @@ echo -e "${GREEN}             Test Suite Execution Complete & Documented        
 echo -e "${BLUE}======================================================================${NC}"
 
 # ===========================================================================
+# STAGE 6: BENCHMARK ENDPOINT TESTS (DO NOT REMOVE)
+# ===========================================================================
+echo -e "\n${BLUE}[*] Stage 6: Benchmark Endpoint Tests...${NC}"
+
+BENCH_KEY="IknowtheConsequencesAndWouldLockupTheServerForHours"
+BENCH_URL="http://localhost:11420/api/snowballEnagaValidationBenchmark"
+
+# Start server for benchmark tests
+echo -e "${CYAN}[i] Starting adelaide_server for benchmark tests...${NC}"
+./bin/adelaide_server --no-gui > server_bench.log 2>&1 &
+BENCH_PID=$!
+
+for i in {1..30}; do
+    if curl -s http://localhost:11420/ > /dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+
+if ! kill -0 $BENCH_PID 2>/dev/null; then
+    echo -e "${RED}[!] Server crashed before benchmark tests!${NC}"
+else
+    echo -e "${GREEN}[ok] Server is up for benchmark tests${NC}"
+
+    # 6a. Performance benchmark only
+    echo -e "\n${CYAN}[i] 6a: Running performance benchmark...${NC}"
+    PERF_RESULT=$(curl -s -w "\n%{http_code}" -X POST "$BENCH_URL" \
+        -H "Content-Type: application/json" \
+        -H "x-api-key: $BENCH_KEY" \
+        -d '{"benchmark_type": "performance"}' -m 30)
+    PERF_HTTP=$(echo "$PERF_RESULT" | tail -1)
+    PERF_BODY=$(echo "$PERF_RESULT" | sed '$d')
+    if [ "$PERF_HTTP" = "200" ]; then
+        echo -e "${GREEN}[ok] Performance benchmark: HTTP $PERF_HTTP${NC}"
+    else
+        echo -e "${RED}[!] Performance benchmark: HTTP $PERF_HTTP${NC}"
+        echo "$PERF_BODY" | head -5
+    fi
+
+    # 6b. Invalid API key test
+    echo -e "\n${CYAN}[i] 6b: Testing invalid API key...${NC}"
+    AUTH_RESULT=$(curl -s -w "\n%{http_code}" -X POST "$BENCH_URL" \
+        -H "Content-Type: application/json" \
+        -H "x-api-key: WRONG_KEY" \
+        -d '{}' -m 10)
+    AUTH_HTTP=$(echo "$AUTH_RESULT" | tail -1)
+    if [ "$AUTH_HTTP" = "401" ]; then
+        echo -e "${GREEN}[ok] Invalid API key rejected: HTTP 401${NC}"
+    else
+        echo -e "${RED}[!] Invalid API key test failed: HTTP $AUTH_HTTP (expected 401)${NC}"
+    fi
+
+    # 6c. Both benchmarks (default) — may fail on accuracy, that's expected
+    echo -e "\n${CYAN}[i] 6c: Running both benchmarks (default mode)...${NC}"
+    BOTH_RESULT=$(curl -s -w "\n%{http_code}" -X POST "$BENCH_URL" \
+        -H "Content-Type: application/json" \
+        -H "x-api-key: $BENCH_KEY" \
+        -d '{}' -m 60)
+    BOTH_HTTP=$(echo "$BOTH_RESULT" | tail -1)
+    BOTH_BODY=$(echo "$BOTH_RESULT" | sed '$d')
+    if [ "$BOTH_HTTP" = "200" ] || [ "$BOTH_HTTP" = "400" ]; then
+        echo -e "${GREEN}[ok] Both benchmarks: HTTP $BOTH_HTTP${NC}"
+    else
+        echo -e "${RED}[!] Both benchmarks: HTTP $BOTH_HTTP${NC}"
+    fi
+
+    # Kill benchmark server
+    echo -e "\n${CYAN}[i] Shutting down benchmark server...${NC}"
+    kill $BENCH_PID 2>/dev/null
+    count=0
+    while kill -0 $BENCH_PID 2>/dev/null && [ $count -lt 5 ]; do
+        sleep 1
+        count=$((count + 1))
+    done
+    kill -9 $BENCH_PID 2>/dev/null
+    wait $BENCH_PID 2>/dev/null
+fi
+
+echo -e "\n${BLUE}======================================================================${NC}"
+echo -e "${GREEN}             Benchmark Tests Complete                                  ${NC}"
+echo -e "${BLUE}======================================================================${NC}"
+
+# ===========================================================================
 # STREAMING TTFB REQUIREMENT (DO NOT REMOVE)
 # ===========================================================================
 # The first chunk (ACK or token) of any streaming response MUST arrive

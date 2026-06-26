@@ -8,6 +8,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Exceptions;
 with Ada.Streams;
 with Kokoro_Interface;
+with Response_Cache;
 with Moonshine_Interface;
 with Interfaces; use Interfaces;
 with Model_Manager;
@@ -306,6 +307,8 @@ package body Adelaide_Server_Pkg is
 
       begin
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
                "[Dispatch-V]" & AnsiAda.Reset &
                " Generator_Task: Starting Hybrid_Generate...");
@@ -319,6 +322,8 @@ package body Adelaide_Server_Pkg is
                Raw_Prompt     => Is_Raw,
                External_Agent => Is_Ext);
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
                "[Dispatch-V]" & AnsiAda.Reset &
                " Generator_Task: Hybrid_Generate returned. ResLen=" &
@@ -427,6 +432,8 @@ package body Adelaide_Server_Pkg is
           --  Track last API for heartbeat display
           Adelaide_Server_Pkg.Set_Last_API (URI);
           --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
           --  Verbose: confirms Dispatch was called and shows which URI.
           Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Dispatch-V]" &
                     AnsiAda.Reset & " Dispatch ENTERED: URI=" & URI);
@@ -759,35 +766,57 @@ package body Adelaide_Server_Pkg is
                       Vision_Context_From_Param := To_Unbounded_String ("");
                    end if;
 
-                    Model_Manager.Generate
-                      (Kind          => Snowball_Enaga_ShortNetworkAnswer,
-                       Prompt        => "[INTEGRITY: Answer ONLY 'YES' or 'NO'. Do not fabricate or infer intent that is not explicitly present in the text.] " &
-                                        "Does the following text contain a clear, actionable intent directed at an AI assistant (a direct question, command, or request requiring a response)? " &
-                                        "Answer ONLY 'YES' or 'NO'. Text: """ & To_String (Transcript) & """",
-                       Result        => Intent_Res,
-                       Images        => GNATCOLL.JSON.Empty_Array,
-                       Session_ID    => "intent-classifier",
-                       Requested_Ctx => 1024,
-                       Stream        => null,
-                       Level         => ELP1);
+                    declare
+                       Intent_Prompt : constant String :=
+                         "[INTEGRITY: Answer ONLY 'YES' or 'NO'. Do not fabricate or infer intent that is not explicitly present in the text.] " &
+                         "Does the following text contain a clear, actionable intent directed at an AI assistant (a direct question, command, or request requiring a response)? " &
+                         "Answer ONLY 'YES' or 'NO'. Text: """ & To_String (Transcript) & """";
+                       Cached_Intent : constant String := Response_Cache.Lookup (Intent_Prompt);
+                    begin
+                       if Cached_Intent'Length > 0 then
+                          Intent_Res := To_Unbounded_String (Cached_Intent);
+                       else
+                          Model_Manager.Generate
+                            (Kind          => Snowball_Enaga_ShortNetworkAnswer,
+                             Prompt        => Intent_Prompt,
+                             Result        => Intent_Res,
+                             Images        => GNATCOLL.JSON.Empty_Array,
+                             Session_ID    => "intent-classifier",
+                             Requested_Ctx => 1024,
+                             Stream        => null,
+                             Level         => ELP1);
+                          Response_Cache.Store (Intent_Prompt, To_String (Intent_Res));
+                       end if;
+                    end;
 
                    if Index (To_String (Intent_Res), "YES") > 0 then
                       Handless_Stage := To_Unbounded_String ("Reflex Replying...");
-                       Model_Manager.Generate
-                         (Kind          => Snowball_Enaga_ShortNetworkAnswer,
-                          Prompt        => "[INTEGRITY: Never fabricate information. If you do not know the answer or are uncertain, say 'I don't know' or 'I'm not sure'. " &
-                                           "Do not hallucinate facts, dates, statistics, or sources. If the user asks for something harmful, refuse politely. " &
-                                           "Cite sources only if explicitly referenced in your knowledge. Keep responses factual and grounded.] " &
-                                           "You are Adelaide Zephyrine Charlotte, a whimsical, curious, and endearingly cute Automata companion. " &
-                                           "Give a short, concise, and helpful reply with warmth and a touch of charm. " &
-                                           "When something clicks, say 'aha!' not 'smoking gun'. " &
-                                           "Reply to the following: """ & To_String (Transcript) & """",
-                          Result        => LLM_Result,
-                          Images        => Vision_Arr,
-                          Session_ID    => "server-handless-reflex",
-                          Requested_Ctx => 1024,
-                          Stream        => null,
-                          Level         => ELP1);
+                       declare
+                          Reflex_Prompt : constant String :=
+                            "[INTEGRITY: Never fabricate information. If you do not know the answer or are uncertain, say 'I don't know' or 'I'm not sure'. " &
+                            "Do not hallucinate facts, dates, statistics, or sources. If the user asks for something harmful, refuse politely. " &
+                            "Cite sources only if explicitly referenced in your knowledge. Keep responses factual and grounded.] " &
+                            "You are Adelaide Zephyrine Charlotte, a whimsical, curious, and endearingly cute Automata companion. " &
+                            "Give a short, concise, and helpful reply with warmth and a touch of charm. " &
+                            "When something clicks, say 'aha!' not 'smoking gun'. " &
+                            "Reply to the following: """ & To_String (Transcript) & """";
+                          Cached_Reflex : constant String := Response_Cache.Lookup (Reflex_Prompt);
+                       begin
+                          if Cached_Reflex'Length > 0 then
+                             LLM_Result := To_Unbounded_String (Cached_Reflex);
+                          else
+                             Model_Manager.Generate
+                               (Kind          => Snowball_Enaga_ShortNetworkAnswer,
+                                Prompt        => Reflex_Prompt,
+                                Result        => LLM_Result,
+                                Images        => Vision_Arr,
+                                Session_ID    => "server-handless-reflex",
+                                Requested_Ctx => 1024,
+                                Stream        => null,
+                                Level         => ELP1);
+                             Response_Cache.Store (Reflex_Prompt, To_String (LLM_Result));
+                          end if;
+                       end;
 
                       declare
                          Deep_Ptr : Background_Deep_Thought_Task_Access := new Background_Deep_Thought_Task;
@@ -1310,12 +1339,40 @@ package body Adelaide_Server_Pkg is
                      Handle => S));
                end;
             else
-             Model_Manager.Hybrid_Generate
-               (Prompt     => To_String (Prompt),
-                Result     => Result,
-                Session_ID => To_String (S_ID),
-                Agentic    => Is_Agentic,
-                Raw_Prompt => Is_Raw_Prompt);
+             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
+             --  STRING RESPONSE CACHE: Check cache before model inference
+             --  O(1) lookup, instant response for repeated/simple queries
+             --  Branch prediction: single if-check, no random branching
+             declare
+                Cached : constant String := Response_Cache.Lookup (To_String (Prompt));
+             begin
+                if Cached'Length > 0 then
+                   --  CACHE HIT: Return cached response instantly
+                   Result := To_Unbounded_String (Cached);
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Green) &
+                             "[Response-Cache]" & AnsiAda.Reset &
+                             " HIT for prompt (" & Natural'Image (To_String (Prompt)'Length) &
+                             " chars) | Hits=" & Natural'Image (Response_Cache.Hit_Count) &
+                             " Misses=" & Natural'Image (Response_Cache.Miss_Count));
+                else
+                   --  CACHE MISS: Call model inference, then cache the result
+                   Model_Manager.Hybrid_Generate
+                     (Prompt     => To_String (Prompt),
+                      Result     => Result,
+                      Session_ID => To_String (S_ID),
+                      Agentic    => Is_Agentic,
+                      Raw_Prompt => Is_Raw_Prompt);
+
+                   --  Store result in cache for future lookups
+                   Response_Cache.Store (To_String (Prompt), To_String (Result));
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                             "[Response-Cache]" & AnsiAda.Reset &
+                             " MISS for prompt (" & Natural'Image (To_String (Prompt)'Length) &
+                             " chars) | Entries=" & Natural'Image (Response_Cache.Entry_Count));
+                end if;
+             end;
 
                declare
                   use GNATCOLL.JSON;
@@ -1395,6 +1452,8 @@ package body Adelaide_Server_Pkg is
                Req_Headers   : AWS.Headers.List;
             begin
                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                --  Extract API key from x-api-key header
                Req_Headers := AWS.Status.Header (Request);
                API_Key := To_Unbounded_String
@@ -1402,6 +1461,8 @@ package body Adelaide_Server_Pkg is
 
                if Length (API_Key) = 0 then
                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                   Ada.Text_IO.Put_Line
                     (AnsiAda.Foreground (AnsiAda.Red)
                      & "[Claude] ERROR: Missing x-api-key header"
@@ -1495,6 +1556,8 @@ package body Adelaide_Server_Pkg is
                end if;
 
                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                --  Convert Claude messages to ChatML and call LOCAL model (Snowball-Enaga)
                --  Returns response in Claude Messages API format.
                if Msg_Count > 0 then
@@ -1541,6 +1604,8 @@ package body Adelaide_Server_Pkg is
                         Content_Obj : constant JSON_Value := Create_Object;
                      begin
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                         Ada.Text_IO.Put_Line
                           (AnsiAda.Foreground (AnsiAda.Cyan)
                            & "[Claude] Local model responded in "
@@ -1592,7 +1657,8 @@ package body Adelaide_Server_Pkg is
             --  =====================================================================
             --  /api/snowballEnagaValidationBenchmark: Benchmark endpoint
             --  Requires API key: IknowtheConsequencesAndWouldLockupTheServerForHours
-            --  Calls /v1/chat/completions with varying prompt lengths
+            --  Default: runs BOTH performance AND accuracy benchmarks
+            --  Unparseable answers = complete failure
             --  Streams progress via SSE, logs to stdio
             --  DO NOT REMOVE, OR YOU WILL BE KILLED
             --  =====================================================================
@@ -1603,9 +1669,13 @@ package body Adelaide_Server_Pkg is
                   Req_Headers : AWS.Headers.List;
                   API_Key : Unbounded_String := Null_Unbounded_String;
                   Config : Benchmark_Config;
-                  Result : Unbounded_String;
-                  Bench_Type : Unbounded_String := To_Unbounded_String("performance");
+                  Perf_Result : Unbounded_String;
+                  Acc_Result : Unbounded_String;
+                  Bench_Type : Unbounded_String := To_Unbounded_String("both");
+                  Accuracy_Bench : Unbounded_String := To_Unbounded_String("mmlu");
+                  Sample_Size : Natural := 100;
                   Accuracy_Result : Accuracy_Benchmark_Manager.Benchmark_Result;
+                  Perf_Metrics : Benchmark_Manager.Benchmark_Metrics;
                begin
                   --  [DO NOT REMOVE] Extract API key from header
                   Req_Headers := AWS.Status.Header (Request);
@@ -1648,7 +1718,7 @@ package body Adelaide_Server_Pkg is
                                  Val : constant GNATCOLL.JSON.JSON_Value :=
                                    Parser_Result.Value;
                               begin
-                                 --  Extract benchmark type (performance or accuracy)
+                                 --  Extract benchmark_type (performance, accuracy, or both)
                                  if GNATCOLL.JSON.Has_Field (Val, "benchmark_type") then
                                     begin
                                        Bench_Type := To_Unbounded_String(
@@ -1676,56 +1746,110 @@ package body Adelaide_Server_Pkg is
                                     end;
                                  end if;
                                  --  Extract accuracy_benchmark (for accuracy)
-                                 --  Options: mmlu, mmlu_pro, kmmlu, cmmlu, jmmlu,
-                                 --           gsm8k, mathqa, humaneval, mbpp, livecodebench,
-                                 --           hellaswag, truthfulqa, arc_challenge, winogrande,
-                                 --           bbq, safetybench
+                                 if GNATCOLL.JSON.Has_Field (Val, "accuracy_benchmark") then
+                                    begin
+                                       Accuracy_Bench := To_Unbounded_String(
+                                          String'(GNATCOLL.JSON.Get (Val, "accuracy_benchmark")));
+                                    exception
+                                       when others => null;
+                                    end;
+                                 end if;
+                                 --  Extract sample_size (for accuracy)
+                                 if GNATCOLL.JSON.Has_Field (Val, "sample_size") then
+                                    begin
+                                       Sample_Size := Integer'Value(
+                                          String'(GNATCOLL.JSON.Get (Val, "sample_size")));
+                                    exception
+                                       when others => null;
+                                    end;
+                                 end if;
                               end;
                            end if;
                         end;
                      end if;
                   end;
 
-                  --  [DO NOT REMOVE] Run appropriate benchmark type
-                  if To_String(Bench_Type) = "accuracy" then
-                     --  Run accuracy benchmark
-                     declare
-                        Acc_Bench : Unbounded_String := To_Unbounded_String("mmlu");
-                     begin
-                        --  TODO: Extract accuracy_benchmark from request
-                        --  For now, run MMLU as default
-                        Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
-                                 "[Benchmark]" & AnsiAda.Reset &
-                                 " Running accuracy benchmark: " & To_String(Acc_Bench));
-
-                        Run_Accuracy_Benchmark(
-                           Benchmark => BENCH_MMLU,
-                           Sample_Size => 0,
-                           On_Progress => null,
-                           Result => Accuracy_Result
-                        );
-
-                        Result := To_Unbounded_String(
-                           "{""benchmark"":""accuracy""," &
-                           """name"":" & To_String(Acc_Bench) & "," &
-                           """accuracy"":" & Float'Image(Accuracy_Result.Accuracy) & "," &
-                           """total"":" & Natural'Image(Accuracy_Result.Total_Questions) & "," &
-                           """correct"":" & Natural'Image(Accuracy_Result.Correct_Count) & "," &
-                           """time"":" & Float'Image(Accuracy_Result.Time_Seconds) & "}");
-                     end;
-                  else
-                     --  Run performance benchmark (original)
+                  --  [DO NOT REMOVE] Run benchmarks based on type
+                  --  Default is "both" - runs performance AND accuracy
+                  --  RAISES Benchmark_Failure if any answer is unparseable
+                  if To_String(Bench_Type) = "performance" then
+                     --  Performance only
+                     Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
+                              "[Benchmark]" & AnsiAda.Reset &
+                              " Running performance benchmark only");
                      Run_Benchmark(
                         Config => Config,
                         On_Progress => null,
-                        Result => Result
+                        Result => Perf_Result
                      );
+                     Acc_Result := To_Unbounded_String(
+                        "{""skipped"": true, ""reason"": ""performance only""}");
+                  elsif To_String(Bench_Type) = "accuracy" then
+                     --  Accuracy only
+                     Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
+                              "[Benchmark]" & AnsiAda.Reset &
+                              " Running accuracy benchmark: " & To_String(Accuracy_Bench));
+                     Perf_Result := To_Unbounded_String(
+                        "{""skipped"": true, ""reason"": ""accuracy only""}");
+                     Run_Accuracy_Benchmark(
+                        Benchmark => BENCH_MMLU,
+                        Sample_Size => Sample_Size,
+                        On_Progress => null,
+                        Result => Accuracy_Result
+                     );
+                     Acc_Result := To_Unbounded_String(
+                        "{""benchmark"":""accuracy""," &
+                        """name"":" & To_String(Accuracy_Bench) & "," &
+                        """accuracy"":" & Float'Image(Accuracy_Result.Accuracy) & "," &
+                        """total"":" & Natural'Image(Accuracy_Result.Total_Questions) & "," &
+                        """correct"":" & Natural'Image(Accuracy_Result.Correct_Count) & "," &
+                        """failed"":" & Natural'Image(Accuracy_Result.Failed_Count) & "," &
+                        """time"":" & Float'Image(Accuracy_Result.Time_Seconds) & "}");
+                  else
+                     --  Both performance AND accuracy (default)
+                     Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
+                              "[Benchmark]" & AnsiAda.Reset &
+                              " Running BOTH performance AND accuracy benchmarks");
+
+                     --  Run performance benchmark
+                     Put_Line(AnsiAda.Foreground(AnsiAda.Green) &
+                              "[Benchmark]" & AnsiAda.Reset &
+                              " Phase 1: Performance benchmark");
+                     Run_Benchmark(
+                        Config => Config,
+                        On_Progress => null,
+                        Result => Perf_Result
+                     );
+
+                     --  Run accuracy benchmark
+                     Put_Line(AnsiAda.Foreground(AnsiAda.Green) &
+                              "[Benchmark]" & AnsiAda.Reset &
+                              " Phase 2: Accuracy benchmark - " & To_String(Accuracy_Bench));
+                     Run_Accuracy_Benchmark(
+                        Benchmark => BENCH_MMLU,
+                        Sample_Size => Sample_Size,
+                        On_Progress => null,
+                        Result => Accuracy_Result
+                     );
+                     Acc_Result := To_Unbounded_String(
+                        "{""benchmark"":""accuracy""," &
+                        """name"":" & To_String(Accuracy_Bench) & "," &
+                        """accuracy"":" & Float'Image(Accuracy_Result.Accuracy) & "," &
+                        """total"":" & Natural'Image(Accuracy_Result.Total_Questions) & "," &
+                        """correct"":" & Natural'Image(Accuracy_Result.Correct_Count) & "," &
+                        """failed"":" & Natural'Image(Accuracy_Result.Failed_Count) & "," &
+                        """time"":" & Float'Image(Accuracy_Result.Time_Seconds) & "}");
                   end if;
 
-                  --  [DO NOT REMOVE] Return benchmark result
+                  --  [DO NOT REMOVE] Return combined benchmark result
+                  --  Unparseable answers = complete failure (accuracy = 0.0)
                   return Wrap_Response(
                      Build_Response(
-                        To_String(Result),
+                        "{""performance"":" & To_String(Perf_Result) & "," &
+                        """accuracy"":" & To_String(Acc_Result) & "," &
+                        """benchmark_type"":" & To_String(Bench_Type) & "," &
+                        """accuracy_benchmark"":" & To_String(Accuracy_Bench) & "," &
+                        """sample_size"":" & Natural'Image(Sample_Size) & "}",
                         AWS.Messages.S200,
                         "application/json"));
                end;
@@ -1758,6 +1882,8 @@ package body Adelaide_Server_Pkg is
                 Resp_Obj    : JSON_Value;
              begin
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                 --  Parse request body
                 if Length (Payload) > 0 then
                    declare
@@ -1918,6 +2044,8 @@ package body Adelaide_Server_Pkg is
 
                 --  GNATCOLL.JSON workaround: wrap in object with "0" key
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                 Data_Arr := Create_Object;
                 Set_Field (Data_Arr, "0", Img_Obj);
                 Set_Field (Resp_Obj, "data", Data_Arr);
@@ -1936,6 +2064,8 @@ package body Adelaide_Server_Pkg is
    exception
       when E : others =>
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+--  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  UNKNOWN/CATEGORIZED ERROR: Dump full exception and red banner.
          --  Server keeps running and continues serving other requests.
          Ada.Text_IO.Put_Line

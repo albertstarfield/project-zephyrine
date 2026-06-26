@@ -13,7 +13,6 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 import os
 import subprocess
 import sys
-from datetime import datetime
 
 SSL_DIR = os.path.join("run", "ssl")
 CERT_FILE = os.path.join(SSL_DIR, "adelaide-server.crt")
@@ -38,7 +37,7 @@ def main():
     # - Valid for 3650 days (10 years)
     # - Subject: CN=localhost (for local development)
     try:
-        result = subprocess.run(
+        subprocess.run(
             [
                 "openssl", "req", "-x509",
                 "-newkey", "rsa:2048",

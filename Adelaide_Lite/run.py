@@ -7,14 +7,103 @@ import hashlib
 import platform
 import signal
 import shutil
+import threading
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
+MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB total cap
 
 # Enforce Huggingface cache location
 os.environ["HF_HOME"] = os.path.join(BASE_DIR, "model")
 os.environ["HF_HUB_CACHE"] = os.path.join(BASE_DIR, "model")
 os.environ["TRANSFORMERS_CACHE"] = os.path.join(BASE_DIR, "model")
+
+
+# ---------------------------------------------------------------------------
+#  Logging: tee stdout+stderr to logs/ with 10 MB rollover
+# ---------------------------------------------------------------------------
+class _TeeWriter:
+    """Write to an original stream AND append to a log file simultaneously."""
+
+    def __init__(self, original, log_file):
+        self._orig = original
+        self._log = log_file
+
+    def write(self, data):
+        self._orig.write(data)
+        try:
+            self._log.write(data)
+            self._log.flush()
+        except Exception:
+            pass
+
+    def flush(self):
+        self._orig.flush()
+        try:
+            self._log.flush()
+        except Exception:
+            pass
+
+    def __getattr__(self, attr):
+        return getattr(self._orig, attr)
+
+
+class _PipeReader(threading.Thread):
+    """Daemon thread that reads a subprocess pipe and tees it to a writer."""
+
+    def __init__(self, pipe, writer, label=""):
+        super().__init__(daemon=True)
+        self._pipe = pipe
+        self._writer = writer
+        self._label = label
+
+    def run(self):
+        try:
+            for line in iter(self._pipe.readline, b""):
+                self._writer.write(line)
+        except Exception:
+            pass
+        finally:
+            self._pipe.close()
+
+
+def _rotate_logs():
+    """Delete oldest log files until total size <= MAX_LOG_BYTES."""
+    if not os.path.isdir(LOGS_DIR):
+        return
+    entries = []
+    for name in os.listdir(LOGS_DIR):
+        if name.endswith(".log"):
+            path = os.path.join(LOGS_DIR, name)
+            try:
+                entries.append((os.path.getmtime(path), os.path.getsize(path), path))
+            except OSError:
+                pass
+    entries.sort(key=lambda e: e[0])  # oldest first
+    total = sum(sz for _, sz, _ in entries)
+    for _mtime, sz, path in entries:
+        if total <= MAX_LOG_BYTES:
+            break
+        try:
+            os.remove(path)
+            total -= sz
+        except OSError:
+            pass
+
+
+def setup_logging():
+    """Create logs/ dir, rotate old logs, redirect stdout/stderr to tee.
+    Returns the path of the current log file."""
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    _rotate_logs()
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    log_path = os.path.join(LOGS_DIR, f"run_{timestamp}.log")
+    log_fp = open(log_path, "a", encoding="utf-8", buffering=1)  # line-buffered
+    sys.stdout = _TeeWriter(sys.__stdout__, log_fp)
+    sys.stderr = _TeeWriter(sys.__stderr__, log_fp)
+    print(f"[*] Logging to {log_path}")
+    return log_path
 
 # ANSI Color Codes
 RST  = "\033[0m"
@@ -430,6 +519,7 @@ signal.signal(signal.SIGTERM, cleanup)
 def main():
     global daemon_process, server_process, watchdog_process, vad_process
     
+    current_log_path = setup_logging()
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
     start_time = int(time.time() * 1000)
 
@@ -1024,9 +1114,8 @@ def main():
             if result.returncode != 0:
                 print("[!] Self-Integrity Quality Check FAILED.")
                 print(result.stdout)
-                # In strict mode, we might want to exit, but for now just warn
-                # print("[*] Emergency Shutdown: Quality violations detected.")
-                # sys.exit(1)
+                print("[!] Emergency Shutdown: Ruff quality violations detected.")
+                sys.exit(1)
             else:
                 print("[+] Self-Integrity Quality Check PASSED.")
         except Exception as e:
@@ -1055,14 +1144,26 @@ def main():
         pyvenv_pyrefly = os.path.join(pyvenv_dir, "bin", "pyrefly")
         if os.path.exists(pyvenv_pyrefly):
             print("[LSH] Running pyrefly type-check on worker...")
-            subprocess.run([pyvenv_pyrefly, "check", lsh_worker], check=False)
+            result = subprocess.run([pyvenv_pyrefly, "check", lsh_worker], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("[!] LSH pyrefly type-check FAILED.")
+                print(result.stdout)
+                print(result.stderr)
+                print("[!] Emergency Shutdown: pyrefly violations detected.")
+                sys.exit(1)
         else:
             print("[LSH] pyrefly not found in venv, skipping type-check.")
         # Self-check: ruff lint on worker script
         pyvenv_ruff = os.path.join(pyvenv_dir, "bin", "ruff")
         if os.path.exists(pyvenv_ruff):
             print("[LSH] Running ruff lint on worker...")
-            subprocess.run([pyvenv_ruff, "check", lsh_worker], check=False)
+            result = subprocess.run([pyvenv_ruff, "check", lsh_worker], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("[!] LSH ruff lint FAILED.")
+                print(result.stdout)
+                print(result.stderr)
+                print("[!] Emergency Shutdown: ruff violations detected.")
+                sys.exit(1)
         else:
             print("[LSH] ruff not found in venv, skipping lint.")
         print("[LSH] QRNN worker bootstrap complete.")
@@ -1199,14 +1300,19 @@ def main():
     print(f"[*] [Launch-V] Server CWD: {BASE_DIR}")
     print(f"[*] [Launch-V] DYLD_LIBRARY_PATH: {env.get('DYLD_LIBRARY_PATH', 'NOT SET')}")
 
+    # Launch server through tee so its output goes to terminal + log file
+    tee_process = subprocess.Popen(
+        ["tee", "-a", current_log_path],
+        stdin=subprocess.PIPE,
+        start_new_session=True
+    )
     server_process = subprocess.Popen([server_path] + server_args, cwd=BASE_DIR, env=env,
+                                       stdout=tee_process.stdin, stderr=subprocess.STDOUT,
                                        start_new_session=True)
 
     # [DO NOT REMOVE] Verbose PID tracking
     print(f"[*] [Launch-V] Server PID: {server_process.pid}")
     print(f"[*] [Launch-V] Server args file: {server_args_file}")
-    print(f"[*] [Launch-V] Server stdout fd: {server_process.stdout}")
-    print(f"[*] [Launch-V] Server stderr fd: {server_process.stderr}")
 
     # Launch external watchdog process (separate binary, monitors server health)
     # [DO NOT REMOVE THIS] LAUNCH GUARD: Set orchestration flag so watchdog
@@ -1341,6 +1447,141 @@ def main():
                 print(f"{BG_BLUE}{'   last Ada stack traces and unfortunately we can'.ljust(70)}{RESET}")
                 print(f"{BG_BLUE}{'   t recover it needs to be relaunched.'.ljust(70)}{RESET}")
                 print(f"{BG_BLUE}{'='*70}{RESET}\n")
+
+                # === PANIC RECOVERY: Generate plot + dump CSV/logs ===
+                import time as _time
+                epoch_s = int(_time.time())
+                panic_log_path = os.path.join(LOGS_DIR, f"I_am_incompetent_Panicked_and_Never_Enough_PANIC_{epoch_s}.log")
+                wcet_csv = os.path.join(BASE_DIR, "run", "wcet.csv")
+                accel_csv = os.path.join(BASE_DIR, "run", "acceleration.csv")
+
+                # Find latest run log
+                latest_log = None
+                if os.path.isdir(LOGS_DIR):
+                    log_files = sorted(
+                        [f for f in os.listdir(LOGS_DIR) if f.startswith("run_") and f.endswith(".log")],
+                        reverse=True,
+                    )
+                    if log_files:
+                        latest_log = os.path.join(LOGS_DIR, log_files[0])
+
+                # Write panic log with full CSV + logs
+                try:
+                    with open(panic_log_path, "w") as pf:
+                        pf.write("=== INCOMPETENT PANIC LOG ===\n")
+                        pf.write(f"Epoch: {epoch_s}\n")
+                        pf.write(f"Exit Code: {exit_code}\n")
+                        pf.write(f"Signal: {sig_name} ({sig_val})\n\n")
+
+                        pf.write("=== WCET CSV (run/wcet.csv) ===\n")
+                        if os.path.exists(wcet_csv):
+                            with open(wcet_csv) as f:
+                                pf.write(f.read())
+                        else:
+                            pf.write("(no wcet.csv found)\n")
+
+                        pf.write("=== ACCELERATION CSV (run/acceleration.csv) ===\n")
+                        if os.path.exists(accel_csv):
+                            with open(accel_csv) as f:
+                                pf.write(f.read())
+                        else:
+                            pf.write("(no gpu.csv found)\n")
+
+                        pf.write(f"\n=== RUN LOG ({latest_log or 'none'}) ===\n")
+                        if latest_log and os.path.exists(latest_log):
+                            with open(latest_log) as f:
+                                pf.write(f.read())
+                        else:
+                            pf.write("(no run log found)\n")
+
+                    print(f"[*] Panic log written: {panic_log_path}")
+                except Exception as e:
+                    print(f"[!] Failed to write panic log: {e}")
+
+                # Generate plot from CSVs
+                try:
+                    import matplotlib
+                    matplotlib.use("Agg")
+                    import matplotlib.pyplot as plt
+                    import csv
+
+                    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
+                    fig.suptitle(f"Adelaide Crash Report — Epoch {epoch_s} — Exit {exit_code}", fontsize=13)
+
+                    # WCET plot
+                    if os.path.exists(wcet_csv):
+                        times, pipeline, elp0, elp1, elp2, elp3 = [], [], [], [], [], []
+                        with open(wcet_csv) as f:
+                            reader = csv.DictReader(f)
+                            for row in reader:
+                                times.append(int(row["uptime_s"].strip()))
+                                pipeline.append(int(row["pipeline_ns"].strip()))
+                                elp0.append(int(row["elp0_ns"].strip()))
+                                elp1.append(int(row["elp1_ns"].strip()))
+                                elp2.append(int(row["elp2_ns"].strip()))
+                                elp3.append(int(row["elp3_ns"].strip()))
+                        if times:
+                            axes[0].plot(times, pipeline, label="Pipeline", linewidth=0.8)
+                            axes[0].plot(times, elp0, label="ELP0", linewidth=0.5, alpha=0.7)
+                            axes[0].plot(times, elp1, label="ELP1", linewidth=0.5, alpha=0.7)
+                            axes[0].plot(times, elp2, label="ELP2", linewidth=0.5, alpha=0.7)
+                            axes[0].plot(times, elp3, label="ELP3", linewidth=0.5, alpha=0.7)
+                            axes[0].set_ylabel("WCET (ns)")
+                            axes[0].legend(fontsize=7)
+                            axes[0].set_title("WCET Timing")
+
+                    # Acceleration plot
+                    if os.path.exists(accel_csv):
+                        times, free, total, pct, metal_broken = [], [], [], [], []
+                        with open(accel_csv) as f:
+                            reader = csv.DictReader(f)
+                            for row in reader:
+                                times.append(int(row["uptime_s"].strip()))
+                                free.append(int(row["free_mb"].strip()))
+                                total.append(int(row["total_mb"].strip()))
+                                pct.append(int(row["percent"].strip()))
+                                metal_broken.append(int(row["metal_broken"].strip()))
+                        if times:
+                            ax1 = axes[1]
+                            ax2 = ax1.twinx()
+                            ax1.plot(times, free, color="green", label="Free MB", linewidth=0.8)
+                            ax1.plot(times, total, color="blue", label="Total MB", linewidth=0.5, alpha=0.7)
+                            ax2.plot(times, pct, color="red", label="Free %", linewidth=0.5, alpha=0.7)
+                            ax1.set_ylabel("Memory (MB)")
+                            ax2.set_ylabel("Free %")
+                            ax1.legend(fontsize=7, loc="upper left")
+                            ax2.legend(fontsize=7, loc="upper right")
+                            ax1.set_title("GPU Memory")
+                            # Mark OOM events
+                            for i, mb in enumerate(metal_broken):
+                                if mb:
+                                    axes[1].axvline(x=times[i], color="red", linestyle="--", alpha=0.3)
+
+                    # Acceleration free % as heatmap-style fill
+                    if os.path.exists(accel_csv):
+                        times_pct, pcts = [], []
+                        with open(accel_csv) as f:
+                            reader = csv.DictReader(f)
+                            for row in reader:
+                                times_pct.append(int(row["uptime_s"].strip()))
+                                pcts.append(int(row["percent"].strip()))
+                        if times_pct:
+                            axes[2].fill_between(times_pct, pcts, alpha=0.4, color="cyan")
+                            axes[2].plot(times_pct, pcts, color="darkcyan", linewidth=0.6)
+                            axes[2].set_ylabel("Free %")
+                            axes[2].set_xlabel("Uptime (s)")
+                            axes[2].set_title("GPU Free Memory %")
+                            axes[2].set_ylim(0, 100)
+
+                    plt.tight_layout()
+                    plot_path = os.path.join(LOGS_DIR, f"I_am_incompetent_Panicked_and_Never_Enough_PANIC_{epoch_s}.png")
+                    plt.savefig(plot_path, dpi=120)
+                    plt.close()
+                    print(f"[*] Crash plot saved: {plot_path}")
+                except ImportError:
+                    print("[!] matplotlib not installed — skipping crash plot (pip install matplotlib)")
+                except Exception as e:
+                    print(f"[!] Failed to generate crash plot: {e}")
             else:
                 print("\n[*] Server exited cleanly (code: 0)")
         except KeyboardInterrupt:

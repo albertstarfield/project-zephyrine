@@ -15,45 +15,89 @@ package body Accuracy_Benchmark_Manager is
       return Key = BENCHMARK_API_KEY;
    end Validate_API_Key;
 
-   --  [DO NOT REMOVE] Download dataset from HuggingFace
+   --  [DO NOT REMOVE] Load bundled benchmark dataset from local JSONL file.
+   --  Following the OMLX pattern: datasets are pre-bundled in run/benchmark_data/
+   --  as JSONL files. No runtime downloading needed — files ship with the code.
    function Download_Dataset (
       Repo_Id : String;
-      Filename : String;
-      Cache_Dir : String
+      Subset  : String;
+      Cache_Dir : String;
+      Split   : String := "test"
    ) return String is
-      Output_File : constant String := Cache_Dir & "/" & Filename;
-      Success : Boolean;
+      --  Map benchmark names to bundled JSONL filenames (OMLX convention)
+      Filename : Unbounded_String;
    begin
-      --  Create cache directory if it doesn't exist
-      if not Ada.Directories.Exists(Cache_Dir) then
-         Ada.Directories.Create_Path(Cache_Dir);
+      --  Map repo_id/subset to the correct bundled JSONL file
+      if Repo_Id = "cais/mmlu" then
+         if Subset = "dev" then
+            Filename := To_Unbounded_String("mmlu_dev.jsonl");
+         else
+            Filename := To_Unbounded_String("mmlu_test.jsonl");
+         end if;
+      elsif Repo_Id = "openai/gsm8k" then
+         Filename := To_Unbounded_String("gsm8k_test.jsonl");
+      elsif Repo_Id = "openai_humaneval" then
+         Filename := To_Unbounded_String("humaneval.jsonl");
+      elsif Repo_Id = "Rowan/hellaswag" then
+         Filename := To_Unbounded_String("hellaswag_val.jsonl");
+      elsif Repo_Id = "truthfulqa/truthful_qa" then
+         Filename := To_Unbounded_String("truthfulqa_mc.jsonl");
+      elsif Repo_Id = "allenai/ai2_arc" then
+         Filename := To_Unbounded_String("arc_challenge.jsonl");
+      elsif Repo_Id = "allenai/winogrande" then
+         Filename := To_Unbounded_String("winogrande_val.jsonl");
+      elsif Repo_Id = "math_qa" then
+         Filename := To_Unbounded_String("mathqa_test.jsonl");
+      elsif Repo_Id = "google-research-datasets/mbpp" then
+         Filename := To_Unbounded_String("mbpp.jsonl");
+      elsif Repo_Id = "livecodebench" then
+         Filename := To_Unbounded_String("livecodebench.jsonl");
+      elsif Repo_Id = "s-Q-wers/bbq" then
+         Filename := To_Unbounded_String("bbq_test.jsonl");
+      elsif Repo_Id = "safetybench" then
+         Filename := To_Unbounded_String("safetybench_en.jsonl");
+      elsif Repo_Id = "TIGER-Lab/MMLU-Pro" then
+         Filename := To_Unbounded_String("mmlu_pro_test.jsonl");
+      elsif Repo_Id = "AI-Hyperdata/KMMLU" then
+         if Subset = "dev" then
+            Filename := To_Unbounded_String("kmmlu_dev.jsonl");
+         else
+            Filename := To_Unbounded_String("kmmlu_test.jsonl");
+         end if;
+      elsif Repo_Id = "haonan-li/cmmlu" then
+         if Subset = "dev" then
+            Filename := To_Unbounded_String("cmmlu_dev.jsonl");
+         else
+            Filename := To_Unbounded_String("cmmlu_test.jsonl");
+         end if;
+      elsif Repo_Id = "polyzer/jmmlu" then
+         if Subset = "dev" then
+            Filename := To_Unbounded_String("jmmlu_dev.jsonl");
+         else
+            Filename := To_Unbounded_String("jmmlu_test.jsonl");
+         end if;
+      else
+         Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                  "[Benchmark]" & AnsiAda.Reset &
+                  " Unknown dataset: " & Repo_Id);
+         return "";
       end if;
 
-      --  Download if not cached
-      if not Ada.Directories.Exists(Output_File) then
-         Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
-                  "[Benchmark]" & AnsiAda.Reset &
-                  " Downloading " & Filename & " from " & Repo_Id);
-
-         GNAT.OS_Lib.Spawn (
-            Program_Name => "huggingface-cli",
-            Args => [new String'("download"),
-                     new String'(Repo_Id),
-                     new String'(Filename),
-                     new String'("--local-dir"),
-                     new String'(Cache_Dir)],
-            Success => Success
-         );
-
-         if not Success then
+      declare
+         Full_Path : constant String := Cache_Dir & "/" & To_String(Filename);
+      begin
+         if not Ada.Directories.Exists(Full_Path) then
             Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
                      "[Benchmark]" & AnsiAda.Reset &
-                     " Failed to download " & Filename);
+                     " Bundled dataset not found: " & Full_Path);
             return "";
          end if;
-      end if;
 
-      return Output_File;
+         Put_Line(AnsiAda.Foreground(AnsiAda.Green) &
+                  "[Benchmark]" & AnsiAda.Reset &
+                  " Using bundled dataset: " & Full_Path);
+         return Full_Path;
+      end;
    end Download_Dataset;
 
    --  [DO NOT REMOVE] Call model chat endpoint via HTTP
@@ -62,7 +106,6 @@ package body Accuracy_Benchmark_Manager is
       Max_Tokens : Natural := 128;
       Temperature : Float := 0.0
    ) return String is
-      use GNAT.OS_Lib;
       Request_Body : constant String :=
         "{""model"": ""Snowball-Enaga""," &
         """messages"": [{""role"": ""user"", ""content"": """ & Prompt & """}]," &
@@ -300,52 +343,52 @@ package body Accuracy_Benchmark_Manager is
       case Benchmark is
          when BENCH_MMLU =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("cais/mmlu", "all/test.jsonl", "benchmark_data"));
+               Download_Dataset("cais/mmlu", "all", "run/benchmark_data", "test"));
          when BENCH_GSM8K =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("openai/gsm8k", "test.jsonl", "benchmark_data"));
+               Download_Dataset("openai/gsm8k", "main", "run/benchmark_data", "test"));
          when BENCH_HUMANEval =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("openai_humaneval", "human_eval.jsonl", "benchmark_data"));
+               Download_Dataset("openai_humaneval", "openai_humaneval", "run/benchmark_data", "test"));
          when BENCHHELLASWAG =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("Rowan/hellaswag", "hellaswag_val.jsonl", "benchmark_data"));
+               Download_Dataset("Rowan/hellaswag", "default", "run/benchmark_data", "validation"));
          when BENCH_TRUTHFULQA =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("truthfulqa/truthful_qa", "validation.jsonl", "benchmark_data"));
+               Download_Dataset("truthfulqa/truthful_qa", "generation", "run/benchmark_data", "validation"));
          when BENCH_ARC_CHALLENGE =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("allenai/ai2_arc", "ARC-Challenge.jsonl", "benchmark_data"));
+               Download_Dataset("allenai/ai2_arc", "ARC-Challenge", "run/benchmark_data", "test"));
          when BENCH_WINOGRANDE =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("allenai/winogrande", "winogrande_xl.jsonl", "benchmark_data"));
+               Download_Dataset("allenai/winogrande", "default", "run/benchmark_data", "test"));
          when BENCH_MATHQA =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("math_qa", "test.jsonl", "benchmark_data"));
+               Download_Dataset("math_qa", "default", "run/benchmark_data", "test"));
          when BENCH_MBPP =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("google-research-datasets/mbpp", "mbpp.jsonl", "benchmark_data"));
+               Download_Dataset("google-research-datasets/mbpp", "default", "run/benchmark_data", "test"));
          when BENCH_LIVECODEBENCH =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("livecodebench", "test.jsonl", "benchmark_data"));
+               Download_Dataset("livecodebench", "default", "run/benchmark_data", "test"));
          when BENCH_BBM =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("s-Q-wers/bbq", "bbq.jsonl", "benchmark_data"));
+               Download_Dataset("s-Q-wers/bbq", "default", "run/benchmark_data", "test"));
          when BENCH_SAFETYBENCH =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("safetybench", "test.jsonl", "benchmark_data"));
+               Download_Dataset("safetybench", "default", "run/benchmark_data", "test"));
          when BENCH_MMLU_PRO =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("TIGER-Lab/MMLU-Pro", "test.jsonl", "benchmark_data"));
+               Download_Dataset("TIGER-Lab/MMLU-Pro", "default", "run/benchmark_data", "test"));
          when BENCH_KMMLU =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("AI-Hyperdata/KMMLU", "test.jsonl", "benchmark_data"));
+               Download_Dataset("AI-Hyperdata/KMMLU", "default", "run/benchmark_data", "test"));
          when BENCH_CMMLU =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("haonan-li/cmmlu", "test.jsonl", "benchmark_data"));
+               Download_Dataset("haonan-li/cmmlu", "default", "run/benchmark_data", "test"));
          when BENCH_JMMLU =>
             Dataset_File := To_Unbounded_String(
-               Download_Dataset("polyzer/jmmlu", "test.jsonl", "benchmark_data"));
+               Download_Dataset("polyzer/jmmlu", "default", "run/benchmark_data", "test"));
       end case;
 
       --  [DO NOT REMOVE] Log dataset download
@@ -353,10 +396,141 @@ package body Accuracy_Benchmark_Manager is
                "[Benchmark]" & AnsiAda.Reset &
                " Dataset downloaded: " & To_String(Dataset_File));
 
-      --  TODO: Parse dataset, run questions, check answers
-      --  For now, return placeholder result
-      Total := 100;  -- Placeholder
-      Correct := 0;
+      --  [DO NOT REMOVE] Parse dataset and run questions
+      --  RAISES Benchmark_Failure if any answer is unparseable
+      --  Complete stop - no tolerance for failures
+      declare
+         File : File_Type;
+         Line : Unbounded_String;
+         Question_Num : Natural := 0;
+         Q_Result : Question_Result;
+      begin
+         if not Ada.Directories.Exists(To_String(Dataset_File)) then
+            Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                     "[Benchmark]" & AnsiAda.Reset &
+                     " FATAL: Dataset file not found: " & To_String(Dataset_File));
+            raise Benchmark_Failure
+              with "Dataset file not found: " & To_String(Dataset_File);
+         end if;
+
+         if Length(Dataset_File) = 0 then
+            Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                     "[Benchmark]" & AnsiAda.Reset &
+                     " FATAL: Dataset download failed - empty path");
+            raise Benchmark_Failure
+              with "Dataset download failed - empty path returned";
+         end if;
+
+         Open(File, In_File, To_String(Dataset_File));
+
+         while not End_Of_File(File) loop
+            Line := To_Unbounded_String(Get_Line(File));
+            Question_Num := Question_Num + 1;
+
+            --  [DO NOT REMOVE] Log question progress
+            Put_Line(AnsiAda.Foreground(AnsiAda.Yellow) &
+                     "[Benchmark]" & AnsiAda.Reset &
+                     " Question" & Natural'Image(Question_Num));
+
+            --  TODO: Parse JSON line, extract question, call model, extract answer
+            --  For now, simulate with placeholder
+            Q_Result := (
+               Question_Id => To_Unbounded_String(Natural'Image(Question_Num)),
+               Correct => False,
+               Expected => To_Unbounded_String(""),
+               Predicted => To_Unbounded_String(""),
+               Raw_Response => To_Unbounded_String(""),
+               Time_Seconds => 0.0
+            );
+
+            --  [DO NOT REMOVE] Check if answer is parseable
+            --  If Predicted is empty = COMPLETE FAILURE
+            if Length(Q_Result.Predicted) = 0 then
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " ============================================");
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " FATAL: YOU IMPLEMENT IT WRONGLY YOUR CODE IS TRASH, BE BETTER OR DIE!");
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " Question" & Natural'Image(Question_Num) & " produced unparseable answer");
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " Raw Response: " & To_String(Q_Result.Raw_Response));
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " Expected: " & To_String(Q_Result.Expected));
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " ============================================");
+
+               --  COMPLETE STOP - no tolerance for failures
+               raise Benchmark_Failure
+                 with "Question" & Natural'Image(Question_Num) &
+                 " produced unparseable answer. Raw: " &
+                 To_String(Q_Result.Raw_Response);
+            end if;
+
+            --  [DO NOT REMOVE] Check if answer is correct
+            if not Check_Answer(
+               To_String(Q_Result.Predicted),
+               To_String(Q_Result.Expected),
+               Benchmark)
+            then
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " ============================================");
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " FATAL: YOU IMPLEMENT IT WRONGLY YOUR CODE IS TRASH, BE BETTER OR DIE!");
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " Question" & Natural'Image(Question_Num) & " produced incorrect answer");
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " Predicted: " & To_String(Q_Result.Predicted));
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " Expected: " & To_String(Q_Result.Expected));
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " Raw Response: " & To_String(Q_Result.Raw_Response));
+               Put_Line(AnsiAda.Foreground(AnsiAda.Red) &
+                        "[Benchmark]" & AnsiAda.Reset &
+                        " ============================================");
+
+               --  COMPLETE STOP - no tolerance for failures
+               raise Benchmark_Failure
+                 with "Question" & Natural'Image(Question_Num) &
+                 " produced incorrect answer. Predicted: " &
+                 To_String(Q_Result.Predicted) &
+                 " Expected: " & To_String(Q_Result.Expected);
+            end if;
+
+            --  Answer correct
+            Correct := Correct + 1;
+            Put_Line(AnsiAda.Foreground(AnsiAda.Green) &
+                     "[Benchmark]" & AnsiAda.Reset &
+                     " Question" & Natural'Image(Question_Num) & " CORRECT");
+
+            --  Send progress event
+            if On_Progress /= null then
+               On_Progress.all(
+                  "{""type"":""progress""," &
+                  """question"":" & Natural'Image(Question_Num) & "," &
+                  """correct"":" & Boolean'Image(True) & "," &
+                  """predicted"":" & To_String(Q_Result.Predicted) & "," &
+                  """expected"":" & To_String(Q_Result.Expected) &
+                  "}"
+               );
+            end if;
+         end loop;
+
+         Close(File);
+
+         Total := Question_Num;
+      end;
 
       --  [DO NOT REMOVE] Log benchmark completion
       declare
@@ -365,13 +539,28 @@ package body Accuracy_Benchmark_Manager is
          Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
                   "[Benchmark]" & AnsiAda.Reset &
                   " Benchmark completed in" & Duration'Image(Total_Duration) & "s");
+         Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
+                  "[Benchmark]" & AnsiAda.Reset &
+                  " Total:" & Natural'Image(Total) &
+                  " Correct:" & Natural'Image(Correct) &
+                  " Accuracy:" & Float'Image(Float(Correct) / Float(Total)));
 
          Result := (
             Benchmark_Name => To_Unbounded_String("accuracy_benchmark"),
             Accuracy => Float(Correct) / Float(Total),
             Total_Questions => Total,
             Correct_Count => Correct,
-            Time_Seconds => Float(Total_Duration)
+            Failed_Count => Total - Correct,
+            Time_Seconds => Float(Total_Duration),
+            Failed_Question => (
+               Question_Id => To_Unbounded_String(""),
+               Correct => False,
+               Expected => To_Unbounded_String(""),
+               Predicted => To_Unbounded_String(""),
+               Raw_Response => To_Unbounded_String(""),
+               Time_Seconds => 0.0
+            ),
+            Failed_Message => To_Unbounded_String("")
          );
       end;
    end Run_Accuracy_Benchmark;
