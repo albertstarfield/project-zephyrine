@@ -62,15 +62,15 @@ package body Tool_Manager is
       elsif Name = "package" or else Name = "install" or else Name = "pkg" then
          Full_Cmd := To_Unbounded_String ("python/package.py");
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  GREP TOOL: Search file contents (like Claude Code's Grep tool)
+      --  GREP TOOL: Search file contents (agentic code tool)
       elsif Name = "grep" or else Name = "search_content" then
          Full_Cmd := To_Unbounded_String ("python/grep.py");
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  TODO TOOL: Task management (like Claude Code's TodoWrite tool)
+      --  TODO TOOL: Task management (agentic code tool)
       elsif Name = "todo" or else Name = "task" then
          Full_Cmd := To_Unbounded_String ("python/todo.py");
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-      --  KILLSHELL TOOL: Process management (like Claude Code's KillShell tool)
+      --  KILLSHELL TOOL: Process management (agentic code tool)
       elsif Name = "kill" or else Name = "killshell" or else Name = "process" then
          Full_Cmd := To_Unbounded_String ("python/killshell.py");
       else
