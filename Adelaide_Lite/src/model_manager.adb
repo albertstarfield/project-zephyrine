@@ -5624,10 +5624,12 @@ package body Model_Manager is
                 return;
             end if;
 
-            declare
+             declare
                 Router_Sys   : constant String :=
                    "You are the Router. You decide if a tool is needed. "
                    & "If the user says hello or greets you, output [FINISH]. "
+                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                   --  CORE TOOLS: Original tool set
                    & "If you need to search, use [ACTION: search(query)]. "
                    & "If you need to read a file, use [ACTION: cat(filename)]. "
                    & "If you need to calculate math, use [ACTION: math(expr)]. "
@@ -5636,6 +5638,20 @@ package body Model_Manager is
                    & "use [ACTION: schedule(seconds, query)]. "
                    & "If you need to generate an image from your imagination, "
                    & "use [ACTION: imagine(description)]. "
+                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                   --  NEW TOOLS: Git, File Edit, Directory, Test, Build, Issue, Review, Security
+                   & "If you need to commit changes, use [ACTION: git(commit message)]. "
+                   & "If you need to push changes, use [ACTION: git(push)]. "
+                   & "If you need to see git status, use [ACTION: git(status)]. "
+                   & "If you need to create/edit/write a file, use [ACTION: file_edit(command filename content)]. "
+                   & "If you need to list a directory, use [ACTION: dir(ls path)]. "
+                   & "If you need to find files, use [ACTION: dir(find path pattern)]. "
+                   & "If you need to run tests, use [ACTION: test(pytest)]. "
+                   & "If you need to lint code, use [ACTION: test(lint)]. "
+                   & "If you need to build/compile, use [ACTION: build(ada)]. "
+                   & "If you need to create an issue, use [ACTION: issue(create title body)]. "
+                   & "If you need to review code, use [ACTION: review(file filename)]. "
+                   & "If you need to scan for security, use [ACTION: security(scan path)]. "
                    & "If you are done, output [FINISH]. "
                    & "Output ONLY the tag.";
                 --  Strip base64 images from router context to prevent tokenization

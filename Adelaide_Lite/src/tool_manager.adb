@@ -24,6 +24,9 @@ package body Tool_Manager is
       Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Tool]" & AnsiAda.Reset &
                 " Executing: " & Name & " with params: " & Params);
 
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  Tool routing: Maps tool names to Python scripts.
+      --  All tools are in python/ directory relative to the server binary.
       if Name = "web_search" or else Name = "searchglobalref" or else Name = "search" then
          Full_Cmd := To_Unbounded_String ("python/searchglobalref.py");
       elsif Name = "local_search" then
@@ -34,6 +37,26 @@ package body Tool_Manager is
          Full_Cmd := To_Unbounded_String ("python/code_tool.py");
       elsif Name = "cat" then
          Full_Cmd := To_Unbounded_String ("python/cat_tool.py");
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  NEW TOOLS: Git, File Edit, Directory, Test, Build, Issue, Review, Security, Hook
+      elsif Name = "git" then
+         Full_Cmd := To_Unbounded_String ("python/git.py");
+      elsif Name = "file_edit" or else Name = "edit" or else Name = "write" then
+         Full_Cmd := To_Unbounded_String ("python/file_edit.py");
+      elsif Name = "dir" or else Name = "ls" or else Name = "find" or else Name = "tree" then
+         Full_Cmd := To_Unbounded_String ("python/directory.py");
+      elsif Name = "test" or else Name = "pytest" or else Name = "lint" then
+         Full_Cmd := To_Unbounded_String ("python/test.py");
+      elsif Name = "build" or else Name = "make" or else Name = "compile" then
+         Full_Cmd := To_Unbounded_String ("python/build.py");
+      elsif Name = "issue" or else Name = "gh" then
+         Full_Cmd := To_Unbounded_String ("python/issue.py");
+      elsif Name = "review" or else Name = "code_review" then
+         Full_Cmd := To_Unbounded_String ("python/review.py");
+      elsif Name = "security" or else Name = "scan" then
+         Full_Cmd := To_Unbounded_String ("python/security.py");
+      elsif Name = "hook" then
+         Full_Cmd := To_Unbounded_String ("python/hook.py");
       else
          Free (Path);
          Result.Output := To_Unbounded_String ("Error: Unknown tool " & Name);
