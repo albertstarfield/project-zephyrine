@@ -1145,9 +1145,6 @@ def main():
     # This prevents run.py's print() from appearing immediately.
     env["PYTHONUNBUFFERED"] = "1"
 
-    # [DO NOT REMOVE] Pass GUI mode flag to server for access info logging.
-    env["ADLAIDE_GUI_MODE"] = "1" if launch_gui else "0"
-
     # Architecture-aware Moonshine ONNX runtime path
     #
     # QUIRK: The server binary links against libmoonshine.dylib, which
