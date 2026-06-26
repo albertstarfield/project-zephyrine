@@ -1,7 +1,5 @@
 pragma SPARK_Mode (On);
 
-pragma SPARK_Mode (Off);
-
 package body Fuzzy_Match is
 
    function To_Lower (C : Character) return Character is
