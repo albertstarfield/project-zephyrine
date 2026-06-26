@@ -16,7 +16,9 @@ use Streaming_Queue;
 with Multimodal_Content_Parser;
 use Multimodal_Content_Parser;
 with AWS.Response.Set;
+with AWS.Client;
 with AWS.Messages;
+with GNAT.Sockets;
 with AWS.Headers;
 with GNATCOLL.JSON; use GNATCOLL.JSON;
 with Math_Utils;
@@ -25,7 +27,8 @@ with Ada.Real_Time; use Ada.Real_Time;
 with Fuzzy_Match;
 with Claude_Client; use Claude_Client;
 with SD_Manager;
-
+with Database_Manager;
+with Model_Types; use Model_Types;
 with Ada.Directories;
 
 with Version;
@@ -249,6 +252,16 @@ package body Adelaide_Server_Pkg is
 
    type Generator_Task_Access is access Generator_Task;
 
+   task type Background_Deep_Thought_Task is
+       pragma Storage_Size (256 * 1024 * 1024);
+       pragma Task_Stack_Size (32 * 1024 * 1024);
+       entry Start
+         (Prompt : String;
+          Images : GNATCOLL.JSON.JSON_Array;
+          Session_ID : String);
+   end Background_Deep_Thought_Task;
+   type Background_Deep_Thought_Task_Access is access Background_Deep_Thought_Task;
+
     task body Generator_Task is
        P : Unbounded_String;
        S_ID : Unbounded_String;
@@ -350,6 +363,36 @@ package body Adelaide_Server_Pkg is
             when others => null;
          end;
    end Generator_Task;
+
+   task body Background_Deep_Thought_Task is
+      P : Unbounded_String;
+      S : Unbounded_String;
+      V : GNATCOLL.JSON.JSON_Array;
+      Res : Unbounded_String;
+   begin
+      accept Start
+        (Prompt : String;
+         Images : GNATCOLL.JSON.JSON_Array;
+         Session_ID : String) do
+         P := To_Unbounded_String (Prompt);
+         V := Images;
+         S := To_Unbounded_String (Session_ID);
+      end Start;
+      
+      Model_Manager.Hybrid_Generate
+        (Prompt         => To_String (P),
+         Result         => Res,
+         Images         => V,
+         Session_ID     => To_String (S),
+         Stream         => null,
+         Level          => ELP0,
+         Agentic        => True,
+         Raw_Prompt     => False,
+         External_Agent => False);
+   exception
+      when E : others =>
+         Ada.Text_IO.Put_Line ("Error in Background_Deep_Thought_Task: " & Ada.Exceptions.Exception_Message (E));
+   end Background_Deep_Thought_Task;
 
    --------------
    -- Dispatch --
@@ -618,6 +661,56 @@ package body Adelaide_Server_Pkg is
             Handless_Output_Text := To_Unbounded_String ("");
 
             if Num_Floats > 0 then
+               declare
+                  use GNAT.Sockets;
+                  VAD_Socket  : Socket_Type;
+                  VAD_Address : Sock_Addr_Type (Family_Unix);
+                  VAD_Stream  : Stream_Access;
+                  
+                  Raw_Length : constant Unsigned_32 := Unsigned_32 (Raw_Payload'Length);
+                  
+                  -- Send length as Big-Endian 4-byte network order
+                  -- In Ada, GNAT.Sockets has no Host_To_Network for Unsigned_32 directly without unchecked conversion.
+                  -- But we can just use Stream_Element_Array and pack the bytes manually since it's only 4 bytes.
+                  Length_Arr : Ada.Streams.Stream_Element_Array (1 .. 4);
+               begin
+                  Length_Arr (1) := Ada.Streams.Stream_Element (Shift_Right (Raw_Length, 24) and 16#FF#);
+                  Length_Arr (2) := Ada.Streams.Stream_Element (Shift_Right (Raw_Length, 16) and 16#FF#);
+                  Length_Arr (3) := Ada.Streams.Stream_Element (Shift_Right (Raw_Length, 8) and 16#FF#);
+                  Length_Arr (4) := Ada.Streams.Stream_Element (Raw_Length and 16#FF#);
+
+                  VAD_Address.Name := To_Unbounded_String ("run/adelaide_vad.sock");
+                  Create_Socket (VAD_Socket, Family_Unix, Socket_Stream);
+                  Connect_Socket (VAD_Socket, VAD_Address);
+                  VAD_Stream := Stream (VAD_Socket);
+                  
+                  -- Send Length (4 bytes)
+                  Ada.Streams.Stream_Element_Array'Write (VAD_Stream, Length_Arr);
+                  -- Send Audio Bytes
+                  Ada.Streams.Stream_Element_Array'Write (VAD_Stream, Raw_Payload);
+                  
+                  -- Read Response ('0' or '1')
+                  declare
+                     Response_Char : Character;
+                  begin
+                     Character'Read (VAD_Stream, Response_Char);
+                     Close_Socket (VAD_Socket);
+                     
+                     if Response_Char = '0' then
+                        Handless_Stage := To_Unbounded_String ("Idle");
+                        return Wrap_Response (AWS.Response.Build ("text/plain", "No Speech Detected"));
+                     end if;
+                  end;
+               exception
+                  when others =>
+                     -- If VAD sidecar is down, fallback to transcribing anyway
+                     begin
+                        Close_Socket (VAD_Socket);
+                     exception
+                        when others => null;
+                     end;
+               end;
+
                Transcript := To_Unbounded_String
                  (Moonshine_Interface.Transcribe_Raw_PCM
                     (Audio_Floats (1)'Access, Num_Floats));
@@ -626,12 +719,13 @@ package body Adelaide_Server_Pkg is
             end if;
 
              Handless_Input_Text := Transcript;
-             Handless_Stage := To_Unbounded_String ("Generating...");
+             Handless_Stage := To_Unbounded_String ("Classifying Intent...");
 
              if Length (Transcript) > 0 then
                 declare
                    Vision_Arr : GNATCOLL.JSON.JSON_Array :=
                      GNATCOLL.JSON.Empty_Array;
+                   Intent_Res : Unbounded_String;
                 begin
                    -- Use vision context from previous upload or current request param
                    if Length (Handless_Vision_Context) > 0 then
@@ -647,15 +741,45 @@ package body Adelaide_Server_Pkg is
                       Vision_Context_From_Param := To_Unbounded_String ("");
                    end if;
 
-                   Model_Manager.Hybrid_Generate
-                     (Prompt     => To_String (Transcript),
-                      Result     => LLM_Result,
-                      Images     => Vision_Arr,
-                      Session_ID => "server-handless",
-                      Agentic    => True,
-                      Raw_Prompt => False);
+                   Model_Manager.Generate
+                     (Kind          => Snowball_Enaga_ShortNetworkAnswer,
+                      Prompt        => "Does the following text contain a clear intent directed at an AI assistant, or is it a direct question/command? Answer ONLY 'YES' or 'NO'. Text: """ & To_String (Transcript) & """",
+                      Result        => Intent_Res,
+                      Images        => GNATCOLL.JSON.Empty_Array,
+                      Session_ID    => "intent-classifier",
+                      Requested_Ctx => 1024,
+                      Stream        => null,
+                      Level         => ELP1);
+
+                   if Index (To_String (Intent_Res), "YES") > 0 then
+                      Handless_Stage := To_Unbounded_String ("Reflex Replying...");
+                      Model_Manager.Generate
+                        (Kind          => Snowball_Enaga_ShortNetworkAnswer,
+                         Prompt        => "You are an AI assistant. Give a short, concise, and helpful reply to the following: """ & To_String (Transcript) & """",
+                         Result        => LLM_Result,
+                         Images        => Vision_Arr,
+                         Session_ID    => "server-handless-reflex",
+                         Requested_Ctx => 1024,
+                         Stream        => null,
+                         Level         => ELP1);
+
+                      declare
+                         Deep_Ptr : Background_Deep_Thought_Task_Access := new Background_Deep_Thought_Task;
+                      begin
+                         Deep_Ptr.Start (To_String (Transcript), Vision_Arr, "server-handless-deep");
+                      end;
+                   else
+                      -- Background chatter
+                      Handless_Stage := To_Unbounded_String ("Background Chatter - Idle");
+                      Database_Manager.Remember
+                        (Prompt   => To_String (Transcript),
+                         Response => "[Passive Observation]",
+                         Image_B64 => "");
+                      return Wrap_Response (AWS.Response.Build ("text/plain", "Silently Embedded"));
+                   end if;
                 end;
              else
+               Handless_Stage := To_Unbounded_String ("Proactive Initiating...");
                Model_Manager.Hybrid_Generate
                  (Prompt     => "Proactively initiate the conversation. " &
                   "Ask a random, interesting, or highly agentic question " &
@@ -775,6 +899,8 @@ package body Adelaide_Server_Pkg is
             Set_Field (R, "Handless_WCET_nS", Handless_WCET * 1_000_000.0);
             Set_Field (R, "Handless_Input_Text", To_String(Handless_Input_Text));
             Set_Field (R, "Handless_Output_Text", To_String(Handless_Output_Text));
+            Set_Field (R, "Handless_Vision_Context",
+              (if Length (Handless_Vision_Context) > 0 then "loaded" else "none"));
 
             return Wrap_Response (Build_Response (Write (R)));
          end;
