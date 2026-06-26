@@ -61,6 +61,18 @@ package body Tool_Manager is
       --  PACKAGE TOOL: Install system packages (apt, brew, pacman, winget, etc.)
       elsif Name = "package" or else Name = "install" or else Name = "pkg" then
          Full_Cmd := To_Unbounded_String ("python/package.py");
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  GREP TOOL: Search file contents (like Claude Code's Grep tool)
+      elsif Name = "grep" or else Name = "search_content" then
+         Full_Cmd := To_Unbounded_String ("python/grep.py");
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  TODO TOOL: Task management (like Claude Code's TodoWrite tool)
+      elsif Name = "todo" or else Name = "task" then
+         Full_Cmd := To_Unbounded_String ("python/todo.py");
+      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+      --  KILLSHELL TOOL: Process management (like Claude Code's KillShell tool)
+      elsif Name = "kill" or else Name = "killshell" or else Name = "process" then
+         Full_Cmd := To_Unbounded_String ("python/killshell.py");
       else
          Free (Path);
          Result.Output := To_Unbounded_String ("Error: Unknown tool " & Name);
