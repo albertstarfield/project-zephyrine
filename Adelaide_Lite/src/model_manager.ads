@@ -341,6 +341,32 @@ package Model_Manager is
    Current_Prompt_Tokens      : Natural := 0;   -- actual tokens in prompt
    Current_Ctx_Capacity       : Natural := 8192; -- llama context window size
 
+   --  PREFILL SPEED & TIME BUDGET TRACKING
+   --  ============================================================================
+   --  WHY: Dynamic ctx expansion must respect a time budget. If prefill takes
+   --  too long, the user perceives lag. We measure actual prefill tok/s
+   --  (NOT cached/virtualized tokens — those are free) and weight it against
+   --  free LLM context % to decide whether to expand.
+   --
+   --  TIME BUDGET: 30 seconds max for prefill. If prefill exceeds this,
+   --  the system should NOT expand context further — it's already too slow.
+   --
+   --  THRESHOLD FORMULA:
+   --    threshold_pct = 30 / prefill_elapsed * (free_ctx_pct / 100)
+   --  This weights the time budget against available context headroom.
+   --  If free_ctx is low (<25%), threshold drops → don't expand.
+   --  If free_ctx is high (>75%), threshold rises → safe to expand.
+   --
+   --  PRINTED IN CTXMONITOR: Virtual prefill speed (tok/s) so we can
+   --  observe degradation and tune the threshold dynamically.
+   --  ============================================================================
+   Prefill_Start_Time        : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
+   Prefill_Token_Count       : Natural := 0;    -- tokens actually decoded (not cached)
+   Virtual_Prefill_Speed     : Duration := 0.0;  -- computed tok/s after prefill
+   Prefill_Elapsed           : Duration := 0.0;  -- wall-clock seconds for prefill
+   Free_Ctx_Pct              : Natural := 0;     -- free % of LLM context window
+   Ctx_Expand_Threshold_Pct  : Natural := 75;    -- dynamic threshold for expansion
+
    --  CACHED VIRTUAL CTX TOKENS
    --  When Internal_State grows, we re-tokenize ONLY the new portion.
    --  The cached tokens are prepended to the prompt on each generation,
