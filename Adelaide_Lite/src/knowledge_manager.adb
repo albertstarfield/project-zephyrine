@@ -374,9 +374,31 @@ package body Knowledge_Manager is
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task waiting for Start...");
       accept Start;
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task ACCEPTED Start, calling Index_References...");
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task ACCEPTED Start.");
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                 AnsiAda.Reset & " Indexing Task Active.");
+
+      --  [BOOT GATE] Wait 600s at boot before indexing begins.
+      --  Gives ELP1 time to settle and prevents index thrash during startup.
+      declare
+         Boot_Cooldown_Remaining : Natural := 600;
+      begin
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                   AnsiAda.Reset & " Boot cooldown: waiting 600s before indexing...");
+         while Boot_Cooldown_Remaining > 0 loop
+            delay 1.0;
+            Boot_Cooldown_Remaining := Boot_Cooldown_Remaining - 1;
+            if Model_Manager.Should_Abort_ELP0 then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                         AnsiAda.Reset & " Boot cooldown interrupted by ELP1, resetting to 600s!");
+               Model_Manager.Wait_For_ELP1_Idle;
+               Boot_Cooldown_Remaining := 600;
+            end if;
+         end loop;
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                   AnsiAda.Reset & " Boot cooldown finished. Starting indexing.");
+      end;
+
        Index_References;
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Indexing_Task Index_References DONE.");
