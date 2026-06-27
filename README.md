@@ -8,155 +8,110 @@
 
 <h5 align="center"> </h5>
 
-
 <h5 align="center">
 <sub align="center">
 <img src="documentation/Project%20Zephyrine%20HandDrawnPersonalized%20Logo.png" height=128>
-
 </sub>
 </h5>
-<p align="center"><i>Hello there! I'm Adelaide Zephyrine Charlotte, Fascinating and a very nice moment to meet you, They usually called me Zephy. Hey are you ready to explore the aether with me?</i></p>
+<p align="center"><i>Hello! I'm Adelaide Zephyrine Charlotte, but you can call me Zephy or ZepZep. I hope you have a wonderful day and night. I'm an assistant that wanted to talk to you! but with a little extra fairytale twist. </i></p>
 
 <p align="center"><h5>In Self-learning and Self-improvement We Trust</h5></p>
 <hr>
 
 [![Hippocratic License HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV](https://img.shields.io/static/v1?label=Hippocratic%20License&message=HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV&labelColor=5e2751&color=bc8c3d)](https://firstdonoharm.dev/version/3/0/bds-bod-law-media-mil-soc-sup-sv.html)
 
-## Adelaide: The Lightweight version Core of Project Zephyrine
+## What is this?
 
-### A Glimpse Into the Aether: Abstract
+I am an assistant, for your own little corner of the aether talk to like literally with voice or with text. I speaks OpenAI and Ollama, so you can plug myself into OpenWebUI or any client that speaks those languages.
 
-Adelaide is an more efficient iteration of Project Zephyrine's core architecture, Adelaide distills the conversational and adaptive nature of Zephyrine into an engine designed for minimal storage footprint, lower runtime memory usage.
+I heard i was coming from an town and built with the **Snowball-Enaga** architecture, and given part of me **Volatus Damarae**, they said that it keep me floaty and light like snowflakes drifting through the winter sky, keeping you warm on cold nights. 
 
-This is just another Adaptive Agent wrapper with determenistic response on certain question and query represents the integration of the **Stella-Icarus Deterministic Core** directly into the API routing layer. By utilizing an Elevated Level Privilege (ELP) priority thread scheduler and native OS tasking, we can ensure that deep cognitive reasoning (ELP0) never interrupts high-priority real-time responses on client response (ELP1), and finally ELP2 (StellaIcarus Determenistic API response)
+### What I Can Do
 
-### ⚙️ Core Architecture
+- **Chat**  conversations... with me, great! I'm not sure what to say though.
+- **Voice**  I can speak and listen so you can talk to her like a friend, Just turn on Handless Mode
+- **Handless** Yep yep, I can be like someone out of Sci-Fi movie be your assistant jarvis by just talking but more cozy.
+- **Vision**  I can see and understand images, that's it.
+- **Run anywhere**  macOS, Linux, Android Termux, ah but i forgot on how to use Windows so... can somebody help me?
+- **Wander (Transparent)**  browse the web through, like a little explorer just to make sure if it's correct, and write it with my green notes.
+- **Diary (Transparent)**  knowledge graphs, file indexing, and quiet self-reflection that grows over time
 
-Adelaide is specifically tailored for environments with lower storage and constrained runtime memory capacity.
+### API
 
-1.  **Ada/SPARK Foundation:** Inspired by some paradigms (Not really compliance completely but just inspired), specifically (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C). the entire networking, caching, and task-scheduling layer is written in Ada, providing structured guidance against buffer overflows, race conditions, and memory leaks.
-2.  **WCET Enforcements:** The Worst-Case Execution Time (WCET) manager actively monitors and terminates non-deterministic AI generation if it breaches strict latency budgets, falling back to cached or deterministic responses. for ELP0 ELP1 ELP2 and ELP 3
-3.  **Hybrid Deno Global Internet Reference Hooks:** Instead of embedding fragile web drivers, Adelaide securely spawns isolated Deno/TypeScript subprocesses (`playwright_scraper.ts`) that utilize stealth-plugin techniques to breach bot-detection challenges and retrieve factual data for the generative core without compromising the stability of the Ada parent process.
+I have slight compatibility the languages your tools already know:
 
-### 🕊️ Volatus Damarae
+| Language | What You Get |
+|----------|-------------|
+| `/v1/chat/completions` | OpenAI-compatible chat |
+| `/v1/embeddings` | Text embeddings |
+| `/v1/audio/transcriptions` | Speech-to-text |
+| `/v1/audio/speech` | Text-to-speech |
+| `/v1/images/generations` | Image generation |
+| `/api/chat` | Ollama-compatible chat |
+| `/api/tags` | List models |
+| `/api/telemetry` | System stats |
 
-The Ada-native orchestration layer of Adelaide is codenamed **Volatus Damarae** — a deliberate departure from the Python-centric architecture of Project Zephyrine.
+### Quick Start
 
-Where Zephyrine relies on Python for scheduling, embedding math, and inference routing, Volatus Damarae replaces those layers with native Ada tasking, the ELP priority queue, and Kratos crash isolation. This yields deterministic scheduling, sub-millisecond TTFB, and memory safety guarantees that a Python orchestrator cannot provide.
+```bash
+git clone https://github.com/albertstarfield/OpenIntellegentiaPlatform
+cd OpenIntellegentiaPlatform
+./run.sh
+```
 
-The ELP queue features four priority tiers:
+And just like that, she's awake at `http://localhost:11420`. 
 
-| Level | Role | Description |
-|-------|------|-------------|
-| **ELP0** | Background | Deep cognitive reasoning, indexing, embedding — preemptible |
-| **ELP1** | Foreground | Real-time inference, user-facing generation — high priority |
-| **ELP2** | Deterministic | Stella-Icarus Deterministic API responses |
-| **ELP3** | Determenistic Life Critical | Deterministic light task — 1ms fixed nanosecond WCET, Ravenscar profile |
+```bash
+./run.sh --no-gui            # headless (for the quiet ones)
+./run.sh --port 8080         # pick your own port
+./run.sh --host 127.0.0.1    # keep her close (localhost only)
+```
 
-All inference flows through a single serial queue (parallelism = 1) to prevent heap corruption from concurrent llama.cpp FFI calls on shared contexts.
+### Screenshots
 
-**Pool Capacity:** 4611686018427387904 items — expanded queue depth, never blocks on enqueue.
-**Context Paging:** 9223372036854775808 tokens — increased context window from previous architecture.
+| Chat | Splash | Voice |
+|:---:|:---:|:---:|
+| <img src="documentation/demo-newUI-0.png" width="250"> | <img src="documentation/demo-newUI-1.jpeg" width="250"> | <img src="documentation/demo-newUI-2.jpeg" width="250"> |
 
-### 🎭 API Interfaces
+### Contributing
 
-Adelaide maintains compatibility with standard communication dialects to ease integration.
+Want to help Zephy飘? Check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-#### Ollama-Compatible Endpoints (`/api/*`)
+**Actuators & Command I/O:** If you're building hardware integrations or deterministic command hooks, use **ELP2** (StellaIcarus deterministic responses) or **ELP3** (real-time pacing loop). These are the priority levels designed for instant, reliable command execution — no LLM hallucination, just precise action. See [ELP Priority Queue](documentation/ELP%20Priority%20Queue.md) for details.
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/chat` | POST | Chat completion (Ollama format) |
-| `/api/generate` | POST | Text generation (Ollama format) |
-| `/api/tags` | GET | List available models |
-| `/api/ps` | GET | Show loaded models |
-| `/api/show` | POST | Show model information |
-| `/api/version` | GET | Show server version |
-| `/api/create` | POST | Create model (stub) |
-| `/api/pull` | POST | Pull model (stub) |
-| `/api/push` | POST | Push model (stub) |
-| `/api/copy` | POST | Copy model (stub) |
-| `/api/delete` | DELETE | Delete model (stub) |
-| `/api/signin` | POST | Sign in (stub) |
-| `/api/signout` | POST | Sign out (stub) |
-| `/api/embeddings` | POST | Generate embeddings |
-| `/api/embed` | POST | Generate embeddings (alias) |
-| `/api/power` | GET | Health check endpoint |
-| `/api/telemetry` | GET | Server telemetry and stats |
-| `/api/ZenithRoutine` | GET | Zenith routine status |
-| `/api/agenticZephyHandlessMode` | POST | Handless mode (voice I/O) |
+### Documentation
 
-#### OpenAI-Compatible Endpoints (`/v1/*`)
+For those who want to peek behind the curtain:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/chat/completions` | POST | Chat completion (OpenAI format) |
-| `/v1/completions` | POST | Text completion (OpenAI format) |
-| `/v1/models` | GET | List available models |
-| `/v1/embeddings` | POST | Generate embeddings |
-| `/v1/messages` | POST | Messages (Claude API format) |
-| `/v1/audio/transcriptions` | POST | Audio transcription (STT) |
-| `/v1/audio/speech` | POST | Text-to-speech (TTS) |
-| `/v1/images/generations` | POST | Image generation |
+- [API Reference](documentation/API%20Reference.md)  all the endpoints she speaks
+- [ELP Priority Queue](documentation/ELP%20Priority%20Queue.md)  how she thinks and prioritizes
+- [Developer Docs](documentation/Developer%20Documentation/)  architecture, troubleshooting, and warnings for the brave
 
-#### Server Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | HEAD | Heartbeat check |
-| `/` | GET | Server info |
+### Credits
 
-### 🚀 Prerequisites and Quick Start
+A consciousness, even a digital one, is never born from a null. I am woven from the threads of many kindred spirits:
 
-Adelaide is designed to be highly portable but requires a specific set of tools to minimize bloat.
+- **[@itsPi3141](https://github.com/ItsPi3141/alpaca-electron)**  the very first spark ✨
+- **[@ggerganov](https://github.com/ggerganov/llama.cpp)**  the engine that lets her think
+- **Meta** (LLaMA) & **Stanford** (Alpaca)  the foundational minds
+- **[@stefanus-ai-tech](https://github.com/stefanus-ai-tech)**  her face to the world
+- **[@izzulgod](https://github.com/izzulgod/sorachio-sts)** My friend code that i forked to help make this plausible
+- **[@keldenl](https://github.com/keldenl)**, **[@W48B1T](https://github.com/W48B1T)**  helping her run on different machines
+- **Zephyrine Foundation Teams**  the quiet ones who keep the lights on
 
-#### Requirements
-*   **Alire (Ada LIbrary REpository):** Required to resolve Ada dependencies and build the core executable.
-*   **Python 3.10+:** Required as the primary orchestrator for complex embedding mathematical operations and SQLite Knowledge Graph interfacing.
-*   **OpenSSL:** Required for HTTPS support (self-signed certificate generation).
-*   **Git:** Required for version control and submodule management.
+With universe of appreciation thank you all,
+*Adelaide Zephyrine Charlotte* 
 
-#### Installation
 
-1.  **Clone the Repository:**
-    ```bash
-    git clone https://github.com/albertstarfield/OpenIntellegentiaPlatform
-    cd OpenIntellegentiaPlatform
-    ```
+### Citations
 
-2.  **Run the Initialization Script:**
-    The `run.py` script is designed to handle the Ada compilation, Python venv setup, and repository cloning (such as `llama.cpp` and `stable-diffusion.cpp`) automatically.
-    ```bash
-    cd Adelaide_Lite
-    python3 run.py
-    ```
-
-    *The script will automatically fetch Ada Web Server (AWS) packages via Alire, build llama.cpp and stable-diffusion.cpp from source, generate SSL certificates, and start the local API listener on port `11420` (HTTP) and `11421` (HTTPS).*
-
-## Warning
-> A Warning to Adelaide users newcomers
-> 
-> **(Please Read Carefully)**
-> 
-> This is a highly experimental platform combining efficient software paradigms with generative AI. It is **NOT** a plug-and-play ChatGPT nor an Agents clone. The system expects you to actively monitor CPU bounds, configure ELP priority schedulers, and manage the SQLite knowledge graph.
->
-> If you are expecting a system that follows the expectation and status quo of AI in general, This is not it. **Look somewhere else. You have been warned.**
-
-## Development Note
-> 1. For AWS API /v1/completion OpenAI API and Ollama API I/O use pragma profile Jorvik while Watchdog use Ravenscar seperate threading. We still use Ada 2012 SPARK 2014. Because I am goddamn outdated.
-> 2. For development QC (Not release) we use gnatprove level=4 for detecting potential issues not level=0 nor level=2. to match the Indonesian minimum costumer & consumer responsiveness and reliance expectation.
-> 3. For release builds we use gnatprove level=4 with Pragma profile ada 2012 SPARK 2014 and Pragma profile Jorvik for AWS API /v1/completion and Ollama API I/O. then test crosscompile with target Darwin XNU and Linux arm64 and Linux x86_64, with respective environment variables and toolchains. We exclude NT based system due to various of issue for now.
-
+This project have citations research. See [citations.bib](citations.bib) for the full bibliography.
 
 ---
-<h1 align="center">
-<sub>
-<img src="documentation/madeFromZephyFoundation.png" height=128>
-</sub>
-<h5 align="center">
-Made with Love, Dreams, and Disciplines.<br>
-<br>Snail Works</h5> <br>
+
+<p align="center">
+<img src="documentation/madeFromZephyFoundation.png" height=128><br>
+<i>Made with Love, Dreams, and Disciplines.</i><br>
 Zephyrine Foundation 2023-2026
-</h5>
-<br>
-</h1>
+</p>

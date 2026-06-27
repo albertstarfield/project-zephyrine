@@ -303,69 +303,21 @@ procedure Adelaide_Watchdog is
           end;
        end if;
 
-      --  Prefer alr exec for proper library paths (DYLD_LIBRARY_PATH etc.)
-      Alr := Locate_Exec_On_Path ("alr");
-      if Alr /= null then
-         Cmd := Alr;
-         Args (1) := new String'("exec");
-         Args (2) := new String'("--");
-         Args (3) := new String'(Server_Bin);
-         N_Args := 3;
-      else
-         Cmd := new String'(Server_Bin);
-         N_Args := 0;
-      end if;
-
-      --  Parse launch args from file (space-separated)
-      while Arg_Start <= Raw_Args'Last loop
-         --  Skip spaces
-         while Arg_Start <= Raw_Args'Last
-           and then Raw_Args (Arg_Start) = ' '
-         loop
-            Arg_Start := Arg_Start + 1;
-         end loop;
-         exit when Arg_Start > Raw_Args'Last;
-         --  Find end of arg
-         Arg_End := Arg_Start;
-         while Arg_End <= Raw_Args'Last
-           and then Raw_Args (Arg_End) /= ' '
-         loop
-            Arg_End := Arg_End + 1;
-         end loop;
-         --  Add arg
-         N_Args := N_Args + 1;
-         Args (N_Args) := new String'(Raw_Args (Arg_Start .. Arg_End - 1));
-         Arg_Start := Arg_End;
-      end loop;
-
-      Put_Line (Standard_Error,
-        "[Watchdog] Spawning: " & Cmd.all);
-
-      --  Delete stale heartbeat so the new server doesn't bypass Check_Single_Instance
+      --  Delete stale heartbeat so run.py's new server doesn't bypass Check_Single_Instance
       if Exists (HB_File) then
          Delete_File (HB_File);
       end if;
 
-      --  Start server as a background (non-blocking) process
-      New_Pid := Non_Blocking_Spawn (Cmd.all, Args (1 .. N_Args));
+      --  We rely on run.py to restart the server (prevents double spawning)
+      Put_Line (Standard_Error, "[Watchdog] Server killed. run.py will handle restart.");
+      
+      --  Note: run.py's wait() will unblock, see the exit code,
+      --  dump the panic logs, and spawn the new process itself.
 
-      if New_Pid = Invalid_Pid then
-         Put_Line (Standard_Error,
-           "[Watchdog] FAILED to start server process.");
-      else
-         Put_Line (Standard_Error,
-           "[Watchdog] Server started, PID:" &
-           Integer'Image (Pid_To_Integer (New_Pid)));
-      end if;
-
-      Free (Cmd);
-      for I in 1 .. N_Args loop
-         Free (Args (I));
-      end loop;
    exception
       when E : others =>
          Put_Line (Standard_Error,
-           "[Watchdog] Failed to restart server: " &
+           "[Watchdog] Failed to kill stale server: " &
            Exception_Message (E));
    end Restart_Server;
 

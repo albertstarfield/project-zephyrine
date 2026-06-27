@@ -127,11 +127,11 @@ project Adelaide_Lite is
               Adelaide_Lite_Config.Ada_Compiler_Switches &
               ("-gnat2022", "-gnatX", "-mmacosx-version-min=15.0");
             for Default_Switches ("C++") use
-              ("-I" & project'Project_Dir & "../llama.cpp/include", 
-               "-I" & project'Project_Dir & "../llama.cpp/ggml/include",
-               "-I" & project'Project_Dir & "../llama.cpp/tools/mtmd",
-               --  [STABLE-DIFFUSION] Include stable-diffusion.cpp headers
-               "-I" & project'Project_Dir & "../stable-diffusion.cpp/include",
+               ("-I" & project'Project_Dir & "vendor/llama.cpp/include", 
+                "-I" & project'Project_Dir & "vendor/llama.cpp/ggml/include",
+                "-I" & project'Project_Dir & "vendor/llama.cpp/tools/mtmd",
+                --  [STABLE-DIFFUSION] Include stable-diffusion.cpp headers
+                "-I" & project'Project_Dir & "vendor/stable-diffusion.cpp/include",
                "-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
                "-std=c++17", "-mmacosx-version-min=15.0");
             for Default_Switches ("C") use
@@ -142,9 +142,9 @@ project Adelaide_Lite is
               Adelaide_Lite_Config.Ada_Compiler_Switches &
               ("-gnat2022", "-gnatX");
             for Default_Switches ("C++") use
-              ("-I" & project'Project_Dir & "../llama.cpp/include", 
-               "-I" & project'Project_Dir & "../llama.cpp/ggml/include",
-               "-I" & project'Project_Dir & "../llama.cpp/tools/mtmd",
+               ("-I" & project'Project_Dir & "vendor/llama.cpp/include", 
+                "-I" & project'Project_Dir & "vendor/llama.cpp/ggml/include",
+                "-I" & project'Project_Dir & "vendor/llama.cpp/tools/mtmd",
                "-std=c++17", "-march=native");
             for Default_Switches ("C") use
               ("-march=native");
@@ -163,16 +163,16 @@ project Adelaide_Lite is
    package Linker is
       Base_Linker_Flags := (
          "-Wl,-stack_size,0x2000000",
-         "-L" & project'Project_Dir & "../moonshine/build/core",
+         "-L" & project'Project_Dir & "vendor/moonshine/build/core",
          "-lmoonshine",
-         project'Project_Dir & "../llama.cpp/build/src/libllama.a",
-         project'Project_Dir & "../llama.cpp/build/ggml/src/libggml.a",
-         project'Project_Dir & "../llama.cpp/build/ggml/src/libggml-base.a",
-         project'Project_Dir & "../llama.cpp/build/ggml/src/libggml-cpu.a",
-         project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-blas/libggml-blas.a",
-         project'Project_Dir & "../llama.cpp/build/tools/mtmd/libmtmd.a",
+         project'Project_Dir & "vendor/llama.cpp/build/src/libllama.a",
+         project'Project_Dir & "vendor/llama.cpp/build/ggml/src/libggml.a",
+         project'Project_Dir & "vendor/llama.cpp/build/ggml/src/libggml-base.a",
+         project'Project_Dir & "vendor/llama.cpp/build/ggml/src/libggml-cpu.a",
+         project'Project_Dir & "vendor/llama.cpp/build/ggml/src/ggml-blas/libggml-blas.a",
+         project'Project_Dir & "vendor/llama.cpp/build/tools/mtmd/libmtmd.a",
          --  [STABLE-DIFFUSION] Link stable-diffusion.cpp for image generation
-         project'Project_Dir & "../stable-diffusion.cpp/build/libstable-diffusion.a",
+         project'Project_Dir & "vendor/stable-diffusion.cpp/build/libstable-diffusion.a",
          "-lsqlite3",
          "-lc++",
           project'Object_Dir & "/llama_safe.o",
@@ -206,13 +206,13 @@ project Adelaide_Lite is
       Backend_Flags := ();
       case GGML_Backend is
          when "metal" =>
-            Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-metal/libggml-metal.a");
+            Backend_Flags := (project'Project_Dir & "vendor/llama.cpp/build/ggml/src/ggml-metal/libggml-metal.a");
          when "cuda" =>
-            Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-cuda/libggml-cuda.a", "-lcublas", "-lcudart");
+            Backend_Flags := (project'Project_Dir & "vendor/llama.cpp/build/ggml/src/ggml-cuda/libggml-cuda.a", "-lcublas", "-lcudart");
          when "vulkan" =>
-            Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-vulkan/libggml-vulkan.a", "-lvulkan");
+            Backend_Flags := (project'Project_Dir & "vendor/llama.cpp/build/ggml/src/ggml-vulkan/libggml-vulkan.a", "-lvulkan");
          when "sycl" =>
-            Backend_Flags := (project'Project_Dir & "../llama.cpp/build/ggml/src/ggml-sycl/libggml-sycl.a", "-lsycl");
+            Backend_Flags := (project'Project_Dir & "vendor/llama.cpp/build/ggml/src/ggml-sycl/libggml-sycl.a", "-lsycl");
          when "none" =>
             null;
       end case;

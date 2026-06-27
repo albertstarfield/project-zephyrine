@@ -26,7 +26,7 @@ with Math_Utils;
 with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Real_Time; use Ada.Real_Time;
 with Fuzzy_Match;
-with Claude_Client; use Claude_Client;
+with Claudealike_Helper; use Claudealike_Helper;
 with SD_Manager;
 with Proactive_Engine;
 with Database_Manager;
@@ -720,6 +720,22 @@ package body Adelaide_Server_Pkg is
                   -- Acoustic Dynamic Gateway
                   -- Governing Equation: dBFS = 20 * log10(RMS + epsilon)
                   -- where RMS = sqrt((1/N) * sum(x_i^2))
+                  --
+                  -- [ARCHITECTURAL REASONING: AEC & BARGE-IN]
+                  -- In Handless mode, the system constantly monitors the microphone,
+                  -- even while synthesizing and speaking (TTS playback).
+                  -- To prevent the AI from hearing itself (audio feedback loop), we must perform
+                  -- Acoustic Echo Cancellation (AEC) to subtract the TTS waveform from the mic input.
+                  -- 
+                  -- If a sudden voice spike is detected (dBFS exceeds threshold) AFTER AEC cancellation, 
+                  -- it means the user is attempting a "Barge-in" (interrupting the AI).
+                  -- When an interrupt occurs:
+                  -- 1. Instantly halt the TTS audio playback queue.
+                  -- 2. Mark the currently spoken response in the Short-Term Memory (STM) as "[INTERRUPTED]".
+                  -- 3. Transcribe the user's new voice input and append it.
+                  -- 4. The neural network (LLM) will observe the "[INTERRUPTED]" tag in its context window
+                  --    and realize its previous thought was cut off, allowing it to adapt dynamically
+                  --    to the user's interjection (e.g., "Oh sorry, as I was saying..." or answering the new question).
                   Sum_Sq : Float := 0.0;
                   RMS    : Float;
                   DB_FS  : Float;
@@ -920,8 +936,15 @@ package body Adelaide_Server_Pkg is
                    Raw_Prompt => True);
             end if;
             Handless_Output_Text := LLM_Result;
+            
+            --  [DO NOT REMOVE COMMENT EXPLANATION]
+            --  Save handless interaction to knowledge base for memory retention.
+            Database_Manager.Remember
+              (Prompt    => (if To_String (Transcript) = "" then "[Proactive Initiation]" else To_String (Transcript)),
+               Response  => To_String (LLM_Result),
+               Image_B64 => To_String (Handless_Vision_Context));
+               
             Handless_Stage := To_Unbounded_String("Synthesizing...");
-
             declare
                PCM_Data : constant Ada.Streams.Stream_Element_Array :=
                  Kokoro_Interface.Synthesize_Speech (To_String (LLM_Result));
@@ -1515,6 +1538,117 @@ package body Adelaide_Server_Pkg is
          end;
       else
          --  =====================================================================
+         --  /api/acp: Agent Client Protocol (ACP) JSON-RPC 2.0 API endpoint
+         --
+         --  [USAGE & CONNECTION GUIDE]
+         --  This endpoint implements the Agent Client Protocol (ACP) over HTTP POST.
+         --  ACP is a standard JSON-RPC 2.0 interface used by clients like Zed, 
+         --  VS Code plugins, and @agentclientprotocol/sdk in Node.js.
+         --
+         --  To connect a pre-existing client:
+         --  1. Configure the client to use HTTP transport.
+         --  2. Set the endpoint URL to `http://<server-ip>:11420/api/acp`.
+         --  3. Send standard JSON-RPC payloads:
+         --     { "jsonrpc": "2.0", "method": "initialize", "params": {}, "id": 1 }
+         --     { "jsonrpc": "2.0", "method": "chat/completion", "params": { "prompt": "Hello!" }, "id": 2 }
+         --
+         --  The local Model_Manager handles agent reasoning natively.
+         --  DO NOT REMOVE, OR YOU WILL BE KILLED
+         --  =====================================================================
+         if URI = "/api/acp" then
+            declare
+               Payload : Unbounded_String := (if Raw_S /= "" then
+                 To_Unbounded_String (Raw_S)
+                 elsif Length (Raw_B) > 0 then Raw_B
+                 else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
+               Method_Name : Unbounded_String := Null_Unbounded_String;
+               Req_Id_Str  : Unbounded_String := To_Unbounded_String ("null");
+               Resp_Str    : Unbounded_String;
+            begin
+               if Length (Payload) > 0 then
+                  declare
+                     Parser_Result : constant GNATCOLL.JSON.Read_Result :=
+                       GNATCOLL.JSON.Read (To_String (Payload));
+                  begin
+                     if Parser_Result.Success then
+                        declare
+                           Val : constant GNATCOLL.JSON.JSON_Value := Parser_Result.Value;
+                        begin
+                           if GNATCOLL.JSON.Has_Field (Val, "id") then
+                              Req_Id_Str := To_Unbounded_String (GNATCOLL.JSON.Write (GNATCOLL.JSON.Get (Val, "id")));
+                           end if;
+
+                           if GNATCOLL.JSON.Has_Field (Val, "method") then
+                              Method_Name := To_Unbounded_String (String'(GNATCOLL.JSON.Get (Val, "method")));
+                           end if;
+
+                           --  Route methods
+                           if Method_Name = "initialize" then
+                              Resp_Str := Resp_Str & "{""jsonrpc"":""2.0"",""id"":" & To_String (Req_Id_Str) & ",""result"":{";
+                              Resp_Str := Resp_Str & """capabilities"":{""experimental"":{}},""serverInfo"":{""name"":""Adelaide_Server_ACP"",""version"":""1.0.0""}}}";
+                           elsif Method_Name = "chat/completion" then
+                              declare
+                                 Prompt_Str : Unbounded_String := To_Unbounded_String ("");
+                                 Gen_Result : Unbounded_String;
+                                 function Escape_JSON_Local (S : String) return String is
+                                    Res : Unbounded_String;
+                                 begin
+                                    for C of S loop
+                                       if C = '"' then
+                                          Res := Res & '\' & '"';
+                                       elsif C = '\' then
+                                          Res := Res & '\' & '\';
+                                       elsif C = ASCII.LF then
+                                          Res := Res & '\' & 'n';
+                                       elsif C = ASCII.CR then
+                                          Res := Res & '\' & 'r';
+                                       elsif C = ASCII.HT then
+                                          Res := Res & '\' & 't';
+                                       else
+                                          Res := Res & C;
+                                       end if;
+                                    end loop;
+                                    return To_String (Res);
+                                 end Escape_JSON_Local;
+                              begin
+                                 if GNATCOLL.JSON.Has_Field (Val, "params") then
+                                    declare
+                                       Params : constant JSON_Value := GNATCOLL.JSON.Get (Val, "params");
+                                    begin
+                                       if GNATCOLL.JSON.Has_Field (Params, "prompt") then
+                                          Prompt_Str := To_Unbounded_String (String'(GNATCOLL.JSON.Get (Params, "prompt")));
+                                       end if;
+                                    end;
+                                 end if;
+                                 
+                                 if Length (Prompt_Str) > 0 then
+                                    Model_Manager.Hybrid_Generate (Prompt => To_String (Prompt_Str), Result => Gen_Result);
+                                 else
+                                    Gen_Result := To_Unbounded_String ("No prompt provided.");
+                                 end if;
+
+                                 Resp_Str := Resp_Str & "{""jsonrpc"":""2.0"",""id"":" & To_String (Req_Id_Str) & ",""result"":{";
+                                 Resp_Str := Resp_Str & """response"":""" & Escape_JSON_Local (To_String (Gen_Result)) & """}}";
+                              end;
+                           else
+                              Resp_Str := Resp_Str & "{""jsonrpc"":""2.0"",""id"":" & To_String (Req_Id_Str) & ",""error"":{""code"":-32601,""message"":""Method not found""}}";
+                           end if;
+
+                           return Wrap_Response
+                             (Build_Response (To_String (Resp_Str), AWS.Messages.S200, "application/json"));
+                        end;
+                     else
+                        return Wrap_Response
+                          (Build_Response ("{""jsonrpc"":""2.0"",""id"":null,""error"":{""code"":-32700,""message"":""Parse error""}}", AWS.Messages.S400, "application/json"));
+                     end if;
+                  end;
+               else
+                  return Wrap_Response
+                    (Build_Response ("{""jsonrpc"":""2.0"",""id"":null,""error"":{""code"":-32600,""message"":""Invalid Request""}}", AWS.Messages.S400, "application/json"));
+               end if;
+            end;
+         end if;
+         --  =====================================================================
          --  /v1/messages: Claude API endpoint (Anthropic Messages API)
          --  Forwards requests to Claude API when model name starts with "claude"
          --  DO NOT REMOVE, OR YOU WILL BE KILLED
@@ -1526,10 +1660,10 @@ package body Adelaide_Server_Pkg is
                  elsif Length (Raw_B) > 0 then Raw_B
                  else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
                Req_Model     : Unbounded_String := To_Unbounded_String ("claude-3-5-sonnet-20241022");
-               Max_Tokens    : Positive := Claude_Client.Default_Max_Tokens;
+               Max_Tokens    : Positive := Claudealike_Helper.Default_Max_Tokens;
                System_Prompt : Unbounded_String := Null_Unbounded_String;
                Temperature   : Float := 1.0;
-               Claude_Messages : Claude_Client.Claude_Message_Array (1 .. 50);
+               Claude_Messages : Claudealike_Helper.Claude_Message_Array (1 .. 50);
                Msg_Count     : Natural := 0;
                API_Key       : Unbounded_String := Null_Unbounded_String;
                Req_Headers   : AWS.Headers.List;
@@ -1622,11 +1756,11 @@ package body Adelaide_Server_Pkg is
                                        Msg_Count := Msg_Count + 1;
                                        if Role = "user" then
                                           Claude_Messages (Msg_Count) :=
-                                            (Claude_Client.User,
+                                            (Claudealike_Helper.User,
                                              To_Unbounded_String (Content));
                                        else
                                           Claude_Messages (Msg_Count) :=
-                                            (Claude_Client.Assistant,
+                                            (Claudealike_Helper.Assistant,
                                              To_Unbounded_String (Content));
                                        end if;
                                     end;
@@ -1658,9 +1792,9 @@ package body Adelaide_Server_Pkg is
                      end if;
                      for I in 1 .. Msg_Count loop
                         declare
-                           M : constant Claude_Client.Claude_Message := Claude_Messages (I);
+                           M : constant Claudealike_Helper.Claude_Message := Claude_Messages (I);
                         begin
-                           if M.Role = Claude_Client.User then
+                           if M.Role = Claudealike_Helper.User then
                               Append (Prompt, "im_start" & "user" & ASCII.LF &
                                       To_String (M.Content) & "im_end" & ASCII.LF);
                            else

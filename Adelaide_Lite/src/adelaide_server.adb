@@ -86,7 +86,7 @@ with Response_Cache;
 --
 --  [QUIRK-S04] [macOS] Moonshine model path
 --  The Moonshine STT model is loaded from a hardcoded relative path:
---    "../moonshine/models/download.moonshine.ai/model/medium-streaming-en/" &
+--    "vendor/moonshine/models/download.moonshine.ai/model/medium-streaming-en/" &
 --    "quantized"
 --  LINUX-COMPAT: This path is the same on Linux, but the model files may
 --  reside at a different location.  The path is relative to the CWD at
@@ -1064,7 +1064,7 @@ begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset & " Initializing Moonshine (STT)...");
       Moonshine_Interface.Init_Moonshine
-        ("../moonshine/models/download.moonshine.ai/model/" &
+        ("vendor/moonshine/models/download.moonshine.ai/model/" &
          "medium-streaming-en/quantized");
 
       --  ==================================================================

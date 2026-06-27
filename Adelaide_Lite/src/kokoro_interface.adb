@@ -15,10 +15,10 @@ package body Kokoro_Interface is
       Empty_Array : Ada.Streams.Stream_Element_Array (1 .. 0);
    begin
       GNAT.OS_Lib.Spawn (
-         Program_Name => "../tts_kokoro_component/venv/bin/python",
-         Args         => [new String'("../tts_kokoro_component/stereo_cloner.py"),
+         Program_Name => "vendor/tts_kokoro_component/venv/bin/python",
+         Args         => [new String'("vendor/tts_kokoro_component/stereo_cloner.py"),
                           new String'("--text"), new String'(Text),
-                          new String'("--ref"), new String'("../Adelaide_Lite/sampleAdeltts_reference.wav"),
+                          new String'("--ref"), new String'("sampleAdeltts_reference.wav"),
                           new String'("--out"), new String'(File_Name)],
          Success      => Success
       );

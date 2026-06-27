@@ -26,6 +26,39 @@ session = ort.InferenceSession(MODEL_PATH, providers=['CPUExecutionProvider'])
 session.intra_op_num_threads = 1
 session.inter_op_num_threads = 1
 
+def acoustic_dynamic_gateway(audio_floats: np.ndarray, sample_rate: int) -> np.ndarray:
+    """
+    Acoustic Dynamic Gateway (Inspired by Audio Technica / Tokyo Philharmonic)
+    Applies a harmonic-based dynamic EQ and bandpass filter to emphasize
+    human voice harmonics (300Hz-3000Hz) and suppress background noise.
+    """
+    if len(audio_floats) == 0:
+        return audio_floats
+        
+    # Perform FFT
+    fft_data = np.fft.rfft(audio_floats)
+    freqs = np.fft.rfftfreq(len(audio_floats), d=1.0/sample_rate)
+    
+    # Create a dynamic EQ curve (mask)
+    mask = np.ones_like(freqs, dtype=np.float32)
+    
+    # Low cut (attenuate rumble below 100Hz)
+    mask[freqs < 100] = 0.1
+    
+    # Voice band enhancement (300Hz - 3000Hz)
+    voice_band = (freqs >= 300) & (freqs <= 3000)
+    mask[voice_band] = 1.2
+    
+    # High cut (attenuate hiss above 4000Hz)
+    mask[freqs > 4000] = 0.2
+    
+    # Apply the mask (harmonic filtering)
+    filtered_fft = fft_data * mask
+    
+    # Inverse FFT back to time domain
+    filtered_audio = np.fft.irfft(filtered_fft, n=len(audio_floats))
+    return filtered_audio.astype(np.float32)
+
 def vad_process(audio_floats: np.ndarray) -> bool:
     """Run Silero VAD over the float32 array in chunks."""
     h = np.zeros((2, 1, 64), dtype=np.float32)
@@ -98,7 +131,11 @@ def main():
                     conn.sendall(b'0')
                 else:
                     audio_floats = np.frombuffer(raw_data, dtype=np.float32)
-                    is_speech = vad_process(audio_floats)
+                    
+                    # Apply Acoustic Dynamic Gateway
+                    filtered_floats = acoustic_dynamic_gateway(audio_floats, SAMPLE_RATE)
+                    
+                    is_speech = vad_process(filtered_floats)
                     
                     conn.sendall(b'1' if is_speech else b'0')
             except Exception as e:
