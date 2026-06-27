@@ -172,11 +172,20 @@ package Model_Manager is
       Raw_Prompt     : Boolean := False;
       External_Agent : Boolean := False);
 
-   procedure Get_Embedding
-     (Prompt : String;
-      Result : out Math_Utils.Vector;
-      Length : out Natural;
-      Level  : ELP_Level := ELP1);
+    procedure Get_Embedding
+      (Prompt : String;
+       Result : out Math_Utils.Vector;
+       Length : out Natural;
+       Level  : ELP_Level := ELP1);
+
+     --  [BATCHING] Process multiple prompts in a single Metal command buffer
+     --  Returns an array of vectors. Lengths are handled via a separate array.
+     procedure Get_Embeddings_Batch
+       (Prompts : Math_Utils.Prompt_List;
+        Results : out Math_Utils.Embedding_Vector_List;
+        Lengths : out Natural_List;
+        Level   : ELP_Level := ELP1);
+
 
    --  POWER AWARE SCHEDULING
    --  [VITAL-DO-NOT-REMOVE]

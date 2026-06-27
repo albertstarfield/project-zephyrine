@@ -13,7 +13,12 @@ with Ada.Directories; use Ada.Directories;
 with Ada.Exceptions;
 with Ada.Calendar;
 with Ada.Real_Time; use Ada.Real_Time;
+with Embedding_Batcher;
 with Speculative_Cache;
+with Interfaces.C;
+with Interfaces.C.Strings;
+with Ada.Streams;
+with Ada.Streams.Stream_IO;
 
 package body Knowledge_Manager is
 
@@ -165,7 +170,69 @@ package body Knowledge_Manager is
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Knowledge_Manager.Start_Tasks COMPLETE.");
    end Start_Tasks;
 
-   --  Helper to index references.bib
+    --  Retrieve the current user's home directory from the environment
+    function Get_Home_Directory return String is
+       use Interfaces.C.Strings;
+       function Get_Env (Name : chars_ptr) return chars_ptr;
+       pragma Import (C, Get_Env, "getenv");
+       
+       C_Name  : chars_ptr;
+       Env_Ptr : chars_ptr;
+    begin
+       C_Name := New_String ("HOME");
+       Env_Ptr := Get_Env (C_Name);
+       Free (C_Name);
+       
+       if Env_Ptr = Null_Ptr then
+          return "/tmp";
+       else
+          return Value (Env_Ptr);
+       end if;
+    end Get_Home_Directory;
+
+     --  Check if a file is readable text by scanning for binary markers (null bytes)
+     function Is_Readable_Text (FilePath : String) return Boolean is
+         use type Ada.Streams.Stream_Element;
+         use type Ada.Streams.Stream_Element_Offset;
+        File_S : Ada.Streams.Stream_IO.File_Type;
+        Buffer : Ada.Streams.Stream_Element_Array (1 .. 4096);
+        Last   : Ada.Streams.Stream_Element_Offset;
+        Non_Printable : Natural := 0;
+     begin
+        begin
+           Ada.Streams.Stream_IO.Open (File_S, Ada.Streams.Stream_IO.In_File, FilePath);
+           Ada.Streams.Stream_IO.Read (File_S, Buffer, Last);
+           Ada.Streams.Stream_IO.Close (File_S);
+
+           for I in 1 .. Last loop
+              if Buffer (I) = 0 then
+                 return False; -- Null byte is a definitive binary marker
+              end if;
+
+              -- Count non-printable characters (excluding tab, LF, CR)
+              if not (Buffer (I) in 32 .. 126 or else
+                      Buffer (I) = 9 or else
+                      Buffer (I) = 10 or else
+                      Buffer (I) = 13) then
+                 Non_Printable := Non_Printable + 1;
+              end if;
+           end loop;
+
+           -- If more than 10% of the first 4KB are non-printable, consider it binary
+           if Last > 0 and then (Non_Printable * 100 / Natural (Last)) > 10 then
+              return False;
+           end if;
+
+           return True;
+        exception
+           when others =>
+              if Ada.Streams.Stream_IO.Is_Open (File_S) then
+                 Ada.Streams.Stream_IO.Close (File_S);
+              end if;
+              return False;
+        end;
+     end Is_Readable_Text;
+
    procedure Index_References is
       File          : File_Type;
       Opened        : Boolean := False;
@@ -297,157 +364,86 @@ package body Knowledge_Manager is
                    Ada.Exceptions.Exception_Message (E));
    end Thought_Task;
 
-   procedure Crawl_Directory (Path : String) is
-      Search  : Ada.Directories.Search_Type;
-      Entry_D : Ada.Directories.Directory_Entry_Type;
-      Files_Scanned : Natural := 0;
-      Files_Indexed : Natural := 0;
-   begin
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+    procedure Crawl_Directory (Path : String) is
+       Search  : Ada.Directories.Search_Type;
+       Entry_D : Ada.Directories.Directory_Entry_Type;
+       Files_Scanned : Natural := 0;
+    begin
+       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-      --  Verbose: prints crawl start and stats so we can see if it runs.
-      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory ENTERED: Path=" & Path);
-      Ada.Directories.Start_Search (Search, Path, "");
-      while Ada.Directories.More_Entries (Search) loop
-         --  [VITAL-DO-NOT-REMOVE] Halt ELP0 crawl when ELP1 is pending.
-         --  This is the critical guard: if a user chat arrives while we are
-         --  indexing background files, we MUST stop immediately and wait
-         --  until the user request is fully served before resuming.
-         --  Without this, ELP0 keeps calling Get_Embedding which spins on
-         --  Acquire_ELP0/DENIED in a tight loop, starving ELP1 of the GPU.
-         if Model_Manager.Should_Abort_ELP0 then
-            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                      AnsiAda.Reset &
-                      " Crawl_Directory: ELP1 pending, HALTING crawl...");
-            Model_Manager.Wait_For_ELP1_Idle;
-            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                      AnsiAda.Reset &
-                      " Crawl_Directory: ELP1 idle, RESUMING crawl...");
-         end if;
+       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory ENTERED: Path=" & Path);
+       Ada.Directories.Start_Search (Search, Path, "");
+       while Ada.Directories.More_Entries (Search) loop
+          if Model_Manager.Should_Abort_ELP0 then
+             Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                       AnsiAda.Reset &
+                       " Crawl_Directory: ELP1 pending, HALTING crawl...");
+             Model_Manager.Wait_For_ELP1_Idle;
+             Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                       AnsiAda.Reset &
+                       " Crawl_Directory: ELP1 idle, RESUMING crawl...");
+          end if;
 
-         Ada.Directories.Get_Next_Entry (Search, Entry_D);
-         declare
-            Name : constant String := Simple_Name (Entry_D);
-            Full : constant String := Full_Name (Entry_D);
-         begin
-            if Name /= "." and then Name /= ".." and then
-               Name /= "node_modules" and then Name /= ".git" and then
-               Name /= "dist" and then Name /= "build"
-            then
-               if Kind (Entry_D) = Directory then
-                  Crawl_Directory (Full);
-               else
-                   --  Check if it is a text file or C/Ada source
-                   --  FIX: Use exact suffix check (Ada.Strings fixed-length).
-                   --  Previously used Index (substring search) which matched
-                   --  .css for .c, .html for .h, .js for .s, etc. causing
-                   --  the crawler to index compiled frontend dist/ bundles.
-                   declare
-                      N_Len : constant Natural := Name'Length;
-                      function Has_Suffix (Suf : String) return Boolean is
-                        (N_Len > Suf'Length and then
-                         Name (Name'Last - Suf'Length + 1 .. Name'Last) = Suf);
-                   begin
-                   if Has_Suffix (".adb") or else
-                     Has_Suffix (".ads") or else
-                     Has_Suffix (".c") or else
-                     Has_Suffix (".h") or else
-                     Has_Suffix (".txt") or else
-                     Has_Suffix (".md")
-                   then
-                     declare
-                        File_Content : Unbounded_String;
-                        File_H       : File_Type;
-                     begin
-                        begin
-                           Open (File_H, In_File, Full);
-                           while not End_Of_File (File_H) loop
-                              Append (File_Content,
-                                      Get_Line (File_H) & ASCII.LF);
-                           end loop;
-                           Close (File_H);
+          Ada.Directories.Get_Next_Entry (Search, Entry_D);
+          declare
+             Name : constant String := Simple_Name (Entry_D);
+             Full : constant String := Full_Name (Entry_D);
+          begin
+             if Name /= "." and then Name /= ".." and then
+                Name /= "node_modules" and then Name /= ".git" and then
+                Name /= "dist" and then Name /= "build" and then
+                Name /= "venv" and then Name /= "__pycache__" and then
+                Name /= ".svn" and then Name /= ".idea" and then
+                Name /= ".vscode"
+             then
+                if Kind (Entry_D) = Directory then
+                   Crawl_Directory (Full);
+                else
+                   if Is_Readable_Text (Full) then
+                      declare
+                         File_Content : Unbounded_String;
+                         File_H       : File_Type;
+                      begin
+                         begin
+                            Open (File_H, In_File, Full);
+                            while not End_Of_File (File_H) loop
+                               Append (File_Content,
+                                       Get_Line (File_H) & ASCII.LF);
+                            end loop;
+                            Close (File_H);
 
-                           --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-                           --  Verbose: print every file being indexed so we
-                           --  can see if the crawl actually finds files.
-                           Files_Scanned := Files_Scanned + 1;
-                           Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                                     AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Crawl: indexing file " &
-                                     Full & " (" &
-                                     Natural'Image (Files_Scanned) & " scanned)");
+                            Files_Scanned := Files_Scanned + 1;
+                            declare
+                               Raw_Content : constant String := To_String (File_Content);
+                               Content     : constant String := Model_Manager.Sanitize_Think_Tags (Raw_Content);
+                            begin
+                               if Content'Length > 0 then
+                                  Embedding_Batcher.Add_To_Batch (Content, Name, ELP0);
+                               end if;
+                            end;
+                         exception
+                            when others =>
+                               if Is_Open (File_H) then
+                                  Close (File_H);
+                               end if;
+                          end;
+                       end;
+                       end if;
+                    end if;
+                 end if;
+              end;
+           end loop;
+           Ada.Directories.End_Search (Search);
+           -- Flush batch at end of directory to maintain granularity
+           Embedding_Batcher.Flush_Batch (ELP0);
 
-                           declare
-                              Raw_Content : constant String :=
-                                To_String (File_Content);
-                              Content     : constant String :=
-                                Model_Manager.Sanitize_Think_Tags (Raw_Content);
-                              Vec         : Math_Utils.Vector (1 .. 4096) :=
-                                [others => 0.0];
-                              Len         : Natural := 0;
-                              Retries     : Natural := 0;
-                              Max_Retries : constant Natural := 3;
-                              Success     : Boolean := False;
-                           begin
-                              if Content'Length > 0 then
-                                 while Retries < Max_Retries and not Success loop
-                                    begin
-                                       --  [VITAL-DO-NOT-REMOVE] Skip embedding if
-                                       --  ELP1 arrived mid-file. Prevents wasted
-                                       --  ELP0 acquire/deny cycles during crawl.
-                                       if Model_Manager.Should_Abort_ELP0 then
-                                          Put_Line
-                                            (AnsiAda.Foreground (AnsiAda.Cyan) &
-                                             "[Init-V]" & AnsiAda.Reset &
-                                             " Crawl: ELP1 pending, SKIPPING " &
-                                             Name);
-                                          Model_Manager.Wait_For_ELP1_Idle;
-                                       end if;
-                                       
-                                       Model_Manager.Get_Embedding
-                                         (Content, Vec, Len, ELP0);
-                                         
-                                       if Len > 0 then
-                                          Database_Manager.Add_Literature_Chunk
-                                            (Name, Content, Vec (1 .. Len), "hash");
-                                          Success := True;
-                                       else
-                                          Retries := Retries + 1;
-                                          Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[WARN]" & AnsiAda.Reset & " Embedding failed (Len=0) for " & Name & ". Retrying burst (" & Natural'Image (Retries) & "/" & Natural'Image (Max_Retries) & ")...");
-                                       end if;
-                                    exception
-                                       when E : others =>
-                                          Retries := Retries + 1;
-                                          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[ERROR]" & AnsiAda.Reset & " Exception in Get_Embedding for " & Name & ": " & Ada.Exceptions.Exception_Information (E) & ". Retrying burst...");
-                                    end;
-                                 end loop;
-                              end if;
-                           end;
-                        exception
-                           when others =>
-                              if Is_Open (File_H) then
-                                 Close (File_H);
-                              end if;
-                        end;
-                      end;
-                   end if;
-                   end; -- Has_Suffix declare block
-                end if;
-            end if;
-         end;
-      end loop;
-      Ada.Directories.End_Search (Search);
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-      --  Verbose: prints crawl completion stats.
-      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory COMPLETE: Path=" & Path &
-                " Files_Scanned=" & Natural'Image (Files_Scanned));
-   end Crawl_Directory;
+       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory COMPLETE: Path=" & Path &
+                 " Files_Scanned=" & Natural'Image (Files_Scanned));
+    end Crawl_Directory;
+
 
    task body Native_Crawl_Task is
    begin
@@ -462,26 +458,67 @@ package body Knowledge_Manager is
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Native_Crawl_Task ACCEPTED Start, entering main loop.");
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                 AnsiAda.Reset & " Native Crawl Task Active.");
-      loop
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+       loop
+          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-         --  Verbose: prints BEFORE blocking on Wait_For_ELP1_Idle so we can
-         --  see if the task is stuck on the guard condition.
-         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: calling Wait_For_ELP1_Idle...");
-         Model_Manager.Wait_For_ELP1_Idle;
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+          --  Verbose: prints BEFORE blocking on Wait_For_ELP1_Idle so we can
+          --  see if the task is stuck on the guard condition.
+          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                    AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: calling Wait_For_ELP1_Idle...");
+          Model_Manager.Wait_For_ELP1_Idle;
+          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-         --  Verbose: prints AFTER guard passes so we know it unblocked.
-         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: Wait_For_ELP1_Idle PASSED, starting crawl...");
-         Crawl_Directory (".");
-         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                   AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: crawl DONE, sleeping 3600s...");
-         delay 3600.0; -- Crawl every hour
-      end loop;
+          --  Verbose: prints AFTER guard passes so we know it unblocked.
+          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                    AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: Wait_For_ELP1_Idle PASSED, starting systemic crawl...");
+          
+          --  [SYSTEMIC INDEXING] Expanding scope to all readable system areas.
+          --  This is mandated to prevent "blind spots" in the knowledge base.
+          
+          --  1. Crawl the root filesystem (covers system files, config, and apps)
+          Crawl_Directory("/");
+          
+           --  2. Explicitly crawl the user home directory
+           Crawl_Directory (Get_Home_Directory);
+
+          
+          --  3. [DYNAMIC MOUNT DETECTION] Cross-platform mount discovery.
+          --  Scans common mount points for Darwin (/Volumes) and Linux (/mnt, /media).
+          declare
+             type Mount_Path_List is array (1 .. 3) of String (1 .. 10);
+             Mount_Points : Mount_Path_List := ("/Volumes  ", "/mnt      ", "/media    ");
+             
+             procedure Scan_Mount_Point (Path : String) is
+                Search  : Ada.Directories.Search_Type;
+                Entry_D : Ada.Directories.Directory_Entry_Type;
+             begin
+                begin
+                   Ada.Directories.Start_Search (Search, Trim (Path, Both), "");
+                   while Ada.Directories.More_Entries (Search) loop
+                      Ada.Directories.Get_Next_Entry (Search, Entry_D);
+                      if Kind (Entry_D) = Directory then
+                         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Dynamic-Mount]" & AnsiAda.Reset & " Found mount point: " & Full_Name (Entry_D));
+                         Crawl_Directory (Full_Name (Entry_D));
+                      end if;
+                   end loop;
+                   Ada.Directories.End_Search (Search);
+                exception
+                   when others => null; -- Path might not exist on this OS
+                end;
+             end Scan_Mount_Point;
+          begin
+             for I in Mount_Points'Range loop
+                Scan_Mount_Point (Mount_Points (I));
+             end loop;
+          end;
+          
+          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                    AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s Native_Crawl_Task: systemic crawl DONE, sleeping 3600s...");
+          delay 3600.0; -- Crawl every hour
+       end loop;
+
    exception
       when E : others =>
          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[FATAL]" &

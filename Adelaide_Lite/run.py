@@ -138,6 +138,53 @@ def get_git_version():
     except Exception:
         return None, None, None
 
+def verify_environment():
+    """Check for all required tools and libraries before proceeding."""
+    print(f"\n{BOLD}{WHT}[*] Verifying Environment Prerequisites...{RST}")
+    
+    critical_tools = {
+        "alr": "Alire (Ada Package Manager) - install via 'brew install alire'",
+        "python3": "Python 3.12+ - install via 'brew install python'",
+        "cmake": "CMake - install via 'brew install cmake'",
+        "git": "Git - install via 'brew install git'",
+        "wget": "wget - install via 'brew install wget'",
+        "npm": "Node.js/npm - install via 'brew install node'",
+        "deno": "Deno - install via 'curl -fsSL https://deno.land/install.sh | sh'",
+        "ruff": "Ruff (Linter) - install via 'pip install ruff'",
+    }
+    
+    missing = []
+    for tool, desc in critical_tools.items():
+        if shutil.which(tool):
+            print(f"  {GRN}[ok]{RST} {tool}")
+        else:
+            print(f"  {RED}[!!]{RST} {tool} is missing: {desc}")
+            missing.append(tool)
+    
+    # macOS specific SDK check
+    if platform.system() == "Darwin":
+        # Check for full Xcode.app installation (not just Command Line Tools)
+        xcode_path = "/Applications/Xcode.app"
+        if os.path.exists(xcode_path):
+            print(f"  {GRN}[ok]{RST} Full Xcode.app found")
+        else:
+            print(f"  {RED}[!!]{RST} Full Xcode.app NOT found at {xcode_path}")
+            print(f"    Prerequisite: Install full Xcode from the App Store")
+            missing.append("xcode-app")
+
+        try:
+            subprocess.check_output(["xcrun", "--show-sdk-path"], stderr=subprocess.DEVNULL)
+            print(f"  {GRN}[ok]{RST} macOS SDK path available")
+        except Exception:
+            print(f"  {RED}[!!]{RST} macOS SDK path not found: run 'xcode-select --install'")
+            missing.append("macos-sdk")
+
+    if missing:
+        print(f"\n{RED}{BOLD}[FATAL] Environment check failed. Please install the missing tools listed above.{RST}")
+        sys.exit(1)
+    else:
+        print(f"{GRN}[+] Environment verified. All prerequisites met.{RST}\n")
+
 def show_help():
     """Print colorful help screen with git version."""
     commit, branch, status = get_git_version()
@@ -520,7 +567,12 @@ def main():
     global daemon_process, server_process, watchdog_process, vad_process
     
     current_log_path = setup_logging()
+    
+    # 0. Verify all critical prerequisites are installed
+    verify_environment()
+    
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
+
     start_time = int(time.time() * 1000)
 
     # Detect Platform and Backend
@@ -1092,6 +1144,47 @@ def main():
             subprocess.run(["bash", version_script], cwd=BASE_DIR, check=False)
         subprocess.run([alr_cmd, "build"], env=env, cwd=BASE_DIR, check=True)
         
+        # =====================================================================
+        # VERIFICATION STAGE: Formal Proofs & Fuzzing
+        # =====================================================================
+        if "--verify" in sys.argv or "--test-build-integrity-check" in sys.argv:
+            print("\n" + "="*70)
+            print("  RUNNING FORMAL VERIFICATION & STABILITY ANALYSIS")
+            print("="*70)
+            
+            # 1. GNATprove Formal Verification
+            print("\n[*] Stage: GNATprove SPARK Static Analysis...")
+            prove_cmd = [alr_cmd, "exec", "--", "gnatprove", "-P", "adelaide_spark.gpr", 
+                         "--level=4", "--prover=cvc5,z3,altergo", "--timeout=60", 
+                         "--memlimit=2000", "--steps=0", "--counterexamples=on", 
+                         "--report=fail", "--warnings=error", "-j0"]
+            
+            try:
+                subprocess.run(prove_cmd, cwd=BASE_DIR, env=env, check=True)
+                print("[+] GNATprove: Formal verification PASSED.")
+            except subprocess.CalledProcessError:
+                print("[!] GNATprove: Formal verification FAILED. Check obj/spark/gnatprove/gnatprove.out")
+                if "--strict-verify" in sys.argv:
+                    sys.exit(1)
+            
+            # 2. AFL++ Fuzzing Environment Check
+            print("\n[*] Stage: AFL++ Fuzzing Readiness Check...")
+            fuzz_ready = False
+            for compiler in ["afl-clang-fast", "afl-gcc-fast", "afl-clang-lto"]:
+                if shutil.which(compiler):
+                    print(f"[+] AFL++ compiler found: {compiler}")
+                    fuzz_ready = True
+                    break
+            
+            if fuzz_ready and shutil.which("afl-fuzz"):
+                print("[+] AFL++ environment is fully ready for binary torture.")
+            else:
+                print("[!] AFL++ environment incomplete. Fuzzing skipped.")
+            
+            print("\n" + "="*70)
+            print("  VERIFICATION STAGE COMPLETE")
+            print("="*70 + "\n")
+
         print("[*] Building Vite Frontend for Sidecar UI...")
         frontend_dir = os.path.join(BASE_DIR, "ui", "frontend")
         if os.path.exists(frontend_dir):

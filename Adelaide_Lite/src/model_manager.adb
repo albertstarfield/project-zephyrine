@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+with System;                use System;
 with AnsiAda;
 with Ada.Text_IO;          use Ada.Text_IO;
 with Ada.Strings;          use Ada.Strings;
@@ -2846,6 +2847,116 @@ package body Model_Manager is
     end Strip_Base64_Images;
 
     --  SINGLE EMBEDDING HELPER
+    procedure Compute_Embedding_Vector
+       (Prompt : String;
+        Result : out Math_Utils.Vector;
+        Length : out Natural;
+        Level  : ELP_Level) is
+        --  Treated as a "Resident" call: Assumes model is already loaded and lock is held.
+        Vocab    : Llama_Vocab;
+        Tokens   : Token_Array_Access;
+        N_Toks   : int;
+        Clean_P  : constant String := Sanitize_UTF8 (Prompt);
+        Prompt_C : chars_ptr := New_String (Clean_P);
+    begin
+        --  Symmetry with Get_Single_Embedding: skip high-density code blocks
+        if Clean_P'Length > 0 then
+            declare
+                Specials : Natural := 0;
+                Density  : Float;
+            begin
+                for I in Clean_P'Range loop
+                    if Clean_P (I) = '{' or else Clean_P (I) = '}' or else Clean_P (I) = ';'
+                       or else Clean_P (I) = ':' or else Clean_P (I) = '@' or else Clean_P (I) = '/'
+                       or else Clean_P (I) = '\' then
+                        Specials := Specials + 1;
+                    end if;
+                end loop;
+                Density := Float (Specials) / Float (Clean_P'Length);
+                if Density > 0.1 then
+                    Length := 0;
+                    Free (Prompt_C);
+                    return;
+                end if;
+            end;
+        end if;
+
+        Tokens := new Token_Array (1 .. 4096);
+        Vocab := Llama_Model_Get_Vocab (Models (Qwen_Embedding).Model);
+        Acquire_Accel_Lock;
+        if Kratos.Guard_Enter = 0 then
+            N_Toks := Llama_Tokenize (Vocab, Prompt_C, int (Clean_P'Length), Tokens.all'Address, 4096, True, True);
+            Kratos.Guard_Exit;
+        else
+            Kratos.Log_Crash;
+            N_Toks := -1;
+        end if;
+        Release_Accel_Lock;
+        Free (Prompt_C);
+
+        if N_Toks <= 0 then
+            Free_Tokens (Tokens);
+            Length := 0;
+            return;
+        end if;
+
+        Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Models (Qwen_Embedding).Context), False);
+        Llama_Set_Embeddings (Models (Qwen_Embedding).Context, Interfaces.C.int (1));
+
+        declare
+            Batch_Size : constant int := int'Min (256, int (Models (Qwen_Embedding).Current_Ctx));
+            Current_Pos : int := 0;
+            Tokens_Left : int := N_Toks;
+        begin
+            while Tokens_Left > 0 loop
+                declare
+                    To_Decode : constant int := (if Tokens_Left > Batch_Size then Batch_Size else Tokens_Left);
+                    B : constant Llama_Batch := Llama_Batch_Get_One (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
+                begin
+                    Acquire_Accel_Lock;
+                    if Kratos.Guard_Enter = 0 then
+                        if Llama_Decode (Models (Qwen_Embedding).Context, B) /= 0 then
+                            -- In batch mode, we skip failed chunks to keep moving
+                            Tokens_Left := Tokens_Left - To_Decode;
+                            Current_Pos := Current_Pos + To_Decode;
+                        else
+                            Tokens_Left := Tokens_Left - To_Decode;
+                            Current_Pos := Current_Pos + To_Decode;
+                        end if;
+                        Kratos.Guard_Exit;
+                    else
+                        Kratos.Log_Crash;
+                        Tokens_Left := Tokens_Left - To_Decode;
+                        Current_Pos := Current_Pos + To_Decode;
+                    end if;
+                    Release_Accel_Lock;
+                end;
+            end loop;
+        end;
+
+        declare
+            function Llama_Model_N_Embd (M : Llama_Model) return int;
+            pragma Import (C, Llama_Model_N_Embd, "llama_model_n_embd");
+            Dim   : constant int := Llama_Model_N_Embd (Models (Qwen_Embedding).Model);
+            Ptr   : Address;
+            Dummy : Address;
+            function Memcpy (Dst, Src : Address; N : Interfaces.C.size_t) return Address;
+            pragma Import (C, Memcpy, "memcpy");
+        begin
+            Acquire_Accel_Lock;
+            Ptr := Llama_Get_Embeddings (Models (Qwen_Embedding).Context);
+            Release_Accel_Lock;
+
+            if Ptr /= Null_Address then
+                Dummy := Memcpy (Result (Result'First)'Address, Ptr, Interfaces.C.size_t (Dim) * Interfaces.C.size_t (Float'Size / 8));
+                Length := Integer (Dim);
+            else
+                Length := 0;
+            end if;
+        end;
+        Free_Tokens (Tokens);
+    end Compute_Embedding_Vector;
+
     procedure Get_Single_Embedding
        (Prompt : String;
         Result : out Math_Utils.Vector;
@@ -2854,394 +2965,37 @@ package body Model_Manager is
     is
         Success  : Boolean;
         Kind     : constant Model_Type := Qwen_Embedding;
-        Vocab    : Llama_Vocab;
-        Tokens   : Token_Array_Access;
-        N_Toks   : int;
-        Clean_P  : constant String := Sanitize_UTF8 (Prompt);
-        Prompt_C : chars_ptr := New_String (Clean_P);
-
-        --  Identify source for descriptive logging
-        Source : constant String :=
-           (if Level = ELP0 then "Knowledge-Index" else "User-RAG");
+        Source   : constant String := (if Level = ELP0 then "Knowledge-Index" else "User-RAG");
     begin
-        --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-        --  --[Debug] DO NOT REMOVE or truncate: Critical for diagnosing Tokenization
-        --  and GPU Metal kernel crashes. We print the FULL input so we can see
-        --  exactly what raw content (CSS, HTML, special chars) is being fed to
-        --  the tokenizer. Truncating hides the problematic characters that cause
-        --  MTLCommandBufferStatus-Error (Code 5).
-        --
-        --  ROOT CAUSE HYPOTHESIS: The embedding model (Qwen3-Embedding-0.6B) is
-        --  designed for natural language text. Feeding it raw CSS/HTML code like
-        --  "ligraphic;font-style:normal;font-weight:400;src:url(/asset..." may
-        --  trigger edge cases in Metal compute kernels because:
-        --    1. CSS has dense special chars (: ; { } # @ /) that tokenize oddly
-        --    2. The tokenizer may produce unusual token ID sequences for code
-        --    3. These sequences could hit untested paths in ggml-metal kernels
-        --  FIX: The caller (Knowledge_Manager) should strip/filter non-text content
-        --  before chunking. See knowledge_manager.adb Native_Crawl_Task.
-        Put_Line
-           ("[Embedding-Debug] Input ("
-            & Clean_P'Length'Img
-            & " chars): "
-            & Clean_P);
-        Flush;
-
-        --  [QUIRK-M10] Fix 2: Reject code-like content before tokenization
-        --  Calculate density of special chars that crash the ggml-metal kernel
-        if Clean_P'Length > 0 then
-            declare
-                Specials : Natural := 0;
-                Density  : Float;
-            begin
-                for I in Clean_P'Range loop
-                    if Clean_P (I) = '{'
-                       or else Clean_P (I) = '}'
-                       or else Clean_P (I) = ';'
-                       or else Clean_P (I) = ':'
-                       or else Clean_P (I) = '@'
-                       or else Clean_P (I) = '/'
-                       or else Clean_P (I) = '\'
-                    then
-                        Specials := Specials + 1;
-                    end if;
-                end loop;
-                Density := Float (Specials) / Float (Clean_P'Length);
-                if Density > 0.1 then
-                    Put_Line
-                       ("[Embedding-Debug] Skipping high-density code block (Density: "
-                        & Density'Img
-                        & ") to prevent Metal crash Code 5");
-                    Length := 0;
-                    Free (Prompt_C);
-                    return;
-                end if;
-            end;
-        end if;
-        --  --[Debug] DO NOT REMOVE: Descriptive source tracking
         ELP_Queue.Enqueue (Level, Kind, Source);
         if Level = ELP0 then
             Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
-            if not Success then
-                Put_Line
-                   ("[ELP0-BLOCKED] "
-                    & Kind'Img
-                    & " | ELP1 is active or pending");
-                ELP_Queue.Dequeue_Level (Level);
-                Length := 0;
-                Free (Prompt_C);
-                return;
-            end if;
-            --  [VITAL-DO-NOT-REMOVE] ELP1 PREEMPTION CHECKPOINT #1:
-            --  Re-check BEFORE Load_Model. Load_Model is a multi-second
-            --  blocking call (model read + context creation). If ELP1 arrived
-            --  between Acquire_ELP0 returning and here, we must drop NOW —
-            --  the abort callback cannot fire until AFTER context exists.
-            --  This is the PRIMARY cause of the 5-minute Hello latency:
-            --  ELP0 holds the gate, starts loading a CPU model (no Metal,
-            --  no abort hook), and ELP1 is stuck waiting the entire time.
-            if Priority_Model_Gate.Should_Abort then
-                Put_Line
-                   ("[ELP0-PREEMPT] Pre-Load abort: ELP1 arrived. "
-                    & "Releasing gate before Load_Model.");
-                Priority_Model_Gate.Release_ELP0 (Kind);
-                ELP_Queue.Dequeue_Level (Level);
-                Length := 0;
-                Free (Prompt_C);
-                return;
-            end if;
         else
             Priority_Model_Gate.Request_ELP1;
             Priority_Model_Gate.Acquire_ELP1 (Kind);
+            Success := True;
+        end if;
+
+        if not Success then
+            ELP_Queue.Dequeue_Level (Level);
+            Length := 0;
+            return;
         end if;
 
         Load_Model (Kind, Success, 1024, Level, Level = ELP0);
-        if not Success then
-            if Level = ELP0 then
-                Priority_Model_Gate.Release_ELP0 (Kind);
-            else
-                Priority_Model_Gate.Release_ELP1 (Kind);
-            end if;
-            ELP_Queue.Dequeue_Level (Level);
-            Length := 0;
-            Free (Prompt_C);
-            return;
-        end if;
-
-        Models (Kind).In_Use := True;
-        Models (Kind).Last_Used := Clock;
-
-        --  Allocate token array based on actual context size
-        Tokens := new Token_Array (1 .. 4096);
-
-        Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-        Acquire_Accel_Lock;
-        if Kratos.Guard_Enter = 0 then
-            N_Toks :=
-               Llama_Tokenize
-                  (Vocab,
-                   Prompt_C,
-                   int (Clean_P'Length),
-                   Tokens.all'Address,
-                   4096,
-                   True,
-                   True);
-            Kratos.Guard_Exit;
+        if Success then
+            Models (Kind).In_Use := True;
+            Compute_Embedding_Vector (Prompt, Result, Length, Level);
+            Unload_Model (Kind);
+            Models (Kind).In_Use := False;
         else
-            Kratos.Log_Crash;
-            N_Toks := -1;
-        end if;
-        Release_Accel_Lock;
-
-        Put_Line
-           ("[Tokenize-Debug] Model:"
-            & Kind'Img
-            & " Prompt_Len:"
-            & Clean_P'Length'Img
-            & " N_Toks:"
-            & N_Toks'Img);
-        Free (Prompt_C);
-
-        if N_Toks <= 0 then
-            Free_Tokens (Tokens);
-            Models (Kind).In_Use := False;
-            if Level = ELP0 then
-                Priority_Model_Gate.Release_ELP0 (Kind);
-            else
-                Priority_Model_Gate.Release_ELP1 (Kind);
-            end if;
-            ELP_Queue.Dequeue_Level (Level);
             Length := 0;
-            return;
         end if;
 
-        --  CHUNKED DECODING FOR EMBEDDINGS
-        --  ============================================================================
-        --  ROOT CAUSE ANALYSIS (QUIRK-M10):
-        --  The embedding model (Qwen3-Embedding-0.6B) processes tokens in batches
-        --  of up to 256 tokens. Each batch calls Llama_Decode which dispatches to
-        --  ggml-metal kernels on macOS. The Metal backend compiles kernel variants
-        --  on-the-fly based on token count and quantization format (Q8_0).
-        --
-        --  THE BUG: After several successful decode calls, Metal fails to compile
-        --  a kernel variant and returns GGML_STATUS_FAILED (Code 5). This happens
-        --  because:
-        --    1. Different N_Toks values produce different kernel configurations
-        --       (nsg, nxpsg, ne12, r2, r3 parameters vary per batch)
-        --    2. Metal's shader cache has limited capacity for compiled variants
-        --    3. When the cache is full or a specific config is invalid, compilation
-        --       fails and llama_decode returns Code 5
-        --    4. The crash is NOT about the input content (CSS vs natural language)
-        --       — it's about Metal kernel compilation limits
-        --
-        --  WHY UNLOADING WAS WRONG:
-        --  The old code unloaded the model on ANY decode failure. This caused:
-        --    - Next chunk reloads the model (expensive: ~2s for context creation)
-        --    - New Metal context hits the same kernel compilation failure
-        --    - Infinite crash-reload loop until server dies
-        --
-        --  FIX: Skip the failed batch and continue. The next batch with a different
-        --  token count may use a different kernel variant that compiles successfully.
-        --  Only unload after 3 consecutive failures (all kernels failing = real issue).
-        --  ============================================================================
-        declare
-            Batch_Size           : constant int :=
-               int'Min (256, int (Models (Kind).Current_Ctx));
-            Current_Pos          : int := 0;
-            Tokens_Left          : int := N_Toks;
-            Consecutive_Failures : Natural :=
-               0;  -- Track consecutive decode failures
-            Max_Consecutive      : constant :=
-               3;   -- Unload after 3 failures in a row
-        begin
-            Llama_Interface.Llama_Memory_Clear
-               (Llama_Interface.Llama_Get_Memory (Models (Kind).Context),
-                False);
-            Llama_Set_Embeddings (Models (Kind).Context, Interfaces.C.int (1));
-
-            while Tokens_Left > 0 loop
-                declare
-                    To_Decode  : constant int :=
-                       (if Tokens_Left > Batch_Size
-                        then Batch_Size
-                        else Tokens_Left);
-                    B          : constant Llama_Batch :=
-                       Llama_Batch_Get_One
-                          (Tokens.all (Integer (Current_Pos) + 1)'Address,
-                           To_Decode);
-                    Dec_Result : int;
-                begin
-                    --  KRATOS CRASH GUARD: llama_decode is wrapped in
-                    --  Guard_Enter/Guard_Exit. See QUIRK-M01.
-                    Acquire_Accel_Lock;
-                    if Kratos.Guard_Enter = 0 then
-                        Dec_Result := Llama_Decode (Models (Kind).Context, B);
-                        Kratos.Guard_Exit;
-                    else
-                        Kratos.Log_Crash;
-                        Dec_Result := -1;
-                    end if;
-                    Release_Accel_Lock;
-
-                    if Dec_Result /= 0 then
-                        --  DECODE FAILED: Skip this batch, don't unload the model.
-                        --  The failure is likely a Metal kernel compilation error for
-                        --  this specific batch size/token count. The next batch may
-                        --  use a different configuration that compiles successfully.
-                        Consecutive_Failures := Consecutive_Failures + 1;
-                        Put_Line
-                           (AnsiAda.Foreground (AnsiAda.Yellow)
-                            & "[WARN] Llama_Decode failed (Code:"
-                            & Dec_Result'Img
-                            & ") Batch:"
-                            & To_Decode'Img
-                            & " Consecutive:"
-                            & Consecutive_Failures'Img
-                            & AnsiAda.Reset);
-
-                        if Consecutive_Failures >= Max_Consecutive then
-                            --  3 consecutive failures = all kernel variants failing.
-                            --  This is a real issue, not a transient compilation error.
-                            --  Unload and let the caller decide what to do.
-                            Put_Line
-                               (AnsiAda.Foreground (AnsiAda.Red)
-                                & "[FATAL] "
-                                & Max_Consecutive'Img
-                                & " consecutive decode failures. "
-                                & "Orphaning poisoned context to prevent SIGTRAP."
-                                & AnsiAda.Reset);
-                            delay 1.0;  -- Brief cooldown for GPU driver
-
-                            --  [QUIRK-M10] We cannot call Unload_Model here. The Metal
-                            --  GPU backend is poisoned. Calling Llama_Free invokes
-                            --  ggml_metal_free which tries to synchronize and aborts
-                            --  the entire server process (SIGTRAP 5). We MUST leak it.
-                            Models (Kind).Context := Null_Context;
-                            Models (Kind).Model := Null_Model;
-                            Models (Kind).Loaded := False;
-                            Models (Kind).Current_Ctx := 0;
-
-                            Free_Tokens (Tokens);
-                            Models (Kind).In_Use := False;
-                            if Level = ELP0 then
-                                Priority_Model_Gate.Release_ELP0 (Kind);
-                            else
-                                Priority_Model_Gate.Release_ELP1 (Kind);
-                            end if;
-                            ELP_Queue.Dequeue_Level (Level);
-                            Length := 0;
-                            return;
-                        end if;
-
-                        --  Skip this batch: advance past the failed tokens and continue.
-                        --  The embedding result will be incomplete for this chunk, but
-                        --  the model stays loaded for the next batch.
-                        Tokens_Left := Tokens_Left - To_Decode;
-                        Current_Pos := Current_Pos + To_Decode;
-                    else
-                        --  DECODE SUCCEEDED: Reset consecutive failure counter.
-                        Consecutive_Failures := 0;
-                        Tokens_Left := Tokens_Left - To_Decode;
-                        Current_Pos := Current_Pos + To_Decode;
-
-                        --  [VITAL-DO-NOT-REMOVE] ELP1 PREEMPTION CHECKPOINT #2:
-                        --  After each successful decode batch, check if ELP1
-                        --  arrived. The abort callback fires INSIDE llama_decode
-                        --  but only on the NEXT batch, causing a full 256-token
-                        --  batch delay per chunk. Exit immediately here so ELP1
-                        --  gets the GPU without waiting for the next iteration.
-                        if Level = ELP0
-                           and then Priority_Model_Gate.Should_Abort
-                        then
-                            Put_Line
-                               ("[ELP0-PREEMPT] Mid-decode abort: "
-                                & "ELP1 pending, breaking decode loop.");
-                            exit;
-                        end if;
-                    end if;
-                end;
-            end loop;
-        end;
-
-        declare
-            use System;
-            function Llama_Model_N_Embd (M : Llama_Model) return int;
-            pragma Import (C, Llama_Model_N_Embd, "llama_model_n_embd");
-            Dim        : constant int :=
-               Llama_Model_N_Embd (Models (Kind).Model);
-            Ptr        : Address;
-            --  SAFE: copy via C memcpy instead of Ada address overlay
-            function Memcpy
-               (Dst, Src : Address; N : Interfaces.C.size_t) return Address;
-            pragma Import (C, Memcpy, "memcpy");
-            Copy_Count : constant Integer :=
-               Integer
-                  (Interfaces.C.size_t'Min
-                      (Interfaces.C.size_t (Dim),
-                       Interfaces.C.size_t (Result'Length)));
-        begin
-            Acquire_Accel_Lock;
-            Ptr := Llama_Get_Embeddings (Models (Kind).Context);
-            Release_Accel_Lock;
-
-            if Copy_Count > 0 and then Ptr /= Null_Address then
-                declare
-                    Dummy : Address;
-                begin
-                    Put_Line ("[Debug] Before Memcpy.");
-                    Dummy :=
-                       Memcpy
-                          (Result (Result'First)'Address,
-                           Ptr,
-                           Interfaces.C.size_t (Copy_Count)
-                           * Interfaces.C.size_t (Float'Size / 8));
-                    Put_Line ("[Debug] After Memcpy.");
-                end;
-                Length := Copy_Count;
-                Put_Line ("[Debug] Copy_Count done");
-            else
-                Length := 0;
-            end if;
-            Free_Tokens (Tokens);
-            Put_Line ("[Debug] Free_Tokens complete.");
-            Models (Kind).In_Use := False;
-            --  [PARALLEL=1 FIX] Unload embedding model from GPU immediately
-             --  after use. Only ONE model can be in Tensor Accelerator memory at a time.
-            --  If we don't unload, the embedding model (~1GB) stays resident
-            --  and the 9B chat model OOMs when it tries to allocate KV +
-            --  compute buffers on top of it.
-            Unload_Model (Kind);
-            if Level = ELP0 then
-                Priority_Model_Gate.Release_ELP0 (Kind);
-                Put_Line
-                   ("[Debug] Priority_Model_Gate.Release_ELP0 complete.");
-            else
-                Priority_Model_Gate.Release_ELP1 (Kind);
-                Put_Line
-                   ("[Debug] Priority_Model_Gate.Release_ELP1 complete.");
-            end if;
-            ELP_Queue.Dequeue_Level (Level);
-            Put_Line ("[Debug] Get_Single_Embedding DONE successfully.");
-        end;
-    exception
-        when E : others =>
-            Put_Line
-               ("[FATAL] Exception in Get_Single_Embedding: "
-                & Ada.Exceptions.Exception_Information (E));
-            if Tokens /= null then
-                Free_Tokens (Tokens);
-            end if;
-            Models (Kind).In_Use := False;
-            --  [PARALLEL=1 FIX] Unload on error too — don't leave broken model in GPU
-            Unload_Model (Kind);
-            if Level = ELP0 then
-                Priority_Model_Gate.Release_ELP0 (Kind);
-            else
-                Priority_Model_Gate.Release_ELP1 (Kind);
-            end if;
-            ELP_Queue.Dequeue_Level (Level);
-            Length := 0;
+        if Level = ELP0 then Priority_Model_Gate.Release_ELP0 (Kind); else Priority_Model_Gate.Release_ELP1 (Kind); end if;
+        ELP_Queue.Dequeue_Level (Level);
     end Get_Single_Embedding;
+
     --  GET EMBEDDING (WITH CHUNKING > 800 CHARS)
 
     procedure Get_Embedding
@@ -3281,8 +3035,8 @@ package body Model_Manager is
                             end if;
                             for I in 1 .. Dim loop
                                 Sum_Vec (Result'First + I - 1) :=
-                                   Sum_Vec (Result'First + I - 1)
-                                   + Sub_Vec (Sub_Vec'First + I - 1);
+                                    Sum_Vec (Result'First + I - 1)
+                                    + Sub_Vec (Sub_Vec'First + I - 1);
                             end loop;
                             Num_Chunks := Num_Chunks + 1;
                         end if;
@@ -3302,6 +3056,70 @@ package body Model_Manager is
             end;
         end if;
     end Get_Embedding;
+
+    procedure Get_Embeddings_Batch
+      (Prompts : Math_Utils.Prompt_List;
+       Results : out Math_Utils.Embedding_Vector_List;
+       Lengths : out Natural_List;
+       Level   : ELP_Level := ELP1) is
+         Success  : Boolean;
+         Kind     : constant Model_Type := Qwen_Embedding;
+         Source   : constant String := (if Level = ELP0 then "Knowledge-Batch" else "User-Batch");
+     begin
+         if Prompts'Length = 0 then
+             return;
+         end if;
+ 
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Batching]" & AnsiAda.Reset & " Processing batch of " & Prompts'Length'Img & " requests.");
+ 
+         --  [CRITICAL] LIFESTYLE OPTIMIZATION:
+         --  The primary cause of Metal driver panics is "Command Buffer Churn".
+         --  We load the model ONCE for the entire batch.
+         ELP_Queue.Enqueue (Level, Kind, Source);
+         if Level = ELP0 then
+             Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
+         else
+             Priority_Model_Gate.Request_ELP1;
+             Priority_Model_Gate.Acquire_ELP1 (Kind);
+             Success := True; 
+         end if;
+ 
+         if not Success then
+             Put_Line ("[Batching-Error] Could not acquire Tensor Accelerator lock.");
+             ELP_Queue.Dequeue_Level (Level);
+             return;
+         end if;
+ 
+         Load_Model (Kind, Success, 1024, Level, Level = ELP0);
+         if not Success then
+             Put_Line ("[Batching-Error] Failed to load embedding model.");
+             if Level = ELP0 then Priority_Model_Gate.Release_ELP0 (Kind); else Priority_Model_Gate.Release_ELP1 (Kind); end if;
+             ELP_Queue.Dequeue_Level (Level);
+             return;
+         end if;
+ 
+         Models (Kind).In_Use := True;
+ 
+         --  [BATCH-INFERENCE] Process prompts while model is resident.
+         for I in Prompts'Range loop
+             declare
+                 Vec : Math_Utils.Vector (1 .. 4096);
+                 Len : Natural := 0;
+             begin
+                 Compute_Embedding_Vector (To_String (Prompts (I)), Vec, Len, Level);
+                 Results (I) := Math_Utils.Embedding_Vector (Vec (1 .. 4096));
+                 Lengths (I) := Len;
+             end;
+         end loop;
+ 
+         Unload_Model (Kind);
+         Models (Kind).In_Use := False;
+         if Level = ELP0 then Priority_Model_Gate.Release_ELP0 (Kind); else Priority_Model_Gate.Release_ELP1 (Kind); end if;
+         ELP_Queue.Dequeue_Level (Level);
+         Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Batching] Batch complete. Model unloaded safely." & AnsiAda.Reset);
+     end Get_Embeddings_Batch;
+
+
 
     --  STREAM PARSER HELPERS
     type Stream_Parser_State is record
