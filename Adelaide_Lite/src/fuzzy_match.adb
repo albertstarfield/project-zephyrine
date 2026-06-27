@@ -16,6 +16,8 @@ package body Fuzzy_Match is
       Matches : Natural := 0;
    begin
       for I in Haystack'Range loop
+         pragma Loop_Invariant (Matches <= I - Haystack'First);
+         pragma Loop_Invariant (Matches <= H_Len);
          for J in Needle'Range loop
             if To_Lower (Haystack (I)) = To_Lower (Needle (J)) then
                Matches := Matches + 1;
@@ -23,7 +25,10 @@ package body Fuzzy_Match is
             end if;
          end loop;
       end loop;
-      return Float (Matches) / Float (H_Len);
+      pragma Assert (Matches <= H_Len);
+      pragma Assert (H_Len >= 1);
+      pragma Assert (Float (H_Len) >= 1.0);
+      return Float'Min (1.0, Float (Matches) / Float (H_Len));
    end Match;
 
 end Fuzzy_Match;

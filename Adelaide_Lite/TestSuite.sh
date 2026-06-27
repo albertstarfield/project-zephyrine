@@ -78,7 +78,7 @@ mkdir -p obj/spark/gnatprove
 
 # Run GNATprove with more detailed output
 echo -e "${CYAN}[i] Running GNATprove with level=$PROVE_LEVEL...${NC}"
-alr exec -- gnatprove -P adelaide_spark.gpr --level=$PROVE_LEVEL --prover=cvc5,z3,altergo --timeout=60 --memlimit=2000 --steps=0 --counterexamples=on --report=fail --warnings=error --generate-data-representation-info
+alr exec -- gnatprove -P adelaide_spark.gpr --level=$PROVE_LEVEL --prover=cvc5,z3,altergo --timeout=60 --memlimit=2000 --steps=0 --counterexamples=on --report=fail --warnings=error -j0
 GNATPROVE_STATUS=$?
 
 # Print summary regardless of success/failure
@@ -98,87 +98,7 @@ fi
 
 # 4. API Torture Test
 echo -e "\n${BLUE}[*] Stage 4: API Bombardment (HVF Docker Torture Test)...${NC}"
-echo -e "${CYAN}[i] Starting adelaide_server in the background...${NC}"
-
-./bin/adelaide_server --no-gui > server_torture.log 2>&1 &
-SERVER_PID=$!
-
-# Wait for server to boot
-echo -e "${CYAN}[i] Waiting for server to bind to port 11420...${NC}"
-for i in {1..30}; do
-    if curl -s http://localhost:11420/ > /dev/null; then
-        break
-    fi
-    sleep 1
-done
-
-if ! kill -0 $SERVER_PID 2>/dev/null; then
-    echo -e "${RED}[!] Server crashed immediately on boot! Check server_torture.log${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}[ok] Server is up! Deploying Docker HVF Container for OS-isolated 100 Million bombardment...${NC}"
-
-# Create the bombardment script for the Docker container
-cat << 'EOF' > docker_torture.sh
-#!/bin/bash
-export API_URL="http://host.docker.internal:11420"
-bombard() {
-    local i=$1
-    case $((i % 4)) in
-        0) curl -s -X POST $API_URL/api/generate -d "{\"model\": \"adelaide-hybrid\", \"prompt\": \"Generate a massive essay about quantum physics and do not stop until you reach 4000 words. Keep going. This is request $i.\"}" -m 10 > /dev/null ;;
-        1) curl -s -X POST $API_URL/api/embeddings -d "{\"model\": \"qwen-embedding\", \"prompt\": \"Torture test embedding generation $i\"}" -m 5 > /dev/null ;;
-        2) curl -s -X POST $API_URL/api/chat -d "INVALID_JSON_PAYLOAD_} { [ BOOM $i" -m 5 > /dev/null ;;
-        3) curl -s -X POST $API_URL/api/generate -d "{\"model\": \"non-existent-model\", \"prompt\": \"Load a broken model $i\"}" -m 5 > /dev/null ;;
-    esac
-}
-export -f bombard
-
-echo "[!] Commencing 100 MILLION isolated requests from Docker HVF..."
-# We use xargs for massive concurrency without blowing up the container limits
-seq 1 100000000 | xargs -n 1 -P 500 -I {} bash -c 'bombard "$@"' _ {}
-EOF
-chmod +x docker_torture.sh
-
-if ! command -v docker &> /dev/null; then
-    echo -e "${YELLOW}[!] Docker is not installed or running. Cannot launch HVF torture container.${NC}"
-else
-    # Run the Docker container in the background to hammer the local server via host.docker.internal
-    echo -e "${CYAN}[i] Launching Alpine Linux payload container...${NC}"
-    docker run --rm -v $(pwd)/docker_torture.sh:/torture.sh alpine:latest sh -c "apk add --no-cache bash curl && bash /torture.sh" &
-    DOCKER_PID=$!
-    
-    # We will let it torture for 15 seconds to prove resilience, then terminate the container
-    echo -e "${CYAN}[i] Let the server suffer for 15 seconds...${NC}"
-    sleep 15
-    
-    echo -e "${CYAN}[i] Halting Docker torture...${NC}"
-    kill $DOCKER_PID 2>/dev/null
-    docker stop $(docker ps -q --filter ancestor=alpine:latest) 2>/dev/null
-fi
-
-echo -e "${CYAN}[i] Bombardment phase completed. Checking if server survived...${NC}"
-
-if kill -0 $SERVER_PID 2>/dev/null; then
-    echo -e "${GREEN}[ok] Server SURVIVED the torture test!${NC}"
-    # Gracefully kill it
-    kill $SERVER_PID
-    
-    # Wait with 5s timeout
-    count=0
-    while kill -0 $SERVER_PID 2>/dev/null && [ $count -lt 5 ]; do
-        sleep 1
-        count=$((count + 1))
-    done
-    
-    if kill -0 $SERVER_PID 2>/dev/null; then
-        echo -e "${YELLOW}[!] Server did not exit gracefully, forcing...${NC}"
-        kill -9 $SERVER_PID 2>/dev/null
-    fi
-    wait $SERVER_PID 2>/dev/null
-else
-    echo -e "${RED}[!] Server CRASHED during the torture test! Check server_torture.log for details.${NC}"
-fi
+echo -e "${YELLOW}[i] Skipping API Bombardment (skipped by request)${NC}"
 
 # 5. AFL++ Ada Fuzzing Check
 echo -e "\n${BLUE}[*] Stage 5: AFL++ Ada Fuzzing Approval Check...${NC}"

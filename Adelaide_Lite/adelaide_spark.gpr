@@ -8,8 +8,8 @@ project Adelaide_Spark is
    for Object_Dir use "obj/spark";
    
 package Builder is
-   for Global_Configuration_Pragmas use "Adelaide_Lite/spark.adc";
-   for Switches ("gnatprove") use ("--prove=auto", "--generate-data-representation-info");
+   for Global_Configuration_Pragmas use "gnat_spark.adc";
+   for Switches ("gnatprove") use ("--prove=auto");
 end Builder;
 
    package Compiler is

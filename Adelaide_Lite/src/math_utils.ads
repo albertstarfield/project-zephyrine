@@ -1,7 +1,18 @@
 pragma SPARK_Mode (On);
+
+with Ada.Strings.Unbounded;
+
 package Math_Utils is
 
-   type Vector is array (Positive range <>) of Float;
+    type Vector is array (Positive range <>) of Float;
+    type Embedding_Vector is array (1 .. 4096) of Float;
+    type Embedding_Vector_List is array (Positive range <>) of Embedding_Vector;
+    type Natural_List is array (Positive range <>) of Natural;
+    type Prompt_List is array (Positive range <>) of Ada.Strings.Unbounded.Unbounded_String;
+
+
+
+
 
    function Cosine_Similarity (V1 : Vector; V2 : Vector) return Float
      with
