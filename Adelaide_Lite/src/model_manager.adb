@@ -1945,6 +1945,21 @@ package body Model_Manager is
              end if;
          end if;
 
+         --  [TENSOR-ACCEL-INOP] Override: force CPU-only when INOP is active.
+         --  When 10+ consecutive ggml compute errors trigger the fallback,
+         --  all models run on CPU until the 10-minute cooldown expires.
+         if Tensor_Accel_INOP then
+             M_Params.N_Gpu_Layers := 0;
+             Put_Line
+                (AnsiAda.Background (AnsiAda.Red)
+                 & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                 & " [BUGCHECK] [TENSOR-ACCEL-INOP] "
+                 & AnsiAda.Reset
+                 & "Forcing CPU-only (N_Gpu_Layers=0) for "
+                 & Kind'Img
+                 & " -- tensor acceleration offline.");
+         end if;
+
          --  [OPTIMIZATION-M01] ENABLE MMAP FOR ZERO-COPY WEIGHT LOADING
          --  ======================================================================
          --  WHY: Reduces the "GAP Zone" Cold Start penalty by eliminating the
@@ -2677,6 +2692,107 @@ package body Model_Manager is
         return Metal_Backend_Broken;
     end Is_Metal_Broken;
 
+    --  [TENSOR-ACCEL-INOP] Count consecutive ggml compute errors.
+    --  When threshold reached, force GPU off and start cooldown countdown.
+    procedure Record_INOP_Error is
+    begin
+        INOP_Consecutive_Errors := INOP_Consecutive_Errors + 1;
+        if INOP_Consecutive_Errors >= INOP_Error_Threshold
+           and then not Tensor_Accel_INOP
+        then
+            Tensor_Accel_INOP := True;
+            INOP_Retry_Countdown := INOP_Cooldown_Secs;
+            INOP_Trigger_Time :=
+               Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Start_Time);
+            Put_Line
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                & " [BUGCHECK] *** TENSOR ACCELERATION INOP *** "
+                & AnsiAda.Reset);
+            Put_Line
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                & " [BUGCHECK] Memory integrity issue! "
+                & Natural'Image (INOP_Consecutive_Errors)
+                & " consecutive ggml compute errors detected."
+                & AnsiAda.Reset);
+            Put_Line
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                & " Forcing CPU-only mode (N_Gpu_Layers=0)."
+                & " Will retry tensor acceleration in "
+                & Natural'Image (INOP_Cooldown_Secs)
+                & " seconds."
+                & AnsiAda.Reset);
+        end if;
+    end Record_INOP_Error;
+
+    --  Clear INOP error counter on successful decode.
+    procedure Clear_INOP_Error is
+    begin
+        INOP_Consecutive_Errors := 0;
+    end Clear_INOP_Error;
+
+    --  Check if Tensor_Accel_INOP is active (countdown still running).
+    function Is_Tensor_INOP return Boolean is
+        Now     : constant Duration :=
+           Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Start_Time);
+        Elapsed : constant Duration := Now - INOP_Trigger_Time;
+    begin
+        if Tensor_Accel_INOP then
+            if Elapsed >= Duration (INOP_Cooldown_Secs) then
+                --  Cooldown expired — re-enable GPU
+                Tensor_Accel_INOP := False;
+                INOP_Retry_Countdown := 0;
+                INOP_Consecutive_Errors := 0;
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Green)
+                    & " [BUGCHECK] [TENSOR-ACCEL-INOP] "
+                    & AnsiAda.Reset
+                    & "GPU acceleration RE-ENABLED after "
+                    & Duration'Image (Elapsed)
+                    & "s cooldown. Resuming Metal acceleration.");
+                return False;
+            else
+                INOP_Retry_Countdown :=
+                   INOP_Cooldown_Secs - Natural (Elapsed);
+                return True;
+            end if;
+        end if;
+        return False;
+    end Is_Tensor_INOP;
+
+    --  [TENSOR-ACCEL-INOP] Print countdown message every 1 second.
+    --  Called from decode loops to show the user the INOP status.
+    Last_INOP_Print_Second : Natural := 0;
+    procedure Print_INOP_Countdown is
+        Now     : constant Duration :=
+           Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Start_Time);
+        Elapsed : constant Duration := Now - INOP_Trigger_Time;
+        Remain  : Natural;
+    begin
+        if not Tensor_Accel_INOP then
+            return;
+        end if;
+        if Elapsed >= Duration (INOP_Cooldown_Secs) then
+            return;  -- Is_Tensor_INOP will handle recovery
+        end if;
+        Remain := INOP_Cooldown_Secs - Natural (Elapsed);
+        --  Only print once per second
+        if Remain /= Last_INOP_Print_Second then
+            Last_INOP_Print_Second := Remain;
+            Put_Line
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                & " [BUGCHECK] *** TENSOR ACCELERATION INOP *** "
+                & "Memory integrity issue! "
+                & "Will retry tensor acceleration in "
+                & Natural'Image (Remain)
+                & " seconds "
+                & AnsiAda.Reset);
+        end if;
+    end Print_INOP_Countdown;
+
     procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
     begin
         Priority_Model_Gate.Set_Power_Condition (On_Battery, Level);
@@ -2980,6 +3096,7 @@ package body Model_Manager is
             Max_Consecutive_Failures : constant := 3;
         begin
             while Tokens_Left > 0 loop
+                Print_INOP_Countdown;
                 declare
                     To_Decode : constant int := (if Tokens_Left > Batch_Size then Batch_Size else Tokens_Left);
                     B : constant Llama_Batch := Llama_Batch_Get_One (Tokens.all (Integer (Current_Pos) + 1)'Address, To_Decode);
@@ -2991,6 +3108,7 @@ package body Model_Manager is
                             --  to clear corrupted state and retry once. This prevents
                             --  the "failed to find a memory slot" cascade that occurs
                             --  when llama.cpp removes all seq_id=0 entries on failure.
+                            Record_INOP_Error;
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Yellow)
                                 & "[DECODE-RETRY]"
@@ -3006,6 +3124,7 @@ package body Model_Manager is
                             --  Retry once
                             if Llama_Decode (Models (Qwen_Embedding).Context, B) /= 0 then
                                 --  Retry also failed — skip chunk and count
+                                Record_INOP_Error;
                                 Consecutive_Failures := Consecutive_Failures + 1;
                                 Put_Line
                                    (AnsiAda.Foreground (AnsiAda.Red)
@@ -3027,11 +3146,13 @@ package body Model_Manager is
                                 end if;
                             else
                                 --  Retry succeeded
+                                Clear_INOP_Error;
                                 Consecutive_Failures := 0;
                                 Tokens_Left := Tokens_Left - To_Decode;
                                 Current_Pos := Current_Pos + To_Decode;
                             end if;
                         else
+                            Clear_INOP_Error;
                             Consecutive_Failures := 0;
                             Tokens_Left := Tokens_Left - To_Decode;
                             Current_Pos := Current_Pos + To_Decode;
@@ -4335,6 +4456,7 @@ package body Model_Manager is
             Tokens_Left : int := N_Toks;
         begin
             while Tokens_Left > 0 loop
+                Print_INOP_Countdown;
                 if Level = ELP0 and then Should_Abort_ELP0 then
                     Put_Line
                        ("[ELP0-ABORT-EXECUTION] Aborting "
@@ -4372,6 +4494,7 @@ package body Model_Manager is
                         --  to clear corrupted state (llama.cpp removes all entries
                         --  for seq_id=0 on failure, leaving cache poisoned), then
                         --  retry the same batch once before aborting.
+                        Record_INOP_Error;
                         Put_Line
                            (AnsiAda.Foreground (AnsiAda.Yellow)
                             & "[DECODE-RETRY]"
@@ -4401,6 +4524,7 @@ package body Model_Manager is
 
                             if Retry_Ret /= 0 then
                                 --  Retry also failed — abort and orphan context
+                                Record_INOP_Error;
                                 Put_Line
                                    (AnsiAda.Foreground (AnsiAda.Red)
                                     & "[DECODE-RETRY]"
@@ -4432,6 +4556,7 @@ package body Model_Manager is
                                 & "[DECODE-RETRY]"
                                 & AnsiAda.Reset
                                 & " Retry succeeded for prefill chunk.");
+                            Clear_INOP_Error;
                         end;
                     end if;
                     Tokens_Left := Tokens_Left - To_Decode;
@@ -4465,6 +4590,7 @@ package body Model_Manager is
             Accum_Count  : Natural := 0;
         begin
             for I in 1 .. 2048 loop
+                Print_INOP_Countdown;
                 if Level = ELP0 and then Should_Abort_ELP0 then
                     Put_Line
                        ("[ELP0-ABORT-LOOP] Aborting "
@@ -4606,6 +4732,7 @@ package body Model_Manager is
                                 --  error). Flush KV cache to clear corrupted state
                                 --  (llama.cpp removes all seq_id=0 entries on failure,
                                 --  leaving cache poisoned) and retry once.
+                                Record_INOP_Error;
                                 Put_Line
                                    (AnsiAda.Foreground (AnsiAda.Yellow)
                                     & "[DECODE-RETRY]"
@@ -4636,6 +4763,7 @@ package body Model_Manager is
 
                                     if Retry_Ret /= 0 then
                                         --  Retry also failed — now abort and orphan
+                                        Record_INOP_Error;
                                         Put_Line
                                            (AnsiAda.Foreground (AnsiAda.Red)
                                             & "[DECODE-RETRY]"
@@ -4658,6 +4786,7 @@ package body Model_Manager is
                                         & AnsiAda.Reset
                                         & " Retry succeeded at iteration" & Natural'Image (I)
                                         & ". Continuing generation.");
+                                    Clear_INOP_Error;
                                 end;
                             end if;
                         end if;
