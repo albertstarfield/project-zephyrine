@@ -1,6 +1,7 @@
 with Interfaces.C; use Interfaces.C;
 with Ada.Text_IO;  use Ada.Text_IO;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with AnsiAda;
 
 package body Kratos is
 
@@ -47,9 +48,13 @@ package body Kratos is
            when others => "Signal" & Integer (Sig)'Image);
    begin
       Put_Line (Standard_Error,
-        "[Kratos] *** CRASH ISOLATED *** " & Sig_Name);
+        AnsiAda.Background (AnsiAda.Red)
+        & "[BUGCHECK] [Kratos] *** CRASH ISOLATED *** " & Sig_Name
+        & AnsiAda.Reset);
       Put_Line (Standard_Error,
-        "[Kratos] Server continuing - inference request aborted.");
+        AnsiAda.Background (AnsiAda.Red)
+        & "[BUGCHECK] [Kratos] Server continuing - inference request aborted."
+        & AnsiAda.Reset);
       Clear_Crash;
    end Log_Crash;
 

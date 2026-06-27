@@ -377,8 +377,10 @@ package body Adelaide_Server_Pkg is
        end;
    exception
       when E : others =>
-         Ada.Text_IO.Put_Line ("Error in Generator_Task: " &
-                               Ada.Exceptions.Exception_Message (E));
+         Ada.Text_IO.Put_Line (AnsiAda.Background (AnsiAda.Red)
+            & "[BUGCHECK] Error in Generator_Task: "
+            & Ada.Exceptions.Exception_Message (E)
+            & AnsiAda.Reset);
          begin
             if QA /= null then
                QA.Close;
@@ -415,7 +417,10 @@ package body Adelaide_Server_Pkg is
          External_Agent => False);
    exception
       when E : others =>
-         Ada.Text_IO.Put_Line ("Error in Background_Deep_Thought_Task: " & Ada.Exceptions.Exception_Message (E));
+         Ada.Text_IO.Put_Line (AnsiAda.Background (AnsiAda.Red)
+            & "[BUGCHECK] Error in Background_Deep_Thought_Task: "
+            & Ada.Exceptions.Exception_Message (E)
+            & AnsiAda.Reset);
    end Background_Deep_Thought_Task;
 
    --------------
@@ -1296,8 +1301,10 @@ package body Adelaide_Server_Pkg is
                         end if;
                      exception
                         when E : others =>
-                           Ada.Text_IO.Put_Line ("JSON Parse Exception: " &
-                             Ada.Exceptions.Exception_Message (E));
+                            Ada.Text_IO.Put_Line (AnsiAda.Background (AnsiAda.Red)
+                              & "[BUGCHECK] JSON Parse Exception: "
+                              & Ada.Exceptions.Exception_Message (E)
+                              & AnsiAda.Reset);
                      end;
                   end if;
                end;
@@ -2337,8 +2344,10 @@ package body Adelaide_Server_Pkg is
    end;
    exception
    when E : others =>
-      Ada.Text_IO.Put_Line ("Server Error: " &
-        Ada.Exceptions.Exception_Message (E));
+      Ada.Text_IO.Put_Line (AnsiAda.Background (AnsiAda.Red)
+        & "[BUGCHECK] Server Error: "
+        & Ada.Exceptions.Exception_Message (E)
+        & AnsiAda.Reset);
       return Build_Response ("{}", AWS.Messages.S500);
    end Dispatch;
 

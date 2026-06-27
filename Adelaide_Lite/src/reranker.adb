@@ -11,6 +11,7 @@ with Interfaces.C.Strings;
 with System; use System;
 with System.Storage_Elements;
 with Ada.Unchecked_Conversion;
+with AnsiAda;
 
 package body Reranker is
 
@@ -58,7 +59,9 @@ package body Reranker is
       Interfaces.C.Strings.Free (Path_C);
 
       if Reranker_Model = Llama_Interface.Null_Model then
-         Put_Line ("[Reranker] FAILED to load model from " & Model_Path);
+         Put_Line (AnsiAda.Background (AnsiAda.Red)
+            & "[BUGCHECK] [Reranker] FAILED to load model from " & Model_Path
+            & AnsiAda.Reset);
          Success := False;
          return;
       end if;
@@ -81,7 +84,9 @@ package body Reranker is
       Reranker_Context := Llama_Interface.Llama_Init_From_Model (Reranker_Model, C_Params);
 
       if Reranker_Context = Llama_Interface.Null_Context then
-         Put_Line ("[Reranker] FAILED to create context");
+         Put_Line (AnsiAda.Background (AnsiAda.Red)
+            & "[BUGCHECK] [Reranker] FAILED to create context"
+            & AnsiAda.Reset);
          Llama_Interface.Llama_Model_Free (Reranker_Model);
          Reranker_Model := Llama_Interface.Null_Model;
          Success := False;
@@ -106,8 +111,10 @@ package body Reranker is
       end;
    exception
       when E : others =>
-         Put_Line ("[Reranker] Exception during init: "
-                   & Ada.Exceptions.Exception_Message (E));
+         Put_Line (AnsiAda.Background (AnsiAda.Red)
+            & "[BUGCHECK] [Reranker] Exception during init: "
+            & Ada.Exceptions.Exception_Message (E)
+            & AnsiAda.Reset);
          Ready := False;
          Success := False;
    end Initialize;
@@ -215,14 +222,14 @@ package body Reranker is
          return;
       end if;
 
-      --  Score each document against the query
-      for I in 0 .. N_Docs - 1 loop
+      --  Score each document against the query (1-indexed to match Chunk_Array)
+      for I in 1 .. N_Docs loop
          declare
             Score : constant Float := Score_Pair (Query, Doc_Contents (I));
          begin
             if Score > Best_Score then
                Best_Score := Score;
-               Best_Idx := I + 1;  -- 1-indexed
+               Best_Idx := I;  -- Already 1-indexed
             end if;
          end;
       end loop;
