@@ -4394,26 +4394,43 @@ package body Model_Manager is
                 Put_Line
                    ("[!] Prompt size ("
                     & N_Toks'Img
-                    & ") exceeds 42% of N_CTX ("
+                    & ") exceeds 75% of N_CTX ("
                     & Models (Kind).Current_Ctx'Img
                     & "). Proactive resize...");
                 declare
-                    Target_Ctx  : constant unsigned := unsigned (N_Toks) * 50 / 21 + 512;
+                    Current_Ctx : constant unsigned := Models (Kind).Current_Ctx;
                     Rounded_Ctx : unsigned;
                 begin
-                    --  Dynamic Context Adjustment Binning & GPU Wind-back
-                    if Target_Ctx <= 8192 then
+                    --  STEP-BY-STEP CONTEXT EXPANSION (power-of-2 bins):
+                    --  =================================================================
+                    --  WHY: Jumping directly to 32768 from 8192 wastes VRAM and causes
+                    --  OOM kills. Instead, step through bins one at a time:
+                    --    2048 → 4096 → 8192 → 16384 → 32768 → 65536 → 131072
+                    --  Each step doubles the context. If the prompt overflows the new
+                    --  bin, the NEXT request will trigger another step up. This gives
+                    --  the system time to adapt GPU layers and compute buffers.
+                    --  =================================================================
+                    if Current_Ctx < 4096 then
+                        Rounded_Ctx := 4096;
+                        Acceleration_Silicon_Layer := -1;
+                    elsif Current_Ctx < 8192 then
                         Rounded_Ctx := 8192;
                         Acceleration_Silicon_Layer := -1;
-                    elsif Target_Ctx <= 16384 then
+                    elsif Current_Ctx < 16384 then
                         Rounded_Ctx := 16384;
                         Acceleration_Silicon_Layer := 24;
-                    elsif Target_Ctx <= 32768 then
+                    elsif Current_Ctx < 32768 then
                         Rounded_Ctx := 32768;
                         Acceleration_Silicon_Layer := 16;
-                    else
-                        Rounded_Ctx := 128000;
+                    elsif Current_Ctx < 65536 then
+                        Rounded_Ctx := 65536;
+                        Acceleration_Silicon_Layer := 12;
+                    elsif Current_Ctx < 131072 then
+                        Rounded_Ctx := 131072;
                         Acceleration_Silicon_Layer := 8;
+                    else
+                        --  Already at max, can't expand further
+                        Rounded_Ctx := Current_Ctx;
                     end if;
                     Free_Tokens (Tokens);
                     Load_Model (Kind, Success, Positive (Rounded_Ctx));
@@ -4635,25 +4652,42 @@ package body Model_Manager is
                     Free_Ctx_Pct := 0;
                 end if;
 
-                --  DYNAMIC EXPANSION THRESHOLD:
-                --  threshold = min(75, 30 / prefill_elapsed * (free_ctx_pct / 100))
-                --  Logic:
-                --  - If prefill is fast (<5s) AND free ctx >50%: threshold rises → safe to expand
-                --  - If prefill is slow (>15s) OR free ctx <25%: threshold drops → don't expand
-                --  - Budget cap: 30s max. Beyond that, expansion makes things worse.
-                --  - Always capped at 75% to prevent runaway expansion.
-                if Prefill_Elapsed > 0.0 then
-                    declare
-                        Budget_Ratio : constant Duration := 30.0 / Prefill_Elapsed;
-                        Free_Factor  : constant Duration := Duration (Free_Ctx_Pct) / 100.0;
-                        Raw_Threshold : constant Natural :=
-                           Natural (Float (Budget_Ratio) * Float (Free_Factor) * 100.0);
-                    begin
-                        Ctx_Expand_Threshold_Pct := Natural'Min (75, Raw_Threshold);
-                    end;
-                else
-                    Ctx_Expand_Threshold_Pct := 75;  -- Default: expand freely
-                end if;
+                --  DYNAMIC EXPANSION THRESHOLD (VRAM-aware, speed-weighted):
+                --  ============================================================================
+                --  WHY THIS FORMULA:
+                --  The old formula used `30s / elapsed * free_ctx_pct` which gave LOW
+                --  thresholds when prefill was slow — WRONG. Slow prefill means expansion
+                --  makes things WORSE, so we need HIGHER thresholds (expand later).
+                --
+                --  NEW FORMULA:
+                --    speed_penalty = (100 - tok_per_sec) / 100 * 45
+                --    vram_penalty  = (100 - vram_free_pct) / 100 * 50
+                --    threshold     = clamp(10, 95, 15 + speed_penalty + vram_penalty)
+                --
+                --  EXAMPLES:
+                --  - 35 tok/s, 50% VRAM free: 15 + 29 + 25 = 69% → expand late
+                --  - 35 tok/s, 10% VRAM free: 15 + 29 + 45 = 89% → expand very late
+                --  - 100 tok/s, 100% VRAM free: 15 + 0 + 0 = 15% → expand early
+                --
+                --  The Tensor Accelerator Monitor feeds VRAM free % here. Less VRAM free
+                --  = higher threshold = N_Gpu_Layers stays at max longer before ctx grows.
+                --  ============================================================================
+                declare
+                    VRAM_Free_Pct : constant Natural :=
+                       (if GPU_Total_MB > 0
+                        then GPU_Free_MB * 100 / GPU_Total_MB
+                        else 100);  -- Assume full if no query
+                    Speed_Penalty : constant Natural :=
+                       (if Virtual_Prefill_Speed > 0.0
+                        then (100 - Natural (Virtual_Prefill_Speed)) * 45 / 100
+                        else 45);  -- Worst case if speed unknown
+                    VRAM_Penalty  : constant Natural :=
+                       (100 - VRAM_Free_Pct) * 50 / 100;
+                    Raw_Threshold : constant Natural := 15 + Speed_Penalty + VRAM_Penalty;
+                begin
+                    Ctx_Expand_Threshold_Pct :=
+                       Natural'Max (10, Natural'Min (95, Raw_Threshold));
+                end;
 
                 --  Print prefill metrics for diagnostics
                 Put_Line
