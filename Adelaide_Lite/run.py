@@ -117,6 +117,7 @@ MGN  = "\033[35m"
 CYN  = "\033[36m"
 WHT  = "\033[97m"
 BG_B = "\033[44m\033[97m"
+BG_RED = "\033[41m\033[97m"
 
 def get_git_version():
     """Get current git commit hash and branch from the project root."""
@@ -180,7 +181,7 @@ def verify_environment():
             missing.append("macos-sdk")
 
     if missing:
-        print(f"\n{RED}{BOLD}[FATAL] Environment check failed. Please install the missing tools listed above.{RST}")
+        print(f"\n{BG_RED}[BUGCHECK] [FATAL] Environment check failed. Please install the missing tools listed above.{RST}")
         sys.exit(1)
     else:
         print(f"{GRN}[+] Environment verified. All prerequisites met.{RST}\n")
@@ -644,7 +645,7 @@ def main():
                 capture_output=True, text=True
             )
             if result.returncode != 0:
-                print(f"[GGML] [{time.strftime('%H:%M:%S')}] Submodule init FAILED: {result.stderr[-300:]}")
+                print(f"{BG_RED}[BUGCHECK] [GGML] [{time.strftime('%H:%M:%S')}] Submodule init FAILED: {result.stderr[-300:]}{RST}")
         else:
             print(f"[GGML] [{time.strftime('%H:%M:%S')}] Fetching latest ggml...")
             subprocess.run(["git", "fetch", "origin"], cwd=ggml_submodule,
@@ -679,17 +680,18 @@ def main():
             result = subprocess.run(cmake_flags, cwd=ggml_submodule,
                                     check=False, capture_output=True, text=True)
             if result.returncode != 0:
-                print(f"[GGML] [{time.strftime('%H:%M:%S')}] CMake FAILED: {result.stderr[-500:]}")
+                print(f"{BG_RED}[BUGCHECK] [GGML] [{time.strftime('%H:%M:%S')}] CMake FAILED: {result.stderr[-500:]}{RST}")
             else:
+                # DO NOT SUPPRESS VERBOSITY IF YOU ARE NOT OVERCONFIDENT
                 result = subprocess.run(
-                    ["cmake", "--build", "build", "--config", "Release", "-j"],
+                    ["cmake", "--build", "build", "--config", "Release", "-j", "--verbose"],
                     cwd=ggml_submodule, check=False, capture_output=True, text=True
                 )
                 ggml_elapsed = time.time() - ggml_start
                 if result.returncode == 0:
                     print(f"[GGML] [{time.strftime('%H:%M:%S')}] Build SUCCESS in {ggml_elapsed:.1f}s")
                 else:
-                    print(f"[GGML] [{time.strftime('%H:%M:%S')}] Build FAILED: {result.stderr[-500:]}")
+                    print(f"{BG_RED}[BUGCHECK] [GGML] [{time.strftime('%H:%M:%S')}] Build FAILED: {result.stderr[-500:]}{RST}")
         else:
             ggml_elapsed = time.time() - ggml_start
             print(f"[GGML] [{time.strftime('%H:%M:%S')}] Library exists ({ggml_elapsed:.1f}s)")
@@ -752,17 +754,18 @@ def main():
                 cmake_flags.append("-DGGML_VULKAN=ON")
             result = subprocess.run(cmake_flags, cwd=llama_dir, check=False, capture_output=True, text=True)
             if result.returncode != 0:
-                print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake configure FAILED")
+                print(f"{BG_RED}[BUGCHECK] [LLAMA] [{time.strftime('%H:%M:%S')}] CMake configure FAILED{RST}")
                 if result.stderr:
                     print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] stderr: {result.stderr[-500:]}")
             else:
                 print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake configure OK, building...")
-                result = subprocess.run(["cmake", "--build", "build", "--config", "Release", "-j"], cwd=llama_dir, check=False, capture_output=True, text=True)
+                # DO NOT SUPPRESS VERBOSITY IF YOU ARE NOT OVERCONFIDENT
+                result = subprocess.run(["cmake", "--build", "build", "--config", "Release", "-j", "--verbose"], cwd=llama_dir, check=False, capture_output=True, text=True)
                 llama_elapsed = time.time() - llama_start
                 if result.returncode == 0:
                     print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Build SUCCESS in {llama_elapsed:.1f}s")
                 else:
-                    print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Build FAILED in {llama_elapsed:.1f}s")
+                    print(f"{BG_RED}[BUGCHECK] [LLAMA] [{time.strftime('%H:%M:%S')}] Build FAILED in {llama_elapsed:.1f}s{RST}")
                     if result.stderr:
                         print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] stderr: {result.stderr[-500:]}")
         else:
@@ -774,7 +777,8 @@ def main():
         mtmd_start = time.time()
         if not os.path.exists(mtmd_lib):
             print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Building mtmd (multimodal) library...")
-            result = subprocess.run(["cmake", "--build", "build", "--target", "mtmd", "-j"], cwd=llama_dir, check=False, capture_output=True, text=True)
+            # DO NOT SUPPRESS VERBOSITY IF YOU ARE NOT OVERCONFIDENT
+            result = subprocess.run(["cmake", "--build", "build", "--target", "mtmd", "-j", "--verbose"], cwd=llama_dir, check=False, capture_output=True, text=True)
             mtmd_elapsed = time.time() - mtmd_start
             if result.returncode == 0:
                 print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Build SUCCESS in {mtmd_elapsed:.1f}s")
@@ -785,7 +789,7 @@ def main():
                 else:
                     print(f"[MTMD] [{time.strftime('%H:%M:%S')}] WARNING: Library file not found after build!")
             else:
-                print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Build FAILED in {mtmd_elapsed:.1f}s")
+                print(f"{BG_RED}[BUGCHECK] [MTMD] [{time.strftime('%H:%M:%S')}] Build FAILED in {mtmd_elapsed:.1f}s{RST}")
                 if result.stdout:
                     print(f"[MTMD] [{time.strftime('%H:%M:%S')}] stdout: {result.stdout[-500:]}")
                 if result.stderr:
@@ -919,10 +923,11 @@ def main():
                 cmake_flags.append("-DGGML_CUDA=ON")
             result = subprocess.run(cmake_flags, cwd=sd_cpp_built, check=False, capture_output=True, text=True)
             if result.returncode != 0:
-                print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] CMake FAILED: {result.stderr[-500:]}")
+                print(f"{BG_RED}[BUGCHECK] [SD-CPP] [{time.strftime('%H:%M:%S')}] CMake FAILED: {result.stderr[-500:]}{RST}")
             else:
+                # DO NOT SUPPRESS VERBOSITY IF YOU ARE NOT OVERCONFIDENT
                 result = subprocess.run(
-                    ["cmake", "--build", ".", "--config", "Release", "-j"],
+                    ["cmake", "--build", ".", "--config", "Release", "-j", "--verbose"],
                     cwd=sd_cpp_built, check=False, capture_output=True, text=True
                 )
                 sd_elapsed = time.time() - sd_cpp_start
@@ -937,7 +942,7 @@ def main():
                     else:
                         print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Build completed but library not found at expected path")
                 else:
-                    print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Build FAILED in {sd_elapsed:.1f}s")
+                    print(f"{BG_RED}[BUGCHECK] [SD-CPP] [{time.strftime('%H:%M:%S')}] Build FAILED in {sd_elapsed:.1f}s{RST}")
                     if result.stderr:
                         print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] stderr: {result.stderr[-500:]}")
         else:
@@ -1084,7 +1089,7 @@ def main():
                     check=False, timeout=None
                 )
                 if result.returncode != 0:
-                    print(f"[!] wget failed (code {result.returncode}), retrying in 5s...")
+                    print(f"{BG_RED}[BUGCHECK] [!] wget failed (code {result.returncode}), retrying in 5s...{RST}")
                     time.sleep(5)
                     continue
 
@@ -1172,7 +1177,7 @@ def main():
                 subprocess.run(prove_cmd, cwd=BASE_DIR, env=env, check=True)
                 print("[+] GNATprove: Formal verification PASSED.")
             except subprocess.CalledProcessError:
-                print("[!] GNATprove: Formal verification FAILED. Check obj/spark/gnatprove/gnatprove.out")
+                print(f"{BG_RED}[BUGCHECK] [!] GNATprove: Formal verification FAILED. Check obj/spark/gnatprove/gnatprove.out{RST}")
                 if "--strict-verify" in sys.argv:
                     sys.exit(1)
             
@@ -1216,14 +1221,14 @@ def main():
                                      "--exclude", "vendor,moonshine"],
                                     capture_output=True, text=True)
             if result.returncode != 0:
-                print("[!] Self-Integrity Quality Check FAILED.")
+                print(f"{BG_RED}[BUGCHECK] [!] Self-Integrity Quality Check FAILED.{RST}")
                 print(result.stdout)
                 print("[!] Emergency Shutdown: Ruff quality violations detected.")
                 sys.exit(1)
             else:
                 print("[+] Self-Integrity Quality Check PASSED.")
         except Exception as e:
-            print(f"[!] Error executing Ruff integrity check: {e}")
+            print(f"{BG_RED}[BUGCHECK] [!] Error executing Ruff integrity check: {e}{RST}")
     else:
         print("[!] Warning: ruff not found in PATH, skipping self-integrity quality check.")
 
@@ -1250,7 +1255,7 @@ def main():
             print("[LSH] Running pyrefly type-check on worker...")
             result = subprocess.run([pyvenv_pyrefly, "check", lsh_worker], capture_output=True, text=True)
             if result.returncode != 0:
-                print("[!] LSH pyrefly type-check FAILED.")
+                print(f"{BG_RED}[BUGCHECK] [!] LSH pyrefly type-check FAILED.{RST}")
                 print(result.stdout)
                 print(result.stderr)
                 print("[!] Emergency Shutdown: pyrefly violations detected.")
@@ -1263,7 +1268,7 @@ def main():
             print("[LSH] Running ruff lint on worker...")
             result = subprocess.run([pyvenv_ruff, "check", lsh_worker], capture_output=True, text=True)
             if result.returncode != 0:
-                print("[!] LSH ruff lint FAILED.")
+                print(f"{BG_RED}[BUGCHECK] [!] LSH ruff lint FAILED.{RST}")
                 print(result.stdout)
                 print(result.stderr)
                 print("[!] Emergency Shutdown: ruff violations detected.")
@@ -1395,7 +1400,7 @@ def main():
         if cert_result.returncode == 0:
             print("[*] SSL certificate ready")
         else:
-            print(f"[!] SSL certificate generation failed: {cert_result.stderr}")
+            print(f"{BG_RED}[BUGCHECK] [!] SSL certificate generation failed: {cert_result.stderr}{RST}")
             print("[!] Falling back to HTTP mode")
 
     # [DO NOT REMOVE] Verbose server launch info
