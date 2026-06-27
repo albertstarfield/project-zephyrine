@@ -4662,7 +4662,7 @@ package body Model_Manager is
                 --  NEW FORMULA:
                 --    speed_penalty = (100 - tok_per_sec) / 100 * 45
                 --    vram_penalty  = (100 - vram_free_pct) / 100 * 50
-                --    threshold     = clamp(10, 95, 15 + speed_penalty + vram_penalty)
+                --    threshold     = clamp(50, 95, 15 + speed_penalty + vram_penalty)
                 --
                 --  EXAMPLES:
                 --  - 35 tok/s, 50% VRAM free: 15 + 29 + 25 = 69% → expand late
@@ -4686,7 +4686,7 @@ package body Model_Manager is
                     Raw_Threshold : constant Natural := 15 + Speed_Penalty + VRAM_Penalty;
                 begin
                     Ctx_Expand_Threshold_Pct :=
-                       Natural'Max (10, Natural'Min (95, Raw_Threshold));
+                       Natural'Max (50, Natural'Min (95, Raw_Threshold));
                 end;
 
                 --  Print prefill metrics for diagnostics
