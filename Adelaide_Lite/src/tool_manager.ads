@@ -18,4 +18,12 @@ package Tool_Manager is
    --  Called from Hybrid_Generate when the model outputs [ACTION: imagine(prompt)].
    function Execute_Imagine_Tool (Prompt : String) return Tool_Result;
 
+   --  CRONIA TOOL: Schedule a timed answer on ELP0
+   --  Params format: "name|time_iso|prompt" or "name|repeat_seconds|prompt"
+   function Execute_Cronia_Tool (Params : String) return Tool_Result;
+
+   --  PROACTIVE TOOL: Trigger proactive question or handless mode
+   --  Params format: "activate_handless" or "acoustic_trigger" or "schedule_question|time_iso|topic"
+   function Execute_Proactive_Tool (Params : String) return Tool_Result;
+
 end Tool_Manager;
