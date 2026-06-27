@@ -2993,6 +2993,8 @@ package body Model_Manager is
             Batch_Size : constant int := int'Min (256, int (Models (Qwen_Embedding).Current_Ctx));
             Current_Pos : int := 0;
             Tokens_Left : int := N_Toks;
+            Consecutive_Failures : Natural := 0;
+            Max_Consecutive_Failures : constant := 3;
         begin
             while Tokens_Left > 0 loop
                 declare
@@ -3002,10 +3004,52 @@ package body Model_Manager is
                     Acquire_Accel_Lock;
                     if Kratos.Guard_Enter = 0 then
                         if Llama_Decode (Models (Qwen_Embedding).Context, B) /= 0 then
-                            -- In batch mode, we skip failed chunks to keep moving
-                            Tokens_Left := Tokens_Left - To_Decode;
-                            Current_Pos := Current_Pos + To_Decode;
+                            --  [DECODE-RETRY] Embedding decode failed. Flush KV cache
+                            --  to clear corrupted state and retry once. This prevents
+                            --  the "failed to find a memory slot" cascade that occurs
+                            --  when llama.cpp removes all seq_id=0 entries on failure.
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Yellow)
+                                & "[DECODE-RETRY]"
+                                & AnsiAda.Reset
+                                & " Embedding chunk failed, flushing KV and retrying...");
+
+                            --  Flush KV cache
+                            Llama_Interface.Llama_Memory_Clear
+                               (Llama_Interface.Llama_Get_Memory (Models (Qwen_Embedding).Context),
+                                True);
+                            delay 0.01;
+
+                            --  Retry once
+                            if Llama_Decode (Models (Qwen_Embedding).Context, B) /= 0 then
+                                --  Retry also failed — skip chunk and count
+                                Consecutive_Failures := Consecutive_Failures + 1;
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Red)
+                                    & "[DECODE-RETRY]"
+                                    & AnsiAda.Reset
+                                    & " Embedding retry failed (consecutive="
+                                    & Natural'Image (Consecutive_Failures) & ")");
+
+                                if Consecutive_Failures >= Max_Consecutive_Failures then
+                                    Put_Line
+                                       (AnsiAda.Foreground (AnsiAda.Red)
+                                        & "[DECODE-RETRY]"
+                                        & AnsiAda.Reset
+                                        & " Too many consecutive embedding failures, aborting.");
+                                    Tokens_Left := 0;  --  Exit loop
+                                else
+                                    Tokens_Left := Tokens_Left - To_Decode;
+                                    Current_Pos := Current_Pos + To_Decode;
+                                end if;
+                            else
+                                --  Retry succeeded
+                                Consecutive_Failures := 0;
+                                Tokens_Left := Tokens_Left - To_Decode;
+                                Current_Pos := Current_Pos + To_Decode;
+                            end if;
                         else
+                            Consecutive_Failures := 0;
                             Tokens_Left := Tokens_Left - To_Decode;
                             Current_Pos := Current_Pos + To_Decode;
                         end if;
@@ -4341,27 +4385,71 @@ package body Model_Manager is
                     end if;
                     Release_Accel_Lock;
                     if Ret /= 0 then
-                        Free_Tokens (Tokens);
-                        Models (Kind).In_Use := False;
-                        if Level = ELP0 then
-                            Priority_Model_Gate.Release_ELP0 (Kind);
-                        else
-                            Priority_Model_Gate.Release_ELP1 (Kind);
-                        end if;
+                        --  [DECODE-RETRY] Prefill decode failed. Flush KV cache
+                        --  to clear corrupted state (llama.cpp removes all entries
+                        --  for seq_id=0 on failure, leaving cache poisoned), then
+                        --  retry the same batch once before aborting.
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Yellow)
+                            & "[DECODE-RETRY]"
+                            & AnsiAda.Reset
+                            & " Prefill chunk failed (ret=" & Ret'Img
+                            & "), flushing KV cache and retrying...");
 
-                        --  [QUIRK-M10] We cannot call Unload_Model here. The Metal
-                        --  GPU backend is poisoned. Calling Llama_Free invokes
-                        --  ggml_metal_free which tries to synchronize and aborts
-                        --  the entire server process (SIGTRAP 5). We MUST leak it.
-                        Models (Kind).Context := Null_Context;
-                        Models (Kind).Model := Null_Model;
-                        Models (Kind).Loaded := False;
-                        Models (Kind).Current_Ctx := 0;
+                        --  Flush KV cache: release all slots so the retry starts clean
+                        Llama_Interface.Llama_Memory_Clear
+                           (Llama_Interface.Llama_Get_Memory (Models (Kind).Context),
+                            True);
+                        delay 0.01;  --  Allow Metal command buffers to drain
 
-                        Result :=
-                           To_Unbounded_String
-                              ("ERROR: Decode failed (" & Ret'Img & ")");
-                        return;
+                        --  Retry decode once
+                        declare
+                            Retry_Ret : int;
+                        begin
+                            Acquire_Accel_Lock;
+                            if Kratos.Guard_Enter = 0 then
+                                Retry_Ret := Llama_Decode (Models (Kind).Context, B);
+                                Kratos.Guard_Exit;
+                            else
+                                Kratos.Log_Crash;
+                                Retry_Ret := -1;
+                            end if;
+                            Release_Accel_Lock;
+
+                            if Retry_Ret /= 0 then
+                                --  Retry also failed — abort and orphan context
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Red)
+                                    & "[DECODE-RETRY]"
+                                    & AnsiAda.Reset
+                                    & " Retry also failed (ret=" & Retry_Ret'Img
+                                    & "). Aborting prefill.");
+                                Free_Tokens (Tokens);
+                                Models (Kind).In_Use := False;
+                                if Level = ELP0 then
+                                    Priority_Model_Gate.Release_ELP0 (Kind);
+                                else
+                                    Priority_Model_Gate.Release_ELP1 (Kind);
+                                end if;
+
+                                --  [QUIRK-M10] Orphan poisoned context to prevent SIGTRAP
+                                Models (Kind).Context := Null_Context;
+                                Models (Kind).Model := Null_Model;
+                                Models (Kind).Loaded := False;
+                                Models (Kind).Current_Ctx := 0;
+
+                                Result :=
+                                   To_Unbounded_String
+                                      ("ERROR: Decode failed after retry (" & Retry_Ret'Img & ")");
+                                return;
+                            end if;
+
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Green)
+                                & "[DECODE-RETRY]"
+                                & AnsiAda.Reset
+                                & " Retry succeeded for prefill chunk.");
+                        end;
                     end if;
                     Tokens_Left := Tokens_Left - To_Decode;
                     Current_Pos := Current_Pos + To_Decode;
@@ -4492,38 +4580,103 @@ package body Model_Manager is
                         end if;
                         Release_Accel_Lock;
                         if Ret /= 0 then
-                            Append (Result, " [ABORTED:" & Ret'Img & "]");
+                            --  [DECODE-RETRY] Token decode failed. For non-OOM errors
+                            --  (ret=-2: ggml compute failure), flush the KV cache to
+                            --  clear corrupted state and retry once. This prevents
+                            --  dropping the ollama connection on transient Metal errors.
+                            --  OOM (-3) is fatal and not retryable.
+                            if Ret = -3 then
+                                --  OOM: Metal is poisoned, cannot retry
+                                Append (Result, " [ABORTED:" & Ret'Img & "]");
 
-                            --  [VITAL-DO-NOT-REMOVE] OOM detection.
-                             --  When llama_decode returns -3, Metal is in error state
-                             --  (kIOGPUCommandBufferCallbackErrorOutOfMemory). Any
-                             --  subsequent llama_state_save_file call will SIGBUS →
-                             --  GNAT exception → exit() → ggml_metal_device_free →
-                             --  GGML_ASSERT([rsets->data count] == 0) → SIGABRT.
-                             --  Mark metal broken (opportunistic: auto-resets after 30s).
-                             if Ret = -3 then
-                                 Mark_Metal_Broken;
-                                 
-                             --  [ENHANCED] Detailed error reporting for Tensor Accelerator issues
-                             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
-                                     & "[ERROR] Tensor Accelerator Memory Exhausted (Metal, -3): " 
-                                     & "Out of Memory (kIOGPUCommandBufferCallbackErrorOutOfMemory)" 
-                                     & AnsiAda.Reset);
-                             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
-                                     & "[ERROR] Action: Marked Metal as broken, will attempt recovery in 30s" 
-                                     & AnsiAda.Reset);
-                             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
-                                     & "[ERROR] Recommendation: Check Tensor Accelerator memory usage, reduce model size, or restart service" 
-                                     & AnsiAda.Reset);
-                             end if;
+                                --  [VITAL-DO-NOT-REMOVE] OOM detection.
+                                --  When llama_decode returns -3, Metal is in error state
+                                --  (kIOGPUCommandBufferCallbackErrorOutOfMemory). Any
+                                --  subsequent llama_state_save_file call will SIGBUS →
+                                --  GNAT exception → exit() → ggml_metal_device_free →
+                                --  GGML_ASSERT([rsets->data count] == 0) → SIGABRT.
+                                --  Mark metal broken (opportunistic: auto-resets after 30s).
+                                Mark_Metal_Broken;
 
-                            --  [QUIRK-M10] Orphan poisoned context to prevent SIGTRAP
-                            Models (Kind).Context := Null_Context;
-                            Models (Kind).Model := Null_Model;
-                            Models (Kind).Loaded := False;
-                            Models (Kind).Current_Ctx := 0;
+                                --  [ENHANCED] Detailed error reporting for Tensor Accelerator issues
+                                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
+                                        & "[ERROR] Tensor Accelerator Memory Exhausted (Metal, -3): "
+                                        & "Out of Memory (kIOGPUCommandBufferCallbackErrorOutOfMemory)"
+                                        & AnsiAda.Reset);
+                                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
+                                        & "[ERROR] Action: Marked Metal as broken, will attempt recovery in 30s"
+                                        & AnsiAda.Reset);
+                                Put_Line (AnsiAda.Foreground (AnsiAda.Red)
+                                        & "[ERROR] Recommendation: Check Tensor Accelerator memory usage, reduce model size, or restart service"
+                                        & AnsiAda.Reset);
 
-                            exit;
+                                --  [QUIRK-M10] Orphan poisoned context to prevent SIGTRAP
+                                Models (Kind).Context := Null_Context;
+                                Models (Kind).Model := Null_Model;
+                                Models (Kind).Loaded := False;
+                                Models (Kind).Current_Ctx := 0;
+
+                                exit;
+
+                            else
+                                --  Non-OOM decode failure (e.g. ret=-2: ggml compute
+                                --  error). Flush KV cache to clear corrupted state
+                                --  (llama.cpp removes all seq_id=0 entries on failure,
+                                --  leaving cache poisoned) and retry once.
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                                    & "[DECODE-RETRY]"
+                                    & AnsiAda.Reset
+                                    & " Token decode failed (ret=" & Ret'Img
+                                    & ") at iteration" & Natural'Image (I)
+                                    & ", flushing KV and retrying...");
+
+                                --  Flush KV cache: release all slots so retry is clean
+                                Llama_Interface.Llama_Memory_Clear
+                                   (Llama_Interface.Llama_Get_Memory (Models (Kind).Context),
+                                    True);
+                                delay 0.01;  --  Allow Metal command buffers to drain
+
+                                --  Retry decode once
+                                declare
+                                    Retry_Ret : int;
+                                begin
+                                    Acquire_Accel_Lock;
+                                    if Kratos.Guard_Enter = 0 then
+                                        Retry_Ret := Llama_Decode (Models (Kind).Context, B);
+                                        Kratos.Guard_Exit;
+                                    else
+                                        Kratos.Log_Crash;
+                                        Retry_Ret := -1;
+                                    end if;
+                                    Release_Accel_Lock;
+
+                                    if Retry_Ret /= 0 then
+                                        --  Retry also failed — now abort and orphan
+                                        Put_Line
+                                           (AnsiAda.Foreground (AnsiAda.Red)
+                                            & "[DECODE-RETRY]"
+                                            & AnsiAda.Reset
+                                            & " Retry also failed (ret=" & Retry_Ret'Img
+                                            & "). Aborting generation.");
+                                        Append (Result, " [ABORTED:" & Retry_Ret'Img & "]");
+
+                                        Models (Kind).Context := Null_Context;
+                                        Models (Kind).Model := Null_Model;
+                                        Models (Kind).Loaded := False;
+                                        Models (Kind).Current_Ctx := 0;
+
+                                        exit;
+                                    end if;
+
+                                    Put_Line
+                                       (AnsiAda.Foreground (AnsiAda.Green)
+                                        & "[DECODE-RETRY]"
+                                        & AnsiAda.Reset
+                                        & " Retry succeeded at iteration" & Natural'Image (I)
+                                        & ". Continuing generation.");
+                                end;
+                            end if;
                         end if;
                     end;
                 end;
