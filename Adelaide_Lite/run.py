@@ -702,7 +702,7 @@ def main():
         # RUNTIME we use our separately-built ggml via RPATH (see GPR file).
         llama_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "llama.cpp"))
         llama_build_dir = os.path.join(llama_dir, "build")
-        llama_lib = os.path.join(llama_build_dir, "bin", "libllama.dylib")
+        llama_lib = os.path.join(llama_build_dir, "src", "libllama.a")
         llama_start = time.time()
 
         if not os.path.exists(llama_dir):
@@ -735,9 +735,9 @@ def main():
         # Build if needed (new clone, update, or missing lib)
         if needs_build:
             print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Building llama.cpp...")
-            print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake flags: -DGGML_NATIVE=ON -DLLAMA_BUILD_TOOLS=ON")
+            print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] CMake flags: -DGGML_NATIVE=ON -DLLAMA_BUILD_TOOLS=ON -DBUILD_SHARED_LIBS=OFF")
             os.makedirs(llama_build_dir, exist_ok=True)
-            cmake_flags = ["cmake", "-B", "build", "-DGGML_NATIVE=ON", "-DLLAMA_BUILD_TOOLS=ON"]
+            cmake_flags = ["cmake", "-B", "build", "-DGGML_NATIVE=ON", "-DLLAMA_BUILD_TOOLS=ON", "-DBUILD_SHARED_LIBS=OFF"]
             if ggml_backend == "metal":
                 print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Metal GPU acceleration: ENABLED")
                 cmake_flags.append("-DGGML_METAL=ON")
@@ -770,7 +770,7 @@ def main():
             print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Library exists, skipping build")
         
         # Ensure mtmd (multimodal) library is built
-        mtmd_lib = os.path.join(llama_build_dir, "bin", "libmtmd.dylib")
+        mtmd_lib = os.path.join(llama_build_dir, "tools", "mtmd", "libmtmd.a")
         mtmd_start = time.time()
         if not os.path.exists(mtmd_lib):
             print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Building mtmd (multimodal) library...")
