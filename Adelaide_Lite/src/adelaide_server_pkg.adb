@@ -35,6 +35,7 @@ with Benchmark_Manager; use Benchmark_Manager;
 with Accuracy_Benchmark_Manager; use Accuracy_Benchmark_Manager;
 
 with Version;
+with Ada.Numerics.Elementary_Functions;
 --  ===========================================================================
 --  DISPATCH QUIRKS & DISCOVERED WORKAROUNDS
 --  ===========================================================================
@@ -107,6 +108,21 @@ package body Adelaide_Server_Pkg is
    Handless_WCET : Float := 0.0;
    Handless_Vision_Context : Unbounded_String := To_Unbounded_String ("");
 
+   Trigger_Emb_Cache : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
+   Trigger_Len_Cache : Natural := 0;
+   Neg_Emb_Cache     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
+   Neg_Len_Cache     : Natural := 0;
+
+   task Handless_Status_Logger is
+   end Handless_Status_Logger;
+
+   task body Handless_Status_Logger is
+   begin
+      loop
+         delay 3.0;
+         Ada.Text_IO.Put_Line ("[Status Ping] Handless Stage: " & To_String (Handless_Stage));
+      end loop;
+   end Handless_Status_Logger;
    use type Streaming_Queue.Queue_Access;
 
    package Session_Maps is new Ada.Containers.Indefinite_Ordered_Maps
@@ -687,6 +703,31 @@ package body Adelaide_Server_Pkg is
 
             if Num_Floats > 0 then
                declare
+                  -- Acoustic Dynamic Gateway
+                  -- Governing Equation: dBFS = 20 * log10(RMS + epsilon)
+                  -- where RMS = sqrt((1/N) * sum(x_i^2))
+                  Sum_Sq : Float := 0.0;
+                  RMS    : Float;
+                  DB_FS  : Float;
+                  Epsilon: constant Float := 1.0e-9;
+               begin
+                  for I in 1 .. Natural (Num_Floats) loop
+                     Sum_Sq := Sum_Sq + Audio_Floats(I) * Audio_Floats(I);
+                  end loop;
+                  RMS := Ada.Numerics.Elementary_Functions.Sqrt (Sum_Sq / Float (Num_Floats));
+                  DB_FS := 20.0 * Ada.Numerics.Elementary_Functions.Log (X => RMS + Epsilon, Base => 10.0);
+
+                  Ada.Text_IO.Put_Line ("[Acoustic Gateway] Async Check - RMS: " & Float'Image (RMS) & ", dBFS: " & Float'Image (DB_FS));
+
+                  if DB_FS < -40.0 then
+                     Ada.Text_IO.Put_Line ("[Acoustic Gateway] Status: Dropped (below -40.0 dB threshold).");
+                     Handless_Stage := To_Unbounded_String ("Idle");
+                     return Wrap_Response (AWS.Response.Build ("text/plain", "No Speech Detected (Acoustic Gate)"));
+                  end if;
+                  Ada.Text_IO.Put_Line ("[Acoustic Gateway] Status: Passed.");
+               end;
+
+               declare
                   use GNAT.Sockets;
                   VAD_Socket  : Socket_Type;
                   VAD_Address : Sock_Addr_Type (Family_Unix);
@@ -767,25 +808,40 @@ package body Adelaide_Server_Pkg is
                    end if;
 
                     declare
-                       Intent_Prompt : constant String :=
-                         "[INTEGRITY: Answer ONLY 'YES' or 'NO'. Do not fabricate or infer intent that is not explicitly present in the text.] " &
-                         "Does the following text contain a clear, actionable intent directed at an AI assistant (a direct question, command, or request requiring a response)? " &
-                         "Answer ONLY 'YES' or 'NO'. Text: """ & To_String (Transcript) & """";
-                       Cached_Intent : constant String := Response_Cache.Lookup (Intent_Prompt);
+                       Transc_Emb   : Math_Utils.Vector (1 .. 4096);
+                       Transc_Len   : Natural;
+                       Sim_Pos      : Float;
+                       Sim_Neg      : Float;
                     begin
-                       if Cached_Intent'Length > 0 then
-                          Intent_Res := To_Unbounded_String (Cached_Intent);
+                       if Trigger_Len_Cache = 0 then
+                          Ada.Text_IO.Put_Line ("[Intent Router] Caching reference embeddings...");
+                          Model_Manager.Get_Embedding (Prompt => "user asking a direct question or commanding the assistant to do a task",
+                                                       Result => Trigger_Emb_Cache,
+                                                       Length => Trigger_Len_Cache,
+                                                       Level  => ELP1);
+
+                          Model_Manager.Get_Embedding (Prompt => "background noise, passive observation, or mumbling to themselves",
+                                                       Result => Neg_Emb_Cache,
+                                                       Length => Neg_Len_Cache,
+                                                       Level  => ELP1);
+                       end if;
+
+                       Model_Manager.Get_Embedding (Prompt => To_String (Transcript),
+                                                    Result => Transc_Emb,
+                                                    Length => Transc_Len,
+                                                    Level  => ELP1);
+                       
+                       Sim_Pos := Math_Utils.Cosine_Similarity (Transc_Emb (1 .. Transc_Len), Trigger_Emb_Cache (1 .. Trigger_Len_Cache));
+                       Sim_Neg := Math_Utils.Cosine_Similarity (Transc_Emb (1 .. Transc_Len), Neg_Emb_Cache (1 .. Neg_Len_Cache));
+
+                       Ada.Text_IO.Put_Line ("[Intent Router] Async Status - Trigger Sim: " & Float'Image (Sim_Pos) & ", BG Sim: " & Float'Image (Sim_Neg));
+
+                       if Sim_Pos > Sim_Neg and Sim_Pos > 0.3 then
+                          Ada.Text_IO.Put_Line ("[Intent Router] Decision: Active Command (YES).");
+                          Intent_Res := To_Unbounded_String ("YES");
                        else
-                          Model_Manager.Generate
-                            (Kind          => Snowball_Enaga_ShortNetworkAnswer,
-                             Prompt        => Intent_Prompt,
-                             Result        => Intent_Res,
-                             Images        => GNATCOLL.JSON.Empty_Array,
-                             Session_ID    => "intent-classifier",
-                             Requested_Ctx => 1024,
-                             Stream        => null,
-                             Level         => ELP1);
-                          Response_Cache.Store (Intent_Prompt, To_String (Intent_Res));
+                          Ada.Text_IO.Put_Line ("[Intent Router] Decision: Background Chatter (NO).");
+                          Intent_Res := To_Unbounded_String ("NO");
                        end if;
                     end;
 

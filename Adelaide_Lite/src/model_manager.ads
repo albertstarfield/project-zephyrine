@@ -186,6 +186,10 @@ package Model_Manager is
         Lengths : out Natural_List;
         Level   : ELP_Level := ELP1);
 
+     --  [FREE-PARALLEL-MEMORY] Global universal call procedure
+     --  Releases VRAM and CPU RAM for all models, Stable Diffusion, and Moonshine.
+     procedure FreeParallelMemory;
+
 
    --  POWER AWARE SCHEDULING
    --  [VITAL-DO-NOT-REMOVE]

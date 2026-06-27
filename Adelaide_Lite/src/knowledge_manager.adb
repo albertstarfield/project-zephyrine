@@ -401,7 +401,15 @@ package body Knowledge_Manager is
                 if Kind (Entry_D) = Directory then
                    Crawl_Directory (Full);
                 else
-                   if Is_Readable_Text (Full) then
+                   --  [DO NOT REMOVE COMMENT EXPLANATION]
+                   --  FIX 4: Pre-Tokenization Filtering (QUIRK-M10)
+                   --  Skip web and code files from natural language embedding.
+                   --  This stops the compute kernel from faulting on hyper-dense symbol clusters.
+                   if Index (Name, ".css") > 0 or else Index (Name, ".js") > 0 or else 
+                      Index (Name, ".html") > 0 or else Index (Name, ".json") > 0 or else 
+                      Index (Name, ".xml") > 0 or else Index (Name, ".ts") > 0 then
+                      null;
+                   elsif Is_Readable_Text (Full) then
                       declare
                          File_Content : Unbounded_String;
                          File_H       : File_Type;

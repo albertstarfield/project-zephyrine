@@ -11,6 +11,8 @@ with Reranker;
 with LSH_Hash;
 with Tool_Manager;
 with Scheduler_Manager;
+with SD_Manager;
+with Moonshine_Interface;
 with Llama_Interface;      use Llama_Interface;
 with Mtmd_Interface;       use Mtmd_Interface;
 with Interfaces.C;         use Interfaces.C;
@@ -348,60 +350,55 @@ package body Model_Manager is
                  --  [MEMORY TRACKING] This will be handled after the GPU query
              end;
              
-             declare
-                 use Interfaces.C;
-                 Free_Bytes  : size_t := 0;
-                 Total_Bytes : size_t := 0;
-                 Free_MB     : Natural := 0;
-                 Total_MB    : Natural := 0;
-                 Percent     : Natural := 0;
-            begin
-                  --  Add error handling for Tensor Accelerator memory query
-                  Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
-                   Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                           & "[DEBUG] [AccelMonitor] Tensor_Accelerator_Memory_Query returned Free_Bytes=" 
-                           & size_t'Image (Free_Bytes) & ", Total_Bytes=" 
-                           & size_t'Image (Total_Bytes) & AnsiAda.Reset);
-                    end;
-                               Put_Line (AnsiAda.Foreground (AnsiAda.Yellow)
-                                       & "[WARNING] [AccelMonitor] Attempted GPU reset after memory query failure" 
-                                       & AnsiAda.Reset);
+                           --  [DO NOT REMOVE COMMENT EXPLANATION]
+              --  FIX 6: Scope and Shadowing Corrections
+              --  We write directly to the outer scope variables (Free_Bytes, Total_Bytes, Is_Critical)
+              --  instead of shadowing them in local declare blocks. This ensures that the
+              --  subsequent status logic uses correct, dynamically queried values.
+              Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
+              Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                      & "[DEBUG] [AccelMonitor] Tensor_Accelerator_Memory_Query returned Free_Bytes=" 
+                      & Interfaces.C.size_t'Image (Free_Bytes) & ", Total_Bytes=" 
+                      & Interfaces.C.size_t'Image (Total_Bytes) & AnsiAda.Reset);
 
-                 
-                         if Total_Bytes > 0 then
-                          Free_MB := Natural (Free_Bytes / (1024 * 1024));
-                          Total_MB := Natural (Total_Bytes / (1024 * 1024));
-                           --  [MEMORY TRACKING] Log memory usage after query
-                           declare
-                               -- Estimate: 10MB per cycle for monitoring overhead (adjust as needed)
-                               Est_Used_MB : constant Integer := Cycle_Count * 10;
-                               Free_Pct : constant Natural := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
-                               -- Check if we're close to OOM
-                                Is_Critical : constant Boolean := Free_Pct < 10 and then Total_MB > 0;
-                           begin
-                               Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                                       & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
-                                       & " | Est_Mem_Used=" & Est_Used_MB'Img & "MB" 
-                                       & " | Free_Pct=" & Free_Pct'Img & "%"
-                                       & (if Is_Critical then " [CRITICAL]" else "")
-                                       & AnsiAda.Reset);
-                           end;
+              if Total_Bytes = 0 and then Acceleration_Silicon_Layer /= 0 then
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow)
+                          & "[WARNING] [AccelMonitor] Attempted GPU reset after memory query failure" 
+                          & AnsiAda.Reset);
+              end if;
 
-                          if Total_MB > 0 then
-                              Percent := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
-                          if Percent > 100 then 
-                             Percent := 100;
-                          end if;
-                     end if;
-                         GPU_Free_MB := Free_MB;
-                         GPU_Total_MB := Total_MB;
-                         GPU_Layer_Percent := Percent;
-                         GPU_Is_Stable := True;
-                         
-                         -- Set metal_broken flag if we're in a critical memory state
-                         declare
-                            Metal_Broken_Flag : constant Integer := (if Is_Critical then 1 else 0);
-                         begin
+              if Total_Bytes > 0 then
+                  Free_MB := Natural (Free_Bytes / (1024 * 1024));
+                  Total_MB := Natural (Total_Bytes / (1024 * 1024));
+                  
+                  declare
+                      Est_Used_MB : constant Integer := Cycle_Count * 10;
+                      Free_Pct    : constant Natural := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
+                  begin
+                      Is_Critical := Free_Pct < 10 and then Total_MB > 0;
+                      Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                              & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
+                              & " | Est_Mem_Used=" & Est_Used_MB'Img & "MB" 
+                              & " | Free_Pct=" & Free_Pct'Img & "%"
+                              & (if Is_Critical then " [CRITICAL]" else "")
+                              & AnsiAda.Reset);
+                  end;
+
+                  if Total_MB > 0 then
+                      Percent := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
+                      if Percent > 100 then 
+                          Percent := 100;
+                      end if;
+                  end if;
+                  
+                  GPU_Free_MB := Free_MB;
+                  GPU_Total_MB := Total_MB;
+                  GPU_Layer_Percent := Percent;
+                  GPU_Is_Stable := True;
+                  
+                  declare
+                      Metal_Broken_Flag : constant Integer := (if Is_Critical then 1 else 0);
+                  begin
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                                 & "[Tensor-Accelerator-Monitor] [Uptime]+"
@@ -1677,6 +1674,13 @@ package body Model_Manager is
                          & "s)");
                      
                      --  Actually free the resources now
+                     --  [DO NOT REMOVE COMMENT EXPLANATION]
+                     --  FIX 1: Asynchronous Execution vs CPU-Side Free (Use-After-Free)
+                     --  We acquire the global Metal lock before tearing down the context.
+                     --  This ensures that if the GPU is still processing a command buffer
+                     --  that was aborted mid-flight, we do not free the underlying memory
+                     --  pages while the GPU driver is referencing them, preventing SIGTRAP.
+                     Acquire_Accel_Lock;
                      if Kind = MMProj then
                          if Models (Kind).Mtmd_Ctx /= Null_Mtmd_Context then
                              Mtmd_Free_Safe (Models (Kind).Mtmd_Ctx);
@@ -1688,6 +1692,7 @@ package body Model_Manager is
                          Models (Kind).Context := Null_Context;
                          Models (Kind).Model := Null_Model;
                      end if;
+                     Release_Accel_Lock;
                      Models (Kind).Current_Ctx := 0;
                  end if;
              end;
@@ -1936,6 +1941,13 @@ package body Model_Manager is
          --        (Phase 2/2), but reduces the disk I/O bottleneck significantly.
          --======================================================================
          M_Params.Use_Mmap := True;
+         
+         --  [DO NOT REMOVE COMMENT EXPLANATION]
+         --  FIX 5: OS-Level Silent Page Eviction (The Swap Death) / Memory Pinning
+         --  Using mlock(2) explicitly pins the memory-mapped weights in physical RAM.
+         --  This prevents macOS from moving the model's memory pages to SSD swap
+         --  under high memory pressure, stopping TDR latency timeouts on the GPU.
+         M_Params.Use_Mlock := True;
 
         --  TRY THREE PATHS FOR MODEL FILES
         --  The CWD at runtime is unpredictable:
@@ -2463,6 +2475,14 @@ package body Model_Manager is
                      Models (Kind).Mtmd_Ctx := Null_Mtmd_Context;
                  end if;
              else
+                 --  [DO NOT REMOVE COMMENT EXPLANATION]
+                 --  FIX: KV Cache Slot Release on Unload
+                 --  We clear the KV cache memory whenever a model is unloaded (or warm-cached)
+                 --  to immediately free VRAM pages, keeping only the model weights in memory.
+                 if Models (Kind).Context /= Null_Context then
+                     Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), True);
+                 end if;
+
                  --  [OPTIMIZATION-M02]: Don't actually free resources yet
                  --  Just mark as warm cached and record the time
                  Models (Kind).Warm_Cached := True;
@@ -2475,12 +2495,39 @@ package body Model_Manager is
          end if;
      end Unload_Model;
 
-    procedure Force_Unload_And_Reload (Kind : Model_Type) is
-        Success : Boolean;
+     procedure Force_Unload_And_Reload (Kind : Model_Type) is
+         Success : Boolean;
+     begin
+         Unload_Model (Kind);
+         Load_Model (Kind, Success);
+     end Force_Unload_And_Reload;
+
+    procedure FreeParallelMemory is
     begin
-        Unload_Model (Kind);
-        Load_Model (Kind, Success);
-    end Force_Unload_And_Reload;
+        --  [DO NOT REMOVE COMMENT EXPLANATION]
+        --  FIX: Global Universal FreeParallelMemory Call
+        --  Releases VRAM and system memory across all AI pipelines:
+        --  1. Flushes and unloads all LLM & Embedding models, clearing KV caches.
+        --  2. Releases Stable Diffusion FLUX and Refinement contexts from VRAM.
+        --  3. Shuts down and releases the Moonshine STT transcriber context.
+        
+        -- 1. Unload all loaded LLM/Embedding models
+        for Kind in Model_Type loop
+            if Models (Kind).Loaded then
+                Unload_Model (Kind);
+            end if;
+        end loop;
+
+        -- 2. Free Stable Diffusion contexts
+        SD_Manager.Free_Flux_Context;
+        SD_Manager.Free_Refiner_Context;
+
+        -- 3. Free Moonshine STT transcribers
+        Moonshine_Interface.Free_Moonshine;
+
+        -- 4. Flush SQLite caches and reclaim database heap memory
+        Database_Manager.Flush_Memory;
+    end FreeParallelMemory;
 
     function Get_Context
        (Kind : Model_Type) return Llama_Interface.Llama_Context is
@@ -2900,7 +2947,12 @@ package body Model_Manager is
             return;
         end if;
 
-        Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Models (Qwen_Embedding).Context), False);
+        --  [DO NOT REMOVE COMMENT EXPLANATION]
+        --  FIX: KV Cache Slot Release
+        --  We pass True (instead of False) to Llama_Memory_Clear to fully release
+        --  the VRAM slots in the KV cache after each prompt. This prevents slot
+        --  exhaustion when batching multiple prompts, avoiding "failed to find a memory slot".
+        Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Models (Qwen_Embedding).Context), True);
         Llama_Set_Embeddings (Models (Qwen_Embedding).Context, Interfaces.C.int (1));
 
         declare
@@ -3004,6 +3056,24 @@ package body Model_Manager is
         Length : out Natural;
         Level  : ELP_Level := ELP1) is
     begin
+        --  [DO NOT REMOVE COMMENT EXPLANATION]
+        --  FIX 4: Threadgroup Out-of-Bounds (The CSS/HTML Quirk)
+        --  Compute kernels can read out-of-bounds in threadgroups if a string is
+        --  too hyper-dense with code symbols. We filter it before it hits the GPU.
+        declare
+            Density_Count : Natural := 0;
+        begin
+            for I in Prompt'Range loop
+                if Prompt (I) = '{' or else Prompt (I) = '}' or else Prompt (I) = ';' then
+                    Density_Count := Density_Count + 1;
+                end if;
+            end loop;
+            if Prompt'Length > 0 and then (Density_Count * 100 / Prompt'Length) > 10 then
+                Length := 0;
+                return;
+            end if;
+        end;
+
         if Prompt'Length <= 800 then
             Get_Single_Embedding (Prompt, Result, Length, Level);
         else

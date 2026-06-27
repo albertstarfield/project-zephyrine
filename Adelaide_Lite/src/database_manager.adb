@@ -1188,4 +1188,21 @@ package body Database_Manager is
       null;
    end Close;
 
+   procedure Flush_Memory is
+   begin
+      if Main_DB_Ptr /= null then
+         Execute (Main_DB_Ptr.all, "PRAGMA wal_checkpoint(TRUNCATE);");
+         Execute (Main_DB_Ptr.all, "PRAGMA shrink_memory;");
+      end if;
+      if Lit_DB_Ptr /= null then
+         Execute (Lit_DB_Ptr.all, "PRAGMA wal_checkpoint(TRUNCATE);");
+         Execute (Lit_DB_Ptr.all, "PRAGMA shrink_memory;");
+      end if;
+      Put_Line ("[DB] Flushed database pages and shrunk SQLite cache memory.");
+   exception
+      when E : others =>
+         Put_Line ("[DB] Flush_Memory ERROR: " &
+                   Ada.Exceptions.Exception_Message (E));
+   end Flush_Memory;
+
 end Database_Manager;
