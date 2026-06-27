@@ -2136,30 +2136,13 @@ package body Model_Manager is
             C_Params.N_Threads := 8;
             C_Params.N_Threads_Batch := 8;
 
-            --  [VITAL-DO-NOT-REMOVE] Model-specific KV cache and flash attention.
-            --  Embedding model (Qwen3-Embedding-0.6B): F16 KV, no flash_attn, GPU.
-            --  Uses F16 because it's a small model — quantized KV saves little
-            --  memory and may degrade embedding quality. No flash_attn because
-            --  embedding model doesn't need it (small context, simple forward pass).
-            --  GPU because LM Studio does it and it's ~10x faster than CPU.
-            --  CRASH HISTORY: The original "Metal crash" with embedding model
-            --  was misdiagnosed. Three separate bugs were at play:
-            --  1) FFI struct missing N_Outputs_Max → Type_K at wrong offset
-            --  2) No Task_Stack_Size → fprintf stack overflow in llama_init
-            --  3) All models got same params (Q4_1 + flash_attn for embedding)
-            --  Chat model (Qwen3.5HybridMythos): Q4_1 KV + flash_attn=1 + GPU.
-            --  Q4_1 KV saves ~75% memory (fits in 16GB RAM). Flash attn
-            --  works because llama_context_default_params() provides correct
-            --  defaults for Qwen3.5's delta net recurrent attention.
-            if Kind = Qwen_Embedding then
-                C_Params.Type_K := GGML_TYPE_F16;
-                C_Params.Type_V := GGML_TYPE_F16;
-                C_Params.Flash_Attn_Type := 0;
-            else
-                C_Params.Type_K := GGML_TYPE_Q4_1;
-                C_Params.Type_V := GGML_TYPE_Q4_1;
-                C_Params.Flash_Attn_Type := 1;
-            end if;
+            --  [VITAL-DO-NOT-REMOVE] All models use Q4_0 KV + flash_attn=1 + GPU.
+            --  Q4_0 KV saves ~75% memory vs F16. Flash attn is REQUIRED when
+            --  using quantized KV cache (V cache quantization needs flash_attn).
+            --  This applies to both embedding and chat models.
+            C_Params.Type_K := GGML_TYPE_Q4_0;
+            C_Params.Type_V := GGML_TYPE_Q4_0;
+            C_Params.Flash_Attn_Type := 1;
 
             C_Params.Abort_Callback := Llama_Abort_Callback'Address;
             C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;

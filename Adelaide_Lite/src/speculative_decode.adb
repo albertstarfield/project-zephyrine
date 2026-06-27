@@ -131,6 +131,9 @@ package body Speculative_Decode is
       Context_Params.N_Ctx := 4096;     -- Smaller context for draft model
       Context_Params.N_Batch := 512;    -- Smaller batch for faster draft
       Context_Params.N_Threads := 4;    -- Fewer threads (it's small)
+      Context_Params.Type_K := Llama_Interface.GGML_TYPE_Q4_0;
+      Context_Params.Type_V := Llama_Interface.GGML_TYPE_Q4_0;
+      Context_Params.Flash_Attn_Type := 1;
 
       --  Create context for draft model
       Draft_Context := Llama_Interface.Llama_Init_From_Model

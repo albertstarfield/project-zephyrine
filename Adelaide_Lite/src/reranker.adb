@@ -26,7 +26,7 @@ package body Reranker is
    Ctx_Size          : constant unsigned := 512;
 
    --  Constants
-   GGML_TYPE_Q8_0 : constant int := 8;
+   GGML_TYPE_Q4_0 : constant int := 2;
 
    function Is_Ready return Boolean is
    begin
@@ -72,9 +72,9 @@ package body Reranker is
       C_Params.N_Ubatch := 1;
       C_Params.N_Threads := 4;
       C_Params.N_Threads_Batch := 4;
-      C_Params.Type_K := GGML_TYPE_Q8_0;
-      C_Params.Type_V := GGML_TYPE_Q8_0;
-      C_Params.Flash_Attn_Type := 0;
+      C_Params.Type_K := GGML_TYPE_Q4_0;
+      C_Params.Type_V := GGML_TYPE_Q4_0;
+      C_Params.Flash_Attn_Type := 1;
       C_Params.Pooling_Type := 4;  -- LLAMA_POOLING_TYPE_RANK
       C_Params.Attention_Type := 1;  -- NON-CAUSAL
 
