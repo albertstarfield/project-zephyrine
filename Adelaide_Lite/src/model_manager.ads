@@ -296,7 +296,7 @@ package Model_Manager is
    --  RECOVERY: After 600s (10 min), GPU layers re-enabled
    Tensor_Accel_INOP       : Boolean := False;
    INOP_Consecutive_Errors : Natural := 0;   -- Consecutive ggml compute errors
-   INOP_Error_Threshold    : constant Natural := 10;  -- Trigger after 10 errors
+   INOP_Error_Threshold    : constant Natural := 420;  -- Blaze it threshold
    INOP_Retry_Countdown    : Natural := 0;   -- Seconds remaining in cooldown
    INOP_Cooldown_Secs      : constant Natural := 600;  -- 10 minutes
    INOP_Trigger_Time       : Duration := 0.0;  -- Time when INOP was triggered

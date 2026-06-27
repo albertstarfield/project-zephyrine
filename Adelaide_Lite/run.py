@@ -296,11 +296,6 @@ def show_help():
     {CYN}GET{RST}    /api/docs/license         License
     {CYN}GET{RST}    /api/user_info            User info
 
-  {BOLD}{WHT}MODEL TYPES{RST}
-    {YLW}Qwen_0_8B{RST}       Small LLM (always loaded)
-    {YLW}Qwen_9B{RST}         Large LLM (loaded on-demand)
-    {YLW}Qwen_Embedding{RST}  Semantic search embeddings
-    {YLW}MMProj{RST}          Multimodal CLIP vision
 
   {DIM}  Documentation:  Adelaide_Lite/documentation/{RST}
   {DIM}  Architecture:   Adelaide_Lite/run.py (line 14){RST}
@@ -573,6 +568,37 @@ def cleanup(signum=None, frame=None):
 signal.signal(signal.SIGINT, cleanup)
 signal.signal(signal.SIGTERM, cleanup)
 
+def checkout_latest_release(repo_dir, module_name):
+    """Fetches the latest release tag and checks it out for stability."""
+    try:
+        # Fetch tags
+        subprocess.run(["git", "fetch", "--tags", "origin"], cwd=repo_dir, check=False, capture_output=True)
+        # Find latest tag
+        result = subprocess.run(["git", "describe", "--tags", "--abbrev=0"], cwd=repo_dir, capture_output=True, text=True)
+        latest_tag = result.stdout.strip()
+        if latest_tag:
+            # Checkout tag
+            checkout_res = subprocess.run(["git", "checkout", latest_tag], cwd=repo_dir, check=False, capture_output=True, text=True)
+            if checkout_res.returncode == 0:
+                print(f"[{module_name}] Checked out latest release: {latest_tag}")
+            else:
+                print(f"[{module_name}] Failed to checkout {latest_tag}: {checkout_res.stderr}")
+            return latest_tag
+    except Exception as e:
+        print(f"[{module_name}] Error checking out latest tag: {e}")
+    return None
+
+def safe_cmake_configure(cmake_flags, cwd, build_dir, module_name):
+    """Robust CMake configure that detects cache corruption and retries cleanly."""
+    result = subprocess.run(cmake_flags, cwd=cwd, check=False, capture_output=True, text=True)
+    if result.returncode != 0 and ("CMakeCache.txt" in result.stderr or "CMake Error" in result.stderr):
+        print(f"{BG_RED}[BUGCHECK] [{module_name}] Corrupted CMakeCache detected. Clearing build dir and retrying...{RST}")
+        shutil.rmtree(build_dir, ignore_errors=True)
+        os.makedirs(build_dir, exist_ok=True)
+        # Re-run from scratch
+        result = subprocess.run(cmake_flags, cwd=cwd, check=False, capture_output=True, text=True)
+    return result
+
 def main():
     global daemon_process, server_process, watchdog_process, vad_process
     
@@ -638,17 +664,15 @@ def main():
                 ["git", "clone", "https://github.com/ggml-org/llama.cpp.git", llama_dir],
                 check=False
             )
+            checkout_latest_release(llama_dir, "LLAMA")
             needs_build = True
         else:
             old_head = subprocess.run(
                 ["git", "rev-parse", "HEAD"], cwd=llama_dir,
                 capture_output=True, text=True
             ).stdout.strip()
-            print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Fetching latest llama.cpp...")
-            subprocess.run(["git", "fetch", "origin"], cwd=llama_dir, check=False,
-                           capture_output=True)
-            subprocess.run(["git", "pull", "--ff-only"], cwd=llama_dir, check=False,
-                           capture_output=True)
+            print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Fetching latest llama.cpp release...")
+            checkout_latest_release(llama_dir, "LLAMA")
             new_head = subprocess.run(
                 ["git", "rev-parse", "HEAD"], cwd=llama_dir,
                 capture_output=True, text=True
@@ -677,7 +701,7 @@ def main():
             elif ggml_backend == "vulkan":
                 print(f"[LLAMA] [{time.strftime('%H:%M:%S')}] Vulkan GPU acceleration: ENABLED")
                 cmake_flags.append("-DGGML_VULKAN=ON")
-            result = subprocess.run(cmake_flags, cwd=llama_dir, check=False, capture_output=True, text=True)
+            result = safe_cmake_configure(cmake_flags, cwd=llama_dir, build_dir=llama_build_dir, module_name="LLAMA")
             if result.returncode != 0:
                 print(f"{BG_RED}[BUGCHECK] [LLAMA] [{time.strftime('%H:%M:%S')}] CMake configure FAILED{RST}")
                 if result.stderr:
@@ -729,6 +753,7 @@ def main():
         if not os.path.exists(kokoro_dir):
             print("[*] Cloning kokoro-onnx...")
             subprocess.run(["git", "clone", "https://github.com/thewh1teagle/kokoro-onnx", kokoro_dir], check=False)
+            checkout_latest_release(kokoro_dir, "KOKORO-ONNX")
         else:
             print("[*] kokoro-onnx already exists, skipping clone.")
             
@@ -736,6 +761,7 @@ def main():
         if not os.path.exists(kokoclone_dir):
             print("[*] Cloning KokoClone Zero-Shot Repository...")
             subprocess.run(["git", "clone", "https://github.com/Ashish-Patnaik/kokoclone.git", kokoclone_dir], check=True)
+            checkout_latest_release(kokoclone_dir, "KOKOCLONE")
         else:
             print("[*] kokoclone already exists, skipping clone.")
 
@@ -754,7 +780,8 @@ def main():
         moonshine_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "moonshine"))
         if not os.path.exists(moonshine_dir):
             print("[*] Cloning moonshine...")
-            subprocess.run(["git", "clone", "--depth=1", "https://github.com/moonshine-ai/moonshine.git", moonshine_dir], check=False)
+            subprocess.run(["git", "clone", "https://github.com/moonshine-ai/moonshine.git", moonshine_dir], check=False)
+            checkout_latest_release(moonshine_dir, "MOONSHINE")
             
             # Autoremove examples to save space
             moonshine_examples = os.path.join(moonshine_dir, "examples")
@@ -770,7 +797,7 @@ def main():
         if not os.path.exists(moonshine_core_lib):
             print("[*] Building moonshine C API...")
             os.makedirs(moonshine_build_dir, exist_ok=True)
-            subprocess.run(["cmake", ".."], cwd=moonshine_build_dir, check=False)
+            result = safe_cmake_configure(["cmake", ".."], cwd=moonshine_build_dir, build_dir=moonshine_build_dir, module_name="MOONSHINE")
             subprocess.run(["make", f"-j{threads}"], cwd=moonshine_build_dir, check=False)
         else:
             print("[*] moonshine core library exists, skipping cmake build.")
@@ -803,20 +830,18 @@ def main():
         if not os.path.exists(sd_cpp_dir):
             print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Cloning stable-diffusion.cpp...")
             subprocess.run(
-                ["git", "clone", "--depth=1", "https://github.com/leejet/stable-diffusion.cpp.git", sd_cpp_dir],
+                ["git", "clone", "https://github.com/leejet/stable-diffusion.cpp.git", sd_cpp_dir],
                 check=False
             )
+            checkout_latest_release(sd_cpp_dir, "SD-CPP")
             needs_build = True
         else:
             old_head = subprocess.run(
                 ["git", "rev-parse", "HEAD"], cwd=sd_cpp_dir,
                 capture_output=True, text=True
             ).stdout.strip()
-            print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Fetching latest stable-diffusion.cpp...")
-            subprocess.run(["git", "fetch", "origin"], cwd=sd_cpp_dir, check=False,
-                           capture_output=True)
-            subprocess.run(["git", "pull", "--ff-only"], cwd=sd_cpp_dir, check=False,
-                           capture_output=True)
+            print(f"[SD-CPP] [{time.strftime('%H:%M:%S')}] Fetching latest stable-diffusion.cpp release...")
+            checkout_latest_release(sd_cpp_dir, "SD-CPP")
             new_head = subprocess.run(
                 ["git", "rev-parse", "HEAD"], cwd=sd_cpp_dir,
                 capture_output=True, text=True
@@ -846,7 +871,7 @@ def main():
                 cmake_flags.append("-DGGML_METAL=ON")
             elif ggml_backend == "cuda":
                 cmake_flags.append("-DGGML_CUDA=ON")
-            result = subprocess.run(cmake_flags, cwd=sd_cpp_built, check=False, capture_output=True, text=True)
+            result = safe_cmake_configure(cmake_flags, cwd=sd_cpp_built, build_dir=sd_cpp_built, module_name="SD-CPP")
             if result.returncode != 0:
                 print(f"{BG_RED}[BUGCHECK] [SD-CPP] [{time.strftime('%H:%M:%S')}] CMake FAILED: {result.stderr[-500:]}{RST}")
             else:

@@ -2151,13 +2151,22 @@ package body Model_Manager is
             C_Params.N_Threads := 8;
             C_Params.N_Threads_Batch := 8;
 
-            --  [VITAL-DO-NOT-REMOVE] All models use Q4_0 KV + flash_attn=1 + GPU.
+            --  [VITAL-DO-NOT-REMOVE] Chat models use Q4_0 KV + flash_attn=1 + GPU.
             --  Q4_0 KV saves ~75% memory vs F16. Flash attn is REQUIRED when
             --  using quantized KV cache (V cache quantization needs flash_attn).
-            --  This applies to both embedding and chat models.
-            C_Params.Type_K := GGML_TYPE_Q4_0;
-            C_Params.Type_V := GGML_TYPE_Q4_0;
-            C_Params.Flash_Attn_Type := 1;
+            --  Embedding models fall back to F16 without flash attention to prevent
+            --  CPU scheduler graph fragmentation and error 1 on Metal+CPU systems.
+            if Kind = Qwen_Embedding then
+               C_Params.Type_K := GGML_TYPE_F16;
+               C_Params.Type_V := GGML_TYPE_F16;
+               C_Params.Flash_Attn_Type := 0;
+               C_Params.N_Batch := 32;
+               C_Params.N_Ubatch := 32;
+            else
+               C_Params.Type_K := GGML_TYPE_Q4_0;
+               C_Params.Type_V := GGML_TYPE_Q4_0;
+               C_Params.Flash_Attn_Type := 1;
+            end if;
 
             C_Params.Abort_Callback := Llama_Abort_Callback'Address;
             C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;
@@ -3089,7 +3098,7 @@ package body Model_Manager is
         Llama_Set_Embeddings (Models (Qwen_Embedding).Context, Interfaces.C.int (1));
 
         declare
-            Batch_Size : constant int := int'Min (256, int (Models (Qwen_Embedding).Current_Ctx));
+            Batch_Size : constant int := int'Min (32, int (Models (Qwen_Embedding).Current_Ctx));
             Current_Pos : int := 0;
             Tokens_Left : int := N_Toks;
             Consecutive_Failures : Natural := 0;
@@ -4455,7 +4464,7 @@ package body Model_Manager is
         --  CHUNKED DECODING
         declare
             Batch_Size  : constant int :=
-               int'Min (256, int (Models (Kind).Current_Ctx));
+               int'Min ((if Kind = Qwen_Embedding then 32 else 256), int (Models (Kind).Current_Ctx));
             Current_Pos : int := 0;
             Tokens_Left : int := N_Toks;
         begin
@@ -6075,6 +6084,10 @@ package body Model_Manager is
                     & " No relevant memories found above threshold -- "
                     & "system prompt unchanged.");
             end if;
+
+            --  [GPU SAFETY] Free Reranker model from Metal BEFORE doing anything else
+            --  so that it does not collide with the main model loading in Load_Model!
+            Reranker.Free_Reranker;
         end;
 
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
