@@ -134,4 +134,7 @@ package Database_Manager is
       Results   : out Imagined_Image_Array;
       Count     : out Natural);
 
+   --  [FREE-PARALLEL-MEMORY] Flush SQLite memory cache to disk and shrink heap usage
+   procedure Flush_Memory;
+
 end Database_Manager;

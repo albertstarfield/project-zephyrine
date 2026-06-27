@@ -30,6 +30,15 @@ package body Moonshine_Interface is
       end if;
    end Init_Moonshine;
 
+   procedure Free_Moonshine is
+   begin
+      if Handle >= 0 then
+         Moonshine_Bindings.Free_Transcriber (Handle);
+         Handle := -1;
+         Ada.Text_IO.Put_Line ("Freed Moonshine transcriber resources.");
+      end if;
+   end Free_Moonshine;
+
    function Transcribe_Raw_PCM (Audio_Data : access Float; Audio_Length : Interfaces.Unsigned_64) return String is
       Transcript_Ptr : aliased Moonshine_Bindings.Transcript_Ptr := null;
       Result : int;

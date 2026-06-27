@@ -69,7 +69,27 @@ package body Embedding_Batcher is
       L : constant Natural := File_Name'Length;
    begin
       Current_Idx := Current_Idx + 1;
-      Buffer (Current_Idx) := To_Unbounded_String (Prompt);
+      --  [DO NOT REMOVE COMMENT EXPLANATION]
+      --  FIX 3: Hardware-Aware Padding (Misaligned Buffers)
+      --  Pad the text chunk with spaces to ensure the final token count
+      --  and memory footprint are aligned to Metal GPU SIMD group boundaries (multiples of 32)
+      declare
+          Pad_Len : constant Natural := (32 - (Prompt'Length mod 32)) mod 32;
+      begin
+          if Pad_Len = 0 then
+              Buffer (Current_Idx) := To_Unbounded_String (Prompt);
+          else
+              declare
+                  Padded_Prompt : String (1 .. Prompt'Length + Pad_Len);
+              begin
+                  Padded_Prompt (1 .. Prompt'Length) := Prompt;
+                  for I in Prompt'Length + 1 .. Padded_Prompt'Last loop
+                      Padded_Prompt (I) := ' ';
+                  end loop;
+                  Buffer (Current_Idx) := To_Unbounded_String (Padded_Prompt);
+              end;
+          end if;
+      end;
       
       if L > 256 then
          Names (Current_Idx) := File_Name (File_Name'First .. File_Name'First + 255);

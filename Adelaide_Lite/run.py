@@ -169,7 +169,7 @@ def verify_environment():
             print(f"  {GRN}[ok]{RST} Full Xcode.app found")
         else:
             print(f"  {RED}[!!]{RST} Full Xcode.app NOT found at {xcode_path}")
-            print(f"    Prerequisite: Install full Xcode from the App Store")
+            print("    Prerequisite: Install full Xcode from the App Store")
             missing.append("xcode-app")
 
         try:
@@ -522,7 +522,7 @@ def cleanup(signum=None, frame=None):
     # Collect PIDs to kill directly — do NOT rely on proc.terminate()
     # inside a signal handler (can deadlock with main thread's proc.wait()).
     pids_to_kill = []
-    for proc in [daemon_process, server_process, vad_process]:
+    for proc in [daemon_process, server_process, watchdog_process, vad_process]:
         if proc and proc.poll() is None:
             pids_to_kill.append((proc.pid, proc.args[0] if proc.args else "unknown"))
 
@@ -550,7 +550,7 @@ def cleanup(signum=None, frame=None):
             print(f"[*] PID {pid} exited cleanly.")
 
     # Force-kill any remaining zombie processes via process group
-    for proc in [daemon_process, server_process, vad_process]:
+    for proc in [daemon_process, server_process, watchdog_process, vad_process]:
         if proc:
             try:
                 os.killpg(os.getpgid(proc.pid), SIGKILL)
@@ -1190,6 +1190,8 @@ def main():
         if os.path.exists(frontend_dir):
             npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
             subprocess.run([npm_cmd, "install"], cwd=frontend_dir, check=True)
+            print("[*] Running auto npm audit fix to resolve vulnerabilities...")
+            subprocess.run([npm_cmd, "audit", "fix"], cwd=frontend_dir, check=False)
             subprocess.run([npm_cmd, "run", "build"], cwd=frontend_dir, check=True)
         
         with open(hash_file, "w") as f:
