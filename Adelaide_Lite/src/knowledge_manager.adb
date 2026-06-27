@@ -540,9 +540,30 @@ package body Knowledge_Manager is
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Native_Crawl_Task waiting for Start...");
       accept Start;
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Native_Crawl_Task ACCEPTED Start, entering main loop.");
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Native_Crawl_Task ACCEPTED Start.");
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                 AnsiAda.Reset & " Native Crawl Task Active.");
+
+      --  [BOOT GATE] Wait 600s at boot before crawling begins.
+      declare
+         Boot_Cooldown_Remaining : Natural := 600;
+      begin
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                   AnsiAda.Reset & " Crawl boot cooldown: waiting 600s before crawling...");
+         while Boot_Cooldown_Remaining > 0 loop
+            delay 1.0;
+            Boot_Cooldown_Remaining := Boot_Cooldown_Remaining - 1;
+            if Model_Manager.Should_Abort_ELP0 then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                         AnsiAda.Reset & " Crawl boot cooldown interrupted by ELP1, resetting to 600s!");
+               Model_Manager.Wait_For_ELP1_Idle;
+               Boot_Cooldown_Remaining := 600;
+            end if;
+         end loop;
+         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                   AnsiAda.Reset & " Crawl boot cooldown finished. Starting crawl.");
+      end;
+
        loop
           --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
