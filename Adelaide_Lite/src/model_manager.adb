@@ -1638,7 +1638,7 @@ package body Model_Manager is
         --  Minimum context size is 8192 for LLM models (stability and headroom).
         --  Smaller contexts (e.g., 4096) caused llama_decode assertion failures
         --  with Qwen3.5HybridMythos at Q4_1 KV quantization on this hardware.
-        --  Embedding model uses 1024 (it only processes 800-char chunks).
+         --  Embedding model uses 512 (fixed, no dynamic sizing).
         if Kind /= Qwen_Embedding and then Actual_Ctx < 8192 then
             Actual_Ctx := 8192;
         end if;
@@ -1932,9 +1932,13 @@ package body Model_Manager is
          --  GPU LAYER CONFIGURATION
          --  ======================================================================
          if Kind = Qwen_Embedding then
-             --  [GPU-FORCE] Embedding model ALWAYS uses GPU.
-             --  CPU-only with Metal backend present causes graph scheduler error 1.
-             M_Params.N_Gpu_Layers := -1;
+             --  ELP0 file indexing uses CPU-only to avoid Metal contention.
+             --  Non-ELP0 embedding ops use GPU.
+             if Is_File_Index then
+                 M_Params.N_Gpu_Layers := 0;  -- CPU-only for file indexing
+             else
+                 M_Params.N_Gpu_Layers := -1;  -- GPU for other ops
+             end if;
          else
              --  [ADAPTIVE GPU LAYERS FOR LLM]
              if Acceleration_Silicon_Layer = -1 then
@@ -2224,7 +2228,8 @@ package body Model_Manager is
                         & "s [LoadModel]"
                         & AnsiAda.Reset
                         & " Embedding GPU: "
-                        & "GPU (forced, CPU-only causes error 1)");
+                        & (if Is_File_Index then "CPU-only (file index)"
+                           else "GPU (accelerator API)"));
                 end if;
                 --  [VITAL-DO-NOT-REMOVE] DO NOT suppress stderr here.
                 --  If Llama_Init_From_Model hangs or crashes, we NEED to see
@@ -3224,7 +3229,7 @@ package body Model_Manager is
             return;
         end if;
 
-        Load_Model (Kind, Success, 1024, Level, Level = ELP0);
+        Load_Model (Kind, Success, 512, Level, Level = ELP0);
         if Success then
             Models (Kind).In_Use := True;
             Compute_Embedding_Vector (Prompt, Result, Length, Level);
@@ -3352,7 +3357,7 @@ package body Model_Manager is
              return;
          end if;
  
-         Load_Model (Kind, Success, 1024, Level, Level = ELP0);
+         Load_Model (Kind, Success, 512, Level, Level = ELP0);
          if not Success then
              Put_Line (AnsiAda.Background (AnsiAda.Red)
                 & "[BUGCHECK] [Batching-Error] Failed to load embedding model."
@@ -5576,10 +5581,10 @@ package body Model_Manager is
             Priority_Model_Gate.Acquire_ELP1 (Kind);
         end if;
 
-        --  Embedding model needs only 1024 context; LLM needs 8192.
+        --  Embedding model needs only 512 context; LLM needs 8192.
         declare
             Embed_Ctx : constant Positive :=
-               (if Kind = Qwen_Embedding then 1024 else 8192);
+               (if Kind = Qwen_Embedding then 512 else 8192);
         begin
             Load_Model (Kind, Success, Embed_Ctx, Level, False);
         end;
@@ -5600,7 +5605,7 @@ package body Model_Manager is
         --  Allocate temp array for tokenization
         declare
             Tok_Cap : constant Positive :=
-               (if Kind = Qwen_Embedding then 1024 else 8192);
+               (if Kind = Qwen_Embedding then 512 else 8192);
         begin
             Tmp_Toks := new Token_Array (1 .. Tok_Cap);
             N_Toks :=
