@@ -457,6 +457,8 @@ package body Knowledge_Manager is
                        end if;
                     end if;
                  end if;
+                 --  Yield to OS scheduler to prevent starvation (framebuffer glitching)
+                 delay 0.001;
               end;
            end loop;
            Ada.Directories.End_Search (Search);

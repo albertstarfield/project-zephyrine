@@ -1,5 +1,7 @@
 pragma SPARK_Mode (Off);
 with Ada.Real_Time; use Ada.Real_Time;
+with Ada.Characters.Handling;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 
 package body Zenith_Orion is
 
@@ -72,5 +74,17 @@ package body Zenith_Orion is
       
       return (Max_J, Min_J, Sum_J / Duration (J_Count));
    end Get_Jitter_Profile;
+
+   function Check_SHM_Trigger (Prompt : String) return String is
+      Lower_Prompt : constant String := Ada.Characters.Handling.To_Lower (Prompt);
+   begin
+      if Index (Lower_Prompt, "zenith lock") > 0 then
+         return "[ZenithOrion-ELP3] Pacing Lock Engaged at 1ms. Max_Jitter: " &
+                Duration'Image (Max_J);
+      elsif Index (Lower_Prompt, "orion telemetry") > 0 then
+         return "[ZenithOrion-ELP3] Telemetry stream active. SHM connected.";
+      end if;
+      return "";
+   end Check_SHM_Trigger;
 
 end Zenith_Orion;

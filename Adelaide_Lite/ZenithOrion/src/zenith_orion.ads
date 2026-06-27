@@ -17,4 +17,8 @@ package Zenith_Orion is
    function Get_Current_Timing return Duration;
    function Get_Jitter_Profile return Jitter_Data;
 
+   --  Checks if the prompt maps to an exact SHM/hardware trigger.
+   --  Returns empty string if no match.
+   function Check_SHM_Trigger (Prompt : String) return String;
+
 end Zenith_Orion;

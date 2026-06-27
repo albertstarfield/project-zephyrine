@@ -35,6 +35,8 @@ with Watchdog_Manager;
 with Kratos;
 with ELP_Queue;
 with Speculative_Cache;
+with Stella_Icarus;
+with Zenith_Orion;
 
 --  ===========================================================================
 --  MODEL MANAGEMENT QUIRKS & DISCOVERED WORKAROUNDS
@@ -716,6 +718,37 @@ package body Model_Manager is
             delay until Next_Check;
         end loop;
     end Context_Monitor;
+
+    --  =====================================================================
+    --  ASYNC STATUS MONITOR TASK
+    --  =====================================================================
+    --  Prints ADB/ADS status every 3 seconds to stdio.
+    --  =====================================================================
+    task Async_Status_Monitor is
+        entry Start;
+    end Async_Status_Monitor;
+
+    task body Async_Status_Monitor is
+        Interval   : constant Duration := 3.0;
+        Next_Check : Ada.Calendar.Time;
+    begin
+        Elab_Trace ("Async_Status_Monitor task body ENTERED");
+        accept Start;
+        loop
+            Next_Check := Ada.Calendar.Clock + Interval;
+            Put_Line
+               (AnsiAda.Foreground (AnsiAda.Yellow)
+                & "[ADB/ADS]"
+                & AnsiAda.Reset
+                & " Status: ACTIVE | ELP Queue: " 
+                & Long_Long_Integer'Image (ELP_Queue.Depth)
+                & " pending | "
+                & "VRAM Free: " 
+                & Natural'Image (GPU_Free_MB) 
+                & " MB");
+            delay until Next_Check;
+        end loop;
+    end Async_Status_Monitor;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -1437,7 +1470,8 @@ package body Model_Manager is
         end if;
          if not CPU_Monitor'Terminated then
              CPU_Monitor.Start;
-         end if;
+            Async_Status_Monitor.Start;
+        end if;
          
          --  [DEBUG] Print status of all monitor tasks
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -5401,7 +5435,12 @@ package body Model_Manager is
         --  through the stream parser. This ensures orchestration thoughts are
         --  silenced inside think blocks instead of leaking to the client.
         Orch_Parser      : Stream_Parser_State;
+        Local_Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
     begin
+        for I in 1 .. GNATCOLL.JSON.Length (Images) loop
+            GNATCOLL.JSON.Append (Local_Images, GNATCOLL.JSON.Get (Images, I));
+        end loop;
+
         --  Reset context fault tracking for this request
         Current_Context_Fault_JMPs := 0;
         Current_Internal_State_Len := 0;
@@ -5421,6 +5460,41 @@ package body Model_Manager is
         Orch_Parser.Orch_Think_Open := True;
 
         T0 := Ada.Calendar.Clock;
+
+        --  [ELP3 / ELP2 FAST-PATH INTERCEPTION]
+        declare
+           T_Hook_Start : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+           ZO_Result : constant String := Zenith_Orion.Check_SHM_Trigger (Prompt);
+        begin
+           if ZO_Result'Length > 0 then
+              Result := To_Unbounded_String (ZO_Result);
+              declare
+                 Dur : constant Duration := Ada.Calendar.Clock - T_Hook_Start;
+              begin
+                 if Dur > Current_WCET_ELP3 then
+                    Current_WCET_ELP3 := Dur;
+                 end if;
+              end;
+              return;
+           end if;
+        end;
+
+        declare
+           T_Hook_Start : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+           SI_Result : constant String := Stella_Icarus.Check_API_Trigger (Prompt);
+        begin
+           if SI_Result'Length > 0 then
+              Result := To_Unbounded_String (SI_Result);
+              declare
+                 Dur : constant Duration := Ada.Calendar.Clock - T_Hook_Start;
+              begin
+                 if Dur > Current_WCET_ELP2 then
+                    Current_WCET_ELP2 := Dur;
+                 end if;
+              end;
+              return;
+           end if;
+        end;
 
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -6442,6 +6516,9 @@ package body Model_Manager is
                                                         & ")]: "
                                                         & To_String (R.Output)
                                                         & ASCII.LF);
+                                                    if T_Name = "imagine" and then R.Success then
+                                                        GNATCOLL.JSON.Append (Local_Images, GNATCOLL.JSON.Create (To_String (R.Output)));
+                                                    end if;
                                                     Current_Internal_State_Len :=
                                                        Length (Internal_State);
                                                     Database_Manager.Set_System_State ("Internal_State", To_String (Internal_State));
@@ -6673,7 +6750,7 @@ package body Model_Manager is
                        (Kind               => Snowball_Enaga_Orchestrator,
                         Prompt             => Get_Final_Prompt,
                         Result             => Fault_Result,
-                        Images             => Images,
+                        Images             => Local_Images,
                         Session_ID         => Session_ID,
                         Requested_Ctx      => 8192,
                         Stream             => Stream,
@@ -6734,7 +6811,7 @@ package body Model_Manager is
                                        Snowball_Enaga_Orchestrator,
                                     Prompt             => Get_Final_Prompt,
                                     Result             => Fault_Result,
-                                    Images             => Images,
+                                    Images             => Local_Images,
                                     Session_ID         => Session_ID,
                                     Requested_Ctx      => 8192,
                                     Stream             => null,
@@ -6834,7 +6911,7 @@ package body Model_Manager is
                                        Snowball_Enaga_Orchestrator,
                                     Prompt             => Get_Final_Prompt,
                                     Result             => Fault_Result,
-                                    Images             => Images,
+                                    Images             => Local_Images,
                                     Session_ID         => Session_ID,
                                     Requested_Ctx      => 8192,
                                     Stream             => null,

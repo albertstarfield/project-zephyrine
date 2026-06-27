@@ -409,11 +409,11 @@ def show_help():
 #   ZenithOrion         — 1ms deterministic pacing loop (ELP3)
 #
 # EXTERNAL DEPENDENCIES (sibling directories):
-#   ../llama.cpp/            — LLM inference engine
-#   ../moonshine/            — Speech-to-text ONNX models
-#   ../kokoro-onnx/          — Text-to-speech ONNX
-#   ../kokoclone/            — Zero-shot voice cloning
-#   ../tts_kokoro_component/ — Kokoro TTS Python deps (isolated venv)
+#   vendor/llama.cpp/            — LLM inference engine
+#   vendor/moonshine/            — Speech-to-text ONNX models
+#   vendor/kokoro-onnx/          — Text-to-speech ONNX
+#   vendor/kokoclone/            — Zero-shot voice cloning
+#   vendor/tts_kokoro_component/ — Kokoro TTS Python deps (isolated venv)
 #
 # COMMUNICATION FLOW:
 #   User Request → HTTP :11420 → Adelaide_Server_Pkg.Dispatch
@@ -450,6 +450,15 @@ if platform.system() == "Windows":
 os.environ["HF_HOME"] = os.path.join(BASE_DIR, "model")
 os.makedirs(os.environ["HF_HOME"], exist_ok=True)
 
+# Kill any stale processes from previous runs before starting
+print("[*] Cleaning up any stale processes from previous runs...")
+try:
+    subprocess.run(["pkill", "-9", "-f", "adelaide_server"], stderr=subprocess.DEVNULL)
+    subprocess.run(["pkill", "-9", "-f", "adelaide_watchdog"], stderr=subprocess.DEVNULL)
+    subprocess.run(["pkill", "-9", "-f", "vad_worker.py"], stderr=subprocess.DEVNULL)
+except Exception:
+    pass
+
 # Globals to keep track of background processes
 daemon_process = None
 server_process = None
@@ -485,7 +494,7 @@ def get_files_to_hash():
     # Also hash mtmd source files in llama.cpp (for multimodal rebuild detection)
     # Why: Changes to mtmd source files should trigger a rebuild of the mtmd library.
     #      Without this, code changes in llama.cpp/tools/mtmd/ would be silently ignored.
-    mtmd_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "llama.cpp", "tools", "mtmd"))
+        mtmd_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "llama.cpp", "tools", "mtmd"))
     mtmd_count = 0
     if os.path.exists(mtmd_dir):
         for root, _, filenames in os.walk(mtmd_dir):
@@ -691,7 +700,7 @@ def main():
         # We always fetch+pull so we get the latest fixes.
         # llama.cpp builds its own ggml in-tree for compilation, but at
         # RUNTIME we use our separately-built ggml via RPATH (see GPR file).
-        llama_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "llama.cpp"))
+        llama_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "llama.cpp"))
         llama_build_dir = os.path.join(llama_dir, "build")
         llama_lib = os.path.join(llama_build_dir, "bin", "libllama.dylib")
         llama_start = time.time()
@@ -787,14 +796,14 @@ def main():
             print(f"[MTMD] [{time.strftime('%H:%M:%S')}] Library exists ({mtmd_size:,} bytes), skipping build")
 
         # Check and clone kokoro-onnx
-        kokoro_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro-onnx"))
+        kokoro_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "kokoro-onnx"))
         if not os.path.exists(kokoro_dir):
             print("[*] Cloning kokoro-onnx...")
             subprocess.run(["git", "clone", "https://github.com/thewh1teagle/kokoro-onnx", kokoro_dir], check=False)
         else:
             print("[*] kokoro-onnx already exists, skipping clone.")
             
-        kokoclone_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoclone"))
+        kokoclone_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "kokoclone"))
         if not os.path.exists(kokoclone_dir):
             print("[*] Cloning KokoClone Zero-Shot Repository...")
             subprocess.run(["git", "clone", "https://github.com/Ashish-Patnaik/kokoclone.git", kokoclone_dir], check=True)
@@ -802,7 +811,7 @@ def main():
             print("[*] kokoclone already exists, skipping clone.")
 
         # Ensure Kokoro TTS component dependencies are installed in an isolated venv
-        kokoro_comp_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "tts_kokoro_component"))
+        kokoro_comp_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "tts_kokoro_component"))
         kokoro_venv_dir = os.path.join(kokoro_comp_dir, "venv")
         if not os.path.exists(kokoro_venv_dir):
             print("[*] Creating dedicated virtual environment for Kokoro TTS (Python 3.12)...")
@@ -813,7 +822,7 @@ def main():
         subprocess.run([kokoro_pip, "install", "-r", os.path.join(kokoro_comp_dir, "requirements.txt")], check=False)
 
         # Check and clone moonshine
-        moonshine_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "moonshine"))
+        moonshine_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "moonshine"))
         if not os.path.exists(moonshine_dir):
             print("[*] Cloning moonshine...")
             subprocess.run(["git", "clone", "--depth=1", "https://github.com/moonshine-ai/moonshine.git", moonshine_dir], check=False)
@@ -838,7 +847,7 @@ def main():
             print("[*] moonshine core library exists, skipping cmake build.")
 
         # Check and download Moonshine models
-        moonshine_models_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "moonshine", "models"))
+        moonshine_models_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "moonshine", "models"))
         if not os.path.exists(moonshine_models_dir) or not os.listdir(moonshine_models_dir):
             print("[*] Downloading Moonshine models...")
             os.makedirs(moonshine_models_dir, exist_ok=True)
@@ -856,7 +865,7 @@ def main():
         # Builds a static library (libstable_diffusion.a) for Ada FFI linkage.
         # The ggml submodule within stable-diffusion.cpp must be initialized
         # before cmake can configure — it provides the compute graph runtime.
-        sd_cpp_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "stable-diffusion.cpp"))
+        sd_cpp_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "stable-diffusion.cpp"))
         sd_cpp_built = os.path.join(sd_cpp_dir, "build")
         sd_cpp_lib_static = os.path.join(sd_cpp_built, "libstable-diffusion.a")
         sd_cpp_lib_shared = os.path.join(sd_cpp_built, "libstable-diffusion.dylib") if platform.system() == "Darwin" else os.path.join(sd_cpp_built, "libstable-diffusion.so")
@@ -977,7 +986,7 @@ def main():
                     subprocess.run(["wget", "-q", "--show-progress", model["url"], "-O", target_path], check=True)
 
         # Check and download Kokoro models
-        kokoro_models_dir = os.path.abspath(os.path.join(BASE_DIR, "..", "kokoro_models"))
+        kokoro_models_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "kokoro_models"))
         os.makedirs(kokoro_models_dir, exist_ok=True)
         kokoro_onnx_model = os.path.join(kokoro_models_dir, "kokoro-v0_19.int8.onnx")
         kokoro_voices = os.path.join(kokoro_models_dir, "voices-v1.0.bin")
@@ -1360,7 +1369,7 @@ def main():
     # wrapper will auto-restart the server if this happens, but clients
     # will see a brief connection reset.
     arch = "arm64" if platform.machine() == "arm64" else "x86_64"
-    moonshine_onnx = os.path.join(BASE_DIR, "..", "moonshine", "core", "third-party", "onnxruntime", "lib", "macos", arch)
+    moonshine_onnx = os.path.join(BASE_DIR, "vendor", "moonshine", "core", "third-party", "onnxruntime", "lib", "macos", arch)
     
     if platform.system() == "Darwin":
         env["DYLD_LIBRARY_PATH"] = f"{moonshine_onnx}:{env.get('DYLD_LIBRARY_PATH', '')}"
@@ -1530,8 +1539,9 @@ def main():
         try:
             while True:
                 exit_code = server_process.wait()
-                if exit_code in (0, 9, -9):
-                    print(f"\n[*] Server exited cleanly or via SIGKILL (code: {exit_code})")
+                shutdown_flag = os.path.join(BASE_DIR, "run", ".shutdown_requested")
+                if exit_code == 0 or os.path.exists(shutdown_flag):
+                    print(f"\n[*] Server exited cleanly or shutdown requested (code: {exit_code})")
                     break
 
                 import signal

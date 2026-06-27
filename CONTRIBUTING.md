@@ -2,9 +2,38 @@
 
 ### The Launcher is the main startup sequence
 
-The `launcher.py` script is the sole authority for installing dependencies and compiling all project components. This ensures that every contributor can build a functional, portable, and reproducible version of the application on their own machine from a clean source checkout.
+The `run.sh` → `Adelaide_Lite/run.py` chain is the sole authority for building and launching all project components. It handles dependency verification, source compilation (Ada/Alire, C++, Python), model downloads, and spawning the runtime processes. This ensures that every contributor can build a functional, portable, and reproducible version of the application on their own machine from a clean source checkout.
 
 **Committing compiled, architecture-specific binaries is strictly forbidden.** This is a core architectural principle. See Article II of our Code of Conduct.
+
+### Prerequisites
+
+*   **Alire (Ada LIbrary REpository):** Required to resolve Ada dependencies and build the core executable.
+*   **Python 3.10+:** Required as the primary orchestrator for complex embedding mathematical operations and SQLite Knowledge Graph interfacing.
+*   **OpenSSL:** Required for HTTPS support (self-signed certificate generation).
+*   **Git:** Required for version control and submodule management.
+
+### Building from Source
+
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/albertstarfield/OpenIntellegentiaPlatform
+    cd OpenIntellegentiaPlatform
+    ```
+
+2.  **Run the Initialization Script:**
+    The `run.py` script handles Ada compilation, Python venv setup, and repository cloning (`llama.cpp`, `stable-diffusion.cpp`, `moonshine`, `kokoro-onnx`) automatically.
+    ```bash
+    ./run.sh
+    ```
+
+    *The script will automatically fetch Ada Web Server (AWS) packages via Alire, build llama.cpp and stable-diffusion.cpp from source, generate SSL certificates, and start the local API listener on port `11420`.*
+
+### Development Notes
+
+1.  For AWS API `/v1/completion` OpenAI API and Ollama API I/O use pragma profile Jorvik while Watchdog uses Ravenscar separate threading. We still use Ada 2012 SPARK 2014.
+2.  For development QC (not release) we use gnatprove level=4 for detecting potential issues not level=0 nor level=2.
+3.  For release builds we use gnatprove level=4 with Pragma profile ada 2012 SPARK 2014 and Pragma profile Jorvik for AWS API `/v1/completion` and Ollama API I/O. Then test cross-compile with target Darwin XNU and Linux arm64 and Linux x86_64, with respective environment variables and toolchains. NT-based systems are excluded due to various issues.
 
 
 ## Section 1.2: Architectural Safety Standards (Design Assurance Levels)
@@ -34,7 +63,7 @@ Before contributing, you must identify the DAL of the module you are modifying. 
     * **Failure Consequence:** Loss of intelligent guidance, reversion to ballistic/fallback mode.
 
 ### **DAL C: Major (The Intelligent Orchestrator / ECSS Category C)**
-* **Scope:** The Zephyrine Orchestrator, Large Language Models (LLM), Stella Icarus Hooks, GNC (Guidance, Navigation, Control) Logic, User Interface, Network Mesh.
+* **Scope:** The Adelaide Server (HTTP API), LLM Inference (llama.cpp), Stella Icarus Hooks, Knowledge Manager (RAG), Moonshine STT, Kokoro TTS, FLUX Image Generation, GUI Sidecar UI.
 * **Permitted Languages:** **Python**, **Ada**, **Ada/SPARK**, **C++** (StellaIcarus Hooks), **TypeScript/JavaScript (ONLY FOR LEGACY)**
 * **Role:** High-level reasoning, physics simulation, and user interaction. This layer is considered **Non-Deterministic**.
 * **Contribution Rules:**
@@ -45,7 +74,7 @@ Before contributing, you must identify the DAL of the module you are modifying. 
 
 To ensure project resilience in cases where the `.git` history may be unavailable, all substantive changes must be linked to an issue or requirement ID.
 
--   **Canonical List:** The master list of all issues, requirements, and defect IDs is maintained in the document: `documentation/DeveloperDocumentation/Issue_Log.md`
+-   **Canonical List:** The master list of all issues, requirements, and defect IDs is maintained in the document: `documentation/Developer Documentation/Issue_Log.md`
 -   **Format:** Before starting work, create or reference an entry in this log. The format for an entry is:
     -   **ID:** A unique identifier (e.g., `MESH-REQ-002`, `WATCHDOG-BUG-005`).
     -   **Title:** A concise, one-line summary.
@@ -91,7 +120,7 @@ The title line is mandatory and consists of three parts:
     -   `test`: Adding missing tests or correcting existing ones.
     -   `build`: Changes that affect the build system or external dependencies.
 
--   **`scope`**: The component or module affected by the change (e.g., `mesh`, `watchdog`, `launcher`, `tui`).
+-   **`scope`**: The component or module affected by the change (e.g., `server`, `watchdog`, `model`, `stt`, `tts`, `knowledge`, `ui`).
 
 -   **`subject`**: A concise, imperative-mood description of the change.
     -   Use the present tense ("add feature" not "added feature").
@@ -142,8 +171,7 @@ The footer is used for explicit traceability and verification. It **MUST** conta
 ```
 fix(mesh): correct asset path resolution and expand manifest scope
 
-This commit resolves a critical path resolution bug in the ZephyMesh node and expands the asset manifest to inc
-lude the Hugging Face cache, ensuring full P2P distribution capability.
+This commit resolves a critical path resolution bug in the Adelaide server and expands the model manifest to include the Hugging Face cache, ensuring full local inference capability.
 
 The Go node was being launched with 
 an incorrect 

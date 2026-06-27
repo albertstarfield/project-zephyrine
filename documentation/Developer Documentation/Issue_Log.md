@@ -1,8 +1,7 @@
-# Project Zephyrine - Canonical Issue & Requirement Log
-
-This document serves as the master list for all tracked requirements, features, bugs, and test cases for Project Zephyrine. All substantive commits must reference an ID from this log in their footer.
-
----
+-   **ID:** `SYS-FIX-024`
+-   **Title:** `Enhance build system for macOS compatibility, frontend verification, and backend SPARK analysis.`
+-   **Status:** `Resolved`
+-   **Description:** `Implemented macOS SDK path detection and sysroot integration for Ada components (Watchdog, Frontface Backend). Integrated JSHint and HTML/CSS verification for frontend assets. Added advisory SPARK flow analysis for the backend service. Refined launcher monitoring intervals and integrity check sequences. Added auto-agreement for TOC/License.`
 
 -   **ID:** `CORE-REFACTOR-017`
 -   **Title:** `Implement ELP0/ELP1 priority propagation and concurrency control.`
@@ -24,610 +23,146 @@ This document serves as the master list for all tracked requirements, features, 
 -   **Status:** `Resolved`
 -   **Description:** `Expanded the frontend dependency stack to include PixiJS and pixi-live2d-display for interactive character rendering. Added html2canvas for screenshot capabilities and updated the environment configuration to use ESM modules.`
 
----
-
-## **BUILD**
-
-
-### Chore
-
--   **ID:** `BUILD-CHORE-001`
-    -   **Title:** Remove conda executable path cache file.
-    -   **Status:** `Resolved`
-    -   **Description:** Removed the `.conda_executable_path_cache_main_env.txt` file from the repository. This file is specific to a local user environment and should not be tracked in version control.
-
----
-
-## **GOVERNANCE**
-
-### Requirements
-
--   **ID:** `GOVERNANCE-REQ-001`
-    -   **Title:** Define a formal contribution process and workflow.
-    -   **Status:** `Resolved`
-    -   **Description:** Establish a clear, documented process for all project contributions. This must include a mandatory standard for Git commit messages to ensure traceability and a rule regarding the project launcher as the source of truth for builds. This is foundational for maintaining long-term project quality and enabling effective collaboration.
-
--   **ID:** `GOVERNANCE-REQ-002`
-    -   **Title:** Enforce architectural principles within the project's code of conduct.
-    -   **Status:** `Resolved`
-    -   **Description:** Amend the `CODE_OF_CONDUCT.md` to formally include adherence to core architectural principles as an expected standard of behavior. This includes a strict prohibition on committing compiled, architecture-specific binaries to the repository.
-
--   **ID:** `GOVERNANCE-FEAT-003`
-    -   **Title:** Introduce DAL and update license to Hippocratic 3.0.
-    -   **Status:** `Resolved`
-    -   **Description:** Introduced a formal Design Assurance Level (DAL) system based on DO-178C to improve architectural safety and rigor. Changed the project license from MIT to the Hippocratic License 3.0 to align with "do no harm" principles. Also updated the engine's public-facing name to "Snowball Enaga" and refined contribution guidelines.
-
----
-
-## **ZEPHYMESH NETWORK (MESH)**
-
-
-### Requirements
-
--   **ID:** `MESH-REQ-001.B`
-    -   **Title:** Ensure manifest accuracy by resolving asset paths correctly.
-    -   **Status:** `Resolved`
-    -   **Description:** The manifest generation process must correctly identify and resolve the paths to all local asset directories from the project root to ensure a complete and accurate list of shareable files.
-
--   **ID:** `MESH-REQ-001.C`
-    -   **Title:** Expand the P2P manifest scope to include the Remote Source cache.
-    -   **Status:** `Resolved`
-    -   **Description:** The asset manifest generation logic must be updated to scan and include the contents of the `remote_source_cache` directory. This is critical for enabling the peer-to-peer distribution of non-binary data modules, text processors, and other dynamically downloaded assets.
-
-### Defects (Bugs)
-
--   **ID:** `ZM-BUG-004`
-    -   **Title:** Incorrect working directory causes asset path resolution failure in the Go node.
-    -   **Status:** `Resolved`
-    -   **Description:** The ZephyMesh Go node process is being launched with its working directory set to its own subdirectory instead of the project root. This causes all relative path lookups for asset directories (e.g., `staticmodelpool`) to fail, resulting in an empty asset manifest and preventing P2P file sharing. The fix is to set the `cwd` to the project's `ROOT_DIR` in `launcher.py`.
--   **ID:** `MESH-BUG-005`
-    -   **Title:** Fix asset path resolution in ZephyMesh node.
-    -   **Status:** `In-Progress`
-    -   **Description:** Corrected the path resolution for the `relayDir` and `staticModelPoolPath` in the ZephyMesh node to ensure correct asset discovery.
-
----
-
-## **DOCUMENTATION (DOC)**
-
-### Requirements
-
--   **ID:** `DOC-REQ-003`
-    -   **Title:** Add academic citations and clarify architectural concepts in README.
-    -   **Status:** `In-Progress`
-    -   **Description:** The main `README.md` has been updated to include academic citations for the architectural concepts mentioned, such as big.LITTLE and Context Engineering. The credits and feature descriptions have also been clarified.
-
--   **ID:** `MESH-DOC-001`
-    -   **Title:** Create component architecture and design documentation for ZephyMesh.
-    -   **Status:** `Resolved`
-    -   **Description:** A formal `README.md` file must be created for the `zephyMeshNetwork` component. This document must outline the core principles, architecture, feature roadmap, and developer notes to serve as the canonical source of truth for the sub-project.
-
--   **ID:** `DOC-REQ-004`
-    -   **Title:** Formalize Issue Log Structure and Content
-    -   **Status:** `Resolved`
-    -   **Description:** This entry formalizes the structure and content of the `Issue_Log.md` file itself. It ensures that all future entries adhere to the established format of ID, Title, Status, and Description, as defined in the `CONTRIBUTING.md` guidelines. This meta-entry serves as a reference point for the log's own standards.
-
--   **ID:** `DOC-REQ-005`
-    -   **Title:** Clarify contribution process by defining the Issue Log
-    -   **Status:** `Resolved`
-    -   **Description:** This entry serves as a practical example of the contribution workflow. It was created by reading the `CONTRIBUTING.md` guidelines, defining a new issue in `Issue_Log.md` (this very entry), and will be committed following the formal traceability standard. This helps to clarify the process for future contributors.
-
-### Test Cases (Verification)
-
--   **ID:** `DOC-REVIEW-001`
-    -   **Title:** Documentation Accuracy & Completeness Review for MESH-DOC-001.
-    -   **Status:** `Closed`
-    -   **Description:** Verify that the `zephyMeshNetwork/README.md` file is present, well-formatted, and accurately reflects the current design, implementation, and planned features of the ZephyMesh component.
-
--   **ID:** `DOC-REVIEW-002`
-    -   **Title:** Governance Documentation Review for GOVERNANCE-REQ-001 and GOVERNANCE-REQ-002.
-    -   **Status:** `Closed`
-    -   **Description:** Verify that the new `CONTRIBUTING.md` and the modified `CODE_OF_CONDUCT.md` clearly and correctly establish the formal contribution process and architectural rules.
-
----
-
-## **TESTING & VALIDATION (TEST)**
-
-### Test Cases
-
--   **ID:** `ZM-TEST-007`
-    -   **Title:** Verification of Manifest Generation for ZM-BUG-004.
-    -   **Status:** `Closed`
-    -   **Description:** After applying the fix for `ZM-BUG-004`, relaunch the application and inspect the ZephyMesh node's startup logs. Verify that asset directory scanning is successful, warning messages about missing paths are gone, and the `remote_source_cache` is included in the scan.
-
----
-
-## **CORE ENGINE (CORE)**
-
-### Features
-
--   **ID:** `CORE-FEAT-013`
-    -   **Title:** Add `parent_ingestion_job_id` to Interaction module.
-    -   **Status:** `Resolved`
-    -   **Description:** Added a `parent_ingestion_job_id` field to the `Interaction` module. This allows for better tracking of interactions that are part of a larger ingestion job.
-
--   **ID:** `CORE-FEAT-014`
-    -   **Title:** Checkpoint: Initial Implementation of Branch Prediction Framework.
-    -   **Status:** `In-Progress`
-    -   **Description:** This commit serves as a checkpoint for the initial, experimental implementation of the DCTD (Decentralized Celestial Time-series Dynamics) Branch Prediction framework. This includes adding new dependencies (Computing Library, ZMQ), database schema changes for LSH hashing, and core logic in the engine to predict future user intent based on temporal vector analysis. This is a foundational step before a larger planned refactor and enhancement of the branch prediction capabilities.
-
--   **ID:** `CORE-FEAT-012`
-    -   **Title:** Add processing chains and text-splitting tools to dependencies.
-    -   **Status:** `In-Progress`
-    -   **Description:** Added `processing chains` and `text-splitting tools` to the project's dependencies to enable new features related to logical processor chains and text processing.
-
--   **ID:** `CORE-FEAT-001`
-    -   **Title:** Upgrade core representation generation component from mixedbread to Core Logic.
-    -   **Status:** `Resolved`
-    -   **Description:** To improve representation quality and performance, the core representation generation component was upgraded from `Representation Component V1` to `Core Logic-Representation-0.6B-Data`. This required updating component download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded representation context size in `engine_worker.py` to support the new component's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new representation format, and `requirements.txt` was updated with new dependencies.
-
--   **ID:** `CORE-FEAT-002`
-    -   **Title:** Added content pass into the database for local document fetching.
-    -   **Status:** `Resolved`
-    -   **Description:** Implemented functionality to store the full content of indexed documents directly into the database. This enables efficient local document fetching for enhanced content retrieval and other content-aware operations, reducing reliance on external file system access during runtime.
-
--   **ID:** `CORE-FEAT-003`
-    -   **Title:** Added MultiLanguage ZH and EN and native lang depends on query summarization for accommodating fallback of fuzzy matching on direct_generate and background_generate connection on the database.
-    -   **Status:** `Resolved`
-    -   **Description:** Introduced multi-language summarization capabilities, supporting English (EN), Simplified Chinese (ZH), and the original query language. This enhancement improves the robustness of fuzzy matching for `direct_generate` and `background_generate` database connections by providing summarized content in multiple linguistic contexts, facilitating better retrieval and understanding across diverse user inputs.
-
--   **ID:** `CORE-FEAT-004`
-    -   **Title:** Reduce the ELP0 restart chance for each pass.
-    -   **Status:** `Resolved`
-    -   **Description:** Modified the ELP0 (Elevated Level Privilege 0) interruption retry mechanism to significantly reduce the chance of full system restarts for each pass. This improves system stability and responsiveness by allowing for more graceful handling of transient interruptions during critical operations.
-
--   **ID:** `CORE-FEAT-005`
-    -   **Title:** Enhance search, debugging, and system stability.
-    -   **Status:** `Resolved`
-    -   **Description:** This update introduces several enhancements across the system. It adds fuzzy and vector search results as an always-on augmented result. More detailed debug logs are inserted into the interaction history, making them accessible to `direct_generate` for learning from mistakes. The `CortexConfiguration` has been adjusted to include a 25% safety context for unit counting mismatches, with the context size set to 4096. The file indexer's idle cycle is now 3600 seconds to allow ELP0 and self-reflection to execute. Finally, the interaction indexer now includes non-text data in the augmentation mix.
-
--   **ID:** `CORE-FEAT-006`
-    -   **Title:** Implement Recursive Socratic Inquiry for Self-Correction and Learning.
-    -   **Status:** `Resolved`
-    -   **Description:** Introduced the A.R.I.S.E. (Adaptive Recursive Inquiry & Synthesis Engine) architecture. This system enables a recursive learning loop where the engine generates Socratic questions based on its own outputs (drafts, summaries, final answers). These questions are saved as new tasks, which the engine then attempts to answer, creating a continuous cycle of self-improvement and knowledge expansion. This includes per-step inquiry generation and a dedicated `socratic_thought` classification.
-
--   **ID:** `CORE-FEAT-007`
-    -   **Title:** Implement Dynamic Automated Relaxation for Resource Management.
-    -   **Status:** `Resolved`
-    -   **Description:** The `AutomatedRelaxationThread` in `priority_lock.py` now supports a dynamic, resource-aware mode (`reservativesharedresources`). In this mode, the thread monitors system CPU load and ELP1 task contention to aggressively throttle ELP0 background tasks when the system is busy, and allows them to run freely when resources are available. This improves overall system responsiveness.
-
--   **ID:** `CORE-FEAT-008`
-    -   **Title:** Unify Mesa GPU Driver Build and Add CPU Fallback for Android.
-    -   **Status:** `In-Progress`
-    -   **Description:** The Mesa build process for Android containers has been unified to use a single configuration for both Adreno and Mali GPUs. A verification step using `vulkaninfo` has been added to check if the custom driver is loaded correctly. If verification fails, a `.gpu_acceleration_failed` flag is created, forcing the application into a CPU-only fallback mode to ensure functionality on devices where the custom driver fails.
-
--   **ID:** `CORE-FEAT-009`
-    -   **Title:** Implement Casual Mistype Humanizer.
-    -   **Status:** `Resolved`
-    -   **Description:** Adds a feature to programmatically introduce subtle, human-like errors into the system's responses to make the persona more believable. This includes chances for lowercase starts, lowercase after periods, capitalization mishaps, and punctuation omissions.
-
--   **ID:** `CORE-FEAT-010`
-    -   **Title:** Pre-buffer 'thinking' monologue on startup.
-    -   **Status:** `Resolved`
-    -   **Description:** To improve UI responsiveness, the introspective monologue shown when the system is "processing" is now generated and cached in the database on startup. This avoids a real-time generation call and the associated delay when the user first interacts with the system.
--   **ID:** `CORE-FEAT-011`
-    -   **Title:** Add ethical watermark for user-invoked image generation.
-    -   **Status:** `In-Progress`
-    -   **Description:** Implemented an optional, repeating, diagonal, semi-transparent watermark on images generated by user request to discourage misuse and promote ethical digital art generation.
-
--   **ID:** `CORE-FEAT-015`
-    -   **Title:** Enhance file ingestion to support structured datasets (JSONL, CSV, Parquet).
-    -   **Status:** `Resolved`
-    -   **Description:** The file ingestion service has been significantly enhanced to parse and process structured data files, including `.jsonl`, `.csv`, and `.parquet`. This allows the system to learn from various conversational data formats (structured interaction data) by extracting user/assistant interactions and queuing them for background reflection.
-
--   **ID:** `CORE-FEAT-016`
-    -   **Title:** Implement DCTD Temporal Scheduler for future task execution.
-    -   **Status:** `Resolved`
-    -   **Description:** Introduced the DCTD (Dancing in the Celestial Timeline) Temporal Scheduler. This system allows the system to schedule "thoughts" (background tasks) for execution at a specific time in the future. It includes a database table `scheduled_thought_tasks` to persist the schedule, logic for collision avoidance, and a daemon thread to execute due tasks. This enables more complex, long-term reasoning and self-reflection.
-
--   **ID:** `CORE-FEAT-017`
-    -   **Title:** Add new components for optical character recognition, UI interaction, and language-to-action.
-    -   **Status:** `Resolved`
-    -   **Description:** Expanded the component ecosystem by adding three new specialized components for document optical character recognition, computer UI interaction, and translating language commands into actions. This increases the system's capabilities in document understanding and automated control.
-
--   **ID:** `CORE-FEAT-018`
-    -   **Title:** Add semaphore for ELP1 direct generation queue concurrency control.
-    -   **Status:** `Resolved`
-    -   **Description:** Implemented an asyncio.Semaphore (`direct_generate_task_semaphore`) to limit the number of concurrent ELP1 (high-priority) generation tasks. This prevents resource exhaustion and ensures system stability under high load by queueing requests gracefully instead of overwhelming the backend.
--   **ID:** `CORE-FEAT-019`
-    -   **Title:** Implement Memory Pressure Warden to prevent UMA crashes.
-    -   **Status:** `In-Progress`
-    -   **Description:** A "Warden" mechanism has been added to monitor VRAM pressure before component invocation. If the estimated required memory exceeds available memory, it dynamically forces the component to run on the CPU (`n_gpu_layers=0`) to prevent a catastrophic crash, especially in Unified Memory Architecture (UMA) environments.
-
-### Defects (Bugs)
-
--   **ID:** `CORE-BUG-001`
-    -   **Title:** Fix unlimited undefined entry of Assistant and User on the database at background_generate result.
-    -   **Status:** `Resolved`
-    -   **Description:** Addressed an issue where `background_generate` was creating an unlimited number of undefined Assistant and User entries in the database due to improper handling of generation results. This fix ensures that only valid and properly attributed entries are stored, preventing database bloat and maintaining data integrity.
-
--   **ID:** `CORE-BUG-002`
-    -   **Title:** Prevent crashes from oversized representation batches.
-    -   **Status:** `Resolved`
-    -   **Description:** Added a safeguard in `cortex_backbone_provider.py` to handle cases where a single text item exceeds the maximum unit limit for representation. The code now truncates oversized items before adding them to a batch, preventing the representation process from crashing and ensuring that large documents can be processed reliably.
-
--   **ID:** `CORE-BUG-003`
-    -   **Title:** GPU Driver Verification Fails on Some Android Devices.
-    -   **Status:** `Open`
-    -   **Description:** The `vulkaninfo` check during the Mesa build process fails on some Android devices, causing the system to unnecessarily fall back to CPU mode even if the GPU is functional. This appears to be a false negative from the verification step.
-
--   **ID:** `CORE-BUG-004`
-    -   **Title:** Launcher fails to correctly configure environment in proot/Termux.
-    -   **Status:** `In-Progress`
-    -   **Description:** The launcher script has several issues when running in a proot-ed environment on Termux. It fails to correctly identify the environment, leading to incorrect paths for conda, contaminated miniforge installations, and failure to set up the environment for custom GPU drivers. This commit introduces fixes to make the launcher more robust in these environments.
--   **ID:** `CORE-BUG-005`
-    -   **Title:** Fix streaming implementation in Engine_Worker_ChatWrapper.
-    -   **Status:** `In-Progress`
-    -   **Description:** Removed the `_stream` method from `Engine_Worker_ChatWrapper` as it was incompatible with raw prompt mode and causing errors.
-
--   **ID:** `CORE-BUG-006`
-    -   **Title:** Potential memory leak in audio_worker.py
-    -   **Status:** `Open`
-    -   **Description:** The audio_worker.py process shows a gradual increase in memory usage over time, suggesting a potential memory leak. This needs to be investigated and patched to ensure long-term stability.
-
--   **ID:** `CORE-BUG-007`
-    -   **Title:** Fix corrupted SQLAlchemy extensions on Python 3.13.
-    -   **Status:** `Resolved`
-    -   **Description:** Added a critical fix to `launcher.py` that forces the reinstallation of SQLAlchemy. This resolves compilation issues with SQLAlchemy's C extensions on newer Python versions like 3.13, preventing runtime crashes related to the database connection.
--   **ID:** `CORE-BUG-008`
-    -   **Title:** Fix branch predictor blocking async event loop.
-    -   **Status:** `In-Progress`
-    -   **Description:** The synchronous call to the `branch_predictor.predict_future_vector` was blocking the main asyncio event loop, causing the `/primedready` endpoint and other async operations to become unresponsive. The call has been wrapped in `asyncio.to_thread` to execute it in a separate thread, resolving the blocking behavior.
-
--   **ID:** `CORE-BUG-009`
-    -   **Title:** Partially fix racing conditions on elp0 semaphore.
-    -   **Status:** `In-Progress`
-    -   **Description:** Addressed an issue where racing conditions on the elp0 semaphore could lead to unpredictable behavior and system instability. This fix partially mitigates these conditions to improve system reliability.
-
--   **ID:** `CORE-BUG-010`
-    -   **Title:** Refine content filtering, adjust search threshold, and remove derogatory terminology.
-    -   **Status:** `Resolved`
-    -   **Description:** This fix addresses several issues. Firstly, it partially improves the categorization of problematic inputs. Secondly, the threshold for the fuzzy logic search has been readjusted for better performance. Lastly, specific derogatory terms have been removed from the system's vocabulary to align with ethical guidelines.
-
--   **ID:** `CORE-BUG-011`
-    -   **Title:** Tune PWM for preempt halt hardblock.
-    -   **Status:** `Resolved`
-    -   **Description:** Adjusted the Pulse Width Modulation (PWM) parameters to optimize the timing and reliability of the preempt halt mechanism within the scheduler. This ensures that the system can effectively halt ELP0 background tasks to prioritize ELP1 high-priority requests, maintaining system responsiveness and operational priority.
-
-### Refactors
-
--   **ID:** `CORE-REFACTOR-007`
-    -   **Title:** Overhaul DB health check with a robust "Nuke and Pave" strategy.
-    -   **Status:** `Resolved`
-    -   **Description:** The database health check in `database.py` has been completely refactored. It now employs a "Nuke and Pave" strategy for new or corrupt databases, where it automatically handles Alembic migrations. This significantly improves the robustness and reliability of the database initialization process.
-
--   **ID:** `CORE-REFACTOR-006`
-    -   **Title:** Generalize `AppleScriptAttempt` to `SystemInteractionScriptAttempt`.
-    -   **Status:** `Resolved`
-    -   **Description:** Renamed the `AppleScriptAttempt` model to `SystemInteractionScriptAttempt` to better reflect its purpose of tracking various types of system interactions, not just AppleScript. This change was propagated throughout the codebase.
-
--   **ID:** `CORE-REFACTOR-001`
-    -   **Title:** Refactor ToT payload and increase representation context size.
-    -   **Status:** `Resolved`
-    -   **Description:** Refactored the Tree of Thought (ToT) payload for clarity and simplicity. Increased the default representation context size in `cortex_backbone_provider.py` to 4096 to improve representation quality for longer documents. Simplified the frontend input area in `InputArea.jsx` by removing the stop generation button.
-
--   **ID:** `CORE-REFACTOR-002`
-    -   **Title:** Overhaul retrieval and background processing for robustness and traceability.
-    -   **Status:** `Resolved`
-    -   **Description:** Major refactor of the `background_generate` function. The retrieval pipeline was rebuilt to use a safe, robust helper (`_build_on_the_fly_retriever`) that combines vector and fuzzy search for recent history. The entire background task now logs every intermediate thought, draft, and correction as a distinct, traceable interaction in the database, providing a complete audit trail of the system's reasoning process. The reflection process was also redesigned to be a "pure" operation that creates new records instead of updating old ones, ensuring data immutability.
-
--   **ID:** `CORE-REFACTOR-003`
-    -   **Title:** Refactor database initialization for speed and robustness.
-    -   **Status:** `Resolved`
-    -   **Description:** The database initialization process (`init_db`) has been refactored to be significantly faster. It now performs a fast, optimistic initialization and spawns a background thread for slower integrity checks, repairs, and migrations. This allows the application to start much faster. A health check event (`_DB_HEALTH_OK_EVENT`) is used to signal when the database is fully ready.
--   **ID:** `CORE-REFACTOR-004`
-    -   **Title:** Refactor Flask route registration from @app.route to @system.route.
-    -   **Status:** `In-Progress`
-    -   **Description:** Refactored all Flask routes to use the `@system.route` decorator instead of `@app.route` for better organization and consistency.
-
--   **ID:** `CORE-REFACTOR-005`
-    -   **Title:** Update dependencies and refactor imports for text processing library compatibility.
-    -   **Status:** `Resolved`
-    -   **Description:** Updated project dependencies and code to align with recent changes in the text processing library. This includes adding `experimental-text-processing` to `requirements.txt`, changing the import for `RecursiveCharacterTextSplitter` from `text_splitter` to `text_splitters` across multiple files, and updating the `aria2` conda package source in `launcher.py`.
-
--   **ID:** `CORE-REFACTOR-008`
-    -   **Title:** Overhaul background processing, DB migrations, and branch prediction.
-    -   **Status:** `In-Progress`
-    -   **Description:** This commit introduces a major architectural overhaul of the core engine. Key changes include:
-        - Refactoring the `background_generate` task with improved error handling, more robust logging, and a clearer separation of concerns.
-        - Introducing a new "Hierarchical Thought Processing" background task for deeper analysis.
-        - Adding a mechanism to generate "StellaIcarus hooks" for creating automations based on interactions.
-        - Overhauling the database health check (`_run_background_db_health_check`) in `database.py` to use a robust "Stamp and Upgrade" Alembic migration strategy, resolving issues with existing databases.
-        - Refactoring the optimized recurrent processing in `VectorCompute_Provider.py` and the prediction logic in `dctd_branchpredictor.py` to use a trajectory-based approach.
-        - Adding support for AVIF/HEIC image formats to the file indexer's optical character recognition capabilities.
-
--   **ID:** `CORE-REFACTOR-009`
-    -   **Title:** Integrate Ada branch predictor code into main engine.
-    -   **Status:** `Resolved`
-    -   **Description:** Reversing of previously externalized Ada branch predictor code and integrating it directly into the Python mainEngineFrame_MacroController_EngineSharedResources. This refactoring aims to streamline the branch prediction mechanism by co-locating the Ada-based logic within the core engine, enhancing performance and simplifying maintenance by reducing inter-process communication overhead.
-
--   **ID:** `CORE-REFACTOR-012`
-    -   **Title:** Consolidate engine core and implement multi-slot priority concurrency.
-    -   **Status:** `Resolved`
-    -   **Description:** Deleted the legacy `AdelaideAlbertCortex.py` in favor of a consolidated architecture. Refactored `PriorityQuotaLock` into a multi-slot semaphore-like system, allowing concurrent ELP0 and ELP1 tasks. Enhanced `CortexEngine` with dual-phase preemption checks to ensure deterministic interruption and prevent resource leaks. Updated task orchestration to support configurable concurrency limits via environment variables.
-
----
-
-
-
-## **LAUNCHER**
-
-
-
-### Features
-
-
-
--   **ID:** `LAUNCHER-FEAT-001`
-
-    -   **Title:** Implement a fast-path startup sequence ("Death Stranding II Inspired Loading").
-
-    -   **Status:** `Resolved`
-
-    -   **Description:** To significantly reduce application startup time after the initial setup, a "fast path" has been implemented in `launcher.py`. On the first successful run, the launcher now compiles all project Python source code into optimized bytecode (`.pyc` files) and creates a `.setup_complete_v2` flag file. On subsequent launches, if this flag is present, the launcher bypasses all dependency checks and environment verification, launching all services in parallel for a near-instantaneous startup.
--   **ID:** `LAUNCHER-FEAT-002`
-    -   **Title:** Prioritize Hypercorn service startup over Watchdog.
-    -   **Status:** `In-Progress`
-    -   **Description:** Changed the service startup sequence in `launcher.py` to prioritize the Hypercorn server, ensuring the API is available before other services.
-
-
-### Defects (Bugs)
-
--   **ID:** `LAUNCHER-BUG-003`
-    -   **Title:** Reduce ZephyMesh startup timeout.
-    -   **Status:** `In-Progress`
-    -   **Description:** The timeout for waiting for the ZephyMesh port file has been reduced from 600 to 60 seconds. The previous timeout was excessively long and could cause the launcher to hang if the mesh node failed to start.
-
--   **ID:** `LAUNCHER-BUG-001`
-    -   **Title:** Fix double launch port occupancy issue.
-    -   **Status:** `In-Progress`
-    -   **Description:** Fixed an issue where the launcher could attempt to launch a service on a port that was already occupied, causing a crash. The launcher now checks for port availability before launching services.
-
--   **ID:** `LAUNCHER-BUG-002`
-    -   **Title:** Launcher fails to correctly configure environment in proot/Termux and has unstable Python version handling.
-    -   **Status:** `In-Progress`
-    -   **Description:** The launcher script has several issues. It struggles to correctly identify and configure the environment when running inside a proot-ed Termux environment, leading to incorrect paths and installation failures. The Python version selection logic is too aggressive and not stable, attempting to use the newest versions first instead of prioritizing known-good versions. The script also has hardcoded paths and lacks robustness in handling dependency installation failures. This commit introduces a major overhaul to address these issues by improving environment detection, implementing a "stability-first" Python version selection strategy, and making the dependency installation process more resilient.
-
----
-
-
-
-## **UI ENGINE (UI)**
-
-
-### Features
-
--   **ID:** `UI-FEAT-001`
-    -   **Title:** Refactor chat submission to synchronous flow and remove typing indicator.
-    -   **Status:** `Resolved`
-    -   **Description:** Changed the chat message submission from an optimistic UI update to a synchronous flow. The user's message is now displayed only after it has been successfully saved to the database. This provides a clearer guarantee of message delivery. Additionally, the assistant's "typing indicator" dots were removed to simplify the UI.
-
--   **ID:** `UI-FEAT-002`
-    -   **Title:** Display chronological timestamp under chat messages.
-    -   **Status:** `Resolved`
-    -   **Description:** Implemented the display of the full chronological date, time, and seconds underneath each chat bubble in the chat feed. This provides users with precise timing information for each message.
-
-
-### Performance
-
-
-
--   **ID:** `UI-PERF-001`
-
-    -   **Title:** Implement virtualized scrolling for chat history to fix performance issues.
-
-    -   **Status:** `Resolved`
-
-    -   **Description:** To improve frontend performance and handle long chat histories efficiently, the chat interface now uses virtualized scrolling (windowing). Instead of rendering all messages at once, it now only renders a small, visible subset. As the user scrolls to the top of the history, older messages are dynamically loaded and rendered on demand. This resolves severe performance degradation and the "bouncy" UI behavior in chats with many messages.
-
-
-
-### Defects (Bugs)
-
-
-
--   **ID:** `UI-BUG-001`
-
-    -   **Title:** Page bouncing back on ordinary chat mode.
-
-    -   **Status:** `Resolved`
-
-    -   **Description:** The chat page bounces back to the top on ordinary chat mode, which is a very annoying user experience. This was caused by rendering the entire chat history at once, leading to performance issues.
-
--   **ID:** `UI-FEAT-003`
-    -   **Title:** Implement Dark Mode for UI
-    -   **Status:** `Open`
-    -   **Description:** Add a toggle to enable a dark mode theme for the user interface to reduce eye strain in low-light environments.
-
----
-
-## **STELLA ICARUS**
-
-### Documentation
-
--   **ID:** `DOC-REQ-006`
-    -   **Title:** Document stella_icarus_utils functions
-    -   **Status:** `Open`
-    -   **Description:** Add docstrings and comments to the functions in `systemCore/mainEngineFrame_MacroController_EngineSharedResources/stella_icarus_utils.py` to explain their purpose, parameters, and return values.
-
----
-
-## **CORE ENGINE (CORE)**
-
-### Defects (Bugs)
-
--   **ID:** `CORE-BUG-006`
-    -   **Title:** Potential memory leak in audio_worker.py
-    -   **Status:** `Open`
-    -   **Description:** The audio_worker.py process shows a gradual increase in memory usage over time, suggesting a potential memory leak. This needs to be investigated and patched to ensure long-term stability.
----
-
-## **ZEPHY WATCHTOWER (WATCHDOWER)**
-
-### Features
-
--   **ID:** `WATCHDOG-FEAT-001`
-    -   **Title:** Implement system health notifications.
-    -   **Status:** `Open`
-    -   **Description:** The ZephyWatchtower should have the capability to send notifications (e.g., via system tray alerts or a dedicated UI panel) when it detects critical issues, such as a service crash or a memory leak (`CORE-BUG-006`).
-
----
-
-## **UI ENGINE (UI)**
-
-### Defects (Bugs)
-
--   **ID:** `UI-BUG-002`
-    -   **Title:** Dark Mode theme does not persist across sessions.
-    -   **Status:** `Open`
-    -   **Description:** When the user enables Dark Mode (`UI-FEAT-003`) and restarts the application, the setting reverts to the default light mode. The selected theme should be saved in local storage and reapplied on startup.
-
----
-
-## **DOCUMENTATION (DOC)**
-
-### Requirements
-
--   **ID:** `DOC-REQ-007`
-    -   **Title:** Document CortexConfiguration.py parameters.
-    -   **Status:** `Open`
-    -   **Description:** Add detailed comments or docstrings to `systemCore/mainEngineFrame_MacroController_EngineSharedResources/CortexConfiguration.py` explaining the purpose of each configuration parameter, its possible values, and its impact on the system's behavior. This is crucial for new developers to understand how to tune the logic performance and features.
----
-
-## **LAUNCHER**
-
-### Defects (Bugs)
-
--   **ID:** `LAUNCHER-BUG-004`
-    -   **Title:** Launcher does not verify integrity of downloaded data.
-    -   **Status:** `Open`
-    -   **Description:** The launcher downloads data from various sources but does not perform a checksum verification. This could lead to corrupted data being used, causing unpredictable behavior in the core engine. A mechanism to verify file integrity (e.g., SHA256 checksum) should be implemented.
-
----
-
-## **UI ENGINE (UI)**
-
-### Features
-
--   **ID:** `UI-FEAT-004`
-    -   **Title:** Add a "Copy to Clipboard" button for code blocks.
-    -   **Status:** `Open$`,
-    -   **Description:** The UI should render code blocks with a "Copy" button to allow users to easily copy code snippets from the logic responses. This improves usability for developers and anyone working with code.
-
----
-
-## **DOCUMENTATION (DOC)**
-
-### Requirements
-
--   **ID:** `DOC-REQ-008`
-    -   **Title:** Create a user guide for the main features.
-    -   **Status:** `Open`
-    -   **Description:** The project lacks a user-facing guide explaining how to use the main features like the agent, the creative processor, and the different search functionalities. A new document should be created in the `documentation` folder to serve as a user manual.
-
--   **ID:** `DOC-FEAT-009`
-    -   **Title:** Add ECSS standards and clarify high-integrity paradigms.
-    -   **Status:** `Resolved`
-    -   **Description:** Updated `README.md`, `CONTRIBUTING.md`, and `systemCore/README.md` to include "Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)". Refined DAL definitions to explicitly map DO-178C levels to ECSS Software Criticality Categories (A, B, C) and added a technical breakdown of how determinism is achieved (DAL isolation, SPARK verification, WCET, and Stella Icarus JIT hooks).
-
-
-
-
-
-### Maintenance
-
--   **ID:** `DOC-MAINT-001`
-    -   **Title:** Checkpoint: AdelaideAlbertCortex refactor and documentation asset relocation.
-    -   **Status:** `Resolved`
-    -   **Description:** This serves as a checkpoint before a major refactoring of the Branch Prediction system. It includes a significant logical overhaul of the main loop, restructuring the flow of context gathering, action analysis, and response synthesis. Additionally, the `_excludefromRuntime_reverseEngineeringAssets` directory has been relocated into the `documentation/Developer Documentation` folder to better organize non-runtime assets.
----
-
-## **LAUNCHER**
-
-### Features
-
--   **ID:** `LAUNCHER-FEAT-003`
-    -   **Title:** Add launcher integrity check to force rebuilds on change.
-    -   **Status:** `Resolved`
-    -   **Description:** Implemented a file hash check for `launcher.py`. If the launcher's content changes, the `.setup_complete_v2` flag is deleted, forcing a full environment rebuild. This guarantees that changes to dependencies or build steps in the launcher are always applied, preventing environment desynchronization.
-
----
-
-## **CORE ENGINE (CORE)**
-
-### Refactors
-
--   **ID:** `CORE-REFACTOR-010`
-    -   **Title:** "Trickshot" refactor of math hook with C++ and Numba tiers.
-    -   **Status:** `Resolved`
-    -   **Description:** The `basic_math_hook` in StellaIcarus was refactored for maximum performance using a tiered "trickshot" approach. It now attempts to compile and use a native C++ library for calculations first. If that fails, it falls back to a Numba JIT-compiled function. The final fallback is a pure Python implementation. This significantly speeds up the execution of simple math queries.
-
----
-
-## **UI ENGINE (UI)**
-
-### Refactors
-
--   **ID:** `UI-REFACTOR-001`
-    -   **Title:** Refactor frontend to be served by a dedicated Ada web host.
-    -   **Status:** `Resolved`
-    -   **Description:** Replaced the Node.js/Vite development server (`npm run dev`) with a compiled Ada web server (`zephyrine_host`) for serving the frontend. The `launcher.py` script now builds the static React assets (`npm run build`), copies them to the Ada host's directory, and compiles the Ada server. This change aims to create a more robust, self-contained, and performant frontend deployment, reducing reliance on Node.js at runtime.
----
-
-## **CORE ENGINE (CORE)**
-
-### Features
-
--   **ID:** `CORE-FEAT-020`
-    -   **Title:** Implement External System Request Pipeline and Output Loop Detection
-    -   **Status:** `In-Progress`
-    -   **Description:** Introduces a specialized request handling pipeline for external, programmatic systems, referred to as 'PrecMode' or 'Bottom Gear'. This pipeline routes requests to specialized processing units and formats the output into a structured JSON response. Additionally, a mechanism to detect and trim meaning-based repetitions or loops in generated text has been implemented to improve output quality.
-
--   **ID:** `CORE-FEAT-021`
-    -   **Title:** `Enhance PromptPruner with dynamic template-based regex generation.`
-    -   **Status:** `Resolved`
-    -   **Description:** `Refactored the PromptPruner class in database.py to dynamically generate de-noising regex patterns from CortexConfiguration templates. This improves the accuracy of user input extraction from complex prompts and reduces the need for manual pattern updates.`
-
--   **ID:** `CORE-REFACTOR-011`
-    -   **Title:** Refactor core engine for Raven-Revolution.
-    -   **Status:** `Resolved`
-    -   **Description:** Implemented manual code refactoring for the Raven-Revolution initiative. This overhaul streamlines execution pipelines and enhances deterministic performance. Formatting was applied via Zed.
-
--   **ID:** `GOVERNANCE-FEAT-004`
-    -   **Title:** Complete license form and identify frontend warning issues.
-    -   **Status:** `In-Progress`
-    -   **Description:** Completed the mandatory license form requirements. However, initial validation indicates that the frontend warning system remains problematic and requires further investigation to ensure compliance with project standards.
-
--   **ID:** `LAUNCHER-FEAT-004`
-    -   **Title:** Refactoring the build to prepare for Raven-Revolution into Stellar.
-    -   **Status:** `Resolved`
-    -   **Description:** Launcher.py now completed rocq/coq auto installation for the venv changes (None coq installation is soon deprecated and rocq is mandatory), (fixes some additional loop retry break sys.exit() ).
+-   **ID:** `CORE-REFACTOR-013`
+-   **Title:** `Refactor background tasks to Snowball-Enaga and implement priority propagation.`
+-   **Status:** `Resolved`
+-   **Description:** `Replaced the legacy Tree of Thoughts (ToT) background task with a more robust Snowball-Enaga background pipeline. Implemented comprehensive priority (ELP0/ELP1) propagation across RAG retrieval, skeleton generation, and node building to ensure deterministic resource management during complex tasks. Standardized imports and formatting in AdelaideAlbertCortex.py.`
+
+-   **ID:** `CORE-FIX-023`
+-   **Title:** `Fix missing imports and typing for Salience Warden implementation.`
+-   **Status:** `Resolved`
+-   **Description:** `Corrected missing increment_hit_count import in AdelaideAlbertCortex.py and updated datetime/typing imports in database.py to support the new salience management system.`
 
 -   **ID:** `CORE-FEAT-022`
-    -   **Title:** Implement Semantic Caching, Self-Healing Integrity, and Enhanced Web Search.
-    -   **Status:** `Resolved`
-    -   **Description:** This update introduces a multi-faceted enhancement to the core engine. Key changes include:
-        1.  **Semantic Caching**: Implementation of a semantic cache layer (`ENABLE_SEMANTIC_CACHE`) to store and retrieve responses based on query similarity, reducing redundant computation.
-        2.  **Self-Healing Integrity**: A new diagnostic suite (`_perform_self_healing_integrity`) that utilizes `pyrefly` for static integrity checks and `deal` for formal verification of code contracts, adhering to high-integrity safety standards.
-        3.  **Enhanced Web Search**: A complete overhaul of the `network_internet_knowledge_fetcher` module, adding support for Google, DuckDuckGo, and Searx engines, along with visual data extraction, CAPTCHA monitoring, and semantic ranking of search results.
-        4.  **Bottom Gear Routing**: Refactored the specialized request pipeline with a dynamic router for specialist model selection and an optimized bypass for self-healing operations.
-        5.  **Headless Mode**: Added a `--no-tui-headless` flag to `launcher.py` to support operation in environments without TUI capability.
+-   **Title:** `Implement Salience Warden for DB Memory Purging and Tracking.`
+-   **Status:** `Resolved`
+-   **Description:** `Introduced a salience-based memory management system. Added hit_count and last_accessed tracking to database records. Implemented the SalienceWardenThread, which monitors database latency and automatically purges low-salience interactions when latency exceeds critical thresholds, ensuring long-term system performance.`
 
--   **ID:** `CORE-FEAT-023`
-    -   **Title:** Implement Global Document Refinement via Multi-Block Diffs.
-    -   **Status:** `Resolved`
-    -   **Description:** Introduced a new post-generation refinement phase (`_refine_final_buffer_via_diff`) in the core engine. This phase utilizes a specialized model to review long-form document buffers and apply targeted edits using a multi-block SEARCH/REPLACE diff format, effectively pruning redundancy and improving linguistic flow.
+-   **ID:** `CORE-FEAT-021`
+-   **Title:** `Enhance PromptPruner with dynamic template-based regex generation.`
+-   **Status:** `Resolved`
+-   **Description:** `Refactored the PromptPruner class in database.py to dynamically generate de-noising regex patterns from CortexConfiguration templates. This improves the accuracy of user input extraction from complex prompts and reduces the need for manual pattern updates.`
 
--   **ID:** `CORE-FEAT-024`
-    -   **Title:** Implement Fuzzy Matching and Self-Healing for Diff Refinement.
-    -   **Status:** `Resolved`
-    -   **Description:** Enhanced the document refinement system (`_apply_diff_to_buffer` and `_refine_final_buffer_via_diff`) with a robust fuzzy matching strategy (85% threshold) and a 5-attempt self-healing retry loop. This allows the system to recover from minor model hallucinations in SEARCH anchors and improves the overall success rate of automated document polishing.
+-   **ID:** CORE-FEAT-019
+-   **Title:** Implement initial safety measures to processing pipeline
+-   **Status:** In-Progress
+-   **Description:** This feature introduces initial safety measures to the core processing pipeline. This is the first half of the planned safety enhancements to ensure robust and secure operation.
 
--   **ID:** `CORE-REFACTOR-013`
-    -   **Title:** Migrate Web Framework from Flask to Quart (ASGI-Native).
-    -   **Status:** `Resolved`
-    -   **Description:** Performed a major architectural migration of the core engine's web layer from Flask to Quart. This enables native asyncio support for all routes and middlewares, improving concurrency and eliminating the need for WSGI-to-ASGI adapters. Key changes include converting route handlers to `async def`, utilizing `await` for request data access, and implementing a native async SSE generator for chat streaming.
+-   **ID:** CORE-REFACTOR-005
+-   **Title:** Refactor Task Classification and Enhance Contextual Retrieval
+-   **Status:** In-Progress
+-   **Description:** This change introduces a more structured approach to handling tasks. A new classification system routes incoming requests to specialized domains (e.g., CODE, PHYSICS). For coding tasks, a verification step is added to enforce stricter development standards when high-integrity code (like Ada/SPARK) is detected. A new standard vector computation adapter has been integrated to allow for more effective retrieval of information from the indexed knowledge base. This reframes the system's operation towards a more procedural and rule-based workflow.
 
--   **ID:** `CORE-INTEGRITY-001`
-    -   **Title:** Integrate SPARK flow analysis and frontend HTML/CSS validation.
-    -   **Status:** `Resolved`
-    -   **Description:** Implemented SPARK flow analysis for Ada components (Watchdog Level 2 and Frontface Backend Service) to enhance formal verification. Integrated HTMLHint and Stylelint into the launcher build pipeline for non-blocking frontend validation. Added detailed RATIONALE and WARRANTY annotations to Python core components for static analysis compatibility with Pyrefly. Enhanced launcher.py with Alire toolchain path management for self-contained builds.
+-   **ID:** CORE-REFACTOR-004
+-   **Title:** Implement Disciplined Ada/SPARK Build Process and Refactor Agent for Procedural Tasks
+-   **Status:** Resolved
+-   **Description:** This change introduces a more rigorous and disciplined build workflow for Ada/SPARK components. New helper scripts (`alr_compile`, `alr_spark`, `alr_whiplash`) are added to the environment via the launcher to standardize compilation and verification, enforcing a 'whiplash' discipline of "verify then compile". The procedural system implementation has been significantly refactored, renaming `procedural system.py` to `procedural_adaptivesystem_procedural system.py` to better reflect its role. The procedural system's internal logic is now a two-phase process (plan then translate) to improve the reliability of tool use and includes a "snowball check" to filter out low-quality responses. The procedural system is now also capable of consulting reference manuals and documents via a new retrieval implementation.
+
+-   **ID:** CORTEX-FEAT-018
+-   **Title:** Ground System in Time with Multi-Calendar Temporal Anchor
+-   **Status:** Resolved
+-   **Description:** This feature enhances the System's contextual awareness by injecting a temporal anchor into its prompts. At the start of a task, a string is generated containing the current date and time in multiple formats: Gregorian (Common Era), Holocene (Human Era), Hebrew, and Islamic (Hijri). This provides a rich, multi-faceted sense of the current time, intended to improve the System's ability to reason about and retrieve time-sensitive information. Requires the `convertdate` library.
+
+-   **ID:** UI-REFACTOR-006
+-   **Title:** Deprecate Ada Frontface and Integrate Native WebSocket UI
+-   **Status:** Resolved
+-   **Description:** This major refactor removes the Ada-based `frontfacebackendservice` and replaces it with a direct, high-performance WebSocket connection to the main Python backend (`AdelaideAlbertCortex.py`). A new native ASGI WebSocket handler (`/zepzepadaui`) has been implemented. The frontend has been completely overhauled with a new "liquid glass" design, a floating chat input, improved animations, and a streamlined user experience. A new `ZepZepAdaUI` database table has been introduced to separate UI state from the core interaction log.
+
+-   **ID:** CORTEX-FEAT-006
+-   **Title:** Implement Warden Memory Protection for System Calls
+-   **Status:** In-Progress
+-   **Description:** This feature introduces the "Warden" system, a proactive memory management and resource negotiation layer for all System calls within the System Core. The Warden is designed to prevent context overflow and subsequent application crashes by dynamically assessing system memory, probing Weight File file metadata to predict RAM requirements, and selecting an appropriate context size ('bin') for the operation. If the required memory exceeds safe available limits, the Warden will negotiate a smaller context bin. If a prompt is too large for the selected bin, the Warden performs "sandwich truncation," preserving the head and tail of the prompt while flushing the full, original text to the vector database for retrieval availability. This ensures both stability under memory pressure and full contextual awareness for the system.
+
+-   **ID:** CORE-REFACTOR-003
+-   **Title:** Evolve Snowball architecture to Enaga diff/patch loop and enhance robustness
+-   **Status:** Resolved
+-   **Description:** This major refactor evolves the 'Snowball' architecture into the 'Snowball-Enaga V10' loop. Instead of simple concatenation, this new architecture uses an System to adaptively generate and apply diff/patches for each generation step, improving contextual consistency. It also introduces a skeleton repair mechanism using an System to fix malformed JSON plans. Input handling is now more robust with automatic "sandwich" truncation for very long inputs, flushing the full content to the vector database to ensure complete context is available for retrieval. The `core_logic_worker` representation parser is now more resilient to varied JSON output from the representation process. The launcher now ensures `bash` is installed and has better error handling for `libiconv`.
+
+-   **ID:** STELLA-REFACTOR-002
+-   **Title:** Remove CX3 Flight Calculator and Refactor Trickshot Benchmark
+-   **Status:** Resolved
+-   **Description:** This refactor removes the deprecated CX3 flight calculator (`flight_cx3_core.cpp`, `flight_core_ultimate.cpp`, and their associated compiled objects). The `trickshot_stellaicarus_benchmark_simplearitmatic.py` has been updated to use picoseconds for higher precision, and now dynamically recompiles its C++ core only when the source code changes. The benchmark's output has also been enhanced to include its own source code for better introspection. Jemalloc is now enforced in proot environments for stability, and the miniforge path has been added to the environment.
+
+-   **ID:** CORE-FEAT-016
+-   **Title:** Implement Dynamic Adaptive Relaxation, Enhanced Streaming Backend Compatibility, and Optical Analysis System Improvements
+-   **Status:** In-Progress
+-   **Description:** This feature introduces a comprehensive set of improvements. A new "Dynamic Adaptive Relaxation" system has been implemented in the `PriorityQuotaLock` to adaptively throttle background ELP0 tasks based on system state (CPU, power, user idle time), significantly improving responsiveness. Streaming Backend compatibility has been greatly enhanced with new API endpoints (`/api/show`), and major refactoring of the streaming generators (`_streaming_backend_pseudo_stream_sync_generator` and `_stream_core_logic_chat_response_generator_flask`) to provide live log streaming. The System Vision pipeline has been made more robust, with its priority elevated to ELP1 and its context handling improved. The default optical analysis system has been updated to a higher quality quantization. Additionally, numerous performance and stability improvements have been made to the `core_logic_worker` and `AdelaideAlbertCortex`.
+
+-   **ID:** CORE-LOGIC-FIX-001
+-   **Title:** Disable memory mapping in core_logic_worker for stability
+-   **Status:** Resolved
+-   **Description:** Disabled memory mapping (`--mmap`) for the Core Logic Component subprocess by replacing it with `--no-mmap`. This is to prevent potential memory-related issues and improve stability, especially on systems where mmap might be problematic.
+-   **ID:** CORTEX-FEAT-004
+-   **Title:** Overhaul retrieval by Re-adding Hybrid Search and Advanced Prompt Synthesis
+-   **Status:** Resolved
+-   **Description:** This feature restores and significantly enhances the System Core's retrieval capabilities by re-introducing fuzzy search, which was previously erroneously removed by an System. The `direct_rag_retriever` now uses a robust hybrid approach, combining high-precision semantic vector search with a fuzzy search fallback to improve context retrieval. A new configuration, `FUZZY_SEARCH_THRESHOLD_CONTEXT`, was introduced for this. Furthermore, the core `PROMPT_DIRECT_GENERATE` was rewritten to give the System explicit, step-by-step instructions on how to comprehensively synthesize information from retrieved context, leading to more detailed and useful responses. A DeepWiki badge was also added to the `README.md`.
+-   **ID:** STELLA-REFACTOR-001
+-   **Title:** Refactor Avionics Daemon from Simulator to Deterministic Kernel
+-   **Status:** In-Progress
+-   **Description:** This refactor transforms the `avionics_daemon` from a random data simulator into a deterministic, physics-based kernel. It introduces a thread-safe state manager and a physics integration loop. Two-way communication with the Python orchestrator is now established via `stdin`/`stdout` pipes, allowing for external control. The Python host's build and discovery logic for Ada daemons has also been significantly improved with better error logging and dynamic executable naming.
+-   **ID:** DOCS-UPDATE-001
+-   **Title:** Update Hippocratic License badge in README
+-   **Status:** Resolved
+-   **Description:** Updated the Hippocratic License badge in `README.md` to include the `LAW` and `SOC` clauses, changing it from `HL3-BDS-BOD-MEDIA-MIL-SUP-SV` to `HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV`.
+-   **ID:** SYS-PERF-008
+-   **Title:** Tune System Core performance, improve response normalization, and prevent file indexer stalls.
+-   **Status:** Resolved
+-   **Description:** This change introduces several performance and reliability improvements. In `CortexConfiguration.py`, background task limits, log queue size, and flush intervals were significantly increased to handle larger workloads, while the fuzzy search threshold and reflector idle wait time were lowered to improve responsiveness. New regex-based normalization rules were added to `DIRECT_GENERATE_NORMALIZATION_RULES` to aggressively clean up verbose, conversational filler from System responses. In `file_indexer.py`, the automatic unloading of optical analysis systems was disabled to prevent a suspected race condition causing the indexer to hang overnight. A blank line was added to `.gitignore` for readability.
+-   **ID:** VECTCOMP-PERF-007
+-   **Title:** Refactor QRNN simulation to use GPU-accelerated tensor engine
+-   **Status:** Resolved
+-   **Description:** Majorly refactored `VectorCompute_Provider.py` to replace the memory-intensive, numpy-based dense matrix simulation with a high-performance, memory-optimized tensor contraction engine. The new engine automatically utilizes PyTorch for GPU acceleration (CUDA, ROCm, MPS) if available, falling back to accelerated CPU routines. This change significantly improves simulation speed and reduces the memory footprint by avoiding the construction of large, dense unitary matrices. The implementation now relies on efficient `tensordot` operations and index permutation for entanglement, which is well-suited for modern hardware. The provider now dynamically selects the best backend (PyTorch, Qiskit, etc.) at initialization. Minor logging noise was reduced in `cortex_backbone_provider.py` and `file_indexer.py`.
+-   **ID:** CORTEX-REFACTOR-001
+-   **Title:** Remove unused datetime import in AdelaideAlbertCortex.py
+-   **Status:** Resolved
+-   **Description:** Removed an unnecessary `datetime` import from `systemCore/mainEngineFrame_MacroController_EngineSharedResources/AdelaideAlbertCortex.py` to clean up the code.
+-   **ID:** CORE-REFACTOR-002
+-   **Title:** Streamline DB Init, Improve Scheduler Resilience, and Add Preemption Check
+-   **Status:** In-Progress
+-   **Description:** This change involves several refactors and a new feature. The database initialization logic was simplified by removing the complex Alembic "stamp and upgrade" process in favor of a more direct `create_all` approach, and the background health check thread was removed. The DCTD scheduler is now more aggressive, attempting to connect to the database immediately upon startup without waiting for a health signal. A new `is_preempted` method was added to the `PriorityQuotaLock` to allow tasks to check if they have been preempted by a higher-priority task. Finally, `datetime` imports were standardized to `import datetime as dt` to prevent import shadowing.
+-   **ID:** CORTEX-FEAT-003
+-   **Title:** Integrate STEM Compass specialized systems
+-   **Status:** Resolved
+-   **Description:** This feature integrates a suite of specialized Systems, collectively named "STEM Compass," into the System Core. The launcher (`launcher.py`) has been updated to download these new Weight File files, and the `CortexConfiguration.py` has been modified to map them for use by the worker. The total model parameter count has been updated to 78.75B to reflect these additions. The `.gitignore` file was also updated to exclude temporary build artifacts.
+-   **ID:** SYS-PERF-004
+-   **Title:** Tune resource limits, improve logging, and relax dependency pinning
+-   **Status:** Resolved
+-   **Description:** This change introduces several modifications to improve system performance and stability. It adjusts resource limits in `CortexConfiguration.py` for background tasks, database truncation length, and logging to reduce memory footprint and increase responsiveness. Logging is now more frequent with smaller batch sizes. Dependency versions in `requirements.txt` have been relaxed from `==` to `>=` to allow for more flexible package updates. Error handling in the `file_indexer.py` has been improved with a try-except block for image processing. `ENABLE_DB_DELETE_DEFECTIVE_ENTRY` has been enabled to allow for automated cleanup of defective database entries.
+-   **ID:** UI-REFACTOR-005
+-   **Title:** Remove unused streaming timer logic in ChatPage
+-   **Status:** In-Progress
+-   **Description:** Refactored the `ChatPage.jsx` component to remove the `streamingStartTimeRef` and the related tokens-per-second calculation. This logic was unused and added unnecessary complexity to the component's state management during message streaming.
+-   **ID:** VECTCOMP-REFACTOR-006
+-   **Title:** Isolate QRNN Numpy Simulation in Subprocess for Memory Safety
+-   **Status:** Resolved
+-   **Description:** Refactored the `VectorCompute_Provider.py` to execute the memory-intensive QRNN numpy simulation in an isolated subprocess. This prevents the main application from crashing due to excessive memory allocation during large matrix operations (`2^16 x 2^16` matrices). The core logic is now in a standalone `_execute_numpy_qrnn_isolated` function, and the provider orchestrates the subprocess lifecycle, passing data via temporary files. This guarantees that memory used by the simulation is released back to the OS immediately upon completion.
+-   **ID:** CORE-FEAT-015
+-   **Title:** Refactor Generation Logic to Peer Review Architecture and Improve Priority Lock
+-   **Status:** In-Progress
+-   **Description:**
+    *   Refactors the primary `chat_direct_generate` function to a "Peer Review Everphase Context" (V9) architecture. This involves a loop of generation, fact-checking against retrieval, and routing to specialist systems for complex or incomplete responses.
+    *   Implements a "politeness" policy in the `PriorityQuotaLock` to prevent ELP0 tasks from starving waiting ELP1 tasks, improving high-priority task responsiveness.
+    *   Dele tes the legacy `trickshot_simple_flight_computer.py`.
+    *   Increases retrieval context limits (`retrieval_URL_COUNT`, fuzzy search interaction fetch).
+    *   Adjusts logging and disables the "mistype" feature.
+-   **ID:** CORTEX-FEAT-005
+-   **Title:** Integrate native Core Logic Component multimodal System for image processing
+-   **Status:** Resolved
+-   **Description:** This feature integrates the new `core logic-mtmd-cli` (renamed to `Visual Logic Component`) from `Core Logic Component` for native, high-performance optical analysis system execution. This replaces the previous, less efficient optical analysis system handling. A new `Core LogicCppVisionWrapper` and a dedicated `optical analysis` task type in the `core_logic_worker` have been implemented. The `launcher` and `CortexConfiguration` have been updated with the new Unsloth Core Logic optical analysis system files and their required `mmproj` files.
+-   **ID:** CORE-REFACTOR-001
+-   **Title:** Refactor optical analysis system image description pipeline
+-   **Status:** Resolved
+-   **Description:** Centralized the optical analysis system image description logic into the `core_logic_worker.py` script. This removes the `get_vlm_description` method from `cortex_backbone_provider.py` and introduces a dedicated "optical analysis" task type in the worker. The changes also include improved error handling, input processing, and a longer timeout for Streaming Backend streaming to enhance stability with slower Systems.
+-   **ID:** UI-FEAT-005
+    -   **Title:** Add initial GTK C application for native UI experiments.
+    -   **Status:** In-Progress
+    -   **Description:** This adds the initial directory structure and boilerplate for a GTK-based desktop application written in C. This is an experimental feature to explore native UI options for the InterfaceEngine_MacroController_SharedResources.
+-   **ID:** `SYS-REFACTOR-011`
+-   **Title:** Overhaul UI architecture, service naming, and system behavior.
+-   **Status:** `Resolved`
+-   **Description:** This commit introduces a major refactoring across the system. The frontend UI has been significantly reworked, replacing virtualized scrolling with a more direct rendering approach and implementing a more robust "fire-and-forget" WebSocket messaging architecture. The splash screen sequence was redesigned to include a warning. Service names within the launcher (`launcher.py`) have been standardized (e.g., `ZEPHYMESH-NODE` to `zephymeshHand`). The core system behavior and system prompts in `CortexConfiguration.py` have been updated to be less confident and more cautious.
+
+-   **ID:** CORE-BUG-011
+-   **Title:** Tune PWM for preempt halt hardblock.
+-   **Status:** Resolved
+-   **Description:** Adjusted the Pulse Width Modulation (PWM) parameters to optimize the timing and reliability of the preempt halt mechanism within the scheduler. This ensures that the system can effectively halt ELP0 background tasks to prioritize ELP1 high-priority requests, maintaining system responsiveness and operational priority.
