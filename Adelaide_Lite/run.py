@@ -615,93 +615,18 @@ def main():
         threads = str(os.cpu_count() or 4)
         
         # =====================================================================
-        # ggml: git submodule → compile from source
+        # GGML: Built in-tree by llama.cpp (vendor/llama.cpp/build/ggml/)
         # =====================================================================
-        # [VITAL-DO-NOT-REMOVE] NEVER use Homebrew's ggml.
-        # Homebrew ggml 0.15.2 has a bug in Qwen3.5's Gated Delta Net:
-        #   GGML_ASSERT(state->ne[0] == S_v) failed  (ggml.c:6252)
-        # This crashes during llama_decode. The assertion path showed
-        # /private/tmp/ggml-20260619-5335-xzehaz/ggml-0.15.2/ which is
-        # the HOMEBREW-built copy, not our locally-built one.
-        # LM Studio runs Qwen3.5 on llama.cpp (not just MLX) and does
-        # NOT have this bug — they bundle their own ggml build.
-        # FIX: Clone ggml as a git submodule, compile from source, link
-        # against our local build only. RPATH ensures runtime never
-        # picks up Homebrew's ggml.
-        # =====================================================================
-        ggml_submodule = os.path.abspath(os.path.join(BASE_DIR, "vendor", "ggml"))
-        ggml_build_dir = os.path.join(ggml_submodule, "build")
-        ggml_lib = os.path.join(ggml_build_dir, "bin", "libggml.dylib")
-        ggml_start = time.time()
-
-        # Init/update submodule
-        if not os.path.exists(os.path.join(ggml_submodule, ".git")) and \
-           not os.path.exists(os.path.join(ggml_submodule, "CMakeLists.txt")):
-            print(f"[GGML] [{time.strftime('%H:%M:%S')}] Initializing ggml submodule...")
-            result = subprocess.run(
-                ["git", "submodule", "update", "--init", "--recursive",
-                 "Adelaide_Lite/vendor/ggml"],
-                cwd=os.path.dirname(BASE_DIR), check=False,
-                capture_output=True, text=True
-            )
-            if result.returncode != 0:
-                print(f"{BG_RED}[BUGCHECK] [GGML] [{time.strftime('%H:%M:%S')}] Submodule init FAILED: {result.stderr[-300:]}{RST}")
-        else:
-            print(f"[GGML] [{time.strftime('%H:%M:%S')}] Fetching latest ggml...")
-            subprocess.run(["git", "fetch", "origin"], cwd=ggml_submodule,
-                           check=False, capture_output=True)
-            subprocess.run(["git", "pull", "--ff-only"], cwd=ggml_submodule,
-                           check=False, capture_output=True)
-
-        ggml_ver = subprocess.run(
-            ["git", "describe", "--tags"], cwd=ggml_submodule,
-            capture_output=True, text=True
-        ).stdout.strip()
-        print(f"[GGML] [{time.strftime('%H:%M:%S')}] Version: {ggml_ver}")
-
-        # Build ggml if needed
-        if not os.path.exists(ggml_lib):
-            print(f"[GGML] [{time.strftime('%H:%M:%S')}] Building ggml from source...")
-            os.makedirs(ggml_build_dir, exist_ok=True)
-            cmake_flags = ["cmake", "-B", "build", "-DGGML_NATIVE=ON",
-                           "-DCMAKE_BUILD_TYPE=Release"]
-            if ggml_backend == "metal":
-                cmake_flags.append("-DGGML_METAL=ON")
-                print(f"[GGML] [{time.strftime('%H:%M:%S')}] Metal GPU: ENABLED")
-            elif ggml_backend == "cuda":
-                cmake_flags.append("-DGGML_CUDA=ON")
-                print(f"[GGML] [{time.strftime('%H:%M:%S')}] CUDA GPU: ENABLED")
-            elif ggml_backend == "sycl":
-                cmake_flags.append("-DGGML_SYCL=ON")
-                print(f"[GGML] [{time.strftime('%H:%M:%S')}] SYCL/oneAPI GPU: ENABLED")
-            elif ggml_backend == "vulkan":
-                cmake_flags.append("-DGGML_VULKAN=ON")
-                print(f"[GGML] [{time.strftime('%H:%M:%S')}] Vulkan GPU: ENABLED")
-            result = subprocess.run(cmake_flags, cwd=ggml_submodule,
-                                    check=False, capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"{BG_RED}[BUGCHECK] [GGML] [{time.strftime('%H:%M:%S')}] CMake FAILED: {result.stderr[-500:]}{RST}")
-            else:
-                # DO NOT SUPPRESS VERBOSITY IF YOU ARE NOT OVERCONFIDENT
-                result = subprocess.run(
-                    ["cmake", "--build", "build", "--config", "Release", "-j", "--verbose"],
-                    cwd=ggml_submodule, check=False, capture_output=True, text=True
-                )
-                ggml_elapsed = time.time() - ggml_start
-                if result.returncode == 0:
-                    print(f"[GGML] [{time.strftime('%H:%M:%S')}] Build SUCCESS in {ggml_elapsed:.1f}s")
-                else:
-                    print(f"{BG_RED}[BUGCHECK] [GGML] [{time.strftime('%H:%M:%S')}] Build FAILED: {result.stderr[-500:]}{RST}")
-        else:
-            ggml_elapsed = time.time() - ggml_start
-            print(f"[GGML] [{time.strftime('%H:%M:%S')}] Library exists ({ggml_elapsed:.1f}s)")
+        # The GPR links against vendor/llama.cpp/build/ggml/src/libggml*.a
+        # No separate ggml build needed — llama.cpp compiles its own ggml
+        # as part of its cmake build. This ensures version consistency.
+        # [VITAL-DO-NOT-REMOVE] Never use Homebrew's ggml.
 
         # =====================================================================
         # llama.cpp: clone → fetch+pull latest → rebuild if updated
         # =====================================================================
         # We always fetch+pull so we get the latest fixes.
-        # llama.cpp builds its own ggml in-tree for compilation, but at
-        # RUNTIME we use our separately-built ggml via RPATH (see GPR file).
+        # llama.cpp builds ggml in-tree. The GPR links the in-tree build.
         llama_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "llama.cpp"))
         llama_build_dir = os.path.join(llama_dir, "build")
         llama_lib = os.path.join(llama_build_dir, "src", "libllama.a")
