@@ -284,6 +284,33 @@ package Model_Manager is
    --  Mark Metal backend as broken (called on OOM decode failure).
    procedure Mark_Metal_Broken;
 
+   --  [TENSOR-ACCEL-INOP] Graceful fallback mode for persistent compute errors.
+   --  When 10+ consecutive ggml compute errors occur (ret=-2 from llama_decode),
+   --  GPU acceleration is disabled (N_Gpu_Layers := 0) and a countdown timer
+   --  starts. The system falls back to CPU-only processing for 10 minutes,
+   --  then re-enables GPU. This prevents the server from thrashing on a broken
+   --  Metal backend while still providing service via CPU.
+   --
+   --  TRIGGER: 10 consecutive ggml compute errors (any decode loop)
+   --  EFFECT: N_Gpu_Layers forced to 0, red countdown printed every 1s
+   --  RECOVERY: After 600s (10 min), GPU layers re-enabled
+   Tensor_Accel_INOP       : Boolean := False;
+   INOP_Consecutive_Errors : Natural := 0;   -- Consecutive ggml compute errors
+   INOP_Error_Threshold    : constant Natural := 10;  -- Trigger after 10 errors
+   INOP_Retry_Countdown    : Natural := 0;   -- Seconds remaining in cooldown
+   INOP_Cooldown_Secs      : constant Natural := 600;  -- 10 minutes
+   INOP_Trigger_Time       : Duration := 0.0;  -- Time when INOP was triggered
+
+   --  Record a ggml compute error for the INOP counter.
+   --  Increments counter; triggers INOP if threshold reached.
+   procedure Record_INOP_Error;
+
+   --  Clear the INOP error counter (called on successful decode).
+   procedure Clear_INOP_Error;
+
+   --  Check if Tensor_Accel_INOP is active.
+   function Is_Tensor_INOP return Boolean;
+
    Current_WCET : Duration := 0.0;
    Current_WCET_ELP0 : Duration := 0.0;
    Current_WCET_ELP1 : Duration := 0.0;
