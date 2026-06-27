@@ -1662,7 +1662,9 @@ package body Model_Manager is
                  return;
              end if;
              Unload_Model (Kind);
-          elsif Models (Kind).Warm_Cached or else Models (Kind).Loaded then
+         end if;
+         
+         if Models (Kind).Warm_Cached then
              --  [OPTIMIZATION-M02] WARM CONTEXT POOLING HIT
              --  ======================================================================
              --  Check if warm cached model can be reused
@@ -1928,14 +1930,9 @@ package body Model_Manager is
          --  GPU LAYER CONFIGURATION
          --  ======================================================================
          if Kind = Qwen_Embedding then
-             --  [ADAPTIVE GPU LAYERS FOR EMBEDDING]
-             --  File literature index -> CPU-only to avoid Metal OOM
-             --  during sustained burst crawl.
-             if Is_File_Index then
-                 M_Params.N_Gpu_Layers := 0;  -- CPU-only for file indexing
-             else
-                 M_Params.N_Gpu_Layers := -1;  -- GPU for all other ops
-             end if;
+             --  [GPU-FORCE] Embedding model ALWAYS uses GPU.
+             --  CPU-only with Metal backend present causes graph scheduler error 1.
+             M_Params.N_Gpu_Layers := -1;
          else
              --  [ADAPTIVE GPU LAYERS FOR LLM]
              if Acceleration_Silicon_Layer = -1 then
@@ -2151,22 +2148,12 @@ package body Model_Manager is
             C_Params.N_Threads := 8;
             C_Params.N_Threads_Batch := 8;
 
-            --  [VITAL-DO-NOT-REMOVE] Chat models use Q4_0 KV + flash_attn=1 + GPU.
+            --  [VITAL-DO-NOT-REMOVE] All models use Q4_0 KV + flash_attn=1.
             --  Q4_0 KV saves ~75% memory vs F16. Flash attn is REQUIRED when
             --  using quantized KV cache (V cache quantization needs flash_attn).
-            --  Embedding models fall back to F16 without flash attention to prevent
-            --  CPU scheduler graph fragmentation and error 1 on Metal+CPU systems.
-            if Kind = Qwen_Embedding then
-               C_Params.Type_K := GGML_TYPE_F16;
-               C_Params.Type_V := GGML_TYPE_F16;
-               C_Params.Flash_Attn_Type := 0;
-               C_Params.N_Batch := 32;
-               C_Params.N_Ubatch := 32;
-            else
-               C_Params.Type_K := GGML_TYPE_Q4_0;
-               C_Params.Type_V := GGML_TYPE_Q4_0;
-               C_Params.Flash_Attn_Type := 1;
-            end if;
+            C_Params.Type_K := GGML_TYPE_Q4_0;
+            C_Params.Type_V := GGML_TYPE_Q4_0;
+            C_Params.Flash_Attn_Type := 1;
 
             C_Params.Abort_Callback := Llama_Abort_Callback'Address;
             C_Params.Abort_Callback_Data := Model_Refs (Kind)'Address;
@@ -2235,8 +2222,7 @@ package body Model_Manager is
                         & "s [LoadModel]"
                         & AnsiAda.Reset
                         & " Embedding GPU: "
-                        & (if Is_File_Index then "CPU-only (file index)"
-                           else "GPU (accelerator API)"));
+                        & "GPU (forced, CPU-only causes error 1)");
                 end if;
                 --  [VITAL-DO-NOT-REMOVE] DO NOT suppress stderr here.
                 --  If Llama_Init_From_Model hangs or crashes, we NEED to see
@@ -3098,7 +3084,7 @@ package body Model_Manager is
         Llama_Set_Embeddings (Models (Qwen_Embedding).Context, Interfaces.C.int (1));
 
         declare
-            Batch_Size : constant int := int'Min (32, int (Models (Qwen_Embedding).Current_Ctx));
+            Batch_Size : constant int := int'Min (256, int (Models (Qwen_Embedding).Current_Ctx));
             Current_Pos : int := 0;
             Tokens_Left : int := N_Toks;
             Consecutive_Failures : Natural := 0;
@@ -4464,7 +4450,7 @@ package body Model_Manager is
         --  CHUNKED DECODING
         declare
             Batch_Size  : constant int :=
-               int'Min ((if Kind = Qwen_Embedding then 32 else 256), int (Models (Kind).Current_Ctx));
+               int'Min (256, int (Models (Kind).Current_Ctx));
             Current_Pos : int := 0;
             Tokens_Left : int := N_Toks;
         begin

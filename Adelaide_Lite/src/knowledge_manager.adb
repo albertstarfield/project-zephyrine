@@ -214,6 +214,7 @@ package body Knowledge_Manager is
         Buffer : Ada.Streams.Stream_Element_Array (1 .. 4096);
         Last   : Ada.Streams.Stream_Element_Offset;
         Non_Printable : Natural := 0;
+        Code_Chars    : Natural := 0;
      begin
         begin
            Ada.Streams.Stream_IO.Open (File_S, Ada.Streams.Stream_IO.In_File, FilePath);
@@ -232,10 +233,27 @@ package body Knowledge_Manager is
                       Buffer (I) = 13) then
                  Non_Printable := Non_Printable + 1;
               end if;
+
+              -- Count code syntax characters to reject minified JS/CSS/JSON
+              if Buffer (I) = 123 or else -- '{'
+                 Buffer (I) = 125 or else -- '}'
+                 Buffer (I) = 59 or else  -- ';'
+                 Buffer (I) = 58 or else  -- ':'
+                 Buffer (I) = 64 or else  -- '@'
+                 Buffer (I) = 47 or else  -- '/'
+                 Buffer (I) = 60 or else  -- '<'
+                 Buffer (I) = 62 then     -- '>'
+                 Code_Chars := Code_Chars + 1;
+              end if;
            end loop;
 
            -- If more than 10% of the first 4KB are non-printable, consider it binary
            if Last > 0 and then (Non_Printable * 100 / Natural (Last)) > 10 then
+              return False;
+           end if;
+
+           -- If more than 10% of the first 4KB are code syntax characters, consider it dense code and reject it
+           if Last > 0 and then (Code_Chars * 100 / Natural (Last)) > 10 then
               return False;
            end if;
 
@@ -457,8 +475,14 @@ package body Knowledge_Manager is
                    --  Skip web and code files from natural language embedding.
                    --  This stops the compute kernel from faulting on hyper-dense symbol clusters.
                    if Index (Name, ".css") > 0 or else Index (Name, ".js") > 0 or else 
-                      Index (Name, ".html") > 0 or else Index (Name, ".json") > 0 or else 
-                      Index (Name, ".xml") > 0 or else Index (Name, ".ts") > 0 then
+                      Index (Name, ".jsx") > 0 or else Index (Name, ".ts") > 0 or else 
+                      Index (Name, ".tsx") > 0 or else Index (Name, ".html") > 0 or else 
+                      Index (Name, ".htm") > 0 or else Index (Name, ".svg") > 0 or else 
+                      Index (Name, ".json") > 0 or else Index (Name, ".xml") > 0 or else 
+                      Index (Name, ".yaml") > 0 or else Index (Name, ".yml") > 0 or else 
+                      Index (Name, ".toml") > 0 or else Index (Name, ".lock") > 0 or else 
+                      Index (Name, ".min") > 0 or else Index (Name, ".map") > 0 or else 
+                      Index (Name, ".gz") > 0 then
                       null;
                    elsif Is_Readable_Text (Full) then
                       declare
