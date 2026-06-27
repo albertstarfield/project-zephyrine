@@ -1,0 +1,50 @@
+Note: Building adelaide_lite=0.1.0-dev/adelaide_lite.gpr...
+Compile
+   [Ada]          cronia_scheduler.adb
+   [Ada]          proactive_engine.adb
+cronia_scheduler.adb:6:06: warning: redundant with clause in body [-gnatwr]
+cronia_scheduler.adb:6:29: warning: "Calendar" is already use-visible through previous use_clause at cronia_scheduler.ads:3 [-gnatwr]
+cronia_scheduler.adb:23:61: error: there is no applicable operator "-" for private type "Ada.Real_Time.Time"
+cronia_scheduler.adb:134:19: error: unmatched actual "Kind" in call
+cronia_scheduler.adb:140:35: error: cannot use call to function "Synthesize_Speech" as a statement
+cronia_scheduler.adb:140:35: error: return value of a function call cannot be ignored
+cronia_scheduler.adb:141:76: error: "Get_Audio_Buffer" not declared in "Kokoro_Interface"
+cronia_scheduler.adb:142:35: error: "Clear_Audio_Buffer" not declared in "Kokoro_Interface"
+cronia_scheduler.ads:43:22: (style) space required [-gnatyt]
+proactive_engine.adb:24:24: error: "Time" is not visible (more references follow)
+proactive_engine.adb:24:24: error: multiple use clauses cause hiding
+proactive_engine.adb:24:24: error: hidden declaration at a-calend.ads:42
+proactive_engine.adb:24:24: error: hidden declaration at a-reatim.ads:57
+proactive_engine.adb:25:22: (style) space required [-gnatyt]
+proactive_engine.adb:71:19: error: unmatched actual "Kind" in call
+proactive_engine.adb:80:35: error: cannot use call to function "Synthesize_Speech" as a statement
+proactive_engine.adb:80:35: error: return value of a function call cannot be ignored
+proactive_engine.adb:81:59: error: "Get_Audio_Buffer" not declared in "Kokoro_Interface"
+proactive_engine.adb:82:35: error: "Clear_Audio_Buffer" not declared in "Kokoro_Interface"
+proactive_engine.adb:88:33: error: missing "with Ada.Exceptions;"
+proactive_engine.adb:128:13: error: unmatched actual "Kind" in call
+proactive_engine.adb:137:29: error: cannot use call to function "Synthesize_Speech" as a statement
+proactive_engine.adb:137:29: error: return value of a function call cannot be ignored
+proactive_engine.adb:138:53: error: "Get_Audio_Buffer" not declared in "Kokoro_Interface"
+proactive_engine.adb:139:29: error: "Clear_Audio_Buffer" not declared in "Kokoro_Interface"
+proactive_engine.adb:145:27: error: missing "with Ada.Exceptions;"
+proactive_engine.adb:149:33: error: not type conformant with declaration at proactive_engine.ads:55
+proactive_engine.adb:149:33: error: type of "At_Time" does not match
+proactive_engine.adb:159:32: error: "Formatting" not declared in "Calendar"
+proactive_engine.adb:201:19: error: unmatched actual "Kind" in call
+proactive_engine.adb:210:35: error: cannot use call to function "Synthesize_Speech" as a statement
+proactive_engine.adb:210:35: error: return value of a function call cannot be ignored
+proactive_engine.adb:211:59: error: "Get_Audio_Buffer" not declared in "Kokoro_Interface"
+proactive_engine.adb:212:35: error: "Clear_Audio_Buffer" not declared in "Kokoro_Interface"
+proactive_engine.adb:218:33: error: missing "with Ada.Exceptions;"
+proactive_engine.ads:2:17: warning: no entities of "Ada.Strings.Unbounded" are referenced in spec [-gnatwu]
+proactive_engine.ads:2:17: warning: with clause might be moved to body [-gnatwu]
+proactive_engine.ads:4:06: warning: no entities of "Model_Types" are referenced in spec [-gnatwu]
+proactive_engine.ads:4:06: warning: with clause might be moved to body [-gnatwu]
+
+   compilation of proactive_engine.adb failed
+   compilation of cronia_scheduler.adb failed
+
+gprbuild: *** compilation phase failed
+ERROR: Command ["gprbuild", "-s", "-j0", "-p", "-P", "/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/adelaide_lite.gpr"] exited with code 4
+ERROR: Compilation failed.
