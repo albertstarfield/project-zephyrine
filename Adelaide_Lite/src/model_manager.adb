@@ -708,6 +708,21 @@ package body Model_Manager is
                        then "INITIAL"
                        else "JMP" & Natural'Image (Fault_Total)));
 
+                --  Virtual Prefill Speed: actual tok/s from last prefill (not cached)
+                --  This is the key metric for time budget enforcement.
+                --  If speed drops below ~20 tok/s, ctx expansion should be avoided.
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                    & "[CtxMonitor]"
+                    & AnsiAda.Reset
+                    & " Prefill Speed: "
+                    & Duration'Image (Virtual_Prefill_Speed)
+                    & " tok/s | Elapsed="
+                    & Duration'Image (Prefill_Elapsed) & "s"
+                    & " | Budget=30s"
+                    & " | Expand Threshold="
+                    & Natural'Image (Ctx_Expand_Threshold_Pct) & "%");
+
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                     & "[CtxMonitor]"
@@ -4465,7 +4480,23 @@ package body Model_Manager is
         Llama_Interface.Llama_Memory_Clear
            (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
 
-        --  CHUNKED DECODING
+        --  CHUNKED DECODING (PREFILL)
+        --  ============================================================================
+        --  PREFILL TIME BUDGET: We measure actual decode time (not cached/virtualized
+        --  tokens — those are free). The budget is 30s max. After prefill completes,
+        --  we compute tok/s and weight it against free context % to determine the
+        --  dynamic expansion threshold. This prevents expanding ctx when prefill is
+        --  already too slow (would make it worse) or when context is nearly full
+        --  (no room to grow into).
+        --
+        --  THRESHOLD FORMULA (computed after prefill):
+        --    threshold_pct = min(75, 30 / prefill_elapsed * (free_ctx_pct / 100))
+        --  - If prefill is fast (<5s) and free ctx is high (>50%): threshold rises
+        --  - If prefill is slow (>15s) or free ctx is low (<25%): threshold drops
+        --  - Always capped at 75% to prevent over-expansion
+        --  ============================================================================
+        Prefill_Start_Time := Ada.Real_Time.Clock;
+        Prefill_Token_Count := 0;
         declare
             Batch_Size  : constant int :=
                int'Min (256, int (Models (Kind).Current_Ctx));
@@ -4580,6 +4611,61 @@ package body Model_Manager is
                     Current_Pos := Current_Pos + To_Decode;
                 end;
             end loop;
+
+            --  PREFILL TIME BUDGET: Compute elapsed time and tok/s
+            --  This measures ACTUAL prefill speed (not cached/virtualized tokens).
+            --  Used to decide dynamic ctx expansion threshold.
+            declare
+                Prefill_End : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+            begin
+                Prefill_Elapsed := Ada.Real_Time.To_Duration (Prefill_End - Prefill_Start_Time);
+                Prefill_Token_Count := Natural (N_Toks);
+
+                --  Compute tok/s (guard against divide-by-zero)
+                if Prefill_Elapsed > 0.0 and then Prefill_Token_Count > 0 then
+                    Virtual_Prefill_Speed := Duration (Prefill_Token_Count) / Prefill_Elapsed;
+                else
+                    Virtual_Prefill_Speed := 0.0;
+                end if;
+
+                --  Compute free context %
+                if Current_Ctx_Capacity > 0 then
+                    Free_Ctx_Pct := (Current_Ctx_Capacity - Current_Prompt_Tokens) * 100 / Current_Ctx_Capacity;
+                else
+                    Free_Ctx_Pct := 0;
+                end if;
+
+                --  DYNAMIC EXPANSION THRESHOLD:
+                --  threshold = min(75, 30 / prefill_elapsed * (free_ctx_pct / 100))
+                --  Logic:
+                --  - If prefill is fast (<5s) AND free ctx >50%: threshold rises → safe to expand
+                --  - If prefill is slow (>15s) OR free ctx <25%: threshold drops → don't expand
+                --  - Budget cap: 30s max. Beyond that, expansion makes things worse.
+                --  - Always capped at 75% to prevent runaway expansion.
+                if Prefill_Elapsed > 0.0 then
+                    declare
+                        Budget_Ratio : constant Duration := 30.0 / Prefill_Elapsed;
+                        Free_Factor  : constant Duration := Duration (Free_Ctx_Pct) / 100.0;
+                        Raw_Threshold : constant Natural :=
+                           Natural (Float (Budget_Ratio) * Float (Free_Factor) * 100.0);
+                    begin
+                        Ctx_Expand_Threshold_Pct := Natural'Min (75, Raw_Threshold);
+                    end;
+                else
+                    Ctx_Expand_Threshold_Pct := 75;  -- Default: expand freely
+                end if;
+
+                --  Print prefill metrics for diagnostics
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                    & "[Prefill-Metrics]"
+                    & AnsiAda.Reset
+                    & " Elapsed=" & Duration'Image (Prefill_Elapsed) & "s"
+                    & " Tokens=" & Natural'Image (Prefill_Token_Count)
+                    & " Speed=" & Duration'Image (Virtual_Prefill_Speed) & " tok/s"
+                    & " Free_Ctx=" & Natural'Image (Free_Ctx_Pct) & "%"
+                    & " Expand_Threshold=" & Natural'Image (Ctx_Expand_Threshold_Pct) & "%");
+            end;
         end;
 
         --  Record prefill metrics for cache performance tracking
