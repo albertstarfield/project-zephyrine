@@ -71,13 +71,13 @@ package body Reranker is
       --  Create context with RANK pooling type
       C_Params := Llama_Interface.Llama_Context_Default_Params;
       C_Params.N_Ctx := Ctx_Size;
-      C_Params.N_Batch := 1;
-      C_Params.N_Ubatch := 1;
+      C_Params.N_Batch := Ctx_Size;
+      C_Params.N_Ubatch := Ctx_Size;
       C_Params.N_Threads := 4;
       C_Params.N_Threads_Batch := 4;
-      C_Params.Type_K := GGML_TYPE_Q4_0;
-      C_Params.Type_V := GGML_TYPE_Q4_0;
-      C_Params.Flash_Attn_Type := 1;
+      C_Params.Type_K := 1; -- GGML_TYPE_F16
+      C_Params.Type_V := 1; -- GGML_TYPE_F16
+      C_Params.Flash_Attn_Type := 0;
       C_Params.Pooling_Type := 4;  -- LLAMA_POOLING_TYPE_RANK
       C_Params.Attention_Type := 1;  -- NON-CAUSAL
 
@@ -180,10 +180,14 @@ package body Reranker is
       --  Build batch
       Batch.N_Tokens := N_Toks;
       Batch.Token    := Tokens (0)'Address;
+      Batch.Embd     := System.Null_Address;
       Batch.Pos      := System.Null_Address;
       Batch.N_Seq_Id := System.Null_Address;
       Batch.Seq_Id   := System.Null_Address;
       Batch.Logits   := System.Null_Address;
+
+      --  Clear KV cache for fresh scoring
+      Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Reranker_Context), True);
 
       --  Decode
       Ret := Llama_Interface.Llama_Decode (Reranker_Context, Batch);

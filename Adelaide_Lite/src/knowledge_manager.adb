@@ -249,6 +249,28 @@ package body Knowledge_Manager is
         end;
      end Is_Readable_Text;
 
+     procedure Wait_For_ELP1_Cooldown is
+        Timer_Done : Boolean := False;
+     begin
+        Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                  AnsiAda.Reset & " Indexing HALTED due to ELP1 request.");
+        while not Timer_Done loop
+           Model_Manager.Wait_For_ELP1_Idle;
+           Timer_Done := True;
+           for I in 1 .. 600 loop
+              delay 1.0;
+              if Model_Manager.Should_Abort_ELP0 then
+                 Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                           AnsiAda.Reset & " ELP1 interrupted cooldown, timer reset to 600s!");
+                 Timer_Done := False;
+                 exit;
+              end if;
+           end loop;
+        end loop;
+        Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
+                  AnsiAda.Reset & " 600s cooldown finished. RESUMING indexing.");
+     end Wait_For_ELP1_Cooldown;
+
    procedure Index_References is
       File          : File_Type;
       Opened        : Boolean := False;
@@ -297,10 +319,7 @@ package body Knowledge_Manager is
 
       while not End_Of_File (File) loop
          if Model_Manager.Should_Abort_ELP0 then
-            Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
-                      AnsiAda.Reset & " Indexing aborted by ELP1.");
-            Close (File);
-            return;
+            Wait_For_ELP1_Cooldown;
          end if;
 
          Line := To_Unbounded_String (Get_Line (File));
@@ -393,13 +412,7 @@ package body Knowledge_Manager is
        Ada.Directories.Start_Search (Search, Path, "");
        while Ada.Directories.More_Entries (Search) loop
           if Model_Manager.Should_Abort_ELP0 then
-             Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                       AnsiAda.Reset &
-                       " Crawl_Directory: ELP1 pending, HALTING crawl...");
-             Model_Manager.Wait_For_ELP1_Idle;
-             Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
-                       AnsiAda.Reset &
-                       " Crawl_Directory: ELP1 idle, RESUMING crawl...");
+             Wait_For_ELP1_Cooldown;
           end if;
 
           Ada.Directories.Get_Next_Entry (Search, Entry_D);
