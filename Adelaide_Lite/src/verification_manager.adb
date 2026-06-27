@@ -6,6 +6,7 @@ with GNAT.OS_Lib;
 with Ada.Directories;
 with Ada.Numerics.Discrete_Random;
 with Ada.Characters.Handling;
+with AnsiAda;
 
 package body Verification_Manager is
 
@@ -329,7 +330,9 @@ package body Verification_Manager is
                         end;
                      else
                         Last_Errors := To_Unbounded_String (Verify_Out);
-                        Put_Line ("[!] Dafny Phase: Verification FAILED.");
+                         Put_Line (AnsiAda.Background (AnsiAda.Red)
+                            & "[BUGCHECK] [!] Dafny Phase: Verification FAILED."
+                            & AnsiAda.Reset);
                      end if;
                   end;
                end;

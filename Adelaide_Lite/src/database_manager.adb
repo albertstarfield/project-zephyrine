@@ -1079,7 +1079,9 @@ package body Database_Manager is
          Bind_Text (Stmt, 2, Image_B64);
          Bind_Int (Stmt, 3, LSH_Hash);
          if Step (Stmt) /= DONE then
-            Put_Line ("[DB] Store_Imagined_Image: INSERT failed");
+             Put_Line (AnsiAda.Background (AnsiAda.Red)
+                & "[BUGCHECK] [DB] Store_Imagined_Image: INSERT failed"
+                & AnsiAda.Reset);
          end if;
       exception
          when E : others =>

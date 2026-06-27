@@ -3337,14 +3337,18 @@ package body Model_Manager is
          end if;
  
          if not Success then
-             Put_Line ("[Batching-Error] Could not acquire Tensor Accelerator lock.");
+             Put_Line (AnsiAda.Background (AnsiAda.Red)
+                & "[BUGCHECK] [Batching-Error] Could not acquire Tensor Accelerator lock."
+                & AnsiAda.Reset);
              ELP_Queue.Dequeue_Level (Level);
              return;
          end if;
  
          Load_Model (Kind, Success, 1024, Level, Level = ELP0);
          if not Success then
-             Put_Line ("[Batching-Error] Failed to load embedding model.");
+             Put_Line (AnsiAda.Background (AnsiAda.Red)
+                & "[BUGCHECK] [Batching-Error] Failed to load embedding model."
+                & AnsiAda.Reset);
              if Level = ELP0 then Priority_Model_Gate.Release_ELP0 (Kind); else Priority_Model_Gate.Release_ELP1 (Kind); end if;
              ELP_Queue.Dequeue_Level (Level);
              return;
@@ -5138,7 +5142,9 @@ package body Model_Manager is
 
         --  Check if target model is loaded
         if not Models (Kind).Loaded then
-            Put_Line ("[Speculative] ERROR: Target model not loaded");
+             Put_Line (AnsiAda.Background (AnsiAda.Red)
+                & "[BUGCHECK] [Speculative] ERROR: Target model not loaded"
+                & AnsiAda.Reset);
             Result := To_Unbounded_String ("ERROR: Target model not loaded");
             Free (Prompt_C);
             return;
@@ -5221,7 +5227,9 @@ package body Model_Manager is
         Free (Prompt_C);
 
         if N_Tokens <= 0 then
-            Put_Line ("[Speculative] ERROR: Tokenization failed");
+             Put_Line (AnsiAda.Background (AnsiAda.Red)
+                & "[BUGCHECK] [Speculative] ERROR: Tokenization failed"
+                & AnsiAda.Reset);
             Result := To_Unbounded_String ("ERROR: Tokenization failed");
             if Draft_Loaded and then Draft_Context /= Null_Context then
                 Llama_Interface.Llama_Free (Draft_Context);
@@ -5502,7 +5510,9 @@ package body Model_Manager is
 
     exception
         when others =>
-            Put_Line ("[Speculative] ERROR: Exception during generation");
+             Put_Line (AnsiAda.Background (AnsiAda.Red)
+                & "[BUGCHECK] [Speculative] ERROR: Exception during generation"
+                & AnsiAda.Reset);
             Free (Prompt_C);
             if Draft_Loaded and then Draft_Context /= Null_Context then
                 Llama_Interface.Llama_Free (Draft_Context);
@@ -7918,17 +7928,17 @@ package body Model_Manager is
             end;
             --  [CRITICAL-FIX] Log the full exception with trace info
             Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Red)
-                & "[Hybrid]"
-                & AnsiAda.Reset
+               (AnsiAda.Background (AnsiAda.Red)
+                & "[BUGCHECK] [Hybrid]"
                 & " Error: "
-                & Ada.Exceptions.Exception_Message (E));
+                & Ada.Exceptions.Exception_Message (E)
+                & AnsiAda.Reset);
             Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Red)
-                & "[Hybrid]"
-                & AnsiAda.Reset
+               (AnsiAda.Background (AnsiAda.Red)
+                & "[BUGCHECK] [Hybrid]"
                 & " Trace: "
-                & Ada.Exceptions.Exception_Information (E));
+                & Ada.Exceptions.Exception_Information (E)
+                & AnsiAda.Reset);
             --  [CRITICAL-FIX] If generation already succeeded (Result is not
             --  empty and not an error string), DO NOT overwrite it with the
             --  error message. A transient Tasking_Error during cleanup (KV
