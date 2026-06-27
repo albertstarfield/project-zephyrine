@@ -1597,12 +1597,21 @@ def main():
                         with open(wcet_csv) as f:
                             reader = csv.DictReader(f)
                             for row in reader:
-                                times.append(int(row["uptime_s"].strip()))
-                                pipeline.append(int(row["pipeline_ns"].strip()))
-                                elp0.append(int(row["elp0_ns"].strip()))
-                                elp1.append(int(row["elp1_ns"].strip()))
-                                elp2.append(int(row["elp2_ns"].strip()))
-                                elp3.append(int(row["elp3_ns"].strip()))
+                                try:
+                                    t = int(row["uptime_s"].strip())
+                                    p = int(row["pipeline_ns"].strip())
+                                    e0 = int(row["elp0_ns"].strip())
+                                    e1 = int(row["elp1_ns"].strip())
+                                    e2 = int(row["elp2_ns"].strip())
+                                    e3 = int(row["elp3_ns"].strip())
+                                    times.append(t)
+                                    pipeline.append(p)
+                                    elp0.append(e0)
+                                    elp1.append(e1)
+                                    elp2.append(e2)
+                                    elp3.append(e3)
+                                except (ValueError, KeyError, AttributeError):
+                                    continue
                         if times:
                             axes[0].plot(times, pipeline, label="Pipeline", linewidth=0.8)
                             axes[0].plot(times, elp0, label="ELP0", linewidth=0.5, alpha=0.7)
@@ -1619,11 +1628,19 @@ def main():
                         with open(accel_csv) as f:
                             reader = csv.DictReader(f)
                             for row in reader:
-                                times.append(int(row["uptime_s"].strip()))
-                                free.append(int(row["free_mb"].strip()))
-                                total.append(int(row["total_mb"].strip()))
-                                pct.append(int(row["percent"].strip()))
-                                metal_broken.append(int(row["metal_broken"].strip()))
+                                try:
+                                    t = int(row["uptime_s"].strip())
+                                    f_mb = int(row["free_mb"].strip())
+                                    t_mb = int(row["total_mb"].strip())
+                                    p = int(row["percent"].strip())
+                                    mb = int(row["metal_broken"].strip())
+                                    times.append(t)
+                                    free.append(f_mb)
+                                    total.append(t_mb)
+                                    pct.append(p)
+                                    metal_broken.append(mb)
+                                except (ValueError, KeyError, AttributeError):
+                                    continue
                         if times:
                             ax1 = axes[1]
                             ax2 = ax1.twinx()
@@ -1646,8 +1663,13 @@ def main():
                         with open(accel_csv) as f:
                             reader = csv.DictReader(f)
                             for row in reader:
-                                times_pct.append(int(row["uptime_s"].strip()))
-                                pcts.append(int(row["percent"].strip()))
+                                try:
+                                    t = int(row["uptime_s"].strip())
+                                    p = int(row["percent"].strip())
+                                    times_pct.append(t)
+                                    pcts.append(p)
+                                except (ValueError, KeyError, AttributeError):
+                                    continue
                         if times_pct:
                             axes[2].fill_between(times_pct, pcts, alpha=0.4, color="cyan")
                             axes[2].plot(times_pct, pcts, color="darkcyan", linewidth=0.6)
