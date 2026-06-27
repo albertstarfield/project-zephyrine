@@ -15,6 +15,9 @@ with Ada.Calendar;
 with Ada.Real_Time; use Ada.Real_Time;
 with Embedding_Batcher;
 with Speculative_Cache;
+with Cronia_Scheduler; use Cronia_Scheduler;
+with Proactive_Engine;
+with Ada.Calendar.Formatting; use Ada.Calendar.Formatting;
 with Interfaces.C;
 with Interfaces.C.Strings;
 with Ada.Streams;
@@ -83,6 +86,13 @@ package body Knowledge_Manager is
       pragma Task_Stack_Size (16 * 1024 * 1024);  --  16 MB thread stack (llama.cpp tokenize needs deep C stack)
       entry Start;
    end Proactive_Cache_Task;
+
+   --  CRONIA TASK: Manages scheduled cron jobs and prints status every 10s
+   --  Named after Cronia (Ancient Greek: "Time" / "The Right Moment").
+   task Cronia_Task is
+      pragma Storage_Size (128 * 1024 * 1024);
+      entry Start;
+   end Cronia_Task;
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -165,6 +175,12 @@ package body Knowledge_Manager is
       Proactive_Cache_Task.Start;
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Proactive_Cache_Task.Start DONE.");
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Starting Cronia_Task...");
+      Cronia_Task.Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Cronia_Task.Start DONE.");
 
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Knowledge_Manager.Start_Tasks COMPLETE.");
@@ -640,5 +656,84 @@ package body Knowledge_Manager is
          delay 10.0;
       end loop;
    end Proactive_Cache_Task;
+
+   --  ============================================================================
+   --  CRONIA TASK BODY
+   --  ============================================================================
+   --  Fires scheduled cron jobs and prints active schedules every 10s.
+   --  This is the heartbeat of the timed_cronia_answer system.
+   --  ============================================================================
+   task body Cronia_Task is
+      Last_Print : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
+      Print_Interval : constant Duration := 10.0;
+   begin
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Cronia_Task waiting for Start...");
+      accept Start;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
+                AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Cronia_Task ACCEPTED Start, entering main loop.");
+      Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Cronia]" &
+                AnsiAda.Reset & " Cronia Task Active.");
+
+      --  Initialize the scheduler and proactive engine
+      Cronia_Scheduler.Initialize;
+      Proactive_Engine.Initialize;
+
+      loop
+         --  Fire any pending cron jobs
+         Cronia_Scheduler.Tick;
+
+         --  Fire any pending proactive questions
+         Proactive_Engine.Tick;
+
+         --  Print cron status every 10 seconds
+         declare
+            Now : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+         begin
+            if Ada.Real_Time.To_Duration (Now - Last_Print) >= Print_Interval then
+               Last_Print := Now;
+               declare
+                  Active_Count : constant Natural := Cronia_Scheduler.Active_Job_Count;
+               begin
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Cronia]" &
+                            AnsiAda.Reset & " === CRON STATUS (10s) ===");
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Cronia]" &
+                            AnsiAda.Reset & " Active jobs: " & Natural'Image (Active_Count));
+
+                  --  Print each active job
+                  for I in 1 .. Active_Count loop
+                     declare
+                        J : constant Cronia_Scheduler.Cron_Job := Cronia_Scheduler.Get_Job (I);
+                     begin
+                        if J.State = Cronia_Scheduler.Scheduled then
+                           Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Cronia]" &
+                                     AnsiAda.Reset & "   [" & Natural'Image (I) & "] " &
+                                     To_String (J.Name) &
+                                     " | Next: " & Ada.Calendar.Formatting.Image (J.Scheduled_Time) &
+                                     (if J.Repeat_Interval > 0.0
+                                      then " | Repeat: " & Duration'Image (J.Repeat_Interval) & "s"
+                                      else ""));
+                        end if;
+                     end;
+                  end loop;
+
+                  --  Print handless mode status
+                  if Proactive_Engine.Is_Handless_Mode_Active then
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Cronia]" &
+                               AnsiAda.Reset & " Handless Mode: ACTIVE");
+                  else
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Cronia]" &
+                               AnsiAda.Reset & " Handless Mode: OFF");
+                  end if;
+
+                  Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Cronia]" &
+                            AnsiAda.Reset & " ==========================");
+               end;
+            end if;
+         end;
+
+         delay 1.0;  --  Tick every second, print every 10s
+      end loop;
+   end Cronia_Task;
 
 end Knowledge_Manager;
