@@ -1664,7 +1664,9 @@ package body Model_Manager is
              Unload_Model (Kind);
          end if;
          
-         if Models (Kind).Warm_Cached then
+         --  [COLD-CACHE] Embedding model always loads fresh to avoid
+         --  corrupted Metal state from warm cache reuse.
+         if Kind /= Qwen_Embedding and then Models (Kind).Warm_Cached then
              --  [OPTIMIZATION-M02] WARM CONTEXT POOLING HIT
              --  ======================================================================
              --  Check if warm cached model can be reused
@@ -2510,10 +2512,21 @@ package body Model_Manager is
                      Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), True);
                  end if;
 
-                 --  [OPTIMIZATION-M02]: Don't actually free resources yet
-                 --  Just mark as warm cached and record the time
-                 Models (Kind).Warm_Cached := True;
-                 Models (Kind).Warm_Cache_Time := Clock;
+                  --  [OPTIMIZATION-M02]: Don't actually free resources yet
+                  --  Just mark as warm cached and record the time
+                  --  [COLD-CACHE] Embedding model never warm-caches (corrupted Metal state)
+                  if Kind = Qwen_Embedding then
+                      --  Actually free resources for embedding model
+                      if Models (Kind).Context /= Null_Context then
+                          Llama_Interface.Llama_Free (Models (Kind).Context);
+                          Models (Kind).Context := Null_Context;
+                      end if;
+                      Models (Kind).Current_Ctx := 0;
+                      Models (Kind).Warm_Cached := False;
+                  else
+                      Models (Kind).Warm_Cached := True;
+                      Models (Kind).Warm_Cache_Time := Clock;
+                  end if;
                  --  Note: We keep Model, Context, and Current_Ctx intact
                  --        for potential reuse
              end if;
