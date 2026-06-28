@@ -1148,7 +1148,7 @@ package body Model_Manager is
     task body Idle_Monitor is
         Next_Check : Time;
         Interval   : constant Time_Span := Seconds (1);
-        Timeout    : constant Time_Span := Seconds (30);
+        Timeout    : constant Time_Span := Seconds (3);
         Now        : Time;
         Cleanup_OK : Boolean;
     begin
@@ -1211,6 +1211,7 @@ package body Model_Manager is
                             & AnsiAda.Reset
                             & " Unloading "
                             & Model_Type'Image (Kind));
+                        KV_Cache_Manager.Wait_For_Save;
                         Unload_Model (Kind);
                         --  Match Acquire_For_Cleanup
                         Priority_Model_Gate.Release_ELP1 (Kind);
