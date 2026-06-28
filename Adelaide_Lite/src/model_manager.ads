@@ -362,6 +362,13 @@ package Model_Manager is
    Free_Ctx_Pct              : Natural := 0;     -- free % of LLM context window
    Ctx_Expand_Threshold_Pct  : Natural := 75;    -- dynamic threshold for expansion (floor=75, ceiling=99)
 
+   --  SIGKILL CONTEXT CAP (absolute, not weighted)
+   --  When the server is OOM-killed (SIGKILL/-9), run.py saves the context size
+   --  that caused the kill to run/.oom_kill_ctx_cap. On next boot, we read this
+   --  file and NEVER expand context beyond this value. This is an absolute cap
+   --  for this specific hardware — no weighting, no exceptions.
+   OOM_Saved_Ctx_Cap         : Natural := 0;     -- 0 = no cap saved yet
+
    --  CACHED VIRTUAL CTX TOKENS
    --  When Internal_State grows, we re-tokenize ONLY the new portion.
    --  The cached tokens are prepended to the prompt on each generation,

@@ -1268,6 +1268,34 @@ package body Model_Manager is
             return;
         end if;
         Initialized := True;
+
+        --  === LOAD SIGKILL CONTEXT CAP ===
+        --  If run/.oom_kill_ctx_cap exists, read the saved context size
+        --  and enforce it as an absolute ceiling for ctx expansion.
+        declare
+            Cap_File : Ada.Text_IO.File_Type;
+            Cap_Line : String (1 .. 32);
+            Cap_Last : Natural;
+        begin
+            Ada.Text_IO.Open (Cap_File, Ada.Text_IO.In_File, "run/.oom_kill_ctx_cap");
+            Ada.Text_IO.Get_Line (Cap_File, Cap_Line, Cap_Last);
+            Ada.Text_IO.Close (Cap_File);
+            OOM_Saved_Ctx_Cap := Natural'Value (Cap_Line (1 .. Cap_Last));
+            Put_Line
+               (AnsiAda.Foreground (AnsiAda.Light_Red)
+                & "[BUGCHECK]"
+                & AnsiAda.Reset
+                & " SIGKILL context cap loaded: "
+                & OOM_Saved_Ctx_Cap'Img
+                & " tokens -- ctx will NEVER exceed this value");
+        exception
+            when Ada.Text_IO.Name_Error =>
+                --  No cap file — first boot or clean shutdown deleted it
+                null;
+            when others =>
+                --  Corrupted cap file — ignore
+                null;
+        end;
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -4469,10 +4497,28 @@ package body Model_Manager is
                        elsif Current_Ctx < 131072 then
                            Rounded_Ctx := 131072; Fallback_Ctx := 65536;
                            Acceleration_Silicon_Layer := 8;
-                       else
-                           Rounded_Ctx := Current_Ctx; Fallback_Ctx := Current_Ctx;
-                       end if;
-                       Free_Tokens (Tokens);
+                        else
+                            Rounded_Ctx := Current_Ctx; Fallback_Ctx := Current_Ctx;
+                        end if;
+
+                        --  SIGKILL CONTEXT CAP: Absolute ceiling from previous OOM kill.
+                        --  If this hardware was killed at context X, NEVER exceed X again.
+                        if OOM_Saved_Ctx_Cap > 0
+                          and then Rounded_Ctx > unsigned (OOM_Saved_Ctx_Cap)
+                        then
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Light_Red)
+                                & "[BUGCHECK]"
+                                & AnsiAda.Reset
+                                & " SIGKILL cap active: clamping "
+                                & Rounded_Ctx'Img
+                                & " -> " & OOM_Saved_Ctx_Cap'Img
+                                & " tokens (previous OOM kill on this hardware)");
+                            Rounded_Ctx := unsigned (OOM_Saved_Ctx_Cap);
+                            Fallback_Ctx := Current_Ctx;
+                        end if;
+
+                        Free_Tokens (Tokens);
                        Load_Model (Kind, Success, Positive (Rounded_Ctx));
                        if not Success then
                            Put_Line ("[!] OOM EXCEPTION: Load_Model failed for " & Rounded_Ctx'Img & ". Pulling back to " & Fallback_Ctx'Img);
