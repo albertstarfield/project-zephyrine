@@ -59,6 +59,7 @@
 ## ============================
 # Runtime telemetry and logs
 Adelaide_Lite/run/*
+**/logs/**
 **/*.log
 **/*.ndjson
 **/*.dat

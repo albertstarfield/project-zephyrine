@@ -123,9 +123,9 @@ project Adelaide_Lite is
    package Compiler is
       case Adelaide_Lite_Config.Alire_Host_OS is
          when "macos" =>
-            for Default_Switches ("Ada") use
+             for Default_Switches ("Ada") use
               Adelaide_Lite_Config.Ada_Compiler_Switches &
-              ("-gnat2022", "-gnatX", "-mmacosx-version-min=15.0");
+              ("-gnat2022", "-gnatX", "-gnatE", "-mmacosx-version-min=15.0");
             for Default_Switches ("C++") use
                ("-I" & project'Project_Dir & "vendor/llama.cpp/include", 
                 "-I" & project'Project_Dir & "vendor/llama.cpp/ggml/include",
@@ -140,7 +140,7 @@ project Adelaide_Lite is
          when "linux" =>
             for Default_Switches ("Ada") use
               Adelaide_Lite_Config.Ada_Compiler_Switches &
-              ("-gnat2022", "-gnatX");
+              ("-gnat2022", "-gnatX", "-gnatE");
             for Default_Switches ("C++") use
                ("-I" & project'Project_Dir & "vendor/llama.cpp/include", 
                 "-I" & project'Project_Dir & "vendor/llama.cpp/ggml/include",
@@ -151,7 +151,7 @@ project Adelaide_Lite is
          when others =>
             for Default_Switches ("Ada") use
               Adelaide_Lite_Config.Ada_Compiler_Switches &
-              ("-gnat2022", "-gnatX");
+              ("-gnat2022", "-gnatX", "-gnatE");
       end case;
    end Compiler;
 
