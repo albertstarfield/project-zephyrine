@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import fcntl
 import sys
 import time
 import subprocess
@@ -13,6 +14,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB total cap
+
+try:
+    _lock_fd = open(os.path.join(BASE_DIR, ".adelaide.lock"), "w")
+    fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    print("[!] FATAL: Another instance of Adelaide is already running.")
+    print("    Singleton lock enforced. Aborting startup.")
+    sys.exit(1)
+
 
 # Enforce Huggingface cache location
 os.environ["HF_HOME"] = os.path.join(BASE_DIR, "model")
