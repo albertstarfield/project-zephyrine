@@ -729,6 +729,12 @@ package body Model_Manager is
                     & " tok/s | Elapsed="
                     & Duration'Image (Prefill_Elapsed) & "s"
                     & " | Budget=30s"
+                    & " | Budget_Projection="
+                    & Natural'Image (
+                         (if Virtual_Prefill_Speed > 0.0
+                          then Natural (Virtual_Prefill_Speed) * 30
+                          else 0))
+                    & " tok"
                     & " | Expand Threshold="
                     & Natural'Image (Ctx_Expand_Threshold_Pct) & "%");
 
@@ -4758,15 +4764,23 @@ package body Model_Manager is
                 end;
 
                 --  Print prefill metrics for diagnostics
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Light_Cyan)
-                    & "[Prefill-Metrics]"
-                    & AnsiAda.Reset
-                    & " Elapsed=" & Duration'Image (Prefill_Elapsed) & "s"
-                    & " Tokens=" & Natural'Image (Prefill_Token_Count)
-                    & " Speed=" & Duration'Image (Virtual_Prefill_Speed) & " tok/s"
-                    & " Free_Ctx=" & Natural'Image (Free_Ctx_Pct) & "%"
-                    & " Expand_Threshold=" & Natural'Image (Ctx_Expand_Threshold_Pct) & "%");
+                declare
+                    Budget_Tokens : constant Natural :=
+                       (if Virtual_Prefill_Speed > 0.0
+                        then Natural (Virtual_Prefill_Speed) * 30
+                        else 0);
+                begin
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                        & "[Prefill-Metrics]"
+                        & AnsiAda.Reset
+                        & " Elapsed=" & Duration'Image (Prefill_Elapsed) & "s"
+                        & " Tokens=" & Natural'Image (Prefill_Token_Count)
+                        & " Speed=" & Duration'Image (Virtual_Prefill_Speed) & " tok/s"
+                        & " Budget_Projection=" & Natural'Image (Budget_Tokens) & " tok@30s"
+                        & " Free_Ctx=" & Natural'Image (Free_Ctx_Pct) & "%"
+                        & " Expand_Threshold=" & Natural'Image (Ctx_Expand_Threshold_Pct) & "%");
+                end;
             end;
         end;
 
