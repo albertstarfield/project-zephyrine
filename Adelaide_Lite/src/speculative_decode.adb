@@ -32,13 +32,19 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Real_Time; use Ada.Real_Time;
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
-with System;
+with System; use type System.Address;
+with System.Storage_Elements; use System.Storage_Elements;
 
 with Llama_Interface; use Llama_Interface;
 with Model_Manager;
 with Model_Types; use Model_Types;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Ada.Unchecked_Conversion;
 
 package body Speculative_Decode is
+
+   function Llama_Batch_Get_One (T : System.Address; N : Interfaces.C.int) return Llama_Interface.Llama_Batch;
+   pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
 
    --  ============================================================================
    --  DRAFT MODEL STATE
@@ -46,6 +52,7 @@ package body Speculative_Decode is
 
    Draft_Model      : Llama_Interface.Llama_Model := Null_Model;
    Draft_Context    : Llama_Interface.Llama_Context := Null_Context;
+   Draft_Fallback_Time : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
    Draft_Loaded     : Boolean := False;
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -93,7 +100,22 @@ package body Speculative_Decode is
 
       --  Initialize model parameters
       Model_Params := Llama_Interface.Llama_Model_Default_Params;
-      Model_Params.N_Gpu_Layers := 99;  -- Offload all layers to GPU
+            --  Check if we are in fallback mode (300s hold on CPU)
+      if Ada.Real_Time.Clock < Draft_Fallback_Time + Ada.Real_Time.Seconds (300) then
+         declare
+            Remaining : constant Ada.Real_Time.Time_Span := (Draft_Fallback_Time + Ada.Real_Time.Seconds (300)) - Ada.Real_Time.Clock;
+            Remaining_Secs : constant Integer := Integer (Ada.Real_Time.To_Duration (Remaining));
+         begin
+            Model_Params.N_Gpu_Layers := 0;   -- Draft model on CPU (fallback)
+            Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Speculative Fallback]" &
+                      AnsiAda.Reset & " Holding draft model on CPU. " &
+                      Integer'Image (Remaining_Secs) & " seconds left before retrying Tensor Accelerator.");
+         end;
+      else
+         Model_Params.N_Gpu_Layers := -1;  -- Draft model on GPU (default)
+      end if;
+      Model_Params.Use_Mlock := False;  -- Allow OS to page out draft model
+      Model_Params.Use_Mmap := True;    -- Enable mmap for swapping
 
       --  Load draft model from file
       declare
@@ -105,7 +127,9 @@ package body Speculative_Decode is
          Free (Path_C);
       end;
 
-      if Draft_Model = Null_Model then
+            if Draft_Model = Null_Model then
+         --  Set fallback time to trigger CPU load for the next 300s
+         Draft_Fallback_Time := Ada.Real_Time.Clock;
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -235,6 +259,11 @@ package body Speculative_Decode is
       return Draft_Loaded;
    end Is_Draft_Model_Loaded;
 
+   function Get_Draft_Context return Llama_Interface.Llama_Context is
+   begin
+      return Draft_Context;
+   end Get_Draft_Context;
+
    --  ============================================================================
    --  VERIFICATION
    --  ============================================================================
@@ -251,7 +280,7 @@ package body Speculative_Decode is
       --  Cast System.Address to access array of Llama_Token
       type Token_Array is array (Positive range <>) of aliased Llama_Interface.Llama_Token;
       type Token_Array_Access is access Token_Array;
-      for Token_Array_Access'Size use System'Address_Size;
+      for Token_Array_Access'Size use Standard'Address_Size;
 
       Tokens_Access : Token_Array_Access;
       for Tokens_Access'Address use Draft_Tokens;
@@ -259,7 +288,7 @@ package body Speculative_Decode is
       --  Get vocabulary for the target model
       Vocab : constant Llama_Interface.Llama_Vocab :=
         Llama_Interface.Llama_Model_Get_Vocab
-          (Model_Manager.Get_Model (Qwen_4B));
+          (Model_Manager.Get_Model (Snowball_Enaga_ShortNetworkAnswer));
 
       --  Sampler for target model
       Sampler_Params : Llama_Interface.Llama_Sampler_Chain_Params;
@@ -289,22 +318,24 @@ package body Speculative_Decode is
 
             --  Create a batch with this single token
             Batch : constant Llama_Interface.Llama_Batch :=
-              Llama_Interface.Llama_Batch_Get_One (Draft_Token'Address, 1);
+              Llama_Batch_Get_One (Draft_Token'Address, 1);
 
             --  Decode with target model
             Ret : Interfaces.C.int;
 
             --  Get logits after decode
             Logits_Ptr : System.Address;
-            type Logit_Array is array (Natural range <>) of Interfaces.C.float;
+            type Logit_Array is array (Natural range <>) of Interfaces.C.C_float;
             type Logit_Array_Access is access Logit_Array;
-            for Logit_Array_Access'Size use System'Address_Size;
+            for Logit_Array_Access'Size use Standard'Address_Size;
 
             Logits_Access : Logit_Array_Access;
+            function To_Logit_Access is new Ada.Unchecked_Conversion (System.Address, Logit_Array_Access);
             N_Vocab       : Interfaces.C.int;
 
-            --  Sample from target model to get what it would choose
-            Target_Token : Llama_Interface.Llama_Token;
+            Target_Token  : Llama_Interface.Llama_Token;
+            Draft_Logit   : Interfaces.C.C_float;
+            Target_Logit  : Interfaces.C.C_float;
 
          begin
             --  Decode the draft token with target model
@@ -316,11 +347,11 @@ package body Speculative_Decode is
 
                if Logits_Ptr /= System.Null_Address then
                   --  Cast to logit array
-                  Logits_Access := Logit_Array_Access (Logits_Ptr);
+                  Logits_Access := To_Logit_Access (Logits_Ptr);
 
                   --  Get vocabulary size
                   N_Vocab := Llama_Interface.Llama_N_Vocab
-                    (Model_Manager.Get_Model (Qwen_4B));
+                    (Model_Manager.Get_Model (Snowball_Enaga_ShortNetworkAnswer));
 
                   --  Sample from target model to see what it would choose
                   Target_Token := Llama_Interface.Llama_Sampler_Sample
@@ -421,7 +452,7 @@ package body Speculative_Decode is
       Vocab         : Llama_Interface.Llama_Vocab;
 
       --  Generation state
-      Generated     : Unbounded_String := To_Unbounded_String (Prompt);
+      Generated     : Ada.Strings.Unbounded.Unbounded_String := Ada.Strings.Unbounded.To_Unbounded_String (Prompt);
       Tokens_Gen    : Natural := 0;
       Done          : Boolean := False;
 
@@ -452,7 +483,7 @@ package body Speculative_Decode is
 
       --  Get vocabulary for tokenization
       Vocab := Llama_Interface.Llama_Model_Get_Vocab
-        (Model_Manager.Get_Model (Qwen_4B));  -- Use target model's vocab
+        (Model_Manager.Get_Model (Snowball_Enaga_ShortNetworkAnswer));  -- Use target model's vocab
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -558,7 +589,7 @@ package body Speculative_Decode is
                   --  Decode with draft model to update its KV cache
                   declare
                      Batch : constant Llama_Interface.Llama_Batch :=
-                       Llama_Interface.Llama_Batch_Get_One (Draft_Token'Address, 1);
+                       Llama_Batch_Get_One (Draft_Token'Address, 1);
                      Ret   : Interfaces.C.int;
                   begin
                      Ret := Llama_Interface.Llama_Decode (Draft_Context, Batch);
@@ -620,7 +651,7 @@ package body Speculative_Decode is
             declare
                type Token_Array is array (Positive range <>) of aliased Llama_Interface.Llama_Token;
                type Token_Array_Access is access Token_Array;
-               for Token_Array_Access'Size use System'Address_Size;
+               for Token_Array_Access'Size use Standard'Address_Size;
 
                Tokens_Access : Token_Array_Access;
                for Tokens_Access'Address use Draft_Buf;
@@ -628,7 +659,6 @@ package body Speculative_Decode is
                Piece : array (1 .. 256) of aliased Character;
                Len   : Interfaces.C.int;
             begin
-               Tokens_Access := Token_Array_Access (Draft_Buf);
 
                for I in 1 .. Integer (Accepted) loop
                   --  Convert token to piece
@@ -637,14 +667,14 @@ package body Speculative_Decode is
 
                   if Len > 0 then
                      for J in 1 .. Integer (Len) loop
-                        Append (Generated, Piece (J));
+                        Ada.Strings.Unbounded.Append (Generated, Piece (J));
                      end loop;
                   end if;
 
                   --  Decode with target model to update its KV cache
                   declare
                      Batch : constant Llama_Interface.Llama_Batch :=
-                       Llama_Interface.Llama_Batch_Get_One (Tokens_Access (I)'Address, 1);
+                       Llama_Batch_Get_One (Tokens_Access (I)'Address, 1);
                      Ret   : Interfaces.C.int;
                   begin
                      Ret := Llama_Interface.Llama_Decode (Target_Context, Batch);
@@ -691,14 +721,14 @@ package body Speculative_Decode is
 
                if Len > 0 then
                   for J in 1 .. Integer (Len) loop
-                     Append (Generated, Piece (J));
+                     Ada.Strings.Unbounded.Append (Generated, Piece (J));
                   end loop;
                end if;
 
                --  Decode with target model to update its KV cache
                declare
                   Batch : constant Llama_Interface.Llama_Batch :=
-                    Llama_Interface.Llama_Batch_Get_One (Target_Token'Address, 1);
+                    Llama_Batch_Get_One (Target_Token'Address, 1);
                   Ret   : Interfaces.C.int;
                begin
                   Ret := Llama_Interface.Llama_Decode (Target_Context, Batch);
@@ -756,7 +786,7 @@ package body Speculative_Decode is
          Release_Draft_Model;
       end if;
 
-      return To_String (Generated);
+      return Ada.Strings.Unbounded.To_String (Generated);
 
    exception
       when others =>

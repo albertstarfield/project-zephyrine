@@ -88,6 +88,9 @@ package Speculative_Decode is
    --  Check if draft model is loaded
    function Is_Draft_Model_Loaded return Boolean;
 
+   --  Get the draft context
+   function Get_Draft_Context return Llama_Interface.Llama_Context;
+
    --  ============================================================================
    --  VERIFICATION
    --  ============================================================================

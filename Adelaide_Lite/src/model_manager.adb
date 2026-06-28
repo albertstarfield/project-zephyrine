@@ -108,11 +108,11 @@ with Zenith_Orion;
 --  "empty response" bugs when models fail to close their thinking blocks.
 --
 --  [QUIRK-M08] [ALL] "GAP Zone" Accelerator Tensor Issue
---  When an ELP1 (User) request preempts an ELP0 (Background) task, a significant 
---  gap in GPU utilization (~5%) is observed. This is NOT a bug, but a systemic 
+--  When an ELP1 (User) request preempts an ELP0 (Background) task, a significant
+--  gap in GPU utilization (~5%) is observed. This is NOT a bug, but a systemic
 --  behavior of the dynamic model-swapping architecture.
 --
---  The "GAP Zone" occurs because the GPU is idle while the CPU and Disk are 
+--  The "GAP Zone" occurs because the GPU is idle while the CPU and Disk are
 --  performing the following "Cold Start" sequence:
 --     1. Unloading the previous model (Metal/VRAM cleanup).
 --     2. Reading new model weights from Disk (I/O Bottleneck).
@@ -121,11 +121,8 @@ with Zenith_Orion;
 --  The GPU only reaches high utilization (80-90%) once the "LoadModel" phase
 --  reaches 'Phase 2/2 COMPLETE' and the first inference token is dispatched.
 
-
 package body Model_Manager is
     use Streaming_Queue;
-
-
 
      --  [OPTIMIZATION-M02] Function to check if model is available (loaded or warm cached)
      function Is_Model_Available (Kind : Model_Type) return Boolean is
@@ -198,6 +195,8 @@ package body Model_Manager is
     --  can reference it during elaboration traces.
     --  INITIALIZED to Clock so task activations don't crash on first use.
     Init_Start_Time : Ada.Real_Time.Time := Ada.Real_Time.Clock;
+    OOM_Hold_Until : Ada.Real_Time.Time := Ada.Real_Time.Clock - Ada.Real_Time.Minutes(1);
+    OOM_Restricted_Ctx : unsigned := 0;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -325,33 +324,33 @@ package body Model_Manager is
                  Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
                            & "[DEBUG] [AccelMonitor] Created new acceleration.csv with headers" & AnsiAda.Reset);
          end;
-         
+
          --  [DEBUG] Log when monitor enters main loop
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
                    & "[DEBUG] [AccelMonitor] Entering main monitoring loop" & AnsiAda.Reset);
-         
+
          loop
              delay until Last_Print + Milliseconds (10000);
              Last_Print := Clock;
              Last_Cycle_Start := Clock;
              Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
              Cycle_Count := Cycle_Count + 1;
-             
+
              --  [INSTRUMENTATION] Log execution time and memory stats
              declare
                  Task_Elapsed : constant Duration := To_Duration (Clock - Task_Start_Time);
                  Cycle_Elapsed : constant Duration := To_Duration (Clock - Last_Cycle_Start);
              begin
                  Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                         & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
-                         & " at Uptime=" & Uptime_S'Img & "s" 
-                         & " | Task_Elap=" & Trim(Duration'Image (Task_Elapsed), Both) 
-                         & " | Cycle_Elap=" & Trim(Duration'Image (Cycle_Elapsed), Both) 
+                         & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img
+                         & " at Uptime=" & Uptime_S'Img & "s"
+                         & " | Task_Elap=" & Trim(Duration'Image (Task_Elapsed), Both)
+                         & " | Cycle_Elap=" & Trim(Duration'Image (Cycle_Elapsed), Both)
                          & AnsiAda.Reset);
-                 
+
                  --  [MEMORY TRACKING] This will be handled after the GPU query
              end;
-             
+
                            --  [DO NOT REMOVE COMMENT EXPLANATION]
               --  FIX 6: Scope and Shadowing Corrections
               --  We write directly to the outer scope variables (Free_Bytes, Total_Bytes, Is_Critical)
@@ -359,28 +358,28 @@ package body Model_Manager is
               --  subsequent status logic uses correct, dynamically queried values.
               Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
               Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                      & "[DEBUG] [AccelMonitor] Tensor_Accelerator_Memory_Query returned Free_Bytes=" 
-                      & Interfaces.C.size_t'Image (Free_Bytes) & ", Total_Bytes=" 
+                      & "[DEBUG] [AccelMonitor] Tensor_Accelerator_Memory_Query returned Free_Bytes="
+                      & Interfaces.C.size_t'Image (Free_Bytes) & ", Total_Bytes="
                       & Interfaces.C.size_t'Image (Total_Bytes) & AnsiAda.Reset);
 
               if Total_Bytes = 0 and then Acceleration_Silicon_Layer /= 0 then
                   Put_Line (AnsiAda.Foreground (AnsiAda.Yellow)
-                          & "[WARNING] [AccelMonitor] Attempted GPU reset after memory query failure" 
+                          & "[WARNING] [AccelMonitor] Attempted GPU reset after memory query failure"
                           & AnsiAda.Reset);
               end if;
 
               if Total_Bytes > 0 then
                   Free_MB := Natural (Free_Bytes / (1024 * 1024));
                   Total_MB := Natural (Total_Bytes / (1024 * 1024));
-                  
+
                   declare
                       Est_Used_MB : constant Integer := Cycle_Count * 10;
                       Free_Pct    : constant Natural := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
                   begin
                       Is_Critical := Free_Pct < 10 and then Total_MB > 0;
                       Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
-                              & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img 
-                              & " | Est_Mem_Used=" & Est_Used_MB'Img & "MB" 
+                              & "[DEBUG] [AccelMonitor] Cycle " & Cycle_Count'Img
+                              & " | Est_Mem_Used=" & Est_Used_MB'Img & "MB"
                               & " | Free_Pct=" & Free_Pct'Img & "%"
                               & (if Is_Critical then " [CRITICAL]" else "")
                               & AnsiAda.Reset);
@@ -388,16 +387,16 @@ package body Model_Manager is
 
                   if Total_MB > 0 then
                       Percent := Natural (Float (Free_MB) * 100.0 / Float (Total_MB));
-                      if Percent > 100 then 
+                      if Percent > 100 then
                           Percent := 100;
                       end if;
                   end if;
-                  
+
                   GPU_Free_MB := Free_MB;
                   GPU_Total_MB := Total_MB;
                   GPU_Layer_Percent := Percent;
                   GPU_Is_Stable := True;
-                  
+
                   declare
                       Metal_Broken_Flag : constant Integer := (if Is_Critical then 1 else 0);
                   begin
@@ -432,7 +431,7 @@ package body Model_Manager is
                         Metal_Broken_Flag : constant Integer := (if Is_Metal_Broken or else (Free_Bytes = 0 and Total_Bytes = 0) then 1 else 0);
                      begin
                          GPU_Is_Stable := not Is_Metal_Broken;
-                         
+
                          if Metal_Broken_Flag = 1 then
                              Put_Line
                                 (AnsiAda.Foreground (AnsiAda.Red)
@@ -442,7 +441,7 @@ package body Model_Manager is
                                  & " (OOM/crash detected) Tensor_Layers=0"
                                  & " -- forcing CPU-only mode"
                                  & AnsiAda.Reset);
-                             
+
                            -- Attempt recovery if this is the first time we've detected the issue
                               if not Is_Metal_Broken then
                                  -- Mark as recovered for this cycle
@@ -459,13 +458,13 @@ package body Model_Manager is
                                     then "ALL(-1)"
                                     else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
                                   & " | Reason:" & AnsiAda.Reset);
-                              
+
                          --  Add specific reason for inapplicable state
                              Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                                      & "           Metal backend is stable but no Tensor Accelerator memory detected"
                                     & AnsiAda.Reset);
                          end if;
-                         
+
                          Ada.Text_IO.Put_Line
                             (CSV_File,
                              Long_Long_Integer'Image (Uptime_S) & ",0,0,0,"
@@ -638,6 +637,16 @@ package body Model_Manager is
                     & AnsiAda.Reset
                      & " === VIRTUAL CONTEXT STATUS (5s) ===");
 
+                if Ada.Real_Time.Clock < OOM_Hold_Until then
+                   Put_Line
+                      (AnsiAda.Foreground (AnsiAda.Light_Red)
+                       & "[CtxMonitor]"
+                       & AnsiAda.Reset
+                       & " [!] WE ARE IN OOM SITUATION! Retrying to realloc within"
+                       & Duration'Image (Ada.Real_Time.To_Duration (OOM_Hold_Until - Ada.Real_Time.Clock))
+                       & " seconds. (Layer-on-demand swap activated)");
+                end if;
+
                 --  ELP Queue: request depth (synthetic 2^63 capacity)
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Cyan)
@@ -755,11 +764,11 @@ package body Model_Manager is
                (AnsiAda.Foreground (AnsiAda.Yellow)
                 & "[ADB/ADS]"
                 & AnsiAda.Reset
-                & " Status: ACTIVE | ELP Queue: " 
+                & " Status: ACTIVE | ELP Queue: "
                 & Long_Long_Integer'Image (ELP_Queue.Depth)
                 & " pending | "
-                & "VRAM Free: " 
-                & Natural'Image (GPU_Free_MB) 
+                & "VRAM Free: "
+                & Natural'Image (GPU_Free_MB)
                 & " MB");
             delay until Next_Check;
         end loop;
@@ -778,8 +787,6 @@ package body Model_Manager is
     end Emit_After_CtxMon;
     Diag_ACM : constant Integer := Emit_After_CtxMon;
     pragma Warnings (Off, Diag_ACM);
-
-
 
     --  Live context size reader for CtxMonitor.
     --  Returns current context capacity from the model record,
@@ -856,7 +863,7 @@ package body Model_Manager is
     --  ELP1 requests (User Interactions) preempt running ELP0 requests (Background Tasks).
      --  PRIORITY MODEL GATE:
      --  Manages access to model execution resources with strict priority enforcement.
-     --  
+     --
      --  Priority Rules:
       --    1. ELP1 (user-facing) requests always preempt ELP0 (background) tasks
       --    2. Background tasks can only run when:
@@ -868,7 +875,7 @@ package body Model_Manager is
       --    to properly block ELP0 tasks when ELP1 requests are pending or active.
       --    This ensures user-facing tasks always get priority over background work.
      --    3. Priority is enforced through entry barriers and runtime checks
-     --  
+     --
      --  State Variables:
      --    ELP1_Pending      : Count of pending user requests
      --    ELP1_Active_Count : Count of active user tasks
@@ -880,37 +887,37 @@ package body Model_Manager is
          --  Signal that an ELP1 request is pending
          --  Increments the pending count and updates priority state
          procedure Request_ELP1;
-          
+
          --  Acquire ELP1 priority for a model
          --  Blocks until priority is available
          entry Acquire_ELP1 (Model_Type);
-          
+
          --  Release ELP1 priority for a model
          --  Decrements active count and updates priority state
          procedure Release_ELP1 (Kind : Model_Type);
-          
+
          --  Acquire ELP0 priority for a model
          --  Returns Success=False if preempted by ELP1 tasks
          entry Acquire_ELP0 (Model_Type) (Success : out Boolean);
-          
+
          --  Release ELP0 priority for a model
          procedure Release_ELP0 (Kind : Model_Type);
-          
+
          --  Attempt cleanup acquisition with priority override
          --  Used by Idle_Monitor for model unloading
          procedure Try_Acquire_For_Cleanup
             (Kind : Model_Type; Success : out Boolean);
-          
+
          --  Check if current execution should abort due to priority escalation
          --  Used by decode loops and long-running operations
          function Should_Abort return Boolean;
-          
+
          --  Check if a model is currently owned by ELP0 priority
          function Is_ELP0_Owner (Kind : Model_Type) return Boolean;
-          
+
          --  Barrier for ELP0 tasks to wait for ELP1 completion
          entry Wait_For_ELP1_Idle;
-          
+
          --  Update power conditions that affect priority rules
          procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural);
      private
@@ -998,7 +1005,7 @@ package body Model_Manager is
         end Release_ELP1;
 
          --  Acquire_ELP0: Allow background tasks (ELP0) to run only when no user tasks (ELP1) are pending.
-         --  
+         --
          --  FIX (priority issue): Changed from "or else" to "and then" conditions to properly enforce priority.
          --  Original bug: ELP0 tasks could acquire the lock even when ELP1 requests were pending or active.
          --  New behavior: ELP0 tasks can only run when:
@@ -1006,7 +1013,7 @@ package body Model_Manager is
          --    2. No ELP1 requests are pending
          --    3. No ELP1 requests are active
          --    4. Battery conditions are satisfied (if on battery)
-         --  
+         --
          --  This ensures user-facing ELP1 requests always preempt background ELP0 tasks.
          entry Acquire_ELP0(for K in Model_Type) (Success : out Boolean)
             when(not Busy (K)
@@ -1487,21 +1494,21 @@ package body Model_Manager is
              CPU_Monitor.Start;
             Async_Status_Monitor.Start;
         end if;
-         
+
          --  [DEBUG] Print status of all monitor tasks
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
                  & "[DEBUG] Monitor Task Status:" & AnsiAda.Reset);
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                 & "[DEBUG]   Context_Monitor'Terminated: " 
+                 & "[DEBUG]   Context_Monitor'Terminated: "
                  & Boolean'Image (Context_Monitor'Terminated) & AnsiAda.Reset);
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                 & "[DEBUG]   WCET_Monitor'Terminated: " 
+                 & "[DEBUG]   WCET_Monitor'Terminated: "
                  & Boolean'Image (WCET_Monitor'Terminated) & AnsiAda.Reset);
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                 & "[DEBUG]   Acceleration_Monitor'Terminated: " 
+                 & "[DEBUG]   Acceleration_Monitor'Terminated: "
                  & Boolean'Image (Acceleration_Monitor'Terminated) & AnsiAda.Reset);
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                 & "[DEBUG]   CPU_Monitor'Terminated: " 
+                 & "[DEBUG]   CPU_Monitor'Terminated: "
                  & Boolean'Image (CPU_Monitor'Terminated) & AnsiAda.Reset);
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
         --  [ElabTrace][+Uptime]: Context_Monitor started.
@@ -1678,7 +1685,7 @@ package body Model_Manager is
              end if;
              Unload_Model (Kind);
          end if;
-         
+
          --  [COLD-CACHE] Embedding model always loads fresh to avoid
          --  corrupted Metal state from warm cache reuse.
          if Kind /= Qwen_Embedding and then Models (Kind).Warm_Cached then
@@ -1691,7 +1698,7 @@ package body Model_Manager is
              --    3. Warm cache hasn't expired (still within TTL)
              --  ======================================================================
              declare
-                 Time_Since_Cached : constant Duration := 
+                 Time_Since_Cached : constant Duration :=
                     Ada.Real_Time.To_Duration (Clock - Models (Kind).Warm_Cache_Time);
              begin
                  if Time_Since_Cached <= Warm_Cache_TTL and then
@@ -1706,7 +1713,7 @@ package body Model_Manager is
                          & " reused from warm cache (saved "
                          & Duration'Image (Time_Since_Cached)
                          & "s of GAP Zone penalty)");
-                     
+
                      --  Reactivate the model
                      Models (Kind).Loaded := True;
                      Models (Kind).Warm_Cached := False;
@@ -1725,7 +1732,7 @@ package body Model_Manager is
                          & "s (TTL="
                          & Duration'Image (Warm_Cache_TTL)
                          & "s)");
-                     
+
                      --  Actually free the resources now
                      --  [DO NOT REMOVE COMMENT EXPLANATION]
                      --  FIX 1: Asynchronous Execution vs CPU-Side Free (Use-After-Free)
@@ -2008,13 +2015,19 @@ package body Model_Manager is
          --        (Phase 2/2), but reduces the disk I/O bottleneck significantly.
          --======================================================================
          M_Params.Use_Mmap := True;
-         
+
          --  [DO NOT REMOVE COMMENT EXPLANATION]
          --  FIX 5: OS-Level Silent Page Eviction (The Swap Death) / Memory Pinning
          --  Using mlock(2) explicitly pins the memory-mapped weights in physical RAM.
          --  This prevents macOS from moving the model's memory pages to SSD swap
          --  under high memory pressure, stopping TDR latency timeouts on the GPU.
-         M_Params.Use_Mlock := True;
+         if Ada.Real_Time.Clock < OOM_Hold_Until then
+            --  [OOM STATE] Allow the OS to page-fault the layers on demand
+            --  (no pinning in RAM) to save memory and avoid an immediate OOM kill.
+            M_Params.Use_Mlock := False;
+         else
+            M_Params.Use_Mlock := False; -- Force OS paging for all devices
+         end if;
 
         --  TRY THREE PATHS FOR MODEL FILES
         --  The CWD at runtime is unpredictable:
@@ -2494,7 +2507,6 @@ package body Model_Manager is
 
      --  Warm cache time-to-live: 30 seconds
      --  Models stay in warm cache for this duration after "unload"
- 
 
      --  [PARALLEL=1] Unload_Model with WARM CONTEXT POOLING
      --  ======================================================================
@@ -2570,7 +2582,7 @@ package body Model_Manager is
         --  1. Flushes and unloads all LLM & Embedding models, clearing KV caches.
         --  2. Releases Stable Diffusion FLUX and Refinement contexts from VRAM.
         --  3. Shuts down and releases the Moonshine STT transcriber context.
-        
+
         -- 1. Unload all loaded LLM/Embedding models
         for Kind in Model_Type loop
             if Models (Kind).Loaded then
@@ -3349,9 +3361,9 @@ package body Model_Manager is
          if Prompts'Length = 0 then
              return;
          end if;
- 
+
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Batching]" & AnsiAda.Reset & " Processing batch of " & Prompts'Length'Img & " requests.");
- 
+
          --  [CRITICAL] LIFESTYLE OPTIMIZATION:
          --  The primary cause of Metal driver panics is "Command Buffer Churn".
          --  We load the model ONCE for the entire batch.
@@ -3361,9 +3373,9 @@ package body Model_Manager is
          else
              Priority_Model_Gate.Request_ELP1;
              Priority_Model_Gate.Acquire_ELP1 (Kind);
-             Success := True; 
+             Success := True;
          end if;
- 
+
          if not Success then
              Put_Line (AnsiAda.Background (AnsiAda.Red)
                 & "[BUGCHECK] [Batching-Error] Could not acquire Tensor Accelerator lock."
@@ -3371,7 +3383,7 @@ package body Model_Manager is
              ELP_Queue.Dequeue_Level (Level);
              return;
          end if;
- 
+
          Load_Model (Kind, Success, 512, Level, Level = ELP0);
          if not Success then
              Put_Line (AnsiAda.Background (AnsiAda.Red)
@@ -3381,9 +3393,9 @@ package body Model_Manager is
              ELP_Queue.Dequeue_Level (Level);
              return;
          end if;
- 
+
          Models (Kind).In_Use := True;
- 
+
          --  [BATCH-INFERENCE] Process prompts while model is resident.
          for I in Prompts'Range loop
              declare
@@ -3395,15 +3407,13 @@ package body Model_Manager is
                  Lengths (I) := Len;
              end;
          end loop;
- 
+
          Unload_Model (Kind);
          Models (Kind).In_Use := False;
          if Level = ELP0 then Priority_Model_Gate.Release_ELP0 (Kind); else Priority_Model_Gate.Release_ELP1 (Kind); end if;
          ELP_Queue.Dequeue_Level (Level);
          Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Batching] Batch complete. Model unloaded safely." & AnsiAda.Reset);
      end Get_Embeddings_Batch;
-
-
 
     --  STREAM PARSER HELPERS
     type Stream_Parser_State is record
@@ -4140,7 +4150,8 @@ package body Model_Manager is
         Virtual_Tokens     : Cached_Token_Access := null;
         Virtual_Tok_Len    : Natural := 0;
         FreeParallelMemory : Boolean := True;
-        Skip_Gate          : Boolean := False)
+        Skip_Gate          : Boolean := False;
+        Use_Speculative    : Boolean := False)
     is
         Success  : Boolean;
         Vocab    : Llama_Vocab;
@@ -4230,11 +4241,16 @@ package body Model_Manager is
                 end if;
             else
                 --  Skip_Gate=True: gate already held by caller (Hybrid_Generate).
+                null;
+            end if;
+
+            if Use_Speculative then
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Blue)
                     & "[Gen-V]"
                     & AnsiAda.Reset
-                    & " Generate: Skip_Gate=True, bypassing ELP lock.");
+                    & " Generate: Initializing Draft Model for Speculative Decoding...");
+                Speculative_Decode.Init_Draft_Model;
             end if;
 
             Load_Model (Kind, Success, Requested_Ctx);
@@ -4391,58 +4407,81 @@ package body Model_Manager is
              --  - Integer math: N_Toks > Current_Ctx * 3 / 4 ≈ 75%
              --  ======================================================================
              if N_Toks > int (Models (Kind).Current_Ctx) * 3 / 4 then
-                Put_Line
-                   ("[!] Prompt size ("
-                    & N_Toks'Img
-                    & ") exceeds 75% of N_CTX ("
-                    & Models (Kind).Current_Ctx'Img
-                    & "). Proactive resize...");
-                declare
-                    Current_Ctx : constant unsigned := Models (Kind).Current_Ctx;
-                    Rounded_Ctx : unsigned;
-                begin
-                    --  STEP-BY-STEP CONTEXT EXPANSION (power-of-2 bins):
-                    --  =================================================================
-                    --  WHY: Jumping directly to 32768 from 8192 wastes VRAM and causes
-                    --  OOM kills. Instead, step through bins one at a time:
-                    --    2048 → 4096 → 8192 → 16384 → 32768 → 65536 → 131072
-                    --  Each step doubles the context. If the prompt overflows the new
-                    --  bin, the NEXT request will trigger another step up. This gives
-                    --  the system time to adapt GPU layers and compute buffers.
-                    --  =================================================================
-                    if Current_Ctx < 4096 then
-                        Rounded_Ctx := 4096;
-                        Acceleration_Silicon_Layer := -1;
-                    elsif Current_Ctx < 8192 then
-                        Rounded_Ctx := 8192;
-                        Acceleration_Silicon_Layer := -1;
-                    elsif Current_Ctx < 16384 then
-                        Rounded_Ctx := 16384;
-                        Acceleration_Silicon_Layer := 24;
-                    elsif Current_Ctx < 32768 then
-                        Rounded_Ctx := 32768;
-                        Acceleration_Silicon_Layer := 16;
-                    elsif Current_Ctx < 65536 then
-                        Rounded_Ctx := 65536;
-                        Acceleration_Silicon_Layer := 12;
-                    elsif Current_Ctx < 131072 then
-                        Rounded_Ctx := 131072;
-                        Acceleration_Silicon_Layer := 8;
-                    else
-                        --  Already at max, can't expand further
-                        Rounded_Ctx := Current_Ctx;
-                    end if;
-                    Free_Tokens (Tokens);
-                    Load_Model (Kind, Success, Positive (Rounded_Ctx));
-                    if not Success then
-                        Result := To_Unbounded_String ("ERROR: Resize failed");
-                        if Level = ELP0 then
-                            Priority_Model_Gate.Release_ELP0 (Kind);
-                        else
-                            Priority_Model_Gate.Release_ELP1 (Kind);
-                        end if;
-                        return;
-                    end if;
+                if Ada.Real_Time.Clock < OOM_Hold_Until then
+                   declare
+                      Remaining : constant Duration := Ada.Real_Time.To_Duration (OOM_Hold_Until - Ada.Real_Time.Clock);
+                   begin
+                      if unsigned (N_Toks) > OOM_Restricted_Ctx * 3 / 4 then
+                         Put_Line
+                            ("[!] WE ARE IN OOM SITUATION! Retrying to realloc within" &
+                             Duration'Image (Remaining) &
+                             " seconds. Offloading to virtual ctx.");
+                         -- Bypass resizing and offload immediately to virtual context
+                         Tokenize_And_Cache_Virtual_Ctx (Kind, Clean_P, Level);
+                         Result := To_Unbounded_String ("");
+                         if Tokens /= null then
+                             Free_Tokens (Tokens);
+                         end if;
+                         Models (Kind).In_Use := False;
+                         if Level = ELP0 then
+                             Priority_Model_Gate.Release_ELP0 (Kind);
+                         else
+                             Priority_Model_Gate.Release_ELP1 (Kind);
+                         end if;
+                         return;
+                      end if;
+                   end;
+                else
+                   Put_Line
+                      ("[!] Prompt size ("
+                       & N_Toks'Img
+                       & ") exceeds 75% of N_CTX ("
+                       & Models (Kind).Current_Ctx'Img
+                       & "). Proactive resize...");
+                   declare
+                       Current_Ctx : constant unsigned := Models (Kind).Current_Ctx;
+                       Rounded_Ctx : unsigned;
+                       Fallback_Ctx : unsigned;
+                   begin
+                       --  STEP-BY-STEP CONTEXT EXPANSION (power-of-2 bins):
+                       if Current_Ctx < 4096 then
+                           Rounded_Ctx := 4096; Fallback_Ctx := Current_Ctx;
+                           Acceleration_Silicon_Layer := -1;
+                       elsif Current_Ctx < 8192 then
+                           Rounded_Ctx := 8192; Fallback_Ctx := 4096;
+                           Acceleration_Silicon_Layer := -1;
+                       elsif Current_Ctx < 16384 then
+                           Rounded_Ctx := 16384; Fallback_Ctx := 8192;
+                           Acceleration_Silicon_Layer := 24;
+                       elsif Current_Ctx < 32768 then
+                           Rounded_Ctx := 32768; Fallback_Ctx := 16384;
+                           Acceleration_Silicon_Layer := 16;
+                       elsif Current_Ctx < 65536 then
+                           Rounded_Ctx := 65536; Fallback_Ctx := 32768;
+                           Acceleration_Silicon_Layer := 12;
+                       elsif Current_Ctx < 131072 then
+                           Rounded_Ctx := 131072; Fallback_Ctx := 65536;
+                           Acceleration_Silicon_Layer := 8;
+                       else
+                           Rounded_Ctx := Current_Ctx; Fallback_Ctx := Current_Ctx;
+                       end if;
+                       Free_Tokens (Tokens);
+                       Load_Model (Kind, Success, Positive (Rounded_Ctx));
+                       if not Success then
+                           Put_Line ("[!] OOM EXCEPTION: Load_Model failed for " & Rounded_Ctx'Img & ". Pulling back to " & Fallback_Ctx'Img);
+                           OOM_Restricted_Ctx := Fallback_Ctx;
+                           OOM_Hold_Until := Ada.Real_Time.Clock + Ada.Real_Time.Minutes (5);
+                           Load_Model (Kind, Success, Positive (Fallback_Ctx));
+                           if not Success then
+                               Result := To_Unbounded_String ("ERROR: Resize fallback failed");
+                               if Level = ELP0 then
+                                   Priority_Model_Gate.Release_ELP0 (Kind);
+                               else
+                                   Priority_Model_Gate.Release_ELP1 (Kind);
+                               end if;
+                               return;
+                           end if;
+                       end if;
 
                     --  Re-allocate token array for new context size
                     Tokens :=
@@ -4466,6 +4505,7 @@ package body Model_Manager is
                     --  Update CtxMonitor with new context size after resize
                     Current_Ctx_Capacity := Natural (Models (Kind).Current_Ctx);
                 end;
+                end if;
             end if;
         exception
             when others =>
@@ -4661,19 +4701,19 @@ package body Model_Manager is
                 --
                 --  NEW FORMULA:
                 --    speed_penalty = (100 - tok_per_sec) / 100 * 45
-                --    vram_penalty  = (100 - vram_free_pct) / 100 * 50
-                --    threshold     = clamp(50, 95, 15 + speed_penalty + vram_penalty)
+                --    tensoracceleratorram_penalty = (100 - tensoracceleratorram_free_pct) / 100 * 50
+                --    threshold     = clamp(50, 95, 15 + speed_penalty + tensoracceleratorram_penalty)
                 --
                 --  EXAMPLES:
-                --  - 35 tok/s, 50% VRAM free: 15 + 29 + 25 = 69% → expand late
-                --  - 35 tok/s, 10% VRAM free: 15 + 29 + 45 = 89% → expand very late
-                --  - 100 tok/s, 100% VRAM free: 15 + 0 + 0 = 15% → expand early
+                --  - 35 tok/s, 50% TensorAcceleratorRAM free: 15 + 29 + 25 = 69% → expand late
+                --  - 35 tok/s, 10% TensorAcceleratorRAM free: 15 + 29 + 45 = 89% → expand very late
+                --  - 100 tok/s, 100% TensorAcceleratorRAM free: 15 + 0 + 0 = 15% → expand early
                 --
-                --  The Tensor Accelerator Monitor feeds VRAM free % here. Less VRAM free
+                --  The Tensor Accelerator Monitor feeds TensorAcceleratorRAM free % here. Less TensorAcceleratorRAM free
                 --  = higher threshold = N_Gpu_Layers stays at max longer before ctx grows.
                 --  ============================================================================
                 declare
-                    VRAM_Free_Pct : constant Natural :=
+                    TensorAcceleratorRAM_Free_Pct : constant Natural :=
                        (if GPU_Total_MB > 0
                         then GPU_Free_MB * 100 / GPU_Total_MB
                         else 100);  -- Assume full if no query
@@ -4681,9 +4721,9 @@ package body Model_Manager is
                        (if Virtual_Prefill_Speed > 0.0
                         then (100 - Natural (Virtual_Prefill_Speed)) * 45 / 100
                         else 45);  -- Worst case if speed unknown
-                    VRAM_Penalty  : constant Natural :=
-                       (100 - VRAM_Free_Pct) * 50 / 100;
-                    Raw_Threshold : constant Natural := 15 + Speed_Penalty + VRAM_Penalty;
+                    TensorAcceleratorRAM_Penalty  : constant Natural :=
+                       (100 - TensorAcceleratorRAM_Free_Pct) * 50 / 100;
+                    Raw_Threshold : constant Natural := 15 + Speed_Penalty + TensorAcceleratorRAM_Penalty;
                 begin
                     Ctx_Expand_Threshold_Pct :=
                        Natural'Max (50, Natural'Min (95, Raw_Threshold));
@@ -4725,37 +4765,61 @@ package body Model_Manager is
         declare
             Accum_Buffer : Unbounded_String := Null_Unbounded_String;
             Accum_Count  : Natural := 0;
-        begin
-            for I in 1 .. 2048 loop
-                Print_INOP_Countdown;
-                if Level = ELP0 and then Should_Abort_ELP0 then
-                    Put_Line
-                       ("[ELP0-ABORT-LOOP] Aborting "
-                        & Kind'Img
-                        & " token loop at iteration "
-                        & I'Img);
-                    exit;
-                end if;
+            Tokens_Gen   : Natural := 0;
+            Done         : Boolean := False;
 
-                declare
-                    Token : constant Llama_Token :=
-                       Llama_Sampler_Sample
-                          (Sampler, Models (Kind).Context, -1);
-                    Piece : array (1 .. 256) of aliased Character;
-                    Len   : int;
-                begin
-                    if Llama_Vocab_Is_Eog (Vocab, Token) then
-                        --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+            --  Helper procedure for single token append and push
+            procedure Process_Token (Token : Llama_Token) is
+                Piece : array (1 .. 256) of aliased Character;
+                Len   : int;
+            begin
+                if Llama_Vocab_Is_Eog (Vocab, Token) then
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                        & "[Gen-V]"
+                        & AnsiAda.Reset
+                        & " Generate: EOG token. Total tokens="
+                        & Tokens_Gen'Img);
+                    if Length (Accum_Buffer) > 0 then
                         Put_Line
                            (AnsiAda.Foreground (AnsiAda.Light_Blue)
                             & "[Gen-V]"
                             & AnsiAda.Reset
-                            & " Generate: EOG token at iteration "
-                            & Natural'Image (I)
-                            & ". Total tokens="
-                            & Natural'Image (I - 1));
-                        --  Dump final accumulated buffer
-                        if Length (Accum_Buffer) > 0 then
+                            & " Generate: BUFFER ["
+                            & Natural'Image (Length (Accum_Buffer))
+                            & " chars] "
+                            & To_String (Accum_Buffer));
+                    end if;
+                    Done := True;
+                    return;
+                end if;
+
+                Len := Llama_Token_To_Piece (Vocab, Token, Piece (1)'Address, 256, 0, True);
+                if Len > 0 then
+                    declare
+                        Str_Piece : String (1 .. Integer (Len));
+                    begin
+                        for J in 1 .. Integer (Len) loop
+                            Str_Piece (J) := Piece (J);
+                            Append (Result, Piece (J));
+                        end loop;
+
+                        if Stream /= null then
+                            Process_And_Push_Chunk
+                               (Stream, Session_ID, Parser, Str_Piece);
+                        end if;
+
+                        if Parser.Stop_Triggered then
+                            Done := True;
+                            return;
+                        end if;
+
+                        Append (Accum_Buffer, Str_Piece);
+                        Accum_Count := Accum_Count + 1;
+
+                        if Accum_Count mod 20 = 0
+                           or else (Len > 0 and then Piece (1) = Character'Val (10))
+                        then
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Light_Blue)
                                 & "[Gen-V]"
@@ -4764,171 +4828,207 @@ package body Model_Manager is
                                 & Natural'Image (Length (Accum_Buffer))
                                 & " chars] "
                                 & To_String (Accum_Buffer));
-                        end if;
-                        exit;
-                    end if;
-                    Len :=
-                       Llama_Token_To_Piece
-                          (Vocab, Token, Piece (1)'Address, 256, 0, True);
-                    if Len > 0 then
-                        declare
-                            Str_Piece : String (1 .. Integer (Len));
-                        begin
-                            for J in 1 .. Integer (Len) loop
-                                Str_Piece (J) := Piece (J);
-                                Append (Result, Piece (J));
-                            end loop;
-
-                            if Stream /= null then
-                                Process_And_Push_Chunk
-                                   (Stream, Session_ID, Parser, Str_Piece);
-                            end if;
-
-                            if Parser.Stop_Triggered then
-                                exit;
-                            end if;
-
-                            --  Accumulate for verbose logging
-                            Append (Accum_Buffer, Str_Piece);
-                            Accum_Count := Accum_Count + 1;
-
-                            --  Dump every 20 tokens or on newline
-                            if Accum_Count mod 20 = 0
-                               or else
-                                  (Len > 0
-                                   and then Piece (1) = Character'Val (10))
-                            then
-                                Put_Line
-                                   (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                                    & "[Gen-V]"
-                                    & AnsiAda.Reset
-                                    & " Generate: BUFFER ["
-                                    & Natural'Image (Length (Accum_Buffer))
-                                    & " chars] "
-                                    & To_String (Accum_Buffer));
-                                Accum_Buffer := Null_Unbounded_String;
-                            end if;
-                        end;
-                    end if;
-
-                    declare
-                        B   : constant Llama_Batch :=
-                           Llama_Batch_Get_One (Token'Address, 1);
-                        Ret : int;
-                    begin
-                        Acquire_Accel_Lock;
-                        if Kratos.Guard_Enter = 0 then
-                            Ret := Llama_Decode (Models (Kind).Context, B);
-                            Kratos.Guard_Exit;
-                        else
-                            Kratos.Log_Crash;
-                            Ret := -1;
-                        end if;
-                        Release_Accel_Lock;
-                        if Ret /= 0 then
-                            --  [DECODE-RETRY] Token decode failed. For non-OOM errors
-                            --  (ret=-2: ggml compute failure), flush the KV cache to
-                            --  clear corrupted state and retry once. This prevents
-                            --  dropping the ollama connection on transient Metal errors.
-                            --  OOM (-3) is fatal and not retryable.
-                            if Ret = -3 then
-                                --  OOM: Metal is poisoned, cannot retry
-                                Append (Result, " [ABORTED:" & Ret'Img & "]");
-
-                                --  [VITAL-DO-NOT-REMOVE] OOM detection.
-                                --  When llama_decode returns -3, Metal is in error state
-                                --  (kIOGPUCommandBufferCallbackErrorOutOfMemory). Any
-                                --  subsequent llama_state_save_file call will SIGBUS →
-                                --  GNAT exception → exit() → ggml_metal_device_free →
-                                --  GGML_ASSERT([rsets->data count] == 0) → SIGABRT.
-                                --  Mark metal broken (opportunistic: auto-resets after 30s).
-                                Mark_Metal_Broken;
-
-                                --  [ENHANCED] Detailed error reporting for Tensor Accelerator issues
-                                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
-                                        & "[ERROR] Tensor Accelerator Memory Exhausted (Metal, -3): "
-                                        & "Out of Memory (kIOGPUCommandBufferCallbackErrorOutOfMemory)"
-                                        & AnsiAda.Reset);
-                                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Red)
-                                        & "[ERROR] Action: Marked Metal as broken, will attempt recovery in 30s"
-                                        & AnsiAda.Reset);
-                                Put_Line (AnsiAda.Foreground (AnsiAda.Red)
-                                        & "[ERROR] Recommendation: Check Tensor Accelerator memory usage, reduce model size, or restart service"
-                                        & AnsiAda.Reset);
-
-                                --  [QUIRK-M10] Orphan poisoned context to prevent SIGTRAP
-                                Models (Kind).Context := Null_Context;
-                                Models (Kind).Model := Null_Model;
-                                Models (Kind).Loaded := False;
-                                Models (Kind).Current_Ctx := 0;
-
-                                exit;
-
-                            else
-                                --  Non-OOM decode failure (e.g. ret=-2: ggml compute
-                                --  error). Flush KV cache to clear corrupted state
-                                --  (llama.cpp removes all seq_id=0 entries on failure,
-                                --  leaving cache poisoned) and retry once.
-                                Record_INOP_Error;
-                                Put_Line
-                                   (AnsiAda.Foreground (AnsiAda.Yellow)
-                                    & "[DECODE-RETRY]"
-                                    & AnsiAda.Reset
-                                    & " Token decode failed (ret=" & Ret'Img
-                                    & ") at iteration" & Natural'Image (I)
-                                    & ", flushing KV and retrying...");
-
-                                --  Flush KV cache: release all slots so retry is clean
-                                Llama_Interface.Llama_Memory_Clear
-                                   (Llama_Interface.Llama_Get_Memory (Models (Kind).Context),
-                                    True);
-                                delay 0.01;  --  Allow Metal command buffers to drain
-
-                                --  Retry decode once
-                                declare
-                                    Retry_Ret : int;
-                                begin
-                                    Acquire_Accel_Lock;
-                                    if Kratos.Guard_Enter = 0 then
-                                        Retry_Ret := Llama_Decode (Models (Kind).Context, B);
-                                        Kratos.Guard_Exit;
-                                    else
-                                        Kratos.Log_Crash;
-                                        Retry_Ret := -1;
-                                    end if;
-                                    Release_Accel_Lock;
-
-                                    if Retry_Ret /= 0 then
-                                        --  Retry also failed — now abort and orphan
-                                        Record_INOP_Error;
-                                        Put_Line
-                                           (AnsiAda.Foreground (AnsiAda.Red)
-                                            & "[DECODE-RETRY]"
-                                            & AnsiAda.Reset
-                                            & " Retry also failed (ret=" & Retry_Ret'Img
-                                            & "). Aborting generation.");
-                                        Append (Result, " [ABORTED:" & Retry_Ret'Img & "]");
-
-                                        Models (Kind).Context := Null_Context;
-                                        Models (Kind).Model := Null_Model;
-                                        Models (Kind).Loaded := False;
-                                        Models (Kind).Current_Ctx := 0;
-
-                                        exit;
-                                    end if;
-
-                                    Put_Line
-                                       (AnsiAda.Foreground (AnsiAda.Green)
-                                        & "[DECODE-RETRY]"
-                                        & AnsiAda.Reset
-                                        & " Retry succeeded at iteration" & Natural'Image (I)
-                                        & ". Continuing generation.");
-                                    Clear_INOP_Error;
-                                end;
-                            end if;
+                            Accum_Buffer := Null_Unbounded_String;
                         end if;
                     end;
-                end;
+                end if;
+                Tokens_Gen := Tokens_Gen + 1;
+            end Process_Token;
+
+        begin
+            while not Done and then Tokens_Gen < 2048 loop
+                Print_INOP_Countdown;
+                if Level = ELP0 and then Should_Abort_ELP0 then
+                    Put_Line
+                       ("[ELP0-ABORT-LOOP] Aborting "
+                        & Kind'Img
+                        & " token loop at iteration "
+                        & Tokens_Gen'Img);
+                    exit;
+                end if;
+
+                if Use_Speculative and then Speculative_Decode.Is_Draft_Model_Loaded then
+                    --  ==============================================================
+                    --  SPECULATIVE DECODING PATH
+                    --  ==============================================================
+                    declare
+                        Draft_Sampler_Params  : constant Llama_Sampler_Chain_Params := Llama_Sampler_Chain_Default_Params;
+                        Draft_Sampler         : constant Llama_Sampler := Llama_Sampler_Chain_Init (Draft_Sampler_Params);
+                        Target_Sampler_Params : constant Llama_Sampler_Chain_Params := Llama_Sampler_Chain_Default_Params;
+                        Target_Sampler        : constant Llama_Sampler := Llama_Sampler_Chain_Init (Target_Sampler_Params);
+                        Max_Draft             : constant := 5;
+                        Draft_Toks            : array (1 .. Max_Draft) of aliased Llama_Token;
+                        N_Draft               : Natural := 0;
+                        Accepted              : Natural := 0;
+                    begin
+                        --  Initialize samplers (greedy)
+                        Llama_Sampler_Chain_Add (Draft_Sampler, Llama_Sampler_Init_Greedy);
+                        Llama_Sampler_Chain_Add (Target_Sampler, Llama_Sampler_Init_Greedy);
+
+                        --  STEP 1: Draft Phase
+                        for I in 1 .. Max_Draft loop
+                            declare
+                                Draft_Token : constant Llama_Token := Llama_Sampler_Sample (Draft_Sampler, Speculative_Decode.Get_Draft_Context, -1);
+                            begin
+                                if Llama_Vocab_Is_Eog (Vocab, Draft_Token) then
+                                    exit;
+                                end if;
+                                Draft_Toks (I) := Draft_Token;
+                                N_Draft := N_Draft + 1;
+
+                                declare
+                                    Batch : constant Llama_Batch := Llama_Batch_Get_One (Draft_Token'Address, 1);
+                                    Ret   : int;
+                                begin
+                                    Acquire_Accel_Lock;
+                                    Ret := Llama_Decode (Speculative_Decode.Get_Draft_Context, Batch);
+                                    Release_Accel_Lock;
+                                    if Ret /= 0 then
+                                        exit;
+                                    end if;
+                                end;
+                            end;
+                        end loop;
+
+                        --  STEP 2: Verify Phase
+                        for I in 1 .. N_Draft loop
+                            declare
+                                Draft_Token  : constant Llama_Token := Draft_Toks (I);
+                                Batch        : constant Llama_Batch := Llama_Batch_Get_One (Draft_Token'Address, 1);
+                                Ret          : int;
+                                Target_Token : Llama_Token;
+                            begin
+                                Acquire_Accel_Lock;
+                                if Kratos.Guard_Enter = 0 then
+                                    Ret := Llama_Decode (Models (Kind).Context, Batch);
+                                    Kratos.Guard_Exit;
+                                else
+                                    Kratos.Log_Crash;
+                                    Ret := -1;
+                                end if;
+                                Release_Accel_Lock;
+
+                                if Ret = 0 then
+                                    Target_Token := Llama_Sampler_Sample (Target_Sampler, Models (Kind).Context, -1);
+                                    if Target_Token = Draft_Token then
+                                        Accepted := Accepted + 1;
+                                        Process_Token (Draft_Token);
+                                        if Done then
+                                            exit;
+                                        end if;
+                                    else
+                                        --  Rejected, use target token and stop verifying
+                                        Process_Token (Target_Token);
+                                        declare
+                                            T_Batch : constant Llama_Batch := Llama_Batch_Get_One (Target_Token'Address, 1);
+                                            T_Ret   : int;
+                                            pragma Unreferenced (T_Ret);
+                                        begin
+                                            Acquire_Accel_Lock;
+                                            T_Ret := Llama_Decode (Models (Kind).Context, T_Batch);
+                                            Release_Accel_Lock;
+                                        end;
+                                        exit;
+                                    end if;
+                                else
+                                    --  Decode failed, just exit verification and fallback later
+                                    exit;
+                                end if;
+                            end;
+                        end loop;
+
+                        --  If all were accepted, we still need to generate one more token from target
+                        if Accepted = N_Draft and then not Done then
+                            declare
+                                Target_Token : constant Llama_Token := Llama_Sampler_Sample (Target_Sampler, Models (Kind).Context, -1);
+                            begin
+                                Process_Token (Target_Token);
+                                if not Done then
+                                    declare
+                                        T_Batch : constant Llama_Batch := Llama_Batch_Get_One (Target_Token'Address, 1);
+                                        T_Ret   : int;
+                                        pragma Unreferenced (T_Ret);
+                                    begin
+                                        Acquire_Accel_Lock;
+                                        T_Ret := Llama_Decode (Models (Kind).Context, T_Batch);
+                                        Release_Accel_Lock;
+                                    end;
+                                end if;
+                            end;
+                        end if;
+
+                        Llama_Sampler_Free (Draft_Sampler);
+                        Llama_Sampler_Free (Target_Sampler);
+                    end;
+                else
+                    --  ==============================================================
+                    --  STANDARD DECODING PATH
+                    --  ==============================================================
+                    declare
+                        Token : constant Llama_Token := Llama_Sampler_Sample (Sampler, Models (Kind).Context, -1);
+                    begin
+                        Process_Token (Token);
+                        if Done then
+                            exit;
+                        end if;
+
+                        declare
+                            B   : constant Llama_Batch := Llama_Batch_Get_One (Token'Address, 1);
+                            Ret : int;
+                        begin
+                            Acquire_Accel_Lock;
+                            if Kratos.Guard_Enter = 0 then
+                                Ret := Llama_Decode (Models (Kind).Context, B);
+                                Kratos.Guard_Exit;
+                            else
+                                Kratos.Log_Crash;
+                                Ret := -1;
+                            end if;
+                            Release_Accel_Lock;
+                            if Ret /= 0 then
+                                if Ret = -3 then
+                                    Append (Result, " [ABORTED:" & Ret'Img & "]");
+                                    Mark_Metal_Broken;
+                                    Models (Kind).Context := Null_Context;
+                                    Models (Kind).Model := Null_Model;
+                                    Models (Kind).Loaded := False;
+                                    Models (Kind).Current_Ctx := 0;
+                                    Done := True;
+                                    exit;
+                                else
+                                    Record_INOP_Error;
+                                    Llama_Memory_Clear (Llama_Get_Memory (Models (Kind).Context), True);
+                                    delay 0.01;
+                                    declare
+                                        Retry_Ret : int;
+                                    begin
+                                        Acquire_Accel_Lock;
+                                        if Kratos.Guard_Enter = 0 then
+                                            Retry_Ret := Llama_Decode (Models (Kind).Context, B);
+                                            Kratos.Guard_Exit;
+                                        else
+                                            Kratos.Log_Crash;
+                                            Retry_Ret := -1;
+                                        end if;
+                                        Release_Accel_Lock;
+
+                                        if Retry_Ret /= 0 then
+                                            Record_INOP_Error;
+                                            Append (Result, " [ABORTED:" & Retry_Ret'Img & "]");
+                                            Models (Kind).Context := Null_Context;
+                                            Models (Kind).Model := Null_Model;
+                                            Models (Kind).Loaded := False;
+                                            Models (Kind).Current_Ctx := 0;
+                                            Done := True;
+                                            exit;
+                                        end if;
+                                        Clear_INOP_Error;
+                                    end;
+                                end if;
+                            end if;
+                        end;
+                    end;
+                end if;
             end loop;
         end; -- Accum_Buffer declare block
 
@@ -5235,433 +5335,6 @@ package body Model_Manager is
     --  - Faster inference, lower quality, used only for candidates
     --  - Must be compatible with target model's tokenizer
     --  ============================================================================
-
-    procedure Generate_Speculative
-       (Kind               : Model_Type;
-        Prompt             : String;
-        Result             : out Unbounded_String;
-        Max_Tokens         : Positive := 2048;
-        Level              : ELP_Level := ELP1;
-        FreeParallelMemory : Boolean := True)
-    is
-        use type Interfaces.C.size_t;
-
-        --  Draft model context
-        Draft_Context : Llama_Interface.Llama_Context := Null_Context;
-        Draft_Loaded  : Boolean := False;
-
-        --  Tokenization buffers
-        Prompt_C   : chars_ptr := New_String (Prompt);
-        Tokens_Buf : Token_Array_Access;
-        N_Tokens   : int;
-
-        --  Generation state
-        Generated  : Unbounded_String := Null_Unbounded_String;
-        Tokens_Gen : Natural := 0;
-        Done       : Boolean := False;
-
-        --  Draft token buffer (max 5 tokens per draft cycle)
-        Max_Draft  : constant := 5;
-        Draft_Toks : array (1 .. Max_Draft) of aliased Llama_Token;
-        N_Draft    : Natural;
-
-        --  Verification state
-        Accepted : Natural;
-
-    begin
-        Put_Line
-           ("[Speculative] Starting speculative generation for: "
-            & Prompt (1 .. Integer'Min (Prompt'Length, 50)));
-
-        --  Check if target model is loaded
-        if not Models (Kind).Loaded then
-             Put_Line (AnsiAda.Background (AnsiAda.Red)
-                & "[BUGCHECK] [Speculative] ERROR: Target model not loaded"
-                & AnsiAda.Reset);
-            Result := To_Unbounded_String ("ERROR: Target model not loaded");
-            Free (Prompt_C);
-            return;
-        end if;
-
-        --  Load draft model (Qwen3.5-0.8B)
-        declare
-            Draft_Params   : Llama_Interface.Llama_Model_Params;
-            Context_Params : Llama_Interface.Llama_Context_Params;
-        begin
-            Draft_Params := Llama_Interface.Llama_Model_Default_Params;
-            Draft_Params.N_Gpu_Layers := 99;
-
-            --  Load draft model
-            declare
-                Draft_Path  : constant String :=
-                   "model/Qwen3.5-0.8B-Q4_K_M.gguf";
-                Path_C      : chars_ptr := New_String (Draft_Path);
-                Draft_Model : Llama_Interface.Llama_Model;
-            begin
-                Draft_Model :=
-                   Llama_Interface.Llama_Model_Load_From_File
-                      (Path_C, Draft_Params);
-                Free (Path_C);
-
-                if Draft_Model = Null_Model then
-                    Put_Line
-                       ("[Speculative] WARNING: Failed to load draft model");
-                    Result :=
-                       To_Unbounded_String ("ERROR: Draft model load failed");
-                    Free (Prompt_C);
-                    return;
-                end if;
-
-                --  Create context for draft model
-                Context_Params := Llama_Interface.Llama_Context_Default_Params;
-                Context_Params.N_Ctx := 4096;
-                Context_Params.N_Batch := 512;
-                Context_Params.N_Threads := 4;
-
-                Draft_Context :=
-                   Llama_Interface.Llama_Init_From_Model
-                      (Draft_Model, Context_Params);
-
-                if Draft_Context = Null_Context then
-                    Put_Line
-                       ("[Speculative] WARNING: Failed to create draft context");
-                    Llama_Interface.Llama_Model_Free (Draft_Model);
-                    Result :=
-                       To_Unbounded_String ("ERROR: Draft context failed");
-                    Free (Prompt_C);
-                    return;
-                end if;
-
-                Draft_Loaded := True;
-                Put_Line ("[Speculative] Draft model loaded successfully");
-            end;
-        end;
-
-        --  Get vocabulary for tokenization
-        declare
-            Vocab : Llama_Interface.Llama_Vocab;
-        begin
-            Vocab :=
-               Llama_Interface.Llama_Model_Get_Vocab (Models (Kind).Model);
-
-            --  Tokenize prompt
-            Tokens_Buf := new Token_Array (1 .. 4096);
-            N_Tokens :=
-               Llama_Interface.Llama_Tokenize
-                  (Vocab,
-                   Prompt_C,
-                   int (Prompt'Length),
-                   Tokens_Buf.all'Address,
-                   4096,
-                   True,
-                   True);
-        end;
-
-        Free (Prompt_C);
-
-        if N_Tokens <= 0 then
-             Put_Line (AnsiAda.Background (AnsiAda.Red)
-                & "[BUGCHECK] [Speculative] ERROR: Tokenization failed"
-                & AnsiAda.Reset);
-            Result := To_Unbounded_String ("ERROR: Tokenization failed");
-            if Draft_Loaded and then Draft_Context /= Null_Context then
-                Llama_Interface.Llama_Free (Draft_Context);
-            end if;
-            Free_Tokens (Tokens_Buf);
-            return;
-        end if;
-
-        Put_Line
-           ("[Speculative] Tokenized prompt: "
-            & int'Image (N_Tokens)
-            & " tokens");
-
-        --  Initialize samplers for draft and target models
-        declare
-            Draft_Sampler_Params  : Llama_Interface.Llama_Sampler_Chain_Params;
-            Draft_Sampler         : Llama_Interface.Llama_Sampler;
-            Target_Sampler_Params : Llama_Interface.Llama_Sampler_Chain_Params;
-            Target_Sampler        : Llama_Interface.Llama_Sampler;
-            Vocab                 : Llama_Interface.Llama_Vocab;
-        begin
-            --  Get vocabulary for tokenization
-            Vocab :=
-               Llama_Interface.Llama_Model_Get_Vocab (Models (Kind).Model);
-
-            --  Initialize draft sampler (greedy for fast candidate generation)
-            Draft_Sampler_Params :=
-               Llama_Interface.Llama_Sampler_Chain_Default_Params;
-            Draft_Sampler :=
-               Llama_Interface.Llama_Sampler_Chain_Init (Draft_Sampler_Params);
-            Llama_Interface.Llama_Sampler_Chain_Add
-               (Draft_Sampler, Llama_Interface.Llama_Sampler_Init_Greedy);
-
-            --  Initialize target sampler (greedy for verification)
-            Target_Sampler_Params :=
-               Llama_Interface.Llama_Sampler_Chain_Default_Params;
-            Target_Sampler :=
-               Llama_Interface.Llama_Sampler_Chain_Init
-                  (Target_Sampler_Params);
-            Llama_Interface.Llama_Sampler_Chain_Add
-               (Target_Sampler, Llama_Interface.Llama_Sampler_Init_Greedy);
-
-            --  Main speculative generation loop
-            while not Done and then Tokens_Gen < Max_Tokens loop
-                --  STEP 1: Draft Phase - Generate N tokens with draft model
-                N_Draft := 0;
-
-                --  Generate draft tokens using draft model
-                for I in 1 .. Max_Draft loop
-                    --  Sample from draft model
-                    declare
-                        Draft_Token : constant Llama_Interface.Llama_Token :=
-                           Llama_Interface.Llama_Sampler_Sample
-                              (Draft_Sampler, Draft_Context, -1);
-                    begin
-                        --  Check for end of generation
-                        if Llama_Interface.Llama_Vocab_Is_Eog
-                              (Vocab, Draft_Token)
-                        then
-                            Put_Line
-                               ("[Speculative] Draft model hit EOG at token "
-                                & Natural'Image (I));
-                            exit;
-                        end if;
-
-                        --  Store draft token
-                        Draft_Toks (I) := Draft_Token;
-                        N_Draft := N_Draft + 1;
-
-                        --  Decode with draft model to update its KV cache
-                        declare
-                            Batch : constant Llama_Interface.Llama_Batch :=
-                               Llama_Batch_Get_One (Draft_Token'Address, 1);
-                            Ret   : Interfaces.C.int;
-                        begin
-                            Acquire_Accel_Lock;
-                            Ret :=
-                               Llama_Interface.Llama_Decode
-                                  (Draft_Context, Batch);
-                            Release_Accel_Lock;
-                            if Ret /= 0 then
-                                Put_Line
-                                   ("[Speculative] Draft decode failed, ret="
-                                    & Interfaces.C.int'Image (Ret));
-                                exit;
-                            end if;
-                        end;
-                    end;
-                end loop;
-
-                Put_Line
-                   ("[Speculative] Draft phase complete: "
-                    & Natural'Image (N_Draft)
-                    & " tokens generated");
-
-                --  STEP 2: Verify Phase - Verify with target model
-                Accepted := 0;
-
-                --  Verify each draft token with target model
-                for I in 1 .. N_Draft loop
-                    declare
-                        Draft_Token  : constant Llama_Interface.Llama_Token :=
-                           Draft_Toks (I);
-                        Batch        : constant Llama_Interface.Llama_Batch :=
-                           Llama_Batch_Get_One (Draft_Token'Address, 1);
-                        Ret          : Interfaces.C.int;
-                        Target_Token : Llama_Interface.Llama_Token;
-                    begin
-                        --  Decode with target model
-                        Acquire_Accel_Lock;
-                        Ret :=
-                           Llama_Interface.Llama_Decode
-                              (Models (Kind).Context, Batch);
-                        Release_Accel_Lock;
-
-                        if Ret = 0 then
-                            --  Sample from target model to see what it would choose
-                            Target_Token :=
-                               Llama_Interface.Llama_Sampler_Sample
-                                  (Target_Sampler, Models (Kind).Context, -1);
-
-                            --  Compare: if target chose same token, accept
-                            if Target_Token = Draft_Token then
-                                Accepted := Accepted + 1;
-                                Put_Line
-                                   ("[Speculative] ACCEPT token "
-                                    & Natural'Image (I)
-                                    & " (draft="
-                                    & Llama_Interface.Llama_Token'Image
-                                         (Draft_Token)
-                                    & " target="
-                                    & Llama_Interface.Llama_Token'Image
-                                         (Target_Token)
-                                    & ")");
-                            else
-                                Put_Line
-                                   ("[Speculative] REJECT token "
-                                    & Natural'Image (I)
-                                    & " (draft="
-                                    & Llama_Interface.Llama_Token'Image
-                                         (Draft_Token)
-                                    & " target="
-                                    & Llama_Interface.Llama_Token'Image
-                                         (Target_Token)
-                                    & ")");
-                                --  Stop at first rejection (standard speculative decoding)
-                                exit;
-                            end if;
-                        else
-                            Put_Line
-                               ("[Speculative] Target decode failed, ret="
-                                & Interfaces.C.int'Image (Ret));
-                            exit;
-                        end if;
-                    end;
-                end loop;
-
-                --  STEP 3: Accept Phase - Keep accepted tokens
-                if Accepted > 0 then
-                    --  Add accepted tokens to generated text
-                    for I in 1 .. Accepted loop
-                        declare
-                            Piece : array (1 .. 256) of aliased Character;
-                            Len   : Interfaces.C.int;
-                        begin
-                            --  Convert token to piece
-                            Len :=
-                               Llama_Interface.Llama_Token_To_Piece
-                                  (Vocab,
-                                   Draft_Toks (I),
-                                   Piece (1)'Address,
-                                   256,
-                                   0,
-                                   True);
-
-                            if Len > 0 then
-                                for J in 1 .. Integer (Len) loop
-                                    Append (Generated, Piece (J));
-                                end loop;
-                            end if;
-                        end;
-                    end loop;
-
-                    Tokens_Gen := Tokens_Gen + Accepted;
-                    Put_Line
-                       ("[Speculative] Accepted "
-                        & Natural'Image (Accepted)
-                        & " tokens");
-                else
-                    --  All rejected - fall back to single token from target
-                    declare
-                        Target_Token : constant Llama_Interface.Llama_Token :=
-                           Llama_Interface.Llama_Sampler_Sample
-                              (Target_Sampler, Models (Kind).Context, -1);
-                        Piece        : array (1 .. 256) of aliased Character;
-                        Len          : Interfaces.C.int;
-                    begin
-                        --  Convert token to piece
-                        Len :=
-                           Llama_Interface.Llama_Token_To_Piece
-                              (Vocab,
-                               Target_Token,
-                               Piece (1)'Address,
-                               256,
-                               0,
-                               True);
-
-                        if Len > 0 then
-                            for J in 1 .. Integer (Len) loop
-                                Append (Generated, Piece (J));
-                            end loop;
-                        end if;
-
-                        --  Decode with target model to update its KV cache
-                        declare
-                            Batch : constant Llama_Interface.Llama_Batch :=
-                               Llama_Batch_Get_One (Target_Token'Address, 1);
-                            Ret   : Interfaces.C.int;
-                        begin
-                            Acquire_Accel_Lock;
-                            Ret :=
-                               Llama_Interface.Llama_Decode
-                                  (Models (Kind).Context, Batch);
-                            Release_Accel_Lock;
-                            if Ret /= 0 then
-                                Put_Line
-                                   ("[Speculative] Target decode failed, ret="
-                                    & Interfaces.C.int'Image (Ret));
-                            end if;
-                        end;
-                    end;
-
-                    Tokens_Gen := Tokens_Gen + 1;
-                    Put_Line
-                       ("[Speculative] All draft tokens rejected, using target");
-                end if;
-
-                --  Check if we should stop
-                if Tokens_Gen >= Max_Tokens then
-                    Done := True;
-                end if;
-            end loop;
-
-            --  Free samplers
-            Llama_Interface.Llama_Sampler_Free (Draft_Sampler);
-            Llama_Interface.Llama_Sampler_Free (Target_Sampler);
-        end;
-
-        --  Cleanup
-        if FreeParallelMemory then
-            if Models (Kind).Loaded then
-                if Level = ELP0 then
-                    Priority_Model_Gate.Release_ELP0 (Kind);
-                else
-                    Priority_Model_Gate.Release_ELP1 (Kind);
-                end if;
-                ELP_Queue.Dequeue_Level (Level);
-            end if;
-            --  [PARALLEL-1] Wait for KV save then unload from GPU
-            KV_Cache_Manager.Wait_For_Save;
-            Unload_Model (Kind);
-        end if;
-
-        --  Release draft model
-        if Draft_Loaded and then Draft_Context /= Null_Context then
-            Llama_Interface.Llama_Free (Draft_Context);
-        end if;
-
-        --  Free token buffer
-        Free_Tokens (Tokens_Buf);
-
-        Put_Line
-           ("[Speculative] Generation complete: "
-            & Natural'Image (Tokens_Gen)
-            & " tokens");
-
-        Result := Generated;
-
-    exception
-        when others =>
-             Put_Line (AnsiAda.Background (AnsiAda.Red)
-                & "[BUGCHECK] [Speculative] ERROR: Exception during generation"
-                & AnsiAda.Reset);
-            Free (Prompt_C);
-            if Draft_Loaded and then Draft_Context /= Null_Context then
-                Llama_Interface.Llama_Free (Draft_Context);
-            end if;
-            Free_Tokens (Tokens_Buf);
-            --  [PARALLEL-1] Unload target model on error too
-            begin
-                KV_Cache_Manager.Wait_For_Save;
-                Unload_Model (Kind);
-            exception
-                when others =>
-                    null;
-            end;
-            Result :=
-               To_Unbounded_String ("ERROR: Exception during generation");
-    end Generate_Speculative;
 
     --  TOKENIZE_AND_CACHE_VIRTUAL_CTX
     --  Called when Internal_State grows.  Tokenizes the full "Fact-Check: "
@@ -7171,7 +6844,8 @@ package body Model_Manager is
                         Virtual_Tokens     => Cached_Virtual_Tokens,
                         Virtual_Tok_Len    => Cached_Virtual_Len,
                         FreeParallelMemory => True,
-                        Skip_Gate          => False);
+                        Skip_Gate          => False,
+                        Use_Speculative    => True);
 
                     --  =================================================================
                     --  THINK-ONLY RETRY: If model produced only <think>...</think>
@@ -7233,7 +6907,8 @@ package body Model_Manager is
                                        Cached_Virtual_Tokens,
                                     Virtual_Tok_Len    => Cached_Virtual_Len,
                                     FreeParallelMemory => True,
-                                    Skip_Gate          => False);
+                                    Skip_Gate          => False,
+                                    Use_Speculative    => True);
                             exception
                                 when others =>
                                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
@@ -8169,25 +7844,25 @@ begin
 
      --  ======================================================================
      --  ELP PRIORITY FIX SUMMARY (2026-06-26):
-     --  
+     --
      --  Problem:
      --    ELP0 background tasks (file indexing) would run while ELP1 user requests
      --    were pending, causing unacceptable latency for user interactions.
-     --  
+     --
      --  Root Cause:
      --    The Acquire_ELP0 entry condition in Priority_Model_Gate used "or else"
      --    instead of "and then" for the ELP1_Pending/Active checks, allowing ELP0
      --    tasks to proceed even when ELP1 requests were pending or active.
-     --  
+     --
      --  Solution:
      --    1. Fixed Acquire_ELP0 entry condition to use "and then" for proper priority
      --    2. Added defensive checks in the Dequeue_Level procedure
      --    3. Enhanced queue priority handling to ensure ELP1 tasks always preempt ELP0
-     --  
+     --
      --  Result:
      --    User-facing requests now properly take priority over background tasks.
      --    Background tasks only run when no user tasks are pending or active.
-     --  
+     --
      --  Files Modified:
      --    - model_manager.adb (priority logic fix)
      --    - elp_queue.adb (queue handling improvements)
