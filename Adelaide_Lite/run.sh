@@ -6,4 +6,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+mkdir -p .bin
+cat << 'RANLIB' > .bin/ranlib
+#!/bin/bash
+ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" != "-c" && "$arg" != "c" ]]; then
+    ARGS+=("$arg")
+  fi
+done
+/usr/bin/ranlib "${ARGS[@]}"
+RANLIB
+chmod +x .bin/ranlib
+export PATH="$PWD/.bin:$PATH"
+
 exec python3 "$SCRIPT_DIR/run.py" "$@"

@@ -11,6 +11,7 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Real_Time;    use Ada.Real_Time;
 with GNATCOLL.JSON;
 with Model_Types; use Model_Types;
+with Speculative_Decode;
 
 package Model_Manager is
 
@@ -127,7 +128,9 @@ package Model_Manager is
        --  factual check) which run while the gate is already held.
        --  Without this, each hop re-acquires an already-locked gate
        --  causing a deadlock (ELP1 never runs after the first hop).
-       Skip_Gate       : Boolean := False);
+       Skip_Gate       : Boolean := False;
+       --  When True, enables draft-model speculative decoding (Qwen3.5-0.8B)
+       Use_Speculative : Boolean := False);
 
    --  ============================================================================
    --  SPECULATIVE DECODING
@@ -150,15 +153,7 @@ package Model_Manager is
    --  - Must be compatible with target model's tokenizer
    --  ============================================================================
 
-   --  Generate tokens using speculative decoding
-   --  WHY: Accelerates generation by using draft model for candidates.
-   procedure Generate_Speculative
-     (Kind            : Model_Type;
-       Prompt          : String;
-       Result          : out Unbounded_String;
-       Max_Tokens      : Positive := 2048;
-       Level           : ELP_Level := ELP1;
-        FreeParallelMemory : Boolean := True);
+
 
    --  Perform multi-hop reasoning
    procedure Hybrid_Generate
