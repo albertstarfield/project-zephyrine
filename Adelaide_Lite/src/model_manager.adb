@@ -4730,7 +4730,7 @@ package body Model_Manager is
                 --  NEW FORMULA:
                 --    speed_penalty = (100 - tok_per_sec) / 100 * 45
                 --    tensoracceleratorram_penalty = (100 - tensoracceleratorram_free_pct) / 100 * 50
-                --    threshold     = clamp(50, 95, 15 + speed_penalty + tensoracceleratorram_penalty)
+                --    threshold     = clamp(75, 99, 15 + speed_penalty + tensoracceleratorram_penalty)
                 --
                 --  EXAMPLES:
                 --  - 35 tok/s, 50% TensorAcceleratorRAM free: 15 + 29 + 25 = 69% → expand late
@@ -4754,7 +4754,7 @@ package body Model_Manager is
                     Raw_Threshold : constant Natural := 15 + Speed_Penalty + TensorAcceleratorRAM_Penalty;
                 begin
                     Ctx_Expand_Threshold_Pct :=
-                       Natural'Max (50, Natural'Min (95, Raw_Threshold));
+                       Natural'Max (75, Natural'Min (99, Raw_Threshold));
                 end;
 
                 --  Print prefill metrics for diagnostics

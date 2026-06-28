@@ -360,7 +360,7 @@ package Model_Manager is
    Virtual_Prefill_Speed     : Duration := 0.0;  -- computed tok/s after prefill
    Prefill_Elapsed           : Duration := 0.0;  -- wall-clock seconds for prefill
    Free_Ctx_Pct              : Natural := 0;     -- free % of LLM context window
-   Ctx_Expand_Threshold_Pct  : Natural := 75;    -- dynamic threshold for expansion
+   Ctx_Expand_Threshold_Pct  : Natural := 75;    -- dynamic threshold for expansion (floor=75, ceiling=99)
 
    --  CACHED VIRTUAL CTX TOKENS
    --  When Internal_State grows, we re-tokenize ONLY the new portion.
