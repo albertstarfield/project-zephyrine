@@ -4650,10 +4650,37 @@ package body Model_Manager is
                                 Models (Kind).Loaded := False;
                                 Models (Kind).Current_Ctx := 0;
 
-                                Result :=
-                                   To_Unbounded_String
-                                      ("ERROR: Decode failed after retry (" & Retry_Ret'Img & ")");
-                                return;
+                                if Tensor_Accel_INOP then
+                                    Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[DECODE-RETRY]" & AnsiAda.Reset & " Falling back to CPU internally...");
+                                    declare
+                                        S : Boolean;
+                                    begin
+                                        Load_Model (Kind, S, 8192);
+                                    end;
+                                    declare
+                                        Fallback_Ret : int;
+                                    begin
+                                        Acquire_Accel_Lock;
+                                        if Kratos.Guard_Enter = 0 then
+                                            Fallback_Ret := Llama_Decode (Models (Kind).Context, B);
+                                            Kratos.Guard_Exit;
+                                        else
+                                            Kratos.Log_Crash;
+                                            Fallback_Ret := -1;
+                                        end if;
+                                        Release_Accel_Lock;
+                                        
+                                        if Fallback_Ret /= 0 then
+                                            Result := To_Unbounded_String ("ERROR: Decode failed after fallback (" & Fallback_Ret'Img & ")");
+                                            return;
+                                        end if;
+                                    end;
+                                else
+                                    Result :=
+                                       To_Unbounded_String
+                                          ("ERROR: Decode failed after retry (" & Retry_Ret'Img & ")");
+                                    return;
+                                end if;
                             end if;
 
                             Put_Line
@@ -5014,13 +5041,40 @@ package body Model_Manager is
 
                                         if Retry_Ret /= 0 then
                                             Record_INOP_Error;
-                                            Append (Result, " [ABORTED:" & Retry_Ret'Img & "]");
-                                            Models (Kind).Context := Null_Context;
-                                            Models (Kind).Model := Null_Model;
-                                            Models (Kind).Loaded := False;
-                                            Models (Kind).Current_Ctx := 0;
-                                            Done := True;
-                                            exit;
+                                            if Tensor_Accel_INOP then
+                                                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[DECODE-RETRY]" & AnsiAda.Reset & " Falling back to CPU internally...");
+                                                Models (Kind).Context := Null_Context;
+                                                Models (Kind).Model := Null_Model;
+                                                Models (Kind).Loaded := False;
+                                                Models (Kind).Current_Ctx := 0;
+                                                declare
+                                        S : Boolean;
+                                    begin
+                                        Load_Model (Kind, S, 8192);
+                                    end;
+                                                Acquire_Accel_Lock;
+                                                if Kratos.Guard_Enter = 0 then
+                                                    Retry_Ret := Llama_Decode (Models (Kind).Context, B);
+                                                    Kratos.Guard_Exit;
+                                                else
+                                                    Kratos.Log_Crash;
+                                                    Retry_Ret := -1;
+                                                end if;
+                                                Release_Accel_Lock;
+                                                if Retry_Ret /= 0 then
+                                                    Append (Result, " [ABORTED:" & Retry_Ret'Img & "]");
+                                                    Done := True;
+                                                    exit;
+                                                end if;
+                                            else
+                                                Append (Result, " [ABORTED:" & Retry_Ret'Img & "]");
+                                                Models (Kind).Context := Null_Context;
+                                                Models (Kind).Model := Null_Model;
+                                                Models (Kind).Loaded := False;
+                                                Models (Kind).Current_Ctx := 0;
+                                                Done := True;
+                                                exit;
+                                            end if;
                                         end if;
                                         Clear_INOP_Error;
                                     end;
