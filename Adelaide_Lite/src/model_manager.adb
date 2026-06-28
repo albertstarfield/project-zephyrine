@@ -4746,7 +4746,7 @@ package body Model_Manager is
                         else 100);  -- Assume full if no query
                     Speed_Penalty : constant Natural :=
                        (if Virtual_Prefill_Speed > 0.0
-                        then (100 - Natural (Virtual_Prefill_Speed)) * 45 / 100
+                        then Integer'Max (0, 100 - Integer (Virtual_Prefill_Speed)) * 45 / 100
                         else 45);  -- Worst case if speed unknown
                     TensorAcceleratorRAM_Penalty  : constant Natural :=
                        (100 - TensorAcceleratorRAM_Free_Pct) * 50 / 100;
@@ -5340,7 +5340,8 @@ package body Model_Manager is
             Result :=
                To_Unbounded_String
                   ("ERROR: Out of Memory (STORAGE_ERROR) -- model unloaded, connection kept alive");
-        when others =>
+        when E : others =>
+            Put_Line ("!!! EXCEPTION IN GENERATE: " & Ada.Exceptions.Exception_Information (E));
             if Tokens /= null then
                 Free_Tokens (Tokens);
             end if;
