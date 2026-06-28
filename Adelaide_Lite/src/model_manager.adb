@@ -6325,8 +6325,8 @@ package body Model_Manager is
                         Result             => Gen_Q,
                         Stream             => null,
                         Level              => Level,
-                        Virtual_Tokens     => Cached_Virtual_Tokens,
-                        Virtual_Tok_Len    => Cached_Virtual_Len,
+                        Virtual_Tokens     => null,
+                        Virtual_Tok_Len    => 0,
                         FreeParallelMemory => True,
                         Skip_Gate          => False);
                 end;
@@ -6363,11 +6363,8 @@ package body Model_Manager is
                     Current_Internal_State_Len := Length (Internal_State);
                     Database_Manager.Set_System_State ("Internal_State", To_String (Internal_State));
                     --  Re-cache virtual ctx tokens after Internal_State grew
-                    Tokenize_And_Cache_Virtual_Ctx
-                       (Model_Types.Snowball_Enaga_Orchestrator,
-                        "Fact-Check: "
-                        & Strip_Base64_Images (To_String (Internal_State)),
-                        Level);
+                    -- Tokenize_And_Cache_Virtual_Ctx disabled to prevent duplication
+                    null;
                     if not External_Agent then
                         Push_Orchestration_Through_Parser
                            (Stream,
@@ -6833,107 +6830,130 @@ package body Model_Manager is
         end if;
 
         declare
-            function Get_Final_Prompt return String is
+            function Get_Final_Prompt (Jmp : Natural := 0) return String is
                 Sys_Tag  : constant String := "<|im_start|>system" & ASCII.LF;
                 Asst_Tag : constant String :=
                    "<|im_start|>assistant" & ASCII.LF;
-            begin
-                if External_Agent then
-                    return Prompt;
-                elsif Raw_Prompt then
-                    declare
-                        Sys_Idx     : constant Natural :=
-                           Index (Prompt, Sys_Tag);
-                        User_Idx    : constant Natural :=
-                           Index (Prompt, "<|im_start|>user");
-                        First_Block : constant Natural :=
-                           (if User_Idx > 0
-                               and then
-                                  (Sys_Idx = 0 or else User_Idx < Sys_Idx)
-                            then User_Idx
-                            elsif Sys_Idx > 0
-                            then Sys_Idx
-                            else 0);
-                    begin
-                        if First_Block > 1 then
-                            declare
-                                Prefix : constant String :=
-                                   Prompt (Prompt'First .. First_Block - 1);
-                            begin
-                                if Length (Internal_State) > 0 then
-                                    --  Strip base64 images — final model cannot
-                                    --  tokenize them either.
-                                    return
-                                       Prefix
-                                       & Sys_Tag
-                                       & To_String (Whimsical_Adelaide)
-                                       & ASCII.LF
-                                       & "Fact-Check: "
-                                       & Strip_Base64_Images
-                                            (To_String (Internal_State))
-                                       & ASCII.LF
-                                       & Prompt (First_Block .. Prompt'Last);
-                                else
-                                    return
-                                       Prefix
-                                       & Sys_Tag
-                                       & To_String (Whimsical_Adelaide)
-                                       & ASCII.LF
-                                       & Prompt (First_Block .. Prompt'Last);
-                                end if;
-                            end;
-                        elsif First_Block = 1 then
-                            if Length (Internal_State) > 0 then
-                                return
-                                   Sys_Tag
-                                   & To_String (Whimsical_Adelaide)
-                                   & ASCII.LF
-                                   & "Fact-Check: "
-                                   & Strip_Base64_Images
-                                        (To_String (Internal_State))
-                                   & ASCII.LF
-                                   & Prompt;
-                            else
-                                return
-                                   Sys_Tag
-                                   & To_String (Whimsical_Adelaide)
-                                   & ASCII.LF
-                                   & Prompt;
-                            end if;
-                        else
-                            if Length (Internal_State) > 0 then
-                                return
-                                   Wrap_ChatML
-                                      (To_String (Whimsical_Adelaide),
-                                       Prompt
-                                       & ASCII.LF
-                                       & "Fact-Check: "
-                                       & Strip_Base64_Images
-                                            (To_String (Internal_State)));
-                            else
-                                return
-                                   Wrap_ChatML
-                                      (To_String (Whimsical_Adelaide), Prompt);
-                            end if;
-                        end if;
-                    end;
-                else
-                    if Length (Internal_State) > 0 then
-                        return
-                           Wrap_ChatML
-                              (To_String (Whimsical_Adelaide),
-                               "User: "
-                               & Prompt
-                               & ASCII.LF
-                               & "Fact-Check: "
-                               & Strip_Base64_Images
-                                    (To_String (Internal_State)));
-                    else
-                        return
-                           Wrap_ChatML
-                              (To_String (Whimsical_Adelaide), Prompt);
+                   
+                --  Dual-Paging Budget Split
+                Current_Ctx : constant Natural := 8192; -- Fixed based on Requested_Ctx
+                Gen_Buffer  : constant Natural := Natural'Min (4096, Current_Ctx / 2);
+                Prompt_Budget : constant Natural := Current_Ctx - Gen_Buffer;
+                
+                Budget_State_Tokens : constant Integer := Prompt_Budget / 2;
+                Budget_Prompt_Tokens : constant Integer := Prompt_Budget - Budget_State_Tokens;
+                
+                Max_State_Chars : constant Positive := Budget_State_Tokens * 3;
+                Max_Prompt_Chars : constant Positive := Budget_Prompt_Tokens * 3;
+                Tail_Chars      : constant Positive := 500 * 3;
+                
+                function Get_State_Chunk return String is
+                    State_Len : constant Natural := Length (Internal_State);
+                begin
+                    if State_Len = 0 then
+                        return "" & ASCII.LF;
                     end if;
+                    declare
+                        Start_Idx : Natural := (Jmp * Max_State_Chars) + 1;
+                        End_Idx   : Natural;
+                    begin
+                        if Start_Idx > State_Len then
+                            Start_Idx := Natural'Max (1, State_Len - Max_State_Chars + 1);
+                        end if;
+                        End_Idx := Start_Idx + Max_State_Chars - 1;
+                        if End_Idx > State_Len then
+                            End_Idx := State_Len;
+                        end if;
+                        return ASCII.LF & "Fact-Check: " & Strip_Base64_Images (Slice (Internal_State, Start_Idx, End_Idx)) & ASCII.LF;
+                    end;
+                end Get_State_Chunk;
+                
+                function Get_Prompt_Chunk (Full_Prompt : String) return String is
+                    P_Len : constant Natural := Full_Prompt'Length;
+                    F_First : constant Positive := Full_Prompt'First;
+                    F_Last : constant Positive := Full_Prompt'Last;
+                begin
+                    if P_Len <= Max_Prompt_Chars then
+                        return Full_Prompt;
+                    end if;
+                    declare
+                        Tail_Start : constant Positive := F_Last - Tail_Chars + 1;
+                        Tail_Str   : constant String := Full_Prompt (Tail_Start .. F_Last);
+                        Middle_Budget : constant Positive := Max_Prompt_Chars - Tail_Chars;
+                        Middle_Start  : Natural := F_First + (Jmp * Middle_Budget);
+                        Middle_End    : Natural;
+                    begin
+                        if Middle_Start >= Tail_Start then
+                            Middle_Start := Natural'Max (F_First, Tail_Start - Middle_Budget);
+                        end if;
+                        Middle_End := Middle_Start + Middle_Budget - 1;
+                        if Middle_End >= Tail_Start then
+                            Middle_End := Tail_Start - 1;
+                        end if;
+                        return Full_Prompt (Middle_Start .. Middle_End) & ASCII.LF & "[...]" & ASCII.LF & Tail_Str;
+                    end;
+                end Get_Prompt_Chunk;
+                
+                function Build_String return String is
+                begin
+                    if External_Agent then
+                        return Prompt;
+                    elsif Raw_Prompt then
+                        declare
+                            Sys_Idx     : constant Natural := Index (Prompt, Sys_Tag);
+                            User_Idx    : constant Natural := Index (Prompt, "<|im_start|>user");
+                            First_Block : constant Natural :=
+                               (if User_Idx > 0 and then (Sys_Idx = 0 or else User_Idx < Sys_Idx)
+                                then User_Idx
+                                elsif Sys_Idx > 0
+                                then Sys_Idx
+                                else 0);
+                        begin
+                            if First_Block > 1 then
+                                declare
+                                    Prefix : constant String := Prompt (Prompt'First .. First_Block - 1);
+                                begin
+                                    return Prefix & Sys_Tag & To_String (Whimsical_Adelaide)
+                                           & Get_State_Chunk
+                                           & Get_Prompt_Chunk (Prompt (First_Block .. Prompt'Last));
+                                end;
+                            elsif First_Block = 1 then
+                                return Sys_Tag & To_String (Whimsical_Adelaide)
+                                       & Get_State_Chunk
+                                       & Get_Prompt_Chunk (Prompt);
+                            else
+                                declare
+                                    State_Str : constant String := Get_State_Chunk;
+                                begin
+                                    if State_Str = "" & ASCII.LF then
+                                        return Wrap_ChatML (To_String (Whimsical_Adelaide), Get_Prompt_Chunk (Prompt));
+                                    else
+                                        return Wrap_ChatML (To_String (Whimsical_Adelaide), Get_Prompt_Chunk (Prompt) & State_Str);
+                                    end if;
+                                end;
+                            end if;
+                        end;
+                    else
+                        declare
+                            State_Str : constant String := Get_State_Chunk;
+                        begin
+                            if State_Str = "" & ASCII.LF then
+                                return Wrap_ChatML (To_String (Whimsical_Adelaide), "User: " & Get_Prompt_Chunk (Prompt));
+                            else
+                                return Wrap_ChatML (To_String (Whimsical_Adelaide), "User: " & Get_Prompt_Chunk (Prompt) & State_Str);
+                            end if;
+                        end;
+                    end if;
+                end Build_String;
+                
+                Final_Str : constant String := Build_String;
+                Hard_Cap  : constant Positive := Prompt_Budget * 4; -- Generous character cap
+            begin
+                if Final_Str'Length > Hard_Cap then
+                    --  Strict truncation from the FRONT if somehow it exceeds the hard cap
+                    return Final_Str (Final_Str'Last - Hard_Cap + 1 .. Final_Str'Last);
                 end if;
+                return Final_Str;
             end Get_Final_Prompt;
         begin
             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
@@ -7001,7 +7021,7 @@ package body Model_Manager is
                         & Natural'Image (Get_Final_Prompt'Length));
                     Generate
                        (Kind               => Snowball_Enaga_Orchestrator,
-                        Prompt             => Get_Final_Prompt,
+                        Prompt             => Get_Final_Prompt (JMP_Count),
                         Result             => Fault_Result,
                         Images             => Local_Images,
                         Session_ID         => Session_ID,
@@ -7009,8 +7029,8 @@ package body Model_Manager is
                         Stream             => Stream,
                         Orch_Think_Open    => (JMP_Count = 0),
                         Level              => Level,
-                        Virtual_Tokens     => Cached_Virtual_Tokens,
-                        Virtual_Tok_Len    => Cached_Virtual_Len,
+                        Virtual_Tokens     => null,
+                        Virtual_Tok_Len    => 0,
                         FreeParallelMemory => True,
                         Skip_Gate          => False,
                         Use_Speculative    => True);
@@ -7063,7 +7083,7 @@ package body Model_Manager is
                                 Generate
                                    (Kind               =>
                                        Snowball_Enaga_Orchestrator,
-                                    Prompt             => Get_Final_Prompt,
+                                    Prompt             => Get_Final_Prompt (JMP_Count),
                                     Result             => Fault_Result,
                                     Images             => Local_Images,
                                     Session_ID         => Session_ID,
@@ -7071,9 +7091,8 @@ package body Model_Manager is
                                     Stream             => null,
                                     Orch_Think_Open    => False,
                                     Level              => Level,
-                                    Virtual_Tokens     =>
-                                       Cached_Virtual_Tokens,
-                                    Virtual_Tok_Len    => Cached_Virtual_Len,
+                                    Virtual_Tokens     => null,
+                                    Virtual_Tok_Len    => 0,
                                     FreeParallelMemory => True,
                                     Skip_Gate          => False,
                                     Use_Speculative    => True);
@@ -7164,7 +7183,7 @@ package body Model_Manager is
                                 Generate
                                    (Kind               =>
                                        Snowball_Enaga_Orchestrator,
-                                    Prompt             => Get_Final_Prompt,
+                                    Prompt             => Get_Final_Prompt (JMP_Count),
                                     Result             => Fault_Result,
                                     Images             => Local_Images,
                                     Session_ID         => Session_ID,
@@ -7172,9 +7191,8 @@ package body Model_Manager is
                                     Stream             => null,
                                     Orch_Think_Open    => False,
                                     Level              => Level,
-                                    Virtual_Tokens     =>
-                                       Cached_Virtual_Tokens,
-                                    Virtual_Tok_Len    => Cached_Virtual_Len,
+                                    Virtual_Tokens     => null,
+                                    Virtual_Tok_Len    => 0,
                                     FreeParallelMemory => True,
                                     Skip_Gate          => False);
                             exception
@@ -7405,12 +7423,7 @@ package body Model_Manager is
                                 & ASCII.LF);
 
                             --  Re-cache virtual ctx tokens after Internal_State grew
-                            Tokenize_And_Cache_Virtual_Ctx
-                               (Model_Types.Snowball_Enaga_Orchestrator,
-                                "Fact-Check: "
-                                & Strip_Base64_Images
-                                     (To_String (Internal_State)),
-                                Level);
+                            null;
 
                             if not External_Agent then
                                 Push_Orchestration_Through_Parser
