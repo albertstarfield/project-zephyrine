@@ -4908,8 +4908,14 @@ package body Model_Manager is
                                     Ret   : int;
                                 begin
                                     Acquire_Accel_Lock;
-                                    Ret := Llama_Decode (Speculative_Decode.Get_Draft_Context, Batch);
-                                    Release_Accel_Lock;
+                                        if Kratos.Guard_Enter = 0 then
+                                            Ret := Llama_Decode (Speculative_Decode.Get_Draft_Context, Batch);
+                                            Kratos.Guard_Exit;
+                                        else
+                                            Kratos.Log_Crash;
+                                            Ret := -1;
+                                        end if;
+                                        Release_Accel_Lock;
                                     if Ret /= 0 then
                                         exit;
                                     end if;
@@ -4952,8 +4958,31 @@ package body Model_Manager is
                                             pragma Unreferenced (T_Ret);
                                         begin
                                             Acquire_Accel_Lock;
+                                        if Kratos.Guard_Enter = 0 then
                                             T_Ret := Llama_Decode (Models (Kind).Context, T_Batch);
-                                            Release_Accel_Lock;
+                                            Kratos.Guard_Exit;
+                                        else
+                                            Kratos.Log_Crash;
+                                            T_Ret := -1;
+                                        end if;
+                                        Release_Accel_Lock;
+                                        
+                                        if T_Ret = -3 then
+                                            Record_INOP_Error;
+                                            Llama_Memory_Clear (Llama_Get_Memory (Models (Kind).Context), True);
+                                            delay 0.01;
+                                            if Tensor_Accel_INOP then
+                                                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[DECODE-RETRY]" & AnsiAda.Reset & " Falling back to CPU internally in Speculative...");
+                                                Models (Kind).Model := Null_Model;
+                                                Models (Kind).Loaded := False;
+                                                Models (Kind).Current_Ctx := 0;
+                                                declare
+                                                    S : Boolean;
+                                                begin
+                                                    Load_Model (Kind, S, 8192);
+                                                end;
+                                            end if;
+                                        end if;
                                         end;
                                         exit;
                                     end if;
@@ -4977,8 +5006,31 @@ package body Model_Manager is
                                         pragma Unreferenced (T_Ret);
                                     begin
                                         Acquire_Accel_Lock;
-                                        T_Ret := Llama_Decode (Models (Kind).Context, T_Batch);
+                                        if Kratos.Guard_Enter = 0 then
+                                            T_Ret := Llama_Decode (Models (Kind).Context, T_Batch);
+                                            Kratos.Guard_Exit;
+                                        else
+                                            Kratos.Log_Crash;
+                                            T_Ret := -1;
+                                        end if;
                                         Release_Accel_Lock;
+                                        
+                                        if T_Ret = -3 then
+                                            Record_INOP_Error;
+                                            Llama_Memory_Clear (Llama_Get_Memory (Models (Kind).Context), True);
+                                            delay 0.01;
+                                            if Tensor_Accel_INOP then
+                                                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[DECODE-RETRY]" & AnsiAda.Reset & " Falling back to CPU internally in Speculative...");
+                                                Models (Kind).Model := Null_Model;
+                                                Models (Kind).Loaded := False;
+                                                Models (Kind).Current_Ctx := 0;
+                                                declare
+                                                    S : Boolean;
+                                                begin
+                                                    Load_Model (Kind, S, 8192);
+                                                end;
+                                            end if;
+                                        end if;
                                     end;
                                 end if;
                             end;
