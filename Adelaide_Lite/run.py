@@ -1497,6 +1497,11 @@ def main():
                 shutdown_flag = os.path.join(BASE_DIR, "run", ".shutdown_requested")
                 if exit_code == 0 or os.path.exists(shutdown_flag):
                     print(f"\n[*] Server exited cleanly or shutdown requested (code: {exit_code})")
+                    # Clean shutdown — remove SIGKILL context cap so next boot starts fresh
+                    cap_file = os.path.join(BASE_DIR, "run", ".oom_kill_ctx_cap")
+                    if os.path.exists(cap_file):
+                        os.remove(cap_file)
+                        print(f"[*] Removed SIGKILL context cap: {cap_file}")
                     break
 
                 import signal
@@ -1580,6 +1585,28 @@ def main():
                     print(f"[*] Panic log written: {panic_log_path}")
                 except Exception as e:
                     print(f"[!] Failed to write panic log: {e}")
+
+                # === SIGKILL CONTEXT CAP: Save the ctx size that OOM'd ===
+                if sig_val == 9:
+                    try:
+                        import re as _re
+                        cap_file = os.path.join(BASE_DIR, "run", ".oom_kill_ctx_cap")
+                        cap_val = None
+                        if latest_log and os.path.exists(latest_log):
+                            with open(latest_log) as lf:
+                                for line in lf:
+                                    # Match: [CtxMonitor] LLM CTX:  7950 /  16384 tokens
+                                    m = _re.search(r'LLM CTX:\s*\d+\s*/\s*(\d+)\s*tokens', line)
+                                    if m:
+                                        cap_val = int(m.group(1))
+                        if cap_val:
+                            with open(cap_file, "w") as cf:
+                                cf.write(str(cap_val))
+                            print(f"[*] SIGKILL context cap saved: {cap_val} tokens → {cap_file}")
+                        else:
+                            print("[*] SIGKILL detected but could not parse context size from log")
+                    except Exception as e:
+                        print(f"[!] Failed to write SIGKILL context cap: {e}")
 
                 # Generate plot from CSVs
                 try:
