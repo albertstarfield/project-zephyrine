@@ -301,7 +301,7 @@ package Model_Manager is
    INOP_Consecutive_Errors : Natural := 0;   -- Consecutive ggml compute errors
    INOP_Error_Threshold    : constant Natural := 2;  -- Trigger fallback on consecutive errors
    INOP_Retry_Countdown    : Natural := 0;   -- Seconds remaining in cooldown
-   INOP_Cooldown_Secs      : constant Natural := 300;  -- 5 minutes
+    INOP_Cooldown_Secs      : constant Natural := 30;  -- 30 seconds
    INOP_Trigger_Time       : Duration := 0.0;  -- Time when INOP was triggered
 
    --  Record a ggml compute error for the INOP counter.

@@ -1756,7 +1756,25 @@ package body Model_Manager is
                      Success := True;
                      return;
                  else
-                     --  Warm cache expired or context too small - actually free resources
+                     --  Warm cache expired or context too small
+                     --  [RACE-FIX] If model is currently In_Use (mid-decode),
+                     --  do NOT free it — that would cause ggml crash (use-after-free).
+                     --  Instead, reuse the existing context as if warm cache hit.
+                     if Models (Kind).In_Use then
+                         Put_Line
+                            (AnsiAda.Foreground (AnsiAda.Yellow)
+                             & "[WarmCache-RACE-FIX] "
+                             & AnsiAda.Reset
+                             & Model_Type'Image (Kind)
+                             & " warm cache expired but model In_Use — reusing context");
+
+                         Models (Kind).Warm_Cached := False;
+                         Models (Kind).Last_Used := Clock;
+                         Success := True;
+                         return;
+                     end if;
+
+                     --  Model is idle — safe to free and reload
                      Put_Line
                         (AnsiAda.Foreground (AnsiAda.Yellow)
                          & "[WarmCache-EXPIRED] "
