@@ -4186,7 +4186,7 @@ package body Model_Manager is
         Virtual_Tok_Len    : Natural := 0;
         FreeParallelMemory : Boolean := True;
         Skip_Gate          : Boolean := False;
-        Use_Speculative    : Boolean := False)
+        Use_OrdinaryStatusQuoDecodeSpeculative    : Boolean := False)
     is
         Success  : Boolean;
         Vocab    : Llama_Vocab;
@@ -4279,14 +4279,12 @@ package body Model_Manager is
                 null;
             end if;
 
-            if Use_Speculative then
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                    & "[Gen-V]"
-                    & AnsiAda.Reset
-                    & " Generate: Initializing Draft Model for Speculative Decoding...");
-                Speculative_Decode.Init_Draft_Model;
-            end if;
+            --  [DEAD-CODE] Draft-model speculative decoding disabled.
+            --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+            --  Causes output quality downgrade and buffer corruption.
+            --  if Use_OrdinaryStatusQuoDecodeSpeculative then
+            --      Speculative_Decode.Init_Draft_Model;
+            --  end if;
 
             Load_Model (Kind, Success, Requested_Ctx);
             if not Success then
@@ -4647,6 +4645,17 @@ package body Model_Manager is
                     Acquire_Accel_Lock;
                     if Kratos.Guard_Enter = 0 then
                         Ret := Llama_Decode (Models (Kind).Context, B);
+                        --  [DEAD-CODE] Draft-model speculative decoding disabled.
+                        --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+                        --  if Use_OrdinaryStatusQuoDecodeSpeculative and then Speculative_Decode.Is_Draft_Model_Loaded then
+                        --      declare
+                        --          Draft_Ret : int := Llama_Decode (Speculative_Decode.Get_Draft_Context, B);
+                        --      begin
+                        --          if Draft_Ret /= 0 then
+                        --              Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V] Draft prefill decode failed!" & AnsiAda.Reset);
+                        --          end if;
+                        --      end;
+                        --  end if;
                         Kratos.Guard_Exit;
                     else
                         Kratos.Log_Crash;
@@ -4679,6 +4688,17 @@ package body Model_Manager is
                             Acquire_Accel_Lock;
                             if Kratos.Guard_Enter = 0 then
                                 Retry_Ret := Llama_Decode (Models (Kind).Context, B);
+                                --  [DEAD-CODE] Draft-model speculative decoding disabled.
+                                --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+                                --  if Use_OrdinaryStatusQuoDecodeSpeculative and then Speculative_Decode.Is_Draft_Model_Loaded then
+                                --      declare
+                                --          Draft_Ret : int := Llama_Decode (Speculative_Decode.Get_Draft_Context, B);
+                                --      begin
+                                --          if Draft_Ret /= 0 then
+                                --              Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V] Draft prefill decode failed!" & AnsiAda.Reset);
+                                --          end if;
+                                --      end;
+                                --  end if;
                                 Kratos.Guard_Exit;
                             else
                                 Kratos.Log_Crash;
@@ -4722,6 +4742,17 @@ package body Model_Manager is
                                         Acquire_Accel_Lock;
                                         if Kratos.Guard_Enter = 0 then
                                             Fallback_Ret := Llama_Decode (Models (Kind).Context, B);
+                                            --  [DEAD-CODE] Draft-model speculative decoding disabled.
+                                            --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+                                            --  if Use_OrdinaryStatusQuoDecodeSpeculative and then Speculative_Decode.Is_Draft_Model_Loaded then
+                                            --      declare
+                                            --          Draft_Ret : int := Llama_Decode (Speculative_Decode.Get_Draft_Context, B);
+                                            --      begin
+                                            --          if Draft_Ret /= 0 then
+                                            --              Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V] Draft prefill decode failed!" & AnsiAda.Reset);
+                                            --          end if;
+                                            --      end;
+                                            --  end if;
                                             Kratos.Guard_Exit;
                                         else
                                             Kratos.Log_Crash;
@@ -4857,10 +4888,12 @@ package body Model_Manager is
         --  token individually, we accumulate and dump the full buffer periodically
         --  so you can see the response building up in real time.
         declare
-            Accum_Buffer : Unbounded_String := Null_Unbounded_String;
-            Accum_Count  : Natural := 0;
-            Tokens_Gen   : Natural := 0;
-            Done         : Boolean := False;
+            Accum_Buffer    : Unbounded_String := Null_Unbounded_String;
+            Accum_Count     : Natural := 0;
+            Tokens_Gen      : Natural := 0;
+            Done            : Boolean := False;
+            Current_Ctx     : constant Natural := Natural (Models (Kind).Current_Ctx);
+            Gen_Buffer_Size : constant Natural := Natural'Min (4096, Current_Ctx / 2);
 
             --  Helper procedure for single token append and push
             procedure Process_Token (Token : Llama_Token) is
@@ -4941,172 +4974,13 @@ package body Model_Manager is
                     exit;
                 end if;
 
-                if Use_Speculative and then Speculative_Decode.Is_Draft_Model_Loaded then
-                    --  ==============================================================
-                    --  SPECULATIVE DECODING PATH
-                    --  ==============================================================
-                    declare
-                        Draft_Sampler_Params  : constant Llama_Sampler_Chain_Params := Llama_Sampler_Chain_Default_Params;
-                        Draft_Sampler         : constant Llama_Sampler := Llama_Sampler_Chain_Init (Draft_Sampler_Params);
-                        Target_Sampler_Params : constant Llama_Sampler_Chain_Params := Llama_Sampler_Chain_Default_Params;
-                        Target_Sampler        : constant Llama_Sampler := Llama_Sampler_Chain_Init (Target_Sampler_Params);
-                        Max_Draft             : constant := 5;
-                        Draft_Toks            : array (1 .. Max_Draft) of aliased Llama_Token;
-                        N_Draft               : Natural := 0;
-                        Accepted              : Natural := 0;
-                    begin
-                        --  Initialize samplers (greedy)
-                        Llama_Sampler_Chain_Add (Draft_Sampler, Llama_Sampler_Init_Greedy);
-                        Llama_Sampler_Chain_Add (Target_Sampler, Llama_Sampler_Init_Greedy);
-
-                        --  STEP 1: Draft Phase
-                        for I in 1 .. Max_Draft loop
-                            declare
-                                Draft_Token : constant Llama_Token := Llama_Sampler_Sample (Draft_Sampler, Speculative_Decode.Get_Draft_Context, -1);
-                            begin
-                                if Llama_Vocab_Is_Eog (Vocab, Draft_Token) then
-                                    exit;
-                                end if;
-                                Draft_Toks (I) := Draft_Token;
-                                N_Draft := N_Draft + 1;
-
-                                declare
-                                    Batch : constant Llama_Batch := Llama_Batch_Get_One (Draft_Token'Address, 1);
-                                    Ret   : int;
-                                begin
-                                    Acquire_Accel_Lock;
-                                        if Kratos.Guard_Enter = 0 then
-                                            Ret := Llama_Decode (Speculative_Decode.Get_Draft_Context, Batch);
-                                            Kratos.Guard_Exit;
-                                        else
-                                            Kratos.Log_Crash;
-                                            Ret := -1;
-                                        end if;
-                                        Release_Accel_Lock;
-                                    if Ret /= 0 then
-                                        exit;
-                                    end if;
-                                end;
-                            end;
-                        end loop;
-
-                        --  STEP 2: Verify Phase
-                        for I in 1 .. N_Draft loop
-                            declare
-                                Draft_Token  : constant Llama_Token := Draft_Toks (I);
-                                Batch        : constant Llama_Batch := Llama_Batch_Get_One (Draft_Token'Address, 1);
-                                Ret          : int;
-                                Target_Token : Llama_Token;
-                            begin
-                                Acquire_Accel_Lock;
-                                if Kratos.Guard_Enter = 0 then
-                                    Ret := Llama_Decode (Models (Kind).Context, Batch);
-                                    Kratos.Guard_Exit;
-                                else
-                                    Kratos.Log_Crash;
-                                    Ret := -1;
-                                end if;
-                                Release_Accel_Lock;
-
-                                if Ret = 0 then
-                                    Target_Token := Llama_Sampler_Sample (Target_Sampler, Models (Kind).Context, -1);
-                                    if Target_Token = Draft_Token then
-                                        Accepted := Accepted + 1;
-                                        Process_Token (Draft_Token);
-                                        if Done then
-                                            exit;
-                                        end if;
-                                    else
-                                        --  Rejected, use target token and stop verifying
-                                        Process_Token (Target_Token);
-                                        declare
-                                            T_Batch : constant Llama_Batch := Llama_Batch_Get_One (Target_Token'Address, 1);
-                                            T_Ret   : int;
-                                            pragma Unreferenced (T_Ret);
-                                        begin
-                                            Acquire_Accel_Lock;
-                                        if Kratos.Guard_Enter = 0 then
-                                            T_Ret := Llama_Decode (Models (Kind).Context, T_Batch);
-                                            Kratos.Guard_Exit;
-                                        else
-                                            Kratos.Log_Crash;
-                                            T_Ret := -1;
-                                        end if;
-                                        Release_Accel_Lock;
-                                        
-                                        if T_Ret = -3 then
-                                            Record_INOP_Error;
-                                            Llama_Memory_Clear (Llama_Get_Memory (Models (Kind).Context), True);
-                                            delay 0.01;
-                                            if Tensor_Accel_INOP then
-                                                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[DECODE-RETRY]" & AnsiAda.Reset & " Falling back to CPU internally in Speculative...");
-                                                Models (Kind).Model := Null_Model;
-                                                Models (Kind).Loaded := False;
-                                                Models (Kind).Current_Ctx := 0;
-                                                declare
-                                                    S : Boolean;
-                                                begin
-                                                    Load_Model (Kind, S, 8192);
-                                                end;
-                                            end if;
-                                        end if;
-                                        end;
-                                        exit;
-                                    end if;
-                                else
-                                    --  Decode failed, just exit verification and fallback later
-                                    exit;
-                                end if;
-                            end;
-                        end loop;
-
-                        --  If all were accepted, we still need to generate one more token from target
-                        if Accepted = N_Draft and then not Done then
-                            declare
-                                Target_Token : constant Llama_Token := Llama_Sampler_Sample (Target_Sampler, Models (Kind).Context, -1);
-                            begin
-                                Process_Token (Target_Token);
-                                if not Done then
-                                    declare
-                                        T_Batch : constant Llama_Batch := Llama_Batch_Get_One (Target_Token'Address, 1);
-                                        T_Ret   : int;
-                                        pragma Unreferenced (T_Ret);
-                                    begin
-                                        Acquire_Accel_Lock;
-                                        if Kratos.Guard_Enter = 0 then
-                                            T_Ret := Llama_Decode (Models (Kind).Context, T_Batch);
-                                            Kratos.Guard_Exit;
-                                        else
-                                            Kratos.Log_Crash;
-                                            T_Ret := -1;
-                                        end if;
-                                        Release_Accel_Lock;
-                                        
-                                        if T_Ret = -3 then
-                                            Record_INOP_Error;
-                                            Llama_Memory_Clear (Llama_Get_Memory (Models (Kind).Context), True);
-                                            delay 0.01;
-                                            if Tensor_Accel_INOP then
-                                                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[DECODE-RETRY]" & AnsiAda.Reset & " Falling back to CPU internally in Speculative...");
-                                                Models (Kind).Model := Null_Model;
-                                                Models (Kind).Loaded := False;
-                                                Models (Kind).Current_Ctx := 0;
-                                                declare
-                                                    S : Boolean;
-                                                begin
-                                                    Load_Model (Kind, S, 8192);
-                                                end;
-                                            end if;
-                                        end if;
-                                    end;
-                                end if;
-                            end;
-                        end if;
-
-                        Llama_Sampler_Free (Draft_Sampler);
-                        Llama_Sampler_Free (Target_Sampler);
-                    end;
-                else
+                --  [DEAD-CODE] Draft-model speculative decoding disabled.
+                --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+                --  Causes output quality downgrade and buffer corruption.
+                --  REPLACED BY: Speculation Context (LSH) + Response Cache + Proactive Engine.
+                --  if Use_OrdinaryStatusQuoDecodeSpeculative and then Speculative_Decode.Is_Draft_Model_Loaded then
+                --      [entire speculative decode path removed — see git history]
+                --  else
                     --  ==============================================================
                     --  STANDARD DECODING PATH
                     --  ==============================================================
@@ -5125,6 +4999,17 @@ package body Model_Manager is
                             Acquire_Accel_Lock;
                             if Kratos.Guard_Enter = 0 then
                                 Ret := Llama_Decode (Models (Kind).Context, B);
+                                --  [DEAD-CODE] Draft-model speculative decoding disabled.
+                                --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+                                --  if Use_OrdinaryStatusQuoDecodeSpeculative and then Speculative_Decode.Is_Draft_Model_Loaded then
+                                --      declare
+                                --          Draft_Ret : int := Llama_Decode (Speculative_Decode.Get_Draft_Context, B);
+                                --      begin
+                                --          if Draft_Ret /= 0 then
+                                --              Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V] Draft prefill decode failed!" & AnsiAda.Reset);
+                                --          end if;
+                                --      end;
+                                --  end if;
                                 Kratos.Guard_Exit;
                             else
                                 Kratos.Log_Crash;
@@ -5151,6 +5036,17 @@ package body Model_Manager is
                                         Acquire_Accel_Lock;
                                         if Kratos.Guard_Enter = 0 then
                                             Retry_Ret := Llama_Decode (Models (Kind).Context, B);
+                                            --  [DEAD-CODE] Draft-model speculative decoding disabled.
+                                            --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+                                            --  if Use_OrdinaryStatusQuoDecodeSpeculative and then Speculative_Decode.Is_Draft_Model_Loaded then
+                                            --      declare
+                                            --          Draft_Ret : int := Llama_Decode (Speculative_Decode.Get_Draft_Context, B);
+                                            --      begin
+                                            --          if Draft_Ret /= 0 then
+                                            --              Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V] Draft prefill decode failed!" & AnsiAda.Reset);
+                                            --          end if;
+                                            --      end;
+                                            --  end if;
                                             Kratos.Guard_Exit;
                                         else
                                             Kratos.Log_Crash;
@@ -5174,6 +5070,17 @@ package body Model_Manager is
                                                 Acquire_Accel_Lock;
                                                 if Kratos.Guard_Enter = 0 then
                                                     Retry_Ret := Llama_Decode (Models (Kind).Context, B);
+                                                    --  [DEAD-CODE] Draft-model speculative decoding disabled.
+                                                    --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+                                                    --  if Use_OrdinaryStatusQuoDecodeSpeculative and then Speculative_Decode.Is_Draft_Model_Loaded then
+                                                    --      declare
+                                                    --          Draft_Ret : int := Llama_Decode (Speculative_Decode.Get_Draft_Context, B);
+                                                    --      begin
+                                                    --          if Draft_Ret /= 0 then
+                                                    --              Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Gen-V] Draft prefill decode failed!" & AnsiAda.Reset);
+                                                    --          end if;
+                                                    --      end;
+                                                    --  end if;
                                                     Kratos.Guard_Exit;
                                                 else
                                                     Kratos.Log_Crash;
@@ -5201,7 +5108,7 @@ package body Model_Manager is
                             end if;
                         end;
                     end;
-                end if;
+                --  end if;  -- [DEAD-CODE] was: if Use_OrdinaryStatusQuoDecodeSpeculative
             end loop;
         end; -- Accum_Buffer declare block
 
@@ -5490,24 +5397,32 @@ package body Model_Manager is
     end Generate;
 
     --  ============================================================================
-    --  SPECULATIVE DECODING
+    --  SPECULATIVE DECODING — DEAD CODE
     --  ============================================================================
-    --  WHY THIS EXISTS:
-    --  Speculative decoding accelerates LLM inference by using a smaller,
-    --  faster "draft" model (Qwen3.5-0.8B) to generate candidate tokens,
-    --  then verifying them in parallel with the larger "target" model.
-    --  This provides 2-3x speedup for text generation.
+    --  [DEAD-CODE] Draft-model speculative decoding (Qwen3.5-0.8B) is DISABLED.
+    --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
     --
-    --  HOW IT WORKS:
-    --    1. Draft Model generates N candidate tokens quickly
-    --    2. Target Model verifies all N tokens in parallel
-    --    3. Accept matching prefix, resample rest from target distribution
-    --    4. Repeat until generation complete
+    --  WHY DISABLED:
+    --  Draft-model speculative decoding causes output quality downgrade and
+    --  buffer corruption. The ggml flash attention kernel crashes with SIGABRT
+    --  (corrupt output buffer j=0xFFFFFFFF, n_outputs=0) during the verify
+    --  phase. The draft model's KV cache interferes with the target model's
+    --  Metal kernel state, producing corrupted token buffers.
     --
-    --  DRAFT MODEL:
-    --  - Qwen3.5-0.8B (not 0.5B from oMLX)
-    --  - Faster inference, lower quality, used only for candidates
-    --  - Must be compatible with target model's tokenizer
+    --  REPLACEMENT — THREE FASTER, CRASH-FREE SYSTEMS:
+    --  1. SPECULATION CONTEXT (ELP0): LSH-based embedding similarity lookup
+    --     injects <SpeculationContextGuidance_Interaction> and
+    --     <SpeculationContextGuidance_Literature> into the system prompt.
+    --     Runs on ELP0 (embedding model), no draft model needed.
+    --  2. RESPONSE CACHE: Fuzzy string matching cache (O(1) hash lookup).
+    --     Normalizes prompts (lowercase, collapse whitespace) for matching.
+    --     Stores model responses after first inference.
+    --  3. PROACTIVE ENGINE: Handless Mode — assistant initiates conversations,
+    --     asks questions, shares observations proactively. Curiosity Engine
+    --     generates questions from accumulated knowledge.
+    --
+    --  These systems are faster (no draft model overhead), crash-free, and
+    --  provide better output quality than draft-model speculative decoding.
     --  ============================================================================
 
     --  TOKENIZE_AND_CACHE_VIRTUAL_CTX
@@ -7039,7 +6954,9 @@ package body Model_Manager is
                         Virtual_Tok_Len    => 0,
                         FreeParallelMemory => True,
                         Skip_Gate          => False,
-                        Use_Speculative    => True);
+                        --  [DEAD-CODE] Draft-model speculative decoding disabled.
+                        --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+                        Use_OrdinaryStatusQuoDecodeSpeculative    => False);
 
                     --  =================================================================
                     --  THINK-ONLY RETRY: If model produced only <think>...</think>
@@ -7101,7 +7018,9 @@ package body Model_Manager is
                                     Virtual_Tok_Len    => 0,
                                     FreeParallelMemory => True,
                                     Skip_Gate          => False,
-                                    Use_Speculative    => True);
+                                    --  [DEAD-CODE] Draft-model speculative decoding disabled.
+                                    --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
+                                    Use_OrdinaryStatusQuoDecodeSpeculative    => False);
                             exception
                                 when others =>
                                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]

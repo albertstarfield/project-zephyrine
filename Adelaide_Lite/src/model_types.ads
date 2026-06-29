@@ -5,7 +5,7 @@ package Model_Types is
    type Model_Type is (LSH_QRNN, Snowball_Enaga_ShortNetworkAnswer, Snowball_Enaga_Orchestrator, Qwen_Embedding, MMProj);
 
    --  ELP levels hierarchy:
-   --  ELP0: Background Literature Indexing (Lowest Priority)
+   --  ELP0: Background Literature Indexing, Cyclic Thoughts(If it was implemented, please check it) (Lowest Priority)
    --  ELP1: Active RAG / Memory Retrieval (User Interaction)
    --  ELP2: StellaIcarus Hooks (Deterministic API Logic)
    --  ELP3: ZenithOrion (Deterministic 1ms Pacing Lock - Highest Frequency)

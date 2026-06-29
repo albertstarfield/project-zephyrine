@@ -1,31 +1,32 @@
 pragma SPARK_Mode (Off);
 --  ============================================================================
---  Speculative Decoding for Adelaide
+--  SPECULATIVE DECODING — DEAD CODE
 --  ============================================================================
---  WHY THIS EXISTS:
---  Speculative decoding accelerates LLM inference by using a smaller, faster
---  "draft" model to generate candidate tokens, then verifying them in parallel
---  with the larger "target" model. This provides:
---    - 2-3x speedup for text generation (more tokens per second)
---    - Same output quality as the target model (verification step)
---    - Better GPU utilization (parallel draft + verify)
+--  [DEAD-CODE] Draft-model speculative decoding is DISABLED.
 --
---  HOW IT WORKS:
---    1. Draft Model (Qwen3.5-0.8B) generates N candidate tokens quickly
---    2. Target Model (Qwen3-4B or 9B) verifies all N tokens in parallel
---    3. If all N match: accept all, continue with next N candidates
---    4. If some mismatch: accept prefix, resample from target distribution
---    5. Repeat until generation complete
+--  WHY DISABLED:
+--  Draft-model speculative decoding (Qwen3.5-0.8B) causes output quality
+--  downgrade and buffer corruption. The ggml flash attention kernel crashes
+--  with SIGABRT (corrupt output buffer j=0xFFFFFFFF, n_outputs=0) during
+--  the verify phase. The draft model's KV cache interferes with the target
+--  model's Metal kernel state, producing corrupted token buffers.
 --
---  DRAFT MODEL:
---  - Qwen3.5-0.8B (not 0.5B from oMLX)
---  - Faster inference, lower quality, used only for candidates
---  - Must be compatible with target model's tokenizer
+--  REPLACEMENT — THREE FASTER, CRASH-FREE SYSTEMS:
+--  1. SPECULATION CONTEXT (ELP0): LSH-based embedding similarity lookup
+--     injects <SpeculationContextGuidance_Interaction> and
+--     <SpeculationContextGuidance_Literature> into the system prompt.
+--     Runs on ELP0 (embedding model), no draft model needed.
+--  2. RESPONSE CACHE: Fuzzy string matching cache (O(1) hash lookup).
+--     Normalizes prompts (lowercase, collapse whitespace) for matching.
+--     Stores model responses after first inference.
+--  3. PROACTIVE ENGINE: Handless Mode — assistant initiates conversations,
+--     asks questions, shares observations proactively. Curiosity Engine
+--     generates questions from accumulated knowledge.
 --
---  INTEGRATION WITH ADELAIDE:
---  - model_manager.adb: Generate_Speculative procedure
---  - llama_interface.ads: FFI bindings for llama.cpp speculative APIs
---  - speculative_cache.ads: Semantic cache for prefix matching
+--  These systems are faster (no draft model overhead), crash-free, and
+--  provide better output quality than draft-model speculative decoding.
+--
+--  This file is retained for reference only. All code within is dead.
 --  ============================================================================
 
 with Interfaces.C;

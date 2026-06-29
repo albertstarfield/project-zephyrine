@@ -75,7 +75,7 @@ And just like that, she's awake at `http://localhost:11420`.
 
 ### Contributing
 
-Want to help Zephy飘? Check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Want to help Zephy? Check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 **Actuators & Command I/O:** If you're building hardware integrations or deterministic command hooks, use **ELP2** (StellaIcarus deterministic responses) or **ELP3** (real-time pacing loop). These are the priority levels designed for instant, reliable command execution — no LLM hallucination, just precise action. See [ELP Priority Queue](documentation/ELP%20Priority%20Queue.md) for details.
 

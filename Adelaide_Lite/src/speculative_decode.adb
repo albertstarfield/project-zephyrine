@@ -1,22 +1,10 @@
 pragma SPARK_Mode (Off);
 --  ============================================================================
---  Speculative Decoding — Implementation
+--  SPECULATIVE DECODING — DEAD CODE
 --  ============================================================================
---  This implementation uses llama.cpp's speculative decoding capabilities.
---  The draft model (Qwen3.5-0.8B) generates candidate tokens in parallel
---  with the target model verification.
---
---  KEY ALGORITHM:
---  1. Draft Phase: Generate N tokens with draft model (fast, low quality)
---  2. Verify Phase: Process N tokens with target model (slow, high quality)
---  3. Accept Phase: Keep matching prefix, resample rest from target
---  4. Repeat until generation complete
---
---  WHY THIS APPROACH:
---  - Draft model is 5-10x faster than target model
---  - Verification is parallel (all N tokens processed together)
---  - Net speedup: 2-3x for typical workloads
---  - Output quality identical to target-only generation
+--  [DEAD-CODE] Draft-model speculative decoding is DISABLED.
+--  This file is retained for reference only. All code within is dead.
+--  See speculative_decode.ads for explanation of why this was disabled.
 --  ============================================================================
 
 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
