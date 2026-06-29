@@ -11,7 +11,12 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Real_Time;    use Ada.Real_Time;
 with GNATCOLL.JSON;
 with Model_Types; use Model_Types;
-with Speculative_Decode;
+--  REMOVED: with Speculative_Decode;
+--  WHY: Draft-model speculative decoding (Qwen3.5-0.8B) causes output quality
+--  downgrade and buffer corruption (ggml flash attn SIGABRT, j=0xFFFFFFFF).
+--  REPLACED BY: Speculation Context (LSH-based ELP0 injection) + Response Cache
+--  (fuzzy string match) + Proactive Engine (proactive answers/questions).
+--  These are faster, crash-free, and run on ELP0 without draft model overhead.
 
 package Model_Manager is
 
@@ -129,28 +134,31 @@ package Model_Manager is
        --  Without this, each hop re-acquires an already-locked gate
        --  causing a deadlock (ELP1 never runs after the first hop).
        Skip_Gate       : Boolean := False;
-       --  When True, enables draft-model speculative decoding (Qwen3.5-0.8B)
-       Use_Speculative : Boolean := False);
+        --  DEAD PARAMETER: Draft-model speculative decoding disabled.
+        --  Causes output quality downgrade and buffer corruption (SIGABRT).
+        --  Kept for signature compatibility; always False.
+        Use_OrdinaryStatusQuoDecodeSpeculative : Boolean := False);
 
    --  ============================================================================
-   --  SPECULATIVE DECODING
+   --  SPECULATIVE DECODING — DEAD CODE
    --  ============================================================================
-   --  WHY THIS EXISTS:
-   --  Speculative decoding accelerates LLM inference by using a smaller,
-   --  faster "draft" model (Qwen3.5-0.8B) to generate candidate tokens,
-   --  then verifying them in parallel with the larger "target" model.
-   --  This provides 2-3x speedup for text generation.
+   --  [DEAD-CODE] Draft-model speculative decoding (Qwen3.5-0.8B) is DISABLED.
    --
-   --  HOW IT WORKS:
-   --    1. Draft Model generates N candidate tokens quickly
-   --    2. Target Model verifies all N tokens in parallel
-   --    3. Accept matching prefix, resample rest from target distribution
-   --    4. Repeat until generation complete
+   --  WHY DISABLED:
+   --  Draft-model speculative decoding causes output quality downgrade and
+   --  buffer corruption. The ggml flash attention kernel crashes with SIGABRT
+   --  (corrupt output buffer j=0xFFFFFFFF, n_outputs=0) during the verify
+   --  phase. The draft model's KV cache interferes with the target model's
+   --  Metal kernel state, producing corrupted token buffers.
    --
-   --  DRAFT MODEL:
-   --  - Qwen3.5-0.8B (not 0.5B from oMLX)
-   --  - Faster inference, lower quality, used only for candidates
-   --  - Must be compatible with target model's tokenizer
+   --  REPLACEMENT — THREE FASTER, CRASH-FREE SYSTEMS:
+   --  1. SPECULATION CONTEXT (ELP0): LSH-based embedding similarity lookup
+   --     injects <SpeculationContextGuidance_Interaction> and
+   --     <SpeculationContextGuidance_Literature> into the system prompt.
+   --  2. RESPONSE CACHE: Fuzzy string matching cache (O(1) hash lookup).
+   --  3. PROACTIVE ENGINE: Handless Mode — assistant initiates conversations.
+   --
+   --  These systems are faster, crash-free, and provide better output quality.
    --  ============================================================================
 
 
