@@ -2065,16 +2065,50 @@ package body Model_Manager is
         --      GPU re-enabled (N_Gpu_Layers := -1) since crash is input-related.
         --      Full debug print added to show untruncated input. Content filtering
         --      fix pending in knowledge_manager.adb.
-        --  ======================================================================
+         --  ======================================================================
          --  GPU LAYER CONFIGURATION
          --  ======================================================================
          if Kind = Qwen_Embedding then
              --  ELP0 file indexing uses CPU-only to avoid Metal contention.
-             --  Non-ELP0 embedding ops use GPU.
+             --  Non-ELP0 embedding ops use GPU — but only if VRAM is sufficient.
              if Is_File_Index then
                  M_Params.N_Gpu_Layers := 0;  -- CPU-only for file indexing
              else
-                 M_Params.N_Gpu_Layers := -1;  -- GPU for other ops
+                 --  [TensorAcceleratorMemGuard] Check free Tensor Accelerator
+                 --  memory before GPU embedding load. This is NOT always GPU -
+                 --  on Apple Silicon it queries Metal/Unified memory via ggml.
+                 --  Embedding model needs ~914 MB (639 MB weights + 126 MB KV q4_0
+                 --  + 149 MB Metal compute buffer). With Metal overhead, require
+                 --  1.2 GB minimum. If insufficient, fall back to CPU-only
+                 --  to prevent GPU OOM -> SIGTRAP crash loop.
+                 declare
+                     Free_Bytes  : Interfaces.C.size_t := 0;
+                     Total_Bytes : Interfaces.C.size_t := 0;
+                     Free_MB     : Natural := 0;
+                     --  Embedding model requirement: ~914 MB + overhead
+                     Embed_Mem_Required_MB : constant Natural := 1200;
+                 begin
+                     Llama_Interface.GPU_Memory_Query (Free_Bytes, Total_Bytes);
+                     Free_MB := Natural (Free_Bytes / (1024 * 1024));
+                     if Free_MB >= Embed_Mem_Required_MB then
+                         M_Params.N_Gpu_Layers := -1;  -- GPU: enough memory
+                         Put_Line
+                            (AnsiAda.Foreground (AnsiAda.Light_Green)
+                             & "[TensorAcceleratorMemGuard] "
+                             & AnsiAda.Reset
+                             & "GPU embedding OK: free=" & Free_MB'Img
+                             & " MB >= required=" & Embed_Mem_Required_MB'Img & " MB");
+                     else
+                         M_Params.N_Gpu_Layers := 0;  -- CPU-only: insufficient memory
+                         Put_Line
+                            (AnsiAda.Foreground (AnsiAda.Yellow)
+                             & "[TensorAcceleratorMemGuard] "
+                             & AnsiAda.Reset
+                             & "GPU embedding DENIED: free=" & Free_MB'Img
+                             & " MB < required=" & Embed_Mem_Required_MB'Img
+                             & " MB - falling back to CPU-only");
+                     end if;
+                 end;
              end if;
          else
              --  [ADAPTIVE GPU LAYERS FOR LLM]
