@@ -27,6 +27,31 @@ package body ELP_Queue is
   
   Task_Timings : array (ELP_Level) of Task_Timing;
 
+  --  ========================================================================
+  --  PREWARM COOLDOWN TRACKING
+  --  ========================================================================
+  --  WHAT IS PREWARM:
+  --    When an ELP1 (user-facing) request arrives, we predictive-load the
+  --    required model in the background BEFORE the request is acquired.
+  --    This eliminates the "GAP Zone" wait time — the model is already
+  --    loaded and ready by the time the request needs it.
+  --
+  --  THE BUG THIS FIXES:
+  --    Without cooldown, if a PreWarm load fails (e.g., GPU OOM), the
+  --    request is immediately re-enqueued, PreWarm fires again, loads
+  --    the model again, fails again — infinite loop. Each load takes
+  --    200-300ms (weights from disk) + Metal init. After 3-4 failed
+  --    loads, Metal state corruption triggers SIGTRAP.
+  --
+  --  THE FIX:
+  --    Track the last PreWarm failure time. If a PreWarm failed within
+  --    the last PREWARM_COOLDOWN_S seconds, skip predictive loading and
+  --    let the model load on-demand instead. This breaks the retry loop.
+  --  ========================================================================
+  PREWARM_COOLDOWN_S : constant Duration := 5.0;
+  Last_Prewarm_Failure : Time := Time_First;
+  Prewarm_Fail_Count   : Natural := 0;
+
   protected Load_State is
      procedure Increment (Level : ELP_Level; Source : String);
      procedure Decrement (Level : ELP_Level);
@@ -132,9 +157,15 @@ package body ELP_Queue is
 
     --  [OPTIMIZATION-M03] PREDICTIVE PRE-WARMING
     --  ======================================================================
-    --  When an ELP1 request is enqueued, immediately start loading the
-    --  required model in the background, BEFORE the request is acquired.
-    --  This eliminates the GAP Zone wait time for the first request.
+    --  WHAT IS PREWARMING:
+    --    When an ELP1 (user-facing) request arrives, we predictive-load the
+    --    required model in the background BEFORE the request is acquired.
+    --    This eliminates the "GAP Zone" wait time — the model is already
+    --    loaded and ready by the time the request needs it.
+    --
+    --    Example: User sends a chat message → ELP1 request enqueued →
+    --    PreWarm starts loading Mythos9bHybrid on GPU → by the time the
+    --    request is dequeued and processed, the model is already warm.
     --
     --  BENEFITS:
     --  - ELP1 requests get instant response (model already loaded)
@@ -145,6 +176,15 @@ package body ELP_Queue is
     --  - May load models that are never used (if request is cancelled)
     --  - Higher memory usage during pre-warming phase
     --  - Only beneficial for ELP1 (user-facing) requests
+    --
+    --  COOLDOWN (PREWARM_COOLDOWN_S):
+    --    If a PreWarm load fails (GPU OOM, Metal error, etc.), we record
+    --    the failure time. For the next PREWARM_COOLDOWN_S seconds, all
+    --    PreWarm attempts for that model are SKIPPED — the model will
+    --    load on-demand instead. This prevents the infinite retry loop:
+    --      fail → re-enqueue → PreWarm → load → fail → re-enqueue → ...
+    --    Without cooldown, 3-4 rapid load attempts corrupt Metal state
+    --    and trigger SIGTRAP.
     --  ======================================================================
     procedure Enqueue
       (Level  : ELP_Level;
@@ -162,32 +202,95 @@ package body ELP_Queue is
            begin
                if not State.Loaded and then not State.Warm_Cached
                then
-                  Put_Line
-                     (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                      & "[PreWarm] "
-                      & AnsiAda.Reset
-                      & "ELP1 request enqueued for "
-                      & Model_Type'Image (Kind)
-                      & ". Starting predictive pre-warming...");
-               
-                  --  Start loading the model in background
-                  --  Note: This is non-blocking - the actual load happens asynchronously
+                  --  [PREWARM-COOLDOWN] Check if this model failed recently.
+                  --  If so, skip predictive loading — let it load on-demand.
+                  --  This breaks the infinite retry loop that causes SIGTRAP.
                   declare
-                      Success : Boolean;
-                      pragma Unreferenced (Success);
+                      Time_Since_Failure : constant Duration :=
+                         Ada.Real_Time.To_Duration (Clock - Last_Prewarm_Failure);
                   begin
-                      --  Load with minimal context to speed up pre-warming
-                      --  The actual request will resize if needed
-                      Model_Manager.Load_Model (Kind, Success, 4096, ELP1);
-                  exception
-                      when others =>
-                          Put_Line
-                             (AnsiAda.Foreground (AnsiAda.Yellow)
-                              & "[PreWarm-WARN] "
-                              & AnsiAda.Reset
-                              & "Predictive pre-warming failed for "
-                              & Model_Type'Image (Kind)
-                              & ". Will load on-demand.");
+                      if Last_Prewarm_Failure /= Time_First
+                        and then Time_Since_Failure < PREWARM_COOLDOWN_S
+                      then
+                         Put_Line
+                            (AnsiAda.Foreground (AnsiAda.Yellow)
+                             & "[PreWarm-COOLDOWN] "
+                             & AnsiAda.Reset
+                             & Model_Type'Image (Kind)
+                             & " FAILED "
+                             & Duration'Image (Time_Since_Failure)
+                             & "s ago (cooldown="
+                             & Duration'Image (PREWARM_COOLDOWN_S)
+                             & "s). Skipping predictive load."
+                             & " Will load on-demand.");
+                         --  Do NOT attempt PreWarm — let on-demand load handle it
+                      else
+                         --  No recent failure — safe to PreWarm
+                         Put_Line
+                            (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                             & "[PreWarm] "
+                             & AnsiAda.Reset
+                             & "ELP1 request enqueued for "
+                             & Model_Type'Image (Kind)
+                             & ". Starting predictive pre-warming...");
+                     
+                         --  Start loading the model in background
+                         --  Note: This is non-blocking - the actual load happens asynchronously
+                         declare
+                             Success : Boolean;
+                             pragma Unreferenced (Success);
+                         begin
+                             --  Load with minimal context to speed up pre-warming
+                             --  The actual request will resize if needed
+                             Model_Manager.Load_Model (Kind, Success, 4096, ELP1);
+
+                             --  Check if load actually succeeded
+                             if not Success then
+                                --  RECORD FAILURE: Start cooldown timer
+                                Last_Prewarm_Failure := Clock;
+                                Prewarm_Fail_Count := Prewarm_Fail_Count + 1;
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Red)
+                                    & "[PreWarm-FAILED] "
+                                    & AnsiAda.Reset
+                                    & Model_Type'Image (Kind)
+                                    & " load FAILED! Cooldown "
+                                    & Duration'Image (PREWARM_COOLDOWN_S)
+                                    & "s started. Failure #"
+                                    & Natural'Image (Prewarm_Fail_Count)
+                                    & ". Will load on-demand.");
+                             else
+                                --  SUCCESS: Reset failure tracking
+                                if Prewarm_Fail_Count > 0 then
+                                   Put_Line
+                                      (AnsiAda.Foreground (AnsiAda.Light_Green)
+                                       & "[PreWarm-RECOVERED] "
+                                       & AnsiAda.Reset
+                                       & Model_Type'Image (Kind)
+                                       & " loaded successfully after "
+                                       & Natural'Image (Prewarm_Fail_Count)
+                                       & " previous failures. Cooldown cleared.");
+                                   Prewarm_Fail_Count := 0;
+                                end if;
+                                Last_Prewarm_Failure := Time_First;
+                             end if;
+                         exception
+                             when others =>
+                                --  EXCEPTION: Record failure for cooldown
+                                Last_Prewarm_Failure := Clock;
+                                Prewarm_Fail_Count := Prewarm_Fail_Count + 1;
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Red)
+                                    & "[PreWarm-EXCEPTION] "
+                                    & AnsiAda.Reset
+                                    & Model_Type'Image (Kind)
+                                    & " load CRASHED! Cooldown "
+                                    & Duration'Image (PREWARM_COOLDOWN_S)
+                                    & "s started. Failure #"
+                                    & Natural'Image (Prewarm_Fail_Count)
+                                    & ". Will load on-demand.");
+                         end;
+                      end if;
                   end;
                else
                   Put_Line
