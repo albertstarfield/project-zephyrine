@@ -1408,6 +1408,7 @@ package body Adelaide_Server_Pkg is
                                    "Timestamp: " & TS & "Z" & ASCII.LF &
                                    "Session: " & To_String (S_ID) & ASCII.LF &
                                    "Pipeline: Hybrid Multi-Hop Reasoning" & ASCII.LF &
+                                   "API Endpoint: " & (if URI = "/v1/chat/completions" or else URI = "/v1/completions" then "OpenAI API" elsif URI = "/v1/messages" then "Claude API" else "Ollama API") & ASCII.LF &
                                    "Model: " & To_String (Req_Model) & ASCII.LF &
                                    "Status: Request received - starting orchestration..." & ASCII.LF &
                                    "Phase: Initializing thought pipeline..." & ASCII.LF &

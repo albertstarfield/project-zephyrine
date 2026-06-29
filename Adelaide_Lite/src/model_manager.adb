@@ -1271,7 +1271,7 @@ package body Model_Manager is
     end Wrap_ChatML;
 
     procedure Tokenize_And_Cache_Virtual_Ctx
-       (Kind : Model_Type; Text : String; Level : ELP_Level);
+       (Kind : Model_Type; Text : String; Level : ELP_Level; Skip_Gate : Boolean := False);
 
     Initialized : Boolean := False;
 
@@ -3542,15 +3542,26 @@ package body Model_Manager is
             Buf : constant String := To_String (Parser.Sanitize_Buffer);
         begin
             if Buf = Think_Tag_A or else Buf = Think_Tag_B then
-                --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                    & "[StreamParse-V]"
-                    & AnsiAda.Reset
-                    & " THINK_OPEN detected. In_Think_Block -> True");
-                Parser.Sanitize_Buffer := Null_Unbounded_String;
-                Parser.In_Think_Block := True;
-                return;
+               if Parser.Orch_Think_Open then
+                  --  Stray inner THINK_OPEN while outer block is active – ignore to prevent unmatched tags
+                  Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                      & "[StreamParse-V]"
+                      & AnsiAda.Reset
+                      & " Stray THINK_OPEN ignored (Orch_Think_Open=True)");
+                  Parser.Sanitize_Buffer := Null_Unbounded_String;
+                  -- Do not set In_Think_Block, treat as regular text
+               else
+                  --  Normal THINK_OPEN handling
+                  Put_Line
+                     (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                      & "[StreamParse-V]"
+                      & AnsiAda.Reset
+                      & " THINK_OPEN detected. In_Think_Block -> True");
+                  Parser.Sanitize_Buffer := Null_Unbounded_String;
+                  Parser.In_Think_Block := True;
+               end if;
+               return;
             elsif Buf = Close_Tag_A or else Buf = Close_Tag_B then
                 --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                 Put_Line
@@ -4541,7 +4552,7 @@ package body Model_Manager is
                              Duration'Image (Remaining) &
                              " seconds. Offloading to virtual ctx.");
                          -- Bypass resizing and offload immediately to virtual context
-                         Tokenize_And_Cache_Virtual_Ctx (Kind, Clean_P, Level);
+                         Tokenize_And_Cache_Virtual_Ctx (Kind, Clean_P, Level, True);
                          Result := To_Unbounded_String ("");
                          if Tokens /= null then
                              Free_Tokens (Tokens);
@@ -4610,7 +4621,7 @@ package body Model_Manager is
                         if unsigned (N_Toks) > Rounded_Ctx then
                              Put_Line
                                 ("[!] Prompt requires " & N_Toks'Img & " tokens but max context is " & Rounded_Ctx'Img & ". Offloading to virtual ctx.");
-                             Tokenize_And_Cache_Virtual_Ctx (Kind, Clean_P, Level);
+                             Tokenize_And_Cache_Virtual_Ctx (Kind, Clean_P, Level, True);
                              Result := To_Unbounded_String ("");
                              if Tokens /= null then
                                  Free_Tokens (Tokens);
@@ -4624,59 +4635,45 @@ package body Model_Manager is
                              return;
                         end if;
 
-                        Free_Tokens (Tokens);
-                       Load_Model (Kind, Success, Positive (Rounded_Ctx));
-                       if not Success then
-                           Put_Line ("[!] OOM EXCEPTION: Load_Model failed for " & Rounded_Ctx'Img & ". Pulling back to " & Fallback_Ctx'Img);
-                           OOM_Restricted_Ctx := Fallback_Ctx;
-                           OOM_Hold_Until := Ada.Real_Time.Clock + Ada.Real_Time.Minutes (5);
-                           Load_Model (Kind, Success, Positive (Fallback_Ctx));
-                           if not Success then
-                               Result := To_Unbounded_String ("ERROR: Resize fallback failed");
-                               if Level = ELP0 then
-                                   Priority_Model_Gate.Release_ELP0 (Kind);
-                               else
-                                   Priority_Model_Gate.Release_ELP1 (Kind);
-                               end if;
-                               return;
-                           end if;
-                       end if;
-
-                    --  Re-allocate token array for new context size
-                    Tokens :=
-                       new Token_Array
-                              (1 .. Positive (Models (Kind).Current_Ctx));
-
-                    --  Tokenize again since the model/vocab might have reloaded
-                    Vocab := Llama_Model_Get_Vocab (Models (Kind).Model);
-                    Prompt_C := New_String (Clean_P);
-                    N_Toks :=
-                       Llama_Tokenize
-                          (Vocab,
-                           Prompt_C,
-                           int (Clean_P'Length),
-                           Tokens.all'Address,
-                           int (Tokens.all'Length),
-                           True,
-                           True);
-                    if N_Toks < 0 then
                         declare
-                            Required_Toks : constant int := -N_Toks;
+                            Old_Tokens : Token_Array_Access := Tokens;
+                            Old_Toks   : constant int := N_Toks;
                         begin
-                            Free_Tokens (Tokens);
-                            Tokens := new Token_Array (1 .. Positive (Required_Toks));
-                            N_Toks :=
-                               Llama_Tokenize
-                                  (Vocab,
-                                   Prompt_C,
-                                   int (Clean_P'Length),
-                                   Tokens.all'Address,
-                                   int (Tokens.all'Length),
-                                   True,
-                                   True);
+                            Load_Model (Kind, Success, Positive (Rounded_Ctx));
+                            if not Success then
+                                Put_Line ("[!] OOM EXCEPTION: Load_Model failed for " & Rounded_Ctx'Img & ". Pulling back to " & Fallback_Ctx'Img);
+                                OOM_Restricted_Ctx := Fallback_Ctx;
+                                OOM_Hold_Until := Ada.Real_Time.Clock + Ada.Real_Time.Minutes (5);
+                                Load_Model (Kind, Success, Positive (Fallback_Ctx));
+                                if not Success then
+                                    Result := To_Unbounded_String ("ERROR: Resize fallback failed");
+                                    if Level = ELP0 then
+                                        Priority_Model_Gate.Release_ELP0 (Kind);
+                                    else
+                                        Priority_Model_Gate.Release_ELP1 (Kind);
+                                    end if;
+                                    Free_Tokens (Old_Tokens);
+                                    return;
+                                end if;
+                            end if;
+
+                            --  Allocate token array for new context size (or required size if larger)
+                            declare
+                                New_Cap : Positive;
+                            begin
+                                if Natural (Models (Kind).Current_Ctx) > Natural (Integer (Old_Toks)) then
+                                    New_Cap := Positive (Models (Kind).Current_Ctx);
+                                else
+                                    New_Cap := Positive (Integer (Old_Toks));
+                                end if;
+                                Tokens := new Token_Array (1 .. New_Cap);
+                                for I in 1 .. Integer (Old_Toks) loop
+                                    Tokens (I) := Old_Tokens (I);
+                                end loop;
+                                N_Toks := Old_Toks;
+                                Free_Tokens (Old_Tokens);
+                            end;
                         end;
-                    end if;
-                    Free (Prompt_C);
 
                     --  Update CtxMonitor with new context size after resize
                     Current_Ctx_Capacity := Natural (Models (Kind).Current_Ctx);
@@ -4684,7 +4681,8 @@ package body Model_Manager is
                 end if;
             end if;
         exception
-            when others =>
+            when E : others =>
+                Put_Line ("[!] FATAL EXCEPTION IN GENERATE: " & Ada.Exceptions.Exception_Information (E));
                 if Tokens /= null then
                     Free_Tokens (Tokens);
                 end if;
@@ -5556,7 +5554,7 @@ package body Model_Manager is
     --  On subsequent Generate calls, these tokens are written directly to
     --  the token array, skipping re-tokenization of the same facts.
     procedure Tokenize_And_Cache_Virtual_Ctx
-       (Kind : Model_Type; Text : String; Level : ELP_Level)
+       (Kind : Model_Type; Text : String; Level : ELP_Level; Skip_Gate : Boolean := False)
     is
         Vocab    : Llama_Vocab;
         Text_C   : chars_ptr := New_String (Text);
@@ -5577,15 +5575,17 @@ package body Model_Manager is
 
         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
         --  Acquire gate to prevent Idle_Monitor from unloading the model mid-tokenization
-        if Level = ELP0 then
-            Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
-            if not Success then
-                Free (Text_C);
-                return;
+        if not Skip_Gate then
+            if Level = ELP0 then
+                Priority_Model_Gate.Acquire_ELP0 (Kind) (Success);
+                if not Success then
+                    Free (Text_C);
+                    return;
+                end if;
+            else
+                Priority_Model_Gate.Request_ELP1;
+                Priority_Model_Gate.Acquire_ELP1 (Kind);
             end if;
-        else
-            Priority_Model_Gate.Request_ELP1;
-            Priority_Model_Gate.Acquire_ELP1 (Kind);
         end if;
 
         --  Embedding model needs only 512 context; LLM needs 8192.
@@ -5596,10 +5596,12 @@ package body Model_Manager is
             Load_Model (Kind, Success, Embed_Ctx, Level, False);
         end;
         if not Success then
-            if Level = ELP0 then
-                Priority_Model_Gate.Release_ELP0 (Kind);
-            else
-                Priority_Model_Gate.Release_ELP1 (Kind);
+            if not Skip_Gate then
+                if Level = ELP0 then
+                    Priority_Model_Gate.Release_ELP0 (Kind);
+                else
+                    Priority_Model_Gate.Release_ELP1 (Kind);
+                end if;
             end if;
             Free (Text_C);
             return;
@@ -5647,10 +5649,12 @@ package body Model_Manager is
         if N_Toks <= 0 then
             Free_Tokens (Tmp_Toks);
             Models (Kind).In_Use := False;
-            if Level = ELP0 then
-                Priority_Model_Gate.Release_ELP0 (Kind);
-            else
-                Priority_Model_Gate.Release_ELP1 (Kind);
+            if not Skip_Gate then
+                if Level = ELP0 then
+                    Priority_Model_Gate.Release_ELP0 (Kind);
+                else
+                    Priority_Model_Gate.Release_ELP1 (Kind);
+                end if;
             end if;
             return;
         end if;
@@ -5672,10 +5676,12 @@ package body Model_Manager is
             & " chars");
 
         Models (Kind).In_Use := False;
-        if Level = ELP0 then
-            Priority_Model_Gate.Release_ELP0 (Kind);
-        else
-            Priority_Model_Gate.Release_ELP1 (Kind);
+        if not Skip_Gate then
+            if Level = ELP0 then
+                Priority_Model_Gate.Release_ELP0 (Kind);
+            else
+                Priority_Model_Gate.Release_ELP1 (Kind);
+            end if;
         end if;
     end Tokenize_And_Cache_Virtual_Ctx;
 
@@ -7690,66 +7696,37 @@ package body Model_Manager is
 
         if not External_Agent then
             --  Extract and push model's internal thinking content (if any).
-            --  This is the content between <think> and </think> tags that the
-            --  model generated during reasoning. We push it through the parser
-            --  so it is properly handled (silenced if In_Think_Block is True).
-            --  NOTE: The closing `` tag is pushed by the emulated streaming
-            --  section below, AFTER the response content has been streamed.
             declare
                 Model_Thinking : constant String :=
                    Extract_Think_Content (To_String (Current_Response));
             begin
                 if Model_Thinking /= "" then
-                    Push_Orchestration_Through_Parser
+                    Push_Chunk
                        (Stream,
                         Session_ID,
-                        Orch_Parser,
-                        Model_Thinking & ASCII.LF);
+                        "<think>" & ASCII.LF & Model_Thinking & ASCII.LF & "</think>" & ASCII.LF);
                 end if;
             end;
         end if;
 
-        --  EMULATED STREAMING
-        --  The model's response was already streamed token-by-token through
-        --  the stream parser during Generate (Process_And_Push_Chunk). Each
-        --  character outside a think block was pushed immediately to the
-        --  queue via Push_Chunk. This emulated streaming section pushes
-        --  ONLY the closing `</think>` tag to close the orchestration think block.
-        --  The response text is NOT re-emitted here to avoid duplication.
-        --
-        --  The 300 tok/s simulation delay ensures the closing tag arrives
-        --  after all generated chunks have been flushed by AWS.
         if not External_Agent and then Stream /= null then
             declare
-                Sim_TPS    : constant Float := 300.0;
                 Resp_Text  : constant String :=
                    Sanitize_Think_Tags (To_String (Current_Response));
-                Resp_Len   : constant Natural := Resp_Text'Length;
-                Delay_Time : constant Duration :=
-                   Duration (Float (Resp_Len) / Sim_TPS);
             begin
-                --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                    & "[Init-V]"
-                    & AnsiAda.Reset
-                    & " Hybrid_Generate: Waiting "
-                    & Duration'Image (Delay_Time)
-                    & "s for 300 tok/s sim.");
-                delay Delay_Time;
                 --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Blue)
                     & "[Init-V]"
                     & AnsiAda.Reset
                     & " Hybrid_Generate: STREAMING COMPLETE.");
-                --  Push statistics to think block before closing tag.
-                --  These provide chunk/token stats and other metrics.
+                --  Push statistics inside a think block so it is hidden.
                 declare
                     Resp_Len    : constant Natural := Resp_Text'Length;
                     Gen_Elapsed : constant Duration := Ada.Calendar.Clock - T0;
                     Stats_Str   : constant String :=
-                       ASCII.LF
+                       "<think>"
+                       & ASCII.LF
                        & "--- ORCHESTRATION STATISTICS ---"
                        & ASCII.LF
                        & "Response Length: "
@@ -7787,7 +7764,7 @@ package body Model_Manager is
                        & "Pipeline Level: "
                        & ELP_Level'Image (Level)
                        & ASCII.LF
-                       & "Streaming Mode: Emulated 300 tok/s"
+                       & "Streaming Mode: Instant TTFB Live Delivery"
                        & ASCII.LF
                        & "GPU Free: "
                        & Natural'Image (GPU_Free_MB)
@@ -7808,32 +7785,12 @@ package body Model_Manager is
                        & "GPU Stable: "
                        & Boolean'Image (GPU_Is_Stable)
                        & ASCII.LF
-                       & "--- END STATISTICS ---";
+                       & "--- END STATISTICS ---"
+                       & ASCII.LF
+                       & "</think>"
+                       & ASCII.LF;
                 begin
                     Push_Chunk (Stream, Session_ID, Stats_Str);
-                end;
-                --  Push `</think>` to close the orchestration think block.
-                Push_Chunk
-                   (Stream, Session_ID, ASCII.LF & "</think>" & ASCII.LF);
-
-                --  Re-emit the final response outside the think block at 300 tok/s
-                --  (approx 1200 chars/s = 120 chars per 0.1s).
-                --  This is what is supposed to happen: after the think block, the response
-                --  is repeated so that clients (like Msty) which hide the think block
-                --  will still display the final response correctly.
-                declare
-                    Chunk_Size : constant Natural := 120;
-                    Pos        : Positive := Resp_Text'First;
-                    Last_Pos   : Natural;
-                begin
-                    while Pos <= Resp_Text'Last loop
-                        Last_Pos :=
-                           Natural'Min (Pos + Chunk_Size - 1, Resp_Text'Last);
-                        Push_Chunk
-                           (Stream, Session_ID, Resp_Text (Pos .. Last_Pos));
-                        delay 0.1;
-                        Pos := Last_Pos + 1;
-                    end loop;
                 end;
             end;
         elsif External_Agent and then Stream /= null then
