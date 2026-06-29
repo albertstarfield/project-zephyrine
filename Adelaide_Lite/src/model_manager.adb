@@ -4463,6 +4463,23 @@ package body Model_Manager is
                        int (Tokens.all'Length),
                        True,
                        True);
+                if N_Toks < 0 then
+                    declare
+                        Required_Toks : constant int := -N_Toks;
+                    begin
+                        Free_Tokens (Tokens);
+                        Tokens := new Token_Array (1 .. Positive (Required_Toks));
+                        N_Toks :=
+                           Llama_Tokenize
+                              (Vocab,
+                               Prompt_C,
+                               int (Clean_P'Length),
+                               Tokens.all'Address,
+                               int (Tokens.all'Length),
+                               True,
+                               True);
+                    end;
+                end if;
             end if;
 
             Put_Line
@@ -4564,6 +4581,23 @@ package body Model_Manager is
                             Fallback_Ctx := Current_Ctx;
                         end if;
 
+                        if unsigned (N_Toks) > Rounded_Ctx then
+                             Put_Line
+                                ("[!] Prompt requires " & N_Toks'Img & " tokens but max context is " & Rounded_Ctx'Img & ". Offloading to virtual ctx.");
+                             Tokenize_And_Cache_Virtual_Ctx (Kind, Clean_P, Level);
+                             Result := To_Unbounded_String ("");
+                             if Tokens /= null then
+                                 Free_Tokens (Tokens);
+                             end if;
+                             Models (Kind).In_Use := False;
+                             if Level = ELP0 then
+                                 Priority_Model_Gate.Release_ELP0 (Kind);
+                             else
+                                 Priority_Model_Gate.Release_ELP1 (Kind);
+                             end if;
+                             return;
+                        end if;
+
                         Free_Tokens (Tokens);
                        Load_Model (Kind, Success, Positive (Rounded_Ctx));
                        if not Success then
@@ -4599,6 +4633,23 @@ package body Model_Manager is
                            int (Tokens.all'Length),
                            True,
                            True);
+                    if N_Toks < 0 then
+                        declare
+                            Required_Toks : constant int := -N_Toks;
+                        begin
+                            Free_Tokens (Tokens);
+                            Tokens := new Token_Array (1 .. Positive (Required_Toks));
+                            N_Toks :=
+                               Llama_Tokenize
+                                  (Vocab,
+                                   Prompt_C,
+                                   int (Clean_P'Length),
+                                   Tokens.all'Address,
+                                   int (Tokens.all'Length),
+                                   True,
+                                   True);
+                        end;
+                    end if;
                     Free (Prompt_C);
 
                     --  Update CtxMonitor with new context size after resize
@@ -5547,6 +5598,23 @@ package body Model_Manager is
                    int (Tmp_Toks.all'Length),
                    True,
                    True);
+            if N_Toks < 0 then
+                declare
+                    Required_Toks : constant int := -N_Toks;
+                begin
+                    Free_Tokens (Tmp_Toks);
+                    Tmp_Toks := new Token_Array (1 .. Positive (Required_Toks));
+                    N_Toks :=
+                       Llama_Tokenize
+                          (Vocab,
+                           Text_C,
+                           int (Text'Length),
+                           Tmp_Toks.all'Address,
+                           int (Tmp_Toks.all'Length),
+                           True,
+                           True);
+                end;
+            end if;
         end;
         Free (Text_C);
 
