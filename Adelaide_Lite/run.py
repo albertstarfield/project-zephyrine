@@ -1256,14 +1256,19 @@ def main():
         print("[VAD] VAD worker bootstrap complete.")
 
     # Handle integrity check flag
+    test_build_integrity = False
     if "--test-build-integrity-check" in sys.argv:
-        print("[*] Test build integrity check passed! Exiting without launching services.")
-        sys.exit(0)
+        print("[*] Test build integrity check: will launch server and invoke benchmark.")
+        test_build_integrity = True
 
     # Parse arguments
     launch_gui = True
-    if "--no-gui" in sys.argv:
+    if "--no-gui" in sys.argv or test_build_integrity:
         launch_gui = False
+    
+    run_benchmark = False
+    if "--benchmark" in sys.argv or test_build_integrity:
+        run_benchmark = True
 
     # [DO NOT REMOVE] --no-daemon: Skip the StellaIcarus daemon runner.
     # The daemon runner retries failed MCU bridge connections every 30s,
@@ -1369,6 +1374,9 @@ def main():
     print(f"[*] [Launch-V] Server CWD: {BASE_DIR}")
     print(f"[*] [Launch-V] DYLD_LIBRARY_PATH: {env.get('DYLD_LIBRARY_PATH', 'NOT SET')}")
 
+    # Inject log file path so the Ada server can tail it for SSE benchmarking
+    env["ADELAIDE_LOG_FILE"] = current_log_path
+
     # Launch server through tee so its output goes to terminal + log file
     tee_process = subprocess.Popen(
         ["tee", "-a", current_log_path],
@@ -1444,6 +1452,121 @@ def main():
                 [pyvenv_python, vad_worker_script], cwd=BASE_DIR, env=env,
                 stdout=vlog, stderr=subprocess.STDOUT,
                 start_new_session=True)
+
+    if run_benchmark:
+        print("[*] Booting benchmark runner thread...")
+        def benchmark_runner():
+            import time, urllib.request, json
+            print("[Benchmark] Waiting 15s for server to settle...")
+            time.sleep(15)
+            url = f"http://{server_host}:{server_port}/api/snowballEnagaValidationBenchmark"
+            print(f"[Benchmark] Invoking {url} (Performance)...")
+            success = False
+            try:
+                data = json.dumps({"benchmark_type": "performance"}).encode('utf-8')
+                req = urllib.request.Request(url, data=data, headers={
+                    'Content-Type': 'application/json',
+                    'x-api-key': 'IknowtheConsequencesAndWouldLockupTheServerForHours'
+                }, method='POST')
+                start_t = time.time()
+                with urllib.request.urlopen(req, timeout=300) as res:
+                    status = res.getcode()
+                    print(f"[Benchmark] Connected. HTTP {status}")
+                    
+                    while True:
+                        line = res.readline().decode('utf-8')
+                        if not line:
+                            break
+                        line = line.strip()
+                        if line.startswith("data: "):
+                            payload = line[6:]
+                            if payload == "[DONE]":
+                                success = True
+                                break
+                            
+                            try:
+                                parsed = json.loads(payload)
+                                if "type" in parsed and parsed["type"] == "log":
+                                    print(f"[Ada-Log] {parsed.get('line', '')}")
+                                elif "type" in parsed and parsed["type"] == "progress":
+                                    print(f"[Benchmark Progress] {payload}")
+                                elif "performance" in parsed:
+                                    print("[Benchmark] Scoring Report:")
+                                    print(json.dumps(parsed, indent=2))
+                                    success = True
+                            except json.JSONDecodeError:
+                                print(f"[SSE Raw] {payload}")
+
+                    elapsed = time.time() - start_t
+                    print(f"[Benchmark] Completed in {elapsed:.2f}s")
+            except Exception as e:
+                print(f"[!] Benchmark failed: {e}")
+
+                print("[*] Running comprehensive loopback API tests...")
+                # We will test all endpoints from the API reference
+                tests = [
+                    ("Server Root (GET)", f"http://{server_host}:{server_port}/", None, "GET"),
+                    ("Server Root (HEAD)", f"http://{server_host}:{server_port}/", None, "HEAD"),
+                    ("Health / Power", f"http://{server_host}:{server_port}/api/power", None, "GET"),
+                    ("Telemetry", f"http://{server_host}:{server_port}/api/telemetry", None, "GET"),
+                    ("Version", f"http://{server_host}:{server_port}/api/version", None, "GET"),
+                    ("Process Status", f"http://{server_host}:{server_port}/api/ps", None, "GET"),
+                    ("Zenith Routine", f"http://{server_host}:{server_port}/api/ZenithRoutine", None, "GET"),
+                    ("List Models (v1)", f"http://{server_host}:{server_port}/v1/models", None, "GET"),
+                    ("Ollama Tags", f"http://{server_host}:{server_port}/api/tags", None, "GET"),
+                    
+                    # POST requests
+                    ("OpenAI Chat", f"http://{server_host}:{server_port}/v1/chat/completions", {"model": "Snowball-Enaga", "messages": [{"role": "user", "content": "ping"}]}, "POST"),
+                    ("OpenAI Completions", f"http://{server_host}:{server_port}/v1/completions", {"model": "Snowball-Enaga", "prompt": "ping"}, "POST"),
+                    ("OpenAI Embeddings", f"http://{server_host}:{server_port}/v1/embeddings", {"model": "Snowball-Enaga", "input": "ping"}, "POST"),
+                    ("Claude Messages", f"http://{server_host}:{server_port}/v1/messages", {"model": "Snowball-Enaga", "messages": [{"role": "user", "content": "ping"}], "max_tokens": 10}, "POST"),
+                    ("Ollama Chat", f"http://{server_host}:{server_port}/api/chat", {"model": "Snowball-Enaga", "messages": [{"role": "user", "content": "ping"}], "stream": False}, "POST"),
+                    ("Ollama Generate", f"http://{server_host}:{server_port}/api/generate", {"model": "Snowball-Enaga", "prompt": "ping", "stream": False}, "POST"),
+                    ("Ollama Embeddings", f"http://{server_host}:{server_port}/api/embeddings", {"model": "Snowball-Enaga", "prompt": "ping"}, "POST"),
+                    ("Ollama Show", f"http://{server_host}:{server_port}/api/show", {"name": "Snowball-Enaga"}, "POST"),
+                    ("AGC/ACP", f"http://{server_host}:{server_port}/api/acp", {"jsonrpc": "2.0", "method": "chat/completion", "params": {"prompt": "ping"}, "id": 1}, "POST"),
+                    
+                    # Media / specialized APIs
+                    ("TTS Kokoro", f"http://{server_host}:{server_port}/v1/audio/speech", {"input": "ping", "voice": "default", "response_format": "wav"}, "POST"),
+                    ("Image Gen (FLUX)", f"http://{server_host}:{server_port}/v1/images/generations", {"prompt": "ping", "n": 1, "size": "1024x1024"}, "POST"),
+                ]
+                
+                all_passed = True
+                for name, endpoint, payload, method in tests:
+                    try:
+                        req_data = json.dumps(payload).encode('utf-8') if payload else None
+                        headers = {'Content-Type': 'application/json'} if payload else {}
+                        req = urllib.request.Request(endpoint, data=req_data, headers=headers, method=method)
+                        with urllib.request.urlopen(req, timeout=30) as res:
+                            code = res.getcode()
+                            if code in (200, 201, 204):
+                                print(f"[+] {name} Test: PASSED (HTTP {code})")
+                            else:
+                                print(f"[-] {name} Test: FAILED (HTTP {code})")
+                                all_passed = False
+                    except urllib.error.HTTPError as e:
+                        # Some endpoints might correctly return 400 or 401 if not fully configured,
+                        # but ideally they shouldn't crash. 404 is a missing endpoint.
+                        print(f"[-] {name} Test: HTTP ERROR {e.code}")
+                        all_passed = False
+                    except Exception as e:
+                        print(f"[-] {name} Test: EXCEPTION ({e})")
+                        all_passed = False
+                
+                if not all_passed:
+                    success = False
+
+            if test_build_integrity:
+                if success:
+                    print("[*] Test build integrity check passed! Exiting successfully.")
+                    cleanup()
+                else:
+                    print("[!] Test build integrity check FAILED!")
+                    os._exit(1)
+
+        import threading
+        b_thread = threading.Thread(target=benchmark_runner, daemon=True)
+        b_thread.start()
 
     if launch_gui:
         print("[*] Booting Python Sidecar UI...")

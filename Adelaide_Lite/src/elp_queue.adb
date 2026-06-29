@@ -205,93 +205,89 @@ package body ELP_Queue is
                   --  [PREWARM-COOLDOWN] Check if this model failed recently.
                   --  If so, skip predictive loading — let it load on-demand.
                   --  This breaks the infinite retry loop that causes SIGTRAP.
-                  declare
-                      Time_Since_Failure : constant Duration :=
-                         Ada.Real_Time.To_Duration (Clock - Last_Prewarm_Failure);
-                  begin
-                      if Last_Prewarm_Failure /= Time_First
-                        and then Time_Since_Failure < PREWARM_COOLDOWN_S
-                      then
-                         Put_Line
-                            (AnsiAda.Foreground (AnsiAda.Yellow)
-                             & "[PreWarm-COOLDOWN] "
-                             & AnsiAda.Reset
-                             & Model_Type'Image (Kind)
-                             & " FAILED "
-                             & Duration'Image (Time_Since_Failure)
-                             & "s ago (cooldown="
-                             & Duration'Image (PREWARM_COOLDOWN_S)
-                             & "s). Skipping predictive load."
-                             & " Will load on-demand.");
-                         --  Do NOT attempt PreWarm — let on-demand load handle it
-                      else
-                         --  No recent failure — safe to PreWarm
-                         Put_Line
-                            (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                             & "[PreWarm] "
-                             & AnsiAda.Reset
-                             & "ELP1 request enqueued for "
-                             & Model_Type'Image (Kind)
-                             & ". Starting predictive pre-warming...");
-                     
-                         --  Start loading the model in background
-                         --  Note: This is non-blocking - the actual load happens asynchronously
-                         declare
-                             Success : Boolean;
-                             pragma Unreferenced (Success);
-                         begin
-                             --  Load with minimal context to speed up pre-warming
-                             --  The actual request will resize if needed
-                             Model_Manager.Load_Model (Kind, Success, 4096, ELP1);
+                   declare
+                       Recent_Failure : Boolean := False;
+                       Time_Since_Failure : Duration := 0.0;
+                   begin
+                       if Last_Prewarm_Failure /= Time_First then
+                           Time_Since_Failure := Ada.Real_Time.To_Duration (Clock - Last_Prewarm_Failure);
+                           if Time_Since_Failure < PREWARM_COOLDOWN_S then
+                               Recent_Failure := True;
+                           end if;
+                       end if;
 
-                             --  Check if load actually succeeded
-                             if not Success then
-                                --  RECORD FAILURE: Start cooldown timer
-                                Last_Prewarm_Failure := Clock;
-                                Prewarm_Fail_Count := Prewarm_Fail_Count + 1;
-                                Put_Line
-                                   (AnsiAda.Foreground (AnsiAda.Red)
-                                    & "[PreWarm-FAILED] "
-                                    & AnsiAda.Reset
-                                    & Model_Type'Image (Kind)
-                                    & " load FAILED! Cooldown "
-                                    & Duration'Image (PREWARM_COOLDOWN_S)
-                                    & "s started. Failure #"
-                                    & Natural'Image (Prewarm_Fail_Count)
-                                    & ". Will load on-demand.");
-                             else
-                                --  SUCCESS: Reset failure tracking
-                                if Prewarm_Fail_Count > 0 then
-                                   Put_Line
-                                      (AnsiAda.Foreground (AnsiAda.Light_Green)
-                                       & "[PreWarm-RECOVERED] "
-                                       & AnsiAda.Reset
-                                       & Model_Type'Image (Kind)
-                                       & " loaded successfully after "
-                                       & Natural'Image (Prewarm_Fail_Count)
-                                       & " previous failures. Cooldown cleared.");
-                                   Prewarm_Fail_Count := 0;
-                                end if;
-                                Last_Prewarm_Failure := Time_First;
-                             end if;
-                         exception
-                             when others =>
-                                --  EXCEPTION: Record failure for cooldown
-                                Last_Prewarm_Failure := Clock;
-                                Prewarm_Fail_Count := Prewarm_Fail_Count + 1;
-                                Put_Line
-                                   (AnsiAda.Foreground (AnsiAda.Red)
-                                    & "[PreWarm-EXCEPTION] "
-                                    & AnsiAda.Reset
-                                    & Model_Type'Image (Kind)
-                                    & " load CRASHED! Cooldown "
-                                    & Duration'Image (PREWARM_COOLDOWN_S)
-                                    & "s started. Failure #"
-                                    & Natural'Image (Prewarm_Fail_Count)
-                                    & ". Will load on-demand.");
-                         end;
-                      end if;
-                  end;
+                       if Recent_Failure then
+                          Put_Line
+                             (AnsiAda.Foreground (AnsiAda.Yellow)
+                              & "[PreWarm-COOLDOWN] "
+                              & AnsiAda.Reset
+                              & Model_Type'Image (Kind)
+                              & " FAILED "
+                              & Duration'Image (Time_Since_Failure)
+                              & "s ago (cooldown="
+                              & Duration'Image (PREWARM_COOLDOWN_S)
+                              & "s). Skipping predictive load."
+                              & " Will load on-demand.");
+                       else
+                          --  No recent failure — safe to PreWarm
+                          Put_Line
+                             (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                              & "[PreWarm] "
+                              & AnsiAda.Reset
+                              & "ELP1 request enqueued for "
+                              & Model_Type'Image (Kind)
+                              & ". Starting predictive pre-warming...");
+
+                          --  Start loading the model in background
+                          declare
+                              Success : Boolean;
+                              pragma Unreferenced (Success);
+                          begin
+                              Model_Manager.Load_Model (Kind, Success, 4096, ELP1);
+                              if not Success then
+                                 Last_Prewarm_Failure := Clock;
+                                 Prewarm_Fail_Count := Prewarm_Fail_Count + 1;
+                                 Put_Line
+                                    (AnsiAda.Foreground (AnsiAda.Red)
+                                     & "[PreWarm-FAILED] "
+                                     & AnsiAda.Reset
+                                     & Model_Type'Image (Kind)
+                                     & " load FAILED! Cooldown "
+                                     & Duration'Image (PREWARM_COOLDOWN_S)
+                                     & "s started. Failure #"
+                                     & Natural'Image (Prewarm_Fail_Count)
+                                     & ". Will load on-demand.");
+                              else
+                                 if Prewarm_Fail_Count > 0 then
+                                    Put_Line
+                                       (AnsiAda.Foreground (AnsiAda.Light_Green)
+                                        & "[PreWarm-RECOVERED] "
+                                        & AnsiAda.Reset
+                                        & Model_Type'Image (Kind)
+                                        & " loaded successfully after "
+                                        & Natural'Image (Prewarm_Fail_Count)
+                                        & " previous failures. Cooldown cleared.");
+                                    Prewarm_Fail_Count := 0;
+                                 end if;
+                                 Last_Prewarm_Failure := Time_First;
+                              end if;
+                          exception
+                              when others =>
+                                 Last_Prewarm_Failure := Clock;
+                                 Prewarm_Fail_Count := Prewarm_Fail_Count + 1;
+                                 Put_Line
+                                    (AnsiAda.Foreground (AnsiAda.Red)
+                                     & "[PreWarm-EXCEPTION] "
+                                     & AnsiAda.Reset
+                                     & Model_Type'Image (Kind)
+                                     & " load CRASHED! Cooldown "
+                                     & Duration'Image (PREWARM_COOLDOWN_S)
+                                     & "s started. Failure #"
+                                     & Natural'Image (Prewarm_Fail_Count)
+                                     & ". Will load on-demand.");
+                          end;
+                       end if;
+                   end;
                else
                   Put_Line
                      (AnsiAda.Foreground (AnsiAda.Light_Blue)
