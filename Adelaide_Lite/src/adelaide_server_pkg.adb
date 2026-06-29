@@ -272,6 +272,18 @@ package body Adelaide_Server_Pkg is
 
    type Generator_Task_Access is access Generator_Task;
 
+   task type Benchmark_Streaming_Task is
+       pragma Storage_Size (64 * 1024 * 1024);
+       pragma Task_Stack_Size (8 * 1024 * 1024);
+       entry Start
+         (Config : Benchmark_Manager.Benchmark_Config;
+          Bench_Type : String;
+          Accuracy_Bench : String;
+          Sample_Size : Natural;
+          Q : Streaming_Queue.Queue_Access);
+   end Benchmark_Streaming_Task;
+   type Benchmark_Streaming_Task_Access is access Benchmark_Streaming_Task;
+
    task type Background_Deep_Thought_Task is
        pragma Storage_Size (256 * 1024 * 1024);
        pragma Task_Stack_Size (32 * 1024 * 1024);
@@ -421,7 +433,138 @@ package body Adelaide_Server_Pkg is
             & "[BUGCHECK] Error in Background_Deep_Thought_Task: "
             & Ada.Exceptions.Exception_Message (E)
             & AnsiAda.Reset);
-   end Background_Deep_Thought_Task;
+    end Background_Deep_Thought_Task;
+
+   task body Benchmark_Streaming_Task is
+      Bench_Type_Val : Unbounded_String;
+      Accuracy_Bench_Val : Unbounded_String;
+      Sample_Size_Val : Natural;
+      Cfg : Benchmark_Manager.Benchmark_Config;
+      Stream_Q : Streaming_Queue.Queue_Access;
+      
+      procedure Progress_Handler (Event : String) is
+      begin
+         Stream_Q.Push("data: " & Event & ASCII.LF & ASCII.LF);
+      end Progress_Handler;
+      
+      task type Tailing_Task is
+         entry Start;
+         entry Stop;
+      end Tailing_Task;
+      
+      task body Tailing_Task is
+         use Ada.Streams.Stream_IO;
+         Log_File_Env : constant String := Ada.Environment_Variables.Value("ADELAIDE_LOG_FILE", "");
+         F : File_Type;
+         Buffer : Ada.Streams.Stream_Element_Array (1 .. 1024);
+         Last : Ada.Streams.Stream_Element_Offset;
+         Should_Stop : Boolean := False;
+         Str_Buf : Unbounded_String;
+      begin
+         accept Start;
+         if Log_File_Env /= "" then
+            begin
+               Open (F, In_File, Log_File_Env);
+               Set_Index (F, Size(F) + 1); -- Start at current end of file
+               while not Should_Stop loop
+                  select
+                     accept Stop do
+                        Should_Stop := True;
+                     end Stop;
+                  else
+                     Read (F, Buffer, Last);
+                     if Last > 0 then
+                        for I in 1 .. Last loop
+                           if Buffer(I) = 10 then -- ASCII.LF
+                              declare
+                                 S : String := To_String(Str_Buf);
+                              begin
+                                 for J in S'Range loop
+                                    if S(J) = '"' then S(J) := '''; end if;
+                                    if S(J) = '\' then S(J) := '/'; end if;
+                                    if S(J) < ' ' then S(J) := ' '; end if; -- Strip control chars
+                                 end loop;
+                                 Stream_Q.Push("data: {""type"":""log"", ""line"":""" & S & """}" & ASCII.LF & ASCII.LF);
+                              end;
+                              Str_Buf := Null_Unbounded_String;
+                           elsif Buffer(I) /= 13 then -- Ignore CR
+                              Append(Str_Buf, Character'Val(Buffer(I)));
+                           end if;
+                        end loop;
+                     else
+                        delay 0.1;
+                     end if;
+                  end select;
+               end loop;
+               Close(F);
+            exception
+               when others => null;
+            end;
+         end if;
+      end Tailing_Task;
+      
+      Tailer : Tailing_Task;
+      Perf_Result : Unbounded_String;
+      Accuracy_Result : Accuracy_Benchmark_Manager.Benchmark_Result;
+      Acc_Result_Str : Unbounded_String;
+   begin
+      accept Start
+        (Config : Benchmark_Manager.Benchmark_Config;
+         Bench_Type : String;
+         Accuracy_Bench : String;
+         Sample_Size : Natural;
+         Q : Streaming_Queue.Queue_Access) do
+         Cfg := Config;
+         Bench_Type_Val := To_Unbounded_String(Bench_Type);
+         Accuracy_Bench_Val := To_Unbounded_String(Accuracy_Bench);
+         Sample_Size_Val := Sample_Size;
+         Stream_Q := Q;
+      end Start;
+      
+      Tailer.Start;
+      
+      if To_String(Bench_Type_Val) = "performance" or To_String(Bench_Type_Val) = "both" then
+         Benchmark_Manager.Run_Benchmark(
+            Config => Cfg,
+            On_Progress => Progress_Handler'Access,
+            Result => Perf_Result
+         );
+      else
+         Perf_Result := To_Unbounded_String("{""skipped"": true}");
+      end if;
+      
+      if To_String(Bench_Type_Val) = "accuracy" or To_String(Bench_Type_Val) = "both" then
+         Accuracy_Benchmark_Manager.Run_Accuracy_Benchmark(
+            Benchmark => BENCH_MMLU,
+            Sample_Size => Sample_Size_Val,
+            On_Progress => Progress_Handler'Access,
+            Result => Accuracy_Result
+         );
+         Acc_Result_Str := To_Unbounded_String(
+            "{""benchmark"":""accuracy""," &
+            """name"":""" & To_String(Accuracy_Bench_Val) & """," &
+            """accuracy"":" & Float'Image(Accuracy_Result.Accuracy) & "," &
+            """total"":" & Natural'Image(Accuracy_Result.Total_Questions) & "," &
+            """correct"":" & Natural'Image(Accuracy_Result.Correct_Count) & "," &
+            """failed"":" & Natural'Image(Accuracy_Result.Failed_Count) & "," &
+            """time"":" & Float'Image(Accuracy_Result.Time_Seconds) & "}");
+      else
+         Acc_Result_Str := To_Unbounded_String("{""skipped"": true}");
+      end if;
+      
+      Tailer.Stop;
+      
+      -- Send final result and close stream
+      Stream_Q.Push("data: {""performance"":" & To_String(Perf_Result) & "," &
+                    """accuracy"":" & To_String(Acc_Result_Str) & "}" & ASCII.LF & ASCII.LF);
+      Stream_Q.Push("data: [DONE]" & ASCII.LF & ASCII.LF);
+      Stream_Q.Close;
+      
+   exception
+      when others =>
+         Tailer.Stop;
+         Stream_Q.Close;
+   end Benchmark_Streaming_Task;
 
    --------------
    -- Dispatch --
@@ -1994,89 +2137,26 @@ package body Adelaide_Server_Pkg is
                      end if;
                   end;
 
-                  --  [DO NOT REMOVE] Run benchmarks based on type
-                  --  Default is "both" - runs performance AND accuracy
-                  --  RAISES Benchmark_Failure if any answer is unparseable
-                  if To_String(Bench_Type) = "performance" then
-                     --  Performance only
-                     Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
-                              "[Benchmark]" & AnsiAda.Reset &
-                              " Running performance benchmark only");
-                     Run_Benchmark(
-                        Config => Config,
-                        On_Progress => null,
-                        Result => Perf_Result
-                     );
-                     Acc_Result := To_Unbounded_String(
-                        "{""skipped"": true, ""reason"": ""performance only""}");
-                  elsif To_String(Bench_Type) = "accuracy" then
-                     --  Accuracy only
-                     Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
-                              "[Benchmark]" & AnsiAda.Reset &
-                              " Running accuracy benchmark: " & To_String(Accuracy_Bench));
-                     Perf_Result := To_Unbounded_String(
-                        "{""skipped"": true, ""reason"": ""accuracy only""}");
-                     Run_Accuracy_Benchmark(
-                        Benchmark => BENCH_MMLU,
-                        Sample_Size => Sample_Size,
-                        On_Progress => null,
-                        Result => Accuracy_Result
-                     );
-                     Acc_Result := To_Unbounded_String(
-                        "{""benchmark"":""accuracy""," &
-                        """name"":" & To_String(Accuracy_Bench) & "," &
-                        """accuracy"":" & Float'Image(Accuracy_Result.Accuracy) & "," &
-                        """total"":" & Natural'Image(Accuracy_Result.Total_Questions) & "," &
-                        """correct"":" & Natural'Image(Accuracy_Result.Correct_Count) & "," &
-                        """failed"":" & Natural'Image(Accuracy_Result.Failed_Count) & "," &
-                        """time"":" & Float'Image(Accuracy_Result.Time_Seconds) & "}");
-                  else
-                     --  Both performance AND accuracy (default)
-                     Put_Line(AnsiAda.Foreground(AnsiAda.Cyan) &
-                              "[Benchmark]" & AnsiAda.Reset &
-                              " Running BOTH performance AND accuracy benchmarks");
-
-                     --  Run performance benchmark
-                     Put_Line(AnsiAda.Foreground(AnsiAda.Green) &
-                              "[Benchmark]" & AnsiAda.Reset &
-                              " Phase 1: Performance benchmark");
-                     Run_Benchmark(
-                        Config => Config,
-                        On_Progress => null,
-                        Result => Perf_Result
-                     );
-
-                     --  Run accuracy benchmark
-                     Put_Line(AnsiAda.Foreground(AnsiAda.Green) &
-                              "[Benchmark]" & AnsiAda.Reset &
-                              " Phase 2: Accuracy benchmark - " & To_String(Accuracy_Bench));
-                     Run_Accuracy_Benchmark(
-                        Benchmark => BENCH_MMLU,
-                        Sample_Size => Sample_Size,
-                        On_Progress => null,
-                        Result => Accuracy_Result
-                     );
-                     Acc_Result := To_Unbounded_String(
-                        "{""benchmark"":""accuracy""," &
-                        """name"":" & To_String(Accuracy_Bench) & "," &
-                        """accuracy"":" & Float'Image(Accuracy_Result.Accuracy) & "," &
-                        """total"":" & Natural'Image(Accuracy_Result.Total_Questions) & "," &
-                        """correct"":" & Natural'Image(Accuracy_Result.Correct_Count) & "," &
-                        """failed"":" & Natural'Image(Accuracy_Result.Failed_Count) & "," &
-                        """time"":" & Float'Image(Accuracy_Result.Time_Seconds) & "}");
-                  end if;
-
-                  --  [DO NOT REMOVE] Return combined benchmark result
-                  --  Unparseable answers = complete failure (accuracy = 0.0)
-                  return Wrap_Response(
-                     Build_Response(
-                        "{""performance"":" & To_String(Perf_Result) & "," &
-                        """accuracy"":" & To_String(Acc_Result) & "," &
-                        """benchmark_type"":" & To_String(Bench_Type) & "," &
-                        """accuracy_benchmark"":" & To_String(Accuracy_Bench) & "," &
-                        """sample_size"":" & Natural'Image(Sample_Size) & "}",
-                        AWS.Messages.S200,
-                        "application/json"));
+                  --  [DO NOT REMOVE] Run benchmarks asynchronously and stream
+                  declare
+                     Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
+                     T : Benchmark_Streaming_Task_Access := new Benchmark_Streaming_Task;
+                     S : aliased Streaming_Queue.Response_Stream;
+                  begin
+                     S.Q := Q;
+                     Q.Set_Format(Streaming_Queue.Raw);
+                     Q.Push("data: {""type"":""status"",""message"":""Benchmark started""}" & ASCII.LF & ASCII.LF);
+                     
+                     T.Start(Config, To_String(Bench_Type), To_String(Accuracy_Bench), Sample_Size, Q);
+                     
+                     Ada.Text_IO.Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Cyan) & "[Benchmark-V]" &
+                        AnsiAda.Reset & " Streaming: Benchmark_Streaming_Task started.");
+                        
+                     return Wrap_Response (AWS.Response.Stream
+                       (Content_Type => "text/event-stream",
+                        Handle => S));
+                  end;
                end;
             end if;
 
