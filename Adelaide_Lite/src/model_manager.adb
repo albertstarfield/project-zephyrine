@@ -2689,32 +2689,58 @@ package body Model_Manager is
          Load_Model (Kind, Success);
      end Force_Unload_And_Reload;
 
-    procedure FreeParallelMemory is
-    begin
-        --  [DO NOT REMOVE COMMENT EXPLANATION]
-        --  FIX: Global Universal FreeParallelMemory Call
-        --  Releases VRAM and system memory across all AI pipelines:
-        --  1. Flushes and unloads all LLM & Embedding models, clearing KV caches.
-        --  2. Releases Stable Diffusion FLUX and Refinement contexts from VRAM.
-        --  3. Shuts down and releases the Moonshine STT transcriber context.
+     procedure FreeParallelMemory is
+     begin
+         --  [DO NOT REMOVE COMMENT EXPLANATION]
+         --  FIX: Global Universal FreeParallelMemory Call
+         --  Releases VRAM and system memory across all AI pipelines:
+         --  1. Force-frees ALL LLM & Embedding model contexts (bypasses warm cache).
+         --  2. Releases Stable Diffusion FLUX and Refinement contexts from VRAM.
+         --  3. Shuts down and releases the Moonshine STT transcriber context.
+         --
+         --  WHY BYPASS Unload_Model:
+         --  Unload_Model marks non-embedding models as "warm cached" without
+         --  calling Llama_Free — this leaves Metal GPU compute buffers and
+         --  KV cache memory allocated in VRAM. Over time (10-15 min), these
+         --  accumulate and push system memory to 98%, triggering macOS OOM
+         --  killer (SIGKILL -9). FreeParallelMemory must release EVERYTHING.
 
-        -- 1. Unload all loaded LLM/Embedding models
-        for Kind in Model_Type loop
-            if Models (Kind).Loaded then
-                Unload_Model (Kind);
-            end if;
-        end loop;
+         --  1. Force-free ALL loaded models — no warm cache, full Metal release
+         for Kind in Model_Type loop
+             if Models (Kind).Loaded then
+                 --  MMProj uses mtmd context, not llama context
+                 if Kind = MMProj then
+                     if Models (Kind).Mtmd_Ctx /= Null_Mtmd_Context then
+                         Mtmd_Free_Safe (Models (Kind).Mtmd_Ctx);
+                         Models (Kind).Mtmd_Ctx := Null_Mtmd_Context;
+                     end if;
+                 else
+                     --  Clear KV cache first to release VRAM pages
+                     if Models (Kind).Context /= Null_Context then
+                         Llama_Interface.Llama_Memory_Clear
+                           (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), True);
+                         --  Force-free the context — releases Metal compute buffers,
+                         --  KV cache memory, and all GPU allocations
+                         Llama_Interface.Llama_Free (Models (Kind).Context);
+                         Models (Kind).Context := Null_Context;
+                     end if;
+                     Models (Kind).Current_Ctx := 0;
+                     Models (Kind).Warm_Cached := False;
+                 end if;
+                 Models (Kind).Loaded := False;
+             end if;
+         end loop;
 
-        -- 2. Free Stable Diffusion contexts
-        SD_Manager.Free_Flux_Context;
-        SD_Manager.Free_Refiner_Context;
+         --  2. Free Stable Diffusion contexts
+         SD_Manager.Free_Flux_Context;
+         SD_Manager.Free_Refiner_Context;
 
-        -- 3. Free Moonshine STT transcribers
-        Moonshine_Interface.Free_Moonshine;
+         --  3. Free Moonshine STT transcribers
+         Moonshine_Interface.Free_Moonshine;
 
-        -- 4. Flush SQLite caches and reclaim database heap memory
-        Database_Manager.Flush_Memory;
-    end FreeParallelMemory;
+         --  4. Flush SQLite caches and reclaim database heap memory
+         Database_Manager.Flush_Memory;
+     end FreeParallelMemory;
 
     function Get_Context
        (Kind : Model_Type) return Llama_Interface.Llama_Context is
