@@ -4437,6 +4437,32 @@ package body Model_Manager is
                                Remaining,
                                False,
                                False);
+                        
+                        if Prompt_Toks < 0 then
+                            declare
+                                Required_Toks : constant int := -Prompt_Toks;
+                                New_Total     : constant int := int (VT_Len) + Required_Toks;
+                                New_Tokens    : constant Token_Array_Access := new Token_Array (1 .. Positive (New_Total));
+                            begin
+                                -- Copy VT back to new array
+                                for I in 1 .. VT_Len loop
+                                    New_Tokens (I) := Tokens (I);
+                                end loop;
+                                Free_Tokens (Tokens);
+                                Tokens := New_Tokens;
+                                
+                                Prompt_Toks :=
+                                   Llama_Tokenize
+                                      (Vocab,
+                                       Prompt_C,
+                                       int (Clean_P'Length),
+                                       Tokens (VT_Len + 1)'Address,
+                                       Required_Toks,
+                                       False,
+                                       False);
+                            end;
+                        end if;
+                        
                         N_Toks := int (VT_Len) + Prompt_Toks;
                     end;
                     declare
