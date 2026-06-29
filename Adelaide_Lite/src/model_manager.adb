@@ -1766,7 +1766,7 @@ package body Model_Manager is
                              & "[WarmCache-RACE-FIX] "
                              & AnsiAda.Reset
                              & Model_Type'Image (Kind)
-                             & " warm cache expired but model In_Use — reusing context");
+                             & " warm cache expired but model In_Use - reusing context");
 
                          Models (Kind).Warm_Cached := False;
                          Models (Kind).Last_Used := Clock;

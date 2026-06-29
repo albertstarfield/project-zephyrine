@@ -2098,7 +2098,7 @@ package body Adelaide_Server_Pkg is
                 Seed        : Long_Long_Integer := -1;
                 Quality     : Unbounded_String := To_Unbounded_String ("standard");
                 Style       : Unbounded_String := To_Unbounded_String ("vivid");
-                Response_Fmt: Unbounded_String := To_Unbounded_String ("b64_json");
+                Response_Fmt : Unbounded_String := To_Unbounded_String ("b64_json");
                 Image_B64   : Unbounded_String := Null_Unbounded_String;
                 Error_Msg   : Unbounded_String := Null_Unbounded_String;
                 Img_Obj     : JSON_Value;
