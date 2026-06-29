@@ -4,6 +4,6 @@
 --  ============================================================================
 package Version is
    Project_Name : constant String := "Project Zephyrine Adelaide Volatus Damare AWS";
-   Git_Hash     : constant String := "47f20d7";
+   Git_Hash     : constant String := "2961ef9";
    Full_Version : constant String := Project_Name & " - " & Git_Hash;
 end Version;

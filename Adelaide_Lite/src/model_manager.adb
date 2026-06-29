@@ -4599,6 +4599,12 @@ package body Model_Manager is
         --  already too slow (would make it worse) or when context is nearly full
         --  (no room to grow into).
         --
+        --  WHY 3s: 30s is not realistic. What IS realistic is instant gratification.
+        --  Indonesian people want 3s at most and that is already considered really
+        --  slow. If prefill exceeds 3s, the user perceives unacceptable lag and the
+        --  threshold formula should prevent further context expansion to avoid making
+        --  it worse.
+        --
         --  THRESHOLD FORMULA (computed after prefill):
         --    threshold_pct = min(75, 30 / prefill_elapsed * (free_ctx_pct / 100))
         --  - If prefill is fast (<5s) and free ctx is high (>50%): threshold rises
