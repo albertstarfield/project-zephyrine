@@ -67,6 +67,7 @@ Adelaide_Lite/run/*
 **/*.csv
 **.graphml
 **.tmp
+**tmp**
 **.pid
 **.heartbeat
 **.args
