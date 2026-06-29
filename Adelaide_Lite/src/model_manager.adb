@@ -690,21 +690,19 @@ package body Model_Manager is
                     & "[CtxMonitor]"
                     & AnsiAda.Reset
                     & " Virtual CTX: "
-                    & Natural'Image (VC_Bytes)
-                    & " bytes / "
                     & Natural'Image (VC_Tokens)
-                    & " ~tokens"
-                    & " out of 9223372036854775807"
-                    & " ("
-                    & Natural'Image (VC_Ctx_Pct)
-                    & "% of LLM window)");
+                    & "/"
+                    & "9223372036854775807"
+                    & " Tokens (Virtctx Mem Alloc "
+                    & Natural'Image (VC_Bytes)
+                    & " bytes)");
 
                 --  LLM Context: actual tokens in the prompt submitted to llama
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Cyan)
                     & "[CtxMonitor]"
                     & AnsiAda.Reset
-                    & " LLM CTX:    "
+                    & " Allocated ctx attention: "
                     & Natural'Image (Prompt_Toks)
                     & " / "
                     & Natural'Image (LLM_Ctx)
@@ -911,6 +909,7 @@ package body Model_Manager is
      --    Owner            : Current priority owner of each model
      --    On_Battery_State : Battery power status
      --    Battery_Level    : Current battery level (0-100)
+     --    Last_ELP1_End    : Timestamp of last ELP1 release (for 60s cooldown)
      protected Priority_Model_Gate is
          --  Signal that an ELP1 request is pending
          --  Increments the pending count and updates priority state
@@ -955,7 +954,11 @@ package body Model_Manager is
          Owner             : Owner_Array := [others => ELP0];
          On_Battery_State  : Boolean := False;
          Battery_Level     : Natural := 100;
+         Last_ELP1_End     : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
     end Priority_Model_Gate;
+
+    --  ELP0 cooldown: 60 seconds after last ELP1 completes before ELP0 can run
+    ELP0_Cooldown_S : constant Duration := 60.0;
 
     protected body Accel_Lock_Object is
         --  [DO NOT REMOVE THIS PRINT VERBOSITY]
@@ -1023,6 +1026,10 @@ package body Model_Manager is
             if ELP1_Active_Count > 0 then
                 ELP1_Active_Count := ELP1_Active_Count - 1;
             end if;
+            --  Record timestamp when last ELP1 ends — ELP0 must wait 60s after this
+            if ELP1_Active_Count = 0 and then ELP1_Pending = 0 then
+                Last_ELP1_End := Ada.Real_Time.Clock;
+            end if;
             Put_Line
                ("[ELP1-RELEASED] "
                 & Kind'Img
@@ -1040,13 +1047,16 @@ package body Model_Manager is
          --    1. The model is not busy
          --    2. No ELP1 requests are pending
          --    3. No ELP1 requests are active
-         --    4. Battery conditions are satisfied (if on battery)
+         --    4. 60 seconds have passed since the last ELP1 completed (cooldown)
+         --    5. Battery conditions are satisfied (if on battery)
          --
          --  This ensures user-facing ELP1 requests always preempt background ELP0 tasks.
          entry Acquire_ELP0(for K in Model_Type) (Success : out Boolean)
             when(not Busy (K)
                  and then ELP1_Pending = 0      -- FIX: Only allow if no ELP1 pending
-                 and then ELP1_Active_Count = 0) -- FIX: Only allow if no ELP1 active
+                 and then ELP1_Active_Count = 0  -- FIX: Only allow if no ELP1 active
+                 and then (Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Last_ELP1_End) >= ELP0_Cooldown_S
+                           or else Last_ELP1_End = Ada.Real_Time.Time_First))
             and then (not On_Battery_State or else Battery_Level >= 80)
          is
          begin
@@ -1063,6 +1073,25 @@ package body Model_Manager is
                      & " | ELP1 Active: "
                      & ELP1_Active_Count'Img);
              else
+                 --  Check 60s cooldown — if ELP1 just finished, wait
+                 if Last_ELP1_End /= Ada.Real_Time.Time_First then
+                     declare
+                        Cooldown_Remaining : constant Duration :=
+                           ELP0_Cooldown_S - (Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Last_ELP1_End));
+                     begin
+                        if Cooldown_Remaining > 0.0 then
+                            Success := False;
+                            Put_Line
+                               ("[ELP0-COOLDOWN] "
+                                & K'Img
+                                & " | Waiting "
+                                & Duration'Image (Cooldown_Remaining)
+                                & "s after last ELP1");
+                            return;
+                        end if;
+                     end;
+                 end if;
+
                  Busy (K) := True;
                  Owner (K) := ELP0;
                  Success := True;
@@ -1112,7 +1141,8 @@ package body Model_Manager is
             return Owner (Kind) = ELP0;
         end Is_ELP0_Owner;
 
-        --  Barrier: ELP0 tasks block here until all ELP1 requests have completed.
+        --  Barrier: ELP0 tasks block here until all ELP1 requests have completed
+        --  AND the 60s cooldown has elapsed.
         --  See Wait_For_ELP1_Idle spec in model_manager.ads for full explanation.
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -1120,6 +1150,8 @@ package body Model_Manager is
         --  Verbose: prints guard state when an ELP0 task arrives.
         entry Wait_For_ELP1_Idle
            when(ELP1_Pending = 0 and then ELP1_Active_Count = 0)
+           and then (Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Last_ELP1_End) >= ELP0_Cooldown_S
+                     or else Last_ELP1_End = Ada.Real_Time.Time_First)
            and then (not On_Battery_State or else Battery_Level >= 80)
         is
         begin
@@ -3574,11 +3606,11 @@ package body Model_Manager is
                 Parser.Sanitize_Buffer := Null_Unbounded_String;
                 Parser.In_Think_Block := False;
                 --  Do NOT push `</think>` here. The emulated streaming section
-                --  in Hybrid_Generate will push `</think>` after Generate
                 --  returns. Pushing it here would create a duplicate closing
                 --  tag on the wire. Just clear the Orch_Think_Open flag so
                 --  the emulated streaming knows the orchestration think block
                 --  was closed during generation.
+                Append (Parser.Output_Buffer, ASCII.LF & "</think>" & ASCII.LF & "<!-- ANSWER_START -->" & ASCII.LF);
                 if Parser.Orch_Think_Open then
                     Parser.Orch_Think_Open := False;
                 end if;
@@ -5305,7 +5337,7 @@ package body Model_Manager is
                 & "[Gen-V]"
                 & AnsiAda.Reset
                 & " Generate: AUTO-CLOSING unclosed think block at EOG.");
-            Append (Result, "</think>");
+            Append (Result, "</think>" & ASCII.LF & "<!-- ANSWER_START -->" & ASCII.LF);
         end if;
 
         if Stream /= null then
@@ -7119,12 +7151,15 @@ package body Model_Manager is
                            Sanitize_Think_Tags (To_String (Fault_Result));
                     begin
                         --  Blacklist the initial seed if it produced think-only
-                        if Sanitized_Check = "" then
+                        if Sanitized_Check = ""
+                           or else Ada.Strings.Fixed.Trim (Sanitized_Check, Ada.Strings.Both) = "<!-- ANSWER_START -->"
+                        then
                             Database_Manager.Blacklist_Seed
                                (Natural (Generate_Seed));
                         end if;
 
-                        while Sanitized_Check = ""
+                        while (Sanitized_Check = ""
+                               or else Ada.Strings.Fixed.Trim (Sanitized_Check, Ada.Strings.Both) = "<!-- ANSWER_START -->")
                            and then Retry_Count < Max_Think_Retries
                         loop
                             Retry_Count := Retry_Count + 1;
