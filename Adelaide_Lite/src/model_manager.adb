@@ -728,11 +728,11 @@ package body Model_Manager is
                     & Duration'Image (Virtual_Prefill_Speed)
                     & " tok/s | Elapsed="
                     & Duration'Image (Prefill_Elapsed) & "s"
-                    & " | Budget=30s"
+                    & " | Budget=3s"
                     & " | Budget_Projection="
                     & Natural'Image (
                          (if Virtual_Prefill_Speed > 0.0
-                          then Natural (Virtual_Prefill_Speed) * 30
+                          then Natural (Virtual_Prefill_Speed) * 3
                           else 0))
                     & " tok"
                     & " | Expand Threshold="
@@ -4593,7 +4593,7 @@ package body Model_Manager is
         --  CHUNKED DECODING (PREFILL)
         --  ============================================================================
         --  PREFILL TIME BUDGET: We measure actual decode time (not cached/virtualized
-        --  tokens — those are free). The budget is 30s max. After prefill completes,
+        --  tokens — those are free). The budget is 3s max. After prefill completes,
         --  we compute tok/s and weight it against free context % to determine the
         --  dynamic expansion threshold. This prevents expanding ctx when prefill is
         --  already too slow (would make it worse) or when context is nearly full
@@ -4775,7 +4775,7 @@ package body Model_Manager is
                 --  DYNAMIC EXPANSION THRESHOLD (VRAM-aware, speed-weighted):
                 --  ============================================================================
                 --  WHY THIS FORMULA:
-                --  The old formula used `30s / elapsed * free_ctx_pct` which gave LOW
+                --  The old formula used `3s / elapsed * free_ctx_pct` which gave LOW
                 --  thresholds when prefill was slow — WRONG. Slow prefill means expansion
                 --  makes things WORSE, so we need HIGHER thresholds (expand later).
                 --
@@ -4823,7 +4823,7 @@ package body Model_Manager is
                         & " Elapsed=" & Duration'Image (Prefill_Elapsed) & "s"
                         & " Tokens=" & Natural'Image (Prefill_Token_Count)
                         & " Speed=" & Duration'Image (Virtual_Prefill_Speed) & " tok/s"
-                        & " Budget_Projection=" & Natural'Image (Budget_Tokens) & " tok@30s"
+                        & " Budget_Projection=" & Natural'Image (Budget_Tokens) & " tok@3s"
                         & " Free_Ctx=" & Natural'Image (Free_Ctx_Pct) & "%"
                         & " Expand_Threshold=" & Natural'Image (Ctx_Expand_Threshold_Pct) & "%");
                 end;
