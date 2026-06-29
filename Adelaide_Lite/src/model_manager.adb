@@ -185,6 +185,8 @@ package body Model_Manager is
        (T : System.Address; N : int) return Llama_Batch;
     pragma Import (C, Llama_Batch_Get_One, "llama_batch_get_one");
 
+    --  =====================================================================
+
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -212,6 +214,63 @@ package body Model_Manager is
     Diag_AIS : constant Integer := Emit_After_Init_Start;
     pragma Warnings (Off, Diag_AIS);
 
+    --  =====================================================================
+    --  CSV SERIAL WRITER — prevents interleaved writes from multiple tasks
+    --  Each CSV file gets its own protected writer that serializes access.
+    --  Without this, concurrent Put_Line calls from different tasks produce
+    --  corrupted rows (e.g., uptime values going backwards).
+    --  =====================================================================
+    protected type CSV_Serial_Writer is
+        procedure Set_File (Path : String; Header : String);
+        procedure Write_Row (Row : String);
+    private
+        File      : Ada.Text_IO.File_Type;
+        Is_Open   : Boolean := False;
+        File_Path : Ada.Strings.Unbounded.Unbounded_String
+                      := Ada.Strings.Unbounded.Null_Unbounded_String;
+        File_Header : Ada.Strings.Unbounded.Unbounded_String
+                        := Ada.Strings.Unbounded.Null_Unbounded_String;
+    end CSV_Serial_Writer;
+
+    protected body CSV_Serial_Writer is
+        procedure Set_File (Path : String; Header : String) is
+        begin
+            Ada.Strings.Unbounded.Set_Unbounded_String (File_Path, Path);
+            Ada.Strings.Unbounded.Set_Unbounded_String (File_Header, Header);
+        end Set_File;
+
+        procedure Ensure_Open is
+        begin
+            if not Is_Open then
+                begin
+                    Ada.Text_IO.Open (File, Ada.Text_IO.Append_File,
+                                      Ada.Strings.Unbounded.To_String (File_Path));
+                exception
+                    when Ada.Text_IO.Name_Error =>
+                        Ada.Text_IO.Create (File, Ada.Text_IO.Append_File,
+                                             Ada.Strings.Unbounded.To_String (File_Path));
+                        if Ada.Strings.Unbounded.Length (File_Header) > 0 then
+                            Ada.Text_IO.Put_Line (File,
+                                                   Ada.Strings.Unbounded.To_String (File_Header));
+                        end if;
+                end;
+                Is_Open := True;
+            end if;
+        end Ensure_Open;
+
+        procedure Write_Row (Row : String) is
+        begin
+            Ensure_Open;
+            Ada.Text_IO.Put_Line (File, Row);
+            Ada.Text_IO.Flush (File);
+        end Write_Row;
+    end CSV_Serial_Writer;
+
+    --  Singleton CSV writers — one per file, serialized across all tasks
+    WCET_CSV     : CSV_Serial_Writer;
+    Accel_CSV    : CSV_Serial_Writer;
+    CPU_CSV      : CSV_Serial_Writer;
+
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -222,20 +281,12 @@ package body Model_Manager is
 
     task body WCET_Monitor is
         use Ada.Real_Time;
-        CSV_File   : Ada.Text_IO.File_Type;
         Last_Print : Time := Time_First;
         Uptime_S   : Long_Long_Integer;
     begin
         Elab_Trace ("WCET_Monitor task body ENTERED");
         accept Start;
-        --  Open CSV for append
-        begin
-            Ada.Text_IO.Open (CSV_File, Ada.Text_IO.Append_File, "run/wcet.csv");
-        exception
-            when Ada.Text_IO.Name_Error =>
-                Ada.Text_IO.Create (CSV_File, Ada.Text_IO.Append_File, "run/wcet.csv");
-                Ada.Text_IO.Put_Line (CSV_File, "uptime_s,pipeline_ns,elp0_ns,elp1_ns,elp2_ns,elp3_ns");
-        end;
+        --  CSV file handled by WCET_CSV singleton — no local file open needed
         loop
             delay until Last_Print + Milliseconds (1000);
             Last_Print := Clock;
@@ -265,10 +316,9 @@ package body Model_Manager is
                 & Long_Long_Integer'Image
                      (Long_Long_Integer (Current_WCET_ELP3 * 1_000_000_000))
                 & "ns");
-            --  Append CSV row
-            Ada.Text_IO.Put_Line
-               (CSV_File,
-                Long_Long_Integer'Image (Uptime_S) & ","
+            --  Append CSV row (serialized via protected writer)
+            WCET_CSV.Write_Row
+               (Long_Long_Integer'Image (Uptime_S) & ","
                 & Long_Long_Integer'Image
                      (Long_Long_Integer (Current_WCET * 1_000_000_000)) & ","
                 & Long_Long_Integer'Image
@@ -279,7 +329,6 @@ package body Model_Manager is
                      (Long_Long_Integer (Current_WCET_ELP2 * 1_000_000_000)) & ","
                 & Long_Long_Integer'Image
                      (Long_Long_Integer (Current_WCET_ELP3 * 1_000_000_000)));
-            Ada.Text_IO.Flush (CSV_File);
         end loop;
     end WCET_Monitor;
 
@@ -293,7 +342,6 @@ package body Model_Manager is
 
       task body Acceleration_Monitor is
          use Ada.Real_Time;
-         CSV_File   : Ada.Text_IO.File_Type;
          Last_Print : Time := Time_First;
          Uptime_S   : Long_Long_Integer;
          Cycle_Count : Natural := 0;
@@ -312,22 +360,9 @@ package body Model_Manager is
                    & "[DEBUG] [AccelMonitor] task body ENTERED" & AnsiAda.Reset);
          Elab_Trace ("Acceleration_Monitor task body ENTERED");
          accept Start;
-         --  Open CSV for append
-         begin
-             Ada.Text_IO.Open (CSV_File, Ada.Text_IO.Append_File, "run/acceleration.csv");
-             Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                       & "[DEBUG] [AccelMonitor] Opened acceleration.csv for append" & AnsiAda.Reset);
-         exception
-             when Ada.Text_IO.Name_Error =>
-                 Ada.Text_IO.Create (CSV_File, Ada.Text_IO.Append_File, "run/acceleration.csv");
-                 Ada.Text_IO.Put_Line (CSV_File, "uptime_s,free_mb,total_mb,percent,tensor_layers,metal_broken");
-                 Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                           & "[DEBUG] [AccelMonitor] Created new acceleration.csv with headers" & AnsiAda.Reset);
-         end;
-
-         --  [DEBUG] Log when monitor enters main loop
+         --  CSV file handled by Accel_CSV singleton — no local file open needed
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                   & "[DEBUG] [AccelMonitor] Entering main monitoring loop" & AnsiAda.Reset);
+                   & "[DEBUG] [AccelMonitor] CSV writer ready (serialized)" & AnsiAda.Reset);
 
          loop
              delay until Last_Print + Milliseconds (10000);
@@ -416,14 +451,13 @@ package body Model_Manager is
                                    else Trim (Integer'Image (Acceleration_Silicon_Layer), Both))
                                 & (if Metal_Broken_Flag = 1 then " [CRITICAL]" else "")
                                 & AnsiAda.Reset);
-                            Ada.Text_IO.Put_Line
-                               (CSV_File,
-                                Long_Long_Integer'Image (Uptime_S) & ","
-                                & Natural'Image (Free_MB) & ","
-                                & Natural'Image (Total_MB) & ","
-                                & Natural'Image (Percent) & ","
-                                & Integer'Image (Acceleration_Silicon_Layer) & ","
-                                & Integer'Image (Metal_Broken_Flag));
+                             Accel_CSV.Write_Row
+                                (Long_Long_Integer'Image (Uptime_S) & ","
+                                 & Natural'Image (Free_MB) & ","
+                                 & Natural'Image (Total_MB) & ","
+                                 & Natural'Image (Percent) & ","
+                                 & Integer'Image (Acceleration_Silicon_Layer) & ","
+                                 & Integer'Image (Metal_Broken_Flag));
                          end;
                  else
                      -- Check for metal_broken state or memory query failure
@@ -465,14 +499,12 @@ package body Model_Manager is
                                     & AnsiAda.Reset);
                          end if;
 
-                         Ada.Text_IO.Put_Line
-                            (CSV_File,
-                             Long_Long_Integer'Image (Uptime_S) & ",0,0,0,"
+                         Accel_CSV.Write_Row
+                            (Long_Long_Integer'Image (Uptime_S) & ",0,0,0,"
                              & Integer'Image (Acceleration_Silicon_Layer) & ","
                              & Integer'Image (Metal_Broken_Flag));
                      end;
-                 Ada.Text_IO.Flush (CSV_File);
-             end if;
+                 end if;
          end loop;
      end Acceleration_Monitor;
 
@@ -489,20 +521,12 @@ package body Model_Manager is
 
     task body CPU_Monitor is
         use Ada.Real_Time;
-        CSV_File   : Ada.Text_IO.File_Type;
         Last_Print : Time := Time_First;
         Uptime_S   : Long_Long_Integer;
     begin
         Elab_Trace ("CPU_Monitor task body ENTERED");
         accept Start;
-        --  Open CSV for append
-        begin
-            Ada.Text_IO.Open (CSV_File, Ada.Text_IO.Append_File, "run/cpu_memory.csv");
-        exception
-            when Ada.Text_IO.Name_Error =>
-                Ada.Text_IO.Create (CSV_File, Ada.Text_IO.Append_File, "run/cpu_memory.csv");
-                Ada.Text_IO.Put_Line (CSV_File, "uptime_s,free_mb,total_mb,percent");
-        end;
+        --  CSV file handled by CPU_CSV singleton — no local file open needed
         loop
             delay until Last_Print + Milliseconds (10000);
             Last_Print := Clock;
@@ -535,14 +559,12 @@ package body Model_Manager is
                         & Trim (Natural'Image (Percent), Both)
                         & "% Used)"
                         & AnsiAda.Reset);
-                    Ada.Text_IO.Put_Line
-                       (CSV_File,
-                        Long_Long_Integer'Image (Uptime_S) & ","
+                    CPU_CSV.Write_Row
+                       (Long_Long_Integer'Image (Uptime_S) & ","
                         & Natural'Image (Free_MB) & ","
                         & Natural'Image (Total_MB) & ","
                         & Natural'Image (Percent));
                 end if;
-                Ada.Text_IO.Flush (CSV_File);
             end;
         end loop;
     end CPU_Monitor;
@@ -1268,6 +1290,14 @@ package body Model_Manager is
             return;
         end if;
         Initialized := True;
+
+        --  === INITIALIZE CSV SERIAL WRITERS ===
+        WCET_CSV.Set_File ("run/wcet.csv",
+                           "uptime_s,pipeline_ns,elp0_ns,elp1_ns,elp2_ns,elp3_ns");
+        Accel_CSV.Set_File ("run/acceleration.csv",
+                            "uptime_s,free_mb,total_mb,percent,tensor_layers,metal_broken");
+        CPU_CSV.Set_File ("run/cpu_memory.csv",
+                          "uptime_s,free_mb,total_mb,percent");
 
         --  === LOAD SIGKILL CONTEXT CAP ===
         --  If run/.oom_kill_ctx_cap exists, read the saved context size

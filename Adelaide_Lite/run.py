@@ -1726,6 +1726,11 @@ def main():
                     print(f"[!] Failed to generate crash plot: {e}")
 
                 print("\n[*] Relaunching server instantly (JMP back Rebounce back)...")
+                # Kill any lingering old daemon to prevent CSV write races
+                subprocess.run(["pkill", "-9", "-f", "adelaide_server"],
+                               stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+                import time as _kill_wait
+                _kill_wait.sleep(0.5)  # Give OS time to release file handles
                 tee_process = subprocess.Popen(
                     ["tee", "-a", current_log_path],
                     stdin=subprocess.PIPE,
