@@ -540,7 +540,7 @@ begin
             end if;
             Put_Line (Standard_Error,
               "[Watchdog] Clean shutdown complete.");
-            return;
+            GNAT.OS_Lib.OS_Exit (0);
          end if;
 
          --  Update our heartbeat so future instances can verify we're alive

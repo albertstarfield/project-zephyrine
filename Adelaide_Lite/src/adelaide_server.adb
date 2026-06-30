@@ -35,6 +35,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Environment_Variables;
 with Ada.Directories;
+with GNAT.OS_Lib;
 with Adelaide_Server_Pkg;
 with Model_Manager;
 with Knowledge_Manager;
@@ -1169,10 +1170,10 @@ begin
                      Ada.Directories.Delete_File
                        ("run/adelaide_server.heartbeat");
                   end if;
-                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
                             "[Shutdown]" & AnsiAda.Reset &
                             " Clean shutdown complete.");
-                  return;
+                   GNAT.OS_Lib.OS_Exit (0);
                end if;
 
                Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
