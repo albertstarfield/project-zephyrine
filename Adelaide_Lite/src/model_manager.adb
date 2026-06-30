@@ -4558,6 +4558,10 @@ package body Model_Manager is
         Prompt_C : chars_ptr := New_String (Clean_P);
         Parser   : Stream_Parser_State;
 
+        --  OOM retry: try smaller context up to 3 times before giving up
+        OOM_Retry_Count : Natural := 0;
+        Max_OOM_Retries : constant Natural := 3;
+
         --  Identify source for descriptive logging
         Source : constant String :=
            (if Level = ELP0 then "Speculation" else "User-Chat");
@@ -4790,6 +4794,12 @@ package body Model_Manager is
                         & "computing from scratch");
                 end if;
             end;
+
+            --  =================================================================
+            --  OOM RETRY LABEL: If Storage_Error occurs during decode,
+            --  we jump back here with a smaller context and retry.
+            --  =================================================================
+            <<OOM_Retry>>
 
             --  Allocate token array based on actual context size
             Tokens :=
@@ -6044,7 +6054,82 @@ package body Model_Manager is
                 Free_Tokens (Tokens);
                 Tokens := null;
             end if;
-            --  Always release ELP lock and dequeue, even on error path.
+
+            --  =================================================================
+            --  OOM RETRY: Try to reload with a smaller context.
+            --  =================================================================
+            --  After OOM, the model is unloaded and memory is freed.
+            --  We try to reload with a smaller context size:
+            --    current_ctx → current_ctx/2 → 4096 → 2048
+            --  If reload succeeds, we goto OOM_Retry to retry generation.
+            --  If all contexts fail, we release the gate and return error.
+            --  =================================================================
+            OOM_Retry_Count := OOM_Retry_Count + 1;
+
+            if OOM_Retry_Count <= Max_OOM_Retries then
+                --  Calculate smaller context: halve it, minimum 2048
+                declare
+                    Old_Ctx : constant Natural := Natural (Models (Kind).Current_Ctx);
+                    New_Ctx : Natural;
+                    Retry_Success : Boolean := False;
+                begin
+                    if Old_Ctx > 8192 then
+                        New_Ctx := 8192;
+                    elsif Old_Ctx > 4096 then
+                        New_Ctx := 4096;
+                    elsif Old_Ctx > 2048 then
+                        New_Ctx := 2048;
+                    else
+                        New_Ctx := 0;  -- Already at minimum, can't go lower
+                    end if;
+
+                    if New_Ctx > 0 then
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Yellow)
+                            & "[OOM-Retry]"
+                            & AnsiAda.Reset
+                            & " OOM #" & Natural'Image (OOM_Retry_Count)
+                            & "/" & Natural'Image (Max_OOM_Retries)
+                            & ": Trying smaller context"
+                            & " " & Natural'Image (Old_Ctx)
+                            & " -> " & Natural'Image (New_Ctx));
+
+                        --  Reload with smaller context
+                        Load_Model (Kind, Retry_Success, New_Ctx);
+
+                        if Retry_Success then
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Green)
+                                & "[OOM-Retry]"
+                                & AnsiAda.Reset
+                                & " Reload OK with ctx="
+                                & Natural'Image (New_Ctx)
+                                & ". Retrying generation...");
+
+                            --  Re-enter the generation loop
+                            goto OOM_Retry;
+                        else
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Yellow)
+                                & "[OOM-Retry]"
+                                & AnsiAda.Reset
+                                & " Reload FAILED with ctx="
+                                & Natural'Image (New_Ctx)
+                                & ". Trying next smaller...");
+                        end if;
+                    end if;
+
+                    --  All contexts exhausted or reload failed
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Red)
+                        & "[OOM-Retry]"
+                        & AnsiAda.Reset
+                        & " All retry attempts exhausted after"
+                        & " " & Natural'Image (OOM_Retry_Count) & " OOMs.");
+                end;
+            end if;
+
+            --  Give up: release gate and return error
             if not Skip_Gate then
                 if Level = ELP0 then
                     Priority_Model_Gate.Release_ELP0 (Kind);
@@ -6055,7 +6140,8 @@ package body Model_Manager is
             end if;
             Result :=
                To_Unbounded_String
-                  ("ERROR: Out of Memory (STORAGE_ERROR) -- model unloaded, connection kept alive");
+                  ("ERROR: Out of Memory (STORAGE_ERROR) -- "
+                   & Natural'Image (OOM_Retry_Count) & " retries exhausted");
         when E : others =>
             Ada.Text_IO.Put_Line
                (AnsiAda.Background (AnsiAda.Red)
