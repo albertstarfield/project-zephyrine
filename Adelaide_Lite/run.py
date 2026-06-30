@@ -1138,8 +1138,7 @@ def main():
                 print("[+] GNATprove: Formal verification PASSED.")
             except subprocess.CalledProcessError:
                 print(f"{BG_RED}[BUGCHECK] [!] GNATprove: Formal verification FAILED. Check obj/spark/gnatprove/gnatprove.out{RST}")
-                if "--strict-verify" in sys.argv:
-                    sys.exit(1)
+                sys.exit(1)
             
             # 2. AFL++ Fuzzing Environment Check
             print("\n[*] Stage: AFL++ Fuzzing Readiness Check...")
@@ -1456,7 +1455,9 @@ def main():
     if run_benchmark:
         print("[*] Booting benchmark runner thread...")
         def benchmark_runner():
-            import time, urllib.request, json
+            import time
+            import urllib.request
+            import json
             print("[Benchmark] Waiting 15s for server to settle...")
             time.sleep(15)
             url = f"http://{server_host}:{server_port}/api/snowballEnagaValidationBenchmark"
