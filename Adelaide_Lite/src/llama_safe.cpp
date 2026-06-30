@@ -117,9 +117,7 @@ extern "C" {
     }
 
     // Detect all available CPU threads (physical + hyperthreaded).
-    // On Intel Pentium Penryn: 2 cores, 4 threads with hyperthreading.
-    // Apple M2 Pro: 10 cores, 10 threads (no hyperthreading on P/E cores).
-    // We use hw.logicalcpu which returns ALL hardware threads.
+    // Uses sysctl HW_LOGICALCPU which returns ALL hardware threads.
     unsigned cpu_thread_count() {
         int mib[2];
         mib[0] = CTL_HW;
