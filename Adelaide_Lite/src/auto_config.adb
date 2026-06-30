@@ -83,8 +83,6 @@ package body Auto_Config is
           & " Detecting hardware...");
 
       --  Detect CPU threads (physical cores + hyperthreading).
-      --  Why: Intel Pentium Penryn = 2 cores, 4 threads (hyperthreading).
-      --  Apple M2 Pro = 10 cores, 10 threads (no HT on P/E cores).
       --  Threads should be min(detected, 4) — more than 4 gives diminishing
       --  returns on llama.cpp workloads.
       declare
@@ -115,12 +113,8 @@ package body Auto_Config is
       end;
 
       --  Detect accelerator memory (Metal/Vulkan/CUDA VRAM)
-      --  Why: Intel integrated "GPU" shares system RAM. The VRAM reported
-      --  by Metal is the shared memory pool, not dedicated VRAM.
-      --  Apple M2 Pro has true unified memory — accelerator can access all RAM.
-      --  For Intel: actual dedicated VRAM is ~128-512MB, rest is shared.
-      --  We call it "accelerator memory" not "GPU VRAM" because on Intel
-      --  it's Intel HD Graphics, not a real GPU.
+      --  On integrated graphics, VRAM is shared system RAM.
+      --  On discrete GPUs, VRAM is dedicated memory.
       declare
          Free_Bytes  : Interfaces.C.size_t := 0;
          Total_Bytes : Interfaces.C.size_t := 0;

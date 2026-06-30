@@ -1767,9 +1767,8 @@ package body Model_Manager is
         --
         --  NEW: Auto_Config detects hardware and provides optimal settings.
         --  The system starts minimal, probes upward, and remembers what works.
-        --  This works on Intel Pentium Penryn (2 cores, 16GB, shared VRAM)
-        --  AND Apple M2 Pro (10 cores, 16GB, unified memory) without
-        --  hardcoding for either.
+        --  This works on any hardware — low-end laptops, workstations,
+        --  servers — without hardcoding for a specific configuration.
         --
         --  Embedding model uses 512 (fixed, no dynamic sizing).
         --  =====================================================================
@@ -2374,14 +2373,14 @@ package body Model_Manager is
             --  =====================================================================
             --  AUTO-CONFIG: Thread, Batch, and GPU Layer Selection
             --  =====================================================================
-            --  OLD: Hardcoded N_Threads=8, N_Batch=256, N_Gpu_Layers=-1
-            --  PROBLEM: Intel Pentium Penryn has 2 cores. Using 8 threads
-            --  causes context switching overhead that SLOWS DOWN inference.
-            --  Intel integrated GPU has ~128-512MB dedicated VRAM. The 5.8GB
-            --  model cannot fit. N_Batch=256 allocates ~64MB compute buffers
-            --  on shared VRAM — that's system RAM stolen from model weights.
-            --
-            --  NEW: Auto_Config detects hardware and provides optimal settings.
+             --  OLD: Hardcoded N_Threads=8, N_Batch=256, N_Gpu_Layers=-1
+             --  PROBLEM: Using more threads than physical cores causes
+             --  context switching overhead that SLOWS DOWN inference.
+             --  Integrated GPUs may have limited VRAM. The model may not fit.
+             --  N_Batch=256 allocates large compute buffers that steal
+             --  system RAM from model weights.
+             --
+             --  NEW: Auto_Config detects hardware and provides optimal settings.
             --  Starts minimal (1 thread, 64 batch, CPU-only), probes upward.
             --  =====================================================================
             declare
@@ -2492,14 +2491,14 @@ package body Model_Manager is
                 --  =================================================================
                 --  CONTEXT STEP-DOWN LADDER
                 --  =================================================================
-                --  OLD: Try context once. If null → fail.
-                --  PROBLEM: On low-RAM hardware (Intel Pentium Penryn, 16GB shared),
-                --  8192 ctx might fail but 4096 or 2048 would work. No retry = server
-                --  becomes useless on that hardware.
-                --
-                --  NEW: Try the requested context first. If it fails, step down
-                --  through the ladder: 8192 → 4096 → 2048. The first one that
-                --  works wins. This makes the server work on ANY hardware.
+                 --  OLD: Try context once. If null → fail.
+                 --  PROBLEM: On low-RAM hardware, a large context might fail
+                 --  but a smaller one would work. No retry = server becomes
+                 --  useless on that hardware.
+                 --
+                 --  NEW: Try the requested context first. If it fails, step down
+                 --  through the ladder: 8192 → 4096 → 2048. The first one that
+                 --  works wins. This makes the server work on ANY hardware.
                 --
                 --  The step-down is logged clearly so the operator knows the
                 --  hardware couldn't handle the requested context.

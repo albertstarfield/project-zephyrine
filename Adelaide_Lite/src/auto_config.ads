@@ -3,7 +3,7 @@ pragma SPARK_Mode (Off);
 --  AUTO_CONFIG — Self-Tuning Hardware Configuration
 --  ============================================================================
 --  PHILOSOPHY:
---    Do NOT hardcode for any specific hardware (Penryn, M2, etc.).
+--    Do NOT hardcode for any specific hardware.
 --    Instead: START MINIMAL → PROBE UPWARD → REMEMBER WHAT WORKS.
 --
 --    On first boot: minimal settings (2048 ctx, 1 thread, CPU-only).
@@ -12,9 +12,9 @@ pragma SPARK_Mode (Off);
 --    On next boot: load saved config, start from there.
 --
 --  WHY THIS MATTERS:
---    Same codebase runs on Intel Pentium Penryn (2 cores, 16GB, shared VRAM)
---    and Apple M2 Pro (10 cores, 16GB, unified memory). Hardcoding for either
---    breaks the other. Auto-config handles both automatically.
+--    Same codebase must run on any hardware — low-end laptops,
+--    workstations, servers — without hardcoding for a specific
+--    configuration. Auto-config handles all machines automatically.
 --
 --  CONFIG PERSISTENCE:
 --    Working configs saved to run/.auto_config between sessions.
@@ -58,10 +58,9 @@ package Auto_Config is
    --  THREAD LADDER (from 1 to max cores)
    --  ========================================================================
    --  Why start at 1:
-   --    Intel Pentium Penryn has 2 cores. Using 8 threads on a 2-core CPU
-   --    causes context switching overhead that SLOWS DOWN inference.
-   --    Start at 1, probe up to min(cores, 4).
-   --    Apple M2 Pro has 10 cores — probe up to 4 (diminishing returns above).
+   --    Using more threads than physical cores causes context switching
+   --    overhead that SLOWS DOWN inference. Start at 1, probe up to
+   --    min(detected_threads, 4) — more than 4 gives diminishing returns.
    --  ========================================================================
    type Thread_Ladder is (T_1, T_2, T_4);
    for Thread_Ladder use (T_1 => 1, T_2 => 2, T_4 => 4);
@@ -88,10 +87,10 @@ package Auto_Config is
    --  ACCELERATION LAYER LADDER (from 0=CPU-only to -1=all)
    --  ========================================================================
    --  Why start at 0:
-   --    Intel integrated GPU has ~128-512MB dedicated VRAM. The 5.8GB model
-   --    cannot fit on GPU. Start CPU-only, probe up to see if GPU helps.
-   --    Apple M2 Pro has unified memory — acceleration layers help immediately.
-   --    The probe will discover this automatically.
+   --    Integrated graphics may have limited dedicated VRAM. The model
+   --    may not fit on the accelerator. Start CPU-only, probe up to
+   --    see if offloading helps. Discrete GPUs with ample VRAM will
+   --    probe up quickly. The probe discovers optimal settings automatically.
    --
    --  Why "Acceleration_Layer" not "GPU_Layer":
    --    This covers GPU (Metal/CUDA/Vulkan), NPU (Neural Engine),
