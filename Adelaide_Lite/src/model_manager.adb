@@ -6094,6 +6094,24 @@ package body Model_Manager is
                             & " " & Natural'Image (Old_Ctx)
                             & " -> " & Natural'Image (New_Ctx));
 
+                        --  Wait for memory to actually free up.
+                        --  After OOM + unload, the OS needs time to reclaim
+                        --  pages. Metal command buffers need to drain.
+                        --  Retry #1: 1s, #2: 2s, #3: 3s (escalating).
+                        declare
+                            Retry_Delay : constant Duration :=
+                               Duration (OOM_Retry_Count);
+                        begin
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Grey)
+                                & "[OOM-Retry]"
+                                & AnsiAda.Reset
+                                & " Waiting"
+                                & Duration'Image (Retry_Delay)
+                                & "s for memory reclaim...");
+                            delay Retry_Delay;
+                        end;
+
                         --  Reload with smaller context
                         Load_Model (Kind, Retry_Success, New_Ctx);
 
