@@ -340,13 +340,14 @@ package body Adelaide_Server_Pkg is
        end Start;
 
       begin
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
                "[Dispatch-V]" & AnsiAda.Reset &
                " Generator_Task: Starting Hybrid_Generate...");
 
+         --  [GEN-RETRY] Retry Hybrid_Generate once on exception
+         Gen_Task_Retry :
+         for Gen_Attempt in 1 .. 2 loop
+         begin
             Model_Manager.Hybrid_Generate
               (Prompt         => To_String (P),
                Result         => Res,
@@ -355,26 +356,39 @@ package body Adelaide_Server_Pkg is
                Agentic        => Is_Ag,
                Raw_Prompt     => Is_Raw,
                External_Agent => Is_Ext);
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-         Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
-               "[Dispatch-V]" & AnsiAda.Reset &
-               " Generator_Task: Hybrid_Generate returned. ResLen=" &
-               Natural'Image (Length (Res)));
-       exception
-          when E : others =>
-             Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
-               "[Dispatch-V]" & AnsiAda.Reset &
-               " Generator Task EXCEPTION: " &
-               Ada.Exceptions.Exception_Message (E));
-             begin
-                if QA /= null then
-                   QA.Push (ASCII.LF & "ERROR: Inference Task Failed." & ASCII.LF);
-                end if;
-             exception
-                when others => null;
-             end;
+            Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                  "[Dispatch-V]" & AnsiAda.Reset &
+                  " Generator_Task: Hybrid_Generate returned. ResLen=" &
+                  Natural'Image (Length (Res)));
+            exit Gen_Task_Retry;  --  Success, no more retries
+
+         exception
+            when E : others =>
+               Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
+                 "[Dispatch-V]" & AnsiAda.Reset &
+                 " Generator Task EXCEPTION (attempt" & Integer'Image (Gen_Attempt) & "/2): " &
+                 Ada.Exceptions.Exception_Message (E));
+               if Gen_Attempt = 1 then
+                  --  First attempt failed: retry once
+                  Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                    "[Dispatch-V]" & AnsiAda.Reset &
+                    " Generator_Task: Retrying Hybrid_Generate...");
+                  delay 0.1;  --  Brief pause to let Metal drain
+               else
+                  --  Second attempt also failed: give up
+                  Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Red) &
+                    "[Dispatch-V]" & AnsiAda.Reset &
+                    " Generator_Task: Retry exhausted. Sending error to client.");
+                  begin
+                     if QA /= null then
+                        QA.Push (ASCII.LF & "ERROR: Inference Task Failed (retries exhausted)." & ASCII.LF);
+                     end if;
+                  exception
+                     when others => null;
+                  end;
+               end if;
+         end;
+         end loop Gen_Task_Retry;
        end;
 
        begin

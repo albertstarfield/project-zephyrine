@@ -750,9 +750,10 @@ package body KV_Cache_Manager is
 
                Free (Path_C);
 
-               if Success then
-                  Found := True;
-                  Record_Cache_Hit (N_Tokens);
+                if Success then
+                   Found := True;
+                   Tokens := Token_Buf.all'Address;
+                   Record_Cache_Hit (N_Tokens);
                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -839,11 +840,12 @@ package body KV_Cache_Manager is
 
                   Free (Path_C);
 
-                  if Success then
-                     Found := True;
-                     Record_Cache_Hit (N_Tokens);
-                     --  Cache this path for next time (TRICK 3)
-                     Cache_Last_Path (Path);
+                   if Success then
+                      Found := True;
+                      Tokens := Token_Buf.all'Address;
+                      Record_Cache_Hit (N_Tokens);
+                      --  Cache this path for next time (TRICK 3)
+                      Cache_Last_Path (Path);
 
                      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -926,10 +928,53 @@ package body KV_Cache_Manager is
             end if;
          end Check_Cache;
 
-      begin
-         Search (Cache_Dir, "*.bin", (True, False, False), Check_Cache'Access);
-         return Found;
-      end;
-   end Has_Cache_Files;
+       begin
+          Search (Cache_Dir, "*.bin", (True, False, False), Check_Cache'Access);
+          return Found;
+       end;
+    end Has_Cache_Files;
+
+    --  ========================================================================
+    --  DELETE STALE CACHE FOR A SPECIFIC MODEL
+    --  ========================================================================
+    procedure Delete_Stale_Cache (Model_ID : String) is
+       use Ada.Directories;
+       Found : Boolean := False;
+
+       procedure Delete_Matching (Ent : Directory_Entry_Type) is
+          Name : constant String := Simple_Name (Ent);
+          Path : constant String := Full_Name (Ent);
+       begin
+          if Name'Length > Model_ID'Length + 5
+            and then Name (Name'First .. Name'First + Model_ID'Length) = Model_ID & "_"
+            and then Name (Name'Last - 3 .. Name'Last) = ".bin"
+          then
+             begin
+                Ada.Directories.Delete_File (Path);
+                Found := True;
+                Put_Line (AnsiAda.Foreground (AnsiAda.Yellow)
+                          & "[KV-Cache]"
+                          & AnsiAda.Reset
+                          & " Deleted stale cache: " & Path);
+             exception
+                when others =>
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Red)
+                             & "[KV-Cache]"
+                             & AnsiAda.Reset
+                             & " Failed to delete stale cache: " & Path);
+             end;
+          end if;
+       end Delete_Matching;
+    begin
+       if Exists (Cache_Dir) then
+          Search (Cache_Dir, "*.bin", (True, False, False), Delete_Matching'Access);
+       end if;
+       if not Found then
+          Put_Line (AnsiAda.Foreground (AnsiAda.Grey)
+                    & "[KV-Cache]"
+                    & AnsiAda.Reset
+                    & " No stale cache files found to delete for " & Model_ID);
+       end if;
+    end Delete_Stale_Cache;
 
 end KV_Cache_Manager;

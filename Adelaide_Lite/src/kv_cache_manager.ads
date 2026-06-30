@@ -85,6 +85,17 @@ package KV_Cache_Manager is
    function Has_Cache_Files return Boolean;
 
    --  ============================================================================
+   --  DELETE STALE CACHE FOR A SPECIFIC MODEL
+   --  ============================================================================
+   --  WHY: When KV cache tokens are invalid (e.g., GPU→CPU config change),
+   --  we need to remove the stale file so it's not reloaded next time.
+   --  Uses proper directory search (NOT glob patterns which don't work with
+   --  Ada.Directories.Delete_File).
+   --
+   --  Logs what was deleted or if nothing found.
+   procedure Delete_Stale_Cache (Model_ID : String);
+
+   --  ============================================================================
    --  METRICS (logged every 10 seconds)
    --  ============================================================================
    --  WHY: Track cache performance for optimization.

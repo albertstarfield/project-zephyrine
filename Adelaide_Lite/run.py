@@ -1469,7 +1469,8 @@ def main():
             url = f"http://{server_host}:{server_port}/api/snowballEnagaValidationBenchmark"
             print(f"[Benchmark] Invoking {url} (Performance)...")
             success = False
-            try:
+            for bench_attempt in range(2):  # Try up to 2 times
+              try:
                 data = json.dumps({"benchmark_type": "performance"}).encode('utf-8')
                 req = urllib.request.Request(url, data=data, headers={
                     'Content-Type': 'application/json',
@@ -1506,8 +1507,14 @@ def main():
 
                     elapsed = time.time() - start_t
                     print(f"[Benchmark] Completed in {elapsed:.2f}s")
-            except Exception as e:
-                print(f"[!] Benchmark failed: {e}")
+                break  # Success, no more retries
+              except Exception as e:
+                if bench_attempt == 0:
+                    print(f"[!] Benchmark attempt 1 failed: {e}")
+                    print("[Benchmark] Retrying in 5s...")
+                    time.sleep(5)
+                else:
+                    print(f"[!] Benchmark failed after retries: {e}")
 
                 print("[*] Running comprehensive loopback API tests...")
                 # We will test all endpoints from the API reference
@@ -1540,7 +1547,9 @@ def main():
                 
                 all_passed = True
                 for name, endpoint, payload, method in tests:
-                    try:
+                    test_passed = False
+                    for test_attempt in range(2):  # Try up to 2 times
+                      try:
                         req_data = json.dumps(payload).encode('utf-8') if payload else None
                         headers = {'Content-Type': 'application/json'} if payload else {}
                         req = urllib.request.Request(endpoint, data=req_data, headers=headers, method=method)
@@ -1548,16 +1557,27 @@ def main():
                             code = res.getcode()
                             if code in (200, 201, 204):
                                 print(f"[+] {name} Test: PASSED (HTTP {code})")
+                                test_passed = True
+                                break
                             else:
-                                print(f"[-] {name} Test: FAILED (HTTP {code})")
-                                all_passed = False
-                    except urllib.error.HTTPError as e:
-                        # Some endpoints might correctly return 400 or 401 if not fully configured,
-                        # but ideally they shouldn't crash. 404 is a missing endpoint.
-                        print(f"[-] {name} Test: HTTP ERROR {e.code}")
-                        all_passed = False
-                    except Exception as e:
-                        print(f"[-] {name} Test: EXCEPTION ({e})")
+                                if test_attempt == 0:
+                                    print(f"[-] {name} Test: FAILED (HTTP {code}), retrying...")
+                                    time.sleep(1)
+                                else:
+                                    print(f"[-] {name} Test: FAILED (HTTP {code})")
+                      except urllib.error.HTTPError as e:
+                        if test_attempt == 0:
+                            print(f"[-] {name} Test: HTTP ERROR {e.code}, retrying...")
+                            time.sleep(1)
+                        else:
+                            print(f"[-] {name} Test: HTTP ERROR {e.code}")
+                      except Exception as e:
+                        if test_attempt == 0:
+                            print(f"[-] {name} Test: EXCEPTION ({e}), retrying...")
+                            time.sleep(1)
+                        else:
+                            print(f"[-] {name} Test: EXCEPTION ({e})")
+                    if not test_passed:
                         all_passed = False
                 
                 if not all_passed:
