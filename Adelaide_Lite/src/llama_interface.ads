@@ -337,7 +337,7 @@ function Llama_Sampler_Init_Penalties
    pragma Import (C, CPU_Memory_Query, "cpu_memory_query");
 
    --  Returns the number of available CPU threads (physical + hyperthreaded).
-   --  Uses sysctl HW_LOGICALCPU on macOS.
+   --  Uses sysctl HW_NCPU on macOS.
    function CPU_Thread_Count return Interfaces.C.unsigned;
    pragma Import (C, CPU_Thread_Count, "cpu_thread_count");
 

@@ -117,18 +117,14 @@ extern "C" {
     }
 
     // Detect all available CPU threads (physical + hyperthreaded).
-    // Uses sysctl HW_LOGICALCPU which returns ALL hardware threads.
+    // Uses sysctl HW_NCPU which returns the total number of CPUs
+    // including hyperthreaded cores.
     unsigned cpu_thread_count() {
         int mib[2];
         mib[0] = CTL_HW;
-        mib[1] = HW_LOGICALCPU;
+        mib[1] = HW_NCPU;
         unsigned int ncpu = 0;
         size_t len = sizeof(ncpu);
-        if (sysctl(mib, 2, &ncpu, &len, NULL, 0) == 0 && ncpu > 0) {
-            return (unsigned)ncpu;
-        }
-        // Fallback: try hw.ncpu (older macOS)
-        mib[1] = HW_NCPU;
         if (sysctl(mib, 2, &ncpu, &len, NULL, 0) == 0 && ncpu > 0) {
             return (unsigned)ncpu;
         }
