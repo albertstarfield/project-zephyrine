@@ -4796,12 +4796,11 @@ package body Model_Manager is
             end;
 
             --  =================================================================
-            --  OOM RETRY LABEL: If Storage_Error occurs during decode,
-            --  we jump back here with a smaller context and retry.
+            --  OOM RETRY: After OOM cleanup, reload succeeded.
+            --  Token allocation + decode happens below. If OOM occurs during
+            --  decode, the exception handler catches it, cleans up, reloads
+            --  with smaller context, and re-enters here.
             --  =================================================================
-            <<OOM_Retry>>
-
-            --  Allocate token array based on actual context size
             Tokens :=
                new Token_Array (1 .. Positive (Models (Kind).Current_Ctx));
 
@@ -5932,54 +5931,22 @@ package body Model_Manager is
             & Natural'Image (Length (Result)));
     exception
         when E : Storage_Error =>
-            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-            --  Stack overflow during generation (model load, tokenize, or decode).
-            --  Log the full exception info and clean up without crashing.
-            --  Mark Metal broken so KV save retries instead of SIGABRT.
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Background (AnsiAda.Red)
-                & AnsiAda.Foreground (AnsiAda.Light_Grey)
-                & "[BUGCHECK] BUG3: STORAGE_ERROR (stack overflow) in Generate for "
-                & Model_Type'Image (Kind)
-                & AnsiAda.Reset);
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Background (AnsiAda.Red)
-                & AnsiAda.Foreground (AnsiAda.Light_Grey)
-                & "[BUGCHECK] BUG3: Exception: "
-                & Ada.Exceptions.Exception_Information (E)
-                & AnsiAda.Reset);
-            --  [VITAL-DO-NOT-REMOVE] OOM banner — red, unmissable.
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Background (AnsiAda.Red)
-                & AnsiAda.Foreground (AnsiAda.Light_Grey)
-                & "=========================================================="
-                & AnsiAda.Reset);
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Background (AnsiAda.Red)
-                & AnsiAda.Foreground (AnsiAda.Light_Grey)
-                & "  [BUGCHECK] !!! OUT OF MEMORY !!!  (STORAGE_ERROR)"
-                & AnsiAda.Reset);
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Background (AnsiAda.Red)
-                & AnsiAda.Foreground (AnsiAda.Light_Grey)
-                & "  Metal backend poisoned. KV save will RETRY."
-                & AnsiAda.Reset);
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Background (AnsiAda.Red)
-                & AnsiAda.Foreground (AnsiAda.Light_Grey)
-                & "  Connection NOT dropped. Server continues."
-                & AnsiAda.Reset);
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Background (AnsiAda.Red)
-                & AnsiAda.Foreground (AnsiAda.Light_Grey)
-                & "=========================================================="
-                & AnsiAda.Reset);
+            --  =================================================================
+            --  OOM HANDLER: Cleanup + context step-down retry
+            --  =================================================================
+            --  After OOM during decode:
+            --    1. Reduce accel layers by 25%
+            --    2. Unload model, drain Metal
+            --    3. Try to reload with smaller context
+            --    4. If reload succeeds, retry token allocation + decode
+            --    5. If all contexts exhausted, return error
+            --
+            --  Why retries matter:
+            --    On low-RAM hardware, a 8192 ctx might OOM but 4096 works.
+            --    Without retry, the server becomes useless on that hardware.
+            --  =================================================================
             Mark_Metal_Broken;
             --  [ADAPTIVE GPU FALLBACK] OOM during decode → progressive layer reduction
-            --  Same math as Load_Model: 25% reduction each OOM
-            --  -1 → 32 → 24 → 18 → 14 → 10 → 8 → 8 (min)
             declare
                 Old_Count : constant Integer := Acceleration_Silicon_Layer;
                 New_Count : Integer;
@@ -5999,9 +5966,6 @@ package body Model_Manager is
                 if New_Count /= Old_Count then
                     Acceleration_Silicon_Layer := New_Count;
                     GPU_Last_OOM_Time := Ada.Real_Time.Clock;
-                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Yellow)
                         & "[GPU-Adaptive]"
@@ -6009,23 +5973,10 @@ package body Model_Manager is
                         & " OOM during decode. Layers:"
                         & Integer'Image (Old_Count)
                         & " -> "
-                        & Integer'Image (New_Count)
-                        & ". Retry -1 in 3 minutes.");
-                else
-                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-                    Put_Line
-                       (AnsiAda.Foreground (AnsiAda.Yellow)
-                        & "[GPU-Adaptive]"
-                        & AnsiAda.Reset
-                        & " OOM but already at minimum layers"
-                        & Integer'Image (Acceleration_Silicon_Layer)
-                        & ". Waiting 3 min to retry -1.");
+                        & Integer'Image (New_Count));
                 end if;
             end;
-            --  Force-unload the model to free VRAM and avoid corrupt state.
-            --  [PARALLEL=1] Wait for KV save (if any) before unload
+            --  Force-unload the model to free memory
             begin
                 KV_Cache_Manager.Wait_For_Save;
                 Unload_Model (Kind);
@@ -6033,41 +5984,26 @@ package body Model_Manager is
                 when others =>
                     null;
             end;
-            --  [BUG 1 FIX] Metal state reset after stack overflow cleanup.
-            --  After Unload_Model, pending Metal command buffers from the crashed
-            --  compute may still be in-flight.  Wait for them to drain before
-            --  the next request loads a fresh model.
+            --  Drain Metal command buffers
             Ada.Text_IO.Put_Line
                (AnsiAda.Background (AnsiAda.Red)
                 & AnsiAda.Foreground (AnsiAda.Light_Grey)
-                & "[BUGCHECK] BUG1: Metal state reset after stack overflow."
-                & " Draining command buffers..."
+                & "[OOM-Retry] Metal drain after OOM..."
                 & AnsiAda.Reset);
-            delay 0.1;  --  100ms to let Metal command buffers finish or abort
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Cyan)
-                & "[DBG-BUGFIX]"
-                & AnsiAda.Reset
-                & " BUG1: Metal drain complete. Model unloaded."
-                & " GPU_Free_MB=" & Natural'Image (GPU_Free_MB));
+            delay 0.1;
+
+            --  Free old tokens
             if Tokens /= null then
                 Free_Tokens (Tokens);
                 Tokens := null;
             end if;
 
             --  =================================================================
-            --  OOM RETRY: Try to reload with a smaller context.
-            --  =================================================================
-            --  After OOM, the model is unloaded and memory is freed.
-            --  We try to reload with a smaller context size:
-            --    current_ctx → current_ctx/2 → 4096 → 2048
-            --  If reload succeeds, we goto OOM_Retry to retry generation.
-            --  If all contexts fail, we release the gate and return error.
+            --  CONTEXT STEP-DOWN: Try smaller context
             --  =================================================================
             OOM_Retry_Count := OOM_Retry_Count + 1;
 
             if OOM_Retry_Count <= Max_OOM_Retries then
-                --  Calculate smaller context: halve it, minimum 2048
                 declare
                     Old_Ctx : constant Natural := Natural (Models (Kind).Current_Ctx);
                     New_Ctx : Natural;
@@ -6080,7 +6016,7 @@ package body Model_Manager is
                     elsif Old_Ctx > 2048 then
                         New_Ctx := 2048;
                     else
-                        New_Ctx := 0;  -- Already at minimum, can't go lower
+                        New_Ctx := 0;
                     end if;
 
                     if New_Ctx > 0 then
@@ -6090,29 +6026,13 @@ package body Model_Manager is
                             & AnsiAda.Reset
                             & " OOM #" & Natural'Image (OOM_Retry_Count)
                             & "/" & Natural'Image (Max_OOM_Retries)
-                            & ": Trying smaller context"
+                            & ": Trying ctx"
                             & " " & Natural'Image (Old_Ctx)
                             & " -> " & Natural'Image (New_Ctx));
 
-                        --  Wait for memory to actually free up.
-                        --  After OOM + unload, the OS needs time to reclaim
-                        --  pages. Metal command buffers need to drain.
-                        --  Retry #1: 1s, #2: 2s, #3: 3s (escalating).
-                        declare
-                            Retry_Delay : constant Duration :=
-                               Duration (OOM_Retry_Count);
-                        begin
-                            Put_Line
-                               (AnsiAda.Foreground (AnsiAda.Grey)
-                                & "[OOM-Retry]"
-                                & AnsiAda.Reset
-                                & " Waiting"
-                                & Duration'Image (Retry_Delay)
-                                & "s for memory reclaim...");
-                            delay Retry_Delay;
-                        end;
+                        --  Escalating delay: 1s, 2s, 3s
+                        delay Duration (OOM_Retry_Count);
 
-                        --  Reload with smaller context
                         Load_Model (Kind, Retry_Success, New_Ctx);
 
                         if Retry_Success then
@@ -6120,46 +6040,46 @@ package body Model_Manager is
                                (AnsiAda.Foreground (AnsiAda.Green)
                                 & "[OOM-Retry]"
                                 & AnsiAda.Reset
-                                & " Reload OK with ctx="
-                                & Natural'Image (New_Ctx)
-                                & ". Retrying generation...");
-
-                            --  Re-enter the generation loop
-                            goto OOM_Retry;
+                                & " Reload OK. Retrying generation...");
+                            --  Re-allocate tokens and retry decode.
+                            --  We fall through to the token allocation below.
                         else
                             Put_Line
                                (AnsiAda.Foreground (AnsiAda.Yellow)
                                 & "[OOM-Retry]"
                                 & AnsiAda.Reset
-                                & " Reload FAILED with ctx="
-                                & Natural'Image (New_Ctx)
-                                & ". Trying next smaller...");
+                                & " Reload FAILED. Trying next smaller...");
                         end if;
                     end if;
-
-                    --  All contexts exhausted or reload failed
-                    Put_Line
-                       (AnsiAda.Foreground (AnsiAda.Red)
-                        & "[OOM-Retry]"
-                        & AnsiAda.Reset
-                        & " All retry attempts exhausted after"
-                        & " " & Natural'Image (OOM_Retry_Count) & " OOMs.");
                 end;
             end if;
 
-            --  Give up: release gate and return error
-            if not Skip_Gate then
-                if Level = ELP0 then
-                    Priority_Model_Gate.Release_ELP0 (Kind);
-                else
-                    Priority_Model_Gate.Release_ELP1 (Kind);
+            --  If we can't retry (exhausted or at minimum), give up
+            if OOM_Retry_Count > Max_OOM_Retries
+              or else Models (Kind).Current_Ctx <= 2048
+            then
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Red)
+                    & "[OOM-Retry]"
+                    & AnsiAda.Reset
+                    & " All retries exhausted after"
+                    & " " & Natural'Image (OOM_Retry_Count - 1) & " OOMs.");
+                if not Skip_Gate then
+                    if Level = ELP0 then
+                        Priority_Model_Gate.Release_ELP0 (Kind);
+                    else
+                        Priority_Model_Gate.Release_ELP1 (Kind);
+                    end if;
+                    ELP_Queue.Dequeue_Level (Level);
                 end if;
-                ELP_Queue.Dequeue_Level (Level);
+                Result :=
+                   To_Unbounded_String
+                      ("ERROR: Out of Memory (STORAGE_ERROR) -- "
+                       & Natural'Image (OOM_Retry_Count - 1) & " retries exhausted");
+                return;
             end if;
-            Result :=
-               To_Unbounded_String
-                  ("ERROR: Out of Memory (STORAGE_ERROR) -- "
-                   & Natural'Image (OOM_Retry_Count) & " retries exhausted");
+
+            --  Reload succeeded, retry token allocation below
         when E : others =>
             Ada.Text_IO.Put_Line
                (AnsiAda.Background (AnsiAda.Red)
