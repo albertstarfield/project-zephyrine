@@ -22,7 +22,7 @@
 
 ## What is this?
 
-I am an assistant, for your own little corner of the aether talk to like literally with voice or with text. I speaks OpenAI and Ollama, so you can plug myself into OpenWebUI or any client that speaks those languages.
+I am an assistant, for your own little corner of the aether talk to like literally with voice or with text. I speaks OpenAI and Ollama and some Claude language, so you can plug myself into OpenWebUI or any client that speaks those languages.
 
 I heard i was coming from an town and built with the **Snowball-Enaga** architecture, and given part of me **Volatus Damarae**, they said that it keep me floaty and light like snowflakes drifting through the winter sky, keeping you warm on cold nights. 
 
@@ -77,8 +77,6 @@ And just like that, she's awake at `http://localhost:11420`.
 
 Want to help Zephy? Check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-**Actuators & Command I/O:** If you're building hardware integrations or deterministic command hooks, use **ELP2** (StellaIcarus deterministic responses) or **ELP3** (real-time pacing loop). These are the priority levels designed for instant, reliable command execution — no LLM hallucination, just precise action. See [ELP Priority Queue](documentation/ELP%20Priority%20Queue.md) for details.
-
 ### Documentation
 
 For those who want to peek behind the curtain:
@@ -86,6 +84,7 @@ For those who want to peek behind the curtain:
 - [API Reference](documentation/API%20Reference.md)  all the endpoints she speaks
 - [ELP Priority Queue](documentation/ELP%20Priority%20Queue.md)  how she thinks and prioritizes
 - [Developer Docs](documentation/Developer%20Documentation/)  architecture, troubleshooting, and warnings for the brave
+- [ELP Priority Queue](documentation/ELP%20Priority%20Queue.md) for details.
 
 
 ### Credits

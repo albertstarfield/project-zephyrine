@@ -46,6 +46,8 @@ Before contributing, you must identify the DAL of the module you are modifying. 
 
 ### **DAL A: Catastrophic (The Hard-Real-Time Core / ECSS Category A)**
 * **Scope:** Microcontroller (uC) Hardware + firmware (NO MMU), Actuator Control, Power Management, Bootloaders, and "Hard-Limit" enforcement logic.
+* 
+**Actuators & Command I/O:** If you're building hardware integrations or deterministic command hooks, use **ELP2** (StellaIcarus deterministic responses) or **ELP3** (real-time pacing loop). These are the priority levels designed for instant, reliable command execution — no hallucination, just precise action. See 
 * **Permitted Languages:** **Ada** (Preferred), **C/C++** (Strict Subset/MISRA compliant).
 * **Prohibited:** Python, JavaScript, Garbage Collection, Dynamic Memory Allocation (after initialization).
 * **Contribution Rules:**

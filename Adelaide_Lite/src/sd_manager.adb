@@ -9,6 +9,7 @@ pragma SPARK_Mode (Off);
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Interfaces.C.Strings;
+with AnsiAda;
 with System;
 
 package body SD_Manager is
@@ -122,8 +123,14 @@ package body SD_Manager is
       Flux_Ctx := New_SD_Ctx (Params'Access);
 
       if Flux_Ctx = Null_SD_Ctx then
-         Put_Line
-           (Uptime_String & " [SD-Manager] [ERROR] Failed to create FLUX context!");
+         Ada.Text_IO.Put_Line
+           (AnsiAda.Background (AnsiAda.Red)
+            & AnsiAda.Foreground (AnsiAda.Light_Grey)
+            & "[BUGCHECK] [SD-Manager] [ERROR]"
+            & " Failed to create FLUX context!"
+            & " Check GPU memory (need ~4GB free)."
+            & " Unload main model before FLUX if VRAM tight."
+            & AnsiAda.Reset);
          raise Program_Error with "FLUX context creation failed";
       end if;
 
