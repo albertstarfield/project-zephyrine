@@ -784,6 +784,13 @@ def main():
         print("[*] Installing Kokoro TTS requirements...")
         kokoro_pip = os.path.join(kokoro_venv_dir, "bin", "pip") if platform.system() != "Windows" else os.path.join(kokoro_venv_dir, "Scripts", "pip.exe")
         subprocess.run([kokoro_pip, "install", "-r", os.path.join(kokoro_comp_dir, "requirements.txt")], check=False)
+        # kokoclone/stereo_cloner needs torch but it's not in requirements.txt
+        # (git-cloned repo). Install here so it persists across repo updates.
+        kokoro_python = os.path.join(kokoro_venv_dir, "bin", "python")
+        torch_check = subprocess.run([kokoro_python, "-c", "import torch"], capture_output=True)
+        if torch_check.returncode != 0:
+            print("[*] Installing torch for kokoclone voice cloning...")
+            subprocess.run([kokoro_pip, "install", "torch", "--index-url", "https://download.pytorch.org/whl/cpu"], check=False)
 
         # Check and clone moonshine
         moonshine_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "moonshine"))
