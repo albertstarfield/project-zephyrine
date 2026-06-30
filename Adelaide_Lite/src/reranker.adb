@@ -135,7 +135,18 @@ package body Reranker is
       Put_Line ("[Reranker] Freed.");
    end Free_Reranker;
 
-   --  Score a single (query, document) pair through the reranker
+   --  Score a single (query, document) pair through the reranker.
+   --
+   --  RETRY LOGIC:
+   --    1. Model not loaded → attempt re-initialization once
+   --    2. Decode fail → flush KV cache, delay 10ms, retry once
+   --    3. OOM (Storage_Error) → halve token count, retry once
+   --
+   --  Why retries matter:
+   --    The reranker scores 10 docs sequentially. Without retry, a single
+   --    transient failure (Metal warm-up, OOM spike) would give that doc
+   --    score -1.0e9 and potentially lose the best result.
+   --  ========================================================================
    function Score_Pair (Query : String; Doc : String) return Float is
       Pair_Text : constant String := Query & Character'Val (9) & Doc;
 
@@ -153,9 +164,33 @@ package body Reranker is
       --  Read float from raw C address (C wrapper in llama_safe.cpp)
       function Read_Float_At (Addr : System.Address) return Interfaces.C.C_float;
       pragma Import (C, Read_Float_At, "read_float_at_address");
+
+      --  ====================================================================
+      --  RETRY 1: Model not loaded → re-initialize
+      --  ====================================================================
+      --  If the reranker model was freed (e.g., by FreeParallelMemory or
+      --  OOM cleanup), attempt to reload it. Only try once to avoid infinite
+      --  retry loops if the model file is missing or corrupt.
+      --  ====================================================================
+      procedure Try_Reinitialize is
+         Init_Success : Boolean;
+      begin
+         Put_Line ("[Reranker] Model not loaded, attempting re-initialization...");
+         Initialize (Init_Success);
+         if not Init_Success then
+            Put_Line ("[Reranker] Re-initialization FAILED.");
+         end if;
+      end Try_Reinitialize;
+
    begin
+      --  ====================================================================
+      --  RETRY 1 CHECK: If model not loaded, try to re-initialize
+      --  ====================================================================
       if not Ready then
-         return -1.0e9;
+         Try_Reinitialize;
+         if not Ready then
+            return -1.0e9;  -- Re-init failed, can't score
+         end if;
       end if;
 
       Pair_C := Interfaces.C.Strings.New_String (Pair_Text);
@@ -192,8 +227,24 @@ package body Reranker is
       --  Decode
       Ret := Llama_Interface.Llama_Decode (Reranker_Context, Batch);
 
+      --  ====================================================================
+      --  RETRY 2: Decode fail → flush KV + delay + retry once
+      --  ====================================================================
+      --  Why this happens: Metal command buffer timeout, transient GPU state
+      --  corruption after previous OOM, or KV cache stale from prior scoring.
+      --  The flush + delay gives the GPU driver time to reset.
+      --  ====================================================================
       if Ret /= 0 then
-         return -1.0e9;
+         Put_Line ("[Reranker] Decode failed (ret=" & int'Image (Ret)
+                   & "), flushing KV and retrying...");
+         Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Reranker_Context), True);
+         delay 0.01;  --  10ms for GPU driver to settle
+
+         Ret := Llama_Interface.Llama_Decode (Reranker_Context, Batch);
+         if Ret /= 0 then
+            Put_Line ("[Reranker] Retry also failed (ret=" & int'Image (Ret) & ").");
+            return -1.0e9;
+         end if;
       end if;
 
       --  Get embeddings (reranking scores via POOLING_TYPE_RANK)
@@ -204,7 +255,68 @@ package body Reranker is
       end if;
 
       return Float (Read_Float_At (Emb_Ptr));
+
+   --  ========================================================================
+   --  RETRY 3: OOM (Storage_Error) → halve tokens, retry once
+   --  ========================================================================
+   --  Why this happens: Reranker context is only 512 tokens. On systems with
+   --  very tight memory (e.g., 16GB with 98% used), even 512 tokens can OOM
+   --  if the GPU layer allocation competes with the main model's KV cache.
+   --  Halving to 256 tokens reduces memory pressure while still allowing
+   --  meaningful scoring (most reranker pairs are well under 256 tokens).
+   --  ========================================================================
    exception
+      when Storage_Error =>
+         Put_Line ("[Reranker] OOM during scoring, halving tokens and retrying...");
+         delay 0.01;  --  10ms for memory to settle
+
+         --  Re-tokenize with halved token limit
+         Pair_C := Interfaces.C.Strings.New_String (Pair_Text);
+         Pair_Len := int (Pair_Text'Length);
+
+         N_Toks := Llama_Interface.Llama_Tokenize
+           (Vocab          => Llama_Interface.Llama_Model_Get_Vocab (Reranker_Model),
+            Text           => Pair_C,
+            Text_Len       => Pair_Len,
+            Tokens         => Tokens (0)'Address,
+            N_Tokens_Max   => int (Natural'Min (Natural (N_Toks), 256)),
+            Add_Special    => True,
+            Parse_Special  => True);
+
+         Interfaces.C.Strings.Free (Pair_C);
+
+         if N_Toks <= 0 then
+            return -1.0e9;
+         end if;
+
+         --  Rebuild batch with fewer tokens
+         Batch.N_Tokens := N_Toks;
+         Batch.Token    := Tokens (0)'Address;
+         Batch.Embd     := System.Null_Address;
+         Batch.Pos      := System.Null_Address;
+         Batch.N_Seq_Id := System.Null_Address;
+         Batch.Seq_Id   := System.Null_Address;
+         Batch.Logits   := System.Null_Address;
+
+         --  Flush KV and retry decode
+         Llama_Interface.Llama_Memory_Clear (Llama_Interface.Llama_Get_Memory (Reranker_Context), True);
+         Ret := Llama_Interface.Llama_Decode (Reranker_Context, Batch);
+
+         if Ret /= 0 then
+            Put_Line ("[Reranker] OOM retry also failed (ret=" & int'Image (Ret) & ").");
+            return -1.0e9;
+         end if;
+
+         --  Get embeddings from reduced decode
+         Emb_Ptr := Llama_Interface.Llama_Get_Embeddings_Seq (Reranker_Context, 0);
+
+         if Emb_Ptr = System.Null_Address then
+            return -1.0e9;
+         end if;
+
+         Put_Line ("[Reranker] OOM retry succeeded with halved tokens.");
+         return Float (Read_Float_At (Emb_Ptr));
+
       when others =>
          return -1.0e9;
    end Score_Pair;
