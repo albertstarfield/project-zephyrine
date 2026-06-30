@@ -208,7 +208,6 @@ def show_help():
 {BG_B}{'='*70}{RST}
 
   {BOLD}Whimsical Automata Companion — Snowball-Enaga{RST}
-  {DIM}ELP Priority Queue · Kratos Crash Isolation{RST}
 
   {BOLD}Version:{RST}  {ver_str}  {status}
   {BOLD}Branch:{RST}   {brn_str}
@@ -255,22 +254,22 @@ def show_help():
 
     {DIM}Phone / Cloud Terminal (access from phone or tablet):{RST}
       {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
-      {DIM}→ Find your Mac IP: ifconfig | grep 'inet '{RST}
-      {DIM}→ Open http://<your-mac-ip>:11420 on your phone browser{RST}
+      {DIM}→ Find your computer's IP: ifconfig | grep 'inet '{RST}
+      {DIM}→ Open http://<your-computer-host-ip>:11420 on your phone browser{RST}
       {DIM}→ Or use curl in Termux / iSH / a-Shell:{RST}
-      {DIM}  curl http://<your-mac-ip>:11420/api/version{RST}
+      {DIM}  curl http://<your-computer-host-ip>:11420/api/version{RST}
 
     {DIM}Multiple devices ( LAN party / office ):{RST}
       {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
-      {DIM}→ Any device on same network can hit http://<mac-ip>:11420{RST}
+      {DIM}→ Any device on same network can hit http://<your-computer-host-ip>:11420{RST}
       {DIM}→ Works with OpenWebUI, OpenCode, curl, or any HTTP client{RST}
 
   {BOLD}{WHT}RUNTIME PROCESSES{RST}
     {MGN}1. StellaIcarus Daemon{RST}    Hardware monitor, power state, telemetry
-    {MGN}2. adelaide_server{RST}        Ada/AWS HTTP API (default port 11420)
+    {MGN}2. adelaide_server{RST}        HTTP API (default port 11420)
     {MGN}3. adelaide_watchdog{RST}      Monitors server health, auto-restarts
 
-  {BOLD}{WHT}ADA SERVER API{RST} (connect via {CYN}http://localhost:11420{RST} or {CYN}http://127.0.0.1:11420{RST})
+  {BOLD}{WHT}SERVER API{RST} (connect via {CYN}http://localhost:11420{RST} or {CYN}http://127.0.0.1:11420{RST})
     {CYN}POST{RST} /api/chat                Chat completion (streaming)
     {CYN}POST{RST} /api/generate            Text generation
     {CYN}POST{RST} /v1/chat/completions    OpenAI-compatible chat
