@@ -115,11 +115,45 @@ extern "C" {
             *total_bytes = 0;
         }
     }
+
+    // Detect all available CPU threads (physical + hyperthreaded).
+    // On Intel Pentium Penryn: 2 cores, 4 threads with hyperthreading.
+    // Apple M2 Pro: 10 cores, 10 threads (no hyperthreading on P/E cores).
+    // We use hw.logicalcpu which returns ALL hardware threads.
+    unsigned cpu_thread_count() {
+        int mib[2];
+        mib[0] = CTL_HW;
+        mib[1] = HW_LOGICALCPU;
+        unsigned int ncpu = 0;
+        size_t len = sizeof(ncpu);
+        if (sysctl(mib, 2, &ncpu, &len, NULL, 0) == 0 && ncpu > 0) {
+            return (unsigned)ncpu;
+        }
+        // Fallback: try hw.ncpu (older macOS)
+        mib[1] = HW_NCPU;
+        if (sysctl(mib, 2, &ncpu, &len, NULL, 0) == 0 && ncpu > 0) {
+            return (unsigned)ncpu;
+        }
+        return 1;  // Absolute fallback
+    }
+
     #else
     // Non-Apple platforms: return 0,0 (inapplicable)
     void cpu_memory_query(size_t * free_bytes, size_t * total_bytes) {
         if (free_bytes) *free_bytes = 0;
         if (total_bytes) *total_bytes = 0;
+    }
+    unsigned cpu_thread_count() {
+        #ifdef __APPLE__
+            return 1;
+        #elif defined(_WIN32)
+            SYSTEM_INFO sysinfo;
+            GetSystemInfo(&sysinfo);
+            return sysinfo.dwNumberOfProcessors;
+        #else
+            long nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+            return nprocs > 0 ? (unsigned)nprocs : 1;
+        #endif
     }
     #endif
     struct llama_model * llama_model_load_from_file_safe(const char * path_model, struct llama_model_params params) {
