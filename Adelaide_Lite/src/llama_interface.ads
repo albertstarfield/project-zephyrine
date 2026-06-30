@@ -336,6 +336,12 @@ function Llama_Sampler_Init_Penalties
       Total_Bytes : out Interfaces.C.size_t);
    pragma Import (C, CPU_Memory_Query, "cpu_memory_query");
 
+   --  Returns the number of available CPU threads (physical + hyperthreaded).
+   --  On Intel Penryn 2-core with HT: returns 4.
+   --  On Apple M2 Pro 10-core: returns 10.
+   function CPU_Thread_Count return Interfaces.C.unsigned;
+   pragma Import (C, CPU_Thread_Count, "cpu_thread_count");
+
    --  ===== RERANKING API =====
    --  When Pooling_Type = LLAMA_POOLING_TYPE_RANK (4), llama.cpp attaches
    --  a classification head to the graph for reranking models like

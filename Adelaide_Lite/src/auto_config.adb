@@ -82,11 +82,20 @@ package body Auto_Config is
           & AnsiAda.Reset
           & " Detecting hardware...");
 
-      --  Detect CPU cores
-      --  Why: Intel Pentium Penryn = 2 cores. Apple M2 Pro = 10 cores.
-      --  Threads should be min(cores, 4) — more than 4 gives diminishing
+      --  Detect CPU threads (physical cores + hyperthreading).
+      --  Why: Intel Pentium Penryn = 2 cores, 4 threads (hyperthreading).
+      --  Apple M2 Pro = 10 cores, 10 threads (no HT on P/E cores).
+      --  Threads should be min(detected, 4) — more than 4 gives diminishing
       --  returns on llama.cpp workloads.
-      Detected_Hardware.CPU_Cores := 2;  -- Safe default for Penryn
+      declare
+         Raw_Threads : constant Interfaces.C.unsigned := Llama_Interface.CPU_Thread_Count;
+      begin
+         if Raw_Threads = 0 then
+            Detected_Hardware.CPU_Cores := 2;  -- Safe fallback
+         else
+            Detected_Hardware.CPU_Cores := Natural'Min (Natural (Raw_Threads), 4);
+         end if;
+      end;
 
       --  Detect available RAM
       --  Why: On 16GB system with 98% used, only 274MB free.
