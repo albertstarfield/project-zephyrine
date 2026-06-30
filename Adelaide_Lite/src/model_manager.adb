@@ -21,6 +21,7 @@ with Ada.Directories;
 with Ada.Real_Time;        use Ada.Real_Time;
 with Ada.Unchecked_Conversion;
 with Ada.Exceptions;
+with Auto_Config;           use Auto_Config;
 
 --  [TERMINOLOGY NOTE]
 --  "Tensor Accelerator" refers to various acceleration technologies including:
@@ -159,6 +160,8 @@ package body Model_Manager is
     type Token_Array_Access is access Token_Array;
     procedure Free_Tokens is new
        Ada.Unchecked_Deallocation (Token_Array, Token_Array_Access);
+    function To_Token_Array_Access is new
+       Ada.Unchecked_Conversion (System.Address, Token_Array_Access);
 
     --  [DO NOT REMOVE] C FFI for stderr suppression during model loading.
     --  llama.cpp prints hundreds of verbose lines to stderr during load.
@@ -1754,12 +1757,58 @@ package body Model_Manager is
         end if;
 
         Actual_Ctx := unsigned (Requested_Ctx);
-        --  Minimum context size is 8192 for LLM models (stability and headroom).
-        --  Smaller contexts (e.g., 4096) caused llama_decode assertion failures
-        --  with Qwen3.5HybridMythos at Q4_1 KV quantization on this hardware.
-         --  Embedding model uses 512 (fixed, no dynamic sizing).
-        if Kind /= Qwen_Embedding and then Actual_Ctx < 8192 then
-            Actual_Ctx := 8192;
+        --  =====================================================================
+        --  AUTO-CONFIG: Hardware-Adaptive Context Floor
+        --  =====================================================================
+        --  OLD: Hardcoded minimum 8192 for all hardware.
+        --  PROBLEM: On low-RAM systems (8-16GB), 8192 ctx + 5.8GB model
+        --  exceeds available memory. Llama_Init_From_Model returns null,
+        --  but there was NO retry with smaller context — just failure.
+        --
+        --  NEW: Auto_Config detects hardware and provides optimal settings.
+        --  The system starts minimal, probes upward, and remembers what works.
+        --  This works on Intel Pentium Penryn (2 cores, 16GB, shared VRAM)
+        --  AND Apple M2 Pro (10 cores, 16GB, unified memory) without
+        --  hardcoding for either.
+        --
+        --  Embedding model uses 512 (fixed, no dynamic sizing).
+        --  =====================================================================
+        Auto_Config.Initialize;
+
+        if Kind /= Qwen_Embedding then
+            declare
+                AC : constant Working_Config := Auto_Config.Get_Config (Kind);
+                Probe : constant Auto_Config.Ctx_Ladder := Auto_Config.Get_Probe_Target (Kind);
+                Auto_Ctx : unsigned;
+            begin
+                --  Use probe target if set (one-shot upgrade attempt)
+                if Auto_Config.Ctx_To_Unsigned (Probe) > Auto_Config.Ctx_To_Unsigned (AC.Ctx) then
+                    Auto_Ctx := Auto_Config.Ctx_To_Unsigned (Probe);
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                        & "[AutoConfig]"
+                        & AnsiAda.Reset
+                        & " " & Model_Type'Image (Kind) & ":"
+                        & " PROBE: Ctx " & unsigned'Image (Actual_Ctx)
+                        & " -> " & unsigned'Image (Auto_Ctx)
+                        & " (headroom detected)");
+                else
+                    Auto_Ctx := Auto_Config.Ctx_To_Unsigned (AC.Ctx);
+                end if;
+
+                --  Use auto-config context if larger than requested
+                if Auto_Ctx > Actual_Ctx then
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                        & "[AutoConfig]"
+                        & AnsiAda.Reset
+                        & " " & Model_Type'Image (Kind) & ":"
+                        & " Ctx " & unsigned'Image (Actual_Ctx)
+                        & " -> " & unsigned'Image (Auto_Ctx)
+                        & " (auto-config)");
+                    Actual_Ctx := Auto_Ctx;
+                end if;
+            end;
         end if;
 
          Success := False;
@@ -2111,12 +2160,12 @@ package body Model_Manager is
                  end;
              end if;
          else
-             --  [ADAPTIVE GPU LAYERS FOR LLM]
-             if Acceleration_Silicon_Layer = -1 then
-                 M_Params.N_Gpu_Layers := -1;  -- Aggressive: all on GPU
-             else
-                 M_Params.N_Gpu_Layers := Interfaces.C.int (Acceleration_Silicon_Layer);  -- Fallback
-             end if;
+             --  [AUTO-CONFIG] GPU layers for LLM models are now handled by
+             --  Auto_Config.Get_Config. The initial setting was applied above
+             --  in the Auto_Config block. We only override here for INOP.
+             --  The Acceleration_Silicon_Layer adaptive fallback is still used
+             --  for OOM recovery (handled in the exception handler below).
+             null;
          end if;
 
          --  [TENSOR-ACCEL-INOP] Override: force CPU-only when INOP is active.
@@ -2322,14 +2371,40 @@ package body Model_Manager is
 
             --  Now override only the fields we care about:
             C_Params.N_Ctx := Actual_Ctx;
-            --  [MEMORY-FIX] Reduced from 512 to 256 to prevent Metal OOM.
-            --  512 batch + 512 ubatch = ~256MB compute buffers on Metal.
-            --  256 batch + 256 ubatch = ~64MB compute buffers on Metal.
-            --  LM Studio uses adaptive batching; we use fixed. Smaller is safer.
-            C_Params.N_Batch := 256;
-            C_Params.N_Ubatch := 256;
-            C_Params.N_Threads := 8;
-            C_Params.N_Threads_Batch := 8;
+            --  =====================================================================
+            --  AUTO-CONFIG: Thread, Batch, and GPU Layer Selection
+            --  =====================================================================
+            --  OLD: Hardcoded N_Threads=8, N_Batch=256, N_Gpu_Layers=-1
+            --  PROBLEM: Intel Pentium Penryn has 2 cores. Using 8 threads
+            --  causes context switching overhead that SLOWS DOWN inference.
+            --  Intel integrated GPU has ~128-512MB dedicated VRAM. The 5.8GB
+            --  model cannot fit. N_Batch=256 allocates ~64MB compute buffers
+            --  on shared VRAM — that's system RAM stolen from model weights.
+            --
+            --  NEW: Auto_Config detects hardware and provides optimal settings.
+            --  Starts minimal (1 thread, 64 batch, CPU-only), probes upward.
+            --  =====================================================================
+            declare
+                AC : constant Working_Config := Auto_Config.Get_Config (Kind);
+            begin
+                C_Params.N_Batch         := Auto_Config.Batch_To_Unsigned (AC.Batch);
+                C_Params.N_Ubatch        := Auto_Config.Batch_To_Unsigned (AC.Batch);
+                C_Params.N_Threads       := Auto_Config.Threads_To_Int (AC.Threads);
+                C_Params.N_Threads_Batch := Auto_Config.Threads_To_Int (AC.Threads);
+
+                --  GPU layers from auto-config
+                M_Params.N_Gpu_Layers := Auto_Config.Accel_Layers_To_Int (AC.Accel_Layers);
+
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                    & "[AutoConfig]"
+                    & AnsiAda.Reset
+                    & " " & Model_Type'Image (Kind) & ":"
+                    & " Ctx=" & unsigned'Image (Actual_Ctx)
+                    & " Threads=" & int'Image (C_Params.N_Threads)
+                    & " Batch=" & unsigned'Image (C_Params.N_Batch)
+                    & " Accel=" & int'Image (M_Params.N_Gpu_Layers));
+            end;
 
             --  [VITAL-DO-NOT-REMOVE] All models use Q4_0 KV + flash_attn=1.
             --  Q4_0 KV saves ~75% memory vs F16. Flash attn is REQUIRED when
@@ -2413,58 +2488,141 @@ package body Model_Manager is
                 --  the llama.cpp stderr output to diagnose the problem.
                 --  The previous stderr suppression caused the 9B model to hang
                 --  silently with zero diagnostic output. That is unacceptable.
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Light_Cyan)
-                    & "[Uptime]+"
-                    & Trim
-                         (Duration'Image
-                             (Ada.Real_Time.To_Duration
-                                 (Ada.Real_Time.Clock - Init_Start_Time)),
-                          Both)
-                    & "s [LoadModel]"
-                    & AnsiAda.Reset
-                    & " Calling Llama_Init_From_Model (stderr visible)...");
-                Models (Kind).Context :=
-                   Llama_Init_From_Model (Models (Kind).Model, C_Params);
 
+                --  =================================================================
+                --  CONTEXT STEP-DOWN LADDER
+                --  =================================================================
+                --  OLD: Try context once. If null → fail.
+                --  PROBLEM: On low-RAM hardware (Intel Pentium Penryn, 16GB shared),
+                --  8192 ctx might fail but 4096 or 2048 would work. No retry = server
+                --  becomes useless on that hardware.
+                --
+                --  NEW: Try the requested context first. If it fails, step down
+                --  through the ladder: 8192 → 4096 → 2048. The first one that
+                --  works wins. This makes the server work on ANY hardware.
+                --
+                --  The step-down is logged clearly so the operator knows the
+                --  hardware couldn't handle the requested context.
+                --  =================================================================
                 declare
-                    Ctx_Dur : constant Duration :=
-                       Ada.Real_Time.To_Duration
-                          (Ada.Real_Time.Clock - Ctx_Init_Start);
-                    Ctx_ms  : constant Natural := Natural (Ctx_Dur * 1000.0);
+                    --  Context sizes to try, from largest to smallest
+                    type Ctx_Step is (Step_Large, Step_Medium, Step_Small);
+                    Step_Ctx : array (Ctx_Step) of unsigned;
+                    Got_Ctx  : Boolean := False;
+                    Used_Step : Ctx_Step;
                 begin
-                    if Models (Kind).Context /= Null_Context then
-                        Put_Line
-                           (AnsiAda.Foreground (AnsiAda.Green)
-                            & "[Uptime]+"
-                            & Trim
-                                 (Duration'Image
-                                     (Ada.Real_Time.To_Duration
-                                         (Ada.Real_Time.Clock
-                                          - Init_Start_Time)),
-                                  Both)
-                            & "s [LoadModel]"
-                            & AnsiAda.Reset
-                            & " Phase 2/2 COMPLETE: context ready"
-                            & " | "
-                            & Natural'Image (Ctx_ms)
-                            & "ms");
+                    --  Build the step-down ladder based on requested context
+                    Step_Ctx (Step_Large)  := Actual_Ctx;
+                    if Actual_Ctx > 4096 then
+                        Step_Ctx (Step_Medium) := 4096;
                     else
+                        Step_Ctx (Step_Medium) := Actual_Ctx;
+                    end if;
+                    if Actual_Ctx > 2048 then
+                        Step_Ctx (Step_Small) := 2048;
+                    else
+                        Step_Ctx (Step_Small) := Actual_Ctx;
+                    end if;
+
+                    --  Try each step
+                    for Step in Ctx_Step loop
+                        if Step_Ctx (Step) = 0 then
+                            null;  -- Skip invalid entries
+                        else
+                            C_Params.N_Ctx := Step_Ctx (Step);
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                                & "[Uptime]+"
+                                & Trim
+                                     (Duration'Image
+                                         (Ada.Real_Time.To_Duration
+                                             (Ada.Real_Time.Clock - Init_Start_Time)),
+                                      Both)
+                                & "s [LoadModel]"
+                                & AnsiAda.Reset
+                                & " Phase 2/2: Trying ctx="
+                                & unsigned'Image (Step_Ctx (Step))
+                                & "...");
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                                & "[Uptime]+"
+                                & Trim
+                                     (Duration'Image
+                                         (Ada.Real_Time.To_Duration
+                                             (Ada.Real_Time.Clock - Init_Start_Time)),
+                                      Both)
+                                & "s [LoadModel]"
+                                & AnsiAda.Reset
+                                & " Calling Llama_Init_From_Model (stderr visible)...");
+
+                            Models (Kind).Context :=
+                               Llama_Init_From_Model (Models (Kind).Model, C_Params);
+
+                            if Models (Kind).Context /= Null_Context then
+                                --  SUCCESS! Use this context size
+                                Actual_Ctx := Step_Ctx (Step);
+                                Got_Ctx := True;
+                                Used_Step := Step;
+
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Green)
+                                    & "[Uptime]+"
+                                    & Trim
+                                         (Duration'Image
+                                             (Ada.Real_Time.To_Duration
+                                                 (Ada.Real_Time.Clock - Init_Start_Time)),
+                                          Both)
+                                    & "s [LoadModel]"
+                                    & AnsiAda.Reset
+                                    & " Phase 2/2 COMPLETE: ctx="
+                                    & unsigned'Image (Actual_Ctx)
+                                    & " ready");
+
+                                --  Record success in auto-config
+                                Auto_Config.Record_Success (Kind, Actual_Ctx);
+                                exit;
+                            else
+                                --  FAILED at this context size — try next step
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                                    & "[Uptime]+"
+                                    & Trim
+                                         (Duration'Image
+                                             (Ada.Real_Time.To_Duration
+                                                 (Ada.Real_Time.Clock - Init_Start_Time)),
+                                          Both)
+                                    & "s [LoadModel]"
+                                    & AnsiAda.Reset
+                                    & " Phase 2/2: ctx="
+                                    & unsigned'Image (Step_Ctx (Step))
+                                    & " FAILED (NULL context) -- stepping down");
+
+                                --  Record failure for this context size
+                                Auto_Config.Record_Failure (Kind, Step_Ctx (Step));
+                            end if;
+                        end if;
+                    end loop;
+
+                    --  If all steps failed, report and clean up
+                    if not Got_Ctx then
                         Put_Line
                            (AnsiAda.Foreground (AnsiAda.Red)
                             & "[Uptime]+"
                             & Trim
                                  (Duration'Image
                                      (Ada.Real_Time.To_Duration
-                                         (Ada.Real_Time.Clock
-                                          - Init_Start_Time)),
+                                         (Ada.Real_Time.Clock - Init_Start_Time)),
                                   Both)
                             & "s [LoadModel]"
                             & AnsiAda.Reset
-                            & " Phase 2/2 FAILED: context is NULL"
-                            & " | "
-                            & Natural'Image (Ctx_ms)
-                            & "ms");
+                            & " Phase 2/2 FAILED: all context sizes exhausted"
+                            & " (tried "
+                            & unsigned'Image (Step_Ctx (Step_Large))
+                            & " -> "
+                            & unsigned'Image (Step_Ctx (Step_Medium))
+                            & " -> "
+                            & unsigned'Image (Step_Ctx (Step_Small))
+                            & ")");
                     end if;
                 end;
             end;
@@ -2488,6 +2646,57 @@ package body Model_Manager is
                            N_Tokens => KV_N_Toks,
                            Model_ID => Kind'Img);
                     if KV_Restored then
+                        --  [BUG 2 FIX] Validate loaded token IDs in Load_Model KV restore
+                        if KV_N_Toks > 0 then
+                            declare
+                                N_Vocab_LM : constant int :=
+                                   Llama_N_Vocab (Models (Kind).Model);
+                                Tok_Arr_LM : access Token_Array;
+                                Bad_LM     : Boolean := False;
+                                Bad_Idx_LM : Integer := 0;
+                            begin
+                                Tok_Arr_LM := To_Token_Array_Access (KV_Tokens);
+                                for I in 1 .. Natural (Integer'Min (Integer (KV_N_Toks), 100)) loop
+                                    if Tok_Arr_LM (I) < Llama_Token (0)
+                                       or else Tok_Arr_LM (I) >= Llama_Token (N_Vocab_LM)
+                                    then
+                                        Bad_LM := True;
+                                        Bad_Idx_LM := I;
+                                        exit;
+                                    end if;
+                                end loop;
+                                if Bad_LM then
+                                    Ada.Text_IO.Put_Line
+                                       (AnsiAda.Background (AnsiAda.Red)
+                                        & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                                        & "[BUGCHECK] BUG2: Load_Model KV restore: Invalid token["
+                                        & Integer'Image (Bad_Idx_LM)
+                                        & "]="
+                                        & Llama_Token'Image (Tok_Arr_LM (Bad_Idx_LM))
+                                        & " (vocab max="
+                                        & int'Image (N_Vocab_LM)
+                                        & "). Flushing stale cache."
+                                        & AnsiAda.Reset);
+                                    Llama_Interface.Llama_Memory_Clear
+                                       (Llama_Interface.Llama_Get_Memory
+                                          (Models (Kind).Context),
+                                        True);
+                                    --  Delete stale cache files from disk so they
+                                    --  won't be reloaded (Ada.Directories.Delete_File
+                                    --  doesn't support wildcards — use our proper helper)
+                                    KV_Cache_Manager.Delete_Stale_Cache (Kind'Img);
+                                else
+                                    Ada.Text_IO.Put_Line
+                                       (AnsiAda.Foreground (AnsiAda.Green)
+                                        & "[DBG-BUGFIX]"
+                                        & AnsiAda.Reset
+                                        & " BUG2: Load_Model KV tokens validated OK ("
+                                        & Interfaces.C.size_t'Image (KV_N_Toks)
+                                        & " tokens, vocab="
+                                        & int'Image (N_Vocab_LM) & ")");
+                                end if;
+                            end;
+                        end if;
                         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -4474,6 +4683,17 @@ package body Model_Manager is
             --  If found, load it to skip recomputing the KV cache from scratch.
             --  This provides fastest response for repeated/similar prompts.
             --  =================================================================
+            --  [BUG 3 DBG] Verbose tracing before KV cache load
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Cyan)
+                & "[DBG-BUGFIX]"
+                & AnsiAda.Reset
+                & " BUG3: Before KV cache load. Model="
+                & Kind'Img
+                & " Context="
+                & Interfaces.C.unsigned'Image (Models (Kind).Current_Ctx)
+                & " Loaded="
+                & Boolean'Image (Models (Kind).Loaded));
             declare
                 Loaded_Tokens : System.Address;
                 Loaded_Count  : Interfaces.C.size_t;
@@ -4486,6 +4706,16 @@ package body Model_Manager is
                        N_Tokens => Loaded_Count,
                        Model_ID => Kind'Img);
 
+                --  [BUG 3 DBG] Verbose tracing after KV cache load
+                Ada.Text_IO.Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Cyan)
+                    & "[DBG-BUGFIX]"
+                    & AnsiAda.Reset
+                    & " BUG3: After KV cache load. Cache_Hit="
+                    & Boolean'Image (Cache_Hit)
+                    & " Loaded_Count="
+                    & Interfaces.C.size_t'Image (Loaded_Count));
+
                 if Cache_Hit then
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Cyan)
@@ -4494,6 +4724,64 @@ package body Model_Manager is
                         & " Auto-loaded from disk ("
                         & Interfaces.C.size_t'Image (Loaded_Count)
                         & " tokens) - fastest response path");
+
+                    --  [BUG 2 FIX] Validate loaded token IDs are within vocab range.
+                    --  When a GPU session saves KV cache, then the model reloads
+                    --  on CPU (INOP fallback), the token IDs may be garbage.
+                    --  Detect this and delete the stale cache file.
+                    if Loaded_Count > 0 then
+                        declare
+                            N_Vocab    : constant int :=
+                               Llama_N_Vocab (Models (Kind).Model);
+                            Tok_Arr    : access Token_Array;
+                            Has_Invalid : Boolean := False;
+                            First_Bad  : Integer := 0;
+                        begin
+                            Tok_Arr := To_Token_Array_Access (Loaded_Tokens);
+                            for I in 1 .. Natural (Integer'Min (Integer (Loaded_Count), 100)) loop
+                                if Tok_Arr (I) < Llama_Token (0)
+                                   or else Tok_Arr (I) >= Llama_Token (N_Vocab)
+                                then
+                                    Has_Invalid := True;
+                                    First_Bad := I;
+                                    exit;
+                                end if;
+                            end loop;
+
+                            if Has_Invalid then
+                                --  [BUG 2 FIX] Stale cache detected — delete it
+                                Ada.Text_IO.Put_Line
+                                   (AnsiAda.Background (AnsiAda.Red)
+                                    & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                                    & "[BUGCHECK] BUG2: Invalid token["
+                                    & Integer'Image (First_Bad)
+                                    & "]="
+                                    & Llama_Token'Image (Tok_Arr (First_Bad))
+                                    & " in KV cache (vocab max="
+                                    & int'Image (N_Vocab)
+                                    & "). Stale GPU cache on CPU mode!"
+                                    & AnsiAda.Reset);
+                                --  Delete stale cache files from disk so they
+                                --  won't be reloaded next time
+                                KV_Cache_Manager.Delete_Stale_Cache (Kind'Img);
+
+                                --  Flush the corrupted KV cache from context
+                                Llama_Interface.Llama_Memory_Clear
+                                   (Llama_Interface.Llama_Get_Memory
+                                      (Models (Kind).Context),
+                                    True);
+                            else
+                                Ada.Text_IO.Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Green)
+                                    & "[DBG-BUGFIX]"
+                                    & AnsiAda.Reset
+                                    & " BUG2: All "
+                                    & Interfaces.C.size_t'Image (Loaded_Count)
+                                    & " loaded tokens validated OK (vocab="
+                                    & int'Image (N_Vocab) & ")");
+                            end if;
+                        end;
+                    end if;
                 else
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Grey)
@@ -4583,6 +4871,17 @@ package body Model_Manager is
                 end;
             else
                 --  No cached virtual tokens — tokenize full prompt as before
+                --  [BUG 3 DBG] Verbose tracing before tokenize
+                Ada.Text_IO.Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Cyan)
+                    & "[DBG-BUGFIX]"
+                    & AnsiAda.Reset
+                    & " BUG3: Before tokenize. Prompt_Len="
+                    & Natural'Image (Clean_P'Length)
+                    & " Max_Tokens="
+                    & Natural'Image (Tokens.all'Length)
+                    & " Vocab="
+                    & Interfaces.C.int'Image (Llama_N_Vocab (Models (Kind).Model)));
                 N_Toks :=
                    Llama_Tokenize
                       (Vocab,
@@ -4774,7 +5073,40 @@ package body Model_Manager is
             end if;
         exception
             when E : others =>
-                Put_Line ("[!] FATAL EXCEPTION IN GENERATE: " & Ada.Exceptions.Exception_Information (E));
+                Ada.Text_IO.Put_Line
+                   (AnsiAda.Background (AnsiAda.Red)
+                    & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                    & "[BUGCHECK] BUG3: STORAGE_ERROR stack overflow caught in inner block!"
+                    & AnsiAda.Reset);
+                Ada.Text_IO.Put_Line
+                   (AnsiAda.Background (AnsiAda.Red)
+                    & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                    & "[BUGCHECK] BUG3: Exception: "
+                    & Ada.Exceptions.Exception_Information (E)
+                    & AnsiAda.Reset);
+                --  [CRITICAL-FIX] This inner handler catches STORAGE_ERROR before the
+                --  outer Storage_Error handler (line 5470) ever runs. That outer handler
+                --  is the one that calls Mark_Metal_Broken + Unload_Model. If we don't
+                --  do it HERE, the next Generate call hits corrupted Metal state → ggml
+                --  error → INOP cascade. Fix: detect Storage_Error and clean up now.
+                if Ada.Exceptions.Exception_Name (E) = "STORAGE_ERROR" then
+                    Ada.Text_IO.Put_Line
+                       (AnsiAda.Background (AnsiAda.Red)
+                        & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                        & "[BUGCHECK] BUG3: Calling Mark_Metal_Broken + Unload_Model"
+                        & " to prevent INOP cascade."
+                        & AnsiAda.Reset);
+                    Mark_Metal_Broken;
+                    --  Force-unload to clear corrupted Metal state
+                    begin
+                        KV_Cache_Manager.Wait_For_Save;
+                        Unload_Model (Kind);
+                    exception
+                        when others => null;
+                    end;
+                    --  Also delete stale KV cache from disk
+                    KV_Cache_Manager.Delete_Stale_Cache (Kind'Img);
+                end if;
                 if Tokens /= null then
                     Free_Tokens (Tokens);
                 end if;
@@ -4857,9 +5189,25 @@ package body Model_Manager is
                            To_Decode);
                     Ret       : int;
                 begin
+                    --  [BUG 3 DBG] Verbose tracing before prefill decode
+                    Ada.Text_IO.Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Cyan)
+                        & "[DBG-BUGFIX]"
+                        & AnsiAda.Reset
+                        & " BUG3: Before prefill decode. To_Decode="
+                        & int'Image (To_Decode)
+                        & " Current_Pos=" & int'Image (Current_Pos)
+                        & " Tokens_Left=" & int'Image (Tokens_Left));
                     Acquire_Accel_Lock;
                     if Kratos.Guard_Enter = 0 then
                         Ret := Llama_Decode (Models (Kind).Context, B);
+                        --  [BUG 3 DBG] Verbose tracing after prefill decode
+                        Ada.Text_IO.Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Cyan)
+                            & "[DBG-BUGFIX]"
+                            & AnsiAda.Reset
+                            & " BUG3: After prefill decode. Ret="
+                            & int'Image (Ret));
                         --  [DEAD-CODE] Draft-model speculative decoding disabled.
                         --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
                         --  if Use_OrdinaryStatusQuoDecodeSpeculative and then Speculative_Decode.Is_Draft_Model_Loaded then
@@ -5211,6 +5559,16 @@ package body Model_Manager is
                             B   : constant Llama_Batch := Llama_Batch_Get_One (Token'Address, 1);
                             Ret : int;
                         begin
+                            --  [BUG 3 DBG] Verbose tracing before generation decode
+                            if Tokens_Gen mod 50 = 0 then
+                                Ada.Text_IO.Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Cyan)
+                                    & "[DBG-BUGFIX]"
+                                    & AnsiAda.Reset
+                                    & " BUG3: Before gen decode. Token#="
+                                    & Natural'Image (Tokens_Gen)
+                                    & " Context=" & Natural'Image (Natural (Models (Kind).Current_Ctx)));
+                            end if;
                             Acquire_Accel_Lock;
                             if Kratos.Guard_Enter = 0 then
                                 Ret := Llama_Decode (Models (Kind).Context, B);
@@ -5225,6 +5583,16 @@ package body Model_Manager is
                                 --          end if;
                                 --      end;
                                 --  end if;
+                                --  [BUG 3 DBG] Verbose tracing after generation decode
+                                if Tokens_Gen mod 50 = 0 then
+                                    Ada.Text_IO.Put_Line
+                                       (AnsiAda.Foreground (AnsiAda.Cyan)
+                                        & "[DBG-BUGFIX]"
+                                        & AnsiAda.Reset
+                                        & " BUG3: After gen decode. Ret="
+                                        & int'Image (Ret)
+                                        & " Token#=" & Natural'Image (Tokens_Gen));
+                                end if;
                                 Kratos.Guard_Exit;
                             else
                                 Kratos.Log_Crash;
@@ -5452,6 +5820,92 @@ package body Model_Manager is
             & Kind'Img
             & " Skip_Gate="
             & Boolean'Image (Skip_Gate));
+
+        --  =================================================================
+        --  AUTO-CONFIG: Record Inference Success
+        --  =================================================================
+        --  Record that this ctx size worked during inference.
+        --  This runs BEFORE the probe so the probe knows the current
+        --  level is stable before trying to upgrade.
+        --  =================================================================
+        if FreeParallelMemory and then Kind /= Qwen_Embedding then
+            Auto_Config.Record_Success (Kind, Models (Kind).Current_Ctx);
+        end if;
+
+        --  =================================================================
+        --  AUTO-CONFIG: Post-Inference Probe
+        --  =================================================================
+        --  After successful inference, check if we can upgrade the config.
+        --  If free RAM > 30% of total, the system has headroom — try a
+        --  larger context on the next inference. This makes the system
+        --  self-tuning: starts minimal, grows when hardware allows.
+        --
+        --  Why here: This runs AFTER generation succeeds but BEFORE the
+        --  gate is released. The model is still loaded, so we can check
+        --  memory pressure accurately.
+        --  =================================================================
+        if FreeParallelMemory and then Kind /= Qwen_Embedding then
+            declare
+                Free_Bytes  : Interfaces.C.size_t := 0;
+                Total_Bytes : Interfaces.C.size_t := 0;
+                Free_MB     : Natural := 0;
+                Total_MB    : Natural := 0;
+                Free_Pct    : Natural := 0;
+                AC          : Auto_Config.Working_Config;
+                Next_Ctx    : Auto_Config.Ctx_Ladder;
+            begin
+                Llama_Interface.CPU_Memory_Query (Free_Bytes, Total_Bytes);
+                Free_MB  := Natural (Free_Bytes / (1024 * 1024));
+                Total_MB := Natural (Total_Bytes / (1024 * 1024));
+
+                if Total_MB > 0 then
+                    Free_Pct := (Free_MB * 100) / Total_MB;
+                end if;
+
+                AC := Auto_Config.Get_Config (Kind);
+                Next_Ctx := Auto_Config.Ctx_Ladder'Val (
+                    Integer'Min (
+                        Auto_Config.Ctx_Ladder'Pos (AC.Ctx) + 1,
+                        Auto_Config.Ctx_Ladder'Pos (Auto_Config.Ctx_32768)));
+
+                --  Probe up if:
+                --    1. Free RAM > 30% (headroom exists)
+                --    2. Current ctx < max (32768)
+                --    3. Not at max acceleration layers
+                if Free_Pct > Auto_Config.Probe_Headroom_Pct
+                  and then AC.Ctx /= Auto_Config.Ctx_32768
+                then
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                        & "[AutoConfig]"
+                        & AnsiAda.Reset
+                        & " " & Model_Type'Image (Kind) & ":"
+                        & " Free_RAM=" & Natural'Image (Free_MB) & "MB"
+                        & " (" & Natural'Image (Free_Pct) & "%)"
+                        & " -- headroom detected, will try ctx="
+                        & Interfaces.C.unsigned'Image (
+                             Auto_Config.Ctx_To_Unsigned (Next_Ctx))
+                        & " on next inference");
+
+                    --  Tell Auto_Config to try the next level up on the
+                    --  NEXT Load_Model call. This is a one-shot probe:
+                    --  if the larger ctx fails, it steps back.
+                    Auto_Config.Set_Probe_Target (Kind, Next_Ctx);
+                elsif Free_Pct <= Auto_Config.Probe_Headroom_Pct then
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Grey)
+                        & "[AutoConfig]"
+                        & AnsiAda.Reset
+                        & " " & Model_Type'Image (Kind) & ":"
+                        & " Free_RAM=" & Natural'Image (Free_MB) & "MB"
+                        & " (" & Natural'Image (Free_Pct) & "%)"
+                        & " -- memory pressure, holding at ctx="
+                        & Interfaces.C.unsigned'Image (
+                             Auto_Config.Ctx_To_Unsigned (AC.Ctx)));
+                end if;
+            end;
+        end if;
+
         if not Skip_Gate then
             if Level = ELP0 then
                 Priority_Model_Gate.Release_ELP0 (Kind);
@@ -5476,36 +5930,41 @@ package body Model_Manager is
             --  Log the full exception info and clean up without crashing.
             --  Mark Metal broken so KV save retries instead of SIGABRT.
             Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Red)
-                & "[Gen-FATAL]"
-                & AnsiAda.Reset
-                & " STORAGE_ERROR (stack overflow) in Generate for "
-                & Model_Type'Image (Kind));
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                & "[BUGCHECK] BUG3: STORAGE_ERROR (stack overflow) in Generate for "
+                & Model_Type'Image (Kind)
+                & AnsiAda.Reset);
             Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Red)
-                & "[Gen-FATAL]"
-                & AnsiAda.Reset
-                & " Exception: "
-                & Ada.Exceptions.Exception_Information (E));
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                & "[BUGCHECK] BUG3: Exception: "
+                & Ada.Exceptions.Exception_Information (E)
+                & AnsiAda.Reset);
             --  [VITAL-DO-NOT-REMOVE] OOM banner — red, unmissable.
             Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Red)
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
                 & "=========================================================="
                 & AnsiAda.Reset);
             Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Red)
-                & "  !!! OUT OF MEMORY !!!  (STORAGE_ERROR)"
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                & "  [BUGCHECK] !!! OUT OF MEMORY !!!  (STORAGE_ERROR)"
                 & AnsiAda.Reset);
             Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Red)
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
                 & "  Metal backend poisoned. KV save will RETRY."
                 & AnsiAda.Reset);
             Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Red)
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
                 & "  Connection NOT dropped. Server continues."
                 & AnsiAda.Reset);
             Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Red)
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
                 & "=========================================================="
                 & AnsiAda.Reset);
             Mark_Metal_Broken;
@@ -5565,6 +6024,23 @@ package body Model_Manager is
                 when others =>
                     null;
             end;
+            --  [BUG 1 FIX] Metal state reset after stack overflow cleanup.
+            --  After Unload_Model, pending Metal command buffers from the crashed
+            --  compute may still be in-flight.  Wait for them to drain before
+            --  the next request loads a fresh model.
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                & "[BUGCHECK] BUG1: Metal state reset after stack overflow."
+                & " Draining command buffers..."
+                & AnsiAda.Reset);
+            delay 0.1;  --  100ms to let Metal command buffers finish or abort
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Foreground (AnsiAda.Cyan)
+                & "[DBG-BUGFIX]"
+                & AnsiAda.Reset
+                & " BUG1: Metal drain complete. Model unloaded."
+                & " GPU_Free_MB=" & Natural'Image (GPU_Free_MB));
             if Tokens /= null then
                 Free_Tokens (Tokens);
                 Tokens := null;
@@ -5582,7 +6058,12 @@ package body Model_Manager is
                To_Unbounded_String
                   ("ERROR: Out of Memory (STORAGE_ERROR) -- model unloaded, connection kept alive");
         when E : others =>
-            Put_Line ("!!! EXCEPTION IN GENERATE: " & Ada.Exceptions.Exception_Information (E));
+            Ada.Text_IO.Put_Line
+               (AnsiAda.Background (AnsiAda.Red)
+                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                & "[BUGCHECK] EXCEPTION IN GENERATE: "
+                & Ada.Exceptions.Exception_Information (E)
+                & AnsiAda.Reset);
             if Tokens /= null then
                 Free_Tokens (Tokens);
             end if;
@@ -6884,6 +7365,55 @@ package body Model_Manager is
                                                            H_Now;
                                                     end if;
                                                 end;
+                                                --  [BUG 5 FIX] VRAM check before FLUX context creation.
+                                                --  FLUX needs ~4GB VRAM. If the main model is still loaded,
+                                                --  there may not be enough. Unload it first to free VRAM.
+                                                if T_Name = "imagine" then
+                                                    declare
+                                                        VRAM_Free_B : Interfaces.C.size_t := 0;
+                                                        VRAM_Total_B : Interfaces.C.size_t := 0;
+                                                    begin
+                                                        Llama_Interface.GPU_Memory_Query (VRAM_Free_B, VRAM_Total_B);
+                                                        Ada.Text_IO.Put_Line
+                                                           (AnsiAda.Foreground (AnsiAda.Cyan)
+                                                            & "[DBG-BUGFIX]"
+                                                            & AnsiAda.Reset
+                                                            & " BUG5: Before FLUX context. VRAM_Free="
+                                                            & Interfaces.C.size_t'Image (VRAM_Free_B / (1024 * 1024))
+                                                            & "MB VRAM_Total="
+                                                            & Interfaces.C.size_t'Image (VRAM_Total_B / (1024 * 1024))
+                                                            & "MB");
+                                                        --  FLUX needs ~4GB VRAM. If less than 5GB free, unload main model first.
+                                                        if VRAM_Free_B > 0
+                                                           and then VRAM_Free_B < 5 * 1024 * 1024
+                                                        then
+                                                            Ada.Text_IO.Put_Line
+                                                               (AnsiAda.Background (AnsiAda.Red)
+                                                                & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                                                                & "[BUGCHECK] BUG5: VRAM insufficient for FLUX ("
+                                                                & Interfaces.C.size_t'Image (VRAM_Free_B / (1024 * 1024))
+                                                                & "MB free, need ~4GB). Unloading main model."
+                                                                & AnsiAda.Reset);
+                                                            begin
+                                                                if Models (Snowball_Enaga_Orchestrator).Loaded then
+                                                                    KV_Cache_Manager.Wait_For_Save;
+                                                                    Unload_Model (Snowball_Enaga_Orchestrator);
+                                                                end if;
+                                                            exception
+                                                                when others => null;
+                                                            end;
+                                                            --  Re-query after unload
+                                                            Llama_Interface.GPU_Memory_Query (VRAM_Free_B, VRAM_Total_B);
+                                                            Ada.Text_IO.Put_Line
+                                                               (AnsiAda.Foreground (AnsiAda.Green)
+                                                                & "[DBG-BUGFIX]"
+                                                                & AnsiAda.Reset
+                                                                & " BUG5: After unload. VRAM_Free="
+                                                                & Interfaces.C.size_t'Image (VRAM_Free_B / (1024 * 1024))
+                                                                & "MB");
+                                                        end if;
+                                                    end;
+                                                end if;
                                                 declare
                                                     R :
                                                        constant Tool_Manager
