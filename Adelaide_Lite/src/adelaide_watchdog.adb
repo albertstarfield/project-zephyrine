@@ -42,6 +42,10 @@ procedure Adelaide_Watchdog is
    function Is_Shutdown_Requested return Interfaces.C.int;
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
 
+   --  _exit() bypasses atexit handlers — prevents Metal assertion failure
+   procedure C_Exit (Status : Interfaces.C.int);
+   pragma Import (C, C_Exit, "_exit");
+
    function Is_Another_Watchdog_Running return Boolean;
    procedure Write_Watchdog_PID;
    procedure Write_Watchdog_Heartbeat;
@@ -540,7 +544,7 @@ begin
             end if;
             Put_Line (Standard_Error,
               "[Watchdog] Clean shutdown complete.");
-            GNAT.OS_Lib.OS_Exit (0);
+            C_Exit (0);
          end if;
 
          --  Update our heartbeat so future instances can verify we're alive

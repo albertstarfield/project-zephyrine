@@ -35,7 +35,6 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Environment_Variables;
 with Ada.Directories;
-with GNAT.OS_Lib;
 with Adelaide_Server_Pkg;
 with Model_Manager;
 with Knowledge_Manager;
@@ -114,6 +113,11 @@ procedure Adelaide_Server is
    pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
    function Is_Shutdown_Requested return Interfaces.C.int;
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
+
+   --  _exit() bypasses atexit handlers — prevents Metal assertion failure
+   --  during process teardown (ggml_metal_device_free asserts rsets->count == 0)
+   procedure C_Exit (Status : Interfaces.C.int);
+   pragma Import (C, C_Exit, "_exit");
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -1173,7 +1177,7 @@ begin
                    Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
                             "[Shutdown]" & AnsiAda.Reset &
                             " Clean shutdown complete.");
-                   GNAT.OS_Lib.OS_Exit (0);
+                   C_Exit (0);
                end if;
 
                Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);

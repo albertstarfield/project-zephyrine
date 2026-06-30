@@ -7,6 +7,11 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Exceptions;
 with Ada.Streams;
+with Ada.Streams.Stream_IO;
+with Ada.Environment_Variables;
+use type Ada.Streams.Stream_Element_Offset;
+use type Ada.Streams.Stream_Element;
+use type Ada.Streams.Stream_IO.Count;
 with Kokoro_Interface;
 with Response_Cache;
 with Moonshine_Interface;
@@ -453,50 +458,49 @@ package body Adelaide_Server_Pkg is
       end Tailing_Task;
       
       task body Tailing_Task is
-         use Ada.Streams.Stream_IO;
          Log_File_Env : constant String := Ada.Environment_Variables.Value("ADELAIDE_LOG_FILE", "");
-         F : File_Type;
+         F : Ada.Streams.Stream_IO.File_Type;
          Buffer : Ada.Streams.Stream_Element_Array (1 .. 1024);
          Last : Ada.Streams.Stream_Element_Offset;
          Should_Stop : Boolean := False;
          Str_Buf : Unbounded_String;
-      begin
-         accept Start;
-         if Log_File_Env /= "" then
-            begin
-               Open (F, In_File, Log_File_Env);
-               Set_Index (F, Size(F) + 1); -- Start at current end of file
-               while not Should_Stop loop
-                  select
-                     accept Stop do
-                        Should_Stop := True;
-                     end Stop;
-                  else
-                     Read (F, Buffer, Last);
-                     if Last > 0 then
-                        for I in 1 .. Last loop
-                           if Buffer(I) = 10 then -- ASCII.LF
-                              declare
-                                 S : String := To_String(Str_Buf);
-                              begin
-                                 for J in S'Range loop
-                                    if S(J) = '"' then S(J) := '''; end if;
-                                    if S(J) = '\' then S(J) := '/'; end if;
-                                    if S(J) < ' ' then S(J) := ' '; end if; -- Strip control chars
-                                 end loop;
-                                 Stream_Q.Push("data: {""type"":""log"", ""line"":""" & S & """}" & ASCII.LF & ASCII.LF);
-                              end;
-                              Str_Buf := Null_Unbounded_String;
-                           elsif Buffer(I) /= 13 then -- Ignore CR
-                              Append(Str_Buf, Character'Val(Buffer(I)));
-                           end if;
-                        end loop;
-                     else
-                        delay 0.1;
-                     end if;
-                  end select;
-               end loop;
-               Close(F);
+       begin
+          accept Start;
+          if Log_File_Env /= "" then
+             begin
+                Ada.Streams.Stream_IO.Open (F, Ada.Streams.Stream_IO.In_File, Log_File_Env);
+                Ada.Streams.Stream_IO.Set_Index (F, Ada.Streams.Stream_IO.Size(F) + Ada.Streams.Stream_IO.Count'(1)); -- Start at current end of file
+                while not Should_Stop loop
+                   select
+                      accept Stop do
+                         Should_Stop := True;
+                      end Stop;
+                   else
+                      Ada.Streams.Stream_IO.Read (F, Buffer, Last);
+                      if Last > 0 then
+                         for I in 1 .. Last loop
+                            if Buffer(I) = 10 then -- ASCII.LF
+                               declare
+                                  S : String := To_String(Str_Buf);
+                               begin
+                                  for J in S'Range loop
+                                     if S(J) = '"' then S(J) := '''; end if;
+                                     if S(J) = '\' then S(J) := '/'; end if;
+                                     if S(J) < ' ' then S(J) := ' '; end if; -- Strip control chars
+                                  end loop;
+                                  Stream_Q.Push("data: {""type"":""log"", ""line"":""" & S & """}" & ASCII.LF & ASCII.LF);
+                               end;
+                               Str_Buf := Null_Unbounded_String;
+                            elsif Buffer(I) /= 13 then -- Ignore CR
+                               Append(Str_Buf, Character'Val(Buffer(I)));
+                            end if;
+                         end loop;
+                      else
+                         delay 0.1;
+                      end if;
+                   end select;
+                end loop;
+                Ada.Streams.Stream_IO.Close(F);
             exception
                when others => null;
             end;
@@ -2155,7 +2159,7 @@ package body Adelaide_Server_Pkg is
                         
                      return Wrap_Response (AWS.Response.Stream
                        (Content_Type => "text/event-stream",
-                        Handle => S));
+                        Handle => S'Access));
                   end;
                end;
             end if;
