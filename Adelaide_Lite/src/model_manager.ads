@@ -304,6 +304,16 @@ package Model_Manager is
     INOP_Cooldown_Secs      : constant Natural := 30;  -- 30 seconds
    INOP_Trigger_Time       : Duration := 0.0;  -- Time when INOP was triggered
 
+   --  [ACCEL-INOP] Forced acceleration layer shutdown on OOM during Generate.
+   --  When GEN-RETRY catches Storage_Error, it forces Acceleration_Silicon_Layer
+   --  to 0 (CPU-only) for 60 seconds, then restores the previous value.
+   --  This prevents the deadlock where Metal is broken but the retry creates
+   --  a new context with Metal layers still active.
+   Accel_INOP_Active       : Boolean := False;  -- True when accel forced to 0
+   Accel_INOP_Saved_Layers : Integer := -1;     -- Saved layer count before force to 0
+   Accel_INOP_Restore_Time : Ada.Real_Time.Time := Ada.Real_Time.Time_First;
+   Accel_INOP_Cooldown     : constant Duration := 60.0;  -- 60 seconds CPU-only
+
    --  Record a ggml compute error for the INOP counter.
    --  Increments counter; triggers INOP if threshold reached.
    procedure Record_INOP_Error;
@@ -313,6 +323,14 @@ package Model_Manager is
 
    --  Check if Tensor_Accel_INOP is active.
    function Is_Tensor_INOP return Boolean;
+
+   --  [ACCEL-INOP] Force acceleration layers to 0 (CPU-only) on OOM.
+   --  Saves current Acceleration_Silicon_Layer for later restoration.
+   procedure Trigger_Accel_INOP;
+
+   --  [ACCEL-INOP] Check if cooldown expired and restore acceleration layers.
+   --  Called periodically by Acceleration_Monitor task.
+   procedure Check_Accel_INOP_Restore;
 
    Current_WCET : Duration := 0.0;
    Current_WCET_ELP0 : Duration := 0.0;

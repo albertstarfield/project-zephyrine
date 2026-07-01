@@ -102,17 +102,204 @@ def _rotate_logs():
             pass
 
 
+IS_KISS = False
+term_stdout = None
+term_stderr = None
+
+def show_bsod(error_msg, log_path, stop_code="0x0000007B"):
+    bsod_text = f"""\033[44m\033[37;1m
+================================================================================
+                                 SYSTEM ERROR
+================================================================================
+
+A fatal problem has been detected and Zephyrine has been shut down to prevent 
+damage to your configuration or platform stability.
+
+STOP_BOOT_FAILURE: {error_msg}
+
+If this is the first time you've seen this error screen, restart the process.
+If this screen appears again, verify your model assets and configuration.
+
+*** STOP: {stop_code} (0xF78D2524, 0xC0000034, 0x00000000, 0x00000000)
+
+================================================================================
+\033[0m"""
+    if term_stdout:
+        term_stdout.write(bsod_text + "\n")
+        term_stdout.flush()
+    else:
+        sys.__stdout__.write(bsod_text + "\n")
+        sys.__stdout__.flush()
+
+def print_progress(percent, message="Loading AI Model..."):
+    bar_width = 40
+    filled = int(bar_width * percent / 100)
+    bar = "█" * filled + "░" * (bar_width - filled)
+    
+    is_tty = hasattr(term_stdout, "isatty") and term_stdout.isatty()
+    term_type = os.environ.get("TERM", "")
+    is_compatible = is_tty and term_type not in ("", "dumb")
+    
+    if is_compatible:
+        term_stdout.write(f"\r\033[KLoading: |{bar}| {percent}% - {message}")
+        term_stdout.flush()
+    else:
+        term_stdout.write(f"Loading: {percent}% - {message}\n")
+        term_stdout.flush()
+
+def render_ascii_logo():
+    logo_path = os.path.join(BASE_DIR, "ui", "frontend", "public", "Project Zephyrine Logo.png")
+    if not os.path.exists(logo_path):
+        logo_path = os.path.join(BASE_DIR, "ui", "frontend", "dist", "Project Zephyrine Logo.png")
+    
+    try:
+        from PIL import Image
+        img = Image.open(logo_path)
+        width = 60
+        w, h = img.size
+        aspect = h / w
+        height = int(width * aspect * 0.45)
+        img = img.resize((width, height)).convert("L")
+        
+        chars = "@%#*+=-:. "
+        num_chars = len(chars)
+        
+        lines = []
+        for y in range(height):
+            line = ""
+            for x in range(width):
+                pixel = img.getpixel((x, y))
+                char_idx = int((pixel / 255) * (num_chars - 1))
+                line += chars[char_idx]
+            lines.append(line)
+        return "\n".join(lines)
+    except Exception:
+        return """
+       .---.
+      /     \\
+      \\_.._/
+       ||||
+       ||||
+    .-'    '-.
+   /          \\
+  |  Project   |
+  | Zephyrine  |
+   \\__________/
+"""
+
+def progress_monitor(log_path):
+    while not os.path.exists(log_path):
+        time.sleep(0.1)
+    
+    server_port = os.environ.get("ADLAIDE_SERVER_PORT", "11420")
+    for i, arg in enumerate(sys.argv):
+        if arg == "--port" and i + 1 < len(sys.argv):
+            server_port = sys.argv[i + 1]
+
+    current_pct = 0
+    target_pct = 0
+    
+    with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+        is_done = False
+        while not is_done:
+            line = f.readline()
+            
+            # Keep target_pct state-machine tracking
+            if line:
+                if "Verifying Environment Prerequisites" in line:
+                    target_pct = max(target_pct, 5)
+                elif "Setting up Adelaide-Lite environment" in line:
+                    target_pct = max(target_pct, 10)
+                elif "llama.cpp release" in line:
+                    target_pct = max(target_pct, 18)
+                elif "Resolving Ada dependencies" in line:
+                    target_pct = max(target_pct, 30)
+                elif "Building Vite Frontend" in line:
+                    target_pct = max(target_pct, 45)
+                elif "Self-Integrity Quality Check" in line:
+                    target_pct = max(target_pct, 55)
+                elif "Bootstrapping QRNN LSH worker" in line:
+                    target_pct = max(target_pct, 65)
+                elif "Bootstrapping ONNX VAD worker" in line:
+                    target_pct = max(target_pct, 75)
+                elif "Booting Adelaide Watchdog" in line or "Booting Adelaide Intelligence" in line:
+                    target_pct = max(target_pct, 85)
+                elif "llama_context: constructing" in line:
+                    target_pct = max(target_pct, 90)
+                elif "Model_Manager.Initialize COMPLETE" in line or "Initialize: metrics logger started" in line:
+                    target_pct = max(target_pct, 95)
+                elif "Server is UP" in line or "HTTP: http://" in line or "Access Info" in line:
+                    target_pct = 100
+                    is_done = True
+            
+            if current_pct < target_pct:
+                current_pct += 1
+                eta = max(1, 15 - int(15 * current_pct / 100))
+                print_progress(current_pct, f"Model Loading... [ETA: {eta}s]")
+                time.sleep(0.02)
+            else:
+                if not line:
+                    time.sleep(0.05)
+        
+        while current_pct < 100:
+            current_pct += 1
+            eta = max(0, 15 - int(15 * current_pct / 100))
+            if current_pct == 100:
+                print_progress(current_pct, "Model loaded successfully!")
+            else:
+                print_progress(current_pct, f"Model Loading... [ETA: {eta}s]")
+            time.sleep(0.01)
+            
+        is_tty = hasattr(term_stdout, "isatty") and term_stdout.isatty()
+        term_type = os.environ.get("TERM", "")
+        if is_tty and term_type not in ("", "dumb"):
+            term_stdout.write("\033[2K\r")
+            term_stdout.flush()
+        else:
+            term_stdout.write("\n")
+            term_stdout.flush()
+            
+        logo_ascii = render_ascii_logo()
+        term_stdout.write("\n\033[36m" + logo_ascii + "\033[0m\n")
+        term_stdout.write("\n\033[32;1mHeya! Adelaide Here and Project Zephyrine has been started! I Hope you have an absolutely wonderful day\033[0m\n")
+        term_stdout.write("To get started interacting with me, you can use:\n")
+        term_stdout.write(f"  * \033[36mOllama Client:\033[0m      OLLAMA_HOST=http://localhost:{server_port} (or point OpenWebUI here)\n")
+        term_stdout.write(f"  * \033[36mOpenAI Client:\033[0m      http://localhost:{server_port}/v1 (note: use /v1)\n")
+        try:
+            ssl_port = int(server_port) + 1
+            term_stdout.write(f"  * \033[36mOpenAI Secure:\033[0m      https://localhost:{ssl_port}/v1\n")
+        except Exception:
+            pass
+        term_stdout.write(f"  * \033[36mClaude Client:\033[0m      http://localhost:{server_port} or https (secure)\n")
+        term_stdout.write("\n\033[32m Remember, I am NOT an AI that nor replacement for chatGPT or Gemini you expected. I am NOT following industry standard status quo AI. I am nobody.\033[0m\n\n")
+        term_stdout.flush()
+
 def setup_logging():
     """Create logs/ dir, rotate old logs, redirect stdout/stderr to tee.
     Returns the path of the current log file."""
+    global IS_KISS, term_stdout, term_stderr
     os.makedirs(LOGS_DIR, exist_ok=True)
     _rotate_logs()
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(LOGS_DIR, f"run_{timestamp}.log")
     log_fp = open(log_path, "a", encoding="utf-8", buffering=1)  # line-buffered
-    sys.stdout = _TeeWriter(sys.__stdout__, log_fp)
-    sys.stderr = _TeeWriter(sys.__stderr__, log_fp)
-    print(f"[*] Logging to {log_path}")
+    
+    IS_KISS = not ("--verbose" in sys.argv or "--test-build-integrity-check" in sys.argv or "--verify" in sys.argv or "--help" in sys.argv or "-h" in sys.argv)
+    
+    if IS_KISS:
+        orig_stdout_fd = os.dup(1)
+        orig_stderr_fd = os.dup(2)
+        term_stdout = open(orig_stdout_fd, "w", buffering=1)
+        term_stderr = open(orig_stderr_fd, "w", buffering=1)
+        os.dup2(log_fp.fileno(), 1)
+        os.dup2(log_fp.fileno(), 2)
+        sys.stdout = log_fp
+        sys.stderr = log_fp
+    else:
+        sys.stdout = _TeeWriter(sys.__stdout__, log_fp)
+        sys.stderr = _TeeWriter(sys.__stderr__, log_fp)
+        print(f"[*] Logging to {log_path}")
+        
     return log_path
 
 # ANSI Color Codes
@@ -192,7 +379,7 @@ def verify_environment():
 
     if missing:
         print(f"\n{BG_RED}[BUGCHECK] [FATAL] Environment check failed. Please install the missing tools listed above.{RST}")
-        sys.exit(1)
+        raise RuntimeError("ENV_CHECK_FAILURE: Environment check failed.")
     else:
         print(f"{GRN}[+] Environment verified. All prerequisites met.{RST}\n")
 
@@ -609,9 +796,82 @@ def safe_cmake_configure(cmake_flags, cwd, build_dir, module_name):
     return result
 
 def main():
-    global daemon_process, server_process, watchdog_process, vad_process
+    global current_log_path
+    try:
+        real_main()
+    except BaseException as e:
+        is_error = True
+        if isinstance(e, SystemExit):
+            if e.code == 0:
+                is_error = False
+        
+        log_path = globals().get("current_log_path") or os.environ.get("ADELAIDE_LOG_FILE", "")
+        if not log_path:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            log_path = os.path.join(LOGS_DIR, f"run_{timestamp}.log")
+            
+        if IS_KISS and is_error:
+            error_str = str(e) or "BOOT_PROCESS_ABORTED"
+            
+            # Disguise developer-level terms
+            if "GNATprove" in error_str or "formal verification" in error_str:
+                error_str = "CORE_INIT_FAILURE: Core security audit and safety check failed."
+            elif "AFL++" in error_str or "fuzzing" in error_str:
+                error_str = "CORE_INIT_FAILURE: Core safety analysis and stability checks failed."
+            elif "Ruff" in error_str or "INTEGRITY_CHECK_FAILURE" in error_str:
+                error_str = "INTEGRITY_CHECK_FAILURE: System code integrity check failed."
+            elif "pyrefly" in error_str or "LSH_BOOTSTRAP_FAILURE" in error_str or "ruff" in error_str:
+                error_str = "LSH_BOOTSTRAP_FAILURE: Sequence worker security check failed."
+            elif "VAD" in error_str or "VAD_BOOTSTRAP_FAILURE" in error_str:
+                error_str = "VAD_BOOTSTRAP_FAILURE: Voice module initialization check failed."
+
+            stop_code = "0x0000007B"
+            if "CORE_INIT_FAILURE" in error_str:
+                stop_code = "0x00000001"
+            elif "FRONTEND_INIT_FAILURE" in error_str:
+                stop_code = "0x00000002"
+            elif "INTEGRITY_CHECK_FAILURE" in error_str:
+                stop_code = "0x00000003"
+            elif "VAD_BOOTSTRAP_FAILURE" in error_str:
+                stop_code = "0x00000004"
+            elif "LSH_BOOTSTRAP_FAILURE" in error_str:
+                stop_code = "0x00000005"
+            elif "SERVER_CRASHED" in error_str:
+                stop_code = "0x00000006"
+            
+            show_bsod(error_str, log_path, stop_code)
+            sys.exit(1)
+        else:
+            raise
+
+def real_main():
+    global daemon_process, server_process, watchdog_process, vad_process, current_log_path
     
     current_log_path = setup_logging()
+    
+    # Kill any stale processes from previous runs before starting
+    print("[*] Cleaning up any stale processes from previous runs...")
+    try:
+        subprocess.run(["pkill", "-9", "-f", "adelaide_server"], stderr=subprocess.DEVNULL)
+        subprocess.run(["pkill", "-9", "-f", "adelaide_watchdog"], stderr=subprocess.DEVNULL)
+        subprocess.run(["pkill", "-9", "-f", "vad_worker.py"], stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+    if IS_KISS:
+        import threading
+        p_thread = threading.Thread(target=progress_monitor, args=(current_log_path,), daemon=True)
+        p_thread.start()
+        
+    # Declare key paths and config objects at the top to prevent UnboundLocalError on direct launch
+    env = os.environ.copy()
+    lsh_reqs = os.path.join(BASE_DIR, "lsh", "requirements-lsh.txt")
+    lsh_worker = os.path.join(BASE_DIR, "lsh", "lsh_qrnn_worker.py")
+    vad_worker_script = os.path.join(BASE_DIR, "vad_component", "vad_worker.py")
+    pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
+    pyvenv_python = os.path.join(pyvenv_dir, "bin", "python3") if platform.system() != "Windows" else os.path.join(pyvenv_dir, "Scripts", "python.exe")
+    alr_cmd = "alr.exe" if platform.system() == "Windows" else "alr"
+    hash_file = os.path.join(BASE_DIR, ".build_hash")
     
     # 0. Verify all critical prerequisites are installed
     verify_environment()
@@ -1122,143 +1382,117 @@ def main():
         version_script = os.path.join(BASE_DIR, "scripts", "update_version.sh")
         if os.path.exists(version_script):
             subprocess.run(["bash", version_script], cwd=BASE_DIR, check=False)
-        subprocess.run([alr_cmd, "build"], env=env, cwd=BASE_DIR, check=True)
+        try:
+            subprocess.run([alr_cmd, "build"], env=env, cwd=BASE_DIR, check=True)
+        except subprocess.CalledProcessError:
+            raise RuntimeError("CORE_INIT_FAILURE: Core initialization failed.")
         
         # =====================================================================
-        # VERIFICATION STAGE: Formal Proofs & Fuzzing
+        # VERIFICATION STAGES: GNATprove, AFL++, Ruff, pyrefly, and tsc
         # =====================================================================
-        if "--verify" in sys.argv or "--test-build-integrity-check" in sys.argv:
-            print("\n" + "="*70)
-            print("  RUNNING FORMAL VERIFICATION & STABILITY ANALYSIS")
-            print("="*70)
-            
-            # 1. GNATprove Formal Verification
-            print("\n[*] Stage: GNATprove SPARK Static Analysis...")
-            prove_cmd = [alr_cmd, "exec", "--", "gnatprove", "-P", "adelaide_spark.gpr", 
-                         "--level=4", "--prover=cvc5,z3,altergo", "--timeout=60", 
-                         "--memlimit=2000", "--steps=0", "--counterexamples=on", 
-                         "--report=fail", "--warnings=error", "-j0"]
-            
-            try:
-                subprocess.run(prove_cmd, cwd=BASE_DIR, env=env, check=True)
-                print("[+] GNATprove: Formal verification PASSED.")
-            except subprocess.CalledProcessError:
-                print(f"{BG_RED}[BUGCHECK] [!] GNATprove: Formal verification FAILED. Check obj/spark/gnatprove/gnatprove.out{RST}")
-                sys.exit(1)
-            
-            # 2. AFL++ Fuzzing Environment Check
-            print("\n[*] Stage: AFL++ Fuzzing Readiness Check...")
-            fuzz_ready = False
-            for compiler in ["afl-clang-fast", "afl-gcc-fast", "afl-clang-lto"]:
-                if shutil.which(compiler):
-                    print(f"[+] AFL++ compiler found: {compiler}")
-                    fuzz_ready = True
-                    break
-            
-            if fuzz_ready and shutil.which("afl-fuzz"):
-                print("[+] AFL++ environment is fully ready for binary torture.")
-            else:
-                print("[!] AFL++ environment incomplete. Fuzzing skipped.")
-            
-            print("\n" + "="*70)
-            print("  VERIFICATION STAGE COMPLETE")
-            print("="*70 + "\n")
+        
+        # 1. GNATprove Formal Verification (always on rebuild)
+        print("\n[*] Stage: GNATprove SPARK Static Analysis...")
+        prove_cmd = [alr_cmd, "exec", "--", "gnatprove", "-P", "adelaide_spark.gpr", 
+                     "--level=4", "--prover=cvc5,z3,altergo", "--timeout=60", 
+                     "--memlimit=2000", "--steps=0", "--counterexamples=on", 
+                     "--report=fail", "--warnings=error", "-j0"]
+        try:
+            subprocess.run(prove_cmd, cwd=BASE_DIR, env=env, check=True)
+            print("[+] GNATprove: Formal verification PASSED.")
+        except subprocess.CalledProcessError:
+            raise RuntimeError("CORE_INIT_FAILURE: GNATprove formal verification failed.")
+        
+        # 2. AFL++ Fuzzing Environment Check
+        print("\n[*] Stage: AFL++ Fuzzing Readiness Check...")
+        fuzz_ready = False
+        for compiler in ["afl-clang-fast", "afl-gcc-fast", "afl-clang-lto"]:
+            if shutil.which(compiler):
+                fuzz_ready = True
+                break
+        if fuzz_ready and shutil.which("afl-fuzz"):
+            print("[+] AFL++ environment is fully ready for binary torture.")
+        else:
+            raise RuntimeError("CORE_INIT_FAILURE: AFL++ environment is incomplete.")
 
+        # 3. Vite Frontend build (runs tsc and vite build)
         print("[*] Building Vite Frontend for Sidecar UI...")
         frontend_dir = os.path.join(BASE_DIR, "ui", "frontend")
         if os.path.exists(frontend_dir):
             npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
-            subprocess.run([npm_cmd, "install"], cwd=frontend_dir, check=True)
-            print("[*] Running auto npm audit fix to resolve vulnerabilities...")
-            subprocess.run([npm_cmd, "audit", "fix"], cwd=frontend_dir, check=False)
-            subprocess.run([npm_cmd, "run", "build"], cwd=frontend_dir, check=True)
-        
+            try:
+                subprocess.run([npm_cmd, "install"], cwd=frontend_dir, check=True)
+                print("[*] Running auto npm audit fix to resolve vulnerabilities...")
+                subprocess.run([npm_cmd, "audit", "fix"], cwd=frontend_dir, check=False)
+                subprocess.run([npm_cmd, "run", "build"], cwd=frontend_dir, check=True)
+            except subprocess.CalledProcessError:
+                raise RuntimeError("FRONTEND_INIT_FAILURE: User interface initialization failed.")
+
+        # 4. Self-Integrity Check using Ruff
+        ruff_cmd = "ruff.exe" if platform.system() == "Windows" else "ruff"
+        if shutil.which(ruff_cmd):
+            print("[*] Running Platform Self-Integrity Quality Check (Ruff)...")
+            try:
+                result = subprocess.run([ruff_cmd, "check", BASE_DIR,
+                                         "--exclude", "vendor,moonshine"],
+                                        capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(result.stdout)
+                    raise RuntimeError("INTEGRITY_CHECK_FAILURE: Ruff quality violations detected.")
+                else:
+                    print("[+] Self-Integrity Quality Check PASSED.")
+            except Exception as e:
+                if isinstance(e, RuntimeError):
+                    raise
+                raise RuntimeError(f"INTEGRITY_CHECK_FAILURE: Ruff check execution error: {e}")
+        else:
+            print("[!] Warning: ruff not found in PATH, skipping self-integrity quality check.")
+
+        # 5. LSH QRNN Worker Bootstrap & pyrefly + ruff check
+        if os.path.exists(lsh_reqs):
+            print("[LSH] Bootstrapping QRNN LSH worker venv...")
+            if not os.path.exists(pyvenv_python):
+                subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
+            pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip")
+            subprocess.run([pyvenv_pip, "install", "-r", lsh_reqs], check=True)
+            
+            # pyrefly check
+            pyvenv_pyrefly = os.path.join(pyvenv_dir, "bin", "pyrefly")
+            if os.path.exists(pyvenv_pyrefly):
+                print("[LSH] Running pyrefly type-check on worker...")
+                res_pyrefly = subprocess.run([pyvenv_pyrefly, "check", lsh_worker], capture_output=True, text=True)
+                if res_pyrefly.returncode != 0:
+                    print(res_pyrefly.stdout)
+                    print(res_pyrefly.stderr)
+                    raise RuntimeError("LSH_BOOTSTRAP_FAILURE: pyrefly type check failed.")
+            
+            # ruff check
+            pyvenv_ruff = os.path.join(pyvenv_dir, "bin", "ruff")
+            if os.path.exists(pyvenv_ruff):
+                print("[LSH] Running ruff lint on worker...")
+                res_ruff = subprocess.run([pyvenv_ruff, "check", lsh_worker], capture_output=True, text=True)
+                if res_ruff.returncode != 0:
+                    print(res_ruff.stdout)
+                    print(res_ruff.stderr)
+                    raise RuntimeError("LSH_BOOTSTRAP_FAILURE: ruff quality check failed.")
+            print("[LSH] QRNN worker bootstrap complete.")
+
+        # 6. VAD ONNX Sidecar Worker: Python venv bootstrap
+        if os.path.exists(vad_worker_script):
+            print("[VAD] Bootstrapping ONNX VAD worker...")
+            if not os.path.exists(pyvenv_python):
+                subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
+            pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip") if platform.system() != "Windows" else os.path.join(pyvenv_dir, "Scripts", "pip.exe")
+            
+            try:
+                subprocess.run([pyvenv_pip, "install", "onnxruntime", "numpy"], check=True)
+                print("[VAD] VAD worker bootstrap complete.")
+            except subprocess.CalledProcessError:
+                raise RuntimeError("VAD_BOOTSTRAP_FAILURE: VAD environment setup failed.")
+
+        # Save build hash after all verification steps pass successfully
         with open(hash_file, "w") as f:
             f.write(current_hash)
-            
-    # Self-Integrity Check using Ruff
-    ruff_cmd = "ruff.exe" if platform.system() == "Windows" else "ruff"
-    if shutil.which(ruff_cmd):
-        print("[*] Running Platform Self-Integrity Quality Check (Ruff)...")
-        # Run ruff check on the Adelaide_Lite directory
-        try:
-            result = subprocess.run([ruff_cmd, "check", BASE_DIR,
-                                     "--exclude", "vendor,moonshine"],
-                                    capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"{BG_RED}[BUGCHECK] [!] Self-Integrity Quality Check FAILED.{RST}")
-                print(result.stdout)
-                print("[!] Emergency Shutdown: Ruff quality violations detected.")
-                sys.exit(1)
-            else:
-                print("[+] Self-Integrity Quality Check PASSED.")
-        except Exception as e:
-            print(f"{BG_RED}[BUGCHECK] [!] Error executing Ruff integrity check: {e}{RST}")
-    else:
-        print("[!] Warning: ruff not found in PATH, skipping self-integrity quality check.")
-
-    # =====================================================================
-    # LSH QRNN Worker: Python venv bootstrap + self-check
-    # =====================================================================
-    lsh_reqs = os.path.join(BASE_DIR, "lsh", "requirements-lsh.txt")
-    lsh_worker = os.path.join(BASE_DIR, "lsh", "lsh_qrnn_worker.py")
-    if os.path.exists(lsh_reqs):
-        print("[LSH] Bootstrapping QRNN LSH worker venv...")
-        # Use the shared pyvenv (already created by sidecar, or create if missing)
-        pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
-        pyvenv_python = os.path.join(pyvenv_dir, "bin", "python3")
-        if not os.path.exists(pyvenv_python):
-            print("[LSH] Creating shared Python venv at pyvenv/...")
-            subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
-        # pip install LSH requirements
-        pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip")
-        print("[LSH] Installing requirements-lsh.txt...")
-        subprocess.run([pyvenv_pip, "install", "-r", lsh_reqs], check=False)
-        # Self-check: pyrefly type-check on worker script
-        pyvenv_pyrefly = os.path.join(pyvenv_dir, "bin", "pyrefly")
-        if os.path.exists(pyvenv_pyrefly):
-            print("[LSH] Running pyrefly type-check on worker...")
-            result = subprocess.run([pyvenv_pyrefly, "check", lsh_worker], capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"{BG_RED}[BUGCHECK] [!] LSH pyrefly type-check FAILED.{RST}")
-                print(result.stdout)
-                print(result.stderr)
-                print("[!] Emergency Shutdown: pyrefly violations detected.")
-                sys.exit(1)
-        else:
-            print("[LSH] pyrefly not found in venv, skipping type-check.")
-        # Self-check: ruff lint on worker script
-        pyvenv_ruff = os.path.join(pyvenv_dir, "bin", "ruff")
-        if os.path.exists(pyvenv_ruff):
-            print("[LSH] Running ruff lint on worker...")
-            result = subprocess.run([pyvenv_ruff, "check", lsh_worker], capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"{BG_RED}[BUGCHECK] [!] LSH ruff lint FAILED.{RST}")
-                print(result.stdout)
-                print(result.stderr)
-                print("[!] Emergency Shutdown: ruff violations detected.")
-                sys.exit(1)
-        else:
-            print("[LSH] ruff not found in venv, skipping lint.")
-        print("[LSH] QRNN worker bootstrap complete.")
-    else:
-        print(f"[!] LSH requirements not found at {lsh_reqs}, skipping QRNN worker setup.")
-
-    # =====================================================================
-    # VAD ONNX Sidecar Worker: Python venv bootstrap
-    # =====================================================================
-    vad_worker_script = os.path.join(BASE_DIR, "vad_component", "vad_worker.py")
-    if os.path.exists(vad_worker_script):
-        print("[VAD] Bootstrapping ONNX VAD worker...")
-        pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
-        pyvenv_python = os.path.join(pyvenv_dir, "bin", "python3") if platform.system() != "Windows" else os.path.join(pyvenv_dir, "Scripts", "python.exe")
-        if not os.path.exists(pyvenv_python):
-            subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
-        pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip") if platform.system() != "Windows" else os.path.join(pyvenv_dir, "Scripts", "pip.exe")
-        
-        print("[VAD] Installing onnxruntime...")
-        subprocess.run([pyvenv_pip, "install", "onnxruntime", "numpy"], check=False)
-        print("[VAD] VAD worker bootstrap complete.")
 
     # Handle integrity check flag
     test_build_integrity = False
@@ -1663,6 +1897,9 @@ def main():
                         os.remove(cap_file)
                         print(f"[*] Removed SIGKILL context cap: {cap_file}")
                     break
+
+                if IS_KISS:
+                    raise RuntimeError(f"SERVER_CRASHED: Server crashed with exit code {exit_code}")
 
                 import signal
                 if exit_code < 0:

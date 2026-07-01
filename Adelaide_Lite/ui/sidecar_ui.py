@@ -887,6 +887,28 @@ def perform_platform_integrity_check():
 
     print("[*] Platform integrity verified.")
 
+class SidecarAPI:
+    def log_error(self, message, source=None, lineno=None, colno=None, error_stack=None):
+        try:
+            import glob
+            logs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
+            os.makedirs(logs_dir, exist_ok=True)
+            log_files = glob.glob(os.path.join(logs_dir, "run_*.log"))
+            if log_files:
+                latest_log = max(log_files, key=os.path.getmtime)
+            else:
+                latest_log = os.path.join(logs_dir, "sidecar_errors.log")
+            
+            with open(latest_log, "a", encoding="utf-8") as f:
+                f.write(f"\n[FRONTEND ERROR] {message}\n")
+                if source:
+                    f.write(f"  Source: {source} ({lineno}:{colno})\n")
+                if error_stack:
+                    f.write(f"  Stack: {error_stack}\n")
+                f.flush()
+        except Exception as e:
+            print(f"Failed to log frontend error: {e}")
+
 if __name__ == "__main__":
     # Perform mandatory safety check before starting any services
     perform_platform_integrity_check()
@@ -975,16 +997,18 @@ if __name__ == "__main__":
     # For production, package as .app bundle using py2app or create manually.
 
     # Launch PyWebview native window
+    api = SidecarAPI()
     window = webview.create_window(
         "Adelaide Zephyrine Assistant",
         f"http://127.0.0.1:{ui_port}",
         width=1000,
         height=800,
         frameless=False, # Set to True if we want fully custom window frame
-        easy_drag=True
+        easy_drag=True,
+        js_api=api
     )
 
-    webview.start(debug=True)
+    webview.start(debug=False)
 
     # Wait for the server thread to keep the FastAPI server running after webview detaches
     server_thread.join()
