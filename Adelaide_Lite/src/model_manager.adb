@@ -4950,13 +4950,19 @@ package body Model_Manager is
         Source : constant String :=
            (if Level = ELP0 then "Speculation" else "User-Chat");
 
-        --  [GEN-RETRY] Progressive fallback: 4 attempts total
+        --  [GEN-RETRY] Progressive fallback: UNLIMITED for ELP1+ (user-facing)
         --  Attempt 1: KV cache + Accel ON → fails → purge KV, keep accel
         --  Attempt 2: No KV + Accel ON → fails → purge KV, keep accel
         --  Attempt 3: No KV + Accel ON → fails → purge KV, disable accel
-        --  Attempt 4: No KV + Accel OFF (CPU-only) → last resort
+        --  Attempt 4+: No KV + Accel OFF (CPU-only) → keeps retrying until success
+        --  ELP0 (background) gets limited 4 attempts — no point retrying speculation
+        --  on broken hardware when a user request (ELP1) will preempt and retry anyway.
+        --
+        --  [VITAL-DO-NOT-REMOVE] Mandated: ELP1+ RETRY BUDGET UNLIMITED
+        --  "for all ELP1 and beyond for retry give it unlimited budget!"
         Gen_Retry_Count : Natural := 0;
-        Max_Gen_Retries : constant Natural := 3;
+        Max_Gen_Retries : constant Natural :=
+           (if Level = ELP0 then 3 else 999_999_999);
 
         --  Cache_Hit: tracks whether KV cache was restored from SSD.
         --  When True, Llama_Memory_Clear must be SKIPPED to preserve restored state.
