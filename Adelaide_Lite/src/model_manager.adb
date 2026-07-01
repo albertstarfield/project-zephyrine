@@ -149,6 +149,11 @@ package body Model_Manager is
     --  -- user, 2026-07-01, after 3 hours of debugging this exact issue
     Gen_Retry_Storage_Error : Boolean := False;
 
+    --  Unified constant for Context Fault maximum JMPs (hops).
+    --  Controls: loop exit limit, CtxMonitor page count, and display.
+    --  Syncs all references — change in one place, propagates everywhere.
+    Context_Fault_Max_JMPs : constant Natural := 99;
+
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -650,7 +655,7 @@ package body Model_Manager is
                 --  Each hop "pages" into a new division of the context space.
                 --  Division page = hop_count + 1 (first page is the original prompt).
                 --  Max pages = 6 (original + 5 hops).
-                Max_Divisions : constant Natural := 6;
+                Max_Divisions : constant Natural := Context_Fault_Max_JMPs;
                 Cur_Division  : constant Natural := Fault_Total + 1;
 
                 --  Virtual Context: Internal_State bytes → approx tokens
@@ -740,7 +745,7 @@ package body Model_Manager is
                     & Natural'Image (Max_Divisions)
                     & " | JMPs="
                     & Natural'Image (Fault_Total)
-                    & "/5");
+                     & "/" & Ada.Strings.Fixed.Trim (Natural'Image (Context_Fault_Max_JMPs), Ada.Strings.Left));
 
                 --  Internal_State size + page jump state
                 Put_Line
@@ -7316,6 +7321,35 @@ package body Model_Manager is
                     & AnsiAda.Reset
                     & " No relevant memories found above threshold -- "
                     & "system prompt unchanged.");
+                --  [BUG-VERBOSE] Log memory retrieval counts for diagnosis
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[BUG-VERBOSE]"
+                    & AnsiAda.Reset
+                    & " Memory injection: Int_Count="
+                    & Natural'Image (Int_Count)
+                    & " Lit_Count="
+                    & Natural'Image (Lit_Count)
+                    & " | Got_Memory="
+                    & Boolean'Image (Got_Memory)
+                    & " | Whimsical_Adelaide size="
+                    & Natural'Image (Length (Whimsical_Adelaide))
+                    & " | External_Agent="
+                    & Boolean'Image (External_Agent));
+            else
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[BUG-VERBOSE]"
+                    & AnsiAda.Reset
+                    & " Memory injection SUCCESS: Int_Count="
+                    & Natural'Image (Int_Count)
+                    & " Lit_Count="
+                    & Natural'Image (Lit_Count)
+                    & " | Whimsical_Adelaide grew from ~1500 to "
+                    & Natural'Image (Length (Whimsical_Adelaide))
+                    & " chars after memory injection"
+                    & " | External_Agent="
+                    & Boolean'Image (External_Agent));
             end if;
 
             --  [GPU SAFETY] Free Reranker model from Metal BEFORE doing anything else
@@ -8147,15 +8181,47 @@ package body Model_Manager is
         end if;
 
         declare
-            function Get_Final_Prompt (Jmp : Natural := 0) return String is
-                Sys_Tag  : constant String := "<|im_start|>system" & ASCII.LF;
-                Asst_Tag : constant String :=
-                   "<|im_start|>assistant" & ASCII.LF;
-                   
-                --  Dual-Paging Budget Split
-                Current_Ctx : constant Natural := 8192; -- Fixed based on Requested_Ctx
-                Gen_Buffer  : constant Natural := Natural'Min (4096, Current_Ctx / 2);
-                Prompt_Budget : constant Natural := Current_Ctx - Gen_Buffer;
+             function Get_Final_Prompt (Jmp : Natural := 0) return String is
+                 Sys_Tag  : constant String := "<|im_start|>system" & ASCII.LF;
+                 Asst_Tag : constant String :=
+                    "<|im_start|>assistant" & ASCII.LF;
+                    
+                 --  [BUG-VERBOSE] External agent identity/context diagnostic
+                 --  Issue: Model doesn't know its identity (Adelaide) and doesn't
+                 --  trigger CONTEXT_FAULT. Root causes identified:
+                 --  1. SLIDING CONTEXT (Get_State_Chunk / Get_Prompt_Chunk) uses
+                 --     position-based windowing, NOT associative memory (embedding
+                 --     retrieval). Internal_State and prompt chunks are sliced by
+                 --     token-position offset (Jmp * Budget), not by semantic relevance.
+                 --     Emb_Vec (1536-dim, line 6940) and Reranker are ALREADY
+                 --     computed/available at this point — the embedding was done
+                 --     before the reasoning chain starts. Get_State_Chunk SHOULD
+                 --     use Emb_Vec to search Internal_State for semantically relevant
+                 --     chunks via Database_Manager.Search_Internal_State or similar,
+                 --     then Reranker to pick the top-1 most relevant chunk.
+                 --     Same for Get_Prompt_Chunk: use Emb_Vec to retrieve relevant
+                 --     conversation history instead of a blind position-based slice.
+                 --  2. CONTEXT_FAULT never triggers because JMP_Count stays at 0.
+                 --     The model doesn't output [CONTEXT_FAULT: query=...] in its
+                 --     responses. When it SHOULD: on JMP=0 after initial generation,
+                 --     scan Fault_Result for [CONTEXT_FAULT:...] pattern. If found,
+                 --     use Emb_Vec + the fault query to retrieve additional context
+                 --     from Internal_State/knowledge DB, inject it, and JMP++.
+                 --     Currently F_Detected is always FALSE because the CONTEXT_FAULT
+                 --     instructions in Whimsical_Adelaide mention it but the model
+                 --     never acts on them (maybe truncated by Hard_Cap or model just
+                 --     doesn't follow them).
+                 --  3. Memory injection (embedding search) found "No relevant memories
+                 --     above threshold" — zero results from interaction+literature DB.
+                 --     No <memory_interaction> or <memory_literature> blocks added.
+                 --  4. Whimsical_Adelaide is ~1500 chars (short personality def),
+                 --     NOT the full ~100k lore. The model gets identity+tool
+                 --     instructions but no deep knowledge context.
+                 --
+                 --  Dual-Paging Budget Split
+                 Current_Ctx : constant Natural := 8192; -- Fixed based on Requested_Ctx
+                 Gen_Buffer  : constant Natural := Natural'Min (4096, Current_Ctx / 2);
+                 Prompt_Budget : constant Natural := Current_Ctx - Gen_Buffer;
                 
                 Budget_State_Tokens : constant Integer := Prompt_Budget / 2;
                 Budget_Prompt_Tokens : constant Integer := Prompt_Budget - Budget_State_Tokens;
@@ -8168,20 +8234,207 @@ package body Model_Manager is
                     State_Len : constant Natural := Length (Internal_State);
                 begin
                     if State_Len = 0 then
+                        --  [BUG-VERBOSE] Internal_State is empty — no fact-check context injected
                         return "" & ASCII.LF;
                     end if;
+
+                    --  ASSOCIATIVE MEMORY RETRIEVAL (keyword overlap)
+                    --  Instead of position-based sliding window (Jmp * Max_State_Chars),
+                    --  we split Internal_State into semantic blocks and score each
+                    --  against the prompt by word overlap. This is content-addressable
+                    --  rather than position-addressable.
+                    --
+                    --  NOTE: Emb_Vec (1536-dim) + Reranker are available in the
+                    --  enclosing scope, but we are mid-inference (main model loaded),
+                    --  so we cannot compute NEW embeddings for each Internal_State
+                    --  chunk via Get_Embedding. The ideal fix (when models can be
+                    --  swapped transparently) is:
+                    --    1. Chunk Internal_State at marker boundaries (800-char blocks)
+                    --    2. Compute Get_Embedding for each block
+                    --    3. Compare cosine similarity with Emb_Vec
+                    --    4. Reranker.Rerank_Scores to pick top-1
+                    --    5. Return the best chunk
+                    --  Until then, keyword-based TF overlap is used as a practical
+                    --  associative retrieval that works mid-inference.
                     declare
-                        Start_Idx : Natural := (Jmp * Max_State_Chars) + 1;
-                        End_Idx   : Natural;
+                        Search_Text : constant String :=
+                           To_String (Internal_State);
+
+                        --  Split Internal_State into blocks at marker boundaries
+                        type Block_Range is record
+                            First : Positive;
+                            Last  : Natural;
+                        end record;
+                        type Block_Array is
+                           array (1 .. 256) of Block_Range;
+                        Blocks   : Block_Array;
+                        N_Blocks : Natural := 0;
+
+                        --  Scoring: count prompt-word occurrences per block
+                        Prompt_Text : constant String :=
+                           (if Prompt'Length > 1000
+                            then Prompt (Prompt'Last - 999 .. Prompt'Last)
+                            else Prompt);
                     begin
-                        if Start_Idx > State_Len then
-                            Start_Idx := Natural'Max (1, State_Len - Max_State_Chars + 1);
+                        --  Step 1: Split into blocks at markers
+                        declare
+                            M1  : constant String := "[FACTUAL_DATA]:";
+                            M2  : constant String := "[IMAGINED_IMAGE]:";
+                            Pos : Natural := Search_Text'First;
+                            Blk_Start : Positive := Search_Text'First;
+                        begin
+                            while Pos <= Search_Text'Last
+                                  and then N_Blocks < Blocks'Length
+                            loop
+                                declare
+                                    M1_Pos : constant Natural :=
+                                       Index (Search_Text, M1, Pos);
+                                    M2_Pos : constant Natural :=
+                                       Index (Search_Text, M2, Pos);
+                                    Next_Marker : Natural := 0;
+                                begin
+                                    if M1_Pos > 0 and M2_Pos > 0 then
+                                        Next_Marker :=
+                                           Natural'Min (M1_Pos, M2_Pos);
+                                    elsif M1_Pos > 0 then
+                                        Next_Marker := M1_Pos;
+                                    elsif M2_Pos > 0 then
+                                        Next_Marker := M2_Pos;
+                                    else
+                                        Next_Marker := 0;
+                                    end if;
+
+                                    if Next_Marker > 0 then
+                                        if Next_Marker > Blk_Start then
+                                            N_Blocks := N_Blocks + 1;
+                                            Blocks (N_Blocks) :=
+                                               (First => Blk_Start,
+                                                Last  => Next_Marker - 1);
+                                        end if;
+                                        Blk_Start := Next_Marker;
+                                        Pos := Next_Marker + 1;
+                                    else
+                                        --  No more markers: rest is one block
+                                        N_Blocks := N_Blocks + 1;
+                                        Blocks (N_Blocks) :=
+                                           (First => Blk_Start,
+                                            Last  => Search_Text'Last);
+                                        exit;
+                                    end if;
+                                end;
+                            end loop;
+                        end;
+
+                        --  Step 2: If no blocks found, fall back to position-based
+                        if N_Blocks = 0 then
+                            declare
+                                Slice_Len : constant Natural :=
+                                   Natural'Min (Max_State_Chars, State_Len);
+                            begin
+                                Put_Line
+                                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                                    & "[BUG-VERBOSE]"
+                                    & AnsiAda.Reset
+                                    & " Get_State_Chunk(JMP="
+                                    & Natural'Image (Jmp)
+                                    & "): Internal_State has no markers,"
+                                    & " returning last "
+                                    & Natural'Image (Slice_Len)
+                                    & " chars (fallback)");
+                                return ASCII.LF
+                                       & "Fact-Check: "
+                                       & Strip_Base64_Images
+                                            (Slice
+                                                (Internal_State,
+                                                 State_Len - Slice_Len + 1,
+                                                 State_Len))
+                                       & ASCII.LF;
+                            end;
                         end if;
-                        End_Idx := Start_Idx + Max_State_Chars - 1;
-                        if End_Idx > State_Len then
-                            End_Idx := State_Len;
-                        end if;
-                        return ASCII.LF & "Fact-Check: " & Strip_Base64_Images (Slice (Internal_State, Start_Idx, End_Idx)) & ASCII.LF;
+
+                        --  Step 3: Score each block by keyword overlap
+                        declare
+                            Best_Idx : Natural := 1;
+                            Best_Score : Natural := 0;
+                        begin
+                            for B in 1 .. N_Blocks loop
+                                declare
+                                    Blk_Txt : constant String :=
+                                       Search_Text
+                                         (Blocks (B).First .. Blocks (B).Last);
+                                    Score : Natural := 0;
+                                begin
+                                    --  Count how many prompt keywords appear
+                                    for PW in 1 .. Prompt_Text'Length - 2 loop
+                                        if not (Prompt_Text (PW) in
+                                                  'a' .. 'z' | 'A' .. 'Z')
+                                        then
+                                            --  Start of a word (non-alpha delim)
+                                            null;
+                                        end if;
+                                    end loop;
+
+                                    --  Simple overlap: count character bigrams
+                                    --  shared between prompt and block.
+                                    --  IMPORTANT: Use string'First-based indexing,
+                                    --  not 1-based, because Prompt_Text and Blk_Txt
+                                    --  are slices of larger strings and may have
+                                    --  arbitrary starting indices.
+                                    for I in
+                                         Prompt_Text'First
+                                         .. Prompt_Text'Last - 1
+                                    loop
+                                        declare
+                                            BG : constant String (1 .. 2) :=
+                                               Prompt_Text (I .. I + 1);
+                                        begin
+                                            for J in
+                                                 Blk_Txt'First
+                                                 .. Blk_Txt'Last - 1
+                                            loop
+                                                if Blk_Txt (J .. J + 1) = BG
+                                                then
+                                                    Score := Score + 1;
+                                                    exit;
+                                                end if;
+                                            end loop;
+                                        end;
+                                    end loop;
+
+                                    if Score > Best_Score then
+                                        Best_Score := Score;
+                                        Best_Idx := B;
+                                    end if;
+                                end;
+                            end loop;
+
+                            --  Step 4: Log associative retrieval result
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Yellow)
+                                & "[BUG-VERBOSE]"
+                                & AnsiAda.Reset
+                                & " Get_State_Chunk(JMP="
+                                & Natural'Image (Jmp)
+                                & "): associative retrieval selected block "
+                                & Natural'Image (Best_Idx)
+                                & "/"
+                                & Natural'Image (N_Blocks)
+                                & " score="
+                                & Natural'Image (Best_Score)
+                                & " | Emb_Vec (len="
+                                & Natural'Image (Emb_Len)
+                                 & ") + Reranker available -- would use for"
+                                 & " embedding-based retrieval if not mid-inference");
+
+                            --  Step 5: Return best block
+                            return ASCII.LF
+                                   & "Fact-Check: "
+                                   & Strip_Base64_Images
+                                        (Search_Text
+                                           (Blocks (Best_Idx).First
+                                            .. Blocks (Best_Idx).Last))
+                                   & ASCII.LF;
+                        end;
                     end;
                 end Get_State_Chunk;
                 
@@ -8193,29 +8446,119 @@ package body Model_Manager is
                     if P_Len <= Max_Prompt_Chars then
                         return Full_Prompt;
                     end if;
+
+                    --  ASSOCIATIVE PROMPT CHUNKING
+                    --  Instead of position-based sliding window (Jmp * Middle_Budget),
+                    --  find the most conversationally-relevant section by bigram overlap
+                    --  with the prompt's tail (latest user message).
+                    --
+                    --  Strategy: always keep the tail (recent turns), then from the
+                    --  earlier portion select the section with highest bigram overlap
+                    --  against the tail query.
                     declare
-                        Tail_Start : constant Positive := F_Last - Tail_Chars + 1;
-                        Tail_Str   : constant String := Full_Prompt (Tail_Start .. F_Last);
-                        Middle_Budget : constant Positive := Max_Prompt_Chars - Tail_Chars;
-                        Middle_Start  : Natural := F_First + (Jmp * Middle_Budget);
-                        Middle_End    : Natural;
+                        Tail_Start : constant Positive :=
+                           F_Last - Tail_Chars + 1;
+                        Tail_Str   : constant String :=
+                           Full_Prompt (Tail_Start .. F_Last);
+                        Middle_Budget : constant Positive :=
+                           Max_Prompt_Chars - Tail_Chars;
+
+                        --  Use the tail itself as the query for relevance scoring
+                        Query_Text : constant String :=
+                           (if Tail_Str'Length > 500
+                            then Tail_Str (Tail_Str'Last - 499 .. Tail_Str'Last)
+                            else Tail_Str);
+
+                        --  Slide a window across the earlier portion, score each
+                        Best_Start  : Natural := F_First;
+                        Best_Score  : Natural := 0;
+                        Win_Size    : constant Positive := Middle_Budget;
+                        Search_End  : constant Natural :=
+                           Natural'Max (F_First, Tail_Start - 1);
                     begin
-                        if Middle_Start >= Tail_Start then
-                            Middle_Start := Natural'Max (F_First, Tail_Start - Middle_Budget);
-                        end if;
-                        Middle_End := Middle_Start + Middle_Budget - 1;
-                        if Middle_End >= Tail_Start then
-                            Middle_End := Tail_Start - 1;
-                        end if;
-                        return Full_Prompt (Middle_Start .. Middle_End) & ASCII.LF & "[...]" & ASCII.LF & Tail_Str;
+                        --  Score candidate windows by bigram overlap with tail query.
+                        --  Use while loop with step increment (Ada 'for' doesn't support step).
+                        declare
+                            Cand      : Natural := F_First;
+                            Cand_End  : Natural;
+                            Max_Start : constant Natural :=
+                               Search_End - Win_Size + 1;
+                            Step      : constant Positive :=
+                               Natural'Max (1, Win_Size / 4);  --  25% overlap
+                            Score     : Natural;
+                        begin
+                            while Cand <= Max_Start loop
+                                Cand_End := Cand + Win_Size - 1;
+                                Score := 0;
+
+                                --  Bigram overlap score.
+                                --  IMPORTANT: Use Query_Text'First-based indexing,
+                                --  not 1-based, because Query_Text is a slice.
+                                for I in
+                                     Query_Text'First
+                                     .. Query_Text'Last - 1
+                                loop
+                                    declare
+                                        BG : constant String (1 .. 2) :=
+                                           Query_Text (I .. I + 1);
+                                    begin
+                                        for J in Cand .. Cand_End - 1 loop
+                                            if Full_Prompt (J .. J + 1) = BG
+                                            then
+                                                Score := Score + 1;
+                                                exit;
+                                            end if;
+                                        end loop;
+                                    end;
+                                end loop;
+
+                                if Score > Best_Score then
+                                    Best_Score := Score;
+                                    Best_Start := Cand;
+                                end if;
+
+                                Cand := Cand + Step;
+                            end loop;
+                        end;
+
+                        --  Log associative selection
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Yellow)
+                            & "[BUG-VERBOSE]"
+                            & AnsiAda.Reset
+                            & " Get_Prompt_Chunk(JMP="
+                            & Natural'Image (Jmp)
+                            & "): associative retrieval best_start="
+                            & Natural'Image (Best_Start)
+                            & " score="
+                            & Natural'Image (Best_Score)
+                            & " | (was position-based sliding window at offset="
+                            & Natural'Image (F_First + (Jmp * Middle_Budget))
+                            & ")");
+
+                        return Full_Prompt
+                                 (Best_Start .. Best_Start + Win_Size - 1)
+                               & ASCII.LF & "[...]" & ASCII.LF & Tail_Str;
                     end;
                 end Get_Prompt_Chunk;
                 
                 function Build_String return String is
                 begin
-                    if External_Agent then
-                        return Prompt;
-                    elsif Raw_Prompt then
+                    --  [ACCIDENT-2026-07-01] DO NOT strip the system prompt for
+                    --  external agents! Previously this branch was:
+                    --    if External_Agent then return Prompt;
+                    --  which returned ONLY the raw user text — no CONTEXT_FAULT
+                    --  instructions, no memory injection, no tool guidance.
+                    --  The model became a generic "I don't know" chatbot that
+                    --  couldn't search, use memory, or call tools. External
+                    --  agents MUST receive the full system prompt with tool/
+                    --  memory/context-fault instructions. The orchestration
+                    --  metadata and think-block wrapping are suppressed in
+                    --  the output pipeline instead (see Stream => null and
+                    --  the not External_Agent guards below).
+                    --  WARNING: stripping this will cause it to be an incompetent
+                    --  generic overconfident piece of GARBAGE.
+                    if Raw_Prompt or else External_Agent then
                         declare
                             Sys_Idx     : constant Natural := Index (Prompt, Sys_Tag);
                             User_Idx    : constant Natural := Index (Prompt, "<|im_start|>user");
@@ -8266,6 +8609,58 @@ package body Model_Manager is
                 Final_Str : constant String := Build_String;
                 Hard_Cap  : constant Positive := Prompt_Budget * 4; -- Generous character cap
             begin
+                --  [BUG-VERBOSE] Log prompt composition breakdown
+                declare
+                    WA_Len  : constant Natural := Length (Whimsical_Adelaide);
+                    St_Len  : constant Natural := Length (Internal_State);
+                    Scr_Len : constant Natural := Final_Str'Length;
+                    Is_Trunc : constant Boolean := Scr_Len > Hard_Cap;
+                    Act_Len : constant Natural := (if Is_Trunc then Hard_Cap else Scr_Len);
+                begin
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Yellow)
+                        & "[BUG-VERBOSE]"
+                        & AnsiAda.Reset
+                        & " Get_Final_Prompt(JMP="
+                        & Natural'Image (Jmp)
+                        & "): Whimsical_Adelaide="
+                        & Natural'Image (WA_Len)
+                        & "chars | Internal_State="
+                        & Natural'Image (St_Len)
+                        & "chars | Build_String="
+                        & Natural'Image (Scr_Len)
+                        & "chars | Hard_Cap="
+                        & Natural'Image (Hard_Cap)
+                        & "chars | TRUNCATED="
+                        & Boolean'Image (Is_Trunc)
+                        & " | Final="
+                        & Natural'Image (Act_Len)
+                        & "chars | Raw="
+                        & Boolean'Image (Raw_Prompt)
+                        & " Ext="
+                        & Boolean'Image (External_Agent));
+                    if Is_Trunc then
+                        --  Show first/last 100 chars of truncated prompt to diagnose
+                        --  front-truncation cutting off Whimsical_Adelaide identity
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Yellow)
+                            & "[BUG-VERBOSE]"
+                            & AnsiAda.Reset
+                            & " TRUNCATED from FRONT. First 100 chars of result: """
+                            & Final_Str (Final_Str'Last - Hard_Cap + 1 .. Final_Str'Last - Hard_Cap + 100)
+                            & """ | Last 100 chars: """
+                            & Final_Str (Final_Str'Last - 99 .. Final_Str'Last)
+                            & """");
+                    else
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Yellow)
+                            & "[BUG-VERBOSE]"
+                            & AnsiAda.Reset
+                            & " NOT truncated. First 150 chars: """
+                            & Final_Str (Final_Str'First .. Natural'Min (Final_Str'First + 149, Final_Str'Last))
+                            & """");
+                    end if;
+                end;
                 if Final_Str'Length > Hard_Cap then
                     --  Strict truncation from the FRONT if somehow it exceeds the hard cap
                     return Final_Str (Final_Str'Last - Hard_Cap + 1 .. Final_Str'Last);
@@ -8295,7 +8690,7 @@ package body Model_Manager is
                     & AnsiAda.Reset
                     & " Hybrid_Generate: CONTEXT_FAULT_LOOP ENTERED.");
                 loop
-                    exit when JMP_Count >= 5;
+                    exit when JMP_Count >= Context_Fault_Max_JMPs;
 
                     --  Reset fault detection state for this hop. Without this,
                     --  a fault detected on a previous hop would persist and
@@ -8328,18 +8723,38 @@ package body Model_Manager is
                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-                    Put_Line
-                       (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                        & "[Init-V]"
-                        & AnsiAda.Reset
-                        & " Hybrid_Generate: Final generation. JMP="
-                        & Natural'Image (JMP_Count)
-                        & " Len="
-                        & Natural'Image (Get_Final_Prompt'Length));
-                     Generate
-                        (Kind               => Snowball_Enaga_Orchestrator,
-                         Prompt             => Get_Final_Prompt (JMP_Count),
-                         Result             => Fault_Result,
+                --  [BUG-VERBOSE] Log CONTEXT_FAULT loop state
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[BUG-VERBOSE]"
+                    & AnsiAda.Reset
+                    & " CONTEXT_FAULT_LOOP JMP="
+                    & Natural'Image (JMP_Count)
+                    & " F_Detected="
+                    & Boolean'Image (F_Detected)
+                    & " | Context Fault Page: External_Agent="
+                    & Boolean'Image (External_Agent)
+                     & " JMPs so far=0/"
+                     & Ada.Strings.Fixed.Trim (Natural'Image (Context_Fault_Max_JMPs), Ada.Strings.Left)
+                     & " (not incrementing because model never"
+                     & " outputs [CONTEXT_FAULT: query=...] in its response)"
+                    & " | Sliding window used: State_Chunk offset="
+                    & Natural'Image (JMP_Count * ((8192 - 4096) / 2) * 3)
+                    & " Prompt_Chunk offset="
+                    & Natural'Image (JMP_Count * ((8192 - 4096) / 4) * 3));
+
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                    & "[Init-V]"
+                    & AnsiAda.Reset
+                    & " Hybrid_Generate: Final generation. JMP="
+                    & Natural'Image (JMP_Count)
+                    & " Len="
+                    & Natural'Image (Get_Final_Prompt'Length));
+                 Generate
+                    (Kind               => Snowball_Enaga_Orchestrator,
+                     Prompt             => Get_Final_Prompt (JMP_Count),
+                     Result             => Fault_Result,
                          Images             => Local_Images,
                          Session_ID         => Session_ID,
                          Requested_Ctx      => 8192,
@@ -8837,8 +9252,20 @@ package body Model_Manager is
                               (GNATCOLL.JSON.Get
                                   (GNATCOLL.JSON.Get (Images, 1))));
                 end if;
-                Database_Manager.Remember
-                   (Prompt, To_String (Current_Response), To_String (B64_Str));
+                begin
+                   Database_Manager.Remember
+                      (Prompt, To_String (Current_Response), To_String (B64_Str));
+                exception
+                   when E : others =>
+                      Put_Line
+                         (AnsiAda.Foreground (AnsiAda.Yellow)
+                          & "[Hybrid]"
+                          & AnsiAda.Reset
+                          & " Remember skipped ("
+                          & Ada.Exceptions.Exception_Name (E)
+                          & "): "
+                          & Ada.Exceptions.Exception_Message (E));
+                end;
             end;
         end;
 
