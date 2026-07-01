@@ -137,6 +137,18 @@ package body Model_Manager is
          return Models (Kind);
      end Get_Model_State;
 
+    --  [METAL-SKIP-FD]: Set by Generate's exception handler when
+    --  Storage_Error triggers a GEN-RETRY. Cleared at start of each
+    --  Hybrid_Generate request. When True, F_Detected re-generation
+    --  is skipped — the retry result is returned as-is.
+    --  WHY: Metal works fine (LM Studio proves it). The bug is that
+    --  F_Detected triggers a JMP=1 re-generation which loads stale
+    --  KV cache into a fresh Metal context and hangs. The retry
+    --  already produced a valid response — don't throw it away.
+    --  "I SAID METAL FUCKING WORK ON JAVASCRIPT LM STUDIO YOU PIECE OF SHIT"
+    --  -- user, 2026-07-01, after 3 hours of debugging this exact issue
+    Gen_Retry_Storage_Error : Boolean := False;
+
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -4602,22 +4614,22 @@ package body Model_Manager is
     end Extract_Think_Content;
 
     --  GENERATE (CORE GGUF INFERENCE WITH PREEMPTION SUPPORT)
-    procedure Generate
-       (Kind               : Model_Type;
-        Prompt             : String;
-        Result             : out Unbounded_String;
-        Images             : GNATCOLL.JSON.JSON_Array :=
-           GNATCOLL.JSON.Empty_Array;
-        Session_ID         : String := "";
-        Requested_Ctx      : Positive := 4096;
-        Stream             : Streaming_Queue.Queue_Access := null;
-        Orch_Think_Open    : Boolean := False;
-        Level              : ELP_Level := ELP1;
-        Virtual_Tokens     : Cached_Token_Access := null;
-        Virtual_Tok_Len    : Natural := 0;
-        FreeParallelMemory : Boolean := True;
-        Skip_Gate          : Boolean := False;
-        Use_OrdinaryStatusQuoDecodeSpeculative    : Boolean := False)
+     procedure Generate
+        (Kind               : Model_Type;
+         Prompt             : String;
+         Result             : out Unbounded_String;
+         Images             : GNATCOLL.JSON.JSON_Array :=
+            GNATCOLL.JSON.Empty_Array;
+         Session_ID         : String := "";
+         Requested_Ctx      : Positive := 4096;
+         Stream             : Streaming_Queue.Queue_Access := null;
+         Orch_Think_Open    : Boolean := False;
+         Level              : ELP_Level := ELP1;
+         Virtual_Tokens     : Cached_Token_Access := null;
+         Virtual_Tok_Len    : Natural := 0;
+         FreeParallelMemory : Boolean := True;
+         Skip_Gate          : Boolean := False;
+         Use_OrdinaryStatusQuoDecodeSpeculative    : Boolean := False)
     is
         Success  : Boolean;
         Vocab    : Llama_Vocab;
@@ -6265,6 +6277,9 @@ package body Model_Manager is
 
         exception
             when E : Storage_Error =>
+                --  [METAL-SKIP-FD]: Flag that Storage_Error triggered retry.
+                --  Hybrid_Generate uses this to skip F_Detected re-generation.
+                Gen_Retry_Storage_Error := True;
                 if Accel_Locked then
                     Release_Accel_Lock;
                 end if;
@@ -6615,7 +6630,16 @@ package body Model_Manager is
         --  silenced inside think blocks instead of leaking to the client.
         Orch_Parser      : Stream_Parser_State;
         Local_Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+
+        --  [METAL-SKIP-FD]: Set by Generate's exception handler when
+        --  Storage_Error triggers a retry. Persists for the entire request.
+        --  When True, F_Detected re-generation is skipped — the retry
+        --  result is returned as-is. Re-generating after a retry loads
+        --  stale KV cache into Metal and hangs.
     begin
+        --  [METAL-SKIP-FD]: Clear flag at start of each new request
+        Gen_Retry_Storage_Error := False;
+
         for I in 1 .. GNATCOLL.JSON.Length (Images) loop
             GNATCOLL.JSON.Append (Local_Images, GNATCOLL.JSON.Get (Images, I));
         end loop;
@@ -8321,6 +8345,23 @@ package body Model_Manager is
                         & Boolean'Image (F_Detected)
                         & " JMP_Count="
                         & Natural'Image (JMP_Count));
+
+                    --  [METAL-SKIP-FD]: After a Storage_Error retry, Metal may
+                    --  be unstable. Don't trigger F_Detected re-generation —
+                    --  the response from the retry is already valid.
+                    --  Re-generating would load stale KV cache into Metal and
+                    --  hang. LM Studio doesn't re-generate after a successful
+                    --  decode either.
+                    if F_Detected and then Gen_Retry_Storage_Error then
+                        Put_Line
+                           (AnsiAda.Foreground (AnsiAda.Yellow)
+                            & "[Init-V]"
+                            & AnsiAda.Reset
+                            & " Hybrid_Generate: F_Detected=TRUE but Storage_Error"
+                            & " retry just happened -- skipping tool + JMP re-gen."
+                            & " Returning retry result as-is.");
+                        F_Detected := False;
+                    end if;
 
                     if F_Detected then
                         declare
