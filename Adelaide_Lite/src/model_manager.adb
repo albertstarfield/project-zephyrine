@@ -3957,12 +3957,22 @@ package body Model_Manager is
                     & Boolean'Image (Parser.Orch_Think_Open));
                 Parser.Sanitize_Buffer := Null_Unbounded_String;
                 Parser.In_Think_Block := False;
-                --  Do NOT push `</think>` here. The emulated streaming section
-                --  returns. Pushing it here would create a duplicate closing
-                --  tag on the wire. Just clear the Orch_Think_Open flag so
-                --  the emulated streaming knows the orchestration think block
-                --  was closed during generation.
-                Append (Parser.Output_Buffer, ASCII.LF & "</think>" & ASCII.LF & "<!-- ANSWER_START -->" & ASCII.LF);
+                --  When Orch_Think_Open is True, the Q.Push opened a master
+                --  <think> block that wraps everything (metadata, thoughts,
+                --  answer preview, stats). We must NOT close it here — it
+                --  closes after the post-gen statistics. Just emit the
+                --  answer-start marker inside the same think block.
+                --  When Orch_Think_Open is False, this is a normal model
+                --  think block without Q.Push orchestration, so emit </think>
+                --  to close it properly.
+                if Parser.Orch_Think_Open then
+                    Append (Parser.Output_Buffer,
+                            ASCII.LF & "<!-- ANSWER_START -->" & ASCII.LF);
+                else
+                    Append (Parser.Output_Buffer,
+                            ASCII.LF & "</think>" & ASCII.LF
+                            & "<!-- ANSWER_START -->" & ASCII.LF);
+                end if;
                 if Parser.Orch_Think_Open then
                     Parser.Orch_Think_Open := False;
                 end if;
@@ -4124,108 +4134,7 @@ package body Model_Manager is
             end if;
 
             -- Stream content out, but SILENCE the think block entirely
-            if not Parser.In_Think_Block then
-                --  [CONTEXT_FAULT OUTSIDE THINK]: The model sometimes emits
-                --  [CONTEXT_FAULT:query=X category=Y] in the response text
-                --  (outside <think> tags). Detect and strip it here so it
-                --  doesn't leak to the client as raw markdown.
-                declare
-                    Fault_Mark : constant String := "[CONTEXT_FAULT:";
-                    F_Pos      : constant Natural := Index (Buf, Fault_Mark);
-                begin
-                    if F_Pos > 0 then
-                        declare
-                            Close_Pos : constant Natural :=
-                               Index (Buf (F_Pos .. Buf'Last), "]");
-                        begin
-                            if Close_Pos > 0 then
-                                --  Complete marker found outside think block.
-                                --  Strip it from output, parse query/category,
-                                --  and set Fault_Detected for tool execution.
-                                declare
-                                    Inner     : constant String :=
-                                       Buf (F_Pos + Fault_Mark'Length
-                                            .. Close_Pos - 1);
-                                    Q_Mark    : constant String := "query=";
-                                    C_Mark    : constant String := "category=";
-                                    Query_Idx : constant Natural :=
-                                       Index (Inner, Q_Mark);
-                                    Cat_Idx   : constant Natural :=
-                                       Index (Inner, C_Mark);
-                                begin
-                                    Parser.Fault_Detected := True;
-                                    if Query_Idx > 0 then
-                                        Parser.Fault_Query :=
-                                           To_Unbounded_String
-                                              (Trim
-                                                 (Inner
-                                                     (Query_Idx + Q_Mark'Length
-                                                      .. (if Cat_Idx > Query_Idx
-                                                          then Cat_Idx - 1
-                                                          else Inner'Last)),
-                                                  Ada.Strings.Both));
-                                    end if;
-                                    if Cat_Idx > 0 then
-                                        Parser.Fault_Category :=
-                                           To_Unbounded_String
-                                              (Trim
-                                                 (Inner
-                                                     (Cat_Idx + C_Mark'Length
-                                                      .. Inner'Last),
-                                                  Ada.Strings.Both));
-                                    else
-                                        Parser.Fault_Category :=
-                                           To_Unbounded_String ("knowledge");
-                                    end if;
-                                    Put_Line
-                                       (AnsiAda.Foreground (AnsiAda.Yellow)
-                                        & "[StreamParse-V]"
-                                        & AnsiAda.Reset
-                                        & " CONTEXT_FAULT detected OUTSIDE think"
-                                        & " block. Stripped from output."
-                                        & " Query=" & To_String (Parser.Fault_Query)
-                                        & " Cat=" & To_String (Parser.Fault_Category));
-                                    --  Clear buffer, skip this chunk
-                                    Parser.Sanitize_Buffer :=
-                                       Null_Unbounded_String;
-                                    return;
-                                end;
-                            end if;
-                        end;
-                    end if;
-                end;
-
-                --  Flush on newlines so the client gets line-by-line incremental
-                --  updates.  Accumulate in Output_Buffer, push when we see a
-                --  newline or when the buffer exceeds 256 chars (safety limit).
-                Append (Parser.Output_Buffer, Buf);
-                declare
-                    OB      : constant String :=
-                       To_String (Parser.Output_Buffer);
-                    Last_NL : Integer := 0;
-                begin
-                    --  Scan for the last newline in the buffer
-                    for I in reverse OB'Range loop
-                        if OB (I) = Character'Val (10) then
-                            -- LF
-                            Last_NL := I;
-                            exit;
-                        end if;
-                    end loop;
-                    if Last_NL > 0 then
-                        --  Push everything up to and including the last newline
-                        Push_Chunk
-                           (Stream, Session_ID, OB (OB'First .. Last_NL));
-                        --  Keep the remainder (after the newline) in the buffer
-                        Parser.Output_Buffer :=
-                           To_Unbounded_String (OB (Last_NL + 1 .. OB'Last));
-                    elsif OB'Length > 256 then
-                        --  Safety: flush even without a newline if buffer is large
-                        Push_Chunk (Stream, Session_ID, OB);
-                        Parser.Output_Buffer := Null_Unbounded_String;
-                    end if;
-                end;
-            else
+            if Parser.In_Think_Block then
                 --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                 if Buf'Length > 0 then
                     Put_Line
@@ -4239,8 +4148,169 @@ package body Model_Manager is
                              (Buf'First
                               .. Natural'Min (Buf'Last, Buf'First + 30)));
                 end if;
+            else
+                --  CONTEXT FAULT DETECTION (outside think block)
+                --
+                --  CRITICAL: Characters arrive ONE AT A TIME through this function.
+                --  We must NOT clear Sanitize_Buffer after each character; instead,
+                --  we accumulate and check for [CONTEXT_FAULT:query=X category=Y]
+                --  across multiple calls.  When a complete marker is found, we strip
+                --  it from the output stream, parse the query/category, and set
+                --  Fault_Detected for tool execution.
+                declare
+                    Fault_Mark    : constant String := "[CONTEXT_FAULT:";
+                    MAX_FAULT_LEN : constant Integer := 500;
+                    SBuf          : constant String :=
+                       To_String (Parser.Sanitize_Buffer);
+                    F_Pos         : constant Natural :=
+                       Index (SBuf, Fault_Mark);
+                begin
+                    if F_Pos > 0 then
+                        --  Found the marker prefix. Check if complete: [...]
+                        declare
+                            Rest      : constant String :=
+                               SBuf (F_Pos + Fault_Mark'Length .. SBuf'Last);
+                            Close_Pos : constant Natural :=
+                               Index (Rest, "]");
+                        begin
+                            if Close_Pos > 0 then
+                                --  Complete [CONTEXT_FAULT:...] found.  Strip it
+                                --  from the output and parse query/category.
+                                declare
+                                    Abs_Close   : constant Natural :=
+                                       F_Pos + Close_Pos - 1;
+                                    Prefix_Text : constant String :=
+                                       SBuf (SBuf'First .. F_Pos - 1);
+                                    Inner       : constant String :=
+                                       SBuf (F_Pos + Fault_Mark'Length
+                                             .. Abs_Close - 1);
+                                    Q_Mark      : constant String := "query=";
+                                    C_Mark      : constant String := "category=";
+                                    Query_Idx   : constant Natural :=
+                                       Index (Inner, Q_Mark);
+                                    Cat_Idx     : constant Natural :=
+                                       Index (Inner, C_Mark);
+                                begin
+                                    --  Push everything before the fault marker
+                                    --  as regular content.
+                                    if Prefix_Text'Length > 0 then
+                                       Append (Parser.Output_Buffer,
+                                               Prefix_Text);
+                                    end if;
+
+                                    --  Parse fault query
+                                    Parser.Fault_Detected := True;
+                                    if Query_Idx > 0 then
+                                       Parser.Fault_Query :=
+                                          To_Unbounded_String
+                                             (Trim
+                                                (Inner
+                                                   (Query_Idx + Q_Mark'Length
+                                                    .. (if Cat_Idx > Query_Idx
+                                                        then Cat_Idx - 1
+                                                        else Inner'Last)),
+                                                 Ada.Strings.Both));
+                                    end if;
+                                    if Cat_Idx > 0 then
+                                       Parser.Fault_Category :=
+                                          To_Unbounded_String
+                                             (Trim
+                                                (Inner
+                                                   (Cat_Idx + C_Mark'Length
+                                                    .. Inner'Last),
+                                                 Ada.Strings.Both));
+                                    else
+                                       Parser.Fault_Category :=
+                                          To_Unbounded_String ("knowledge");
+                                    end if;
+
+                                    Put_Line
+                                       (AnsiAda.Foreground (AnsiAda.Yellow)
+                                        & "[StreamParse-V]"
+                                        & AnsiAda.Reset
+                                        & " CONTEXT_FAULT detected OUTSIDE think"
+                                        & " block. Stripped from output."
+                                        & " Query="
+                                        & To_String (Parser.Fault_Query)
+                                        & " Cat="
+                                        & To_String (Parser.Fault_Category));
+
+                                    --  Clear the marker from the buffer
+                                    Parser.Sanitize_Buffer :=
+                                       Null_Unbounded_String;
+
+                                    --  Flush output buffer to stream
+                                    declare
+                                       OB      : constant String :=
+                                          To_String (Parser.Output_Buffer);
+                                       Last_NL : Integer := 0;
+                                    begin
+                                       for I in reverse OB'Range loop
+                                          if OB(I) = Character'Val (10) then
+                                             Last_NL := I;
+                                             exit;
+                                          end if;
+                                       end loop;
+                                       if Last_NL > 0 then
+                                          Push_Chunk
+                                             (Stream, Session_ID,
+                                              OB (OB'First .. Last_NL));
+                                          Parser.Output_Buffer :=
+                                             To_Unbounded_String
+                                                (OB (Last_NL + 1
+                                                     .. OB'Last));
+                                       elsif OB'Length > 256 then
+                                          Push_Chunk
+                                             (Stream, Session_ID, OB);
+                                          Parser.Output_Buffer :=
+                                             Null_Unbounded_String;
+                                       end if;
+                                    end;
+                                end;
+                                return;
+                            end if;
+                        end;
+                    end if;
+
+                    --  No complete fault marker found (or no marker at all).
+                    --  Flush on newlines for smooth streaming, or when the
+                    --  buffer exceeds MAX_FAULT_LEN (safety limit).
+                    if C = Character'Val (10)
+                       or else SBuf'Length >= MAX_FAULT_LEN
+                    then
+                       --  Flush accumulated buffer to output stream
+                       Append (Parser.Output_Buffer, SBuf);
+                       Parser.Sanitize_Buffer := Null_Unbounded_String;
+
+                       declare
+                          OB      : constant String :=
+                             To_String (Parser.Output_Buffer);
+                          Last_NL : Integer := 0;
+                       begin
+                          for I in reverse OB'Range loop
+                             if OB(I) = Character'Val (10) then
+                                Last_NL := I;
+                                exit;
+                             end if;
+                          end loop;
+                          if Last_NL > 0 then
+                             Push_Chunk
+                                (Stream, Session_ID,
+                                 OB (OB'First .. Last_NL));
+                             Parser.Output_Buffer :=
+                                To_Unbounded_String
+                                   (OB (Last_NL + 1 .. OB'Last));
+                          elsif OB'Length > 256 then
+                             Push_Chunk (Stream, Session_ID, OB);
+                             Parser.Output_Buffer :=
+                                Null_Unbounded_String;
+                          end if;
+                       end;
+                    end if;
+                    --  else: keep accumulating for fault detection
+                    return;
+                end;
             end if;
-            Parser.Sanitize_Buffer := Null_Unbounded_String;
         end;
     end Process_And_Push_Char;
 
@@ -4591,6 +4661,123 @@ package body Model_Manager is
         end if;
         return To_String (Result);
     end Sanitize_Fault_Markers;
+
+    --  SANITIZE_TOOL_REFERENCES:
+    --  Strips raw tool-reference formatting from the model's final answer.
+    --  The searchglobalref.py tool produces output in a very distinctive
+    --  markdown format: numbered titles, URL/Engine/Reference fields,
+    --  Snippet/Visual-Evidence sections, etc. The model sometimes regurgitates
+    --  this verbatim instead of synthesizing it. This function strips those
+    --  patterns so the client never sees raw tool output in the visible answer.
+    --
+    --  The tool results are already logged to stderr by the Python scripts
+    --  and stored in Internal_State for the model's context. This only removes
+    --  the raw formatting from the final user-visible text.
+    function Sanitize_Tool_References (Text : String) return String is
+        Result   : Unbounded_String;
+        Start    : Positive := Text'First;
+        Line_End : Natural;
+    begin
+        while Start <= Text'Last loop
+            --  Find end of current line
+            Line_End := Start;
+            while Line_End <= Text'Last and then Text (Line_End) /= ASCII.LF loop
+                Line_End := Line_End + 1;
+            end loop;
+            --  Line_End is at LF or past last char
+            declare
+                Line_Str : constant String :=
+                   (if Line_End <= Text'Last
+                    then Text (Start .. Line_End - 1)
+                    else Text (Start .. Text'Last));
+                Stripped : constant String := Ada.Strings.Fixed.Trim (Line_Str, Ada.Strings.Both);
+            begin
+                --  Strip known tool-reference patterns.
+                --  Must match ENTIRE line or start-of-line to avoid false positives.
+                if Stripped'Length = 0 then
+                    --  Empty line: keep only if NOT between two reference entries
+                    --  (detected by whether the non-empty context is reference-like)
+                    null; --  Keep empty lines by default
+                elsif Stripped = "# Global Search Results" then
+                    --  Skip header
+                    null;
+                elsif Stripped'Length > 2 and then Stripped (Stripped'First) = '*'
+                   and then Stripped (Stripped'Last) = '*'
+                then
+                    --  Skip "*Query: ...*" lines
+                    null;
+                elsif Stripped'Length >= 3
+                   and then Stripped (Stripped'First .. Stripped'First + 2) = "## "
+                then
+                    --  Skip numbered title lines like "## 1. Title"
+                    --  This could be aggressive if the model uses ## legitimately,
+                    --  but the numbered format N. is distinctive to tool output.
+                    --  Only strip if followed by a digit (numbered entry)
+                    if Stripped'Length >= 5
+                       and then Stripped (Stripped'First + 3) in '0' .. '9'
+                    then
+                        null; --  Strip "## N."
+                    else
+                        Append (Result, Line_Str & ASCII.LF);
+                    end if;
+                elsif Stripped'Length >= 8
+                   and then Stripped (Stripped'First .. Stripped'First + 7) = "- **URL:**"
+                then
+                    --  Strip URL field
+                    null;
+                elsif Stripped'Length >= 11
+                   and then Stripped (Stripped'First .. Stripped'First + 10) = "- **Engine:**"
+                then
+                    --  Strip Engine field
+                    null;
+                elsif Stripped'Length >= 18
+                   and then Stripped (Stripped'First .. Stripped'First + 17) = "- **Semantic Rank:**"
+                then
+                    --  Strip Semantic Rank field
+                    null;
+                elsif Stripped'Length >= 14
+                   and then Stripped (Stripped'First .. Stripped'First + 13) = "- **Reference:**"
+                then
+                    --  Strip Reference field (citations are handled differently)
+                    null;
+                elsif Stripped'Length >= 10
+                   and then Stripped (Stripped'First .. Stripped'First + 9) = "### Snippet"
+                then
+                    --  Strip "### Snippet" header
+                    null;
+                elsif (Stripped'Length >= 25
+                       and then Stripped (Stripped'First .. Stripped'First + 24) = "### Visual Evidence (Page")
+                   or else (Stripped'Length >= 14
+                            and then Stripped (Stripped'First .. Stripped'First + 13) = "### Website Im")
+                then
+                    --  Strip "### Visual Evidence (Page Snapshot)" and "### Website Images"
+                    null;
+                elsif Stripped'Length >= 3
+                   and then Stripped = "---"
+                then
+                    --  Strip horizontal rule separators between entries
+                    null;
+                elsif Stripped'Length >= 17
+                   and then Stripped (Stripped'First .. Stripped'First + 16) = "![Page Snapshot]("
+                then
+                    --  Strip page snapshot image references (base64 already stripped,
+                    --  but the markdown text may remain)
+                    null;
+                elsif Stripped'Length >= 13
+                   and then Stripped (Stripped'First .. Stripped'First + 12) = "![Web Image]("
+                then
+                    --  Strip web image references
+                    null;
+                else
+                    --  Keep all other lines
+                    Append (Result, Line_Str & ASCII.LF);
+                end if;
+            end;
+            --  Advance past LF
+            Start := Line_End + 1;
+        end loop;
+        return To_String (Result);
+    end Sanitize_Tool_References;
 
     --  ============================================================================
     --  REPEATING RESPONSE DETECTOR
@@ -8149,14 +8336,14 @@ package body Model_Manager is
                         & Natural'Image (JMP_Count)
                         & " Len="
                         & Natural'Image (Get_Final_Prompt'Length));
-                    Generate
-                       (Kind               => Snowball_Enaga_Orchestrator,
-                        Prompt             => Get_Final_Prompt (JMP_Count),
-                        Result             => Fault_Result,
-                        Images             => Local_Images,
-                        Session_ID         => Session_ID,
-                        Requested_Ctx      => 8192,
-                        Stream             => Stream,
+                     Generate
+                        (Kind               => Snowball_Enaga_Orchestrator,
+                         Prompt             => Get_Final_Prompt (JMP_Count),
+                         Result             => Fault_Result,
+                         Images             => Local_Images,
+                         Session_ID         => Session_ID,
+                         Requested_Ctx      => 8192,
+                         Stream             => (if External_Agent then null else Stream),
                         Orch_Think_Open    => (JMP_Count = 0),
                         Level              => Level,
                         Virtual_Tokens     => null,
@@ -8259,7 +8446,7 @@ package body Model_Manager is
                                     & AnsiAda.Reset
                                     & " Hybrid_Generate: RETRY SUCCEEDED. Len="
                                     & Natural'Image (Length (Fault_Result)));
-                                if Stream /= null then
+                                if Stream /= null and then not External_Agent then
                                     Push_Chunk
                                        (Stream,
                                         Session_ID,
@@ -8358,7 +8545,7 @@ package body Model_Manager is
                                     & AnsiAda.Reset
                                     & " Hybrid_Generate: REPEAT RETRY SUCCEEDED. Len="
                                     & Natural'Image (Length (Fault_Result)));
-                                if Stream /= null then
+                                if Stream /= null and then not External_Agent then
                                     Push_Chunk
                                        (Stream,
                                         Session_ID,
@@ -8637,8 +8824,9 @@ package body Model_Manager is
 
             Result :=
                To_Unbounded_String
-                  (Sanitize_Fault_Markers
-                     (Sanitize_Think_Tags (To_String (Current_Response))));
+                  (Sanitize_Tool_References
+                     (Sanitize_Fault_Markers
+                        (Sanitize_Think_Tags (To_String (Current_Response)))));
             declare
                 B64_Str : Unbounded_String := To_Unbounded_String ("");
             begin
@@ -8784,8 +8972,9 @@ package body Model_Manager is
                        Session_ID    => Session_ID,
                        Level         => Level);
                 Resp_Text : constant String :=
-                    Sanitize_Fault_Markers
-                       (Sanitize_Think_Tags (To_String (Current_Response)));
+                    Sanitize_Tool_References
+                       (Sanitize_Fault_Markers
+                          (Sanitize_Think_Tags (To_String (Current_Response))));
                 Gen_Elapsed : constant Duration := Ada.Calendar.Clock - T0;
             begin
                 --  Log score to stdout (always).
@@ -8807,17 +8996,16 @@ package body Model_Manager is
                         & AnsiAda.Reset
                         & " Hybrid_Generate: STREAMING COMPLETE.");
 
-                    --  Push all post-gen metadata inside ONE <think> block so it
-                    --  is hidden from the user but visible to clients that parse
-                    --  think tags.  Timing and score MUST go here (not via
-                    --  Push_Orchestration_Through_Parser) because Orch_Think_Open
-                    --  is FALSE at this point — see architecture comment above.
+                    --  The Q.Push opened a master <think> block at the start.
+                    --  Everything until now (metadata, LLM thoughts, answer
+                    --  preview) is inside that block.  Push the post-gen
+                    --  timing/score/stats into the same master think block,
+                    --  then close it with </think> before emitting the
+                    --  canonical clean answer.
                     Push_Chunk
                        (Stream,
                         Session_ID,
-                        "<think>"
-                        & ASCII.LF
-                        & "[Adelaide Core]: [Thought] Response generated in "
+                        "[Adelaide Core]: [Thought] Response generated in "
                         & Dur_Str
                         & "s."
                         & ASCII.LF
@@ -8876,14 +9064,19 @@ package body Model_Manager is
                         & Boolean'Image (GPU_Is_Stable)
                         & ASCII.LF
                         & "--- END STATISTICS ---"
-                        & ASCII.LF
-                        & "</think>"
                         & ASCII.LF);
 
-                    --  Re-emit the clean answer AFTER the post-gen think block.
-                    --  See architecture comment above for the full rationale.
-                    --  Sanitize_Think_Tags strips the LLM's own <think>...</think>
-                    --  so the client receives clean answer text only here.
+                    --  Close the master <think> block that Q.Push opened.
+                    --  From here on, output is visible to the user.
+                    Push_Chunk
+                       (Stream, Session_ID,
+                        "</think>" & ASCII.LF);
+
+                    --  Re-emit the clean answer AFTER the master think block
+                    --  closes.  Sanitize_Think_Tags strips the LLM's own
+                    --  <think>...</think> so the canonical final answer is
+                    --  clean text.  This is the ONLY content outside the
+                    --  master think block.
                     Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
                 end if;
             end;

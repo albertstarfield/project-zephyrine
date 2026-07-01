@@ -65,15 +65,18 @@ async function renderMarkdownToElement(el: HTMLElement, mdText: string) {
   });
 
   // Collapse ALL closed <think>...</think> blocks first (non-greedy, handles multiples)
+  // IMPORTANT: \n\n after </details> is required — marked.parse() needs a blank
+  // line after raw HTML to resume markdown processing. Without it, **bold** after
+  // the think block stays as raw **bold** instead of becoming <strong>bold</strong>.
   preProcessed = preProcessed.replace(/<think>([\s\S]*?)<\/think>/gi, (_, thinkContent) => {
-    return `<details class="think-block"><summary>Thought Process</summary>\n\n${thinkContent}\n\n</details>`;
+    return `<details class="think-block"><summary>Thought Process</summary>\n\n${thinkContent}\n\n</details>\n\n`;
   });
 
   // Handle a single trailing unclosed <think> tag (still streaming).
   // Use a non-greedy match anchored so it only catches the LAST unclosed <think>.
   // After all closed blocks are already replaced above, any remaining <think> is unclosed.
   preProcessed = preProcessed.replace(/<think>([\s\S]*)$/i, (_, thinkContent) => {
-    return `<details class="think-block" open><summary>Thought Process <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></summary>\n\n${thinkContent}\n\n</details>`;
+    return `<details class="think-block" open><summary>Thought Process <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></summary>\n\n${thinkContent}\n\n</details>\n\n`;
   });
 
   const rawHtml = marked.parse(preProcessed) as string;
