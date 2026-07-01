@@ -5741,8 +5741,25 @@ package body Model_Manager is
         Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_K (40));
         Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Top_P (0.9, 1));
         Llama_Sampler_Chain_Add (Sampler, Llama_Sampler_Init_Temp (0.7));
-        --  [VITAL-DO-NOT-REMOVE] Use randomized seed instead of hardcoded 1234.
-        --  Seed is incremented on think-only retries to get different output.
+         --  [VITAL-DO-NOT-REMOVE] Use randomized seed instead of hardcoded 1234.
+         --  Seed is incremented on think-only retries to get different output.
+         --
+         --  [STOCHASTIC-SEED]: Randomize seed per-request using nanosecond
+         --  clock. Inspired by stochastic molecular dynamics (SPARTA DSMC):
+         --  dissociation at delta_t=0 requires random initial conditions for
+         --  accurate trajectory sampling. Same principle applies to LLM
+         --  decoding — deterministic seeds produce deterministic (boring)
+         --  output. Random seeds explore the probability distribution.
+         declare
+             Now     : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+             Elapsed : constant Ada.Real_Time.Time_Span := Now - Init_Start_Time;
+             --  Nanoseconds since init — unique per request
+             NS      : constant Interfaces.C.unsigned :=
+                Interfaces.C.unsigned
+                   (Ada.Real_Time.To_Duration (Elapsed) * 1_000_000_000.0);
+         begin
+             Generate_Seed := NS;
+         end;
         Llama_Sampler_Chain_Add
            (Sampler, Llama_Sampler_Init_Dist (Generate_Seed));
 
