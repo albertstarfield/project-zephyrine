@@ -64,13 +64,15 @@ async function renderMarkdownToElement(el: HTMLElement, mdText: string) {
     catch(e) { return match; }
   });
 
-  // Collapse closed <think> tags into a details block
+  // Collapse ALL closed <think>...</think> blocks first (non-greedy, handles multiples)
   preProcessed = preProcessed.replace(/<think>([\s\S]*?)<\/think>/gi, (_, thinkContent) => {
     return `<details class="think-block"><summary>Thought Process</summary>\n\n${thinkContent}\n\n</details>`;
   });
 
-  // Handle unclosed <think> tag (while streaming)
-  preProcessed = preProcessed.replace(/<think>([\s\S]*)$/gi, (_, thinkContent) => {
+  // Handle a single trailing unclosed <think> tag (still streaming).
+  // Use a non-greedy match anchored so it only catches the LAST unclosed <think>.
+  // After all closed blocks are already replaced above, any remaining <think> is unclosed.
+  preProcessed = preProcessed.replace(/<think>([\s\S]*)$/i, (_, thinkContent) => {
     return `<details class="think-block" open><summary>Thought Process <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></summary>\n\n${thinkContent}\n\n</details>`;
   });
 
@@ -162,6 +164,240 @@ function addMessageToUI(msg: Message): string {
   const copyBtn = actions.querySelector('.copy-btn');
   copyBtn?.addEventListener('click', () => {
     navigator.clipboard.writeText(msg.content);
+  });
+
+  // --- Edit button (user messages) ---
+  const editBtn = actions.querySelector('.edit-btn');
+  editBtn?.addEventListener('click', () => {
+    const bubble = msgEl.querySelector('.bubble') as HTMLElement;
+    if (!bubble || bubble.querySelector('textarea')) return; // already editing
+
+    const originalText = msg.content;
+    const textarea = document.createElement('textarea');
+    textarea.className = 'edit-textarea';
+    textarea.value = originalText;
+    textarea.style.width = '100%';
+    textarea.style.minHeight = '60px';
+    textarea.style.background = 'rgba(255,255,255,0.05)';
+    textarea.style.color = 'inherit';
+    textarea.style.border = '1px solid var(--primary)';
+    textarea.style.borderRadius = '8px';
+    textarea.style.padding = '8px';
+    textarea.style.fontFamily = 'inherit';
+    textarea.style.fontSize = 'inherit';
+    textarea.style.resize = 'vertical';
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'edit-btn-row';
+    btnRow.style.display = 'flex';
+    btnRow.style.gap = '8px';
+    btnRow.style.marginTop = '8px';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save';
+    saveBtn.className = 'msg-btn';
+    saveBtn.style.background = 'var(--primary)';
+    saveBtn.style.color = '#fff';
+    saveBtn.style.border = 'none';
+    saveBtn.style.borderRadius = '6px';
+    saveBtn.style.padding = '4px 12px';
+    saveBtn.style.cursor = 'pointer';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'msg-btn';
+    cancelBtn.style.background = 'transparent';
+    cancelBtn.style.color = '#a0a0a0';
+    cancelBtn.style.border = '1px solid #555';
+    cancelBtn.style.borderRadius = '6px';
+    cancelBtn.style.padding = '4px 12px';
+    cancelBtn.style.cursor = 'pointer';
+
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(cancelBtn);
+
+    bubble.innerHTML = '';
+    bubble.appendChild(textarea);
+    bubble.appendChild(btnRow);
+    textarea.focus();
+
+    cancelBtn.addEventListener('click', () => {
+      renderMarkdownToElement(bubble, originalText);
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      const newText = textarea.value.trim();
+      if (!newText || newText === originalText) {
+        renderMarkdownToElement(bubble, originalText);
+        return;
+      }
+
+      // Update the message content in memory
+      msg.content = newText;
+
+      // Remove all messages after this one (assistant responses)
+      const allMsgs = Array.from(messagesContainer.querySelectorAll('.message'));
+      const idx = allMsgs.indexOf(msgEl);
+      for (let i = allMsgs.length - 1; i > idx; i--) {
+        allMsgs[i].remove();
+      }
+
+      // Re-render the edited message
+      renderMarkdownToElement(bubble, newText);
+
+      // Re-send conversation to get new response
+      const typingId = addTypingIndicator();
+      const thinkState = { inThink: false, thinkBuffer: '', answerSegments: [''], rawBuf: '' };
+
+      try {
+        const response = await fetch('/api/regenerate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: currentSessionId, message: newText })
+        });
+
+        if (!response.ok) {
+          removeTypingIndicator(typingId);
+          addMessageToUI({ role: 'assistant', content: "Error: " + response.statusText });
+          return;
+        }
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        if (!reader) {
+          removeTypingIndicator(typingId);
+          return;
+        }
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          for (const line of chunk.split('\n')) {
+            if (!line.trim()) continue;
+            try {
+              const data = JSON.parse(line);
+              let content = '';
+              if (data.message?.content) content = data.message.content;
+              else if (data.response) content = data.response;
+              if (content) {
+                feedChunkToThinkMachine(content, thinkState);
+                const liveSegments = thinkState.answerSegments.map((s, i) =>
+                  i === thinkState.answerSegments.length - 1 ? s + thinkState.rawBuf : s
+                );
+                const displayText = buildDisplayText(thinkState.thinkBuffer, liveSegments, thinkState.inThink);
+                const typingEl = document.getElementById(typingId);
+                if (typingEl) {
+                  const bubble = typingEl.querySelector('.bubble') as HTMLElement;
+                  if (bubble) renderMarkdownToElement(bubble, displayText);
+                  document.getElementById('chat-container')?.scrollTo(0, 999999);
+                }
+              }
+            } catch {}
+          }
+        }
+
+        // Finalize
+        if (thinkState.rawBuf.length > 0) {
+          if (thinkState.inThink) thinkState.thinkBuffer += thinkState.rawBuf;
+          else thinkState.answerSegments[thinkState.answerSegments.length - 1] += thinkState.rawBuf;
+        }
+        const typingEl = document.getElementById(typingId);
+        if (typingEl) {
+          typingEl.classList.remove('typing-indicator');
+          typingEl.classList.add('assistant');
+          const finalText = buildDisplayText(thinkState.thinkBuffer, thinkState.answerSegments, false);
+          const bubble = typingEl.querySelector('.bubble') as HTMLElement;
+          if (bubble) renderMarkdownToElement(bubble, finalText || "No response received.");
+        }
+      } catch {
+        removeTypingIndicator(typingId);
+        addMessageToUI({ role: 'assistant', content: "Network error." });
+      }
+    });
+  });
+
+  // --- Regenerate button (assistant messages) ---
+  const resubmitBtn = actions.querySelector('.resubmit-btn');
+  resubmitBtn?.addEventListener('click', async () => {
+    // Find this assistant message's position
+    const allMsgs = Array.from(messagesContainer.querySelectorAll('.message'));
+    const idx = allMsgs.indexOf(msgEl);
+
+    // Remove this assistant message and all messages after it
+    for (let i = allMsgs.length - 1; i >= idx; i--) {
+      allMsgs[i].remove();
+    }
+
+    // Add typing indicator
+    const typingId = addTypingIndicator();
+    const thinkState = { inThink: false, thinkBuffer: '', answerSegments: [''], rawBuf: '' };
+
+    try {
+      const response = await fetch('/api/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: currentSessionId })
+      });
+
+      if (!response.ok) {
+        removeTypingIndicator(typingId);
+        addMessageToUI({ role: 'assistant', content: "Error: " + response.statusText });
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) {
+        removeTypingIndicator(typingId);
+        return;
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split('\n')) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+            let content = '';
+            if (data.message?.content) content = data.message.content;
+            else if (data.response) content = data.response;
+            if (content) {
+              feedChunkToThinkMachine(content, thinkState);
+              const liveSegments = thinkState.answerSegments.map((s, i) =>
+                i === thinkState.answerSegments.length - 1 ? s + thinkState.rawBuf : s
+              );
+              const displayText = buildDisplayText(thinkState.thinkBuffer, liveSegments, thinkState.inThink);
+              const typingEl = document.getElementById(typingId);
+              if (typingEl) {
+                const bubble = typingEl.querySelector('.bubble') as HTMLElement;
+                if (bubble) renderMarkdownToElement(bubble, displayText);
+                document.getElementById('chat-container')?.scrollTo(0, 999999);
+              }
+            }
+          } catch {}
+        }
+      }
+
+      // Finalize
+      if (thinkState.rawBuf.length > 0) {
+        if (thinkState.inThink) thinkState.thinkBuffer += thinkState.rawBuf;
+        else thinkState.answerSegments[thinkState.answerSegments.length - 1] += thinkState.rawBuf;
+      }
+      const typingEl = document.getElementById(typingId);
+      if (typingEl) {
+        typingEl.classList.remove('typing-indicator');
+        typingEl.classList.add('assistant');
+        const finalText = buildDisplayText(thinkState.thinkBuffer, thinkState.answerSegments, false);
+        const bubble = typingEl.querySelector('.bubble') as HTMLElement;
+        if (bubble) renderMarkdownToElement(bubble, finalText || "No response received.");
+      }
+    } catch {
+      removeTypingIndicator(typingId);
+      addMessageToUI({ role: 'assistant', content: "Network error." });
+    }
   });
 
   msgEl.appendChild(actions);
@@ -369,6 +605,113 @@ function removeTypingIndicator(id: string) {
   if (el) el.remove();
 }
 
+// -----------------------------------------------------------------
+// Think-aware streaming accumulator
+// -----------------------------------------------------------------
+// The Ada backend (Hybrid_Generate) emits the following stream order:
+//
+//   1. <think>LLM live reasoning tokens...</think>   (streamed live during Generate)
+//   2. live-answer tokens                            (streamed live, TTFB preview)
+//   3. <think>                                       (post-gen think block opens)
+//        [Adelaide Core]: [Thought] Response generated in Xs.
+//        [Adelaide Core]: [Thought] Self-assessment: N/10
+//        --- ORCHESTRATION STATISTICS ---
+//        ...
+//        --- END STATISTICS ---
+//      </think>                                      (post-gen think block closes)
+//   4. clean-answer                                  (re-emitted canonical answer,
+//                                                    LLM think tags stripped)
+//
+// WHY THIS STRUCTURE EXISTS (do not simplify away):
+//   The timing and score messages are computed AFTER Generate() returns, at which
+//   point the parser's Orch_Think_Open flag is already FALSE. Pushing them via
+//   Push_Orchestration_Through_Parser at that point leaks them as VISIBLE text
+//   appended to the answer. They must be wrapped in a direct Push_Chunk
+//   <think>...</think> block to stay hidden.
+//   The clean-answer re-emission (step 4) is necessary so that clients which
+//   take the LAST non-think text segment as "the answer" get the canonical
+//   clean version, not the live preview that came before the post-gen think block.
+//
+// FRONTEND STATE MACHINE STRATEGY:
+//   Rather than a single answerBuffer, we use answerSegments: string[].
+//   Each time we EXIT a think block we advance to a new segment.
+//   Text outside think blocks always accumulates in the LAST segment.
+//   buildDisplayText uses the last segment as the canonical answer to display.
+//   During streaming (step 2 live), segment[0] fills — giving TTFB animation.
+//   After step 3 closes and step 4 arrives, segment[1] fills with clean answer.
+//   Final render: segment[1] wins, correctly showing the clean answer.
+// -----------------------------------------------------------------
+function buildDisplayText(
+  thinkBuffer: string,
+  answerSegments: string[],
+  inThink: boolean
+): string {
+  // Pick the last non-empty segment as the canonical answer.
+  // During early streaming when only segment[0] exists, it IS the answer.
+  // After re-emission, segment[1] takes over.
+  const canonicalAnswer = [...answerSegments].reverse().find(s => s.trim()) ?? '';
+
+  let out = '';
+  if (thinkBuffer) {
+    if (inThink) {
+      // Still streaming inside think block — show open/animated details
+      out += `<think>${thinkBuffer}`;
+    } else {
+      // Think block(s) closed — wrap accumulated content
+      out += `<think>${thinkBuffer}</think>`;
+    }
+  }
+  // Append the canonical answer after all think blocks
+  out += canonicalAnswer;
+  return out;
+}
+
+function feedChunkToThinkMachine(
+  raw: string,
+  state: { inThink: boolean; thinkBuffer: string; answerSegments: string[]; rawBuf: string }
+): void {
+  state.rawBuf += raw;
+
+  while (state.rawBuf.length > 0) {
+    if (state.inThink) {
+      const closeIdx = state.rawBuf.indexOf('</think>');
+      if (closeIdx === -1) {
+        // Need more data — flush everything except last 8 chars (len of '</think>')
+        const safeLen = Math.max(0, state.rawBuf.length - 8);
+        state.thinkBuffer += state.rawBuf.substring(0, safeLen);
+        state.rawBuf = state.rawBuf.substring(safeLen);
+        break;
+      } else {
+        // Found close tag — consume think content up to it
+        state.thinkBuffer += state.rawBuf.substring(0, closeIdx);
+        state.rawBuf = state.rawBuf.substring(closeIdx + 8); // skip '</think>'
+        state.inThink = false;
+        // Start a fresh answer segment after each closed think block.
+        // Text arriving now will go into the new (last) segment.
+        state.answerSegments.push('');
+        // Continue processing remaining rawBuf
+      }
+    } else {
+      const openIdx = state.rawBuf.indexOf('<think>');
+      if (openIdx === -1) {
+        // No think tag — flush safely to the last answer segment
+        const safeLen = Math.max(0, state.rawBuf.length - 7);
+        state.answerSegments[state.answerSegments.length - 1] +=
+          state.rawBuf.substring(0, safeLen);
+        state.rawBuf = state.rawBuf.substring(safeLen);
+        break;
+      } else {
+        // Found open tag — flush text before it into the current segment, enter think mode
+        state.answerSegments[state.answerSegments.length - 1] +=
+          state.rawBuf.substring(0, openIdx);
+        state.rawBuf = state.rawBuf.substring(openIdx + 7); // skip '<think>'
+        state.inThink = true;
+        // Continue processing remaining rawBuf
+      }
+    }
+  }
+}
+
 async function processQueue() {
   isProcessingQueue = true;
 
@@ -377,7 +720,14 @@ async function processQueue() {
     if (!text) continue;
 
     const typingId = addTypingIndicator();
-    let fullContent = '';
+
+    // Think-state-machine state
+    const thinkState = {
+      inThink: false,
+      thinkBuffer: '',
+      answerSegments: [''],  // start with one empty segment; new segments added after each </think>
+      rawBuf: ''
+    };
 
     try {
       const response = await fetch('/api/chat', {
@@ -418,6 +768,11 @@ async function processQueue() {
                 loadHistory();
             }
 
+            // Stop processing if done signal
+            if (data.done === true && !data.message && !data.response) {
+                continue; // session_id-only done packet — skip
+            }
+
             let content = '';
             if (data.message && data.message.content) {
                 content = data.message.content;
@@ -426,13 +781,30 @@ async function processQueue() {
             }
 
             if (content) {
-                fullContent += content;
-                // Update the typing indicator bubble with actual content
+                // Feed into state machine
+                feedChunkToThinkMachine(content, thinkState);
+
+                // Flush any remaining safe bytes from rawBuf into the right buffer
+                // so we have the latest possible display state.
+                // For the live preview, rawBuf contents are appended to a temporary
+                // copy of the last segment so we see partial-tag-safe output.
+                const liveSegments = thinkState.answerSegments.map((s, i) =>
+                    i === thinkState.answerSegments.length - 1
+                        ? s + thinkState.rawBuf  // show partial tail in last segment
+                        : s
+                );
+                const displayText = buildDisplayText(
+                    thinkState.thinkBuffer,
+                    liveSegments,
+                    thinkState.inThink
+                );
+
+                // Update the typing indicator bubble
                 const typingEl = document.getElementById(typingId) as HTMLElement | null;
                 if (typingEl) {
                     const bubble = typingEl.querySelector('.bubble') as HTMLElement | null;
                     if (bubble) {
-                        renderMarkdownToElement(bubble, fullContent);
+                        renderMarkdownToElement(bubble, displayText);
                     }
                     const chatContainerWrapper = document.getElementById('chat-container');
                     if (chatContainerWrapper) {
@@ -446,18 +818,35 @@ async function processQueue() {
         }
       }
 
+      // Flush any residual rawBuf into the last answer segment on stream end
+      if (thinkState.rawBuf.length > 0) {
+        if (thinkState.inThink) {
+          thinkState.thinkBuffer += thinkState.rawBuf;
+        } else {
+          thinkState.answerSegments[thinkState.answerSegments.length - 1] += thinkState.rawBuf;
+        }
+        thinkState.rawBuf = '';
+        thinkState.inThink = false; // force-close any unclosed think on stream end
+      }
+
       // Stream complete: finalize the message
       const typingEl = document.getElementById(typingId) as HTMLElement | null;
       if (typingEl) {
-          // Remove typing-indicator class, keep as normal assistant message
           typingEl.classList.remove('typing-indicator');
           typingEl.classList.add('assistant');
-          
-          // If no content was received, show error
-          if (!fullContent) {
+
+          const finalText = buildDisplayText(thinkState.thinkBuffer, thinkState.answerSegments, false);
+
+          if (!finalText.trim()) {
               const bubble = typingEl.querySelector('.bubble') as HTMLElement | null;
               if (bubble) {
                   renderMarkdownToElement(bubble, "No response received from backend.");
+              }
+          } else {
+              // Do one final render with the clean, complete text
+              const bubble = typingEl.querySelector('.bubble') as HTMLElement | null;
+              if (bubble) {
+                  renderMarkdownToElement(bubble, finalText);
               }
           }
       }
