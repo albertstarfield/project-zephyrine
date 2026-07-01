@@ -8347,19 +8347,17 @@ package body Model_Manager is
                         & Natural'Image (JMP_Count));
 
                     --  [METAL-SKIP-FD]: After a Storage_Error retry, Metal may
-                    --  be unstable. Don't trigger F_Detected re-generation —
-                    --  the response from the retry is already valid.
-                    --  Re-generating would load stale KV cache into Metal and
-                    --  hang. LM Studio doesn't re-generate after a successful
-                    --  decode either.
+                    --  be unstable. Execute the tool (so raw CONTEXT_FAULT tags
+                    --  are replaced with actual results), but skip the JMP=1
+                    --  re-generation — it would load stale KV cache into Metal
+                    --  and hang. Return the retry result with tool data appended.
                     if F_Detected and then Gen_Retry_Storage_Error then
                         Put_Line
                            (AnsiAda.Foreground (AnsiAda.Yellow)
                             & "[Init-V]"
                             & AnsiAda.Reset
-                            & " Hybrid_Generate: F_Detected=TRUE but Storage_Error"
-                            & " retry just happened -- skipping tool + JMP re-gen."
-                            & " Returning retry result as-is.");
+                            & " Hybrid_Generate: Storage_Error retry active"
+                            & " -- executing tool but skipping JMP re-gen.");
                         F_Detected := False;
                     end if;
 
@@ -8385,7 +8383,7 @@ package body Model_Manager is
 
                             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
+--  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ET ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                             --  CONTEXT FAULT IMAGINE: When the model's <thinking>
                             --  emits [CONTEXT_FAULT:query=X category=imagine],
                             --  generate an image via the two-stage SD pipeline
@@ -8462,6 +8460,21 @@ package body Model_Manager is
                                     & ASCII.LF);
                             end if;
                         end;
+                        --  [METAL-SKIP-FD]: After Storage_Error retry, execute
+                        --  the tool (done above) but exit loop — don't re-generate.
+                        --  The tool results are in Internal_State. The retry's
+                        --  response is valid. Re-generating would hang Metal.
+                        if Gen_Retry_Storage_Error then
+                            Put_Line
+                               (AnsiAda.Foreground (AnsiAda.Yellow)
+                                & "[Init-V]"
+                                & AnsiAda.Reset
+                                & " Hybrid_Generate: Tool executed after retry."
+                                & " Skipping JMP re-gen. Returning result with"
+                                & " tool data appended.");
+                            Current_Response := Fault_Result;
+                            exit;
+                        end if;
                         JMP_Count := JMP_Count + 1;
                         --  Update context fault monitor tracking
                         Current_Context_Fault_JMPs := JMP_Count;
