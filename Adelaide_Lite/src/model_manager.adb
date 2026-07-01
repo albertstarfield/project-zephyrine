@@ -7440,7 +7440,7 @@ package body Model_Manager is
                         & ASCII.LF);
                     Append
                        (Internal_State,
-                        "[FACTUAL_DATA]: " & To_String (R.Output) & ASCII.LF);
+                        "[FACTUAL_DATA]: " & Strip_Base64_Images (To_String (R.Output)) & ASCII.LF);
                     Current_Internal_State_Len := Length (Internal_State);
                     Database_Manager.Set_System_State ("Internal_State", To_String (Internal_State));
                     --  Re-cache virtual ctx tokens after Internal_State grew
@@ -7894,7 +7894,7 @@ package body Model_Manager is
                                                         "[TOOL ("
                                                         & T_Name
                                                         & ")]: "
-                                                        & To_String (R.Output)
+                                                        & Strip_Base64_Images (To_String (R.Output))
                                                         & ASCII.LF);
                                                     if T_Name = "imagine" and then R.Success then
                                                         GNATCOLL.JSON.Append (Local_Images, GNATCOLL.JSON.Create (To_String (R.Output)));
@@ -8541,7 +8541,7 @@ package body Model_Manager is
                                 Append
                                    (Internal_State,
                                     "[IMAGINED_IMAGE]: "
-                                    & To_String (R.Output)
+                                    & Strip_Base64_Images (To_String (R.Output))
                                     & ASCII.LF);
                             elsif C_Str = "graph" then
                                 R :=
@@ -8556,7 +8556,7 @@ package body Model_Manager is
                             Append
                                (Internal_State,
                                 "[FACTUAL_DATA]: "
-                                & To_String (R.Output)
+                                & Strip_Base64_Images (To_String (R.Output))
                                 & ASCII.LF);
 
                             --  Re-cache virtual ctx tokens after Internal_State grew
