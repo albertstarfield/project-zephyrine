@@ -4554,6 +4554,44 @@ package body Model_Manager is
         return To_String (Res);
     end Sanitize_Think_Tags;
 
+    --  SANITIZE_FAULT_MARKERS:
+    --  Strips raw [CONTEXT_FAULT:query=X category=Y] markers from text.
+    --  These are internal protocol markers between the model and the
+    --  orchestration layer. If they survive to the final output (e.g.,
+    --  when Gen_Retry_Storage_Error prevents tool execution), they must
+    --  be removed so the client never sees raw protocol text.
+    function Sanitize_Fault_Markers (Text : String) return String is
+        Fault_Mark : constant String := "[CONTEXT_FAULT:";
+        Result     : Unbounded_String;
+        Start     : Positive := Text'First;
+        F_Pos     : Natural;
+    begin
+        loop
+            F_Pos := Index (Text (Start .. Text'Last), Fault_Mark);
+            exit when F_Pos = 0;
+            --  Append everything before the fault marker
+            Append (Result, Text (Start .. F_Pos - 1));
+            --  Find the closing bracket
+            declare
+                Close_Pos : constant Natural :=
+                   Index (Text (F_Pos .. Text'Last), "]");
+            begin
+                if Close_Pos > 0 then
+                    --  Skip the entire [CONTEXT_FAULT:...] marker
+                    Start := Close_Pos + 1;
+                else
+                    --  No closing bracket — marker is truncated, skip rest
+                    return To_String (Result);
+                end if;
+            end;
+        end loop;
+        --  Append remaining text after last marker
+        if Start <= Text'Last then
+            Append (Result, Text (Start .. Text'Last));
+        end if;
+        return To_String (Result);
+    end Sanitize_Fault_Markers;
+
     --  ============================================================================
     --  REPEATING RESPONSE DETECTOR
     --  ============================================================================
@@ -8435,21 +8473,6 @@ package body Model_Manager is
                         & " JMP_Count="
                         & Natural'Image (JMP_Count));
 
-                    --  [METAL-SKIP-FD]: After a Storage_Error retry, Metal may
-                    --  be unstable. Execute the tool (so raw CONTEXT_FAULT tags
-                    --  are replaced with actual results), but skip the JMP=1
-                    --  re-generation — it would load stale KV cache into Metal
-                    --  and hang. Return the retry result with tool data appended.
-                    if F_Detected and then Gen_Retry_Storage_Error then
-                        Put_Line
-                           (AnsiAda.Foreground (AnsiAda.Yellow)
-                            & "[Init-V]"
-                            & AnsiAda.Reset
-                            & " Hybrid_Generate: Storage_Error retry active"
-                            & " -- executing tool but skipping JMP re-gen.");
-                        F_Detected := False;
-                    end if;
-
                     if F_Detected then
                         declare
                             Q_Str : constant String := To_String (F_Query);
@@ -8614,7 +8637,8 @@ package body Model_Manager is
 
             Result :=
                To_Unbounded_String
-                  (Sanitize_Think_Tags (To_String (Current_Response)));
+                  (Sanitize_Fault_Markers
+                     (Sanitize_Think_Tags (To_String (Current_Response))));
             declare
                 B64_Str : Unbounded_String := To_Unbounded_String ("");
             begin
@@ -8760,7 +8784,8 @@ package body Model_Manager is
                        Session_ID    => Session_ID,
                        Level         => Level);
                 Resp_Text : constant String :=
-                   Sanitize_Think_Tags (To_String (Current_Response));
+                    Sanitize_Fault_Markers
+                       (Sanitize_Think_Tags (To_String (Current_Response)));
                 Gen_Elapsed : constant Duration := Ada.Calendar.Clock - T0;
             begin
                 --  Log score to stdout (always).
