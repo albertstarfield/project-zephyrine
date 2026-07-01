@@ -4125,6 +4125,76 @@ package body Model_Manager is
 
             -- Stream content out, but SILENCE the think block entirely
             if not Parser.In_Think_Block then
+                --  [CONTEXT_FAULT OUTSIDE THINK]: The model sometimes emits
+                --  [CONTEXT_FAULT:query=X category=Y] in the response text
+                --  (outside <think> tags). Detect and strip it here so it
+                --  doesn't leak to the client as raw markdown.
+                declare
+                    Fault_Mark : constant String := "[CONTEXT_FAULT:";
+                    F_Pos      : constant Natural := Index (Buf, Fault_Mark);
+                begin
+                    if F_Pos > 0 then
+                        declare
+                            Close_Pos : constant Natural :=
+                               Index (Buf (F_Pos .. Buf'Last), "]");
+                        begin
+                            if Close_Pos > 0 then
+                                --  Complete marker found outside think block.
+                                --  Strip it from output, parse query/category,
+                                --  and set Fault_Detected for tool execution.
+                                declare
+                                    Inner     : constant String :=
+                                       Buf (F_Pos + Fault_Mark'Length
+                                            .. Close_Pos - 1);
+                                    Q_Mark    : constant String := "query=";
+                                    C_Mark    : constant String := "category=";
+                                    Query_Idx : constant Natural :=
+                                       Index (Inner, Q_Mark);
+                                    Cat_Idx   : constant Natural :=
+                                       Index (Inner, C_Mark);
+                                begin
+                                    Parser.Fault_Detected := True;
+                                    if Query_Idx > 0 then
+                                        Parser.Fault_Query :=
+                                           To_Unbounded_String
+                                              (Trim
+                                                 (Inner
+                                                     (Query_Idx + Q_Mark'Length
+                                                      .. (if Cat_Idx > Query_Idx
+                                                          then Cat_Idx - 1
+                                                          else Inner'Last)),
+                                                  Ada.Strings.Both));
+                                    end if;
+                                    if Cat_Idx > 0 then
+                                        Parser.Fault_Category :=
+                                           To_Unbounded_String
+                                              (Trim
+                                                 (Inner
+                                                     (Cat_Idx + C_Mark'Length
+                                                      .. Inner'Last),
+                                                  Ada.Strings.Both));
+                                    else
+                                        Parser.Fault_Category :=
+                                           To_Unbounded_String ("knowledge");
+                                    end if;
+                                    Put_Line
+                                       (AnsiAda.Foreground (AnsiAda.Yellow)
+                                        & "[StreamParse-V]"
+                                        & AnsiAda.Reset
+                                        & " CONTEXT_FAULT detected OUTSIDE think"
+                                        & " block. Stripped from output."
+                                        & " Query=" & To_String (Parser.Fault_Query)
+                                        & " Cat=" & To_String (Parser.Fault_Category));
+                                    --  Clear buffer, skip this chunk
+                                    Parser.Sanitize_Buffer :=
+                                       Null_Unbounded_String;
+                                    return;
+                                end;
+                            end if;
+                        end;
+                    end if;
+                end;
+
                 --  Flush on newlines so the client gets line-by-line incremental
                 --  updates.  Accumulate in Output_Buffer, push when we see a
                 --  newline or when the buffer exceeds 256 chars (safety limit).
