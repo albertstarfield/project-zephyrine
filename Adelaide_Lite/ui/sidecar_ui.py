@@ -442,6 +442,108 @@ async def chat(request: Request):
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
+
+@app.post("/api/regenerate")
+async def regenerate(request: Request):
+    """Regenerate the last assistant response in a session.
+    Optionally accepts a new user message to replace the last user message before regenerating.
+    """
+    data = await request.json()
+    session_id = data.get("session_id")
+    new_message = data.get("message")  # Optional: if provided, replaces last user message
+
+    if not session_id:
+        return JSONResponse({"error": "session_id required"}, status_code=400)
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Get all messages for this session in order
+    cursor.execute("SELECT id, role, content FROM messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
+    rows = cursor.fetchall()
+
+    if not rows:
+        conn.close()
+        return JSONResponse({"error": "No messages in session"}, status_code=404)
+
+    # If new_message provided, update the last user message
+    if new_message:
+        # Find last user message and update it
+        for msg_id, role, content in reversed(rows):
+            if role == "user":
+                cursor.execute("UPDATE messages SET content = ? WHERE id = ?", (new_message, msg_id))
+                # Delete all messages after this user message (assistant responses)
+                cursor.execute("DELETE FROM messages WHERE id > ? AND session_id = ?", (msg_id, session_id))
+                conn.commit()
+                break
+        # Re-fetch messages after update
+        cursor.execute("SELECT id, role, content FROM messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
+        rows = cursor.fetchall()
+    else:
+        # Just delete the last assistant response if the last message is from assistant
+        last_role = rows[-1][1] if rows else None
+        if last_role == "assistant":
+            cursor.execute("DELETE FROM messages WHERE id = ?", (rows[-1][0],))
+            conn.commit()
+            rows = rows[:-1]
+
+    conn.close()
+
+    # Build messages array for Ada backend
+    messages = [{"role": role, "content": content} for _, role, content in rows]
+
+    async def event_generator():
+        payload = {
+            "model": "Snowball-Enaga",
+            "messages": messages,
+            "stream": True
+        }
+
+        full_reply = ""
+        try:
+            async with httpx.AsyncClient() as client:
+                async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=120.0) as response:
+                    if response.status_code != 200:
+                        yield json.dumps({"error": f"Backend returned error: {response.status_code}"}) + "\n"
+                        return
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        try:
+                            resp_json = json.loads(line)
+                            if "message" in resp_json:
+                                chunk = resp_json["message"].get("content", "")
+                                full_reply += chunk
+                                yield line + "\n"
+                            elif "response" in resp_json:
+                                chunk = resp_json.get("response", "")
+                                full_reply += chunk
+                                yield line + "\n"
+
+                            if resp_json.get("done", False):
+                                break
+                        except json.JSONDecodeError:
+                            continue
+
+            # Save assistant reply to DB
+            if full_reply:
+                conn_final = sqlite3.connect(DB_PATH)
+                cursor_final = conn_final.cursor()
+                cursor_final.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)",
+                                    ("assistant", full_reply, session_id))
+                conn_final.commit()
+                conn_final.close()
+
+            yield json.dumps({"session_id": session_id, "done": True}) + "\n"
+
+        except Exception as e:
+            error_msg = f"Could not connect to Ada backend: {str(e)}"
+            yield json.dumps({"message": {"content": error_msg}, "done": True}) + "\n"
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+
+
 @app.post("/api/exit")
 def exit_app():
     import threading

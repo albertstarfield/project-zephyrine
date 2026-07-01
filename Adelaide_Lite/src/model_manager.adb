@@ -8689,165 +8689,178 @@ package body Model_Manager is
             end case;
         end;
 
+        --
+        --  ============================================================
+        --  POST-GENERATION STREAMING ARCHITECTURE — READ BEFORE EDITING
+        --  ============================================================
+        --
+        --  PROBLEM THIS SECTION SOLVES:
+        --  During the Generate/Flush_Parser live-streaming loop, the model
+        --  emits its own reasoning as:
+        --      <think>...LLM reasoning tokens...</think>
+        --      ...actual answer tokens...
+        --  Both parts are pushed to the client stream in real-time via
+        --  Push_Orchestration_Through_Parser / Flush_Parser as they arrive.
+        --  By the time Generate() returns, the parser's Orch_Think_Open
+        --  flag is FALSE and In_Think_Block is FALSE — the think-block
+        --  the LLM opened has already been closed and flushed to the client.
+        --
+        --  WHAT WENT WRONG (the bug this fixes):
+        --  After Generate returns, we still need to emit two pieces of
+        --  Adelaide Core orchestration metadata:
+        --    1. Total generation wall-clock time (Dur_Str)
+        --    2. Response quality self-assessment score
+        --  These were previously pushed via Push_Orchestration_Through_Parser.
+        --  THAT WAS WRONG: because Orch_Think_Open=FALSE at this point, the
+        --  parser passes the text straight through to Output_Buffer → Push_Chunk
+        --  as VISIBLE text. Result: every streaming client (curl, Ollama, GUI)
+        --  saw e.g. "[Adelaide Core]: [Thought] Self-assessment: 7/10" appended
+        --  to the end of the answer bubble — exactly as shown in the bug screenshot.
+        --
+        --  WHY THE CLEAN-ANSWER RE-EMISSION EXISTS:
+        --  After the live stream, the client has already received:
+        --      <think>LLM thoughts</think>live-answer
+        --  We must append a post-gen think block AFTER the live answer:
+        --      <think>timing + score + stats</think>
+        --  If we stopped here, the canonical final answer would be buried before
+        --  the post-gen think block, and clients/parsers that take the last
+        --  non-think segment as "the answer" would get nothing.  Therefore we
+        --  re-emit the clean answer (with the LLM's own <think> tags stripped
+        --  via Sanitize_Think_Tags) as the LAST item in the stream.  This way:
+        --      <think>live LLM thoughts</think>
+        --      live-answer            ← preview, low-latency TTFB
+        --      <think>timing+score+stats</think>
+        --      clean-answer           ← canonical final answer
+        --  • Ollama/curl clients that do not parse <think> tags: see two copies
+        --    of the answer, but the last one is always the clean canonical form.
+        --  • GUI / frontend think-state-machine: accumulates thinkBuffer from
+        --    ALL <think> blocks and takes the LAST answer segment as the display
+        --    value, so the duplicate is handled transparently.
+        --  • The re-emission MUST use Sanitize_Think_Tags to strip the LLM's
+        --    own <think>...</think> so the re-emitted copy is clean text only.
+        --
+        --  DO NOT REMOVE THE RE-EMISSION or the post-gen think block.
+        --  DO NOT use Push_Orchestration_Through_Parser for timing/score here;
+        --  it will leak visible text because Orch_Think_Open=FALSE at this point.
+        --  ============================================================
+
         if not External_Agent then
             declare
-                Dur_Str : constant String := Duration'Image (T1 - T0);
+                Dur_Str   : constant String :=
+                   Duration'Image (T1 - T0);
+                Score     : constant Natural :=
+                   Grade_Response_Quality
+                      (Response_Text => To_String (Result),
+                       Prompt        => Prompt,
+                       Search_Used   =>
+                          Index (To_String (Internal_State), "[FACTUAL_DATA]") > 0,
+                       Has_Citations =>
+                          Index (To_String (Result), "[") > 0
+                          and then Index (To_String (Result), "]") > 0,
+                       Session_ID    => Session_ID,
+                       Level         => Level);
+                Resp_Text : constant String :=
+                   Sanitize_Think_Tags (To_String (Current_Response));
+                Gen_Elapsed : constant Duration := Ada.Calendar.Clock - T0;
             begin
-                Push_Orchestration_Through_Parser
-                   (Stream,
-                    Session_ID,
-                    Orch_Parser,
-                    "[Adelaide Core]: [Thought] Response generated in "
-                    & Dur_Str
-                    & "s."
-                    & ASCII.LF);
-            end;
-        end if;
-
-        if External_Agent then
-            Result :=
-               To_Unbounded_String
-                  (Sanitize_Think_Tags (To_String (Current_Response)));
-        elsif Stream = null then
-            Result :=
-               To_Unbounded_String
-                  (Sanitize_Think_Tags (To_String (Current_Response)));
-        else
-            Result := Current_Response;
-        end if;
-
-        declare
-            Score : constant Natural :=
-               Grade_Response_Quality
-                  (Response_Text => To_String (Result),
-                   Prompt        => Prompt,
-                   Search_Used   =>
-                      Index (To_String (Internal_State), "[FACTUAL_DATA]") > 0,
-                   Has_Citations =>
-                      Index (To_String (Result), "[") > 0
-                      and then Index (To_String (Result), "]") > 0,
-                   Session_ID    => Session_ID,
-                   Level         => Level);
-        begin
-            if not External_Agent then
-                Push_Orchestration_Through_Parser
-                   (Stream,
-                    Session_ID,
-                    Orch_Parser,
-                    "[Adelaide Core]: [Thought] Self-assessment: "
+                --  Log score to stdout (always).
+                Ada.Text_IO.Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Cyan)
+                    & "[Quality Score] "
+                    & AnsiAda.Reset
+                    & "Score: "
                     & Score'Img
-                    & "/10"
-                    & ASCII.LF);
-            end if;
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Cyan)
-                & "[Quality Score] "
-                & AnsiAda.Reset
-                & "Score: "
-                & Score'Img
-                & "/10 | "
-                & "Session: "
-                & Session_ID);
-        end;
+                    & "/10 | "
+                    & "Session: "
+                    & Session_ID);
 
-        if not External_Agent then
-            --  Extract and push model's internal thinking content (if any).
-            declare
-                Model_Thinking : constant String :=
-                   Extract_Think_Content (To_String (Current_Response));
-            begin
-                if Model_Thinking /= "" then
+                if Stream /= null then
+                    --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Light_Blue)
+                        & "[Init-V]"
+                        & AnsiAda.Reset
+                        & " Hybrid_Generate: STREAMING COMPLETE.");
+
+                    --  Push all post-gen metadata inside ONE <think> block so it
+                    --  is hidden from the user but visible to clients that parse
+                    --  think tags.  Timing and score MUST go here (not via
+                    --  Push_Orchestration_Through_Parser) because Orch_Think_Open
+                    --  is FALSE at this point — see architecture comment above.
                     Push_Chunk
                        (Stream,
                         Session_ID,
-                        "<think>" & ASCII.LF & Model_Thinking & ASCII.LF & "</think>" & ASCII.LF);
-                end if;
-            end;
-        end if;
+                        "<think>"
+                        & ASCII.LF
+                        & "[Adelaide Core]: [Thought] Response generated in "
+                        & Dur_Str
+                        & "s."
+                        & ASCII.LF
+                        & "[Adelaide Core]: [Thought] Self-assessment: "
+                        & Score'Img
+                        & "/10"
+                        & ASCII.LF
+                        & "--- ORCHESTRATION STATISTICS ---"
+                        & ASCII.LF
+                        & "Response Length: "
+                        & Natural'Image (Resp_Text'Length)
+                        & " chars"
+                        & ASCII.LF
+                        & "Response Tokens (est): "
+                        & Natural'Image (Resp_Text'Length / 4)
+                        & " tokens"
+                        & ASCII.LF
+                        & "Generation Time: "
+                        & Duration'Image (Gen_Elapsed)
+                        & "s"
+                        & ASCII.LF
+                        & "Prompt Tokens: "
+                        & Natural'Image (Current_Prompt_Tokens)
+                        & ASCII.LF
+                        & "Context Capacity: "
+                        & Natural'Image (Current_Ctx_Capacity)
+                        & " tokens"
+                        & ASCII.LF
+                        & "Context Utilization: "
+                        & Natural'Image
+                             (Current_Prompt_Tokens
+                              * 100
+                              / Current_Ctx_Capacity)
+                        & "%"
+                        & ASCII.LF
+                        & "Pipeline Level: "
+                        & ELP_Level'Image (Level)
+                        & ASCII.LF
+                        & "GPU Free: "
+                        & Natural'Image (GPU_Free_MB)
+                        & "MB / "
+                        & Natural'Image (GPU_Total_MB)
+                        & "MB ("
+                        & Natural'Image (GPU_Layer_Percent)
+                        & "%)"
+                        & ASCII.LF
+                        & "GPU Layers: "
+                        & (if Acceleration_Silicon_Layer = -1
+                           then "ALL(-1)"
+                           else
+                              Integer'Image (Acceleration_Silicon_Layer)
+                              & "/"
+                              & Natural'Image (Total_Model_Layers))
+                        & ASCII.LF
+                        & "GPU Stable: "
+                        & Boolean'Image (GPU_Is_Stable)
+                        & ASCII.LF
+                        & "--- END STATISTICS ---"
+                        & ASCII.LF
+                        & "</think>"
+                        & ASCII.LF);
 
-        if not External_Agent and then Stream /= null then
-            declare
-                Resp_Text  : constant String :=
-                   Sanitize_Think_Tags (To_String (Current_Response));
-            begin
-                --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-                Put_Line
-                   (AnsiAda.Foreground (AnsiAda.Light_Blue)
-                    & "[Init-V]"
-                    & AnsiAda.Reset
-                    & " Hybrid_Generate: STREAMING COMPLETE.");
-                --  Push statistics inside a think block so it is hidden.
-                declare
-                    Resp_Len    : constant Natural := Resp_Text'Length;
-                    Gen_Elapsed : constant Duration := Ada.Calendar.Clock - T0;
-                    Stats_Str   : constant String :=
-                       "<think>"
-                       & ASCII.LF
-                       & "--- ORCHESTRATION STATISTICS ---"
-                       & ASCII.LF
-                       & "Response Length: "
-                       & Natural'Image (Resp_Len)
-                       & " chars"
-                       & ASCII.LF
-                       & "Response Tokens (est): "
-                       & Natural'Image (Resp_Len / 4)
-                       & " tokens"
-                       & ASCII.LF
-                       & "Generation Time: "
-                       & Duration'Image (Gen_Elapsed)
-                       & "s"
-                       & ASCII.LF
-                       & "Prompt Tokens: "
-                       & Natural'Image (Current_Prompt_Tokens)
-                       & ASCII.LF
-                       & "Context Capacity: "
-                       & Natural'Image (Current_Ctx_Capacity)
-                       & " tokens"
-                       & ASCII.LF
-                       & "Context Utilization: "
-                       & Natural'Image
-                            (Current_Prompt_Tokens
-                             * 100
-                             / Current_Ctx_Capacity)
-                       & "%"
-                       & ASCII.LF
-                       & "JMPs: "
-                       & Natural'Image (Current_JMP_Count)
-                       & ASCII.LF
-                       & "Context Faults: "
-                       & Natural'Image (Current_Context_Fault_JMPs)
-                       & ASCII.LF
-                       & "Pipeline Level: "
-                       & ELP_Level'Image (Level)
-                       & ASCII.LF
-                       & "Streaming Mode: Instant TTFB Live Delivery"
-                       & ASCII.LF
-                       & "GPU Free: "
-                       & Natural'Image (GPU_Free_MB)
-                       & "MB / "
-                       & Natural'Image (GPU_Total_MB)
-                       & "MB ("
-                       & Natural'Image (GPU_Layer_Percent)
-                       & "%)"
-                       & ASCII.LF
-                       & "GPU Layers: "
-                       & (if Acceleration_Silicon_Layer = -1
-                          then "ALL(-1)"
-                          else
-                             Integer'Image (Acceleration_Silicon_Layer)
-                             & "/"
-                             & Natural'Image (Total_Model_Layers))
-                       & ASCII.LF
-                       & "GPU Stable: "
-                       & Boolean'Image (GPU_Is_Stable)
-                       & ASCII.LF
-                       & "--- END STATISTICS ---"
-                       & ASCII.LF
-                       & "</think>"
-                       & ASCII.LF;
-                begin
-                    Push_Chunk (Stream, Session_ID, Stats_Str);
-                end;
+                    --  Re-emit the clean answer AFTER the post-gen think block.
+                    --  See architecture comment above for the full rationale.
+                    --  Sanitize_Think_Tags strips the LLM's own <think>...</think>
+                    --  so the client receives clean answer text only here.
+                    Push_Chunk (Stream, Session_ID, Resp_Text & ASCII.LF);
+                end if;
             end;
         elsif External_Agent and then Stream /= null then
             declare
