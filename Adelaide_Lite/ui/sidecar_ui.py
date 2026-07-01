@@ -493,13 +493,17 @@ async def regenerate(request: Request):
 
     conn.close()
 
-    # Build messages array for Ada backend
-    messages = [{"role": role, "content": content} for _, role, content in rows]
+    # Find the last user message to send to Ada (Ada expects single-message prompts)
+    last_user_msg = ""
+    for _, role, content in reversed(rows):
+        if role == "user":
+            last_user_msg = content
+            break
 
     async def event_generator():
         payload = {
             "model": "Snowball-Enaga",
-            "messages": messages,
+            "messages": [{"role": "user", "content": last_user_msg}],
             "stream": True
         }
 
