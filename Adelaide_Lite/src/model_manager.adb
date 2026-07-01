@@ -4638,9 +4638,20 @@ package body Model_Manager is
         Source : constant String :=
            (if Level = ELP0 then "Speculation" else "User-Chat");
 
-        --  [GEN-RETRY] Retry Generate once on outer exception
+        --  [GEN-RETRY] Progressive fallback: 4 attempts total
+        --  Attempt 1: KV cache + Accel ON → fails → purge KV, keep accel
+        --  Attempt 2: No KV + Accel ON → fails → purge KV, keep accel
+        --  Attempt 3: No KV + Accel ON → fails → purge KV, disable accel
+        --  Attempt 4: No KV + Accel OFF (CPU-only) → last resort
         Gen_Retry_Count : Natural := 0;
-        Max_Gen_Retries : constant Natural := 1;
+        Max_Gen_Retries : constant Natural := 3;
+
+        --  Cache_Hit: tracks whether KV cache was restored from SSD.
+        --  When True, Llama_Memory_Clear must be SKIPPED to preserve restored state.
+        Cache_Hit : Boolean := False;
+        --  Loaded_Count: number of tokens loaded from SSD KV cache.
+        --  Used for logging and validation.
+        Loaded_Count : Interfaces.C.size_t := 0;
 
         Accel_Locked    : Boolean := False;
 
@@ -4773,6 +4784,10 @@ package body Model_Manager is
             Models (Kind).In_Use := True;
             Models (Kind).Last_Used := Clock;
 
+            --  Cache_Hit tracks whether KV cache was restored from SSD.
+            --  Used later to skip Llama_Memory_Clear (preserving restored state).
+            Cache_Hit := False;
+
             --  =================================================================
             --  KV CACHE SSD SPILLOVER: Auto-load from disk if available
             --  =================================================================
@@ -4780,28 +4795,39 @@ package body Model_Manager is
             --  If found, load it to skip recomputing the KV cache from scratch.
             --  This provides fastest response for repeated/similar prompts.
             --  =================================================================
-            --  [BUG 3 DBG] Verbose tracing before KV cache load
-            Ada.Text_IO.Put_Line
-               (AnsiAda.Foreground (AnsiAda.Cyan)
-                & "[DBG-BUGFIX]"
-                & AnsiAda.Reset
-                & " BUG3: Before KV cache load. Model="
-                & Kind'Img
-                & " Context="
-                & Interfaces.C.unsigned'Image (Models (Kind).Current_Ctx)
-                & " Loaded="
-                & Boolean'Image (Models (Kind).Loaded));
-            declare
-                Loaded_Tokens : System.Address;
-                Loaded_Count  : Interfaces.C.size_t;
-                Cache_Hit     : Boolean;
-            begin
-                Cache_Hit :=
-                   KV_Cache_Manager.Load_From_SSD_Lazy
-                      (Context  => Models (Kind).Context,
-                       Tokens   => Loaded_Tokens,
-                       N_Tokens => Loaded_Count,
-                       Model_ID => Kind'Img);
+            --
+            --  [GEN-RETRY KV SKIP]: On retry after Storage_Error, do NOT load
+            --  from serialized KV cache. The cache may contain Metal-generated
+            --  state that's incompatible with CPU-only decode. Starting fresh
+            --  avoids re-triggering the same Storage_Error.
+            --
+            --  Also skip if Metal backend is broken or accel is disabled — these
+            --  flags persist across calls (e.g. Hybrid_Generate re-enters Generate
+            --  with a fresh Gen_Retry_Count=0 scope).
+            --
+            if Gen_Retry_Count = 0
+              and then not Is_Metal_Broken
+              and then Acceleration_Silicon_Layer > 0
+            then
+                Ada.Text_IO.Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Cyan)
+                    & "[DBG-BUGFIX]"
+                    & AnsiAda.Reset
+                    & " BUG3: Before KV cache load. Model="
+                    & Kind'Img
+                    & " Context="
+                    & Interfaces.C.unsigned'Image (Models (Kind).Current_Ctx)
+                    & " Loaded="
+                    & Boolean'Image (Models (Kind).Loaded));
+                declare
+                    Loaded_Tokens : System.Address;
+                begin
+                    Cache_Hit :=
+                       KV_Cache_Manager.Load_From_SSD_Lazy
+                          (Context  => Models (Kind).Context,
+                           Tokens   => Loaded_Tokens,
+                           N_Tokens => Loaded_Count,
+                           Model_ID => Kind'Img);
 
                 --  [BUG 3 DBG] Verbose tracing after KV cache load
                 Ada.Text_IO.Put_Line
@@ -4888,6 +4914,26 @@ package body Model_Manager is
                         & "computing from scratch");
                 end if;
             end;
+            else
+                --  [GEN-RETRY KV SKIP] This is a retry after Storage_Error.
+                --  Do NOT load stale KV cache — start fresh with empty context.
+                --  Also delete the old cache file so it doesn't get loaded on
+                --  the next session either (it may contain Metal-poisoned state).
+                Cache_Hit := False;
+                Loaded_Count := 0;
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[GEN-RETRY]"
+                    & AnsiAda.Reset
+                    & " Skipping KV cache load on retry (attempt"
+                    & Natural'Image (Gen_Retry_Count)
+                    & ") -- deleting stale cache, starting fresh");
+                begin
+                    KV_Cache_Manager.Delete_Stale_Cache (Kind'Img);
+                exception
+                    when others => null;
+                end;
+            end if;
 
             --  =================================================================
             --  OOM RETRY LOOP: Wraps token allocation + tokenize + decode.
@@ -5194,8 +5240,119 @@ package body Model_Manager is
             return;
         end if;
 
-        Llama_Interface.Llama_Memory_Clear
-           (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
+        --  !! IMPORTANT NOTE: VIRTUAL CTX → CONTEXT FAULT → ALLOCATED CTX FLOW !!
+        --  ============================================================================
+        --  The system has TWO layers of context:
+        --
+        --  1. VIRTUAL CTX (full pool): Holds ALL tokens for the prompt.
+        --     Example: 88K chars → ~20K tokens stored in virtual context.
+        --     This is the complete conversation/prompt, stored in Ada-managed memory.
+        --
+        --  2. ALLOCATED CTX (llama.cpp window): The actual llama_context size.
+        --     Example: 8192 tokens. This is the GPU/CPU buffer for inference.
+        --
+        --  FLOW: Tokenize → Virtual Ctx → Context Fault Paging → Chunked FFI Submit
+        --
+        --  Context Fault Paging works like OS virtual memory:
+        --  - Only a WINDOW of the virtual ctx fits in allocated ctx at once
+        --  - When the window is full, "page out" old tokens, "page in" new tokens
+        --  - Each page is submitted to llama_decode in batches of 256 tokens
+        --  - The KV cache from paged-out tokens is saved to SSD and restored on demand
+        --
+        --  WHY THIS MATTERS: If you submit 20K tokens to an 8192-token context,
+        --  llama.cpp will overflow its internal buffers → SIGSEGV or OOM.
+        --  The context fault paging system prevents this by chunking the prompt
+        --  into windows that fit the allocated ctx.
+        --
+        --  KV CACHE INTERACTION: When a KV cache is loaded from SSD (Cache_Hit=True),
+        --  those tokens are ALREADY in the llama.cpp context. DO NOT clear them with
+        --  Llama_Memory_Clear(..., False) — that would throw away the restored cache.
+        --  Only clear if Cache_Hit=False (fresh context, no restored state).
+        --  ============================================================================
+
+        --  [CRITICAL] Only clear KV cache if we did NOT restore from SSD.
+        --  If Cache_Hit=True, the KV cache is already populated with restored tokens.
+        --  Clearing it would waste the restore and force re-processing all tokens,
+        --  which causes OOM when prompt_tokens + kv_tokens > ctx_size.
+        if not Cache_Hit then
+            Llama_Interface.Llama_Memory_Clear
+               (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
+        else
+            Put_Line
+               (AnsiAda.Foreground (AnsiAda.Light_Cyan)
+                & "[KV-Cache]"
+                & AnsiAda.Reset
+                & " KV cache restored from disk, skipping Llama_Memory_Clear"
+                & " (preserving " & Interfaces.C.size_t'Image (Loaded_Count) & " tokens)");
+        end if;
+
+        --  !! IMPORTANT NOTE: KV CACHE + PROMPT OVERFLOW GUARD !!
+        --  ============================================================================
+        --  When a KV cache is loaded from SSD, those tokens occupy part of the
+        --  allocated context window. The new prompt tokens must fit in the REMAINING
+        --  slots alongside the restored KV tokens.
+        --
+        --  Example: ctx=8192, KV cache=3747 tokens, prompt=20000 tokens
+        --    Remaining slots = 8192 - 3747 = 4445
+        --    Prompt needs    = 20000 tokens
+        --    Overflow        = 15555 tokens (190% over capacity)
+        --
+        --  Without this guard, the prefill loop would submit 20000 tokens to
+        --  llama_decode which only has 8192 slots → SIGSEGV or OOM hang.
+        --
+        --  FIX: If prompt + KV tokens exceed ctx, discard the KV cache restore
+        --  and process the prompt fresh. The prompt is more important than the
+        --  cached KV state — the user asked a NEW question, not a repeat.
+        --  ============================================================================
+        if Cache_Hit
+          and then Interfaces.C.size_t (N_Toks) + Loaded_Count > Interfaces.C.size_t (Models (Kind).Current_Ctx)
+        then
+            declare
+                Overflow : constant Interfaces.C.size_t :=
+                   Interfaces.C.size_t (N_Toks) + Loaded_Count - Interfaces.C.size_t (Models (Kind).Current_Ctx);
+                Uptime_Str : constant String :=
+                   Trim
+                      (Duration'Image
+                          (Ada.Real_Time.To_Duration
+                              (Ada.Real_Time.Clock - Init_Start_Time)),
+                       Both);
+            begin
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[Uptime]+" & Uptime_Str & "s"
+                    & AnsiAda.Reset
+                    & " [KV-Cache-OVERFLOW]"
+                    & " KV tokens=" & Interfaces.C.size_t'Image (Loaded_Count)
+                    & " + prompt tokens=" & int'Image (N_Toks)
+                    & " = " & Interfaces.C.size_t'Image (Loaded_Count + Interfaces.C.size_t (N_Toks))
+                    & " > ctx_size=" & Interfaces.C.unsigned'Image (Models (Kind).Current_Ctx)
+                    & " (overflow=" & Interfaces.C.size_t'Image (Overflow) & " tokens)");
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[CtxMonitor]"
+                    & AnsiAda.Reset
+                    & " OVERFLOW: Allocated ctx attention: "
+                    & Interfaces.C.size_t'Image (Loaded_Count + Interfaces.C.size_t (N_Toks))
+                    & " / "
+                    & Interfaces.C.unsigned'Image (Models (Kind).Current_Ctx)
+                    & " tokens"
+                    & " ("
+                    & Natural'Image (Natural ((Loaded_Count + Interfaces.C.size_t (N_Toks)) * 100 / Interfaces.C.size_t (Models (Kind).Current_Ctx)))
+                    & "% over capacity)");
+                Put_Line
+                   (AnsiAda.Foreground (AnsiAda.Yellow)
+                    & "[CtxMonitor]"
+                    & AnsiAda.Reset
+                    & " Discarding KV cache, processing prompt fresh.");
+
+                --  Clear the restored KV cache — we can't use it alongside this prompt.
+                --  The prompt is too large to fit with the cached state.
+                Llama_Interface.Llama_Memory_Clear
+                   (Llama_Interface.Llama_Get_Memory (Models (Kind).Context), False);
+                Cache_Hit := False;
+                Loaded_Count := 0;
+            end;
+        end if;
 
         --  CHUNKED DECODING (PREFILL)
         --  ============================================================================
@@ -6111,7 +6268,7 @@ package body Model_Manager is
                 if Accel_Locked then
                     Release_Accel_Lock;
                 end if;
-                --  [GEN-RETRY] OOM during generate. Clean up, retry once with fresh state.
+                --  [GEN-RETRY] OOM during generate. Clean up, retry with fresh state.
                 Gen_Retry_Count := Gen_Retry_Count + 1;
                 Ada.Text_IO.Put_Line
                    (AnsiAda.Background (AnsiAda.Red)
@@ -6122,12 +6279,25 @@ package body Model_Manager is
                     & "/" & Natural'Image (Max_Gen_Retries + 1) & ")"
                     & AnsiAda.Reset);
                 Mark_Metal_Broken;
-                --  [ACCEL-INOP] Force acceleration to 0 (CPU-only) for retry.
-                --  This prevents the deadlock where Metal is broken but the
-                --  retry creates a new context with Metal layers still active.
-                --  The 60s cooldown will restore layers automatically.
-                if Acceleration_Silicon_Layer /= 0 then
+                --  [GEN-RETRY PROGRESSIVE FALLBACK]
+                --  Attempt 1 failure: Keep accel ON, just purge KV cache.
+                --  Attempt 2 failure: Keep accel ON, purge KV cache again.
+                --  Attempt 3 failure: NOW disable accel (CPU-only fallback).
+                --    Metal is persistently broken after 3 tries, fall back to CPU.
+                if Gen_Retry_Count >= 3 and then Acceleration_Silicon_Layer /= 0 then
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Red)
+                        & "[GEN-RETRY]"
+                        & AnsiAda.Reset
+                        & " 3rd failure -- disabling acceleration (CPU-only)");
                     Trigger_Accel_INOP;
+                elsif Gen_Retry_Count <= 2 then
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Yellow)
+                        & "[GEN-RETRY]"
+                        & AnsiAda.Reset
+                        & " failure #" & Natural'Image (Gen_Retry_Count)
+                        & " -- keeping accel ON, purging KV cache only");
                 end if;
                 begin
                     KV_Cache_Manager.Wait_For_Save;
@@ -6147,14 +6317,17 @@ package body Model_Manager is
                     end if;
                     ELP_Queue.Dequeue_Level (Level);
                 end if;
-                --  [GEN-RETRY] If first attempt, retry with fresh state
+                --  [GEN-RETRY] Progressive fallback: retry if attempts remain
                 if Gen_Retry_Count <= Max_Gen_Retries then
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Yellow)
                         & "[GEN-RETRY]"
                         & AnsiAda.Reset
                         & " Retrying Generate for " & Model_Type'Image (Kind)
-                        & " with Accel=0 (CPU-only)");
+                        & " (attempt" & Natural'Image (Gen_Retry_Count + 1)
+                        & "/" & Natural'Image (Max_Gen_Retries + 1) & ")"
+                        & (if Gen_Retry_Count >= 2 then " Accel=0 (CPU-only)"
+                           else " Accel=ON (keeping acceleration)"));
                     Tokens := null;
                     --  Loop continues: retry Generate
                 else
