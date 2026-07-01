@@ -601,12 +601,22 @@ package body Adelaide_Server_Pkg is
      function Dispatch
        (Request : AWS.Status.Data) return AWS.Response.Data
      is
-         --  UserAgent=FuzzyMatch: Behavioural patch for external agent detection.
-         --  External agent apps (OpenCode, OpenWebUI, etc.) send structured
-         --  chat completions requests but expect raw LLM output, not our
-         --  personality pipeline. Fuzzy matching the User-Agent against known
-         --  agent signatures at 0.7 threshold lets us bypass the personality
-         --  orchestrator and passthrough raw inference.
+          --  UserAgent=FuzzyMatch: Behavioural patch for external agent detection.
+          --  External agent apps (OpenCode, OpenWebUI, etc.) send structured
+          --  chat completions requests but expect raw LLM output, not our
+          --  personality pipeline. Fuzzy matching the User-Agent against known
+          --  agent signatures at 0.5 threshold lets us bypass the personality
+          --  orchestrator and passthrough raw inference.
+          --
+          --  DEFAULT: agentic mode (cleaner raw LLM output).
+          --  Only standard chatbots (matched at >= 0.5) get chat mode.
+          --  Everything else (external agents, unknown clients, uncertain
+          --  matches) defaults to agentic.
+          --
+          --  NOTE: If your client can't receive streaming or gets low TTFB
+          --  from Adelaide, it is being detected as an external agent —
+          --  this means the threshold is too high. Lower the threshold
+          --  and try again.
           URI    : constant String := AWS.Status.URI (Request);
           UA     : constant String := AWS.Status.User_Agent (Request);
           Match_Score : Float := 0.0;
@@ -656,19 +666,23 @@ package body Adelaide_Server_Pkg is
             for Bot of Standard_Chatbots loop
                begin
                   Current_Score_2 := Fuzzy_Match.Match (UA, Trim (Bot, Ada.Strings.Right));
-                  if Current_Score_2 >= 0.7 then
-                     Is_Standard_Chatbot := True;
-                     Matched_Chatbot := To_Unbounded_String (Trim (Bot, Ada.Strings.Right));
-                     exit;
-                  end if;
+                   if Current_Score_2 >= 0.5 then
+                      Is_Standard_Chatbot := True;
+                      Matched_Chatbot := To_Unbounded_String (Trim (Bot, Ada.Strings.Right));
+                      exit;
+                   end if;
                exception
                   when others => null;
                end;
             end loop;
          end;
 
-         --  External Agent = matches known agents AND NOT a standard chatbot
-         Is_External_Agent := Match_Score >= 0.7 and then not Is_Standard_Chatbot;
+           --  External Agent detection: Is_Standard_Chatbot is the sole
+           --  decision-maker. Known chatbots (>= 50% match) get chat mode.
+           --  Everything else (including unknown clients) gets agentic mode
+           --  for clean, minimal-overhead output. External agent matching
+           --  scores are for logging only.
+           Is_External_Agent := not Is_Standard_Chatbot;
         declare
           Score_Pct : constant Integer := Integer (Match_Score * 100.0);
           Category  : constant String :=
@@ -1580,7 +1594,7 @@ package body Adelaide_Server_Pkg is
                                    "Token Budget: Streaming enabled, real-time chunk delivery" & ASCII.LF &
                                    "Memory System: Semantic search + knowledge graph integration" & ASCII.LF &
                                    "Orchestration Mode: Multi-hop reasoning with context faults" & ASCII.LF &
-                                   To_String (GPU_Part) & ASCII.LF);
+                                    To_String (GPU_Part) & ASCII.LF);
                        end;
                    end if;
 
