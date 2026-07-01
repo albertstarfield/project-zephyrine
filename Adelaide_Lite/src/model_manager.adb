@@ -5754,11 +5754,13 @@ package body Model_Manager is
              Now     : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
              Elapsed : constant Ada.Real_Time.Time_Span := Now - Init_Start_Time;
              --  Nanoseconds since init — unique per request
-             NS      : constant Interfaces.C.unsigned :=
-                Interfaces.C.unsigned
+             --  Use Interfaces.C.unsigned_long (64-bit) to avoid overflow
+             --  (32-bit unsigned overflows after ~4.29 seconds!)
+             NS      : constant Interfaces.C.unsigned_long :=
+                Interfaces.C.unsigned_long
                    (Ada.Real_Time.To_Duration (Elapsed) * 1_000_000_000.0);
          begin
-             Generate_Seed := NS;
+             Generate_Seed := Interfaces.C.unsigned (NS mod 2**32);
          end;
         Llama_Sampler_Chain_Add
            (Sampler, Llama_Sampler_Init_Dist (Generate_Seed));
