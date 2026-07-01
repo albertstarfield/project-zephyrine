@@ -8,6 +8,7 @@ import uvicorn
 import psutil
 import tiktoken
 import gc
+import asyncio
 import json
 import uuid
 import socket
@@ -398,47 +399,67 @@ async def chat(request: Request):
         }
         
         full_reply = ""
-        try:
-            async with httpx.AsyncClient() as client:
-                async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=120.0) as response:
-                    if response.status_code != 200:
-                        yield json.dumps({"error": f"Backend returned error: {response.status_code}"}) + "\n"
-                        return
-
-                    async for line in response.aiter_lines():
-                        if not line:
+        session_id_local = session_id
+        retry_delay = 1.0  # starts at 1s, caps at 30s
+        
+        while True:
+            try:
+                async with httpx.AsyncClient() as client:
+                    async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=600.0) as response:
+                        if response.status_code != 200:
+                            yield json.dumps({"error": f"Backend returned error: {response.status_code}, retrying..."}) + "\n"
+                            await asyncio.sleep(retry_delay)
+                            retry_delay = min(retry_delay * 2, 30.0)
                             continue
-                        try:
-                            resp_json = json.loads(line)
-                            # Ada returns Ollama format: {"message": {"content": "..."}, "done": false}
-                            if "message" in resp_json:
-                                chunk = resp_json["message"].get("content", "")
-                                full_reply += chunk
-                                yield line + "\n"
-                            elif "response" in resp_json: # /api/generate format
-                                chunk = resp_json.get("response", "")
-                                full_reply += chunk
-                                yield line + "\n"
-                            
-                            if resp_json.get("done", False):
-                                break
-                        except json.JSONDecodeError:
-                            continue
-            
-            # Finalize and save to DB
-            conn_final = sqlite3.connect(DB_PATH)
-            cursor_final = conn_final.cursor()
-            cursor_final.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", 
-                                ("assistant", full_reply, session_id))
-            conn_final.commit()
-            conn_final.close()
-            
-            # Send a final chunk with the session_id so the frontend can update
-            yield json.dumps({"session_id": session_id, "done": True}) + "\n"
 
-        except Exception as e:
-            error_msg = f"Could not connect to Ada backend: {str(e)}"
-            yield json.dumps({"message": {"content": error_msg}, "done": True}) + "\n"
+                        retry_delay = 1.0  # reset on successful connection
+
+                        async for line in response.aiter_lines():
+                            if not line:
+                                continue
+                            try:
+                                resp_json = json.loads(line)
+                                # Ada returns Ollama format: {"message": {"content": "..."}, "done": false}
+                                if "message" in resp_json:
+                                    chunk = resp_json["message"].get("content", "")
+                                    full_reply += chunk
+                                    yield line + "\n"
+                                elif "response" in resp_json: # /api/generate format
+                                    chunk = resp_json.get("response", "")
+                                    full_reply += chunk
+                                    yield line + "\n"
+                                
+                                if resp_json.get("done", False):
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+                
+                # If we get here, the stream completed successfully
+                break
+                    
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
+                # Ada backend unreachable or dropped connection — retry indefinitely
+                yield json.dumps({"message": {"content": f"[Waiting for Ada backend...] (retry in {retry_delay:.0f}s)"}, "done": False}) + "\n"
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 30.0)
+                continue
+                
+            except Exception as e:
+                yield json.dumps({"message": {"content": f"[Ada backend error: {str(e)}, retrying...]"}, "done": False}) + "\n"
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 30.0)
+                continue
+        
+        # Finalize and save to DB
+        conn_final = sqlite3.connect(DB_PATH)
+        cursor_final = conn_final.cursor()
+        cursor_final.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", 
+                            ("assistant", full_reply, session_id_local))
+        conn_final.commit()
+        conn_final.close()
+        
+        # Send a final chunk with the session_id so the frontend can update
+        yield json.dumps({"session_id": session_id_local, "done": True}) + "\n"
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
@@ -508,46 +529,63 @@ async def regenerate(request: Request):
         }
 
         full_reply = ""
-        try:
-            async with httpx.AsyncClient() as client:
-                async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=120.0) as response:
-                    if response.status_code != 200:
-                        yield json.dumps({"error": f"Backend returned error: {response.status_code}"}) + "\n"
-                        return
+        retry_delay = 1.0  # starts at 1s, caps at 30s
 
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        try:
-                            resp_json = json.loads(line)
-                            if "message" in resp_json:
-                                chunk = resp_json["message"].get("content", "")
-                                full_reply += chunk
-                                yield line + "\n"
-                            elif "response" in resp_json:
-                                chunk = resp_json.get("response", "")
-                                full_reply += chunk
-                                yield line + "\n"
-
-                            if resp_json.get("done", False):
-                                break
-                        except json.JSONDecodeError:
+        while True:
+            try:
+                async with httpx.AsyncClient() as client:
+                    async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=600.0) as response:
+                        if response.status_code != 200:
+                            yield json.dumps({"error": f"Backend returned error: {response.status_code}, retrying..."}) + "\n"
+                            await asyncio.sleep(retry_delay)
+                            retry_delay = min(retry_delay * 2, 30.0)
                             continue
 
-            # Save assistant reply to DB
-            if full_reply:
-                conn_final = sqlite3.connect(DB_PATH)
-                cursor_final = conn_final.cursor()
-                cursor_final.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)",
-                                    ("assistant", full_reply, session_id))
-                conn_final.commit()
-                conn_final.close()
+                        retry_delay = 1.0  # reset on successful connection
 
-            yield json.dumps({"session_id": session_id, "done": True}) + "\n"
+                        async for line in response.aiter_lines():
+                            if not line:
+                                continue
+                            try:
+                                resp_json = json.loads(line)
+                                if "message" in resp_json:
+                                    chunk = resp_json["message"].get("content", "")
+                                    full_reply += chunk
+                                    yield line + "\n"
+                                elif "response" in resp_json:
+                                    chunk = resp_json.get("response", "")
+                                    full_reply += chunk
+                                    yield line + "\n"
 
-        except Exception as e:
-            error_msg = f"Could not connect to Ada backend: {str(e)}"
-            yield json.dumps({"message": {"content": error_msg}, "done": True}) + "\n"
+                                if resp_json.get("done", False):
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+
+                break  # stream completed
+
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
+                yield json.dumps({"message": {"content": f"[Waiting for Ada backend...] (retry in {retry_delay:.0f}s)"}, "done": False}) + "\n"
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 30.0)
+                continue
+
+            except Exception as e:
+                yield json.dumps({"message": {"content": f"[Ada backend error: {str(e)}, retrying...]"}, "done": False}) + "\n"
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 30.0)
+                continue
+
+        # Save assistant reply to DB
+        if full_reply:
+            conn_final = sqlite3.connect(DB_PATH)
+            cursor_final = conn_final.cursor()
+            cursor_final.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)",
+                                ("assistant", full_reply, session_id))
+            conn_final.commit()
+            conn_final.close()
+
+        yield json.dumps({"session_id": session_id, "done": True}) + "\n"
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
