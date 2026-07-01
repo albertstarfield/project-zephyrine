@@ -245,6 +245,21 @@ function addMessageToUI(msg: Message): string {
       // Re-render the edited message
       renderMarkdownToElement(bubble, newText);
 
+      // Ensure we have a session — create one if needed
+      if (!currentSessionId) {
+        try {
+          const sessRes = await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: newText.slice(0, 20) })
+          });
+          if (sessRes.ok) {
+            const sessData = await sessRes.json();
+            currentSessionId = sessData.id;
+          }
+        } catch {}
+      }
+
       // Re-send conversation to get new response
       const typingId = addTypingIndicator();
       const thinkState = { inThink: false, thinkBuffer: '', answerSegments: [''], rawBuf: '' };
@@ -327,6 +342,21 @@ function addMessageToUI(msg: Message): string {
     // Remove this assistant message and all messages after it
     for (let i = allMsgs.length - 1; i >= idx; i--) {
       allMsgs[i].remove();
+    }
+
+    // Ensure we have a session — create one if needed
+    if (!currentSessionId) {
+      try {
+        const sessRes = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: "Regenerated Chat" })
+        });
+        if (sessRes.ok) {
+          const sessData = await sessRes.json();
+          currentSessionId = sessData.id;
+        }
+      } catch {}
     }
 
     // Add typing indicator

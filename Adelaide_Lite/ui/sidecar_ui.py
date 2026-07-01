@@ -452,11 +452,15 @@ async def regenerate(request: Request):
     session_id = data.get("session_id")
     new_message = data.get("message")  # Optional: if provided, replaces last user message
 
-    if not session_id:
-        return JSONResponse({"error": "session_id required"}, status_code=400)
-
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
+    if not session_id:
+        # Create a new session
+        title = (new_message or "Regenerated Chat")[:20]
+        cursor.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
+        session_id = cursor.lastrowid
+        conn.commit()
 
     # Get all messages for this session in order
     cursor.execute("SELECT id, role, content FROM messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
