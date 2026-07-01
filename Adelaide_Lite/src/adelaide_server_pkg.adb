@@ -2173,7 +2173,8 @@ package body Adelaide_Server_Pkg is
                   declare
                      Q : constant Streaming_Queue.Queue_Access := new Streaming_Queue.Queue;
                      T : Benchmark_Streaming_Task_Access := new Benchmark_Streaming_Task;
-                     S : aliased Streaming_Queue.Response_Stream;
+                     S : constant Streaming_Queue.Response_Stream_Access :=
+                        new Streaming_Queue.Response_Stream;
                   begin
                      S.Q := Q;
                      Q.Set_Format(Streaming_Queue.Raw);
@@ -2187,7 +2188,7 @@ package body Adelaide_Server_Pkg is
                         
                      return Wrap_Response (AWS.Response.Stream
                        (Content_Type => "text/event-stream",
-                        Handle => S'Access));
+                        Handle => S));
                   end;
                end;
             end if;

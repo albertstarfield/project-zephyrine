@@ -93,7 +93,7 @@ package body Streaming_Queue is
       end Push;
 
       entry Pop (Item : out String; Last : out Natural; Is_Closed : out Boolean; Max_Len : in Natural)
-        when Ada.Strings.Unbounded.Length (Buffer) > 0 or else Closed
+        when True  --  Always open: never blocks. Read loop yields when no data.
       is
          Len : constant Natural :=
            Natural'Min (Ada.Strings.Unbounded.Length (Buffer),
@@ -241,14 +241,22 @@ package body Streaming_Queue is
          return;
       end if;
 
+      --  Buffer-fill loop: fill the output buffer with available data.
+      --  Pop is always-open (non-blocking) — returns 0 if no data yet.
+      --  When no data and not closed, yield briefly and retry.
+      --  This design keeps AWS happy (full buffers = no premature EOF)
+      --  while never blocking forever (non-blocking Pop + yield).
       loop
-         Resource.Q.Pop (Item, Actual_Len, Is_Closed, Natural (Target_Last - Current_Last));
+         Resource.Q.Pop
+           (Item, Actual_Len, Is_Closed,
+            Natural (Target_Last - Current_Last));
 
          if Actual_Len > 0 then
             --  [VITAL-DO-NOT-REMOVE] Mandated by user.
             Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Stream-V]" &
-                      AnsiAda.Reset & " Read: Popped " & Natural'Image (Actual_Len) &
-                      " chars. CurrentLast=" & Natural'Image (Natural (Current_Last + 1)));
+                      AnsiAda.Reset & " Read: Popped " &
+                      Natural'Image (Actual_Len) & " chars. CurrentLast=" &
+                      Natural'Image (Natural (Current_Last + 1)));
             declare
                To_Fill : constant Stream_Element_Offset :=
                  Stream_Element_Offset (Actual_Len);
@@ -259,12 +267,16 @@ package body Streaming_Queue is
                     Stream_Element (Character'Pos (Item (Integer (I))));
                end loop;
             end;
-
-            --  We block until the buffer is full (or closed) to avoid
-            --  AWS interpreting a short read as EOF.
          end if;
 
          exit when Current_Last = Target_Last or else Is_Closed;
+
+         --  No data yet and not closed: yield briefly so the generator
+         --  task can Push more data into the queue. Without this yield,
+         --  the always-open Pop would busy-wait spinning at 100% CPU.
+         if Actual_Len = 0 then
+            delay 0.001;  --  1ms yield
+         end if;
       end loop;
 
       Last := Current_Last;
