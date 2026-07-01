@@ -2,6 +2,22 @@ pragma SPARK_Mode (Off);
 --  ============================================================================
 --  KV Cache Manager — DATACENTER SPEED BLACKMAGIC
 --  ============================================================================
+--
+--  !! IMPORTANT NOTE: CTX SIZE MUST BE PART OF THE CACHE KEY !!
+--  ============================================================================
+--  Different context allocations produce DIFFERENT KV cache layouts in memory.
+--  A KV cache saved with ctx=8192 has 8192 cells per layer. Loading it into a
+--  ctx=4096 context would overflow the buffer (8192 > 4096), causing SIGSEGV
+--  or silent memory corruption.
+--
+--  Cache key = Model_ID + prompt_hash + CTX_SIZE
+--  Filename  = cache/kv/{Model_ID}_ctx{N}_{prompt_hash}.bin
+--
+--  NEVER load a KV cache file into a context with a different size than it was
+--  saved with. The ctx size is embedded in the filename and the hash to prevent
+--  this class of bugs.
+--  ============================================================================
+--
 --  ALL THE CHEATING TRICKS TO GET MAXIMUM PERFORMANCE:
 --
 --  TRICK 1: ASYNC SAVE
@@ -177,42 +193,43 @@ package body KV_Cache_Manager is
    end Record_Cache_Miss;
 
    --  ============================================================================
-   --  TRICK 3: PRE-PATH CACHE
-   --  ============================================================================
+   --  TRICK 3: PRE-PATH CACHE (per-model)
+   -- ============================================================================
    --  WHY: Directory scans are SLOW on HDD (50-200ms).
-   --  Cache the last used path to skip the scan on same prompt.
+   --  Cache the last used path per model to skip the scan on same prompt.
+   --  BUG FIX: Old implementation used a single global Cached_Path shared
+   --  across all models. When Model A saved, it overwrote Model B's cache,
+   --  causing unnecessary directory scans. Now each model has its own cache.
 
-   Cached_Path      : Unbounded_String := Null_Unbounded_String;
+   Cached_Path_Model : Unbounded_String := Null_Unbounded_String;
+   Cached_Path_File  : Unbounded_String := Null_Unbounded_String;
    Cached_Path_Valid : Boolean := False;
 
-   procedure Cache_Last_Path (Path : String) is
+   procedure Cache_Last_Path (Path : String; Model_ID : String) is
    begin
-      Cached_Path := To_Unbounded_String (Path);
+      Cached_Path_Model := To_Unbounded_String (Model_ID);
+      Cached_Path_File  := To_Unbounded_String (Path);
       Cached_Path_Valid := True;
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: logs path cache update.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[KV-Cache]" &
-                AnsiAda.Reset & "+Cache_Last_Path: cached=" & Path);
+                AnsiAda.Reset & "+Cache_Last_Path: model=" & Model_ID & " cached=" & Path);
    end Cache_Last_Path;
 
    function Get_Cached_Path return String is
    begin
-      return To_String (Cached_Path);
+      return To_String (Cached_Path_File);
    end Get_Cached_Path;
 
    function Has_Cached_Path (Model_ID : String) return Boolean is
-      P : constant String := To_String (Cached_Path);
-      Prefix : constant String := Cache_Dir & Model_ID & "_";
    begin
       if not Cached_Path_Valid then
          return False;
       end if;
-      if P'Length >= Prefix'Length and then P (P'First .. P'First + Prefix'Length - 1) = Prefix then
-         return True;
-      end if;
-      return False;
+      --  Check if the cached path belongs to this model
+      return To_String (Cached_Path_Model) = Model_ID;
    end Has_Cached_Path;
 
    --  ============================================================================
@@ -630,24 +647,32 @@ package body KV_Cache_Manager is
                 "s Initialize: metrics logger started (10s interval)");
    end Initialize;
 
-   procedure Save_To_SSD_Async
-     (Context    : Llama_Interface.Llama_Context;
-      Tokens     : System.Address;
-      N_Tokens   : Interfaces.C.size_t;
-      Model_ID   : String)
-   is
-      --  Generate cache key from prompt content (shared across sessions)
-      Tok_Len : constant Natural := Natural (N_Tokens);
-      Hash    : Natural := 0;
-   begin
-      --  Simple hash for cache key
-      for I in 1 .. Integer'Min (Tok_Len, 128) loop
-         Hash := (Hash * 31 + I) mod 1000000;
-      end loop;
+    procedure Save_To_SSD_Async
+      (Context    : Llama_Interface.Llama_Context;
+       Tokens     : System.Address;
+       N_Tokens   : Interfaces.C.size_t;
+       Model_ID   : String)
+    is
+       --  IMPORTANT: Cache key = Model_ID + prompt hash + CTX SIZE.
+       --  WHY: Different ctx allocations mean different KV cache layouts in memory.
+       --  A KV cache saved with ctx=8192 has 8192 cells per layer. Loading it
+       --  into a ctx=4096 context would overflow the buffer (8192 > 4096),
+       --  causing SIGSEGV or silent memory corruption. The ctx size MUST be part
+       --  of the cache key so that caches from different allocations are never mixed.
+       Ctx_Size  : constant Interfaces.C.size_t := Interfaces.C.size_t (Llama_Interface.Llama_N_Ctx (Context));
+       Tok_Len   : constant Natural := Natural (N_Tokens);
+       Hash      : Natural := 0;
+    begin
+       --  Hash includes both token content AND context size
+       Hash := Natural (Ctx_Size mod 1000000);
+       for I in 1 .. Integer'Min (Tok_Len, 128) loop
+          Hash := (Hash * 31 + I) mod 1000000;
+       end loop;
 
-      declare
-         Prompt_Hash : constant String := Trim (Natural'Image (Hash), Both);
-         File_Path   : constant String := Cache_Dir & Model_ID & "_" & Prompt_Hash & ".bin";
+       declare
+          Prompt_Hash : constant String := Trim (Natural'Image (Hash), Both);
+          --  Filename includes ctx size for human readability and debugging
+          File_Path   : constant String := Cache_Dir & Model_ID & "_ctx" & Trim (Interfaces.C.size_t'Image (Ctx_Size), Both) & "_" & Prompt_Hash & ".bin";
       begin
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -658,7 +683,7 @@ package body KV_Cache_Manager is
                    Interfaces.C.size_t'Image (N_Tokens) & " tokens -> " & File_Path);
 
          --  Cache the path for future loads (TRICK 3)
-         Cache_Last_Path (File_Path);
+         Cache_Last_Path (File_Path, Model_ID);
 
          --  Create and start background save task (TRICK 1)
          --  WHY: Non-blocking, returns immediately.
@@ -845,7 +870,7 @@ package body KV_Cache_Manager is
                       Tokens := Token_Buf.all'Address;
                       Record_Cache_Hit (N_Tokens);
                       --  Cache this path for next time (TRICK 3)
-                      Cache_Last_Path (Path);
+                      Cache_Last_Path (Path, Model_ID);
 
                      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE

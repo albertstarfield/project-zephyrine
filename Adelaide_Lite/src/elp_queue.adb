@@ -243,7 +243,7 @@ package body ELP_Queue is
                               Success : Boolean;
                               pragma Unreferenced (Success);
                           begin
-                              Model_Manager.Load_Model (Kind, Success, 4096, ELP1);
+                              Model_Manager.Load_Model (Kind, Success, (if Kind = Qwen_Embedding then 512 else 4096), ELP1);
                               if not Success then
                                  Last_Prewarm_Failure := Clock;
                                  Prewarm_Fail_Count := Prewarm_Fail_Count + 1;

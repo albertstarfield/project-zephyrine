@@ -83,16 +83,15 @@ package body Auto_Config is
           & " Detecting hardware...");
 
       --  Detect CPU threads (physical cores + hyperthreading).
-      --  Why: Intel Pentium Penryn = 2 cores, 4 threads (hyperthreading).
-      --  Threads should be min(detected, 4) — more than 4 gives diminishing
-      --  returns on llama.cpp workloads.
+      --  Why: Parallelism is everything! Allocate the absolute maximum number
+      --  of available CPU threads to maximize performance.
       declare
          Raw_Threads : constant Interfaces.C.unsigned := Llama_Interface.CPU_Thread_Count;
       begin
          if Raw_Threads = 0 then
             Detected_Hardware.CPU_Cores := 2;  -- Safe fallback
          else
-            Detected_Hardware.CPU_Cores := Natural'Min (Natural (Raw_Threads), 4);
+            Detected_Hardware.CPU_Cores := Natural (Raw_Threads);
          end if;
       end;
 
@@ -453,6 +452,11 @@ package body Auto_Config is
                                    Max_Working      => Ctx_2048,
                                    Fail_Count       => 0);
       end loop;
+
+      --  Embedding model uses only 512 context (fixed, no dynamic sizing).
+      --  The Ctx_Ladder doesn't have 512, so we store it as Ctx_2048
+      --  but Load_Model overrides Actual_Ctx to 512 for embedding.
+      --  We just need to ensure Accel_Layers stays 0 for embedding.
 
       --  Step 3: Load saved config (overrides defaults if available)
       Load_Config_File;

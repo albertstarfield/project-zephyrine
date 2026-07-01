@@ -2,6 +2,22 @@ pragma SPARK_Mode (Off);
 --  ============================================================================
 --  KV Cache Manager — DATACENTER SPEED ON SLOW HARDWARE
 --  ============================================================================
+--
+--  !! IMPORTANT NOTE: CTX SIZE MUST BE PART OF THE CACHE KEY !!
+--  ============================================================================
+--  Different context allocations produce DIFFERENT KV cache layouts in memory.
+--  A KV cache saved with ctx=8192 has 8192 cells per layer. Loading it into a
+--  ctx=4096 context would overflow the buffer (8192 > 4096), causing SIGSEGV
+--  or silent memory corruption.
+--
+--  Cache key = Model_ID + prompt_hash + CTX_SIZE
+--  Filename  = cache/kv/{Model_ID}_ctx{N}_{prompt_hash}.bin
+--
+--  NEVER load a KV cache file into a context with a different size than it was
+--  saved with. The ctx size is embedded in the filename and the hash to prevent
+--  this class of bugs.
+--  ============================================================================
+--
 --  BLACKMAGIC TRICKS FOR MAXIMUM SPEED:
 --
 --  1. ASYNC SAVE: Fire-and-forget background task, never block on disk I/O
@@ -56,7 +72,7 @@ package KV_Cache_Manager is
     --  WHY: Directory scans are slow on HDD. Cache the last used path.
     --  On same prompt, skip the scan entirely.
 
-    procedure Cache_Last_Path (Path : String);
+     procedure Cache_Last_Path (Path : String; Model_ID : String);
     function Get_Cached_Path return String;
     function Has_Cached_Path (Model_ID : String) return Boolean;
 

@@ -374,6 +374,9 @@ package body Model_Manager is
              Uptime_S := Long_Long_Integer (To_Duration (Clock - Init_Start_Time));
              Cycle_Count := Cycle_Count + 1;
 
+             --  [ACCEL-INOP] Check if 60s cooldown expired and restore GPU layers
+             Check_Accel_INOP_Restore;
+
              --  [INSTRUMENTATION] Log execution time and memory stats
              declare
                  Task_Elapsed : constant Duration := To_Duration (Clock - Task_Start_Time);
@@ -2187,6 +2190,21 @@ package body Model_Manager is
                  & " -- tensor acceleration offline.");
          end if;
 
+         --  [ACCEL-INOP] Override: force CPU-only when OOM triggered INOP.
+         --  When GEN-RETRY catches Storage_Error, it forces acceleration
+         --  layers to 0 for 60 seconds to prevent deadlock on broken Metal.
+         if Accel_INOP_Active then
+             M_Params.N_Gpu_Layers := 0;
+             Put_Line
+                (AnsiAda.Background (AnsiAda.Red)
+                 & AnsiAda.Foreground (AnsiAda.Light_Grey)
+                 & " [ACCEL-INOP] "
+                 & AnsiAda.Reset
+                 & "Forcing CPU-only (N_Gpu_Layers=0) for "
+                 & Kind'Img
+                 & " -- acceleration offline (OOM cooldown).");
+         end if;
+
          --  [OPTIMIZATION-M01] ENABLE MMAP FOR ZERO-COPY WEIGHT LOADING
          --  ======================================================================
          --  WHY: Reduces the "GAP Zone" Cold Start penalty by eliminating the
@@ -2764,12 +2782,20 @@ package body Model_Manager is
                     & " Exception: "
                     & Ada.Exceptions.Exception_Information (E));
                 Mark_Metal_Broken;
+                --  [ACCEL-INOP] Force acceleration to 0 (CPU-only) on OOM during load.
+                --  Prevents the retry from re-creating context with broken Metal.
+                if Acceleration_Silicon_Layer /= 0 then
+                    Trigger_Accel_INOP;
+                end if;
                 --  [ADAPTIVE GPU FALLBACK] OOM during load → progressive layer reduction
                 declare
                     Old_Count : constant Integer := Acceleration_Silicon_Layer;
                     New_Count : Integer;
                 begin
-                    if Acceleration_Silicon_Layer = -1 then
+                    --  [ACCEL-INOP] When INOP is active, force to 0 instead of progressive
+                    if Accel_INOP_Active then
+                        New_Count := 0;
+                    elsif Acceleration_Silicon_Layer = -1 then
                         New_Count := GPU_Layer_Fallback;
                     elsif Acceleration_Silicon_Layer > GPU_Layer_Min then
                         New_Count :=
@@ -3212,6 +3238,56 @@ package body Model_Manager is
         end if;
     end Print_INOP_Countdown;
 
+    --  [ACCEL-INOP] Force acceleration layers to 0 (CPU-only) on OOM.
+    --  Saves current Acceleration_Silicon_Layer for later restoration.
+    procedure Trigger_Accel_INOP is
+    begin
+        Accel_INOP_Saved_Layers := Acceleration_Silicon_Layer;
+        Accel_INOP_Active := True;
+        Accel_INOP_Restore_Time := Ada.Real_Time.Clock + Ada.Real_Time.To_Time_Span (Accel_INOP_Cooldown);
+        Acceleration_Silicon_Layer := 0;
+        Put_Line
+           (AnsiAda.Background (AnsiAda.Red)
+            & AnsiAda.Foreground (AnsiAda.Light_Grey)
+            & "[ACCEL-INOP]"
+            & AnsiAda.Reset
+            & " Forced acceleration layers to 0 (CPU-only)."
+            & " Saved layers=" & Integer'Image (Accel_INOP_Saved_Layers)
+            & ". Restoring in "
+            & Duration'Image (Accel_INOP_Cooldown) & "s.");
+    end Trigger_Accel_INOP;
+
+    --  [ACCEL-INOP] Check if cooldown expired and restore acceleration layers.
+    --  Called periodically by Acceleration_Monitor task.
+    procedure Check_Accel_INOP_Restore is
+        Now : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+    begin
+        if Accel_INOP_Active and then Now >= Accel_INOP_Restore_Time then
+            Acceleration_Silicon_Layer := Accel_INOP_Saved_Layers;
+            Accel_INOP_Active := False;
+            Put_Line
+               (AnsiAda.Foreground (AnsiAda.Green)
+                & "[ACCEL-INOP]"
+                & AnsiAda.Reset
+                & " Cooldown expired. Restored acceleration layers to"
+                & Integer'Image (Acceleration_Silicon_Layer) & ".");
+        elsif Accel_INOP_Active then
+            declare
+                Remain : constant Duration :=
+                   Ada.Real_Time.To_Duration (Accel_INOP_Restore_Time - Now);
+            begin
+                if abs Remain < 1.0 then
+                    Put_Line
+                       (AnsiAda.Foreground (AnsiAda.Yellow)
+                        & "[ACCEL-INOP]"
+                        & AnsiAda.Reset
+                        & " CPU-only mode. Restoring GPU in"
+                        & Duration'Image (Remain) & "s.");
+                end if;
+            end;
+        end if;
+    end Check_Accel_INOP_Restore;
+
     procedure Set_Power_Condition (On_Battery : Boolean; Level : Natural) is
     begin
         Priority_Model_Gate.Set_Power_Condition (On_Battery, Level);
@@ -3314,7 +3390,7 @@ package body Model_Manager is
             if Val = 9
                or else Val = 10
                or else Val = 13
-               or else (Val >= 32 and Val <= 126)
+               or else (Val >= 32 and then Val <= 126)
                or else Val >= 128
             then
                 Append (Res, S (I));
@@ -4566,6 +4642,20 @@ package body Model_Manager is
         Gen_Retry_Count : Natural := 0;
         Max_Gen_Retries : constant Natural := 1;
 
+        Accel_Locked    : Boolean := False;
+
+        procedure Acquire_Accel_Lock is
+        begin
+           Model_Manager.Acquire_Accel_Lock;
+           Accel_Locked := True;
+        end Acquire_Accel_Lock;
+
+        procedure Release_Accel_Lock is
+        begin
+           Model_Manager.Release_Accel_Lock;
+           Accel_Locked := False;
+        end Release_Accel_Lock;
+
         pragma Unreferenced (Images);
     begin
         Gen_Retry_Loop :
@@ -5758,6 +5848,9 @@ package body Model_Manager is
 
                 exception
                     when E : Storage_Error =>
+                        if Accel_Locked then
+                            Release_Accel_Lock;
+                        end if;
                         --  OOM during decode: cleanup, reload smaller ctx, retry
                         Mark_Metal_Broken;
                         declare
@@ -6015,6 +6108,9 @@ package body Model_Manager is
 
         exception
             when E : Storage_Error =>
+                if Accel_Locked then
+                    Release_Accel_Lock;
+                end if;
                 --  [GEN-RETRY] OOM during generate. Clean up, retry once with fresh state.
                 Gen_Retry_Count := Gen_Retry_Count + 1;
                 Ada.Text_IO.Put_Line
@@ -6026,6 +6122,13 @@ package body Model_Manager is
                     & "/" & Natural'Image (Max_Gen_Retries + 1) & ")"
                     & AnsiAda.Reset);
                 Mark_Metal_Broken;
+                --  [ACCEL-INOP] Force acceleration to 0 (CPU-only) for retry.
+                --  This prevents the deadlock where Metal is broken but the
+                --  retry creates a new context with Metal layers still active.
+                --  The 60s cooldown will restore layers automatically.
+                if Acceleration_Silicon_Layer /= 0 then
+                    Trigger_Accel_INOP;
+                end if;
                 begin
                     KV_Cache_Manager.Wait_For_Save;
                     Unload_Model (Kind);
@@ -6050,7 +6153,8 @@ package body Model_Manager is
                        (AnsiAda.Foreground (AnsiAda.Yellow)
                         & "[GEN-RETRY]"
                         & AnsiAda.Reset
-                        & " Retrying Generate for " & Model_Type'Image (Kind));
+                        & " Retrying Generate for " & Model_Type'Image (Kind)
+                        & " with Accel=0 (CPU-only)");
                     Tokens := null;
                     --  Loop continues: retry Generate
                 else
@@ -6067,6 +6171,9 @@ package body Model_Manager is
                 end if;
 
             when E : others =>
+                if Accel_Locked then
+                    Release_Accel_Lock;
+                end if;
                 Ada.Text_IO.Put_Line
                    (AnsiAda.Background (AnsiAda.Red)
                     & AnsiAda.Foreground (AnsiAda.Light_Grey)
@@ -8544,6 +8651,10 @@ package body Model_Manager is
                 & "=========================================================="
                 & AnsiAda.Reset);
             Mark_Metal_Broken;
+            --  [ACCEL-INOP] Force acceleration to 0 (CPU-only) on OOM in Hybrid_Generate.
+            if Acceleration_Silicon_Layer /= 0 then
+                Trigger_Accel_INOP;
+            end if;
             if Stream /= null then
                 begin
                     Push_Chunk

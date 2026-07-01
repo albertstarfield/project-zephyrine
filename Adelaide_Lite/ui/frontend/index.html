@@ -4,6 +4,27 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Zephyrine Assistant</title>
+        <script>
+            window.addEventListener('error', function(event) {
+                if (window.pywebview && window.pywebview.api) {
+                    window.pywebview.api.log_error(
+                        event.message,
+                        event.filename,
+                        event.lineno,
+                        event.colno,
+                        event.error ? event.error.stack : null
+                    );
+                }
+            });
+            window.addEventListener('unhandledrejection', function(event) {
+                if (window.pywebview && window.pywebview.api) {
+                    var reason = event.reason;
+                    var msg = reason ? (reason.message || String(reason)) : 'Unhandled Rejection';
+                    var stack = reason ? reason.stack : null;
+                    window.pywebview.api.log_error(msg, null, null, null, stack);
+                }
+            });
+        </script>
     </head>
     <body>
         <!-- Background -->
