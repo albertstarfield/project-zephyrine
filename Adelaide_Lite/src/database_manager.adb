@@ -5,7 +5,8 @@ with Ada_Sqlite3; use Ada_Sqlite3;
 with Ada.Exceptions;
 with Ada.Directories;
 with GNATCOLL.JSON;
-with Interfaces; use Interfaces;
+with Interfaces;           use Interfaces;
+with Interfaces.C;         use Interfaces.C;
 
 package body Database_Manager is
 
@@ -991,7 +992,7 @@ package body Database_Manager is
    --  When a seed produces only <think> with no visible content,
    --  it is blacklisted permanently. Generate skips blacklisted seeds.
 
-   procedure Blacklist_Seed (Seed : Natural) is
+   procedure Blacklist_Seed (Seed : Unsigned) is
    begin
       if Main_DB_Ptr = null then
          return;
@@ -1001,20 +1002,20 @@ package body Database_Manager is
                            "INSERT OR IGNORE INTO seed_blacklist (seed, reason) " &
                            "VALUES (?, 'think-only')");
       begin
-         Bind_Text (Stmt, 1, Natural'Image (Seed));
+         Bind_Text (Stmt, 1, Unsigned'Image (Seed));
          Step (Stmt);
          Put_Line
             (AnsiAda.Foreground (AnsiAda.Yellow)
              & "[Seed-BL]"
              & AnsiAda.Reset
-             & " Blacklisted seed " & Natural'Image (Seed)
-             & " (think-only response)");
+             & " Blacklisted seed " & Unsigned'Image (Seed)
+             & " (think-only/repeating response)");
       exception
          when others => null;  -- Non-fatal: blacklist is best-effort
       end;
    end Blacklist_Seed;
 
-   function Is_Seed_Blacklisted (Seed : Natural) return Boolean is
+   function Is_Seed_Blacklisted (Seed : Unsigned) return Boolean is
       Result : Boolean := False;
    begin
       if Main_DB_Ptr = null then
@@ -1025,7 +1026,7 @@ package body Database_Manager is
                            "SELECT COUNT(*) FROM seed_blacklist " &
                            "WHERE seed = ?");
       begin
-         Bind_Text (Stmt, 1, Natural'Image (Seed));
+         Bind_Text (Stmt, 1, Unsigned'Image (Seed));
          if Step (Stmt) = ROW then
             Result := Column_Int (Stmt, 0) > 0;
          end if;
