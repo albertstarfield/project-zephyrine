@@ -8791,8 +8791,8 @@ package body Model_Manager is
                         if Sanitized_Check = ""
                            or else Ada.Strings.Fixed.Trim (Sanitized_Check, Ada.Strings.Both) = "<!-- ANSWER_START -->"
                         then
-                            Database_Manager.Blacklist_Seed
-                               (Natural (Generate_Seed));
+                           Database_Manager.Blacklist_Seed
+                              (Generate_Seed);
                         end if;
 
                         while (Sanitized_Check = ""
@@ -8807,7 +8807,7 @@ package body Model_Manager is
                                 Generate_Seed := Generate_Seed + 1;
                                 exit when
                                    not Database_Manager.Is_Seed_Blacklisted
-                                          (Natural (Generate_Seed));
+                                          (Generate_Seed);
                             end loop;
 
                             Put_Line
@@ -8877,7 +8877,7 @@ package body Model_Manager is
                             else
                                 --  This seed also produced think-only — blacklist it
                                 Database_Manager.Blacklist_Seed
-                                   (Natural (Generate_Seed));
+                                   (Generate_Seed);
                             end if;
                         end loop;
                     end;
@@ -8896,7 +8896,7 @@ package body Model_Manager is
                         --  Check for repeating response
                         if Is_Repeating_Response (Sanitized_Repeat) then
                             Database_Manager.Blacklist_Seed
-                               (Natural (Generate_Seed));
+                               (Generate_Seed);
                         end if;
 
                         while Is_Repeating_Response (Sanitized_Repeat)
@@ -8909,7 +8909,7 @@ package body Model_Manager is
                                 Generate_Seed := Generate_Seed + 1;
                                 exit when
                                    not Database_Manager.Is_Seed_Blacklisted
-                                          (Natural (Generate_Seed));
+                                          (Generate_Seed);
                             end loop;
 
                             Put_Line
@@ -8976,7 +8976,7 @@ package body Model_Manager is
                             else
                                 --  This seed also produced repeating — blacklist it
                                 Database_Manager.Blacklist_Seed
-                                   (Natural (Generate_Seed));
+                                   (Generate_Seed);
                             end if;
                         end loop;
                     end;

@@ -1,6 +1,7 @@
 pragma SPARK_Mode (Off);
 with Math_Utils;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Interfaces.C;          use Interfaces.C;
 
 package Database_Manager is
 
@@ -88,11 +89,13 @@ package Database_Manager is
 
    procedure Export_GraphML (Filename : String);
 
-   --  [VITAL-DO-NOT-REMOVE] Seed blacklist for think-only responses.
-   --  When a seed produces only <think> with no visible content,
-   --  it is blacklisted permanently. Generate skips blacklisted seeds.
-   procedure Blacklist_Seed (Seed : Natural);
-   function Is_Seed_Blacklisted (Seed : Natural) return Boolean;
+   --  [VITAL-DO-NOT-REMOVE] Seed blacklist for think-only/repeating responses.
+   --  Seed is Interfaces.C.unsigned (32-bit) because Generate_Seed is that
+   --  type (matches Llama_Sampler_Init_Dist's C unsigned int parameter).
+   --  Changing to Interfaces.C.unsigned fixes CONSTRAINT_ERROR range check
+   --  when Generate_Seed exceeds Natural'Last (2^31-1).
+   procedure Blacklist_Seed (Seed : Interfaces.C.unsigned);
+   function Is_Seed_Blacklisted (Seed : Interfaces.C.unsigned) return Boolean;
    function Get_Blacklist_Size return Natural;
 
    procedure Close;
