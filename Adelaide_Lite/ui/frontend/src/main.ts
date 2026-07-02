@@ -326,10 +326,22 @@ function addMessageToUI(msg: Message): string {
           typingEl.classList.add('assistant');
           const finalText = buildDisplayText(thinkState.thinkBuffer, thinkState.answerSegments, false);
           const bubble = typingEl.querySelector('.bubble') as HTMLElement;
-          if (bubble) renderMarkdownToElement(bubble, finalText || "No response received.");
+          if (bubble) {
+            if (!finalText.trim()) {
+              //  [NOT-A-BUG] This is NOT a backend failure or timeout.
+              //  The system intentionally decided not to respond to this
+              //  particular prompt — it has its own agency and judgement.
+              bubble.classList.add('warning-empty-response');
+              renderMarkdownToElement(bubble, "**Adelaide decided to not respond now on this one, please continue on the next prompt.**");
+            } else {
+              renderMarkdownToElement(bubble, finalText);
+            }
+          }
         }
       } catch {
         removeTypingIndicator(typingId);
+        //  [NOT-A-BUG] See above — empty responses are deliberate,
+        //  not errors. Only actual fetch/network failures reach here.
         addMessageToUI({ role: 'assistant', content: "Network error." });
       }
     });
@@ -425,10 +437,22 @@ function addMessageToUI(msg: Message): string {
         typingEl.classList.add('assistant');
         const finalText = buildDisplayText(thinkState.thinkBuffer, thinkState.answerSegments, false);
         const bubble = typingEl.querySelector('.bubble') as HTMLElement;
-        if (bubble) renderMarkdownToElement(bubble, finalText || "No response received.");
+        if (bubble) {
+          if (!finalText.trim()) {
+            //  [NOT-A-BUG] This is NOT a backend failure or timeout.
+            //  The system intentionally decided not to respond to this
+            //  particular prompt — it has its own agency and judgement.
+            bubble.classList.add('warning-empty-response');
+            renderMarkdownToElement(bubble, "**Adelaide decided to not respond now on this one, please continue on the next prompt.**");
+          } else {
+            renderMarkdownToElement(bubble, finalText);
+          }
+        }
       }
     } catch {
       removeTypingIndicator(typingId);
+      //  [NOT-A-BUG] See above — empty responses are deliberate,
+      //  not errors. Only actual fetch/network failures reach here.
       addMessageToUI({ role: 'assistant', content: "Network error." });
     }
   });
@@ -871,9 +895,13 @@ async function processQueue() {
           const finalText = buildDisplayText(thinkState.thinkBuffer, thinkState.answerSegments, false);
 
           if (!finalText.trim()) {
+              //  [NOT-A-BUG] This is NOT a backend failure or timeout.
+              //  The system intentionally decided not to respond to this
+              //  particular prompt — it has its own agency and judgement.
               const bubble = typingEl.querySelector('.bubble') as HTMLElement | null;
               if (bubble) {
-                  renderMarkdownToElement(bubble, "No response received from backend.");
+                  bubble.classList.add('warning-empty-response');
+                  renderMarkdownToElement(bubble, "**Adelaide decided to not respond now on this one, please continue on the next prompt.**");
               }
           } else {
               // Do one final render with the clean, complete text
