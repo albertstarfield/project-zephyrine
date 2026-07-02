@@ -2,10 +2,17 @@ pragma SPARK_Mode (Off);
 with GNATCOLL.JSON;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;
-with Ada.Text_IO; use Ada.Text_IO;
+with Ada.Real_Time;      use Ada.Real_Time;
+with Ada.Text_IO;         use Ada.Text_IO;
 with AnsiAda;
 
 package body Streaming_Queue is
+
+   --  Rate limiter for [Queue-V] Pop verbose logging
+   --  Only prints Pop ENTERED every Pop_Verbose_Interval to prevent log spam
+   --  when Pop is called at high frequency (non-blocking barrier = always open).
+   Last_Pop_Log_Time : Time := Clock;
+   Pop_Verbose_Interval : constant Time_Span := Milliseconds (500);
 
    protected body Queue is
       procedure Set_Format (F : Format_Type; Model : String := "") is
@@ -98,32 +105,31 @@ package body Streaming_Queue is
          Len : constant Natural :=
            Natural'Min (Ada.Strings.Unbounded.Length (Buffer),
              Natural'Min (Item'Length, Max_Len));
-      begin
-         --  [VITAL-DO-NOT-REMOVE] Mandated by user for stream visibility.
-         Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Queue-V]" &
-                   AnsiAda.Reset & " Pop ENTERED. BufferLen=" &
-                   Natural'Image (Ada.Strings.Unbounded.Length (Buffer)) &
-                   " Max_Len=" & Natural'Image (Max_Len) &
-                   " Closed=" & Boolean'Image (Closed));
-         Last := Len;
-         if Len > 0 then
-            Item (Item'First .. Item'First + Len - 1) :=
-              Ada.Strings.Unbounded.To_String
-                (Ada.Strings.Unbounded.Unbounded_Slice (Buffer, 1, Len));
-            Buffer := Ada.Strings.Unbounded.Unbounded_Slice
-              (Buffer, Len + 1, Ada.Strings.Unbounded.Length (Buffer));
-            --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-            Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Queue-V]" &
-                      AnsiAda.Reset & " Pop: Popped " & Natural'Image (Len) &
-                      " chars. Remaining=" &
-                      Natural'Image (Ada.Strings.Unbounded.Length (Buffer)));
-         end if;
-         Is_Closed := Closed and then
-           Ada.Strings.Unbounded.Length (Buffer) = 0;
-         --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-         Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Queue-V]" &
-                   AnsiAda.Reset & " Pop: Is_Closed=" &
-                   Boolean'Image (Is_Closed) & " Last=" & Natural'Image (Last));
+       begin
+          --  [Queue-V] Rate-limited: prints at most every 500ms
+          Last := Len;
+          if Len > 0 then
+             Item (Item'First .. Item'First + Len - 1) :=
+               Ada.Strings.Unbounded.To_String
+                 (Ada.Strings.Unbounded.Unbounded_Slice (Buffer, 1, Len));
+             Buffer := Ada.Strings.Unbounded.Unbounded_Slice
+               (Buffer, Len + 1, Ada.Strings.Unbounded.Length (Buffer));
+          end if;
+          Is_Closed := Closed and then
+            Ada.Strings.Unbounded.Length (Buffer) = 0;
+
+          --  [Queue-V] Rate-limited verbose log: prints at most every 500ms
+          --  Prevents log spam from non-blocking Pop (barrier = always open).
+          if Clock - Last_Pop_Log_Time >= Pop_Verbose_Interval then
+             Last_Pop_Log_Time := Clock;
+             Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[Queue-V]" &
+                       AnsiAda.Reset & " Pop: BufferLen=" &
+                       Natural'Image (Ada.Strings.Unbounded.Length (Buffer)) &
+                       " Max_Len=" & Natural'Image (Max_Len) &
+                       " Closed=" & Boolean'Image (Closed) &
+                       " Is_Closed=" & Boolean'Image (Is_Closed) &
+                       " Last=" & Natural'Image (Last));
+          end if;
       end Pop;
 
       procedure Close is
