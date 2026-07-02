@@ -600,6 +600,23 @@ html {
 .typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
 
+/*  [NOT-A-BUG] Warning banner for when the system intentionally
+ *  decides not to respond. This is NOT an error or timeout —
+ *  Adelaide exercised its own judgement on this prompt.
+ *  Yellow/amber border + text highlight to distinguish from
+ *  normal assistant responses and from error messages. */
+.message.assistant .bubble.warning-empty-response {
+    background: rgba(255, 200, 0, 0.08);
+    border: 1px solid rgba(255, 200, 0, 0.35);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    color: #f0d060;
+}
+.message.assistant .bubble.warning-empty-response strong {
+    color: #f5d742;
+    font-weight: 600;
+}
+
 @keyframes typingPulse {
     0% { opacity: 0.2; transform: scale(1); }
     20% { opacity: 1; transform: scale(1.2); }
