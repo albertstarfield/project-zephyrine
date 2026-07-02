@@ -404,7 +404,7 @@ async def chat(request: Request):
         
         while True:
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(headers={"User-Agent": "Zephy-Sidecar-UI/1.0"}) as client:
                     async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=600.0) as response:
                         if response.status_code != 200:
                             yield json.dumps({"error": f"Backend returned error: {response.status_code}, retrying..."}) + "\n"
@@ -437,13 +437,13 @@ async def chat(request: Request):
                 # If we get here, the stream completed successfully
                 break
                     
-            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError):
                 # Ada backend unreachable or dropped connection — retry indefinitely
                 yield json.dumps({"message": {"content": f"[Waiting for Ada backend...] (retry in {retry_delay:.0f}s)"}, "done": False}) + "\n"
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 30.0)
                 continue
-                
+
             except Exception as e:
                 yield json.dumps({"message": {"content": f"[Ada backend error: {str(e)}, retrying...]"}, "done": False}) + "\n"
                 await asyncio.sleep(retry_delay)
@@ -533,7 +533,7 @@ async def regenerate(request: Request):
 
         while True:
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(headers={"User-Agent": "Zephy-Sidecar-UI/1.0"}) as client:
                     async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=600.0) as response:
                         if response.status_code != 200:
                             yield json.dumps({"error": f"Backend returned error: {response.status_code}, retrying..."}) + "\n"
@@ -564,7 +564,7 @@ async def regenerate(request: Request):
 
                 break  # stream completed
 
-            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError):
                 yield json.dumps({"message": {"content": f"[Waiting for Ada backend...] (retry in {retry_delay:.0f}s)"}, "done": False}) + "\n"
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 30.0)

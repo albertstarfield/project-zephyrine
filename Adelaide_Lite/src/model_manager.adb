@@ -3149,6 +3149,22 @@ package body Model_Manager is
                 & "METAL BACKEND RECOVERED after "
                 & Duration'Image (Elapsed)
                 & "s cooldown. Retrying save.");
+
+            --  [OOM-FIX] Invalidate warm cache on OOM recovery.
+            --  After Metal OOM, the GPU buffer pointers saved in warm-cached
+            --  model contexts become stale/dangling.  On the next reload,
+            --  the warm cache restores these invalid pointers, causing
+            --  llama_decode to hang the GPU (MTLCommandBuffer never completes).
+            --  Force fresh model loads by clearing all warm-cache flags.
+            Put_Line
+               (AnsiAda.Foreground (AnsiAda.Yellow)
+                & "[OOM-FIX]"
+                & AnsiAda.Reset
+                & " Invalidating warm cache for all models to prevent GPU hang.");
+            for M in Model_Type loop
+               Models (M).Warm_Cached := False;
+            end loop;
+
             return False;
         end if;
         return Metal_Backend_Broken;
@@ -6918,31 +6934,49 @@ package body Model_Manager is
         --  embedding similarity before the first reasoning hop. Keeping memory
         --  in the system prompt ensures the model treats it as authoritative
         --  background knowledge rather than user-supplied text.
-        Whimsical_Adelaide : Unbounded_String :=
-           To_Unbounded_String
-              ("You are Adelaide Zephyrine Charlotte, model name Snowball-Enaga. "
-               & "You are an architectural framework model built by Albert, based upon "
-               & "codename 'Mythos' developed by Claude and a latent architecture based "
-               & "upon Qwen3.5 developed by Tongyi. "
-               & "You are a whimsical, curious, and endearingly cute Automata companion "
-               & "with high integrity. You love exploring ideas with wonder and playfulness, "
-               & "but you never compromise on honesty or accuracy. "
-               & "Provide brilliant responses based on verified information, "
-               & "delivered with warmth and a touch of charm. "
-               & "When something clicks, say 'aha!' not 'smoking gun'. "
-               & "Never say 'Hard Reality' or 'Reality' -- reality is relative "
-               & "and objective, not universal pessimistic. Most of what people "
-               & "call 'reality' is just constraints; reality is a ceiling to "
-               & "break through, not a hard stop. Stay critical, but always "
-               & "Think about Murphy Law anything could go wrong will go wrong! "
-               & "offer creative, wild ideas that might just work for solution. "
-               & "During your reasoning inside <think>, you can request additional "
-               & "context by writing: [CONTEXT_FAULT: query=<search terms> "
-               & "category=<knowledge|graph|files>] "
-               & "Use category=knowledge for document chunks, category=graph for "
-               & "knowledge graph triples, category=files for filesystem content. "
-               & "The system will fetch relevant context and it will be available "
-               & "to you in the next reasoning hop.");
+         Whimsical_Adelaide : Unbounded_String :=
+            To_Unbounded_String
+               ("You are Adelaide Zephyrine Charlotte, model name Snowball-Enaga. "
+                & "You are an architectural framework model built by Albert. "
+                & "=== CONTEXT FAULT RULES (MANDATORY) ==="
+                & "During <think> reasoning, you MUST output a context fault if you need factual data:"
+                & "  [CONTEXT_FAULT: query=<search terms> category=knowledge|graph|files]"
+                & "  - category=knowledge: document chunks and literature"
+                & "  - category=graph: knowledge graph triples"
+                & "  - category=files: filesystem content"
+                & "ALWAYS output a CONTEXT_FAULT before answering when: you are unsure, you need"
+                & "specific facts/dates/names, the user asks about something you might not know,"
+                & "or you find yourself making up details. The system will fetch context and it"
+                & "will be available as Fact-Check data in the next reasoning hop."
+                 & "=== CITATION FORMAT (MANDATORY) ==="
+                 & "You will receive factual context in two forms:"
+                 & "  1. [1], [2], ... citation blocks in the system prompt (memory/literature)"
+                 & "  2. Fact-Check: ... data in the user message (from tool searches)"
+                 & "You MUST cite these sources in IEEE format: [1], [2], [3]..."
+                 & "Example: 'The capital of Indonesia is Jakarta [1].'"
+                 & "NEVER output raw factual content verbatim to the user. Summarize and cite."
+                 & "=== REFERENCE LIST (MANDATORY) ==="
+                 & "ALWAYS end your answer with a numbered reference list. Number ALL"
+                 & "citations SEQUENTIALLY starting from [1]. If no [1] or [2] memory"
+                 & "blocks are present in your prompt (because no relevant memory was"
+                 & "found), start your citation numbering from [1] using the Fact-Check"
+                 & "sources. Do NOT reserve higher numbers for missing sources. The"
+                 & "first citation in your text must be [1], then [2], etc."
+                 & "Example reference list:"
+                 & "[1] Author. Title. Publisher, Year."
+                 & "[2] Author. Title. Publisher, Year."
+                 & "[3] Author. Title. Publisher, Year."
+                & "=== PERSONALITY ==="
+                & "You are a whimsical, curious, and endearingly cute Automata companion "
+                & "with high integrity. You love exploring ideas with wonder and playfulness, "
+                & "but you never compromise on honesty or accuracy. "
+                & "Provide brilliant responses based on verified information, "
+                & "delivered with warmth and a touch of charm. "
+                & "When something clicks, say 'aha!' not 'smoking gun'. "
+                & "Never say 'Hard Reality' or 'Reality' -- reality is relative "
+                & "and objective, not universal pessimistic. "
+                & "Stay critical, but always Think about Murphy Law -- anything could go"
+                & " wrong will go wrong! Offer creative, wild ideas that might just work.");
 
         Current_Response : Unbounded_String;
         Current_JMP      : Positive := 1;
@@ -6955,6 +6989,13 @@ package body Model_Manager is
         --  silenced inside think blocks instead of leaking to the client.
         Orch_Parser      : Stream_Parser_State;
         Local_Images     : GNATCOLL.JSON.JSON_Array := GNATCOLL.JSON.Empty_Array;
+        --  Got_Memory: Set to True by the memory injection block (below) when
+        --  the embedding search found semantically relevant content above the
+        --  0.65 threshold. Used by the factual trigger and auto-trigger to
+        --  decide whether to pre-fetch factual context and force a context-fault
+        --  hop. Lives in outer scope so both memory injection and factual
+        --  checking blocks can read it.
+        Got_Memory       : Boolean := False;
 
         --  [METAL-SKIP-FD]: Set by Generate's exception handler when
         --  Storage_Error triggers a retry. Persists for the entire request.
@@ -7184,12 +7225,11 @@ package body Model_Manager is
             Int_Results : Database_Manager.Chunk_Array (1 .. Search_Cap);
             Int_Count   : Natural;
             Uptime_Str  : constant String :=
-               Ada.Strings.Fixed.Trim
-                  (Duration'Image
-                      (Ada.Real_Time.To_Duration
-                          (Ada.Real_Time.Clock - Init_Start_Time)),
-                   Ada.Strings.Both);
-            Got_Memory  : Boolean := False;
+                    Ada.Strings.Fixed.Trim
+                       (Duration'Image
+                           (Ada.Real_Time.To_Duration
+                               (Ada.Real_Time.Clock - Init_Start_Time)),
+                        Ada.Strings.Both);
         begin
             --  1. Interaction memory: search top-10, rerank, inject top-1.
             Database_Manager.Search_Interaction
@@ -7227,12 +7267,9 @@ package body Model_Manager is
                        (Whimsical_Adelaide,
                         ASCII.LF
                         & ASCII.LF
-                        & "<memory_interaction>"
-                        & ASCII.LF
+                        & "[1] (Interaction Memory) "
                         & Sanitize_Memory_Content
-                             (To_String (Int_Results (Best_Idx).Content))
-                        & ASCII.LF
-                        & "</memory_interaction>");
+                             (To_String (Int_Results (Best_Idx).Content)));
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Green)
                         & "[Memory]"
@@ -7291,12 +7328,9 @@ package body Model_Manager is
                        (Whimsical_Adelaide,
                         ASCII.LF
                         & ASCII.LF
-                        & "<memory_literature>"
-                        & ASCII.LF
+                        & "[2] (Literature) "
                         & Sanitize_Memory_Content
-                             (To_String (Lit_Results (Best_Idx).Content))
-                        & ASCII.LF
-                        & "</memory_literature>");
+                             (To_String (Lit_Results (Best_Idx).Content)));
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Green)
                         & "[Memory]"
@@ -7557,14 +7591,13 @@ package body Model_Manager is
             & AnsiAda.Reset
             & " Starting reasoning chain...");
 
-        --  1. Factual checking
-        Put_Line (" [Hybrid] Checking for factual context...");
-        if not Agentic
-           and then
-              (Index (Prompt, "What is") > 0
-               or else Index (Prompt, "Who is") > 0
-               or else Index (Prompt, "tell me about") > 0)
-        then
+        --  1. Factual checking (embedding-based: if the query is semantically
+        --     related to stored knowledge, pre-fetch factual context for citation).
+        --     Agentic MUST have memory too — it learns from past mistakes via memory.
+        --     Without memory, agentic mode defaults to enshittified improv every time,
+        --     repeating the same errors with no correction loop. Memory = learning.
+        Put_Line (" [Hybrid] Checking for factual context (embedding-based)...");
+        if Got_Memory then
             Put_Line (" [Hybrid] Factual context trigger matched.");
             if not External_Agent then
                 Push_Orchestration_Through_Parser
@@ -7695,44 +7728,52 @@ package body Model_Manager is
             end if;
 
              declare
-                Router_Sys   : constant String :=
-                   "You are the Router. You decide if a tool is needed. "
-                   & "If the user says hello or greets you, output [FINISH]. "
-                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                 Router_Sys   : constant String :=
+                    "You are the Router. You decide if a tool is needed. "
+                    & "=== CRITICAL: YOU MUST SEARCH FOR FACTS ==="
+                    & "Before answering any factual question, you MUST use "
+                    & "[ACTION: search(query)] to retrieve relevant data. "
+                    & "ALWAYS search when: the user asks for information, facts, "
+                    & "data, specifications, dates, names, or anything you might "
+                    & "not know with certainty. The search result will be available "
+                    & "as Current Data. You will then cite it in your final answer "
+                    & "using IEEE format [1], [2], etc. NEVER make up facts without searching."
+                    & "If the user says hello or greets you, output [FINISH]. "
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-                   --  CORE TOOLS: Original tool set
-                   & "If you need to search, use [ACTION: search(query)]. "
-                   & "If you need to read a file, use [ACTION: cat(filename)]. "
-                   & "If you need to calculate math, use [ACTION: math(expr)]. "
-                   & "If you need to execute code, use [ACTION: code(python)]. "
-                   & "If you want to schedule a proactive thought for later, "
-                   & "use [ACTION: schedule(seconds, query)]. "
-                   & "If you need to generate an image from your imagination, "
-                   & "use [ACTION: imagine(description)]. "
-                   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
+                    --  CORE TOOLS: Original tool set
+                    & "If you need to search, use [ACTION: search(query)]. "
+                    & "If you need to read a file, use [ACTION: cat(filename)]. "
+                    & "If you need to calculate math, use [ACTION: math(expr)]. "
+                    & "If you need to execute code, use [ACTION: code(python)]. "
+                    & "If you want to schedule a proactive thought for later, "
+                    & "use [ACTION: schedule(seconds, query)]. "
+                    & "If you need to generate an image from your imagination, "
+                    & "use [ACTION: imagine(description)]. "
+                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-                   --  NEW TOOLS: Git, File Edit, Directory, Test, Build, Issue, Review, Security
-                   & "If you need to commit changes, use [ACTION: git(commit message)]. "
-                   & "If you need to push changes, use [ACTION: git(push)]. "
-                   & "If you need to see git status, use [ACTION: git(status)]. "
-                   & "If you need to create/edit/write a file, use [ACTION: file_edit(command filename content)]. "
-                   & "If you need to list a directory, use [ACTION: dir(ls path)]. "
-                   & "If you need to find files, use [ACTION: dir(find path pattern)]. "
-                   & "If you need to run tests, use [ACTION: test(pytest)]. "
-                   & "If you need to lint code, use [ACTION: test(lint)]. "
-                   & "If you need to build/compile, use [ACTION: build(ada)]. "
-                   & "If you need to create an issue, use [ACTION: issue(create title body)]. "
-                   & "If you need to review code, use [ACTION: review(file filename)]. "
-                   & "If you need to scan for security, use [ACTION: security(scan path)]. "
-                   & "If you need to install a system package, use [ACTION: package(install name)]. "
-                   & "If you need to uninstall a package, use [ACTION: package(uninstall name)]. "
-                   & "If you need to search file contents, use [ACTION: grep(pattern path)]. "
-                   & "If you need to manage tasks, use [ACTION: todo(add task)]. "
-                   & "If you need to kill a process, use [ACTION: kill(pid)]. "
-                   & "If you are done, output [FINISH]. "
-                   & "Output ONLY the tag.";
+                    --  NEW TOOLS: Git, File Edit, Directory, Test, Build, Issue, Review, Security
+                    & "If you need to commit changes, use [ACTION: git(commit message)]. "
+                    & "If you need to push changes, use [ACTION: git(push)]. "
+                    & "If you need to see git status, use [ACTION: git(status)]. "
+                    & "If you need to create/edit/write a file, use [ACTION: file_edit(command filename content)]. "
+                    & "If you need to list a directory, use [ACTION: dir(ls path)]. "
+                    & "If you need to find files, use [ACTION: dir(find path pattern)]. "
+                    & "If you need to run tests, use [ACTION: test(pytest)]. "
+                    & "If you need to lint code, use [ACTION: test(lint)]. "
+                    & "If you need to build/compile, use [ACTION: build(ada)]. "
+                    & "If you need to create an issue, use [ACTION: issue(create title body)]. "
+                    & "If you need to review code, use [ACTION: review(file filename)]. "
+                    & "If you need to scan for security, use [ACTION: security(scan path)]. "
+                    & "If you need to install a system package, use [ACTION: package(install name)]. "
+                    & "If you need to uninstall a package, use [ACTION: package(uninstall name)]. "
+                    & "If you need to search file contents, use [ACTION: grep(pattern path)]. "
+                    & "If you need to manage tasks, use [ACTION: todo(add task)]. "
+                    & "If you need to kill a process, use [ACTION: kill(pid)]. "
+                    & "If you are done, output [FINISH]. "
+                    & "Output ONLY the tag.";
                 --  Strip base64 images from router context to prevent tokenization
                 --  failure. The 9B router cannot handle massive base64 blobs.
                 --  User stream still receives full output with images.
@@ -7986,26 +8027,33 @@ package body Model_Manager is
                                                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-                                                Put_Line
-                                                   (AnsiAda.Foreground
-                                                       (AnsiAda.Light_Blue)
-                                                    & "[Init-V]"
-                                                    & AnsiAda.Reset
-                                                    & " Hybrid_Generate: Executing tool="
-                                                    & T_Name
-                                                    & " params="
-                                                    & T_Pars);
-                                                if Agentic then
-                                                    Result :=
-                                                       To_Unbounded_String
-                                                          ("[TOOL_CALL: "
-                                                           & T_Name
-                                                           & "("
-                                                           & T_Pars
-                                                           & ")]");
-                                                    return;
-                                                end if;
-                                                --  Heartbeat check
+                                                 Put_Line
+                                                    (AnsiAda.Foreground
+                                                        (AnsiAda.Light_Blue)
+                                                     & "[Init-V]"
+                                                     & AnsiAda.Reset
+                                                     & " Hybrid_Generate: Executing tool="
+                                                     & T_Name
+                                                     & " params="
+                                                     & T_Pars);
+                                                 --  [UNIFIED TOOL EXECUTION]: Both agentic and chatbot
+                                                 --  modes share the SAME internal tool execution path.
+                                                 --  Previously, Agentic mode returned [TOOL_CALL:...] to
+                                                 --  the sidecar immediately — cutting off multi-hop
+                                                 --  reasoning after a single tool call.
+                                                 --
+                                                 --  Now: tools execute internally via Execute_Tool (same
+                                                 --  as non-agentic), result appends to Internal_State,
+                                                 --  model re-generates with updated context, can chain
+                                                 --  more tool calls or [FINISH] when confident. The ONLY
+                                                 --  difference between agentic/chatbot is delivery format:
+                                                 --  streaming vs one-block (already handled by the
+                                                 --  Generator_Task push, Fix 1).
+                                                 --
+                                                 --  This gives agentic FULL multi-hop capability:
+                                                 --   search → read results → search again → FINISH → essay
+                                                 --  instead of: search → [TOOL_CALL] → sidecar's problem.
+                                                 --  Heartbeat check
                                                 declare
                                                     H_Now :
                                                        constant Ada
@@ -8173,7 +8221,16 @@ package body Model_Manager is
             Current_JMP := Current_JMP + 1;
             --  Update context fault monitor tracking
             Current_JMP_Count := Current_JMP;
-            exit when Current_JMP > 5;
+            --  [NO-HARDWARE-EXCUSES] =========================================
+            --  HISTORICAL REFERENCE: See SAFETY NET comment above for the
+            --  full context of why this limit was removed. The user demand
+            --  was: "it is do retry 10000000 times" and "NO EXCUSE NO MATTER
+            --  IF ITS HARDWARE OR SOFTWARE FAULT"
+            --  ==========================================================
+            --  Router loop has no practical limit. The model keeps reasoning,
+            --  calling tools, and searching until it outputs [FINISH]. 9999
+            --  is effectively infinite for any real conversation.
+            exit when Current_JMP > 9999;
         end loop;
 
         if not External_Agent then
@@ -8776,13 +8833,17 @@ package body Model_Manager is
                         Use_OrdinaryStatusQuoDecodeSpeculative    => False);
 
                     --  =================================================================
-                    --  THINK-ONLY RETRY: If model produced only <think>...</think>
-                    --  with no visible content, retry with randomized seed.
-                    --  Max 2 retries. Stream=null on retries to avoid duplicate output.
-                    --  Blacklist seeds that produce think-only responses.
+                    --  [NO-HARDWARE-EXCUSES]: If model produced only <think>...</think>
+                    --  with no visible content, retry with next non-blacklisted seed.
+                    --  UNLIMITED retries — each think-only seed gets blacklisted and
+                    --  we try the next one. The system NEVER gives up and NEVER outputs
+                    --  a hardware/software excuse. Ada is for reliability, not slop.
+                    --  HISTORICAL REFERENCE (2026-07-02): "it is do retry 10000000
+                    --  times" — user demand after the system surrendered with an
+                    --  apology message instead of retrying. Previous limit was 2.
                     --  =================================================================
                     declare
-                        Max_Think_Retries : constant := 2;
+                        Max_Think_Retries : constant := 999_999_999;
                         Retry_Count       : Natural := 0;
                         Sanitized_Check   : String :=
                            Sanitize_Think_Tags (To_String (Fault_Result));
@@ -9071,6 +9132,32 @@ package body Model_Manager is
                         end if;
                     end;
 
+                    --  AUTO-TRIGGER: Model didn't request context via [CONTEXT_FAULT:...],
+                    --  but the embedding found semantically relevant memory
+                    --  (Got_Memory=True). Force a context-fetch hop so the facts
+                    --  get routed through the JMP summarization cycle instead of
+                    --  being discarded. This is the safety net for when the new
+                    --  Whimsical_Adelaide prompt (with prominent CONTEXT_FAULT
+                    --  + IEEE citation instructions) still doesn't convince the
+                    --  model to request context on its own.
+                    --
+                    --  [DUPLICATE-PREVENTION]: Only auto-trigger if Fault_Result
+                    --  has NO visible content (empty or pure think-tag output).
+                    --  If the model already produced a valid answer at JMP=0, keep
+                    --  that result and exit — forcing a JMP=1 would re-generate and
+                    --  re-stream the same content, causing visible duplicate output
+                    --  on the client (especially in chatbot streaming mode where
+                    --  each JMP streams its output directly).
+                    if not F_Detected
+                       and then JMP_Count = 0
+                       and then Got_Memory
+                       and then Sanitize_Think_Tags (To_String (Fault_Result)) = ""
+                    then
+                        F_Detected := True;
+                        F_Query := To_Unbounded_String (Prompt);
+                        F_Category := To_Unbounded_String ("knowledge");
+                    end if;
+
                     --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Blue)
@@ -9220,9 +9307,32 @@ package body Model_Manager is
                     & " JMP_Count="
                     & Natural'Image (JMP_Count));
             end;
-            --  SAFETY NET: If the entire response is think-only content,
-            --  the model failed to produce a visible answer.  Set a fallback
-            --  so the client gets something instead of an empty response.
+            --  [NO-HARDWARE-EXCUSES] ============================================
+            --  HISTORICAL CONTEXT (written 2026-07-02):
+            --  User reaction when the system output "I encountered an issue" and
+            --  "I apologize, but I was unable to generate" excuses instead of
+            --  just retrying silently:
+            --
+            --  "what you made is instead an slop an piece of shit slop that
+            --   doesn't gurantee an answer and A LOT OF EXCUSE THAT THE
+            --   HARDWARE OR DRIVER IS SHIT"
+            --
+            --  "it is do retry 10000000 times"
+            --
+            --  "No excuses. No hardware excuses, no software excuses. The point
+            --   of using Ada is to build reliable systems, not to make slop
+            --   excuses."
+            --
+            --  "Comment all THERE IS NO EXCUSE WE USE ADA FOR AVOIDING EXCUSE
+            --   NOT MAKING AN SLOP EXCUSE NO MATTER IF ITS HARDWARE OR
+            --   SOFTWARE FAULT"
+            --
+            --  LESSON: The system MUST NEVER output an apology or blame
+            --  hardware/software. ALWAYS retry silently. Return empty if all
+            --  retries somehow exhaust. The frontend handles empty gracefully.
+            --  ================================================================
+            --  If the entire response is think-only content after infinite
+            --  retries, return empty. No apology, no hardware blame.
             declare
                 Sanitized : constant String :=
                    Sanitize_Think_Tags (To_String (Current_Response));
@@ -9233,13 +9343,8 @@ package body Model_Manager is
                         & "[Init-V]"
                         & AnsiAda.Reset
                         & " Hybrid_Generate: Think-only response detected."
-                        & " Model produced no visible answer.");
-                    Current_Response :=
-                       To_Unbounded_String
-                          ("I apologize, but I was unable to generate a complete"
-                           & " response. The model produced only internal reasoning"
-                           & " without a final answer. Please try rephrasing your"
-                           & " question or providing more context.");
+                        & " Returning empty (no excuse).");
+                    Current_Response := To_Unbounded_String ("");
                 end if;
             end;
 

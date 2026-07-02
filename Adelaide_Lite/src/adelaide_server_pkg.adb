@@ -391,13 +391,50 @@ package body Adelaide_Server_Pkg is
          end loop Gen_Task_Retry;
        end;
 
-       begin
-          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
-          Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
-                "[Dispatch-V]" & AnsiAda.Reset &
-                " Generator_Task: Calling Q.Close...");
-          if QA /= null then
-             QA.Close;
+        begin
+           --  [EXTERNAL-AGENT-FIX] Push final result to queue for external agents.
+           --  Hybrid_Generate may not push to Stream for external agents when
+           --  internal retries (think-only, repeating) use Stream => null and
+           --  the result is never forwarded. Ensure the client always receives
+           --  the response text.
+           if Is_Ext and then QA /= null then
+              if Length (Res) > 0 then
+                 declare
+                    Text : constant String := To_String (Res);
+                 begin
+                    Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                          "[Dispatch-V]" & AnsiAda.Reset &
+                          " Generator_Task: Pushing external agent result (" &
+                          Natural'Image (Text'Length) & " chars) to queue.");
+                    QA.Push (Text & ASCII.LF);
+                 end;
+              else
+                  --  [NO-HARDWARE-EXCUSES] =========================================
+                  --  HISTORICAL CONTEXT (2026-07-02):
+                  --  "what you made is instead an slop an piece of shit slop
+                  --   that doesn't gurantee an answer and A LOT OF EXCUSE THAT
+                  --   THE HARDWARE OR DRIVER IS SHIT"
+                  --  "Comment all THERE IS NO EXCUSE WE USE ADA FOR AVOIDING
+                  --   EXCUSE NOT MAKING AN SLOP EXCUSE NO MATTER IF ITS
+                  --   HARDWARE OR SOFTWARE FAULT"
+                  --  ==========================================================
+                  --  Empty result but we never blame Metal/drivers/hardware.
+                  --  Just push nothing. Frontend shows "Adelaide decided to
+                  --  not respond now..." which is honest: the model couldn't
+                  --  produce visible content even after infinite retries.
+                  Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                        "[Dispatch-V]" & AnsiAda.Reset &
+                        " Generator_Task: External agent result was empty."
+                        & " Closing silently (no hardware blame).");
+              end if;
+           end if;
+
+           --  [VITAL-DO-NOT-REMOVE] Mandated by user.
+           Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
+                 "[Dispatch-V]" & AnsiAda.Reset &
+                 " Generator_Task: Calling Q.Close...");
+           if QA /= null then
+              QA.Close;
           end if;
           --  [VITAL-DO-NOT-REMOVE] Mandated by user.
           Ada.Text_IO.Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) &
@@ -657,10 +694,10 @@ package body Adelaide_Server_Pkg is
          Is_Standard_Chatbot : Boolean := False;
          Matched_Chatbot : Unbounded_String := To_Unbounded_String ("(none)");
          declare
-             Standard_Chatbots : constant array (1 .. 9) of String (1 .. 12) :=
-               ("msty        ", "OpenWebUI   ", "Chatbox     ", "Palchat     ",
-                "OpenCat     ", "Enlighten   ", "Aiko        ", "MindMac     ",
-                "curl        ");
+              Standard_Chatbots : constant array (1 .. 10) of String (1 .. 12) :=
+                ("msty        ", "OpenWebUI   ", "Chatbox     ", "Palchat     ",
+                 "OpenCat     ", "Enlighten   ", "Aiko        ", "MindMac     ",
+                 "curl        ", "Zephyr      ");
             Current_Score_2 : Float;
          begin
             for Bot of Standard_Chatbots loop
