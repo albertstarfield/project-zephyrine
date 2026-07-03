@@ -42,6 +42,7 @@ with Accuracy_Benchmark_Manager; use Accuracy_Benchmark_Manager;
 
 with Version;
 with Ada.Numerics.Elementary_Functions;
+with API_Key_Manager; use API_Key_Manager;
 --  ===========================================================================
 --  DISPATCH QUIRKS & DISCOVERED WORKAROUNDS
 --  ===========================================================================
@@ -654,13 +655,13 @@ package body Adelaide_Server_Pkg is
           --  from Adelaide, it is being detected as an external agent —
           --  this means the threshold is too high. Lower the threshold
           --  and try again.
-          URI    : constant String := AWS.Status.URI (Request);
-          UA     : constant String := AWS.Status.User_Agent (Request);
-          Match_Score : Float := 0.0;
-          Best_Match_Name : Unbounded_String := To_Unbounded_String ("(none)");
-       begin
-          --  Track last API for heartbeat display
-          Adelaide_Server_Pkg.Set_Last_API (URI);
+           URI    : constant String := AWS.Status.URI (Request);
+           UA     : constant String := AWS.Status.User_Agent (Request);
+           Match_Score : Float := 0.0;
+           Best_Match_Name : Unbounded_String := To_Unbounded_String ("(none)");
+        begin
+           --  Track last API for heartbeat display
+           Adelaide_Server_Pkg.Set_Last_API (URI);
           --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -1401,6 +1402,27 @@ package body Adelaide_Server_Pkg is
          URI = "/v1/chat/completions" or else URI = "/v1/completions"
       then
          declare
+            Req_Headers : constant AWS.Headers.List := AWS.Status.Header (Request);
+            API_Key : constant String :=
+              AWS.Headers.Get_Values (Req_Headers, "x-api-key");
+         begin
+            --  Validate API key
+            if not Validate_API_Key (API_Key) then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Red)
+                         & "[Auth] ERROR: Invalid or missing x-api-key header on "
+                         & URI & AnsiAda.Reset);
+               declare
+                  Err_Obj : constant JSON_Value := Create_Object;
+               begin
+                  Set_Field (Err_Obj, "type", "error");
+                  Set_Field (Err_Obj, "error_type", "authentication_error");
+                  Set_Field (Err_Obj, "message", "Invalid or missing x-api-key header");
+                  return Wrap_Response
+                    (Build_Response (Write (Err_Obj), AWS.Messages.S401, "application/json"));
+               end;
+            end if;
+         end;
+         declare
             Payload : Unbounded_String := (if Raw_S /= "" then
               To_Unbounded_String (Raw_S) 
               elsif Length (Raw_B) > 0 then Raw_B
@@ -1885,35 +1907,30 @@ package body Adelaide_Server_Pkg is
                Temperature   : Float := 1.0;
                Claude_Messages : Claudealike_Helper.Claude_Message_Array (1 .. 50);
                Msg_Count     : Natural := 0;
-               API_Key       : Unbounded_String := Null_Unbounded_String;
-               Req_Headers   : AWS.Headers.List;
-            begin
-               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-               --  Extract API key from x-api-key header
-               Req_Headers := AWS.Status.Header (Request);
-               API_Key := To_Unbounded_String
-                 (AWS.Headers.Get_Values (Req_Headers, "x-api-key"));
-
-               if Length (API_Key) = 0 then
-                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-                  Ada.Text_IO.Put_Line
-                    (AnsiAda.Foreground (AnsiAda.Red)
-                     & "[Claude] ERROR: Missing x-api-key header"
-                     & AnsiAda.Reset);
-                  declare
-                     Err_Obj : constant JSON_Value := Create_Object;
-                  begin
-                     Set_Field (Err_Obj, "type", "error");
-                     Set_Field (Err_Obj, "error_type", "authentication_error");
-                     Set_Field (Err_Obj, "message", "Missing x-api-key header");
-                     return Wrap_Response
-                       (Build_Response (Write (Err_Obj), AWS.Messages.S401, "application/json"));
-                  end;
-               end if;
+                Req_Headers   : AWS.Headers.List;
+             begin
+                --  [DO NOT REMOVE] Validate API key via API_Key_Manager
+                Req_Headers := AWS.Status.Header (Request);
+                declare
+                   Key : constant String :=
+                     AWS.Headers.Get_Values (Req_Headers, "x-api-key");
+                begin
+                   if not Validate_API_Key (Key) then
+                      Ada.Text_IO.Put_Line
+                        (AnsiAda.Foreground (AnsiAda.Red)
+                         & "[Claude] ERROR: Invalid or missing x-api-key header"
+                         & AnsiAda.Reset);
+                      declare
+                         Err_Obj : constant JSON_Value := Create_Object;
+                      begin
+                         Set_Field (Err_Obj, "type", "error");
+                         Set_Field (Err_Obj, "error_type", "authentication_error");
+                         Set_Field (Err_Obj, "message", "Invalid or missing x-api-key header");
+                         return Wrap_Response
+                           (Build_Response (Write (Err_Obj), AWS.Messages.S401, "application/json"));
+                      end;
+                   end if;
+                end;
                if Length (Payload) > 0 then
                   declare
                      Parser_Result : constant GNATCOLL.JSON.Read_Result :=
@@ -2100,37 +2117,39 @@ package body Adelaide_Server_Pkg is
             --  DO NOT REMOVE, OR YOU WILL BE KILLED
             --  =====================================================================
             if URI = "/api/snowballEnagaValidationBenchmark" then
-               declare
-                  use Benchmark_Manager;
-                  use Accuracy_Benchmark_Manager;
-                  Req_Headers : AWS.Headers.List;
-                  API_Key : Unbounded_String := Null_Unbounded_String;
-                  Config : Benchmark_Config;
-                  Perf_Result : Unbounded_String;
-                  Acc_Result : Unbounded_String;
-                  Bench_Type : Unbounded_String := To_Unbounded_String("both");
-                  Accuracy_Bench : Unbounded_String := To_Unbounded_String("mmlu");
-                  Sample_Size : Natural := 100;
-                  Accuracy_Result : Accuracy_Benchmark_Manager.Benchmark_Result;
-                  Perf_Metrics : Benchmark_Manager.Benchmark_Metrics;
-               begin
-                  --  [DO NOT REMOVE] Extract API key from header
-                  Req_Headers := AWS.Status.Header (Request);
-                  API_Key := To_Unbounded_String(
-                     AWS.Headers.Get_Values (Req_Headers, "x-api-key"));
-
-                  --  [DO NOT REMOVE] Validate API key
-                  if not Benchmark_Manager.Validate_API_Key(To_String(API_Key)) then
-                     Ada.Text_IO.Put_Line(
-                        AnsiAda.Foreground(AnsiAda.Red) &
-                        "[Benchmark]" & AnsiAda.Reset &
-                        " Invalid API key provided");
-                     return Wrap_Response(
-                        Build_Response(
-                           "{""error"": ""Invalid API key""}",
-                           AWS.Messages.S401,
-                           "application/json"));
-                  end if;
+                declare
+                   use Benchmark_Manager;
+                   use Accuracy_Benchmark_Manager;
+                   Config : Benchmark_Config;
+                   Perf_Result : Unbounded_String;
+                   Acc_Result : Unbounded_String;
+                   Bench_Type : Unbounded_String := To_Unbounded_String("both");
+                   Accuracy_Bench : Unbounded_String := To_Unbounded_String("mmlu");
+                   Sample_Size : Natural := 100;
+                   Accuracy_Result : Accuracy_Benchmark_Manager.Benchmark_Result;
+                   Perf_Metrics : Benchmark_Manager.Benchmark_Metrics;
+                begin
+                   --  [DO NOT REMOVE] Validate API key (check managed keys first, then hardcoded fallback)
+                   Req_Headers := AWS.Status.Header (Request);
+                   declare
+                      Key : constant String :=
+                        AWS.Headers.Get_Values (Req_Headers, "x-api-key");
+                   begin
+                      --  Accept if API_Key_Manager validates OR hardcoded key matches
+                      if not Validate_API_Key (Key)
+                        and then not Benchmark_Manager.Validate_API_Key (Key)
+                      then
+                         Ada.Text_IO.Put_Line(
+                            AnsiAda.Foreground(AnsiAda.Red) &
+                            "[Benchmark]" & AnsiAda.Reset &
+                            " Invalid API key provided");
+                         return Wrap_Response(
+                            Build_Response(
+                               "{""error"": ""Invalid API key""}",
+                               AWS.Messages.S401,
+                               "application/json"));
+                      end if;
+                   end;
 
                   --  [DO NOT REMOVE] Log benchmark request
                   Ada.Text_IO.Put_Line(

@@ -414,6 +414,9 @@ def show_help():
     {GRN}--port{RST} {CYN}PORT{RST}                     Bind port (default: 11420, env: ADLAIDE_SERVER_PORT)
     {GRN}--test-build-integrity-check{RST}    Build only, verify integrity, then exit
     {GRN}--show-key{RST}                      Show the current AES-256 master key, then exit
+    {GRN}--enforce-api-key{RST}               Enable x-api-key validation on the Ada server
+    {GRN}--no-enforce-api-key{RST}            Explicitly disable API key enforcement (default)
+    {GRN}--api-key{RST} {CYN}ACTION [ARGS]{RST}  Manage API keys: add [key] | remove <key> | list | edit <old> <new>
     {GRN}-h{RST}, {GRN}--help{RST}                  Show this help screen
 
   {BOLD}{WHT}EXAMPLES{RST}
@@ -456,6 +459,31 @@ def show_help():
       {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
       {DIM}→ Any device on same network can hit http://<your-computer-host-ip>:11420{RST}
       {DIM}→ Works with OpenWebUI, OpenCode, curl, or any HTTP client{RST}
+
+    {DIM}API Key Management:{RST}
+      {CYN}./run.sh --api-key list{RST}
+      {DIM}→ List all configured API keys (shows first 8 chars each){RST}
+      {CYN}./run.sh --api-key add my-secret-key-123{RST}
+      {DIM}→ Add a specific API key to the encrypted store{RST}
+      {CYN}./run.sh --api-key add{RST}
+      {DIM}→ Auto-generate a random 256-bit API key and add it{RST}
+      {CYN}./run.sh --api-key remove my-secret-key-123{RST}
+      {DIM}→ Remove an API key from the store{RST}
+      {CYN}./run.sh --api-key edit old-key new-key{RST}
+      {DIM}→ Replace an existing key with a new one{RST}
+
+    {DIM}API Key Enforcement:{RST}
+      {CYN}./run.sh --enforce-api-key{RST}
+      {DIM}→ Enable x-api-key header validation (clients must send a valid key){RST}
+      {CYN}./run.sh --no-enforce-api-key{RST}
+      {DIM}→ Disable enforcement (default, for Ollama app compatibility){RST}
+      {CYN}./run.sh --api-key add --enforce-api-key{RST}
+      {DIM}→ Add a key first, then start server with enforcement{RST}
+
+    {DIM}With API key enforcement + curl:{RST}
+      {CYN}./run.sh --api-key add mykey --enforce-api-key{RST}
+      {DIM}  # Then from another terminal:{RST}
+      {CYN}curl http://localhost:11420/api/chat -H "x-api-key: mykey" -d '{"model":"Snowball-Enaga","messages":[{"role":"user","content":"Hello"}],"stream":false}'{RST}
 
   {BOLD}{WHT}RUNTIME PROCESSES{RST}
     {MGN}1. StellaIcarus Daemon{RST}    Hardware monitor, power state, telemetry
@@ -649,6 +677,67 @@ if "--show-key" in sys.argv:
         print(f"[CRYPTO] No master key available: {e}")
         print("[CRYPTO] Run without --show-key first to bootstrap a new key.")
         sys.exit(1)
+    sys.exit(0)
+
+# ── API key management ───────────────────────────────────────────────────────
+# Usage:
+#   python3 run.py --api-key add <key>
+#   python3 run.py --api-key add              (auto-generate a random key)
+#   python3 run.py --api-key remove <key>
+#   python3 run.py --api-key list
+#   python3 run.py --api-key edit <old> <new>
+if "--api-key" in sys.argv:
+    idx = sys.argv.index("--api-key")
+    args_after = sys.argv[idx + 1:]
+    if not args_after:
+        print("[API-KEY] Usage: --api-key add [key] | remove <key> | list | edit <old> <new>")
+        sys.exit(1)
+
+    action = args_after[0]
+    # Bootstrap crypto if not already done (needed for encrypted store)
+    try:
+        master_key = load_master_key()
+    except RuntimeError:
+        master_key = bootstrap_crypto()
+
+    if action == "add":
+        if len(args_after) >= 2 and args_after[1]:
+            key = args_after[1]
+        else:
+            # Auto-generate a 32-byte hex key (64 chars)
+            import secrets
+            key = secrets.token_hex(32)
+            print(f"[API-KEY] Generated new key: {key}")
+        from adelaide_crypto import add_api_key
+        add_api_key(key)
+        print(f"[API-KEY] Key added successfully.")
+        # Show the key so user can copy it
+        if len(args_after) < 2 or not args_after[1]:
+            print(f"[API-KEY] Copy this key for your client: {key}")
+
+    elif action == "remove":
+        if len(args_after) < 2:
+            print("[API-KEY] Usage: --api-key remove <key>")
+            sys.exit(1)
+        from adelaide_crypto import remove_api_key
+        remove_api_key(args_after[1])
+
+    elif action == "list":
+        from adelaide_crypto import list_api_keys
+        list_api_keys()
+
+    elif action == "edit":
+        if len(args_after) < 3:
+            print("[API-KEY] Usage: --api-key edit <old> <new>")
+            sys.exit(1)
+        from adelaide_crypto import edit_api_key
+        edit_api_key(args_after[1], args_after[2])
+
+    else:
+        print(f"[API-KEY] Unknown action: {action}")
+        print("[API-KEY] Usage: --api-key add [key] | remove <key> | list | edit <old> <new>")
+        sys.exit(1)
+
     sys.exit(0)
 
 if platform.system() == "Windows":
@@ -1536,6 +1625,16 @@ def real_main():
     if "--no-daemon" in sys.argv:
         launch_daemon = False
 
+    # ── API key enforcement ──────────────────────────────────────────────────
+    # --enforce-api-key: enable x-api-key validation on the Ada server
+    # --no-enforce-api-key: explicitly disable (default for Ollama compat)
+    # If neither flag is given, enforcement is OFF by default.
+    enforce_api_key = False
+    if "--enforce-api-key" in sys.argv:
+        enforce_api_key = True
+    if "--no-enforce-api-key" in sys.argv:
+        enforce_api_key = False
+
     # Port/Host: args > env > defaults
     server_host = os.environ.get("ADLAIDE_SERVER_HOST", "0.0.0.0")
     server_port = os.environ.get("ADLAIDE_SERVER_PORT", "11420")
@@ -1644,6 +1743,38 @@ def real_main():
     print(f"[*] [Launch-V] Server args: {server_args}")
     print(f"[*] [Launch-V] Server CWD: {BASE_DIR}")
     print(f"[*] [Launch-V] DYLD_LIBRARY_PATH: {env.get('DYLD_LIBRARY_PATH', 'NOT SET')}")
+
+    # ── API key enforcement setup ─────────────────────────────────────────────
+    # If enforcement is enabled, decrypt the API key store and write a plaintext
+    # file that the Ada server can read at startup.  Also expose the first key
+    # to the sidecar UI via ADELAIDE_SIDECAR_API_KEY.
+    if enforce_api_key:
+        try:
+            from adelaide_crypto import load_api_keys
+            all_keys = load_api_keys()
+            if all_keys:
+                # Write plaintext key file for Ada server
+                api_key_file = os.path.join(BASE_DIR, "run", "api_keys_plain.txt")
+                os.makedirs(os.path.dirname(api_key_file), exist_ok=True)
+                with open(api_key_file, "w") as f:
+                    for k in all_keys:
+                        f.write(k + "\n")
+                os.chmod(api_key_file, 0o600)
+                env["ADELAIDE_API_KEY_FILE"] = api_key_file
+                env["ADELAIDE_API_KEY_ENFORCE"] = "1"
+                # First key goes to the sidecar UI
+                env["ADELAIDE_SIDECAR_API_KEY"] = all_keys[0]
+                print(f"[API-KEY] Enforcement enabled, {len(all_keys)} key(s) loaded from encrypted store")
+            else:
+                print("[API-KEY] WARNING: Enforcement enabled but no API keys configured.")
+                print("[API-KEY] Use --api-key add <key> to add a key, or disable with --no-enforce-api-key")
+                enforce_api_key = False
+        except Exception as e:
+            print(f"[API-KEY] WARNING: Could not set up API keys: {e}")
+            enforce_api_key = False
+    else:
+        env["ADELAIDE_API_KEY_ENFORCE"] = "0"
+        print("[API-KEY] Enforcement disabled (default). Use --enforce-api-key to enable.")
 
     # Inject log file path so the Ada server can tail it for SSE benchmarking
     env["ADELAIDE_LOG_FILE"] = current_log_path
