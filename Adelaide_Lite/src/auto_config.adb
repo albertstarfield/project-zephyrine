@@ -41,13 +41,9 @@ package body Auto_Config is
       end case;
    end Ctx_To_Unsigned;
 
-   function Threads_To_Int (T : Thread_Ladder) return Interfaces.C.int is
+   function Threads_To_Int (T : Interfaces.C.int) return Interfaces.C.int is
    begin
-      case T is
-         when T_1 => return 1;
-         when T_2 => return 2;
-         when T_4 => return 4;
-      end case;
+      return T;  -- Identity: threads is already the raw int
    end Threads_To_Int;
 
    function Batch_To_Unsigned (B : Batch_Ladder) return Interfaces.C.unsigned is
@@ -239,13 +235,8 @@ package body Auto_Config is
                                        exit;
                                     end if;
                                  end loop;
-                              elsif Key = "THREADS" then
-                                 for T in Thread_Ladder loop
-                                    if Threads_To_Int (T) = Interfaces.C.int (Val) then
-                                       Current_Config (Kind).Threads := T;
-                                       exit;
-                                    end if;
-                                 end loop;
+                               elsif Key = "THREADS" then
+                                  Current_Config (Kind).Threads := Interfaces.C.int (Val);
                               elsif Key = "BATCH" then
                                  for B in Batch_Ladder loop
                                     if Batch_To_Unsigned (B) = Interfaces.C.unsigned (Val) then
@@ -393,14 +384,7 @@ package body Auto_Config is
       end case;
    end Next_Ctx_Level;
 
-   function Next_Thread_Level (Current : Thread_Ladder) return Thread_Ladder is
-   begin
-      case Current is
-         when T_1 => return T_2;
-         when T_2 => return T_4;
-         when T_4 => return T_4;  -- Already at max
-      end case;
-   end Next_Thread_Level;
+
 
    function Next_Batch_Level (Current : Batch_Ladder) return Batch_Ladder is
    begin
@@ -445,7 +429,7 @@ package body Auto_Config is
       --  Step 2: Start with minimal defaults for all models
       for Kind in Model_Type loop
          Current_Config (Kind) := (Ctx              => Ctx_2048,
-                                   Threads          => T_1,
+                                   Threads          => 1,
                                    Batch            => B_64,
                                    Accel_Layers     => AL_0,
                                    Probe_Target      => Ctx_2048,
@@ -484,16 +468,24 @@ package body Auto_Config is
       end if;
       --  Low RAM (< 4GB free): stay at 2048, probe up from there
 
-      --  Set threads based on detected cores
-      if Detected_Hardware.CPU_Cores >= 4 then
+      --  Auto-select threads: use all detected CPU cores, no artificial cap.
+      --  Whether you have 2 cores or 256, we use what's available.
+      declare
+         Thread_Count : constant Interfaces.C.int :=
+                          Interfaces.C.int (Detected_Hardware.CPU_Cores);
+      begin
+         Put_Line
+            (AnsiAda.Foreground (AnsiAda.Cyan)
+             & "[AutoConfig]"
+             & AnsiAda.Reset
+             & " Detected" & Natural'Image (Detected_Hardware.CPU_Cores)
+             & " CPU cores, using"
+             & Interfaces.C.int'Image (Thread_Count)
+             & " threads");
          for Kind in Model_Type loop
-            Current_Config (Kind).Threads := T_4;
+            Current_Config (Kind).Threads := Thread_Count;
          end loop;
-      elsif Detected_Hardware.CPU_Cores >= 2 then
-         for Kind in Model_Type loop
-            Current_Config (Kind).Threads := T_2;
-         end loop;
-      end if;
+      end;
 
       --  Set batch based on accelerator VRAM
       if Detected_Hardware.Accel_VRAM_MB > 4000 then
@@ -667,7 +659,7 @@ package body Auto_Config is
    begin
       for Kind in Model_Type loop
          Current_Config (Kind) := (Ctx              => Ctx_2048,
-                                   Threads          => T_1,
+                                   Threads          => 1,
                                    Batch            => B_64,
                                    Accel_Layers     => AL_0,
                                    Probe_Target      => Ctx_2048,

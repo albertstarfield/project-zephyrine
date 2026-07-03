@@ -55,18 +55,17 @@ package Auto_Config is
    pragma Inline (Ctx_To_Unsigned);
 
    --  ========================================================================
-   --  THREAD LADDER (from 1 to max cores)
+   --  THREAD COUNT (auto-detected from CPU cores, no artificial cap)
    --  ========================================================================
-   --  Why start at 1:
-   --    Intel Pentium Penryn has 2 cores. Using 8 threads on a 2-core CPU
-   --    causes context switching overhead that SLOWS DOWN inference.
-   --    Start at 1, probe up to min(detected_threads, 4).
-   --    More than 4 threads gives diminishing returns on llama.cpp workloads.
+   --  Thread count is set to the number of detected CPU cores.
+   --  On Metal + Apple Silicon most compute runs on GPU, but prompt
+   --  processing, sampling, and non-offloaded layers benefit from
+   --  all available cores. No cap — 2 cores or 256, we use what you have.
+   --
+   --  Threads_To_Int is a trivial identity kept for backward compatibility
+   --  with callers that were written for the old enum ladder.
    --  ========================================================================
-   type Thread_Ladder is (T_1, T_2, T_4);
-   for Thread_Ladder use (T_1 => 1, T_2 => 2, T_4 => 4);
-
-   function Threads_To_Int (T : Thread_Ladder) return Interfaces.C.int;
+   function Threads_To_Int (T : Interfaces.C.int) return Interfaces.C.int;
    pragma Inline (Threads_To_Int);
 
    --  ========================================================================
@@ -109,10 +108,10 @@ package Auto_Config is
    --  WORKING CONFIGURATION (per model kind)
    --  ========================================================================
    type Working_Config is record
-      Ctx              : Ctx_Ladder     := Ctx_2048;    -- Start minimal
-      Threads          : Thread_Ladder  := T_1;         -- Start with 1 thread
-      Batch            : Batch_Ladder   := B_64;        -- Start with small batch
-      Accel_Layers     : Accel_Layer_Ladder := AL_0;    -- Start CPU-only
+      Ctx              : Ctx_Ladder            := Ctx_2048;    -- Start minimal
+      Threads          : Interfaces.C.int      := 1;           -- Start with 1 thread
+      Batch            : Batch_Ladder          := B_64;        -- Start with small batch
+      Accel_Layers     : Accel_Layer_Ladder    := AL_0;        -- Start CPU-only
       --  Probing state
       Probe_Target     : Ctx_Ladder     := Ctx_2048;    -- Next ctx to try (set by Record_Success)
       Max_Working      : Ctx_Ladder     := Ctx_2048;    -- Highest ctx that worked

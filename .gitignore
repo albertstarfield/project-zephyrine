@@ -59,6 +59,12 @@
 ## ============================
 # Runtime telemetry and logs
 Adelaide_Lite/run/*
+
+## ============================
+## SSL / Certificates
+## ============================
+**/*.pem
+**/*.sidecar_api_key
 **/logs/**
 **/*.log
 **/*.ndjson
