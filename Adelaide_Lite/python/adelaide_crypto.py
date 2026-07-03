@@ -341,6 +341,122 @@ def _validate_hex(key: str, source: str) -> None:
         raise RuntimeError(f"Invalid hex key from {source}: {e}")
 
 
+# ── Encrypted Config File Helpers ────────────────────────────────────────
+
+CTX_API_KEYS = "adelaide:api-keys:v1"
+"""HKDF context for the API key store file."""
+
+API_KEY_FILE = os.path.join(CONFIG_DIR, "api_keys.enc")
+"""Path to the encrypted API key store (JSON with keys array)."""
+
+
+def encrypt_file(data: str, context: str = CTX_API_KEYS) -> str:
+    """
+    Encrypt a string using the master key derived for *context*.
+
+    Returns a hex-encoded blob (nonce||ciphertext||tag) that can be
+    stored on disk.
+    """
+    master_hex = load_master_key()
+    sub_key = derive_sub_key(master_hex, context)
+    return encrypt_field(sub_key, data)
+
+
+def decrypt_file(blob_hex: str, context: str = CTX_API_KEYS) -> str:
+    """
+    Decrypt a hex-encoded blob previously produced by *encrypt_file*.
+
+    Raises ValueError on wrong key or corrupted data.
+    """
+    master_hex = load_master_key()
+    sub_key = derive_sub_key(master_hex, context)
+    return decrypt_field(sub_key, blob_hex)
+
+
+def load_api_keys() -> list[str]:
+    """
+    Load API keys from the encrypted store at ``API_KEY_FILE``.
+
+    Returns a list of key strings (may be empty if no file exists).
+    """
+    if not os.path.exists(API_KEY_FILE):
+        return []
+    import json
+    try:
+        with open(API_KEY_FILE, "r") as f:
+            blob_hex = f.read().strip()
+        if not blob_hex:
+            return []
+        payload = decrypt_file(blob_hex)
+        data = json.loads(payload)
+        return data.get("keys", [])
+    except (OSError, IOError, ValueError, json.JSONDecodeError) as e:
+        print(f"[CRYPTO] Warning: Could not load API key store: {e}")
+        return []
+
+
+def save_api_keys(keys: list[str]) -> None:
+    """
+    Save a list of API keys to the encrypted store at ``API_KEY_FILE``.
+
+    Overwrites any existing store.
+    """
+    import json
+    payload = json.dumps({"keys": keys})
+    blob_hex = encrypt_file(payload)
+    os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
+    with open(API_KEY_FILE, "w") as f:
+        f.write(blob_hex + "\n")
+    os.chmod(API_KEY_FILE, 0o600)
+    print(f"[CRYPTO] API key store written to {API_KEY_FILE} ({len(keys)} key(s))")
+
+
+def add_api_key(key: str) -> list[str]:
+    """Add an API key to the encrypted store. Returns updated key list."""
+    keys = load_api_keys()
+    if key in keys:
+        print(f"[CRYPTO] API key already exists in store (skipped)")
+        return keys
+    keys.append(key)
+    save_api_keys(keys)
+    return keys
+
+
+def remove_api_key(key: str) -> list[str]:
+    """Remove an API key from the encrypted store. Returns updated key list."""
+    keys = load_api_keys()
+    if key not in keys:
+        print(f"[CRYPTO] API key not found in store (nothing to remove)")
+        return keys
+    keys = [k for k in keys if k != key]
+    save_api_keys(keys)
+    return keys
+
+
+def list_api_keys() -> list[str]:
+    """List all API keys from the encrypted store (first 8 chars shown)."""
+    keys = load_api_keys()
+    if not keys:
+        print("[CRYPTO] No API keys configured.")
+    else:
+        print(f"[CRYPTO] API keys ({len(keys)}):")
+        for i, k in enumerate(keys, 1):
+            display = k[:8] + "..." if len(k) > 8 else k
+            print(f"  {i}. {display}")
+    return keys
+
+
+def edit_api_key(old_key: str, new_key: str) -> list[str]:
+    """Replace *old_key* with *new_key* in the encrypted store."""
+    keys = load_api_keys()
+    if old_key not in keys:
+        print(f"[CRYPTO] Old key not found in store (nothing to edit)")
+        return keys
+    keys = [new_key if k == old_key else k for k in keys]
+    save_api_keys(keys)
+    return keys
+
+
 # ── Standalone Test ──────────────────────────────────────────────────────
 
 if __name__ == "__main__":

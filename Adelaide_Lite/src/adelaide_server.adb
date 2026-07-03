@@ -57,6 +57,7 @@ with KV_Cache_Manager;
 with Interfaces.C; use Interfaces.C;
 with SD_Manager;
 with Response_Cache;
+with API_Key_Manager;
 
 --  ===========================================================================
 --  SERVER QUIRKS & DISCOVERED WORKAROUNDS
@@ -716,11 +717,29 @@ begin
                 AnsiAda.Reset &
                 " Starting background tasks (ELP0 producers)...");
       Knowledge_Manager.Start_Tasks;
+       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                 AnsiAda.Reset & "+" &
+                 Trim (Duration'Image (Ada.Real_Time.To_Duration
+                   (Ada.Real_Time.Clock - Start_Time)), Both) &
+                 "s STEP 5 DONE: Knowledge_Manager.Start_Tasks returned.");
+
+      --  ==================================================================
+      --  STEP 5.5: Initialize API key manager
+      --  ==================================================================
+      --  Loads API keys from the file pointed to by ADELAIDE_API_KEY_FILE.
+      --  Enforcement mode comes from ADELAIDE_API_KEY_ENFORCE env var.
+      --  Must happen before HTTP bind so keys are ready for request dispatch.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
                 AnsiAda.Reset & "+" &
                 Trim (Duration'Image (Ada.Real_Time.To_Duration
                   (Ada.Real_Time.Clock - Start_Time)), Both) &
-                "s STEP 5 DONE: Knowledge_Manager.Start_Tasks returned.");
+                "s STEP 5.5: Initializing API Key Manager...");
+      API_Key_Manager.Initialize;
+      Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Init-V]" &
+                AnsiAda.Reset & "+" &
+                Trim (Duration'Image (Ada.Real_Time.To_Duration
+                  (Ada.Real_Time.Clock - Start_Time)), Both) &
+                "s STEP 5.5 DONE: API Key Manager initialized.");
 
       --  ==================================================================
       --  STEP 6: Bind HTTP server

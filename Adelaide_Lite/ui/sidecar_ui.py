@@ -202,6 +202,21 @@ except Exception:
 ADA_BACKEND_URL = "http://localhost:11420"
 DIST_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
+# ── API Key for Ada backend ──────────────────────────────────────────────────
+# Injected by run.py via ADELAIDE_SIDECAR_API_KEY when enforcement is enabled.
+# If the env var is not set, we send a default placeholder key so the Ada
+# server's non-enforcement mode (which accepts any non-empty key) still works.
+_ADELAIDE_API_KEY = os.environ.get("ADELAIDE_SIDECAR_API_KEY", "")
+if not _ADELAIDE_API_KEY:
+    _ADELAIDE_API_KEY = "adelaide-sidecar-default-key"
+
+def _ada_headers(extra: dict | None = None) -> dict:
+    """Return base headers for Ada backend requests, including x-api-key."""
+    h = {"User-Agent": "Zephy-Sidecar-UI/1.0", "x-api-key": _ADELAIDE_API_KEY}
+    if extra:
+        h.update(extra)
+    return h
+
 # Initialize SQLite Database
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -477,7 +492,7 @@ async def chat(request: Request):
         
         while True:
             try:
-                async with httpx.AsyncClient(headers={"User-Agent": "Zephy-Sidecar-UI/1.0"}) as client:
+                async with httpx.AsyncClient(headers=_ada_headers()) as client:
                     async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=600.0) as response:
                         if response.status_code != 200:
                             yield json.dumps({"error": f"Backend returned error: {response.status_code}, retrying..."}) + "\n"
@@ -612,7 +627,7 @@ async def regenerate(request: Request):
 
         while True:
             try:
-                async with httpx.AsyncClient(headers={"User-Agent": "Zephy-Sidecar-UI/1.0"}) as client:
+                async with httpx.AsyncClient(headers=_ada_headers()) as client:
                     async with client.stream("POST", f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=600.0) as response:
                         if response.status_code != 200:
                             yield json.dumps({"error": f"Backend returned error: {response.status_code}, retrying..."}) + "\n"
@@ -1184,7 +1199,7 @@ if __name__ == "__main__":
         while True:
             try:
                 t0 = time.perf_counter_ns()
-                resp = httpx.get("http://127.0.0.1:11420/api/telemetry", timeout=1.0)
+                resp = httpx.get(f"{ADA_BACKEND_URL}/api/telemetry", headers=_ada_headers(), timeout=1.0)
                 t1 = time.perf_counter_ns()
                 now_ts = time.time()
 
