@@ -135,8 +135,9 @@ project Adelaide_Lite is
                "-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
                "-std=c++17", "-mmacosx-version-min=15.0");
             for Default_Switches ("C") use
-              ("-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
-               "-mmacosx-version-min=15.0");
+               ("-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
+                "-mmacosx-version-min=15.0",
+                "-I/opt/homebrew/opt/openssl@3.6/include");
          when "linux" =>
             for Default_Switches ("Ada") use
               Adelaide_Lite_Config.Ada_Compiler_Switches &
@@ -147,7 +148,8 @@ project Adelaide_Lite is
                 "-I" & project'Project_Dir & "vendor/llama.cpp/tools/mtmd",
                "-std=c++17", "-march=native");
             for Default_Switches ("C") use
-              ("-march=native");
+               ("-march=native",
+                "-I/opt/homebrew/opt/openssl@3.6/include");
          when others =>
             for Default_Switches ("Ada") use
               Adelaide_Lite_Config.Ada_Compiler_Switches &
@@ -180,7 +182,8 @@ project Adelaide_Lite is
           project'Object_Dir & "/stdout_unbuffer.o",
           project'Object_Dir & "/shutdown_handler.o",
           project'Object_Dir & "/kratos_signal.o",
-          project'Object_Dir & "/sd_helper.o"
+           project'Object_Dir & "/sd_helper.o",
+           project'Object_Dir & "/adl_crypto.o"
       );
 
       Platform_Flags := ();
@@ -188,6 +191,8 @@ project Adelaide_Lite is
          when "macos" =>
             Platform_Flags := (
                "-L/opt/homebrew/opt/sqlite/lib",
+               "-L/opt/homebrew/opt/openssl@3.6/lib",
+               "-lcrypto",
                "-Wl,-syslibroot," & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
                "-F" & external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk") & "/System/Library/Frameworks",
                "-mmacosx-version-min=15.0",
@@ -195,10 +200,10 @@ project Adelaide_Lite is
                "-framework", "Metal",
                "-framework", "Foundation"
             );
-         when "linux" =>
-            Platform_Flags := (
-               "-lblas", "-llapack", "-lstdc++"
-            );
+          when "linux" =>
+             Platform_Flags := (
+                "-lblas", "-llapack", "-lstdc++", "-lcrypto"
+             );
          when others =>
             null;
       end case;

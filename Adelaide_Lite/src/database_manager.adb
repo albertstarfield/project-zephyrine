@@ -4,9 +4,12 @@ with Ada.Text_IO; use Ada.Text_IO;
 with Ada_Sqlite3; use Ada_Sqlite3;
 with Ada.Exceptions;
 with Ada.Directories;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNATCOLL.JSON;
-with Interfaces;           use Interfaces;
-with Interfaces.C;         use Interfaces.C;
+with Interfaces;            use Interfaces;
+with Interfaces.C;          use Interfaces.C;
+with Interfaces.C.Strings;  use Interfaces.C.Strings;
+with Adelaide_Crypto;
 
 package body Database_Manager is
 
@@ -19,6 +22,14 @@ package body Database_Manager is
    type DB_Access is access all Ada_Sqlite3.Database;
    Main_DB_Ptr : DB_Access := null;
    Lit_DB_Ptr  : DB_Access := null;
+
+   --  Per-DB AES-256-GCM sub-keys (64 hex chars each, set during Initialize)
+   Memory_Sub_Key : Unbounded_String := Null_Unbounded_String;
+   Lit_Sub_Key    : Unbounded_String := Null_Unbounded_String;
+   Crypto_Enabled : Boolean := False;
+
+   --  Forward declaration of migration procedure (called from Do_Init)
+   procedure Migrate_Databases;
 
    protected Init_Gate is
       procedure Do_Init;
@@ -192,10 +203,59 @@ package body Database_Manager is
             when others => null; -- Columns already exist
          end;
 
-         Done := True;
-         Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" &
-           AnsiAda.Reset & " Core initialized.");
-      end Do_Init;
+          --  ═══════════════════════════════════════════════════════════════
+          --  CRYPTO: Initialize master key + derive per-DB sub-keys
+          --  ═══════════════════════════════════════════════════════════════
+          --  [POST-QUANTUM] AES-256-GCM with HKDF-SHA384 sub-keys.
+          --  Each DB gets its own sub-key so one compromise ≠ all compromised.
+          --
+          --  Master key is loaded from:
+          --    1. ADELAIDE_MASTER_KEY env var (set by run.py before spawn)
+          --    2. ~/.config/adelaide/master.key (created by run.py bootstrap)
+          --  ═══════════════════════════════════════════════════════════════
+          Crypto_Enabled := Adelaide_Crypto.Initialize_Crypto;
+
+          if Crypto_Enabled then
+             declare
+                use Adelaide_Crypto;
+                Mem_Res : constant Crypto_Result := Derive_Subkey ("adelaide:db:memory:v1");
+                Lit_Res : constant Crypto_Result := Derive_Subkey ("adelaide:db:literature:v1");
+             begin
+                if Mem_Res.Success then
+                   Memory_Sub_Key := Mem_Res.Data;
+                end if;
+                if Lit_Res.Success then
+                   Lit_Sub_Key := Lit_Res.Data;
+                end if;
+             end;
+
+             --  Auto-migration: detect unencrypted data and encrypt in-place
+             --  Checks the database_version system state key. If version < 2
+             --  or key is missing, scans all tables for plaintext fields and
+             --  encrypts them. Sets version to 2 after migration completes.
+             declare
+                DB_Version : constant String :=
+                  Get_System_State ("database_version", "0");
+             begin
+                if DB_Version /= "2" then
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[CRYPTO]" &
+                     AnsiAda.Reset & " Migrating database to encrypted format...");
+                   Migrate_Databases;
+                   Set_System_State ("database_version", "2");
+                   Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[CRYPTO]" &
+                     AnsiAda.Reset & " Migration complete.");
+                end if;
+             end;
+          else
+             Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[CRYPTO]" &
+               AnsiAda.Reset & " Encryption disabled (no master key). " &
+               "Data stored in plaintext.");
+          end if;
+
+          Done := True;
+          Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" &
+            AnsiAda.Reset & " Core initialized.");
+       end Do_Init;
    end Init_Gate;
 
    ----------------
@@ -272,9 +332,14 @@ package body Database_Manager is
    is
       use GNATCOLL.JSON;
       Vec_Obj : JSON_Array := Empty_Array;
+      Enc_Content : String := Content;
    begin
       if Lit_DB_Ptr = null then
          return;
+      end if;
+
+      if Crypto_Enabled and then Content'Length > 0 then
+         Enc_Content := Adelaide_Crypto.Try_Encrypt (To_String (Lit_Sub_Key), Content);
       end if;
 
       for I in Embedding'Range loop
@@ -288,7 +353,7 @@ package body Database_Manager is
             "VALUES (?, ?, ?, ?)");
       begin
          Bind_Text (Stmt, 1, File_Path);
-         Bind_Text (Stmt, 2, Content);
+         Bind_Text (Stmt, 2, Enc_Content);
          Bind_Text (Stmt, 3, Write (Create (Vec_Obj)));
          Bind_Text (Stmt, 4, Doc_Hash);
          Step (Stmt);
@@ -320,7 +385,11 @@ package body Database_Manager is
          while Step (Stmt) = ROW and then Idx <= Results'Last loop
             declare
                Path_Str : constant String := Column_Text (Stmt, 0);
-               Text_Str : constant String := Column_Text (Stmt, 1);
+               Raw_Content : constant String := Column_Text (Stmt, 1);
+               Text_Str : constant String :=
+                 (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Content)
+                  then Adelaide_Crypto.Try_Decrypt (To_String (Lit_Sub_Key), Raw_Content)
+                  else Raw_Content);
                Raw_Vec  : constant String := Column_Text (Stmt, 2);
                JSON_Vec : constant Read_Result := Read (Raw_Vec);
             begin
@@ -383,11 +452,19 @@ package body Database_Manager is
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all, "SELECT prompt, response, embedding FROM response_cache");
       begin
-         while Step (Stmt) = ROW and then Idx <= Results'Last loop
-            declare
-               Prompt_Str : constant String := Column_Text (Stmt, 0);
-               Resp_Str   : constant String := Column_Text (Stmt, 1);
-               Raw_Vec    : constant String := Column_Text (Stmt, 2);
+          while Step (Stmt) = ROW and then Idx <= Results'Last loop
+             declare
+                Raw_Prompt : constant String := Column_Text (Stmt, 0);
+                Raw_Resp   : constant String := Column_Text (Stmt, 1);
+                Prompt_Str : constant String :=
+                  (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Prompt)
+                   then Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), Raw_Prompt)
+                   else Raw_Prompt);
+                Resp_Str   : constant String :=
+                  (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Resp)
+                   then Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), Raw_Resp)
+                   else Raw_Resp);
+                Raw_Vec    : constant String := Column_Text (Stmt, 2);
                JSON_Vec   : constant Read_Result := Read (Raw_Vec);
             begin
                if JSON_Vec.Success then
@@ -465,14 +542,21 @@ package body Database_Manager is
    -- Add_To_Cache --
    ------------------
    procedure Add_To_Cache (Prompt : String;
-                           Embedding : Math_Utils.Vector;
-                           Response : String)
+                            Embedding : Math_Utils.Vector;
+                            Response : String)
    is
       use GNATCOLL.JSON;
       Vec_Obj : JSON_Array := Empty_Array;
+      Enc_Prompt  : String := Prompt;
+      Enc_Response : String := Response;
    begin
       if Main_DB_Ptr = null then
          return;
+      end if;
+
+      if Crypto_Enabled then
+         Enc_Prompt   := Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Prompt);
+         Enc_Response := Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Response);
       end if;
 
       for I in Embedding'Range loop
@@ -485,9 +569,9 @@ package body Database_Manager is
             "INSERT INTO response_cache (prompt, embedding, response) " &
             "VALUES (?, ?, ?)");
       begin
-         Bind_Text (Stmt, 1, Prompt);
+         Bind_Text (Stmt, 1, Enc_Prompt);
          Bind_Text (Stmt, 2, Write (Create (Vec_Obj)));
-         Bind_Text (Stmt, 3, Response);
+         Bind_Text (Stmt, 3, Enc_Response);
          Step (Stmt);
       end;
    exception
@@ -581,18 +665,26 @@ package body Database_Manager is
             return "";
          end if;
 
-         --  Evict stale entries (hit 2+ times, served successfully)
-         if Best_Hits >= 2 then
-            Execute (Main_DB_Ptr.all,
-                    "DELETE FROM response_cache WHERE id = " & Best_Id'Img);
-            return "";
-         else
-            Execute (Main_DB_Ptr.all,
-                    "UPDATE response_cache SET hit_count = hit_count + 1, " &
-                    "last_hit_time = CURRENT_TIMESTAMP WHERE id = " &
-                    Best_Id'Img);
-            return To_String (Best_Res);
-         end if;
+          --  Decrypt the cached response if encrypted
+          declare
+             Decrypted_Res : constant String :=
+               (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (To_String (Best_Res))
+                then Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), To_String (Best_Res))
+                else To_String (Best_Res));
+          begin
+             --  Evict stale entries (hit 2+ times, served successfully)
+             if Best_Hits >= 2 then
+                Execute (Main_DB_Ptr.all,
+                        "DELETE FROM response_cache WHERE id = " & Best_Id'Img);
+                return "";
+             else
+                Execute (Main_DB_Ptr.all,
+                        "UPDATE response_cache SET hit_count = hit_count + 1, " &
+                        "last_hit_time = CURRENT_TIMESTAMP WHERE id = " &
+                        Best_Id'Img);
+                return Decrypted_Res;
+             end if;
+          end;
       end if;
 
       return "";
@@ -607,18 +699,28 @@ package body Database_Manager is
    -- Remember --
    --------------
    procedure Remember (Prompt : String; Response : String; Image_B64 : String := "") is
+      Enc_Prompt  : String := Prompt;
+      Enc_Resp    : String := Response;
+      Enc_Image   : String := Image_B64;
    begin
       if Main_DB_Ptr = null then
          return;
+      end if;
+      if Crypto_Enabled then
+         Enc_Prompt := Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Prompt);
+         Enc_Resp   := Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Response);
+         if Image_B64'Length > 0 then
+            Enc_Image := Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Image_B64);
+         end if;
       end if;
       declare
          Stmt : Statement := Prepare
            (Main_DB_Ptr.all,
             "INSERT INTO memories (input, response, image_b64) VALUES (?, ?, ?)");
       begin
-         Bind_Text (Stmt, 1, Prompt);
-         Bind_Text (Stmt, 2, Response);
-         Bind_Text (Stmt, 3, Image_B64);
+         Bind_Text (Stmt, 1, Enc_Prompt);
+         Bind_Text (Stmt, 2, Enc_Resp);
+         Bind_Text (Stmt, 3, Enc_Image);
          Step (Stmt);
       end;
    exception
@@ -631,6 +733,8 @@ package body Database_Manager is
    function Recall (Query : String) return String is
       Result : Unbounded_String;
       Best_Id : Integer := -1;
+      Raw_Resp : String (1 .. 65536);
+      Raw_Len  : Natural := 0;
    begin
       if Main_DB_Ptr = null then
          return "";
@@ -643,7 +747,16 @@ package body Database_Manager is
          Bind_Text (Stmt, 1, "%" & Query & "%");
          if Step (Stmt) = ROW then
             Best_Id := Column_Int (Stmt, 0);
-            Result := To_Unbounded_String (Column_Text (Stmt, 1));
+            declare
+               DB_Resp : constant String := Column_Text (Stmt, 1);
+            begin
+               if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (DB_Resp) then
+                  Result := To_Unbounded_String
+                    (Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), DB_Resp));
+               else
+                  Result := To_Unbounded_String (DB_Resp);
+               end if;
+            end;
          end if;
       end;
 
@@ -800,8 +913,17 @@ package body Database_Manager is
             "SELECT content FROM chunks ORDER BY RANDOM() LIMIT 1");
       begin
          if Step (Stmt) = ROW then
-            Content := To_Unbounded_String (Column_Text (Stmt, 0));
-            Success := True;
+            declare
+               Raw_C : constant String := Column_Text (Stmt, 0);
+            begin
+               if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_C) then
+                  Content := To_Unbounded_String
+                    (Adelaide_Crypto.Try_Decrypt (To_String (Lit_Sub_Key), Raw_C));
+               else
+                  Content := To_Unbounded_String (Raw_C);
+               end if;
+               Success := True;
+            end;
          end if;
       end;
    exception
@@ -874,21 +996,29 @@ package body Database_Manager is
                "ORDER BY timestamp DESC LIMIT 1");
          begin
             Bind_Int (Inner_Stmt, 1, Candidates (C));
-            if Step (Inner_Stmt) = ROW then
-               declare
-                  Prompt_Str : constant String := Column_Text (Inner_Stmt, 0);
-                  Resp_Str   : constant String := Column_Text (Inner_Stmt, 1);
-               begin
-                  Results (Idx).File_Path :=
-                    To_Unbounded_String ("Speculation:Interaction");
-                  Results (Idx).Content   :=
-                    To_Unbounded_String
-                      ("User: " & Prompt_Str & ASCII.LF &
-                       "Adelaide: " & Resp_Str);
-                  Results (Idx).Score := 1.0;
-                  Idx := Idx + 1;
-                  Count := Count + 1;
-               end;
+             if Step (Inner_Stmt) = ROW then
+                declare
+                   Raw_Prompt_Str : constant String := Column_Text (Inner_Stmt, 0);
+                   Raw_Resp_Str   : constant String := Column_Text (Inner_Stmt, 1);
+                   Prompt_Str : constant String :=
+                     (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Prompt_Str)
+                      then Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), Raw_Prompt_Str)
+                      else Raw_Prompt_Str);
+                   Resp_Str   : constant String :=
+                     (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Resp_Str)
+                      then Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), Raw_Resp_Str)
+                      else Raw_Resp_Str);
+                begin
+                   Results (Idx).File_Path :=
+                     To_Unbounded_String ("Speculation:Interaction");
+                   Results (Idx).Content   :=
+                     To_Unbounded_String
+                       ("User: " & Prompt_Str & ASCII.LF &
+                        "Adelaide: " & Resp_Str);
+                   Results (Idx).Score := 1.0;
+                   Idx := Idx + 1;
+                   Count := Count + 1;
+                end;
             end if;
          end;
       end loop;
@@ -969,15 +1099,23 @@ package body Database_Manager is
                "LIMIT 1");
          begin
             Bind_Int (Inner_Stmt, 1, Candidates (C));
-            if Step (Inner_Stmt) = ROW then
-               Results (Idx).File_Path :=
-                 To_Unbounded_String (Column_Text (Inner_Stmt, 0));
-               Results (Idx).Content   :=
-                 To_Unbounded_String (Column_Text (Inner_Stmt, 1));
-               Results (Idx).Score := 1.0;
-               Idx := Idx + 1;
-               Count := Count + 1;
-            end if;
+             if Step (Inner_Stmt) = ROW then
+                declare
+                   Raw_Content : constant String := Column_Text (Inner_Stmt, 1);
+                   Dec_Content : constant String :=
+                     (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Content)
+                      then Adelaide_Crypto.Try_Decrypt (To_String (Lit_Sub_Key), Raw_Content)
+                      else Raw_Content);
+                begin
+                   Results (Idx).File_Path :=
+                     To_Unbounded_String (Column_Text (Inner_Stmt, 0));
+                   Results (Idx).Content   :=
+                     To_Unbounded_String (Dec_Content);
+                   Results (Idx).Score := 1.0;
+                   Idx := Idx + 1;
+                   Count := Count + 1;
+                end;
+             end if;
          end;
       end loop;
 
@@ -1076,17 +1214,23 @@ package body Database_Manager is
       Image_B64 : String;
       LSH_Hash  : Integer := -1)
    is
+      Enc_Prompt  : String := Prompt;
+      Enc_Image   : String := Image_B64;
    begin
       if Main_DB_Ptr = null then
          return;
+      end if;
+      if Crypto_Enabled then
+         Enc_Prompt := Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Prompt);
+         Enc_Image  := Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Image_B64);
       end if;
       declare
          Stmt : Statement := Prepare (Main_DB_Ptr.all,
                         "INSERT INTO imagined_images (prompt, image_b64, lsh_hash) " &
                         "VALUES (?, ?, ?)");
       begin
-         Bind_Text (Stmt, 1, Prompt);
-         Bind_Text (Stmt, 2, Image_B64);
+         Bind_Text (Stmt, 1, Enc_Prompt);
+         Bind_Text (Stmt, 2, Enc_Image);
          Bind_Int (Stmt, 3, LSH_Hash);
          if Step (Stmt) /= DONE then
              Put_Line (AnsiAda.Background (AnsiAda.Red)
@@ -1140,13 +1284,26 @@ package body Database_Manager is
                end loop;
                LSH_Dist := Dist;
 
-               if LSH_Dist <= Tolerance then
-                  Row_Count := Row_Count + 1;
-                  Results (Row_Count) :=
-                    (Image_B64  => To_Unbounded_String (Column_Text (Stmt, 1)),
-                     Prompt     => To_Unbounded_String (Column_Text (Stmt, 0)),
-                     LSH_Hash   => Integer (Column_Int (Stmt, 2)),
-                     Created_At => To_Unbounded_String (Column_Text (Stmt, 3)));
+                if LSH_Dist <= Tolerance then
+                   Row_Count := Row_Count + 1;
+                   declare
+                      Raw_Prompt : constant String := Column_Text (Stmt, 0);
+                      Raw_Image  : constant String := Column_Text (Stmt, 1);
+                      Dec_Prompt : constant String :=
+                        (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Prompt)
+                         then Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), Raw_Prompt)
+                         else Raw_Prompt);
+                      Dec_Image  : constant String :=
+                        (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Image)
+                         then Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), Raw_Image)
+                         else Raw_Image);
+                   begin
+                      Results (Row_Count) :=
+                        (Image_B64  => To_Unbounded_String (Dec_Image),
+                         Prompt     => To_Unbounded_String (Dec_Prompt),
+                         LSH_Hash   => Integer (Column_Int (Stmt, 2)),
+                         Created_At => To_Unbounded_String (Column_Text (Stmt, 3)));
+                   end;
                end if;
             end;
          end loop;
@@ -1178,14 +1335,27 @@ package body Database_Manager is
                         "LIMIT " & Integer'Image (Max_Results));
          Row_Count : Natural := 0;
       begin
-         while Step (Stmt) = ROW loop
-            Row_Count := Row_Count + 1;
-            Results (Row_Count) :=
-              (Image_B64  => To_Unbounded_String (Column_Text (Stmt, 1)),
-               Prompt     => To_Unbounded_String (Column_Text (Stmt, 0)),
-               LSH_Hash   => Integer (Column_Int (Stmt, 2)),
-               Created_At => To_Unbounded_String (Column_Text (Stmt, 3)));
-         end loop;
+          while Step (Stmt) = ROW loop
+             Row_Count := Row_Count + 1;
+             declare
+                Raw_Prompt  : constant String := Column_Text (Stmt, 0);
+                Raw_Image   : constant String := Column_Text (Stmt, 1);
+                Dec_Prompt  : constant String :=
+                  (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Prompt)
+                   then Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), Raw_Prompt)
+                   else Raw_Prompt);
+                Dec_Image   : constant String :=
+                  (if Crypto_Enabled and then Adelaide_Crypto.Is_Encrypted (Raw_Image)
+                   then Adelaide_Crypto.Try_Decrypt (To_String (Memory_Sub_Key), Raw_Image)
+                   else Raw_Image);
+             begin
+                Results (Row_Count) :=
+                  (Image_B64  => To_Unbounded_String (Dec_Image),
+                   Prompt     => To_Unbounded_String (Dec_Prompt),
+                   LSH_Hash   => Integer (Column_Int (Stmt, 2)),
+                   Created_At => To_Unbounded_String (Column_Text (Stmt, 3)));
+             end;
+          end loop;
          Count := Row_Count;
       exception
          when E : others =>
@@ -1194,6 +1364,213 @@ package body Database_Manager is
             Count := 0;
       end;
    end Get_Recent_Imagined_Images;
+
+   -----------------------
+   -- Migrate_Databases --
+   -----------------------
+   procedure Migrate_Databases is
+      use Ada.Exceptions;
+      --  Scans all managed databases for unencrypted plaintext fields and
+      --  encrypts them in-place. Runs once on first boot with a master key
+      --  when database_version < 2 in system_state.
+      --
+      --  Detection: if field is already hex-encoded blob (nonce|ct|tag pattern
+      --  of 52+ chars), Is_Encrypted returns True; skips those rows.
+   begin
+      if Main_DB_Ptr = null or else not Crypto_Enabled then
+         return;
+      end if;
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[MIGRATE]" &
+        AnsiAda.Reset & " Checking adelaide_memory.db for unencrypted data...");
+
+      --  memories table: input, response, image_b64
+      declare
+         Stmt : Statement := Prepare
+           (Main_DB_Ptr.all,
+            "SELECT rowid, input, response, image_b64 FROM memories");
+         Update_Stmt : Statement := Prepare
+           (Main_DB_Ptr.all,
+            "UPDATE memories SET input = ?, response = ?, image_b64 = ? WHERE rowid = ?");
+         Migrated : Natural := 0;
+      begin
+         while Step (Stmt) = ROW loop
+            declare
+               RowID : constant Integer := Column_Int (Stmt, 0);
+               Raw_Input : constant String := Column_Text (Stmt, 1);
+               Raw_Resp  : constant String := Column_Text (Stmt, 2);
+               Raw_Img   : constant String := Column_Text (Stmt, 3);
+               Need_Migrate : Boolean := False;
+            begin
+               if Raw_Input'Length > 0 and then not Adelaide_Crypto.Is_Encrypted (Raw_Input) then
+                  Bind_Text (Update_Stmt, 1,
+                    Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Raw_Input));
+                  Need_Migrate := True;
+               else
+                  Bind_Text (Update_Stmt, 1, Raw_Input);
+               end if;
+
+               if Raw_Resp'Length > 0 and then not Adelaide_Crypto.Is_Encrypted (Raw_Resp) then
+                  Bind_Text (Update_Stmt, 2,
+                    Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Raw_Resp));
+                  Need_Migrate := True;
+               else
+                  Bind_Text (Update_Stmt, 2, Raw_Resp);
+               end if;
+
+               if Raw_Img'Length > 0 and then not Adelaide_Crypto.Is_Encrypted (Raw_Img) then
+                  Bind_Text (Update_Stmt, 3,
+                    Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Raw_Img));
+                  Need_Migrate := True;
+               else
+                  Bind_Text (Update_Stmt, 3, Raw_Img);
+               end if;
+
+               if Need_Migrate then
+                  Bind_Int (Update_Stmt, 4, RowID);
+                  Step (Update_Stmt);
+                  Migrated := Migrated + 1;
+               end if;
+            end;
+         end loop;
+         if Migrated > 0 then
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[MIGRATE]" &
+              AnsiAda.Reset & " memories: " & Migrated'Img & " rows encrypted.");
+         end if;
+      end;
+
+      --  response_cache table: prompt, response
+      declare
+         Stmt : Statement := Prepare
+           (Main_DB_Ptr.all,
+            "SELECT rowid, prompt, response FROM response_cache");
+         Update_Stmt : Statement := Prepare
+           (Main_DB_Ptr.all,
+            "UPDATE response_cache SET prompt = ?, response = ? WHERE rowid = ?");
+         Migrated : Natural := 0;
+      begin
+         while Step (Stmt) = ROW loop
+            declare
+               RowID  : constant Integer := Column_Int (Stmt, 0);
+               Raw_P  : constant String := Column_Text (Stmt, 1);
+               Raw_R  : constant String := Column_Text (Stmt, 2);
+               Need_Migrate : Boolean := False;
+            begin
+               if Raw_P'Length > 0 and then not Adelaide_Crypto.Is_Encrypted (Raw_P) then
+                  Bind_Text (Update_Stmt, 1,
+                    Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Raw_P));
+                  Need_Migrate := True;
+               else
+                  Bind_Text (Update_Stmt, 1, Raw_P);
+               end if;
+
+               if Raw_R'Length > 0 and then not Adelaide_Crypto.Is_Encrypted (Raw_R) then
+                  Bind_Text (Update_Stmt, 2,
+                    Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Raw_R));
+                  Need_Migrate := True;
+               else
+                  Bind_Text (Update_Stmt, 2, Raw_R);
+               end if;
+
+               if Need_Migrate then
+                  Bind_Int (Update_Stmt, 3, RowID);
+                  Step (Update_Stmt);
+                  Migrated := Migrated + 1;
+               end if;
+            end;
+         end loop;
+         if Migrated > 0 then
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[MIGRATE]" &
+              AnsiAda.Reset & " response_cache: " & Migrated'Img & " rows encrypted.");
+         end if;
+      end;
+
+      --  imagined_images table: prompt, image_b64
+      declare
+         Stmt : Statement := Prepare
+           (Main_DB_Ptr.all,
+            "SELECT rowid, prompt, image_b64 FROM imagined_images");
+         Update_Stmt : Statement := Prepare
+           (Main_DB_Ptr.all,
+            "UPDATE imagined_images SET prompt = ?, image_b64 = ? WHERE rowid = ?");
+         Migrated : Natural := 0;
+      begin
+         while Step (Stmt) = ROW loop
+            declare
+               RowID  : constant Integer := Column_Int (Stmt, 0);
+               Raw_P  : constant String := Column_Text (Stmt, 1);
+               Raw_I  : constant String := Column_Text (Stmt, 2);
+               Need_Migrate : Boolean := False;
+            begin
+               if Raw_P'Length > 0 and then not Adelaide_Crypto.Is_Encrypted (Raw_P) then
+                  Bind_Text (Update_Stmt, 1,
+                    Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Raw_P));
+                  Need_Migrate := True;
+               else
+                  Bind_Text (Update_Stmt, 1, Raw_P);
+               end if;
+
+               if Raw_I'Length > 0 and then not Adelaide_Crypto.Is_Encrypted (Raw_I) then
+                  Bind_Text (Update_Stmt, 2,
+                    Adelaide_Crypto.Try_Encrypt (To_String (Memory_Sub_Key), Raw_I));
+                  Need_Migrate := True;
+               else
+                  Bind_Text (Update_Stmt, 2, Raw_I);
+               end if;
+
+               if Need_Migrate then
+                  Bind_Int (Update_Stmt, 3, RowID);
+                  Step (Update_Stmt);
+                  Migrated := Migrated + 1;
+               end if;
+            end;
+         end loop;
+         if Migrated > 0 then
+            Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[MIGRATE]" &
+              AnsiAda.Reset & " imagined_images: " & Migrated'Img & " rows encrypted.");
+         end if;
+      end;
+
+      --  literature chunks table: content
+      if Lit_DB_Ptr /= null then
+         declare
+            Stmt : Statement := Prepare
+              (Lit_DB_Ptr.all,
+               "SELECT rowid, content FROM chunks");
+            Update_Stmt : Statement := Prepare
+              (Lit_DB_Ptr.all,
+               "UPDATE chunks SET content = ? WHERE rowid = ?");
+            Migrated : Natural := 0;
+         begin
+            while Step (Stmt) = ROW loop
+               declare
+                  RowID : constant Integer := Column_Int (Stmt, 0);
+                  Raw_C : constant String := Column_Text (Stmt, 1);
+               begin
+                  if Raw_C'Length > 0 and then not Adelaide_Crypto.Is_Encrypted (Raw_C) then
+                     Bind_Text (Update_Stmt, 1,
+                       Adelaide_Crypto.Try_Encrypt (To_String (Lit_Sub_Key), Raw_C));
+                     Bind_Int (Update_Stmt, 2, RowID);
+                     Step (Update_Stmt);
+                     Migrated := Migrated + 1;
+                  end if;
+               end;
+            end loop;
+            if Migrated > 0 then
+               Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[MIGRATE]" &
+                 AnsiAda.Reset & " literature chunks: " & Migrated'Img & " rows encrypted.");
+            end if;
+         end;
+      end if;
+
+      Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[MIGRATE]" &
+        AnsiAda.Reset & " Migration complete.");
+   exception
+      when E : others =>
+         Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[MIGRATE]" &
+           AnsiAda.Reset & " Error during migration: " &
+           Ada.Exceptions.Exception_Message (E));
+   end Migrate_Databases;
 
    procedure Close is
    begin
