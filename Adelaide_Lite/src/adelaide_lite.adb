@@ -38,7 +38,7 @@ begin
              AnsiAda.Reset & " Adelaide Knowledge Core is active.");
    Put_Line ("[+] Adelaide_Lite ready.");
    Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
-             AnsiAda.Reset & " Press Q to shutdown.");
+              AnsiAda.Reset);
 
    --  Main loop - continues listening even after errors
    loop

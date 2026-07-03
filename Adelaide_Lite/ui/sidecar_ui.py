@@ -14,6 +14,7 @@ import uuid
 import socket
 import networkx as nx
 import numpy as np
+import importlib.util
 from typing import Optional
 from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
@@ -35,10 +36,34 @@ DB_PATH = os.path.join(base_dir, "NetworkMemoryPool", "assistant_session.db")
 # ── Crypto ────────────────────────────────────────────────────────────────
 # Load the AdaLang encryption module for field-level AES-256-GCM.
 # Sub-keys are derived from the master key (set by run.py as env var).
-sys.path.insert(0, os.path.join(base_dir, "python"))
-from adelaide_crypto import (
+
+base_dir = os.path.dirname(os.path.abspath(__file__))
+base_dir = os.path.dirname(base_dir)
+
+print("[DBG] base_dir:", base_dir)
+p = os.path.join(base_dir, "python", "adelaide_crypto.py")
+print("[DBG] looking for:", p)
+print("[DBG] exists?", os.path.exists(p))
+
+spec = importlib.util.spec_from_file_location(
+    "adelaide_crypto", p
+)
+if spec is None:
+    print("[DBG] spec is None")
+    raise ImportError("Could not find adelaide_crypto module")
+else:
+    print("[DBG] spec:", spec)
+
+adelaide_crypto = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(adelaide_crypto)
+print("[DBG] module:", adelaide_crypto)
+
+# Register the module in sys.modules
+sys.modules["adelaide_crypto"] = adelaide_crypto
+
+from adelaide_crypto import ( # noqa: E402
     load_master_key, derive_sub_key, encrypt_field, decrypt_field,
-    is_field_encrypted, bootstrap_crypto,
+    is_field_encrypted,
     CTX_ASSISTANT, CTX_MEMORY_INDEX, CTX_LITERATURE
 )
 
@@ -272,7 +297,7 @@ if _crypto_available:
                 _migrated = 0
                 for _row in _cur.fetchall():
                     if not is_field_encrypted(str(_row[1])):
-                        _enc = encrypt_field(_assistant_sub_key, _row[1])
+                        _enc = _row[1] if _assistant_sub_key is None else encrypt_field(_assistant_sub_key, _row[1])
                         _cur.execute("UPDATE messages SET content = ? WHERE rowid = ?", (_enc, _row[0]))
                         _migrated += 1
                 if _migrated > 0:
@@ -815,7 +840,7 @@ if _crypto_available:
             _migrated = 0
             for _row in _cur.fetchall():
                 if not is_field_encrypted(str(_row[1])):
-                    _enc = encrypt_field(_memory_index_sub_key, _row[1])
+                    _enc = _row[1] if _memory_index_sub_key is None else encrypt_field(_memory_index_sub_key, _row[1])
                     _cur.execute("UPDATE memories SET content = ? WHERE rowid = ?", (_enc, _row[0]))
                     _migrated += 1
             if _migrated > 0:
@@ -829,10 +854,10 @@ if _crypto_available:
             _cur.execute("SELECT rowid, content FROM documents WHERE content IS NOT NULL AND content != ''")
             _migrated = 0
             for _row in _cur.fetchall():
-                if not is_field_encrypted(str(_row[1])):
-                    _enc = encrypt_field(_literature_sub_key, _row[1])
-                    _cur.execute("UPDATE documents SET content = ? WHERE rowid = ?", (_enc, _row[0]))
-                    _migrated += 1
+                     if not is_field_encrypted(str(_row[1])):
+                          _enc = _row[1] if _literature_sub_key is None else encrypt_field(_literature_sub_key, _row[1])
+                          _cur.execute("UPDATE documents SET content = ? WHERE rowid = ?", (_enc, _row[0]))
+                          _migrated += 1
             if _migrated > 0:
                 _conn.commit()
                 print(f"[CRYPTO] literatureRefIndex: migrated {_migrated} document rows to encrypted")

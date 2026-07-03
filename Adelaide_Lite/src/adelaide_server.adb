@@ -1100,7 +1100,7 @@ begin
       --  This message confirms all initialization steps completed.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &
                 AnsiAda.Reset &
-                " Server is UP. Press Q to shutdown (or kill if background).");
+                 " Server is UP.");
 
       --  ==================================================================
       --  STEP 10: Main heartbeat loop

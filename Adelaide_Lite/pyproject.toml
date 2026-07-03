@@ -1,0 +1,17 @@
+[tool.ruff]
+# Exclude vendor directories and other non-project code
+exclude = [
+    "vendor",
+    "moonshine",
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+# Target Python version
+target-version = "py312"
+
+# Enable specific rules or ignore others if needed
+# select = ["E", "F", "W", "I"]
+# ignore = ["E501"]
