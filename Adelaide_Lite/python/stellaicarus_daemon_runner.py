@@ -103,7 +103,7 @@ def main():
     print_hw_detection()
     
     
-    port_file = os.path.join(ADELAIDE_LITE_DIR, "UI_Database", ".sidecar_port")
+    port_file = os.path.join(ADELAIDE_LITE_DIR, "NetworkMemoryPool", ".sidecar_port")
     
     try:
         # Keep the main thread alive so daemon threads can run

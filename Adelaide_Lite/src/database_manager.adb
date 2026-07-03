@@ -10,8 +10,11 @@ with Interfaces.C;         use Interfaces.C;
 
 package body Database_Manager is
 
-   DB_File : constant String := "UI_Database/adelaide_memory.db";
-   Lit_DB_File : constant String := "UI_Database/literatureRefIndex.db";
+   DB_Dir   : constant String := "NetworkMemoryPool";
+   DB_File : constant String := DB_Dir & "/adelaide_memory.db";
+   Lit_DB_File : constant String := DB_Dir & "/literatureRefIndex.db";
+
+   Old_DB_Dir : constant String := "UI_Database";
 
    type DB_Access is access all Ada_Sqlite3.Database;
    Main_DB_Ptr : DB_Access := null;
@@ -30,17 +33,23 @@ package body Database_Manager is
             return;
          end if;
 
-         if not Ada.Directories.Exists ("UI_Database") then
-            Ada.Directories.Create_Directory ("UI_Database");
-         end if;
+          --  Migrate from old UI_Database/ to NetworkMemoryPool/ if needed
+          if not Ada.Directories.Exists (DB_Dir) then
+             if Ada.Directories.Exists (Old_DB_Dir) then
+                Ada.Directories.Rename (Old_DB_Dir, DB_Dir);
+             else
+                Ada.Directories.Create_Directory (DB_Dir);
+             end if;
+          end if;
 
-         if Ada.Directories.Exists ("adelaide_memory.db") and then not Ada.Directories.Exists ("UI_Database/adelaide_memory.db") then
-            Ada.Directories.Rename ("adelaide_memory.db", "UI_Database/adelaide_memory.db");
-         end if;
+          --  Migrate root-level DBs into the new directory (legacy cleanup)
+          if Ada.Directories.Exists ("adelaide_memory.db") and then not Ada.Directories.Exists (DB_File) then
+             Ada.Directories.Rename ("adelaide_memory.db", DB_File);
+          end if;
 
-         if Ada.Directories.Exists ("literatureRefIndex.db") and then not Ada.Directories.Exists ("UI_Database/literatureRefIndex.db") then
-            Ada.Directories.Rename ("literatureRefIndex.db", "UI_Database/literatureRefIndex.db");
-         end if;
+          if Ada.Directories.Exists ("literatureRefIndex.db") and then not Ada.Directories.Exists (Lit_DB_File) then
+             Ada.Directories.Rename ("literatureRefIndex.db", Lit_DB_File);
+          end if;
 
          Main_DB_Ptr := new Ada_Sqlite3.Database'(Open (DB_File));
 
