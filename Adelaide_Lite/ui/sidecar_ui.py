@@ -30,7 +30,7 @@ gc.disable()
 
 # Configuration
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(base_dir, "UI_Database", "assistant_session.db")
+DB_PATH = os.path.join(base_dir, "NetworkMemoryPool", "assistant_session.db")
 
 # Zephyrine Engine Settings - Configuration dictionary for engine settings
 class EngineSettings:
@@ -646,11 +646,11 @@ def get_user_info():
     return {"username": username}
 
 # --- Knowledge Stack Backend ---
-LITERATURE_DB_PATH = os.path.join(base_dir, "UI_Database", "literatureRefIndex.db")
-LITERATURE_GRAPH_PATH = os.path.join(base_dir, "UI_Database", "literature.graphml")
+LITERATURE_DB_PATH = os.path.join(base_dir, "NetworkMemoryPool", "literatureRefIndex.db")
+LITERATURE_GRAPH_PATH = os.path.join(base_dir, "NetworkMemoryPool", "literature.graphml")
 
-MEMORY_DB_PATH = os.path.join(base_dir, "UI_Database", "memoryRefIndex.db")
-MEMORY_GRAPH_PATH = os.path.join(base_dir, "UI_Database", "memory.graphml")
+MEMORY_DB_PATH = os.path.join(base_dir, "NetworkMemoryPool", "memoryRefIndex.db")
+MEMORY_GRAPH_PATH = os.path.join(base_dir, "NetworkMemoryPool", "memory.graphml")
 
 # Ensure dir
 os.makedirs(os.path.dirname(LITERATURE_DB_PATH), exist_ok=True)
