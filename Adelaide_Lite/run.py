@@ -15,6 +15,11 @@ PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB total cap
 
+# ── Crypto ────────────────────────────────────────────────────────────────
+# Import the Python crypto module (sibling to python/adelaide_crypto.py)
+sys.path.insert(0, os.path.join(BASE_DIR, "python"))
+from adelaide_crypto import bootstrap_crypto, load_master_key
+
 try:
     _lock_fd = open(os.path.join(BASE_DIR, ".adelaide.lock"), "w")
     fcntl.flock(_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -408,6 +413,7 @@ def show_help():
     {GRN}--host{RST} {CYN}HOST{RST}                     Bind address (default: 0.0.0.0, env: ADLAIDE_SERVER_HOST)
     {GRN}--port{RST} {CYN}PORT{RST}                     Bind port (default: 11420, env: ADLAIDE_SERVER_PORT)
     {GRN}--test-build-integrity-check{RST}    Build only, verify integrity, then exit
+    {GRN}--show-key{RST}                      Show the current AES-256 master key, then exit
     {GRN}-h{RST}, {GRN}--help{RST}                  Show this help screen
 
   {BOLD}{WHT}EXAMPLES{RST}
@@ -630,6 +636,19 @@ def show_help():
 #  LINUX-COMPAT (future): When porting to Linux, remove this check.
 if "--help" in sys.argv or "-h" in sys.argv:
     show_help()
+    sys.exit(0)
+
+# ── Show master key ─────────────────────────────────────────────────────────
+# Print the current master key and exit. Useful for CI, backup, or when
+# you need to copy the key to another machine.
+if "--show-key" in sys.argv:
+    try:
+        master_key = load_master_key()
+        print(f"[CRYPTO] Master key: {master_key}")
+    except RuntimeError as e:
+        print(f"[CRYPTO] No master key available: {e}")
+        print("[CRYPTO] Run without --show-key first to bootstrap a new key.")
+        sys.exit(1)
     sys.exit(0)
 
 if platform.system() == "Windows":
@@ -1544,6 +1563,19 @@ def real_main():
         daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR, start_new_session=True)
     else:
         print("[*] [Launch-V] Skipping daemon runner (--no-daemon)")
+
+    # ── Crypto Bootstrap ────────────────────────────────────────────────────
+    # Initialize master key (generates + persists if first boot), then set
+    # ADELAIDE_MASTER_KEY env var so the Ada server and all subprocesses
+    # inherit the key automatically.
+    print("[CRYPTO] Bootstrapping encryption master key...")
+    try:
+        master_key = bootstrap_crypto()
+        os.environ["ADELAIDE_MASTER_KEY"] = master_key
+        print(f"[CRYPTO] Master key ready. {len(master_key)} hex chars.")
+    except Exception as e:
+        print(f"[CRYPTO] WARNING: Could not bootstrap crypto: {e}")
+        print("[CRYPTO] Encryption disabled. Data will be stored in plaintext.")
 
     print("[*] Booting Adelaide Intelligence Server...")
     end_time = int(time.time() * 1000)

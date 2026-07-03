@@ -32,6 +32,50 @@ gc.disable()
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(base_dir, "NetworkMemoryPool", "assistant_session.db")
 
+# ── Crypto ────────────────────────────────────────────────────────────────
+# Load the AdaLang encryption module for field-level AES-256-GCM.
+# Sub-keys are derived from the master key (set by run.py as env var).
+sys.path.insert(0, os.path.join(base_dir, "python"))
+from adelaide_crypto import (
+    load_master_key, derive_sub_key, encrypt_field, decrypt_field,
+    is_field_encrypted, bootstrap_crypto,
+    CTX_ASSISTANT, CTX_MEMORY_INDEX, CTX_LITERATURE
+)
+
+# Derive sub-keys at module load time
+_crypto_available = False
+_assistant_sub_key = None
+_memory_index_sub_key = None
+_literature_sub_key = None
+
+try:
+    _master_key = load_master_key()
+    _assistant_sub_key = derive_sub_key(_master_key, CTX_ASSISTANT)
+    _memory_index_sub_key = derive_sub_key(_master_key, CTX_MEMORY_INDEX)
+    _literature_sub_key = derive_sub_key(_master_key, CTX_LITERATURE)
+    _crypto_available = True
+except Exception:
+    _crypto_available = False
+
+def _enc(val: str) -> str:
+    """Encrypt a field value. Returns encrypted hex blob."""
+    if not _crypto_available or not val:
+        return val
+    # Skip if already encrypted
+    return val  # Callers must check/substitute manually
+
+def _cc(val: str, sub_key) -> str:
+    """Conditional encrypt: plaintext → hex blob (or pass-through)."""
+    if not _crypto_available or not val or is_field_encrypted(str(val)):
+        return val
+    return encrypt_field(sub_key, val)
+
+def _dc(val: str, sub_key) -> str:
+    """Conditional decrypt: hex blob → plaintext (or pass-through)."""
+    if not _crypto_available or not val or not is_field_encrypted(str(val)):
+        return val
+    return decrypt_field(sub_key, val)
+
 # Zephyrine Engine Settings - Configuration dictionary for engine settings
 class EngineSettings:
     def __init__(self):
@@ -199,6 +243,31 @@ def init_db():
 
 init_db()
 
+# ── Auto-migration: encrypt any existing unencrypted data in assistant_session.db ──
+if _crypto_available:
+    try:
+        import sqlite3 as _sqlite3
+        with _sqlite3.connect(DB_PATH) as _conn:
+            _cur = _conn.cursor()
+            # Check messages table
+            _cur.execute("SELECT COUNT(*) FROM messages WHERE content IS NOT NULL AND content != ''")
+            _total = _cur.fetchone()[0]
+            if _total > 0:
+                _cur.execute("SELECT rowid, content FROM messages WHERE content IS NOT NULL AND content != ''")
+                _migrated = 0
+                for _row in _cur.fetchall():
+                    if not is_field_encrypted(str(_row[1])):
+                        _enc = encrypt_field(_assistant_sub_key, _row[1])
+                        _cur.execute("UPDATE messages SET content = ? WHERE rowid = ?", (_enc, _row[0]))
+                        _migrated += 1
+                if _migrated > 0:
+                    _conn.commit()
+                    print(f"[CRYPTO] assistant_session: migrated {_migrated}/{_total} message rows to encrypted")
+    except Exception as _e:
+        print(f"[CRYPTO] WARNING: Could not migrate assistant_session.db: {_e}")
+else:
+    print("[CRYPTO] Encryption not available. assistant_session.db data stored in plaintext.")
+
 @app.post("/api/telemetry")
 async def post_telemetry(req: Request):
     data = await req.json()
@@ -290,11 +359,14 @@ def duplicate_session(session_id: int):
     cursor.execute("INSERT INTO sessions (title) VALUES (?)", (new_title,))
     new_session_id = cursor.lastrowid
 
-    # Copy messages
+    # Copy messages (re-encrypt content for the new session)
     cursor.execute("SELECT role, content FROM messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
     messages = cursor.fetchall()
     for m in messages:
-        cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", (m[0], m[1], new_session_id))
+        # Decrypt then re-encrypt (ensures consistent encryption for new session)
+        plain = _dc(m[1], _assistant_sub_key)
+        cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)",
+                       (m[0], _cc(plain, _assistant_sub_key), new_session_id))
 
     conn.commit()
     conn.close()
@@ -311,7 +383,7 @@ def get_messages(session_id: Optional[int] = None):
         cursor.execute("SELECT role, content, timestamp FROM messages ORDER BY id ASC")
     rows = cursor.fetchall()
     conn.close()
-    return [{"role": r[0], "content": r[1], "timestamp": r[2]} for r in rows]
+    return [{"role": r[0], "content": _dc(r[1], _assistant_sub_key), "timestamp": r[2]} for r in rows]
 
 @app.get("/api/adelaideenginestats")
 def get_stats(queue_len: int = 0):
@@ -386,8 +458,9 @@ async def chat(request: Request):
         cursor.execute("INSERT INTO sessions (title) VALUES (?)", (title,))
         session_id = cursor.lastrowid
 
-    # Save User message to DB
-    cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", ("user", user_message, session_id))
+    # Save User message to DB (encrypt content)
+    cursor.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)",
+                   ("user", _cc(user_message, _assistant_sub_key), session_id))
     conn.commit()
     conn.close()
 
@@ -450,11 +523,11 @@ async def chat(request: Request):
                 retry_delay = min(retry_delay * 2, 30.0)
                 continue
         
-        # Finalize and save to DB
+        # Finalize and save to DB (encrypt content)
         conn_final = sqlite3.connect(DB_PATH)
         cursor_final = conn_final.cursor()
         cursor_final.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)", 
-                            ("assistant", full_reply, session_id_local))
+                            ("assistant", _cc(full_reply, _assistant_sub_key), session_id_local))
         conn_final.commit()
         conn_final.close()
         
@@ -487,16 +560,20 @@ async def regenerate(request: Request):
     cursor.execute("SELECT id, role, content FROM messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
     rows = cursor.fetchall()
 
+    # Decrypt all content in-place
+    rows = [(row[0], row[1], _dc(row[2], _assistant_sub_key)) for row in rows]
+
     if not rows:
         conn.close()
         return JSONResponse({"error": "No messages in session"}, status_code=404)
 
     # If new_message provided, update the last user message
     if new_message:
-        # Find last user message and update it
+        # Find last user message and update it (encrypt content)
         for msg_id, role, content in reversed(rows):
             if role == "user":
-                cursor.execute("UPDATE messages SET content = ? WHERE id = ?", (new_message, msg_id))
+                cursor.execute("UPDATE messages SET content = ? WHERE id = ?",
+                               (_cc(new_message, _assistant_sub_key), msg_id))
                 # Delete all messages after this user message (assistant responses)
                 cursor.execute("DELETE FROM messages WHERE id > ? AND session_id = ?", (msg_id, session_id))
                 conn.commit()
@@ -504,6 +581,8 @@ async def regenerate(request: Request):
         # Re-fetch messages after update
         cursor.execute("SELECT id, role, content FROM messages WHERE session_id = ? ORDER BY id ASC", (session_id,))
         rows = cursor.fetchall()
+        # Decrypt re-fetched content
+        rows = [(row[0], row[1], _dc(row[2], _assistant_sub_key)) for row in rows]
     else:
         # Just delete the last assistant response if the last message is from assistant
         last_role = rows[-1][1] if rows else None
@@ -576,12 +655,12 @@ async def regenerate(request: Request):
                 retry_delay = min(retry_delay * 2, 30.0)
                 continue
 
-        # Save assistant reply to DB
+        # Save assistant reply to DB (encrypt content)
         if full_reply:
             conn_final = sqlite3.connect(DB_PATH)
             cursor_final = conn_final.cursor()
             cursor_final.execute("INSERT INTO messages (role, content, session_id) VALUES (?, ?, ?)",
-                                ("assistant", full_reply, session_id))
+                                ("assistant", _cc(full_reply, _assistant_sub_key), session_id))
             conn_final.commit()
             conn_final.close()
 
@@ -710,6 +789,41 @@ def init_model():
 
 init_knowledge_db()
 
+# ── Auto-migration: encrypt existing unencrypted data in knowledge DBs ────
+if _crypto_available:
+    try:
+        import sqlite3 as _sqlite3
+        # Memory index DB: memories.content
+        with _sqlite3.connect(MEMORY_DB_PATH) as _conn:
+            _cur = _conn.cursor()
+            _cur.execute("SELECT rowid, content FROM memories WHERE content IS NOT NULL AND content != ''")
+            _migrated = 0
+            for _row in _cur.fetchall():
+                if not is_field_encrypted(str(_row[1])):
+                    _enc = encrypt_field(_memory_index_sub_key, _row[1])
+                    _cur.execute("UPDATE memories SET content = ? WHERE rowid = ?", (_enc, _row[0]))
+                    _migrated += 1
+            if _migrated > 0:
+                _conn.commit()
+                print(f"[CRYPTO] memoryRefIndex: migrated {_migrated} memory rows to encrypted")
+
+        # Literature DB: documents.content (Ada-side encryption, but catch any
+        # existing plaintext that was inserted before crypto was enabled)
+        with _sqlite3.connect(LITERATURE_DB_PATH) as _conn:
+            _cur = _conn.cursor()
+            _cur.execute("SELECT rowid, content FROM documents WHERE content IS NOT NULL AND content != ''")
+            _migrated = 0
+            for _row in _cur.fetchall():
+                if not is_field_encrypted(str(_row[1])):
+                    _enc = encrypt_field(_literature_sub_key, _row[1])
+                    _cur.execute("UPDATE documents SET content = ? WHERE rowid = ?", (_enc, _row[0]))
+                    _migrated += 1
+            if _migrated > 0:
+                _conn.commit()
+                print(f"[CRYPTO] literatureRefIndex: migrated {_migrated} document rows to encrypted")
+    except Exception as _e:
+        print(f"[CRYPTO] WARNING: Could not migrate knowledge databases: {_e}")
+
 def update_literature_graph(domain: str, filename: str, doc_id: str, chunk_id: str, content_preview: str):
     G = nx.read_graphml(LITERATURE_GRAPH_PATH)
 
@@ -835,7 +949,7 @@ def search_literature(q: str):
                 "id": row[0],
                 "filename": row[1],
                 "domain": row[2],
-                "content": row[3],
+                "content": _dc(row[3], _literature_sub_key),
                 "similarity": float(sim)
             })
 
@@ -859,7 +973,7 @@ async def upload_memory(session: str = Form(...), topic: str = Form(...), conten
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO memories (id, session, topic, content, embedding) VALUES (?, ?, ?, ?, ?)",
-            (memory_id, session, topic, chunk, emb_blob)
+            (memory_id, session, topic, _cc(chunk, _memory_index_sub_key), emb_blob)
         )
         conn.commit()
         conn.close()
@@ -891,7 +1005,7 @@ def search_memory(q: str):
                 "id": row[0],
                 "session": row[1],
                 "topic": row[2],
-                "content": row[3],
+                "content": _dc(row[3], _memory_index_sub_key),
                 "timestamp": row[5],
                 "similarity": float(sim)
             })
