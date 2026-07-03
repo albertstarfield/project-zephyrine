@@ -1407,7 +1407,7 @@ package body Adelaide_Server_Pkg is
               AWS.Headers.Get_Values (Req_Headers, "x-api-key");
          begin
             --  Validate API key
-            if not Validate_API_Key (API_Key) then
+             if not API_Key_Manager.Validate_API_Key (API_Key) then
                Put_Line (AnsiAda.Foreground (AnsiAda.Red)
                          & "[Auth] ERROR: Invalid or missing x-api-key header on "
                          & URI & AnsiAda.Reset);
@@ -1915,7 +1915,7 @@ package body Adelaide_Server_Pkg is
                    Key : constant String :=
                      AWS.Headers.Get_Values (Req_Headers, "x-api-key");
                 begin
-                   if not Validate_API_Key (Key) then
+                    if not API_Key_Manager.Validate_API_Key (Key) then
                       Ada.Text_IO.Put_Line
                         (AnsiAda.Foreground (AnsiAda.Red)
                          & "[Claude] ERROR: Invalid or missing x-api-key header"
@@ -2127,8 +2127,9 @@ package body Adelaide_Server_Pkg is
                    Accuracy_Bench : Unbounded_String := To_Unbounded_String("mmlu");
                    Sample_Size : Natural := 100;
                    Accuracy_Result : Accuracy_Benchmark_Manager.Benchmark_Result;
-                   Perf_Metrics : Benchmark_Manager.Benchmark_Metrics;
-                begin
+                    Perf_Metrics : Benchmark_Manager.Benchmark_Metrics;
+                    Req_Headers    : AWS.Headers.List;
+                 begin
                    --  [DO NOT REMOVE] Validate API key (check managed keys first, then hardcoded fallback)
                    Req_Headers := AWS.Status.Header (Request);
                    declare
@@ -2136,7 +2137,7 @@ package body Adelaide_Server_Pkg is
                         AWS.Headers.Get_Values (Req_Headers, "x-api-key");
                    begin
                       --  Accept if API_Key_Manager validates OR hardcoded key matches
-                      if not Validate_API_Key (Key)
+                       if not API_Key_Manager.Validate_API_Key (Key)
                         and then not Benchmark_Manager.Validate_API_Key (Key)
                       then
                          Ada.Text_IO.Put_Line(

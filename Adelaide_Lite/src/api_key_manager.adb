@@ -91,8 +91,10 @@ package body API_Key_Manager is
       UKey : constant Unbounded_String := To_Unbounded_String (Key);
    begin
       if not Enforcement then
-         --  When enforcement is off, any non-empty key is accepted
-         return Key'Length > 0;
+         --  When enforcement is off, ALL requests pass through
+         --  (backward compatible with Ollama/OpenWebUI clients
+         --  that do not send any x-api-key header)
+         return True;
       end if;
       return Loaded_Keys.Contains (UKey);
    end Validate_API_Key;

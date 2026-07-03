@@ -30,10 +30,10 @@ POST-QUANTUM NOTE:
 
 import os
 import sys
-import base64
+
 import hashlib
 import hmac
-import struct
+
 
 # ── cryptography library (already installed per system audit) ────────────
 try:
@@ -415,7 +415,7 @@ def add_api_key(key: str) -> list[str]:
     """Add an API key to the encrypted store. Returns updated key list."""
     keys = load_api_keys()
     if key in keys:
-        print(f"[CRYPTO] API key already exists in store (skipped)")
+        print("[CRYPTO] API key already exists in store (skipped)")
         return keys
     keys.append(key)
     save_api_keys(keys)
@@ -426,7 +426,7 @@ def remove_api_key(key: str) -> list[str]:
     """Remove an API key from the encrypted store. Returns updated key list."""
     keys = load_api_keys()
     if key not in keys:
-        print(f"[CRYPTO] API key not found in store (nothing to remove)")
+        print("[CRYPTO] API key not found in store (nothing to remove)")
         return keys
     keys = [k for k in keys if k != key]
     save_api_keys(keys)
@@ -450,7 +450,7 @@ def edit_api_key(old_key: str, new_key: str) -> list[str]:
     """Replace *old_key* with *new_key* in the encrypted store."""
     keys = load_api_keys()
     if old_key not in keys:
-        print(f"[CRYPTO] Old key not found in store (nothing to edit)")
+        print("[CRYPTO] Old key not found in store (nothing to edit)")
         return keys
     keys = [new_key if k == old_key else k for k in keys]
     save_api_keys(keys)
@@ -460,7 +460,7 @@ def edit_api_key(old_key: str, new_key: str) -> list[str]:
 # ── Standalone Test ──────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    import json
+    pass
 
     print("=== Adelaide Crypto Module Self-Test ===\n")
 

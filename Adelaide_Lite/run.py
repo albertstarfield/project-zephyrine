@@ -18,7 +18,7 @@ MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB total cap
 # ── Crypto ────────────────────────────────────────────────────────────────
 # Import the Python crypto module (sibling to python/adelaide_crypto.py)
 sys.path.insert(0, os.path.join(BASE_DIR, "python"))
-from adelaide_crypto import bootstrap_crypto, load_master_key
+from adelaide_crypto import bootstrap_crypto, load_master_key  # noqa: E402
 
 try:
     _lock_fd = open(os.path.join(BASE_DIR, ".adelaide.lock"), "w")
@@ -483,7 +483,7 @@ def show_help():
     {DIM}With API key enforcement + curl:{RST}
       {CYN}./run.sh --api-key add mykey --enforce-api-key{RST}
       {DIM}  # Then from another terminal:{RST}
-      {CYN}curl http://localhost:11420/api/chat -H "x-api-key: mykey" -d '{"model":"Snowball-Enaga","messages":[{"role":"user","content":"Hello"}],"stream":false}'{RST}
+       {CYN}curl http://localhost:11420/api/chat -H "x-api-key: mykey" -d '{{"model":"Snowball-Enaga","messages":[{{"role":"user","content":"Hello"}}],"stream":false}}'{RST}
 
   {BOLD}{WHT}RUNTIME PROCESSES{RST}
     {MGN}1. StellaIcarus Daemon{RST}    Hardware monitor, power state, telemetry
@@ -710,7 +710,7 @@ if "--api-key" in sys.argv:
             print(f"[API-KEY] Generated new key: {key}")
         from adelaide_crypto import add_api_key
         add_api_key(key)
-        print(f"[API-KEY] Key added successfully.")
+        print("[API-KEY] Key added successfully.")
         # Show the key so user can copy it
         if len(args_after) < 2 or not args_after[1]:
             print(f"[API-KEY] Copy this key for your client: {key}")
