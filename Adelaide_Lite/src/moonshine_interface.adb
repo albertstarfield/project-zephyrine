@@ -62,7 +62,7 @@ package body Moonshine_Interface is
          return "Transcription failed";
       end if;
 
-      if Transcript_Ptr /= null then
+      if Transcript_Ptr /= null and then Transcript_Ptr.Lines /= null then
          declare
             L_Count : constant Interfaces.Unsigned_64 := Transcript_Ptr.Line_Count;
             type Line_Array is array (0 .. Natural (L_Count) - 1) of aliased Moonshine_Bindings.Transcript_Line;

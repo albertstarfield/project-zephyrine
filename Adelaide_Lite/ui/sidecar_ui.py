@@ -14,7 +14,6 @@ import uuid
 import socket
 import networkx as nx
 import numpy as np
-import importlib.util
 from typing import Optional
 from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
@@ -40,28 +39,13 @@ DB_PATH = os.path.join(base_dir, "NetworkMemoryPool", "assistant_session.db")
 base_dir = os.path.dirname(os.path.abspath(__file__))
 base_dir = os.path.dirname(base_dir)
 
-print("[DBG] base_dir:", base_dir)
-p = os.path.join(base_dir, "python", "adelaide_crypto.py")
-print("[DBG] looking for:", p)
-print("[DBG] exists?", os.path.exists(p))
+# Add python/ to path so adelaide_crypto is importable by static checkers
+# and at runtime (it lives in python/, not ui/)
+_python_dir = os.path.join(base_dir, "python")
+if _python_dir not in sys.path:
+    sys.path.insert(0, _python_dir)
 
-spec = importlib.util.spec_from_file_location(
-    "adelaide_crypto", p
-)
-if spec is None:
-    print("[DBG] spec is None")
-    raise ImportError("Could not find adelaide_crypto module")
-else:
-    print("[DBG] spec:", spec)
-
-adelaide_crypto = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(adelaide_crypto)
-print("[DBG] module:", adelaide_crypto)
-
-# Register the module in sys.modules
-sys.modules["adelaide_crypto"] = adelaide_crypto
-
-from adelaide_crypto import ( # noqa: E402
+from adelaide_crypto import (  # noqa: E402
     load_master_key, derive_sub_key, encrypt_field, decrypt_field,
     is_field_encrypted,
     CTX_ASSISTANT, CTX_MEMORY_INDEX, CTX_LITERATURE
@@ -216,6 +200,9 @@ class EngineStats:
         self.wcet_wtdog_hist = []
         self.wcet_mloop_hist = []
 
+        self.context_faults = 0
+        self.virtual_ctx_len = 0
+
 engine_stats = EngineStats()
 
 try:
@@ -337,6 +324,12 @@ async def post_telemetry(req: Request):
         val = float(data["WCET_ELP3_nS"])
         engine_stats.wcet_elp3 = val
         # For ELP3 (1ms paced), we don't store 1000pts/s in history
+
+    if "Context_Faults" in data:
+        engine_stats.context_faults = int(data["Context_Faults"])
+        
+    if "Virtual_Ctx_Len" in data:
+        engine_stats.virtual_ctx_len = int(data["Virtual_Ctx_Len"])
 
     if "Jitter_Avg_nS" in data:
         engine_stats.jitter_avg_us = float(data["Jitter_Avg_nS"])
@@ -478,11 +471,59 @@ def get_stats(queue_len: int = 0):
         "WCET_WtDog_Hist": engine_stats.wcet_wtdog_hist,
         "WCET_mLoop_Hist": engine_stats.wcet_mloop_hist,
 
+        "Context_Faults": engine_stats.context_faults,
+        "Virtual_Ctx_Len": engine_stats.virtual_ctx_len,
+
         "Handless_Stage": engine_stats.handless_stage,
         "Handless_WCET_nS": engine_stats.handless_wcet,
         "Handless_Input_Text": engine_stats.handless_input_text,
         "Handless_Output_Text": engine_stats.handless_output_text
     }
+
+async def _auto_extract_memory(session_id: str, user_msg: str, assistant_msg: str):
+    prompt = f"Extract the core topic and a concise memory summary from this interaction.\nUser: {user_msg}\nAssistant: {assistant_msg}\n\nRespond ONLY with a valid JSON object in this format: {{\"topic\": \"Short Topic Name\", \"memory\": \"Concise memory text\"}}"
+    payload = {
+        "model": "Snowball-Enaga",
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False
+    }
+    try:
+        async with httpx.AsyncClient(headers=_ada_headers()) as client:
+            response = await client.post(f"{ADA_BACKEND_URL}/api/chat", json=payload, timeout=60.0)
+            if response.status_code == 200:
+                import re
+                resp_json = response.json()
+                content = resp_json.get("message", {}).get("content", "")
+                if not content:
+                    content = resp_json.get("response", "")
+                
+                match = re.search(r'\{.*\}', content, re.DOTALL)
+                if match:
+                    data = json.loads(match.group(0))
+                    topic = data.get("topic", "Extracted Topic")
+                    memory_text = data.get("memory", "")
+                    
+                    if memory_text:
+                        if _embedding_model is None:
+                            init_model()
+                        if _embedding_model is not None:
+                            chunks = [memory_text[i:i+500] for i in range(0, len(memory_text), 500)]
+                            for chunk in chunks:
+                                emb = _embedding_model.encode([chunk])[0]
+                                emb_blob = emb.astype(np.float32).tobytes()
+                                memory_id = str(uuid.uuid4())
+
+                                conn = sqlite3.connect(MEMORY_DB_PATH)
+                                cursor = conn.cursor()
+                                cursor.execute(
+                                    "INSERT INTO memories (id, session, topic, content, embedding) VALUES (?, ?, ?, ?, ?)",
+                                    (memory_id, session_id, topic, _cc(chunk, _memory_index_sub_key), emb_blob)
+                                )
+                                conn.commit()
+                                conn.close()
+                                update_memory_graph(session_id, topic, memory_id, chunk[:30] + "...")
+    except Exception as e:
+        print(f"Auto-extract memory failed: {e}")
 
 @app.post("/api/chat")
 async def chat(request: Request):
@@ -571,6 +612,9 @@ async def chat(request: Request):
         conn_final.commit()
         conn_final.close()
         
+        # Fire and forget background memory extraction
+        asyncio.create_task(_auto_extract_memory(str(session_id_local), user_message, full_reply))
+
         # Send a final chunk with the session_id so the frontend can update
         yield json.dumps({"session_id": session_id_local, "done": True}) + "\n"
 
@@ -703,6 +747,9 @@ async def regenerate(request: Request):
                                 ("assistant", _cc(full_reply, _assistant_sub_key), session_id))
             conn_final.commit()
             conn_final.close()
+            
+            # Fire and forget background memory extraction
+            asyncio.create_task(_auto_extract_memory(str(session_id), last_user_msg, full_reply))
 
         yield json.dumps({"session_id": session_id, "done": True}) + "\n"
 
@@ -713,6 +760,11 @@ async def regenerate(request: Request):
 def exit_app():
     import threading
     def kill_process():
+        try:
+            with open(os.path.join(os.path.dirname(DB_PATH), ".intentional_exit"), "w") as f:
+                f.write("1")
+        except Exception:
+            pass
         os._exit(0)
     # Run in a separate thread to allow the HTTP response to return
     threading.Timer(0.5, kill_process).start()
@@ -1150,6 +1202,11 @@ def perform_platform_integrity_check():
 
         if site_pkgs and os.path.exists(site_pkgs):
             env["PYTHONPATH"] = site_pkgs + os.pathsep + env.get("PYTHONPATH", "")
+
+        # Add python/ directory so pyrefly can resolve adelaide_crypto etc.
+        python_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "python")
+        if os.path.exists(python_dir):
+            env["PYTHONPATH"] = python_dir + os.pathsep + env.get("PYTHONPATH", "")
 
         # Run pyrefly check.
         result = subprocess.run([pyrefly_cmd, "check", __file__],

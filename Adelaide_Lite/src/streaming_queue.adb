@@ -193,6 +193,11 @@ package body Streaming_Queue is
                    Natural'Image (Ada.Strings.Unbounded.Length (Buffer)));
       end Close;
 
+      function Buffer_Length return Natural is
+      begin
+         return Length (Buffer);
+      end Buffer_Length;
+
       function Is_Empty_And_Closed return Boolean is
       begin
          return Closed and then Length (Buffer) = 0;

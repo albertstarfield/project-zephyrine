@@ -398,7 +398,10 @@ package body Adelaide_Server_Pkg is
            --  internal retries (think-only, repeating) use Stream => null and
            --  the result is never forwarded. Ensure the client always receives
            --  the response text.
-           if Is_Ext and then QA /= null then
+           --  BUT only push if nothing was streamed yet: QA.Buffer_Length = 0
+           --  If the buffer already has content, streaming worked, and pushing
+           --  the full result again would cause duplicate output.
+           if Is_Ext and then QA /= null and then QA.Buffer_Length = 0 then
               if Length (Res) > 0 then
                  declare
                     Text : constant String := To_String (Res);
@@ -1264,6 +1267,10 @@ package body Adelaide_Server_Pkg is
             Set_Field (R, "Jitter_Avg_nS", Float (Model_Manager.Current_Jitter_Avg * 1_000_000_000.0));
             Set_Field (R, "Jitter_Max_nS", Float (Model_Manager.Current_Jitter_Max * 1_000_000_000.0));
             Set_Field (R, "WCET_mainLoop_nS", Main_NS);
+            
+            -- Context Fault and Virtual Ctx Tracking
+            Set_Field (R, "Context_Faults", Model_Manager.Current_Context_Fault_JMPs);
+            Set_Field (R, "Virtual_Ctx_Len", Model_Manager.Cached_Virtual_Len);
 
             -- Handless Mode telemetry
             Set_Field (R, "Handless_Stage", To_String(Handless_Stage));

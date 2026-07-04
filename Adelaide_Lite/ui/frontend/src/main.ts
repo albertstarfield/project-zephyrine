@@ -332,7 +332,7 @@ function addMessageToUI(msg: Message): string {
               //  The system intentionally decided not to respond to this
               //  particular prompt — it has its own agency and judgement.
               bubble.classList.add('warning-empty-response');
-              renderMarkdownToElement(bubble, "**Adelaide decided to not respond now on this one, please continue on the next prompt.**");
+              renderMarkdownToElement(bubble, "**Adelaide chose not to respond.** The model detected that continuing would likely produce a hallucinated or low-quality answer. Please rephrase or continue on the next prompt.");
             } else {
               renderMarkdownToElement(bubble, finalText);
             }
@@ -443,7 +443,7 @@ function addMessageToUI(msg: Message): string {
             //  The system intentionally decided not to respond to this
             //  particular prompt — it has its own agency and judgement.
             bubble.classList.add('warning-empty-response');
-            renderMarkdownToElement(bubble, "**Adelaide decided to not respond now on this one, please continue on the next prompt.**");
+            renderMarkdownToElement(bubble, "**Adelaide chose not to respond.** The model detected that continuing would likely produce a hallucinated or low-quality answer. Please rephrase or continue on the next prompt.");
           } else {
             renderMarkdownToElement(bubble, finalText);
           }
@@ -901,7 +901,7 @@ async function processQueue() {
               const bubble = typingEl.querySelector('.bubble') as HTMLElement | null;
               if (bubble) {
                   bubble.classList.add('warning-empty-response');
-                  renderMarkdownToElement(bubble, "**Adelaide decided to not respond now on this one, please continue on the next prompt.**");
+                  renderMarkdownToElement(bubble, "**Adelaide chose not to respond.** The model detected that continuing would likely produce a hallucinated or low-quality answer. Please rephrase or continue on the next prompt.");
               }
           } else {
               // Do one final render with the clean, complete text
@@ -1433,6 +1433,7 @@ if (tabGraph && tabSearch) {
     tabSearch.classList.remove('active');
     contentGraph?.classList.add('active');
     contentSearch?.classList.remove('active');
+    if (cyInstance) { setTimeout(() => cyInstance.resize(), 50); }
   });
   tabSearch.addEventListener('click', () => {
     tabSearch.classList.add('active');
@@ -1612,6 +1613,12 @@ async function loadGraph() {
     const elements = await res.json();
     
     if (cyInstance) cyInstance.destroy();
+
+    const hasEdges = elements.some((e: any) => e.data.source && e.data.target);
+    if (!elements || elements.length <= 1 || !hasEdges) {
+      cyContainer.innerHTML = '<p style="color:white; text-align:center; margin-top:20px;">No literature graph available yet. Upload documents to create one!</p>';
+      return;
+    }
     
     cyInstance = cytoscape({
       container: cyContainer,
@@ -1687,6 +1694,13 @@ async function loadMemoryGraph() {
     const elements = await res.json();
     
     if (cyMemoryInstance) cyMemoryInstance.destroy();
+
+    // Prevent Cytoscape WebKit segfaults on graphs with no edges or only the root node
+    const hasEdges = elements.some((e: any) => e.data.source && e.data.target);
+    if (!elements || elements.length <= 1 || !hasEdges) {
+      cyMemoryContainer.innerHTML = '<p style="color:white; text-align:center; margin-top:20px;">No memory graph available yet. Chat with Zephy to create one!</p>';
+      return;
+    }
     
     cyMemoryInstance = cytoscape({
       container: cyMemoryContainer,
@@ -1923,6 +1937,11 @@ In        : ${stats.Handless_Input_Text || "-"}
 Out       : ${stats.Handless_Output_Text || "-"}
 `;
       
+      const knowledgeStats = document.getElementById('knowledge-stats');
+      if (knowledgeStats) {
+        knowledgeStats.textContent = `Virtual Context: ${stats.Virtual_Ctx_Len || 0} tokens | Context Faults: ${stats.Context_Faults || 0} hops`;
+      }
+
       // Draw Ada Graph (Tokens/s and WCET History)
       const width = mangoCanvas.width;
       const height = mangoCanvas.height;

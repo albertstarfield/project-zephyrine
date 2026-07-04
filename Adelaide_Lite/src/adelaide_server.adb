@@ -110,11 +110,13 @@ procedure Adelaide_Server is
    function Use_HTTPS return Boolean;
    function Get_Sidecar_Port return Natural;
 
-   --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
+   --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM/SIGQUIT)
    procedure Install_Shutdown_Handlers;
    pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
    function Is_Shutdown_Requested return Interfaces.C.int;
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
+   function Last_Signal_Received return Interfaces.C.int;
+   pragma Import (C, Last_Signal_Received, "last_signal_received");
 
    --  _exit() bypasses atexit handlers — prevents Metal assertion failure
    --  during process teardown (ggml_metal_device_free asserts rsets->count == 0)
@@ -776,7 +778,7 @@ begin
                      (Ada.Real_Time.Clock - Start_Time)), Both) &
                    "s STEP 6: Configuring HTTP on " & Host & ":" &
                    Natural'Image (HTTP_Port) & "...");
-         AWS.Config.Set.Server_Port (Conf_HTTP, HTTP_Port);
+          AWS.Config.Set.Server_Port (Conf_HTTP, HTTP_Port);
          AWS.Config.Set.Server_Host (Conf_HTTP, Host);
          AWS.Config.Set.Reuse_Address (Conf_HTTP, True);
          AWS.Config.Set.Security (Conf_HTTP, False);
@@ -785,6 +787,35 @@ begin
          --  for the large QWEN_9B model to load from disk!
          AWS.Config.Set.Send_Timeout (Conf_HTTP, 600.0);
          AWS.Config.Set.Receive_Timeout (Conf_HTTP, 600.0);
+
+         --  ==================================================================
+         --  FREEZE FIX: Max_Connection
+         --  ==================================================================
+         --  PROBLEM (2026-07-04):
+         --    The Ada AWS web server defaults to Max_Connection = 5.
+         --    When a query triggers Generate(), the AWS handler thread blocks
+         --    waiting for ELP1 + Accel_Lock during Metal inference. This can
+         --    take minutes for large models (Qwen_9B, Mythos9bHybrid).
+         --
+         --    If 5 concurrent requests arrive while all threads are blocked:
+         --      - AWS refuses new connections
+         --      - /api/health becomes unresponsive
+         --      - Watchdog sees stale heartbeat, kills server
+         --      - Server appears "frozen" to the user
+         --
+         --    This is EXACERBATED by:
+         --      a) Max_Gen_Retries = 999_999_999 for ELP1 (indefinite hold)
+         --      b) Save_Task also acquires Accel_Lock (double lockup risk)
+         --      c) ELP_Queue.Enqueue calls Load_Model inside Dispatch
+         --         (blocking the AWS thread during model loading)
+         --
+         --  FIX:
+         --    Increase Max_Connection to allow concurrent requests while
+         --    inference is running. 50 is safe for a local server — each
+         --    idle connection costs ~8KB stack + socket fd. Under load,
+         --    only a few threads actually run inference (gated by ELP1).
+         --  ==================================================================
+         AWS.Config.Set.Max_Connection (Conf_HTTP, 50);
 
          --  ==================================================================
          --  HTTPS Server Config (port 11421)
@@ -815,6 +846,8 @@ begin
             AWS.Config.Set.Check_Certificate (Conf_HTTPS, False);
             AWS.Config.Set.Send_Timeout (Conf_HTTPS, 600.0);
             AWS.Config.Set.Receive_Timeout (Conf_HTTPS, 600.0);
+            --  Same freeze fix as HTTP (see above)
+            AWS.Config.Set.Max_Connection (Conf_HTTPS, 50);
          else
             Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Init-V]" &
                       AnsiAda.Reset & "+" &
@@ -1168,43 +1201,100 @@ begin
             --  If ANY unknown/uncategorized exception occurs in the main loop,
             --  dump the full exception info with a red banner and RETRY after 10s.
             --  Server stays alive and continues serving.
-            begin
-               --  [DO NOT REMOVE] Graceful shutdown check (SIGINT/SIGTERM).
-               if Is_Shutdown_Requested /= 0 then
-                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
-                            "[Shutdown]" & AnsiAda.Reset &
-                            " SIGINT/SIGTERM received. Cleaning up...");
-
-                  --  Signal all Ada tasks to stop
-                  Shutdown_Manager.Shutdown_Status.Request;
-                  Watchdog_Manager.AWS_Server_Monitor.Deactivate;
-
-                  --  KV Cache: No blocking save at shutdown
-                  --  WHY: Background async saves will complete or die with process
-                  --  This ensures instant shutdown (no waiting for disk I/O)
-                  Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
-                            "[Shutdown]" & AnsiAda.Reset &
-                            " KV Cache: async saves will complete in background...");
-
-                  --  Write clean exit reason (not a crash)
-                  Watchdog_IPC.Write_Exit_Reason
-                    ("Clean Shutdown (SIGINT/SIGTERM)", 0);
-                  --  Delete PID file so watchdog doesn't try to restart
-                  if Ada.Directories.Exists ("run/adelaide_server.pid") then
-                     Ada.Directories.Delete_File ("run/adelaide_server.pid");
+           begin
+               --  [DO NOT REMOVE] Graceful shutdown check.
+               --  Two paths to trigger:
+               --    1) Flag file (run/.shutdown_requested) — written by
+               --       run.py when user presses Ctrl+\ (SIGQUIT).
+               --    2) C signal handler flag — fallback for standalone
+               --       Ada operation (no run.py).
+               declare
+                  Shutdown_Now : Boolean := False;
+                  Shutdown_Flag : constant String := "run/.shutdown_requested";
+               begin
+                  --  Path 1: Flag file from run.py
+                  if Ada.Directories.Exists (Shutdown_Flag) then
+                     Ada.Directories.Delete_File (Shutdown_Flag);
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                               "[Shutdown]" & AnsiAda.Reset &
+                               " Shutdown flag detected. Cleaning up...");
+                     Shutdown_Now := True;
                   end if;
-                  if Ada.Directories.Exists ("run/adelaide_server.heartbeat") then
-                     Ada.Directories.Delete_File
-                       ("run/adelaide_server.heartbeat");
-                  end if;
-                   Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
-                            "[Shutdown]" & AnsiAda.Reset &
-                            " Clean shutdown complete.");
-                   C_Exit (0);
-               end if;
 
-               Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
-               Watchdog_IPC.Write_Heartbeat;
+                  --  Path 2: C signal handler (standalone fallback)
+                  if not Shutdown_Now and then Is_Shutdown_Requested /= 0 then
+                     declare
+                        Sig_Num : constant Integer :=
+                          Integer (Last_Signal_Received);
+                        Sig_Name : constant String :=
+                          (case Sig_Num is
+                           when 2  => "SIGINT (Ctrl+C)",
+                           when 3  => "SIGQUIT (Ctrl+\\)",
+                           when 15 => "SIGTERM (kill)",
+                           when others => "Signal" &
+                             Integer'Image (Sig_Num));
+                     begin
+                        Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                                  "[Shutdown]" & AnsiAda.Reset &
+                                  " Signal received: " & Sig_Name &
+                                   " -- cleaning up...");
+                     end;
+                     Shutdown_Now := True;
+                  end if;
+
+                   if Shutdown_Now then
+
+                      --  Signal all Ada tasks to stop
+                      Shutdown_Manager.Shutdown_Status.Request;
+                      Watchdog_Manager.AWS_Server_Monitor.Deactivate;
+
+                      --  Stop the background heartbeat task so it doesn't
+                      --  keep writing after we clean up IPC files.
+                      Watchdog_IPC.Shutdown_Heartbeat_Task;
+
+                      --  KV Cache: No blocking save at shutdown
+                      --  WHY: Background async saves will complete or die with process
+                      --  This ensures instant shutdown (no waiting for disk I/O)
+                      Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                                "[Shutdown]" & AnsiAda.Reset &
+                                " KV Cache: async saves will complete in background...");
+
+                      --  Write clean exit reason (not a crash)
+                      declare
+                         Sig_Num : constant Integer :=
+                           Integer (Last_Signal_Received);
+                         Sig_Name : constant String :=
+                           (case Sig_Num is
+                            when 2  => "SIGINT",
+                            when 3  => "SIGQUIT",
+                            when 15 => "SIGTERM",
+                            when others => "Signal" &
+                              Integer'Image (Sig_Num));
+                      begin
+                         Watchdog_IPC.Write_Exit_Reason
+                           ("Clean Shutdown (" & Sig_Name & ")", 0);
+                      end;
+                      --  Delete PID file so watchdog doesn't try to restart
+                      if Ada.Directories.Exists ("run/adelaide_server.pid") then
+                         Ada.Directories.Delete_File ("run/adelaide_server.pid");
+                      end if;
+                      if Ada.Directories.Exists ("run/adelaide_server.heartbeat") then
+                         Ada.Directories.Delete_File
+                           ("run/adelaide_server.heartbeat");
+                      end if;
+                      Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) &
+                                "[Shutdown]" & AnsiAda.Reset &
+                                " Clean shutdown complete.");
+                      C_Exit (0);
+                   end if;
+                end;
+
+                Watchdog_Manager.AWS_Server_Monitor.Heartbeat (Clock);
+               --  [HEARTBEAT-FIX] Use non-blocking Update instead of
+               --  blocking Write_Heartbeat. The background task handles
+               --  the actual file I/O independently. This prevents the
+               --  main loop from blocking on disk I/O under memory pressure.
+               Watchdog_IPC.Update_Heartbeat;
                Heartbeat_Count := Heartbeat_Count + 1;
                Alive_Count     := Alive_Count + 1;
                if Alive_Count >= 3 then
@@ -1293,8 +1383,9 @@ begin
                      (AnsiAda.Foreground (AnsiAda.Red)
                       & "=========================================================="
                       & AnsiAda.Reset);
-                  --  Retry with 10s delay — server stays alive
-                  delay 10.0;
+                   --  Retry with 2s delay — short enough that the watchdog
+                   --  heartbeat stays fresh (stale limit is 10s).
+                   delay 2.0;
             end;
          end loop;
       end;
