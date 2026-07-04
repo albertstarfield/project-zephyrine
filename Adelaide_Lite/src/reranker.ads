@@ -30,10 +30,10 @@ with Llama_Interface;
 
 package Reranker is
 
-   --  A single reranking result: document ID + relevance score
+   --  A single reranking result: entrySlice ID + relevance score
    type Rerank_Result is record
-      Doc_ID : Natural;
-      Score  : Float;
+      EntrySlice_ID : Natural;
+      Score         : Float;
    end record;
 
    type Rerank_Result_Array is array (Positive range <>) of Rerank_Result;
@@ -48,13 +48,13 @@ package Reranker is
       Results   : out Unbounded_String;
       Count     : out Natural);
 
-   --  Rerank documents using pre-computed search results.
-   --  Scores each (query, doc) pair through the reranker model.
-   --  Returns Top_K best document IDs (1-indexed).
+   --  Rerank entrySlices using pre-computed search results.
+   --  Scores each (query, entrySlice) pair through the reranker model.
+   --  Returns Top_K best entrySlice IDs (1-indexed).
    procedure Rerank_Scores
-     (Query         : String;
-      Doc_Contents  : access function (Idx : Natural) return String;
-      N_Docs        : Natural;
+     (Query              : String;
+      EntrySlice_Contents  : access function (Idx : Natural) return String;
+      N_EntrySlices        : Natural;
       Top_K         : Natural;
       Best_Idx      : out Natural;
       Best_Score    : out Float);

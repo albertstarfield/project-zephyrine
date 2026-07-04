@@ -12,9 +12,9 @@ def main():
         
     try:
         import fitz  # PyMuPDF
-        doc = fitz.open(path)
+        entrySlice = fitz.open(path)
         text = ""
-        for page in doc:
+        for page in entrySlice:
             text += page.get_text() + "\n"
         print(text)
     except ImportError:

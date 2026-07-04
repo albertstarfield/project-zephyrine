@@ -227,8 +227,8 @@ def extract_content_via_python(path: str) -> str:
 
     try:
         if ext == '.pdf' and fitz:
-            doc = fitz.open(path)
-            for page in doc:
+            entrySlice = fitz.open(path)
+            for page in entrySlice:
                 text += page.get_text() + "\n"
         elif ext in ['.xlsx', '.xls']:
             import openpyxl
@@ -241,8 +241,8 @@ def extract_content_via_python(path: str) -> str:
                         text += " | ".join(row_data) + "\n"
         elif ext in ['.docx']:
             import docx
-            doc = docx.Document(path)
-            text = "\n".join([p.text for p in doc.paragraphs if p.text])
+            entrySlice = docx.Document(path)
+            text = "\n".join([p.text for p in entrySlice.paragraphs if p.text])
         elif ext in ['.pptx']:
             import pptx
             prs = pptx.Presentation(path)
