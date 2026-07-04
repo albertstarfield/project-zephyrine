@@ -41,6 +41,8 @@ procedure Adelaide_Watchdog is
    pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
    function Is_Shutdown_Requested return Interfaces.C.int;
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
+   function Last_Signal_Received return Interfaces.C.int;
+   pragma Import (C, Last_Signal_Received, "last_signal_received");
 
    --  _exit() bypasses atexit handlers — prevents Metal assertion failure
    procedure C_Exit (Status : Interfaces.C.int);
@@ -163,12 +165,25 @@ procedure Adelaide_Watchdog is
 
    procedure Write_Watchdog_Heartbeat is
       F : File_Type;
+      Tmp_File : constant String := WD_HB_File & ".tmp";
       T : constant Duration :=
         To_Duration (Clock - Time_Of (0, Time_Span_Zero));
    begin
-      Create (F, Out_File, WD_HB_File);
+      --  [ATOMIC-WRITE] Write to tmp, then rename. Same pattern as
+      --  the server's Write_Heartbeat to prevent race conditions.
+      Create (F, Out_File, Tmp_File);
       Put_Line (F, Duration'Image (T));
       Close (F);
+      Ada.Directories.Rename (Tmp_File, WD_HB_File);
+   exception
+      when others =>
+         begin
+            if Ada.Directories.Exists (Tmp_File) then
+               Ada.Directories.Delete_File (Tmp_File);
+            end if;
+         exception
+            when others => null;
+         end;
    end Write_Watchdog_Heartbeat;
 
    Oneshot       : Boolean := False;
@@ -531,10 +546,20 @@ begin
       API_Check_Count : Natural := 0;
    begin
       loop
-         --  [DO NOT REMOVE] Graceful shutdown check (SIGINT/SIGTERM).
+         --  [DO NOT REMOVE] Graceful shutdown check (SIGINT/SIGTERM/SIGQUIT).
          if Is_Shutdown_Requested /= 0 then
-            Put_Line (Standard_Error,
-              "[Watchdog] SIGINT/SIGTERM received. Shutting down gracefully...");
+            declare
+               Sig_Num : constant Integer := Integer (Last_Signal_Received);
+               Sig_Name : constant String :=
+                 (case Sig_Num is
+                  when 2  => "SIGINT",
+                  when 3  => "SIGQUIT",
+                  when 15 => "SIGTERM",
+                  when others => "Signal" & Integer'Image (Sig_Num));
+            begin
+               Put_Line (Standard_Error,
+                 "[Watchdog] " & Sig_Name & " received. Shutting down gracefully...");
+            end;
             --  Clean up our own PID file
             if Exists (WD_PID_File) then
                Delete_File (WD_PID_File);

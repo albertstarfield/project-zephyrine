@@ -17,13 +17,23 @@ package Watchdog_IPC is
 
    procedure Init;
    --  Creates the run/ directory (if absent) and writes PID + initial heartbeat.
+   --  Also starts the background heartbeat task.
+
+   procedure Update_Heartbeat;
+   --  Updates the shared heartbeat timestamp (fast, non-blocking).
+   --  The background task writes the actual file independently.
+   --  Called from the server main loop every ~1 s.
 
    procedure Write_Heartbeat;
-   --  Overwrites run/adelaide_server.heartbeat with the current monotonic time.
-   --  Called from the server main loop every ~1 s.
+   --  DIRECT file write — used only during Init and shutdown.
+   --  For normal operation, use Update_Heartbeat instead.
 
    procedure Write_Exit_Reason (Reason : String; Signal_Or_Code : Integer);
    --  Writes an explicit exit reason and exit code/signal to run/adelaide_server.exit_reason
    --  before the server terminates.
+
+   procedure Shutdown_Heartbeat_Task;
+   --  Signals the background heartbeat task to stop.
+   --  Called during clean shutdown.
 
 end Watchdog_IPC;

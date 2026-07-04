@@ -20,6 +20,127 @@ package body Watchdog_IPC is
    function Kill (PID : Integer; Sig : Integer) return Integer;
    pragma Import (C, Kill, "kill");
 
+   --  =====================================================================
+   --  BACKGROUND HEARTBEAT TASK
+   --  =====================================================================
+   --  WHY: The main loop must never block on disk I/O. Under memory pressure
+   --  (swap), file operations (Create, Put_Line, Rename) can take 10-20s.
+   --  If the main loop blocks on Write_Heartbeat, the heartbeat file goes
+   --  stale, and the watchdog kills the server — even though it's alive.
+   --
+   --  FIX: A dedicated background task handles all heartbeat file I/O.
+   --  The main loop calls Update_Heartbeat() which is a protected procedure
+   --  (fast, non-blocking, never waits for disk). The background task wakes
+   --  up every 1s, reads the shared timestamp, and writes the file.
+   --  Even if the file I/O blocks for 20s, the main loop continues.
+   --  =====================================================================
+
+   --  Shared state between main loop and heartbeat task
+   protected HB_State is
+      procedure Update;
+      --  Called by main loop: stores current time as heartbeat timestamp.
+      --  Fast, non-blocking, never waits for disk.
+
+      function Get_Timestamp return Duration;
+      --  Called by heartbeat task: returns the last stored timestamp.
+
+      procedure Request_Stop;
+      --  Called by main loop at shutdown: signals task to exit.
+
+      function Should_Stop return Boolean;
+      --  Called by heartbeat task: checks if stop was requested.
+   private
+      Latest_Timestamp : Duration := 0.0;
+      Stop_Requested   : Boolean := False;
+   end HB_State;
+
+   protected body HB_State is
+      procedure Update is
+      begin
+         Latest_Timestamp :=
+           To_Duration (Clock - Time_Of (0, Time_Span_Zero));
+      end Update;
+
+      function Get_Timestamp return Duration is
+      begin
+         return Latest_Timestamp;
+      end Get_Timestamp;
+
+      procedure Request_Stop is
+      begin
+         Stop_Requested := True;
+      end Request_Stop;
+
+      function Should_Stop return Boolean is
+      begin
+         return Stop_Requested;
+      end Should_Stop;
+   end HB_State;
+
+   --  Background task: writes heartbeat file every 1 second.
+   --  Runs independently of the main loop. Even if disk I/O blocks
+   --  for 20 seconds, the main loop continues uninterrupted.
+   task Heartbeat_Task is
+      entry Start;
+      entry Stop;
+   end Heartbeat_Task;
+
+   task body Heartbeat_Task is
+      Tmp_File : constant String := HB_File & ".tmp";
+      F        : File_Type;
+   begin
+      accept Start;
+      Put_Line (Standard_Error,
+        "[Heartbeat-Task] Background heartbeat task started.");
+
+      loop
+         --  Check for shutdown request
+         select
+            accept Stop;
+            Put_Line (Standard_Error,
+              "[Heartbeat-Task] Stop requested. Exiting.");
+            exit;
+         else
+            null;  --  Continue loop
+         end select;
+
+         --  Write heartbeat file (this may block under memory pressure,
+         --  but it doesn't matter — the main loop is unaffected)
+         begin
+            --  [ATOMIC-WRITE] Write to temp file, then rename.
+            --  This prevents the watchdog from reading a truncated file.
+            Create (F, Out_File, Tmp_File);
+            declare
+               T_Str : constant String :=
+                 Duration'Image (HB_State.Get_Timestamp);
+            begin
+               Put_Line (F, T_Str);
+            end;
+            Close (F);
+            --  Atomic replace: rename tmp -> final
+            Ada.Directories.Rename (Tmp_File, HB_File);
+         exception
+            when others =>
+               --  Best effort — if write fails, old heartbeat stays valid.
+               begin
+                  if Ada.Directories.Exists (Tmp_File) then
+                     Ada.Directories.Delete_File (Tmp_File);
+                  end if;
+               exception
+                  when others => null;
+               end;
+         end;
+
+         delay 1.0;
+      end loop;
+
+      Put_Line (Standard_Error,
+        "[Heartbeat-Task] Background heartbeat task stopped.");
+   end Heartbeat_Task;
+
+   --  Track if heartbeat task has been started
+   HB_Task_Started : Boolean := False;
+
    -------------------------
    -- Check_Single_Instance --
    -------------------------
@@ -73,19 +194,12 @@ package body Watchdog_IPC is
 
       --  Process exists, but is it an adelaide_server?  PIDs get recycled
       --  by the OS, so PID 45220 might now be some unrelated process.
-      --  Verify by checking the command name via ps.
+      --  Verify by checking the heartbeat file was written recently.
       begin
          declare
             Cmd_File : File_Type;
             Line     : Unbounded_String;
          begin
-            --  Run: ps -p PID -o comm=
-            --  Returns the command name (truncated to 15 chars on macOS)
-            --  We use GNAT.OS_Lib or just Ada.Text_IO to read from a pipe.
-            --  Since we can't do popen in pure Ada, use a temp file approach:
-            --  Actually, simpler: just check if the heartbeat file was written
-            --  recently by THIS same binary.  If the heartbeat is stale
-            --  (>30s old), the server is dead even if the PID was recycled.
             if not Exists (HB_File) then
                return False;
             end if;
@@ -140,8 +254,28 @@ package body Watchdog_IPC is
       Put_Line (F, Integer'Image (Get_PID));
       Close (F);
 
+      --  Write initial heartbeat directly (before task starts)
       Write_Heartbeat;
+
+      --  Start the background heartbeat task
+      if not HB_Task_Started then
+         Heartbeat_Task.Start;
+         HB_Task_Started := True;
+      end if;
    end Init;
+
+   ---------------------
+   -- Update_Heartbeat --
+   ---------------------
+
+   procedure Update_Heartbeat is
+   begin
+      --  Fast, non-blocking: just update the shared timestamp.
+      --  The background task writes the actual file independently.
+      HB_State.Update;
+      --  Also update the in-memory watchdog monitor (no disk I/O)
+      null;  --  AWS_Server_Monitor.Heartbeat is called separately in main loop
+   end Update_Heartbeat;
 
    --------------------
    -- Write_Heartbeat --
@@ -149,8 +283,11 @@ package body Watchdog_IPC is
 
    procedure Write_Heartbeat is
       F : File_Type;
+      Tmp_File : constant String := HB_File & ".tmp";
    begin
-      Create (F, Out_File, HB_File);
+      --  DIRECT file write — used only during Init and shutdown.
+      --  For normal operation, use Update_Heartbeat instead.
+      Create (F, Out_File, Tmp_File);
       declare
          T_Str : constant String :=
            Duration'Image (To_Duration (Clock - Time_Of (0, Time_Span_Zero)));
@@ -158,7 +295,30 @@ package body Watchdog_IPC is
          Put_Line (F, T_Str);
       end;
       Close (F);
+      Ada.Directories.Rename (Tmp_File, HB_File);
+   exception
+      when others =>
+         begin
+            if Ada.Directories.Exists (Tmp_File) then
+               Ada.Directories.Delete_File (Tmp_File);
+            end if;
+         exception
+            when others => null;
+         end;
    end Write_Heartbeat;
+
+   ----------------------------
+   -- Shutdown_Heartbeat_Task --
+   ----------------------------
+
+   procedure Shutdown_Heartbeat_Task is
+   begin
+      if HB_Task_Started then
+         HB_State.Request_Stop;
+         --  Give the task one more cycle to notice the stop flag
+         delay 1.5;
+      end if;
+   end Shutdown_Heartbeat_Task;
 
    -----------------------
    -- Write_Exit_Reason --
