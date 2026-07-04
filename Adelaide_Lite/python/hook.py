@@ -26,7 +26,7 @@ import os
 import json
 import subprocess
 from datetime import datetime
-from trace_utils import init_trace, trace_print, trace_result
+from trace_utils import init_trace, trace_print
 
 
 HOOKS_FILE = os.path.join(os.path.dirname(__file__), ".hooks.json")

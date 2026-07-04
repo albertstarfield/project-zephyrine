@@ -444,3 +444,4 @@ def main():
 if __name__ == "__main__":
     trace_print("searchlocalref", "invoke", f"{sys.executable} {' '.join(sys.argv)}")
     main()
+    trace_result("searchlocalref", True)

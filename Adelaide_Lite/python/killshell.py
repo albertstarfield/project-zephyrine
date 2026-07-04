@@ -18,7 +18,7 @@ import subprocess
 import sys
 import os
 import signal
-from trace_utils import init_trace, trace_print, trace_result
+from trace_utils import init_trace, trace_print
 
 
 def run_cmd(cmd):
