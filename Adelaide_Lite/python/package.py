@@ -25,6 +25,7 @@ import subprocess
 import sys
 import os
 import platform
+from trace_utils import init_trace, trace_print, trace_result
 
 
 def detect_package_manager():
@@ -107,8 +108,8 @@ def install_package(package):
     if not name:
         return "ERROR: No supported package manager found"
     
-    print(f"Detected package manager: {name}")
-    print(f"Installing: {package}")
+    trace_print("package", "detect", name)
+    trace_print("package", "install", package)
     
     # Special handling for some package managers
     if name == "apt":
@@ -134,6 +135,8 @@ def main():
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
+    init_trace()
+
     if cmd == "detect":
         name, base_cmd = detect_package_manager()
         if name:
@@ -141,6 +144,7 @@ def main():
             print(f"Install command: {' '.join(base_cmd)}")
         else:
             print("No supported package manager found")
+        trace_result("package", name is not None, f"detected {name}" if name else "none found")
 
     elif cmd == "install":
         if not args:
@@ -148,6 +152,7 @@ def main():
             return 1
         output = install_package(args[0])
         print(output)
+        trace_result("package", "ERROR" not in output, f"installed {args[0]}")
 
     elif cmd == "uninstall":
         if not args:
@@ -173,6 +178,7 @@ def main():
         
         output = run_cmd(cmd, sudo=True)
         print(output)
+        trace_result("package", "ERROR" not in output, f"uninstalled {args[0]}")
 
     elif cmd == "update":
         name, _ = detect_package_manager()
@@ -194,6 +200,7 @@ def main():
             output = f"Update not implemented for {name}"
         
         print(output)
+        trace_result("package", "ERROR" not in output, "updated")
 
     elif cmd == "upgrade":
         name, _ = detect_package_manager()
@@ -215,6 +222,7 @@ def main():
             output = f"Upgrade not implemented for {name}"
         
         print(output)
+        trace_result("package", "ERROR" not in output, "upgraded")
 
     elif cmd == "search":
         if not args:
@@ -241,6 +249,7 @@ def main():
             output = f"Search not implemented for {name}"
         
         print(output)
+        trace_result("package", "ERROR" not in output, f"searched {query}")
 
     elif cmd == "list":
         name, _ = detect_package_manager()
@@ -262,6 +271,7 @@ def main():
             output = f"List not implemented for {name}"
         
         print(output)
+        trace_result("package", "ERROR" not in output, "listed packages")
 
     else:
         print(f"ERROR: Unknown command: {cmd}")

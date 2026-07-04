@@ -13,6 +13,7 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 """
 
 import sys
+from trace_utils import init_trace, trace_print, trace_result
 import os
 import re
 import json
@@ -98,6 +99,7 @@ def scan_directory(path):
 
 
 def main():
+    init_trace()
     if len(sys.argv) < 2:
         print(__doc__)
         return 1
@@ -122,25 +124,25 @@ def main():
             by_severity[sev].append(issue)
         
         # Print report
-        print(f"Security Scan Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        trace_print("security", "scan:report", f"Security Scan Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 60)
         
         for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
             if severity in by_severity:
-                print(f"\n[{severity}] ({len(by_severity[severity])} issues)")
+                trace_print("security", "scan:findings", f"[{severity}] ({len(by_severity[severity])} issues)")
                 for issue in by_severity[severity]:
                     print(f"  {issue['file']}:{issue['line']}")
                     print(f"    {issue['message']}")
                     print(f"    Code: {issue['code'][:80]}")
         
-        print(f"\nTotal: {len(issues)} issues found")
+        trace_result("security", True, f"total: {len(issues)} issues")
 
     elif cmd == "watch":
         if not args:
             print("ERROR: Usage: security.py watch <file>")
             return 1
         filepath = args[0]
-        print(f"Watching {filepath} for security issues...")
+        trace_print("security", "watch", f"Watching {filepath} for security issues...")
         print("Press Ctrl+C to stop")
         
         last_mtime = os.path.getmtime(filepath)
@@ -150,7 +152,7 @@ def main():
                 time.sleep(1)
                 current_mtime = os.path.getmtime(filepath)
                 if current_mtime != last_mtime:
-                    print(f"\nFile changed at {datetime.now().strftime('%H:%M:%S')}")
+                    trace_print("security", "watch:change", f"File changed at {datetime.now().strftime('%H:%M:%S')}")
                     issues = scan_file(filepath)
                     if issues:
                         for issue in issues:

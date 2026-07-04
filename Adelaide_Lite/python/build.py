@@ -16,6 +16,7 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 
 import subprocess
 import sys
+from trace_utils import init_trace, trace_print
 import os
 import shutil
 
@@ -38,12 +39,15 @@ def run_command(cmd, cwd=None):
 
 
 def main():
+    init_trace()
     if len(sys.argv) < 2:
         print(__doc__)
         return 1
 
     cmd = sys.argv[1]
     args = sys.argv[2:]
+
+    trace_print("build", cmd, " ".join(args))
 
     if cmd == "ada":
         print(run_command(["alr", "build"]))

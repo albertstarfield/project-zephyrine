@@ -26,6 +26,7 @@ import os
 import json
 import subprocess
 from datetime import datetime
+from trace_utils import init_trace, trace_print, trace_result
 
 
 HOOKS_FILE = os.path.join(os.path.dirname(__file__), ".hooks.json")
@@ -57,7 +58,7 @@ def run_hooks(event, data=None):
             print(f"WARNING: Hook script not found: {script}")
             continue
         
-        print(f"Running hook: {hook.get('name', script)}")
+        trace_print("hook", "run", str(hook.get("name", script)))
         try:
             env = os.environ.copy()
             if data:
@@ -72,7 +73,7 @@ def run_hooks(event, data=None):
             )
             
             if result.returncode != 0:
-                print(f"Hook failed: {result.stderr}")
+                trace_print("hook", "error", f"Hook failed: {result.stderr}")
                 return False
             
             if result.stdout:
@@ -80,7 +81,7 @@ def run_hooks(event, data=None):
         except subprocess.TimeoutExpired:
             print(f"Hook timed out: {script}")
         except Exception as e:
-            print(f"Hook error: {e}")
+            trace_print("hook", "error", f"{e}")
     
     return True
 
@@ -92,6 +93,8 @@ def main():
 
     cmd = sys.argv[1]
     args = sys.argv[2:]
+
+    init_trace()
 
     if cmd == "list":
         hooks = load_hooks()
@@ -121,7 +124,7 @@ def main():
         })
         
         save_hooks(hooks)
-        print(f"OK: Added hook for {event}")
+        trace_print("hook", "add", event)
 
     elif cmd == "remove":
         if len(args) < 2:
@@ -134,7 +137,7 @@ def main():
         if event in hooks and len(hooks[event]) > hook_id:
             hooks[event].pop(hook_id)
             save_hooks(hooks)
-            print(f"OK: Removed hook from {event}")
+            trace_print("hook", "remove", event)
         else:
             print("ERROR: Hook not found")
 

@@ -20,6 +20,7 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 
 import subprocess
 import sys
+from trace_utils import init_trace, trace_print, trace_result
 
 
 def run_git(args):
@@ -39,12 +40,16 @@ def run_git(args):
 
 
 def main():
+    init_trace()
     if len(sys.argv) < 2:
         print(__doc__)
         return 1
 
     cmd = sys.argv[1]
     args = sys.argv[2:]
+    success = True
+
+    trace_print("git", cmd, " ".join(args))
 
     if cmd == "status":
         print(run_git(["status"]))
@@ -53,10 +58,11 @@ def main():
     elif cmd == "commit":
         if not args:
             print("ERROR: Usage: git.py commit <message>")
-            return 1
-        message = " ".join(args)
-        print(run_git(["add", "."]))
-        print(run_git(["commit", "-m", message]))
+            success = False
+        else:
+            message = " ".join(args)
+            print(run_git(["add", "."]))
+            print(run_git(["commit", "-m", message]))
     elif cmd == "push":
         print(run_git(["push"]))
     elif cmd == "pull":
@@ -69,30 +75,34 @@ def main():
     elif cmd == "checkout":
         if not args:
             print("ERROR: Usage: git.py checkout <branch>")
-            return 1
-        print(run_git(["checkout"] + args))
+            success = False
+        else:
+            print(run_git(["checkout"] + args))
     elif cmd == "create-pr":
         if not args:
             print("ERROR: Usage: git.py create-pr <title>")
-            return 1
-        title = " ".join(args)
-        # Check if gh CLI is available
-        try:
-            result = subprocess.run(
-                ["gh", "pr", "create", "--title", title, "--fill"],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            print(result.stdout + result.stderr)
-        except FileNotFoundError:
-            print("ERROR: gh CLI not found. Install: brew install gh")
+            success = False
+        else:
+            title = " ".join(args)
+            # Check if gh CLI is available
+            try:
+                result = subprocess.run(
+                    ["gh", "pr", "create", "--title", title, "--fill"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                print(result.stdout + result.stderr)
+            except FileNotFoundError:
+                print("ERROR: gh CLI not found. Install: brew install gh")
+                success = False
     else:
         print(f"ERROR: Unknown command: {cmd}")
         print(__doc__)
-        return 1
+        success = False
 
-    return 0
+    trace_result("git", success, f"command: {cmd}")
+    return 0 if success else 1
 
 
 if __name__ == "__main__":

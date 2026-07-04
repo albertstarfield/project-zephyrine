@@ -1,0 +1,40 @@
+pragma SPARK_Mode (Off);
+
+--  ============================================================================
+--  ADELAIDE TRACE — Standardized verbosity for tool execution.
+--  ============================================================================
+--  Provides:
+--    1. Server-uptime counter since Initialize().
+--    2. Trace_Print with format: [prefix][Toolcall][+uptime] <message>
+--    3. Trace_Result for completion status.
+--    4. Prefix configured via ADELAIDE_TOOL_TRACE_PREFIX env var.
+--  ============================================================================
+
+with Ada.Calendar;          use Ada.Calendar;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+
+package Adelaide_Trace is
+
+   --  Initialize the trace system.  Call once at server start.
+   procedure Initialize;
+
+   --  Whole seconds since Initialize().
+   function Uptime return Natural;
+
+   --  -------------------------------------------------------------------------
+   --  Trace output — emits to stdout with the standardized prefix format.
+   --  -------------------------------------------------------------------------
+   procedure Trace_Print (Toolcall : String; Message : String := "");
+   procedure Trace_Print (Toolcall : String; Step    : String;
+                          Message  : String := "");
+
+   --  Final result trace (OK / FAIL with optional detail).
+   procedure Trace_Result (Toolcall : String; Success : Boolean;
+                           Detail   : String := "");
+
+private
+   Start_Time  : Ada.Calendar.Time;
+   Trace_Prefix : Unbounded_String := To_Unbounded_String ("[ADA]");
+   Trace_Enabled : Boolean := True;
+
+end Adelaide_Trace;

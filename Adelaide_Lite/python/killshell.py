@@ -18,6 +18,7 @@ import subprocess
 import sys
 import os
 import signal
+from trace_utils import init_trace, trace_print, trace_result
 
 
 def run_cmd(cmd):
@@ -42,6 +43,8 @@ def main():
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
+    init_trace()
+
     if cmd == "kill":
         if not args:
             print("ERROR: Usage: killshell.py kill <pid>")
@@ -49,9 +52,9 @@ def main():
         pid = int(args[0])
         try:
             os.kill(pid, signal.SIGTERM)
-            print(f"OK: Killed process {pid}")
+            trace_print("killshell", "kill", f"pid={pid}")
         except ProcessLookupError:
-            print(f"ERROR: Process {pid} not found")
+            trace_print("killshell", "error", f"pid {pid} not found")
         except PermissionError:
             print(f"ERROR: Permission denied to kill {pid}")
 
@@ -61,7 +64,10 @@ def main():
             return 1
         name = args[0]
         output = run_cmd(["killall", name])
-        print(output if output else f"OK: Killed all {name} processes")
+        if output:
+            print(output)
+        else:
+            trace_print("killshell", "killall", name)
 
     elif cmd == "pkill":
         if not args:
@@ -69,7 +75,10 @@ def main():
             return 1
         pattern = args[0]
         output = run_cmd(["pkill", "-f", pattern])
-        print(output if output else f"OK: Killed processes matching {pattern}")
+        if output:
+            print(output)
+        else:
+            trace_print("killshell", "pkill", pattern)
 
     elif cmd == "ps":
         pattern = args[0] if args else ""

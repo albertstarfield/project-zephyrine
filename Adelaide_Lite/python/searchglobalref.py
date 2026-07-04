@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import sys
+from trace_utils import init_trace, trace_print, trace_result
 import os
 import subprocess
 import time
@@ -25,7 +26,7 @@ def apply_base_env():
                 for key, value in base_env.items():
                     os.environ[key] = value
         except Exception as e:
-            print(f"⚠️ Error loading base_env: {e}", file=sys.stderr)
+            trace_print("searchglobalref", "warning", f"Error loading base_env: {e}")
 
 # --- Bootstrap Virtual Environment ---
 VENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyvenv")
@@ -39,7 +40,7 @@ def bootstrap_venv():
     # If not in the correct venv, ensure it exists and switch to it
     if os.path.abspath(sys.prefix) != venv_abs:
         if not os.path.exists(VENV_DIR):
-            print(f"[*] Creating virtual environment in {VENV_DIR}...", file=sys.stderr)
+            trace_print("searchglobalref", "bootstrap", f"Creating virtual environment in {VENV_DIR}...")
             subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True)
             
         if os.name == 'nt':
@@ -54,10 +55,7 @@ def bootstrap_venv():
     import importlib.util
     missing = [req for req in REQUIREMENTS if importlib.util.find_spec(req) is None]
     if missing:
-        print(
-            f"[*] Missing dependencies. Installing: {', '.join(missing)}...",
-            file=sys.stderr
-        )
+        trace_print("searchglobalref", "bootstrap", f"Missing dependencies. Installing: {', '.join(missing)}...")
         if os.name == 'nt':
             pip_exe = os.path.join(VENV_DIR, "Scripts", "pip.exe")
         else:
@@ -68,6 +66,7 @@ def bootstrap_venv():
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
 bootstrap_venv()
+init_trace()
 
 # --- Ollama Configuration ---
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_PROXY_URL", "http://localhost:11435")
@@ -85,10 +84,10 @@ def ensure_ollama_running():
     import requests
     try:
         requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
-        print(f"✅ Ollama reachable at {OLLAMA_BASE_URL}", file=sys.stderr)
+        trace_print("searchglobalref", "ollama", f"Ollama reachable at {OLLAMA_BASE_URL}")
         return True
     except Exception:
-        print("⚠️ Ollama not reachable. Attempting restart...", file=sys.stderr)
+        trace_print("searchglobalref", "warning", "Ollama not reachable. Attempting restart...")
         subprocess.run(["launchctl", "setenv", "OLLAMA_HOST", "0.0.0.0:1234"], check=False)
         subprocess.run(["brew", "services", "restart", "ollama"], check=False)
         time.sleep(3)
@@ -130,7 +129,7 @@ def store_in_memory(content, ollama_external=None):
             cmd.extend(["--ollamaHost", ollama_external])
         subprocess.run(cmd, check=False)
     except Exception as e:
-        print(f"⚠️ Failed to store memory: {e}", file=sys.stderr)
+        trace_print("searchglobalref", "warning", f"Failed to store memory: {e}")
 
 def main():
     import argparse
@@ -161,7 +160,7 @@ def main():
     if args.jsonIO:
         print(json.dumps({"phase": 1, "status": "start", "query": args.query}), flush=True)
     else:
-        print(f"[*] Dispatching Deno Playwright Scraper for '{args.query}'...", file=sys.stderr)
+        trace_print("searchglobalref", "phase1", f"Dispatching Deno Playwright Scraper for '{args.query}'...")
 
     # Spawn Deno Sidecar
     scraper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "playwright_scraper.ts")
@@ -181,7 +180,7 @@ def main():
                 break
         all_flat = json.loads(json_str)
     except Exception as e:
-        print(f"⚠️ Deno Scraper failed: {e}", file=sys.stderr)
+        trace_print("searchglobalref", "warning", f"Deno Scraper failed: {e}")
         all_flat = []
 
     # Inject APA7 references
@@ -197,7 +196,7 @@ def main():
     final_results = []
     if ollama_ready and all_flat:
         if not args.jsonIO:
-            print(f"[*] Ranking {len(all_flat)} results semantically...", file=sys.stderr)
+            trace_print("searchglobalref", "phase2", f"Ranking {len(all_flat)} results semantically...")
         q_emb = get_embedding(args.query)
         if q_emb is not None:
             ranked = []
@@ -223,6 +222,7 @@ def main():
         final_results = all_flat[:7]
 
     # --- Store in Memory ---
+    trace_print("searchglobalref", "memory", "Storing results in memory...")
     for r in final_results:
         memory_content = (
             f"Source: {r.get('url', '')}\n"
@@ -267,5 +267,5 @@ def main():
             print("---\n", flush=True)
 
 if __name__ == "__main__":
-    print(f"[*] Invoked: {sys.executable} {' '.join(sys.argv)}", file=sys.stderr)
+    trace_print("searchglobalref", "invoke", f"{sys.executable} {' '.join(sys.argv)}")
     main()

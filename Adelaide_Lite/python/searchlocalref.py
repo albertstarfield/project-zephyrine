@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import sys
+from trace_utils import init_trace, trace_print, trace_result
 import os
 import subprocess
 import time
@@ -40,7 +41,7 @@ def apply_base_env():
                 for key, value in base_env.items():
                     os.environ[key] = value
         except Exception as e:
-            print(f"⚠️ Error loading base_env: {e}", file=sys.stderr)
+            trace_print("searchlocalref", "warning", f"Error loading base_env: {e}")
 
 # --- Bootstrap Virtual Environment ---
 VENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyvenv")
@@ -56,7 +57,7 @@ def bootstrap_venv():
     
     if os.path.abspath(sys.prefix) != venv_abs:
         if not os.path.exists(VENV_DIR):
-            print(f"[*] Creating virtual environment in {VENV_DIR}...", file=sys.stderr)
+            trace_print("searchlocalref", "bootstrap", f"Creating virtual environment in {VENV_DIR}...")
             subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True)
             
         python_exe = os.path.join(VENV_DIR, "bin", "python") if os.name != 'nt' else os.path.join(VENV_DIR, "Scripts", "python.exe")
@@ -70,13 +71,14 @@ def bootstrap_venv():
     missing = [mod for mod in CHECK_MODULES if importlib.util.find_spec(mod) is None]
     
     if missing:
-        print(f"[*] Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...", file=sys.stderr)
+        trace_print("searchlocalref", "bootstrap", f"Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...")
         pip_exe = os.path.join(VENV_DIR, "bin", "pip") if os.name != 'nt' else os.path.join(VENV_DIR, "Scripts", "pip.exe")
         subprocess.run([pip_exe, "install", "--upgrade", "pip"], check=True)
         subprocess.run([pip_exe, "install"] + REQUIREMENTS, check=True)
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
 bootstrap_venv()
+init_trace()
 
 # --- Post-Bootstrap Environment Fixes ---
 if "RECOLL_CONFDIR" not in os.environ:
@@ -109,9 +111,9 @@ def load_cache():
         try:
             with open(CACHE_FILE_PATH, 'rb') as f:
                 MEMORY_CACHE = pickle.load(f)
-            print(f"[*] Loaded {len(MEMORY_CACHE)} embedding vectors into active memory.", file=sys.stderr)
+            trace_print("searchlocalref", "cache", f"Loaded {len(MEMORY_CACHE)} embedding vectors into active memory")
         except Exception as e:
-            print(f"⚠️ Failed to load memory cache. Starting fresh: {e}", file=sys.stderr)
+            trace_print("searchlocalref", "warning", f"Failed to load memory cache. Starting fresh: {e}")
             MEMORY_CACHE = {}
 
 def save_cache():
@@ -120,18 +122,19 @@ def save_cache():
         return
         
     if len(MEMORY_CACHE) > MAX_CACHE_ENTRIES:
-        print(f"[*] Memory cache exceeded {MAX_CACHE_ENTRIES} entries. Executing LRU eviction...", file=sys.stderr)
+        trace_print("searchlocalref", "cache", f"Memory cache exceeded {MAX_CACHE_ENTRIES} entries. Executing LRU eviction...")
         sorted_keys = sorted(MEMORY_CACHE.keys(), key=lambda k: MEMORY_CACHE[k]['last_used'])
         keys_to_delete = sorted_keys[:int(MAX_CACHE_ENTRIES * 0.2)]
         for k in keys_to_delete:
             del MEMORY_CACHE[k]
+        trace_print("searchlocalref", "cache", f"LRU eviction: removed {len(keys_to_delete)} entries")
             
     try:
         with open(CACHE_FILE_PATH, 'wb') as f:
             pickle.dump(MEMORY_CACHE, f)
-        print("[*] Memory cache flushed to disk successfully.", file=sys.stderr)
+        trace_print("searchlocalref", "cache", "Flushed to disk")
     except Exception as e:
-        print(f"⚠️ Failed to write cache to disk: {e}", file=sys.stderr)
+        trace_print("searchlocalref", "warning", f"Failed to write cache to disk: {e}")
 
 def get_embedding(text: str) -> Optional[np.ndarray]:
     global MEMORY_CACHE, CACHE_MODIFIED
@@ -165,7 +168,7 @@ def get_embedding(text: str) -> Optional[np.ndarray]:
         CACHE_MODIFIED = True
         return emb_array
     except Exception as e:
-        print(f"⚠️ Embedding API failed: {e}", file=sys.stderr)
+        trace_print("searchlocalref", "warning", f"Embedding API failed: {e}")
         return None
 
 # --- MAIN LOGIC ---
@@ -174,7 +177,7 @@ def ensure_ollama_running():
         requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
         return True
     except Exception:
-        print(f"⚠️ Proxy Ollama not reachable at {OLLAMA_BASE_URL}. Assuming it's managed externally or down.", file=sys.stderr)
+        trace_print("searchlocalref", "ollama", f"Not reachable at {OLLAMA_BASE_URL}. Assuming it's managed externally or down.")
         return False
 
 def cosine_similarity(v1: np.ndarray, v2: np.ndarray) -> float:
@@ -212,7 +215,7 @@ def get_file_paths_from_massive_dump(query: str, limit: int) -> List[str]:
                     
         return unique_paths
     except subprocess.CalledProcessError as e:
-        print(f"❌ recollq failed: {e.stderr}", file=sys.stderr)
+        trace_print("searchlocalref", "error", f"recollq failed: {e.stderr}")
         sys.exit(e.returncode)
 
 def extract_content_via_python(path: str) -> str:
@@ -220,7 +223,7 @@ def extract_content_via_python(path: str) -> str:
         return ""
     ext = os.path.splitext(path)[1].lower()
     text = ""
-    print(f"   ↳ Processing natively: {ext or 'Unknown/Text'}", file=sys.stderr)
+    trace_print("searchlocalref", "extract", f"Processing natively: {ext or 'Unknown/Text'}")
 
     try:
         if ext == '.pdf' and fitz:
@@ -265,7 +268,7 @@ def extract_content_via_python(path: str) -> str:
             with open(path, 'r', encoding='utf-8', errors='ignore') as f:
                 text = f.read()
     except Exception as e:
-        print(f"   ⚠️ Native extraction failed for {os.path.basename(path)}: {e}", file=sys.stderr)
+        trace_print("searchlocalref", "warning", f"Native extraction failed for {os.path.basename(path)}: {e}")
     return text
 
 def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
@@ -331,7 +334,7 @@ def main():
     if args.jsonIO:
         print(json.dumps({"phase": 1, "status": "start", "query": args.query}), flush=True)
     else:
-        print(f"[*] Querying massive recoll dump for '{args.query}'...", file=sys.stderr)
+        trace_print("searchlocalref", "phase1", f"Querying recoll dump for '{args.query}'...")
     
     # Phase 1: Lexical Filter (Recoll TF-IDF -> Top 10)
     t1_start = time.perf_counter()
@@ -354,7 +357,7 @@ def main():
             })
         print(json.dumps({"phase": 1, "status": "complete", "results": phase1_results, "time_ms": (t1_end - t1_start)*1000}), flush=True)
     else:
-        print(f"[*] Lexical Filter isolated Top {len(top_10_files)} documents in {(t1_end - t1_start)*1000:.2f} ms.", file=sys.stderr)
+        trace_print("searchlocalref", "phase1:complete", f"Lexical filter isolated {len(top_10_files)} documents in {(t1_end - t1_start)*1000:.2f} ms")
 
     query_emb = get_embedding(args.query)
     if query_emb is None:
@@ -362,7 +365,7 @@ def main():
 
     all_chunks = []
     if not args.jsonIO:
-        print(f"[*] Executing Python extraction for top {len(top_10_files)} files...", file=sys.stderr)
+        trace_print("searchlocalref", "phase2:extract", f"Extracting content for {len(top_10_files)} files...")
     
     for path in top_10_files:
         text = extract_content_via_python(path)[:MAX_CHARS_PER_FILE]
@@ -374,7 +377,7 @@ def main():
             all_chunks.append({"path": path, "text": chunk})
 
     if not args.jsonIO:
-        print(f"[*] Filtering {len(all_chunks)} chunks against threshold {RANK_THRESHOLD}...", file=sys.stderr)
+        trace_print("searchlocalref", "phase2:chunk", f"Processing {len(all_chunks)} chunks against threshold {RANK_THRESHOLD}...")
     
     # Phase 2: Semantic Chunking (Ollama)
     t2_start = time.perf_counter()
@@ -412,7 +415,7 @@ def main():
             })
         print(json.dumps({"phase": 2, "status": "complete", "results": phase2_results, "time_ms": phase2_ms}), flush=True)
     else:
-        print(f"   ⏱️ Chunk Embedding & Filtering completed in: {phase2_ms:.2f} ms", file=sys.stderr)
+        trace_print("searchlocalref", "phase2:ranking", f"Chunk embedding completed in {phase2_ms:.2f} ms")
 
         # --- Markdown Output ---
         print("\n# Local Search Results (Threshold Filtered)", flush=True)
@@ -439,5 +442,5 @@ def main():
     save_cache()
 
 if __name__ == "__main__":
-    print(f"[*] Invoked: {sys.executable} {' '.join(sys.argv)}", file=sys.stderr)
+    trace_print("searchlocalref", "invoke", f"{sys.executable} {' '.join(sys.argv)}")
     main()

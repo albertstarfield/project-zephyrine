@@ -11,15 +11,45 @@ with Cronia_Scheduler;
 with Proactive_Engine;
 with Ada.Calendar; use Ada.Calendar;
 with Ada.Calendar.Formatting;
+with Adelaide_Trace;
 
 package body Tool_Manager is
+
+   --  ------------------------------------------------------------------------
+   --  ASYNC TOOL EXECUTION TASK
+   --  ------------------------------------------------------------------------
+   --  Spawns a Python tool subprocess in a background Ada task so the caller
+   --  can poll for completion with a configurable heartbeat (every 30 s).
+   --
+   --  Usage pattern in Execute_Tool:
+   --
+   --     declare
+   --        task Runner is
+   --           entry Get_Result (Output : out Unbounded_String;
+   --                             Status : out Integer);
+   --        end Runner;
+   --        task body Runner is ... end Runner;
+   --     begin
+   --        loop
+   --           select
+   --              Runner.Get_Result (Result.Output, Ex_Status);
+   --              Result.Success := (Ex_Status = 0);
+   --              exit;
+   --           or
+   --              delay 30.0;
+   --              Adelaide_Trace.Trace_Print (Name, "STILL_RUNNING",
+   --                "elapsed: " & Integer'Image (Adelaide_Trace.Uptime) & "s");
+   --           end select;
+   --        end loop;
+   --     end;
+   --  ------------------------------------------------------------------------
 
    function Execute_Tool (Name : String; Params : String) return Tool_Result is
       use GNAT.OS_Lib;
       Path : GNAT.OS_Lib.String_Access;
       Full_Cmd : Unbounded_String;
       Result : Tool_Result := (Success => False,
-                               Output  => Null_Unbounded_String);
+                                Output  => Null_Unbounded_String);
    begin
       Path := GNAT.OS_Lib.Locate_Exec_On_Path ("python3");
       if Path = null then
@@ -27,8 +57,8 @@ package body Tool_Manager is
          return Result;
       end if;
 
-      Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Tool]" & AnsiAda.Reset &
-                " Executing: " & Name & " with params: " & Params);
+      Adelaide_Trace.Trace_Print (Toolcall => "dispatch:" & Name,
+        Message => "params: " & Params);
 
       --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -105,21 +135,66 @@ package body Tool_Manager is
          return Result;
       end if;
 
+      --  Async execution with 30 s heartbeat
       declare
-         Arg_List : Argument_List (1 .. 2);
-         Status : aliased Integer;
-      begin
-         Arg_List (1) := new String'(To_String (Full_Cmd));
-         Arg_List (2) := new String'(Params);
-         
-         Result.Output := To_Unbounded_String
-           (GNAT.Expect.Get_Command_Output (Path.all, Arg_List, "",
-            Status'Access));
+         Cmd_Str  : constant String := To_String (Full_Cmd);
+         Params_Str : constant String := Params;
 
-         for I in Arg_List'Range loop Free (Arg_List (I)); end loop;
+         task Runner is
+            entry Get_Result (Output : out Unbounded_String;
+                              Status : out Integer);
+         end Runner;
+
+         task body Runner is
+            use GNAT.OS_Lib;
+            use GNAT.Expect;
+            Local_Args : Argument_List (1 .. 2);
+            Ex_Status  : aliased Integer;
+         begin
+            Local_Args (1) := new String'(Cmd_Str);
+            Local_Args (2) := new String'(Params_Str);
+
+            declare
+               Out_Str : constant String :=
+                 Get_Command_Output (Cmd_Str, Local_Args, "",
+                                     Ex_Status'Access);
+            begin
+               accept Get_Result (Output : out Unbounded_String;
+                                  Status : out Integer) do
+                  Output := To_Unbounded_String (Out_Str);
+                  Status := Ex_Status;
+               end Get_Result;
+            end;
+
+            for I in Local_Args'Range loop
+               Free (Local_Args (I));
+            end loop;
+         end Runner;
+
+         Status : aliased Integer;
+         Heartbeat_Count : Natural := 0;
+      begin
+         --  Wait loop with 30 s heartbeat
+         loop
+            select
+               Runner.Get_Result (Result.Output, Status);
+               Adelaide_Trace.Trace_Result (Name,
+                 Success => (Status = 0),
+                 Detail  => "duration: " &
+                   Integer'Image (Adelaide_Trace.Uptime) & "s" &
+                   " exit_code: " & Integer'Image (Status));
+               Result.Success := (Status = 0);
+               exit;
+            or
+               delay 30.0;
+               Heartbeat_Count := Heartbeat_Count + 1;
+               Adelaide_Trace.Trace_Print (Name, "STILL_RUNNING",
+                 "heartbeat #" & Natural'Image (Heartbeat_Count) &
+                 " elapsed: " & Integer'Image (Adelaide_Trace.Uptime) & "s");
+            end select;
+         end loop;
+
          Free (Path);
-         
-         Result.Success := True;
          return Result;
       end;
    exception
@@ -143,11 +218,12 @@ package body Tool_Manager is
       Image_B64 : Unbounded_String := Null_Unbounded_String;
       Error_Msg : Unbounded_String := Null_Unbounded_String;
       Result    : Tool_Result := (Success => False,
-                                  Output  => Null_Unbounded_String);
+                                   Output  => Null_Unbounded_String);
+      Truncated_Prompt : constant String :=
+        Prompt (Prompt'First .. Integer'Min (Prompt'First + 79, Prompt'Last));
    begin
-      Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Tool-Imagine]" &
-                AnsiAda.Reset & " Generating image for: " &
-                Prompt (Prompt'First .. Integer'Min (Prompt'First + 79, Prompt'Last)));
+      Adelaide_Trace.Trace_Print ("imagine", "generating",
+        "prompt: """ & Truncated_Prompt & """");
 
       SD_Manager.Generate_Two_Stage
         (Prompt         => Prompt,
@@ -163,19 +239,20 @@ package body Tool_Manager is
          Error_Msg      => Error_Msg);
 
       if Length (Error_Msg) > 0 then
-         Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[Tool-Imagine] ERROR: " &
-                   AnsiAda.Reset & To_String (Error_Msg));
+         Adelaide_Trace.Trace_Print ("imagine", "error",
+           To_String (Error_Msg));
          Result.Output := To_Unbounded_String ("Error: " & To_String (Error_Msg));
          return Result;
       end if;
 
       if Length (Image_B64) > 0 then
-         Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Tool-Imagine]" &
-                   AnsiAda.Reset & " Image generated. Base64 length=" &
-                   Integer'Image (Length (Image_B64)));
+         Adelaide_Trace.Trace_Result ("imagine", Success => True,
+           Detail => "Base64 length=" & Integer'Image (Length (Image_B64)));
          Result.Success := True;
          Result.Output := Image_B64;
       else
+         Adelaide_Trace.Trace_Result ("imagine", Success => False,
+           Detail => "image generation returned empty");
          Result.Output := To_Unbounded_String ("Error: Image generation returned empty");
       end if;
 
@@ -197,8 +274,8 @@ package body Tool_Manager is
       Name    : Unbounded_String;
       Rest    : Unbounded_String;
    begin
-      Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Tool-Cronia]" &
-                AnsiAda.Reset & " Params: " & Params);
+      Adelaide_Trace.Trace_Print (Toolcall => "cronia",
+        Message => "params: " & Params);
 
       --  Parse: "name|rest"
       Sep_Pos := Index (Params, "|");
@@ -288,8 +365,8 @@ package body Tool_Manager is
    function Execute_Proactive_Tool (Params : String) return Tool_Result is
       Result : Tool_Result := (Success => False, Output => Null_Unbounded_String);
    begin
-      Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Tool-Proactive]" &
-                AnsiAda.Reset & " Params: " & Params);
+      Adelaide_Trace.Trace_Print (Toolcall => "proactive",
+        Message => "params: " & Params);
 
       if Params = "activate_handless" then
          Proactive_Engine.Activate_Handless_Mode;

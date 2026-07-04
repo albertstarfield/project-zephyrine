@@ -22,6 +22,7 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 import subprocess
 import sys
 import re
+from trace_utils import init_trace, trace_print
 
 
 def run_grep(pattern, path=".", options=None):
@@ -78,12 +79,15 @@ def main():
             paths.append(args[i])
             i += 1
 
+    init_trace()
+
     if cmd == "search" or cmd == "regex":
         if not paths:
             print("ERROR: Usage: grep.py search <pattern> [path]")
             return 1
         pattern = paths[0]
         path = paths[1] if len(paths) > 1 else "."
+        trace_print("grep", cmd, f"pattern: {pattern}, path: {path}")
         output = run_grep(pattern, path, options)
         print(output if output else "No matches found")
 
@@ -93,6 +97,7 @@ def main():
             return 1
         pattern = re.escape(paths[0])
         path = paths[1] if len(paths) > 1 else "."
+        trace_print("grep", cmd, f"pattern: {pattern}, path: {path}")
         output = run_grep(pattern, path, options)
         print(output if output else "No matches found")
 
@@ -102,6 +107,7 @@ def main():
             return 1
         pattern = paths[0]
         path = paths[1] if len(paths) > 1 else "."
+        trace_print("grep", cmd, f"pattern: {pattern}, path: {path}")
         cmd_list = ["grep", "-r", "-c", pattern, path]
         if options.get("ignore_case"):
             cmd_list.insert(2, "-i")
@@ -122,6 +128,7 @@ def main():
             return 1
         pattern = paths[0]
         path = paths[1] if len(paths) > 1 else "."
+        trace_print("grep", cmd, f"pattern: {pattern}, path: {path}")
         cmd_list = ["grep", "-r", "-l", pattern, path]
         if options.get("ignore_case"):
             cmd_list.insert(2, "-i")
