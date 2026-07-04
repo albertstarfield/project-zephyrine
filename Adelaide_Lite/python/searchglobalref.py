@@ -269,3 +269,4 @@ def main():
 if __name__ == "__main__":
     trace_print("searchglobalref", "invoke", f"{sys.executable} {' '.join(sys.argv)}")
     main()
+    trace_result("searchglobalref", True)
