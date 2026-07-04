@@ -143,12 +143,12 @@ package body Reranker is
    --    3. OOM (Storage_Error) → halve token count, retry once
    --
    --  Why retries matter:
-   --    The reranker scores 10 docs sequentially. Without retry, a single
-   --    transient failure (Metal warm-up, OOM spike) would give that doc
+   --    The reranker scores 10 entrySlices sequentially. Without retry, a single
+   --    transient failure (Metal warm-up, OOM spike) would give that entrySlice
    --    score -1.0e9 and potentially lose the best result.
    --  ========================================================================
-   function Score_Pair (Query : String; Doc : String) return Float is
-      Pair_Text : constant String := Query & Character'Val (9) & Doc;
+   function Score_Pair (Query : String; EntrySlice : String) return Float is
+      Pair_Text : constant String := Query & Character'Val (9) & EntrySlice;
 
       type Token_Array is array (Natural range <>) of Llama_Interface.Llama_Token;
       Tokens : Token_Array (0 .. 511);
@@ -323,8 +323,8 @@ package body Reranker is
 
    procedure Rerank_Scores
      (Query         : String;
-      Doc_Contents  : access function (Idx : Natural) return String;
-      N_Docs        : Natural;
+       EntrySlice_Contents  : access function (Idx : Natural) return String;
+       N_EntrySlices        : Natural;
       Top_K         : Natural;
       Best_Idx      : out Natural;
       Best_Score    : out Float)
@@ -334,14 +334,14 @@ package body Reranker is
       Best_Idx := 1;
       Best_Score := -1.0e9;
 
-      if not Ready or N_Docs = 0 then
+      if not Ready or N_EntrySlices = 0 then
          return;
       end if;
 
       --  Score each document against the query (1-indexed to match Chunk_Array)
-      for I in 1 .. N_Docs loop
+      for I in 1 .. N_EntrySlices loop
          declare
-            Score : constant Float := Score_Pair (Query, Doc_Contents (I));
+            Score : constant Float := Score_Pair (Query, EntrySlice_Contents (I));
          begin
             if Score > Best_Score then
                Best_Score := Score;
@@ -350,7 +350,7 @@ package body Reranker is
          end;
       end loop;
 
-      Put_Line ("[Reranker] Scored" & Natural'Image (N_Docs) & " documents."
+      Put_Line ("[Reranker] Scored" & Natural'Image (N_EntrySlices) & " entrySlices."
                 & " Best: #" & Natural'Image (Best_Idx)
                 & " score=" & Float'Image (Best_Score));
    end Rerank_Scores;

@@ -7245,15 +7245,15 @@ package body Model_Manager is
                     if Rerank_Ready and Int_Count > 1 then
                         --  Build closure to access Int_Results by index
                         declare
-                            function Get_Doc (Idx : Natural) return String is
+                            function Get_EntrySlice (Idx : Natural) return String is
                             begin
                                 return To_String (Int_Results (Idx).Content);
-                            end Get_Doc;
+                            end Get_EntrySlice;
                         begin
                             Reranker.Rerank_Scores
-                               (Query        => Prompt,
-                                Doc_Contents => Get_Doc'Access,
-                                N_Docs       => Int_Count,
+                               (Query              => Prompt,
+                                EntrySlice_Contents => Get_EntrySlice'Access,
+                                N_EntrySlices       => Int_Count,
                                 Top_K        => 1,
                                 Best_Idx     => Best_Idx,
                                 Best_Score   => Best_Score);
@@ -7306,15 +7306,15 @@ package body Model_Manager is
                     Reranker.Initialize (Rerank_Ready);
                     if Rerank_Ready and Lit_Count > 1 then
                         declare
-                            function Get_Doc (Idx : Natural) return String is
+                            function Get_EntrySlice (Idx : Natural) return String is
                             begin
                                 return To_String (Lit_Results (Idx).Content);
-                            end Get_Doc;
+                            end Get_EntrySlice;
                         begin
                             Reranker.Rerank_Scores
-                               (Query        => Prompt,
-                                Doc_Contents => Get_Doc'Access,
-                                N_Docs       => Lit_Count,
+                               (Query              => Prompt,
+                                EntrySlice_Contents => Get_EntrySlice'Access,
+                                N_EntrySlices       => Lit_Count,
                                 Top_K        => 1,
                                 Best_Idx     => Best_Idx,
                                 Best_Score   => Best_Score);
