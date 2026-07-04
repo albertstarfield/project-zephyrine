@@ -2078,6 +2078,44 @@ def real_main():
                 "[!] Warning: ruff not found in PATH, skipping self-integrity quality check."
             )
 
+        # 4a. CrossHair Symbolic Analysis for python/ sidecars
+        print("[*] Ensuring CrossHair is installed...")
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "crosshair-tool"], check=True, capture_output=True)
+            print("[*] Running CrossHair Symbolic Verification on python sidecars...")
+            
+            python_dir = os.path.join(BASE_DIR, "python")
+            target_files = []
+            for root_dir, _, files in os.walk(python_dir):
+                for f in files:
+                    if f.endswith(".py") and not f.startswith("test"):
+                        target_files.append(os.path.join(root_dir, f))
+            
+            if target_files:
+                result = subprocess.run(
+                    [sys.executable, "-m", "crosshair", "check", "--per_condition_timeout", "1"] + target_files,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 1:
+                    print(result.stdout)
+                    print(result.stderr)
+                    raise RuntimeError(
+                        "INTEGRITY_CHECK_FAILURE: CrossHair contract violations detected in python/ sidecars."
+                    )
+                elif result.returncode == 2:
+                    print(result.stdout)
+                    print(result.stderr)
+                    raise RuntimeError(
+                        "INTEGRITY_CHECK_FAILURE: CrossHair execution error in python/ sidecars."
+                    )
+                else:
+                    print("[+] CrossHair Symbolic Verification PASSED.")
+        except Exception as e:
+            if isinstance(e, RuntimeError):
+                raise
+            raise RuntimeError(f"INTEGRITY_CHECK_FAILURE: CrossHair initialization error: {e}")
+
         # 4b. Pyrefly check for python/ sidecars
         pyrefly_cmd = "pyrefly.exe" if platform.system() == "Windows" else "pyrefly"
         if shutil.which(pyrefly_cmd):

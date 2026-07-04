@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "biome check src && tsc && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.2",
     "@types/cytoscape": "^3.21.9",
     "@types/dompurify": "^3.0.5",
     "@types/katex": "^0.16.8",
