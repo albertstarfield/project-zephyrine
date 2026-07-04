@@ -17,6 +17,7 @@ import subprocess
 import sys
 import os
 import re
+from trace_utils import init_trace, trace_print, trace_result
 
 
 def run_command(cmd):
@@ -106,6 +107,8 @@ def main():
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
+    init_trace()
+
     if cmd == "diff":
         branch = args[0] if args else "main"
         print(run_command(["git", "diff", branch]))
@@ -118,21 +121,23 @@ def main():
         if not os.path.exists(filepath):
             print(f"ERROR: File not found: {filepath}")
             return 1
-        print(f"=== Code Review: {filepath} ===")
-        print("\n--- Security Issues ---")
-        issues = security_check(filepath)
-        if issues:
-            for issue in issues:
+        trace_print("review", "file", filepath)
+        trace_print("review", "security", "scanning...")
+        sec_issues = security_check(filepath)
+        if sec_issues:
+            for issue in sec_issues:
                 print(issue)
         else:
             print("No security issues found")
-        print("\n--- Quality Issues ---")
-        issues = quality_check(filepath)
-        if issues:
-            for issue in issues:
+        trace_print("review", "quality", "scanning...")
+        qual_issues = quality_check(filepath)
+        if qual_issues:
+            for issue in qual_issues:
                 print(issue)
         else:
             print("No quality issues found")
+        total = len(sec_issues) + len(qual_issues)
+        trace_result("review", True, f"found {total} issues")
 
     elif cmd == "security":
         if not args:

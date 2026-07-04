@@ -16,6 +16,7 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 
 import subprocess
 import sys
+from trace_utils import init_trace, trace_print
 
 
 def run_command(cmd, cwd=None):
@@ -36,12 +37,15 @@ def run_command(cmd, cwd=None):
 
 
 def main():
+    init_trace()
     if len(sys.argv) < 2:
         print(__doc__)
         return 1
 
     cmd = sys.argv[1]
     args = sys.argv[2:]
+
+    trace_print("test", cmd, " ".join(args))
 
     if cmd == "pytest":
         print(run_command(["python3", "-m", "pytest"] + args))

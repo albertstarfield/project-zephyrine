@@ -1680,6 +1680,16 @@ def real_main():
     end_time = int(time.time() * 1000)
     print(f"[*] Startup completed in {end_time - start_time}ms (WCET)")
 
+    # ── Trace verbosity prefix ──────────────────────────────────────────────
+    # Set ADELAIDE_TOOL_TRACE_PREFIX so Ada server and all Python tool scripts
+    # emit consistent [prefix][Toolcall][+uptime] trace lines.
+    # The prefix is derived from --verbose: verbose → "[ADA]" (visible on tty),
+    # default/kiss → "[ADA]" (still captured in log files).
+    os.environ["ADELAIDE_TOOL_TRACE_PREFIX"] = "[ADA]"
+    # Disable trace when not verbose? No — always enabled, always goes to logs.
+    # User sees traces on terminal when --verbose is active (via _TeeWriter).
+    os.environ["ADELAIDE_TOOL_TRACE_ENABLED"] = "1"
+
     server_bin = "adelaide_server.exe" if platform.system() == "Windows" else "adelaide_server"
     server_path = os.path.join(BASE_DIR, "bin", server_bin)
 

@@ -17,6 +17,7 @@ DO NOT REMOVE, OR YOU WILL BE KILLED
 
 import subprocess
 import sys
+from trace_utils import init_trace, trace_print
 
 
 def run_gh(args):
@@ -42,6 +43,9 @@ def main():
 
     cmd = sys.argv[1]
     args = sys.argv[2:]
+
+    init_trace()
+    trace_print("issue", cmd, f"args: {args}")
 
     if cmd == "list":
         print(run_gh(["issue", "list"]))

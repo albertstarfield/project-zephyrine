@@ -19,6 +19,7 @@ import sys
 import os
 import glob
 import shutil
+from trace_utils import init_trace, trace_print
 
 
 def list_dir(path=".", show_hidden=False):
@@ -72,6 +73,7 @@ def tree(path=".", depth=2, prefix=""):
 
 
 def main():
+    init_trace()
     if len(sys.argv) < 2:
         print(__doc__)
         return 1
@@ -80,6 +82,7 @@ def main():
 
     if cmd == "ls":
         path = sys.argv[2] if len(sys.argv) > 2 else "."
+        trace_print("directory", cmd, f"path: {path}")
         show_hidden = "--hidden" in sys.argv
         list_dir(path, show_hidden)
 
@@ -87,29 +90,35 @@ def main():
         if len(sys.argv) < 4:
             print("ERROR: Usage: directory.py find <path> <pattern>")
             return 1
+        trace_print("directory", cmd, f"path: {sys.argv[2]}")
         find_files(sys.argv[2], sys.argv[3])
 
     elif cmd == "tree":
         path = sys.argv[2] if len(sys.argv) > 2 else "."
+        trace_print("directory", cmd, f"path: {path}")
         depth = int(sys.argv[3]) if len(sys.argv) > 3 else 2
         print(f"{path}/")
         tree(path, depth)
 
     elif cmd == "pwd":
+        trace_print("directory", cmd, "path: (cwd)")
         print(os.getcwd())
 
     elif cmd == "mkdir":
         if len(sys.argv) < 3:
             print("ERROR: Usage: directory.py mkdir <path>")
             return 1
-        os.makedirs(sys.argv[2], exist_ok=True)
-        print(f"OK: Created {sys.argv[2]}")
+        path = sys.argv[2]
+        trace_print("directory", cmd, f"path: {path}")
+        os.makedirs(path, exist_ok=True)
+        print(f"OK: Created {path}")
 
     elif cmd == "rm":
         if len(sys.argv) < 3:
             print("ERROR: Usage: directory.py rm <path>")
             return 1
         path = sys.argv[2]
+        trace_print("directory", cmd, f"path: {path}")
         if os.path.isdir(path):
             shutil.rmtree(path)
             print(f"OK: Removed directory {path}")

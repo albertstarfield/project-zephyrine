@@ -19,6 +19,7 @@ import sys
 import os
 import json
 from datetime import datetime
+from trace_utils import init_trace, trace_print
 
 
 TODO_FILE = os.path.join(os.path.dirname(__file__), ".todos.json")
@@ -46,6 +47,8 @@ def main():
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
+    init_trace()
+
     todos = load_todos()
 
     if cmd == "add":
@@ -62,7 +65,7 @@ def main():
         todos["tasks"].append(new_task)
         todos["next_id"] += 1
         save_todos(todos)
-        print(f"OK: Added task #{new_task['id']}: {task}")
+        trace_print("todo", "add", f"#{new_task['id']}: {task}")
 
     elif cmd == "list":
         if not todos["tasks"]:
@@ -81,7 +84,7 @@ def main():
             if task["id"] == task_id:
                 task["done"] = True
                 save_todos(todos)
-                print(f"OK: Marked task #{task_id} as done")
+                trace_print("todo", "done", f"#{task_id}")
                 return 0
         print(f"ERROR: Task #{task_id} not found")
 
@@ -94,14 +97,14 @@ def main():
             if task["id"] == task_id:
                 todos["tasks"].pop(i)
                 save_todos(todos)
-                print(f"OK: Removed task #{task_id}")
+                trace_print("todo", "remove", f"#{task_id}")
                 return 0
         print(f"ERROR: Task #{task_id} not found")
 
     elif cmd == "clear":
         todos["tasks"] = [t for t in todos["tasks"] if not t["done"]]
         save_todos(todos)
-        print("OK: Cleared done tasks")
+        trace_print("todo", "clear", "")
 
     elif cmd == "search":
         if not args:

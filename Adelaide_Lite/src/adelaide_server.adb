@@ -58,6 +58,7 @@ with Interfaces.C; use Interfaces.C;
 with SD_Manager;
 with Response_Cache;
 with API_Key_Manager;
+with Adelaide_Trace;
 
 --  ===========================================================================
 --  SERVER QUIRKS & DISCOVERED WORKAROUNDS
@@ -379,6 +380,9 @@ begin
       Put_Line (" / ___ / /_/ /  __/ / /_/ / / /_/ /  __/ ");
       Put_Line ("/_/  |_\__,_/\___/_/\__,_/_/\__,_/\___/ ");
       Put_Line ("");
+
+      --  Initialize the trace system for [prefix][Toolcall][+uptime] format.
+      Adelaide_Trace.Initialize;
 
       --  ==================================================================
       --  STEP 0: Disk Read Benchmark (1GB sequential from GGUF)
