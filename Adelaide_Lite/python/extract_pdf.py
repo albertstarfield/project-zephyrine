@@ -15,7 +15,7 @@ def main():
         entrySlice = fitz.open(path)
         text = ""
         for page in entrySlice:
-            text += page.get_text() + "\n"
+            text += f"{page.get_text()}\n"
         print(text)
     except ImportError:
         print("⚠️ PyMuPDF (fitz) is required for PDF extraction.", file=sys.stderr)

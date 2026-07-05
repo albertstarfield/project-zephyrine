@@ -12,6 +12,7 @@ with Proactive_Engine;
 with Ada.Calendar; use Ada.Calendar;
 with Ada.Calendar.Formatting;
 with Adelaide_Trace;
+with Zenith_Orion;
 
 package body Tool_Manager is
 
@@ -129,6 +130,10 @@ package body Tool_Manager is
       elsif Name = "proactive" or else Name = "proactive_question" or else Name = "handless" then
          Free (Path);
          return Execute_Proactive_Tool (Params);
+      --  ROS2 TOOL: Actuate and Telemetry trigger
+      elsif Name = "ros2" or else Name = "actuator" then
+         Free (Path);
+         return Execute_ROS2_Tool (Params);
       else
          Free (Path);
          Result.Output := To_Unbounded_String ("Error: Unknown tool " & Name);
@@ -431,5 +436,34 @@ package body Tool_Manager is
 
       return Result;
    end Execute_Proactive_Tool;
+
+   --  ROS2 TOOL: Trigger native Ada ROS2 actuator via ELP3
+   --  Params format: "servo_id|angle"
+   function Execute_ROS2_Tool (Params : String) return Tool_Result is
+      Result : Tool_Result := (Success => False, Output => Null_Unbounded_String);
+      Pipe_Idx : Natural := Index (Params, "|");
+   begin
+      if Pipe_Idx = 0 or else Pipe_Idx = Params'First or else Pipe_Idx = Params'Last then
+         Result.Output := To_Unbounded_String ("Error: Invalid ROS2 tool parameters. Expected 'servo_id|angle'.");
+         return Result;
+      end if;
+
+      declare
+         Servo_ID : constant String := Params (Params'First .. Pipe_Idx - 1);
+         Angle_Str : constant String := Params (Pipe_Idx + 1 .. Params'Last);
+         Angle : Float;
+      begin
+         Angle := Float'Value (Angle_Str);
+         -- Push to ZenithOrion Buffer for ELP3 execution
+         Zenith_Orion.ROS2_Command_Buffer.Push_Command (Servo_ID, Angle);
+
+         Result.Success := True;
+         Result.Output := To_Unbounded_String ("ROS2 Command pushed to fast-path buffer successfully.");
+      exception
+         when others =>
+            Result.Output := To_Unbounded_String ("Error: Could not parse Angle as Float.");
+            return Result;
+      end;
+   end Execute_ROS2_Tool;
 
 end Tool_Manager;

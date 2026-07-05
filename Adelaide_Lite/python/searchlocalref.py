@@ -20,14 +20,15 @@ try:
     import numpy as np
     from adelaide_bridge import AdelaideBridge
 except ImportError:
-    requests = None
-    np = None
-    AdelaideBridge = None
+    import typing
+    requests: typing.Any = None
+    np: typing.Any = None
+    AdelaideBridge: typing.Any = None
 
 try:
     import fitz # PyMuPDF
 except ImportError:
-    fitz = None
+    fitz: typing.Any = None
 
 # --- Environment Setup ---
 def apply_base_env():
@@ -229,7 +230,7 @@ def extract_content_via_python(path: str) -> str:
         if ext == '.pdf' and fitz:
             entrySlice = fitz.open(path)
             for page in entrySlice:
-                text += page.get_text() + "\n"
+                text += f"{page.get_text()}\n"
         elif ext in ['.xlsx', '.xls']:
             import openpyxl
             wb = openpyxl.load_workbook(path, data_only=True)

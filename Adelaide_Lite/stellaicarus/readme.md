@@ -92,6 +92,7 @@ The `StellaIcarusHookManager` scans for hooks **only at application startup**. T
 
 ### Path Forward
 -   **For Python Hooks:** All new hooks **must** adhere to the robust, defensive design pattern of `basic_math_hook.py`. Prioritize stability, graceful fallbacks, and JIT compilation. New hooks are placed in the `./StellaIcarus/` directory.
+-   **For ROS2 Integration:** ROS2 Nodes for telemetry should be placed in `ros2_daemon/`. ROS2 hooks for deterministic actuator reflexes MUST target either **ELP3** (strictly for safety/failure-critical, time-sensitive actuators requiring consistent 1ms timing like balancing) or **ELP2** (for all other non-critical actuators) to bypass the non-deterministic generative queue.
 -   **For Ada Daemons:** The highest priority is to **identify and fix the root cause of the segmentation faults.** Development must focus on debugging memory access and ensuring all code leverages Ada's built-in safety features. New daemons are placed in a subdirectory of `./StellaIcarus_Ada/`.
 
 Until the Ada implementation can guarantee stability, the Python hooks represent the more reliable and production-ready component of the Stella Icarus subsystem.
