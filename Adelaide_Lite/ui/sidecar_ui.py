@@ -66,12 +66,16 @@ try:
 except Exception:
     _crypto_available = False
 
-def _enc(val: str) -> str:
+def _enc(val: str, sub_key=None) -> str:
     """Encrypt a field value. Returns encrypted hex blob."""
     if not _crypto_available or not val:
         return val
     # Skip if already encrypted
-    return val  # Callers must check/substitute manually
+    if is_field_encrypted(str(val)):
+        return val
+    if sub_key is None:
+        return val
+    return encrypt_field(sub_key, val)
 
 def _cc(val: str, sub_key) -> str:
     """Conditional encrypt: plaintext → hex blob (or pass-through)."""

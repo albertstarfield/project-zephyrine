@@ -171,13 +171,14 @@ def derive_sub_key(master_key_hex: str, context: str) -> bytes:
 
 # ── AES-256-GCM Encrypt / Decrypt (MUST match C shim) ────────────────────
 
-def encrypt_field(sub_key: bytes, plaintext: str) -> str:
+def encrypt_field(sub_key: bytes, plaintext: str, aad: str | None = None) -> str:
     """
     Encrypt a string field with AES-256-GCM.
 
     Args:
         sub_key:  32-byte AES-256 sub-key (from derive_sub_key).
         plaintext: UTF-8 text to encrypt.
+        aad:      Additional Authenticated Data (optional, bound to ciphertext).
 
     Returns:
         Hex-encoded ciphertext blob: nonce(12) || ciphertext || tag(16).
@@ -188,28 +189,30 @@ def encrypt_field(sub_key: bytes, plaintext: str) -> str:
     aesgcm = AESGCM(sub_key)
     nonce = os.urandom(NONCE_SIZE)
     pt_bytes = plaintext.encode("utf-8") if isinstance(plaintext, str) else plaintext
+    aad_bytes = aad.encode("utf-8") if aad else None
 
     # AESGCM.encrypt returns ciphertext + tag (16 bytes appended)
-    ct_with_tag = aesgcm.encrypt(nonce, pt_bytes, None)
+    ct_with_tag = aesgcm.encrypt(nonce, pt_bytes, aad_bytes)
 
     # Build blob: nonce(12) || ciphertext || tag(16)
     blob = nonce + ct_with_tag
     return blob.hex()
 
 
-def decrypt_field(sub_key: bytes, ciphertext_hex: str) -> str:
+def decrypt_field(sub_key: bytes, ciphertext_hex: str, aad: str | None = None) -> str:
     """
     Decrypt a hex-encoded field from AES-256-GCM.
 
     Args:
         sub_key:        32-byte AES-256 sub-key.
         ciphertext_hex: Hex-encoded blob: nonce(12) || ciphertext || tag(16).
+        aad:            Additional Authenticated Data (must match encryption AAD).
 
     Returns:
         Decrypted UTF-8 plaintext string.
 
     Raises:
-        ValueError: If auth tag verification fails (wrong key or corrupted data).
+        ValueError: If auth tag verification fails (wrong key, corrupted data, or AAD mismatch).
     """
     if not HAS_AESGCM:
         raise RuntimeError("cryptography library not available (pip install cryptography)")
@@ -224,14 +227,15 @@ def decrypt_field(sub_key: bytes, ciphertext_hex: str) -> str:
 
     nonce = blob[:NONCE_SIZE]
     ct_with_tag = blob[NONCE_SIZE:]
+    aad_bytes = aad.encode("utf-8") if aad else None
 
     aesgcm = AESGCM(sub_key)
     # AESGCM.decrypt expects ciphertext||tag combined
     try:
-        plaintext = aesgcm.decrypt(nonce, ct_with_tag, None)
+        plaintext = aesgcm.decrypt(nonce, ct_with_tag, aad_bytes)
     except Exception as e:
         raise ValueError(
-            f"Decryption failed (wrong key or corrupted data): {e}"
+            f"Decryption failed (wrong key, corrupted data, or AAD mismatch): {e}"
         ) from e
     return plaintext.decode("utf-8")
 
@@ -455,6 +459,165 @@ def edit_api_key(old_key: str, new_key: str) -> list[str]:
     keys = [new_key if k == old_key else k for k in keys]
     save_api_keys(keys)
     return keys
+
+
+# ── Key Rotation ──────────────────────────────────────────────────────────
+
+def rotate_master_key(new_master_hex: str | None = None) -> str:
+    """
+    Rotate the master key and re-encrypt all databases.
+    
+    Args:
+        new_master_hex: New master key (64 hex chars). If None, generates a new one.
+    
+    Returns:
+        The new master key (64 hex chars).
+    
+    Raises:
+        RuntimeError: If rotation fails mid-way (data may be partially encrypted).
+    """
+    import sqlite3
+    import json
+    
+    # Load old key
+    old_master_hex = load_master_key()
+    old_sub_keys = {
+        "memory": derive_sub_key(old_master_hex, CTX_MEMORY),
+        "literature": derive_sub_key(old_master_hex, CTX_LITERATURE),
+        "assistant": derive_sub_key(old_master_hex, CTX_ASSISTANT),
+        "memory_index": derive_sub_key(old_master_hex, CTX_MEMORY_INDEX),
+    }
+    
+    # Generate or use provided new key
+    if new_master_hex is None:
+        new_master_hex = generate_master_key()
+    
+    new_sub_keys = {
+        "memory": derive_sub_key(new_master_hex, CTX_MEMORY),
+        "literature": derive_sub_key(new_master_hex, CTX_LITERATURE),
+        "assistant": derive_sub_key(new_master_hex, CTX_ASSISTANT),
+        "memory_index": derive_sub_key(new_master_hex, CTX_MEMORY_INDEX),
+    }
+    
+    print(f"[CRYPTO] Rotating master key...")
+    print(f"[CRYPTO] Old key: {old_master_hex[:8]}...")
+    print(f"[CRYPTO] New key: {new_master_hex[:8]}...")
+    
+    # Re-encrypt adelaide_memory.db
+    db_path = os.path.join(os.path.dirname(__file__), "adelaide_memory.db")
+    if os.path.exists(db_path):
+        _re_encrypt_db(db_path, old_sub_keys["memory"], new_sub_keys["memory"],
+                       ["memories"], ["input", "response", "image_b64"])
+        _re_encrypt_db(db_path, old_sub_keys["memory"], new_sub_keys["memory"],
+                       ["response_cache"], ["prompt", "response"])
+        _re_encrypt_db(db_path, old_sub_keys["memory"], new_sub_keys["memory"],
+                       ["imagined_images"], ["prompt", "image_b64"])
+    
+    # Re-encrypt literatureRefIndex.db
+    db_path = os.path.join(os.path.dirname(__file__), "literatureRefIndex.db")
+    if os.path.exists(db_path):
+        _re_encrypt_db(db_path, old_sub_keys["literature"], new_sub_keys["literature"],
+                       ["chunks"], ["content"])
+    
+    # Re-encrypt assistant_session.db
+    db_path = os.path.join(os.path.dirname(__file__), "assistant_session.db")
+    if os.path.exists(db_path):
+        _re_encrypt_db(db_path, old_sub_keys["assistant"], new_sub_keys["assistant"],
+                       ["messages"], ["content"])
+    
+    # Re-encrypt memoryRefIndex.db
+    db_path = os.path.join(os.path.dirname(__file__), "memoryRefIndex.db")
+    if os.path.exists(db_path):
+        _re_encrypt_db(db_path, old_sub_keys["memory_index"], new_sub_keys["memory_index"],
+                       ["memories"], ["content"])
+    
+    # Re-encrypt API key store
+    api_key_file = os.path.join(CONFIG_DIR, "api_keys.enc")
+    if os.path.exists(api_key_file):
+        try:
+            keys = load_api_keys()
+            # Save with new key
+            payload = json.dumps({"keys": keys})
+            blob_hex = encrypt_file(payload, CTX_API_KEYS)
+            with open(api_key_file, "w") as f:
+                f.write(blob_hex + "\n")
+            print(f"[CRYPTO] api_keys.enc: re-encrypted with new key")
+        except Exception as e:
+            print(f"[CRYPTO] WARNING: Failed to re-encrypt api_keys.enc: {e}")
+    
+    # Persist new key
+    try:
+        os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
+        with open(KEY_FILE, "w") as f:
+            f.write(new_master_hex + "\n")
+        os.chmod(KEY_FILE, 0o600)
+        print(f"[CRYPTO] New master key written to {KEY_FILE}")
+    except (OSError, IOError) as e:
+        print(f"[CRYPTO] WARNING: Could not persist new key to {KEY_FILE}: {e}")
+    
+    # Set env var
+    os.environ["ADELAIDE_MASTER_KEY"] = new_master_hex
+    
+    print(f"[CRYPTO] Key rotation complete!")
+    return new_master_hex
+
+
+def _re_encrypt_db(db_path: str, old_sub_key: bytes, new_sub_key: bytes,
+                   tables: list[str], columns: list[str]) -> None:
+    """Re-encrypt all rows in specified tables/columns with a new sub-key."""
+    import sqlite3
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    for table in tables:
+        # Check if table exists
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (table,)
+        )
+        if not cursor.fetchone():
+            continue
+        
+        # Get all rows
+        cols = ", ".join(["rowid"] + columns)
+        cursor.execute(f"SELECT {cols} FROM {table}")
+        rows = cursor.fetchall()
+        
+        migrated = 0
+        for row in rows:
+            rowid = row[0]
+            needs_update = False
+            new_values = []
+            
+            for i, col in enumerate(columns):
+                val = row[i + 1]
+                if val and is_field_encrypted(str(val)):
+                    # Decrypt with old key, encrypt with new key
+                    try:
+                        plaintext = decrypt_field(old_sub_key, str(val))
+                        encrypted = encrypt_field(new_sub_key, plaintext)
+                        new_values.append(encrypted)
+                        needs_update = True
+                    except ValueError:
+                        # Already encrypted with new key or corrupted
+                        new_values.append(val)
+                else:
+                    new_values.append(val)
+            
+            if needs_update:
+                set_clause = ", ".join(f"{col}=?" for col in columns)
+                cursor.execute(
+                    f"UPDATE {table} SET {set_clause} WHERE rowid=?",
+                    new_values + [rowid]
+                )
+                migrated += 1
+        
+        if migrated > 0:
+            print(f"[CRYPTO] {table}: re-encrypted {migrated} rows")
+    
+    conn.commit()
+    conn.close()
 
 
 # ── Standalone Test ──────────────────────────────────────────────────────

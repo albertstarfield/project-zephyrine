@@ -198,6 +198,13 @@ package body Adelaide_Crypto is
       if Res.Success and then Res.Data /= Null_Unbounded_String then
          return To_String (Res.Data);
       end if;
+      --  WARNING: Encryption failed, storing plaintext!
+      Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+        "[CRYPTO] WARNING: Encryption failed for field (" &
+        Positive'Image (Plaintext'Length) & " bytes). " &
+        "Data stored in PLAINTEXT. Error: " &
+        (if Res.Error /= Null_Unbounded_String then To_String (Res.Error)
+         else "unknown"));
       return Plaintext;  -- fallback (best effort)
    end Try_Encrypt;
 
@@ -210,6 +217,13 @@ package body Adelaide_Crypto is
       if Res.Success and then Res.Data /= Null_Unbounded_String then
          return To_String (Res.Data);
       end if;
+      --  WARNING: Decryption failed, returning ciphertext!
+      Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error,
+        "[CRYPTO] WARNING: Decryption failed for field (" &
+        Positive'Image (Ciphertext_Hex'Length) & " hex chars). " &
+        "Returning raw ciphertext. Error: " &
+        (if Res.Error /= Null_Unbounded_String then To_String (Res.Error)
+         else "unknown"));
       return Ciphertext_Hex;  -- fallback (best effort)
    end Try_Decrypt;
 
