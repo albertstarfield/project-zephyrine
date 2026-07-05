@@ -207,6 +207,8 @@ def decrypt_field(sub_key: bytes, ciphertext_hex: str, aad: str | None = None) -
         sub_key:        32-byte AES-256 sub-key.
         ciphertext_hex: Hex-encoded blob: nonce(12) || ciphertext || tag(16).
         aad:            Additional Authenticated Data (must match encryption AAD).
+                        If provided and verification fails, retries without AAD
+                        for backward compatibility with pre-AAD encrypted data.
 
     Returns:
         Decrypted UTF-8 plaintext string.
@@ -230,9 +232,19 @@ def decrypt_field(sub_key: bytes, ciphertext_hex: str, aad: str | None = None) -
     aad_bytes = aad.encode("utf-8") if aad else None
 
     aesgcm = AESGCM(sub_key)
-    # AESGCM.decrypt expects ciphertext||tag combined
+    
+    # Try with AAD first
+    if aad_bytes:
+        try:
+            plaintext = aesgcm.decrypt(nonce, ct_with_tag, aad_bytes)
+            return plaintext.decode("utf-8")
+        except Exception:
+            # AAD verification failed — try without AAD (backward compatibility)
+            pass
+    
+    # Fallback: decrypt without AAD (legacy data)
     try:
-        plaintext = aesgcm.decrypt(nonce, ct_with_tag, aad_bytes)
+        plaintext = aesgcm.decrypt(nonce, ct_with_tag, None)
     except Exception as e:
         raise ValueError(
             f"Decryption failed (wrong key, corrupted data, or AAD mismatch): {e}"
@@ -476,7 +488,6 @@ def rotate_master_key(new_master_hex: str | None = None) -> str:
     Raises:
         RuntimeError: If rotation fails mid-way (data may be partially encrypted).
     """
-    import sqlite3
     import json
     
     # Load old key
@@ -499,7 +510,7 @@ def rotate_master_key(new_master_hex: str | None = None) -> str:
         "memory_index": derive_sub_key(new_master_hex, CTX_MEMORY_INDEX),
     }
     
-    print(f"[CRYPTO] Rotating master key...")
+    print("[CRYPTO] Rotating master key...")
     print(f"[CRYPTO] Old key: {old_master_hex[:8]}...")
     print(f"[CRYPTO] New key: {new_master_hex[:8]}...")
     
@@ -541,7 +552,7 @@ def rotate_master_key(new_master_hex: str | None = None) -> str:
             blob_hex = encrypt_file(payload, CTX_API_KEYS)
             with open(api_key_file, "w") as f:
                 f.write(blob_hex + "\n")
-            print(f"[CRYPTO] api_keys.enc: re-encrypted with new key")
+            print("[CRYPTO] api_keys.enc: re-encrypted with new key")
         except Exception as e:
             print(f"[CRYPTO] WARNING: Failed to re-encrypt api_keys.enc: {e}")
     
@@ -558,7 +569,7 @@ def rotate_master_key(new_master_hex: str | None = None) -> str:
     # Set env var
     os.environ["ADELAIDE_MASTER_KEY"] = new_master_hex
     
-    print(f"[CRYPTO] Key rotation complete!")
+    print("[CRYPTO] Key rotation complete!")
     return new_master_hex
 
 
@@ -618,6 +629,136 @@ def _re_encrypt_db(db_path: str, old_sub_key: bytes, new_sub_key: bytes,
     
     conn.commit()
     conn.close()
+
+
+# ── AAD Migration ──────────────────────────────────────────────────────────
+
+def migrate_to_aad(db_path: str, sub_key: bytes, table: str, 
+                   key_column: str, encrypt_columns: list[str],
+                   aad_context: str) -> int:
+    """
+    Migrate existing encrypted data to use AAD binding.
+    
+    Decrypts without AAD, re-encrypts with AAD = table:column context.
+    Returns number of rows migrated.
+    
+    This should be called once on startup to upgrade legacy data.
+    """
+    import sqlite3
+    
+    if not os.path.exists(db_path):
+        return 0
+    
+    print(f"[CRYPTO] AAD migrate: checking {os.path.basename(db_path)}:{table}...")
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Check if table exists
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (table,)
+    )
+    if not cursor.fetchone():
+        print(f"[CRYPTO] AAD migrate: {table} not found, skipping")
+        conn.close()
+        return 0
+    
+    # Get all rows
+    cols = ", ".join([key_column] + encrypt_columns)
+    cursor.execute(f"SELECT rowid, {cols} FROM {table}")
+    rows = cursor.fetchall()
+    print(f"[CRYPTO] AAD migrate: {table} has {len(rows)} rows")
+    
+    migrated = 0
+    skipped = 0
+    errors = 0
+    for row in rows:
+        rowid = row[0]
+        needs_update = False
+        new_values = []
+        
+        for i, col in enumerate(encrypt_columns):
+            val = row[i + 2]  # +2 because rowid is first, then key_column
+            if val and is_field_encrypted(str(val)):
+                try:
+                    # Decrypt without AAD (legacy)
+                    plaintext = decrypt_field(sub_key, str(val), aad=None)
+                    # Re-encrypt with AAD
+                    column_aad = f"{aad_context}:{col}"
+                    encrypted = encrypt_field(sub_key, plaintext, aad=column_aad)
+                    new_values.append(encrypted)
+                    needs_update = True
+                except ValueError as e:
+                    # Already encrypted with AAD or corrupted
+                    print(f"[CRYPTO] AAD migrate: {table} rowid={rowid} col={col} decrypt failed: {e}")
+                    new_values.append(val)
+                    errors += 1
+            else:
+                new_values.append(val)
+        
+        if needs_update:
+            set_clause = ", ".join(f"{col}=?" for col in encrypt_columns)
+            cursor.execute(
+                f"UPDATE {table} SET {set_clause} WHERE rowid=?",
+                new_values + [rowid]
+            )
+            migrated += 1
+        else:
+            skipped += 1
+    
+    conn.commit()
+    conn.close()
+    
+    if migrated > 0:
+        print(f"[CRYPTO] AAD migrate: {table}: migrated {migrated} rows, "
+              f"skipped {skipped} (already AAD), errors {errors}")
+    else:
+        print(f"[CRYPTO] AAD migrate: {table}: no migration needed "
+              f"({skipped} rows already AAD-bound)")
+    
+    return migrated
+
+
+def migrate_all_to_aad() -> None:
+    """
+    Migrate all databases to use AAD-bound encryption.
+    Call this once on startup after crypto initialization.
+    """
+    master_hex = load_master_key()
+    total_migrated = 0
+    
+    print("[CRYPTO] === AAD Migration Start ===")
+    
+    # adelaide_memory.db
+    db_path = os.path.join(os.path.dirname(__file__), "adelaide_memory.db")
+    sub_key = derive_sub_key(master_hex, CTX_MEMORY)
+    total_migrated += migrate_to_aad(db_path, sub_key, "memories", "id", 
+                   ["input", "response", "image_b64"], "adelaide:db:memory")
+    total_migrated += migrate_to_aad(db_path, sub_key, "response_cache", "id",
+                   ["prompt", "response"], "adelaide:db:memory")
+    total_migrated += migrate_to_aad(db_path, sub_key, "imagined_images", "id",
+                   ["prompt", "image_b64"], "adelaide:db:memory")
+    
+    # literatureRefIndex.db
+    db_path = os.path.join(os.path.dirname(__file__), "literatureRefIndex.db")
+    sub_key = derive_sub_key(master_hex, CTX_LITERATURE)
+    total_migrated += migrate_to_aad(db_path, sub_key, "chunks", "id",
+                   ["content"], "adelaide:db:literature")
+    
+    # assistant_session.db
+    db_path = os.path.join(os.path.dirname(__file__), "assistant_session.db")
+    sub_key = derive_sub_key(master_hex, CTX_ASSISTANT)
+    total_migrated += migrate_to_aad(db_path, sub_key, "messages", "rowid",
+                   ["content"], "adelaide:db:assistant")
+    
+    # memoryRefIndex.db
+    db_path = os.path.join(os.path.dirname(__file__), "memoryRefIndex.db")
+    sub_key = derive_sub_key(master_hex, CTX_MEMORY_INDEX)
+    total_migrated += migrate_to_aad(db_path, sub_key, "memories", "id",
+                   ["content"], "adelaide:db:memory_index")
+    
+    print(f"[CRYPTO] === AAD Migration Complete: {total_migrated} total rows migrated ===")
 
 
 # ── Standalone Test ──────────────────────────────────────────────────────

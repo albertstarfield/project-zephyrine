@@ -18,7 +18,7 @@ MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB total cap
 # ── Crypto ────────────────────────────────────────────────────────────────
 # Import the Python crypto module (sibling to python/adelaide_crypto.py)
 sys.path.insert(0, os.path.join(BASE_DIR, "python"))
-from adelaide_crypto import bootstrap_crypto, load_master_key  # noqa: E402
+from adelaide_crypto import bootstrap_crypto, load_master_key, migrate_all_to_aad  # noqa: E402
 
 try:
     _lock_fd = open(os.path.join(BASE_DIR, ".adelaide.lock"), "w")
@@ -2418,6 +2418,14 @@ def real_main():
         master_key = bootstrap_crypto()
         os.environ["ADELAIDE_MASTER_KEY"] = master_key
         print(f"[CRYPTO] Master key ready. {len(master_key)} hex chars.")
+        
+        # Migrate existing data to AAD-bound encryption (one-time)
+        print("[CRYPTO] Checking for AAD migration...")
+        try:
+            migrate_all_to_aad()
+        except Exception as e:
+            print(f"[CRYPTO] WARNING: AAD migration failed: {e}")
+            print("[CRYPTO] Legacy data will still decrypt (backward compatible)")
     except Exception as e:
         print(f"[CRYPTO] WARNING: Could not bootstrap crypto: {e}")
         print("[CRYPTO] Encryption disabled. Data will be stored in plaintext.")
