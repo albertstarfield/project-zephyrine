@@ -19,8 +19,8 @@ begin
    Supertonic_Interface.Initialize ("../supertonic/models", False);
    
    -- Load the voice style we just created via MeloTTS
-   Put_Line ("Loading voice style from tests/sampleAdeltts_blob.dat...");
-   Supertonic_Interface.Load_Voice_Style ("tests/sampleAdeltts_blob.dat");
+   Put_Line ("Loading voice style from src/sampleAdeltts_blob.dat...");
+   Supertonic_Interface.Load_Voice_Style ("src/sampleAdeltts_blob.dat");
    
    Put_Line ("Synthesizing Speech...");
    declare
