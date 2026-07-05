@@ -1,3 +1,0 @@
-/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/src/c_bindings/supertonic/build/CMakeFiles/supertonic_c.dir
-/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/src/c_bindings/supertonic/build/CMakeFiles/edit_cache.dir
-/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/Adelaide_Lite/src/c_bindings/supertonic/build/CMakeFiles/rebuild_cache.dir
