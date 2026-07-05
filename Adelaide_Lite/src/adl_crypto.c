@@ -36,6 +36,14 @@
 /* ── Static Master Key Storage ─────────────────────────────────────────────── */
 /* Set once by adl_init(), read-only thereafter. Thread-safe for reads. */
 static char g_master_key_hex[ADL_KEY_HEX_SIZE] = {0};
+static int g_master_key_loaded = 0;
+
+/* ── Secure Zeroing ────────────────────────────────────────────────────────── */
+/* Zero sensitive memory to prevent key material from lingering. */
+static void secure_zero(void *ptr, size_t len) {
+    volatile unsigned char *p = (volatile unsigned char *)ptr;
+    while (len--) *p++ = 0;
+}
 
 /* ── Internal Helpers ───────────────────────────────────────────────────────── */
 
@@ -166,8 +174,11 @@ store:
         /* Store the hex-encoded key in our static buffer */
         strncpy(g_master_key_hex, src, ADL_KEY_HEX_SIZE - 1);
         g_master_key_hex[ADL_KEY_HEX_SIZE - 1] = '\0';
+        g_master_key_loaded = 1;
     }
 
+    /* Zero the raw key from stack */
+    secure_zero(raw_key, ADL_KEY_SIZE);
     return 0;
 }
 
@@ -265,6 +276,7 @@ int adl_derive_subkey(const char *master_key_hex,
 
 int adl_encrypt(const char *sub_key_hex,
                 const unsigned char *plaintext, size_t plaintext_len,
+                const unsigned char *aad, size_t aad_len,
                 char *ciphertext_hex, size_t *ciphertext_hex_len,
                 char *err_buf)
 {
@@ -318,6 +330,15 @@ int adl_encrypt(const char *sub_key_hex,
     if (EVP_EncryptInit_ex(ctx, NULL, NULL, key, nonce) != 1) {
         get_openssl_error(err_buf, ADL_ERROR_SIZE);
         goto cleanup;
+    }
+
+    /* Add AAD if provided (must be done before encrypting data) */
+    if (aad && aad_len > 0) {
+        int aad_out_len = 0;
+        if (EVP_EncryptUpdate(ctx, NULL, &aad_out_len, aad, (int)aad_len) != 1) {
+            get_openssl_error(err_buf, ADL_ERROR_SIZE);
+            goto cleanup;
+        }
     }
 
     /* Encrypt (GCM produces same-length output) */
@@ -375,6 +396,7 @@ int adl_encrypt(const char *sub_key_hex,
 cleanup:
     EVP_CIPHER_CTX_free(ctx);
     free(ct_buf);
+    secure_zero(key, ADL_KEY_SIZE);  /* Zero key from stack */
     return ret;
 }
 
@@ -382,6 +404,7 @@ cleanup:
 
 int adl_decrypt(const char *sub_key_hex,
                 const char *ciphertext_hex,
+                const unsigned char *aad, size_t aad_len,
                 unsigned char *plaintext, size_t *plaintext_len,
                 char *err_buf)
 {
@@ -465,6 +488,15 @@ int adl_decrypt(const char *sub_key_hex,
         goto cleanup;
     }
 
+    /* Add AAD if provided (must match encryption AAD) */
+    if (aad && aad_len > 0) {
+        int aad_out_len = 0;
+        if (EVP_DecryptUpdate(ctx, NULL, &aad_out_len, aad, (int)aad_len) != 1) {
+            get_openssl_error(err_buf, ADL_ERROR_SIZE);
+            goto cleanup;
+        }
+    }
+
     int out_len = 0;
     if (EVP_DecryptUpdate(ctx, plaintext, &out_len, blob + ADL_NONCE_SIZE, (int)ct_len) != 1) {
         get_openssl_error(err_buf, ADL_ERROR_SIZE);
@@ -480,7 +512,7 @@ int adl_decrypt(const char *sub_key_hex,
     /* Finalize (verifies auth tag) */
     if (EVP_DecryptFinal_ex(ctx, plaintext + out_len, &out_len) != 1) {
         snprintf(err_buf, ADL_ERROR_SIZE,
-                 "Decryption failed (wrong key or corrupted data)");
+                 "Decryption failed (wrong key, corrupted data, or AAD mismatch)");
         goto cleanup;
     }
 
@@ -490,6 +522,7 @@ int adl_decrypt(const char *sub_key_hex,
 cleanup:
     EVP_CIPHER_CTX_free(ctx);
     free(blob);
+    secure_zero(key, ADL_KEY_SIZE);  /* Zero key from stack */
     return ret;
 }
 
@@ -503,6 +536,7 @@ int adl_encrypt_string(const char *sub_key_hex,
     return adl_encrypt(sub_key_hex,
                        (const unsigned char*)plaintext,
                        strlen(plaintext),
+                       NULL, 0,  /* No AAD for string wrapper */
                        ciphertext_hex, ciphertext_hex_len,
                        err_buf);
 }
@@ -516,6 +550,7 @@ int adl_decrypt_string(const char *sub_key_hex,
 {
     int ret = adl_decrypt(sub_key_hex,
                           ciphertext_hex,
+                          NULL, 0,  /* No AAD for string wrapper */
                           (unsigned char*)plaintext, plaintext_len,
                           err_buf);
     if (ret == 0) {
@@ -550,7 +585,7 @@ int adl_crypto_init_wrapper(void)
  */
 int adl_master_key_available(void)
 {
-    return (g_master_key_hex[0] != '\0') ? 1 : 0;
+    return g_master_key_loaded;
 }
 
 /*

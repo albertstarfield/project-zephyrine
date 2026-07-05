@@ -41,6 +41,7 @@
 #define ADL_NONCE_SIZE      12    /* 96-bit random nonce for GCM */
 #define ADL_TAG_SIZE        16    /* 128-bit GCM auth tag */
 #define ADL_ERROR_SIZE      256   /* max error message length */
+#define ADL_AAD_MAX_SIZE    256   /* max Additional Authenticated Data length */
 
 /* ── Key Management ─────────────────────────────────────────────────────────── */
 
@@ -88,6 +89,8 @@ int adl_derive_subkey(const char *master_key_hex,
  * sub_key_hex:   64-char hex-encoded 32-byte sub-key (from adl_derive_subkey).
  * plaintext:     Raw bytes to encrypt.
  * plaintext_len: Length of plaintext.
+ * aad:           Additional Authenticated Data (optional, may be NULL).
+ * aad_len:       Length of AAD (0 if NULL).
  * ciphertext_hex: Output buffer. Must be at least 2*(plaintext_len + 28) + 1 bytes.
  * ciphertext_hex_len: In: size of output buffer. Out: actual length (excluding null).
  * err_buf:       256-byte error buffer.
@@ -96,6 +99,7 @@ int adl_derive_subkey(const char *master_key_hex,
  */
 int adl_encrypt(const char *sub_key_hex,
                 const unsigned char *plaintext, size_t plaintext_len,
+                const unsigned char *aad, size_t aad_len,
                 char *ciphertext_hex, size_t *ciphertext_hex_len,
                 char *err_buf);
 
@@ -104,6 +108,8 @@ int adl_encrypt(const char *sub_key_hex,
  *
  * sub_key_hex:     64-char hex-encoded 32-byte sub-key.
  * ciphertext_hex:  Hex-encoded ciphertext (from adl_encrypt).
+ * aad:             Additional Authenticated Data (must match encryption AAD).
+ * aad_len:         Length of AAD (0 if NULL).
  * plaintext:       Output buffer. Must be at least ciphertext_len/2 bytes.
  * plaintext_len:   In: size of output buffer. Out: actual plaintext length.
  * err_buf:         256-byte error buffer.
@@ -112,6 +118,7 @@ int adl_encrypt(const char *sub_key_hex,
  */
 int adl_decrypt(const char *sub_key_hex,
                 const char *ciphertext_hex,
+                const unsigned char *aad, size_t aad_len,
                 unsigned char *plaintext, size_t *plaintext_len,
                 char *err_buf);
 
