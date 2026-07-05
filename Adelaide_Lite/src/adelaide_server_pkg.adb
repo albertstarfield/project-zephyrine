@@ -2446,8 +2446,6 @@ package body Adelaide_Server_Pkg is
 
                 --  GNATCOLL.JSON workaround: wrap in object with "0" key
                 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                 Data_Arr := Create_Object;
                 Set_Field (Data_Arr, "0", Img_Obj);
                 Set_Field (Resp_Obj, "data", Data_Arr);
@@ -2466,8 +2464,6 @@ package body Adelaide_Server_Pkg is
    exception
       when E : others =>
          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  UNKNOWN/CATEGORIZED ERROR: Dump full exception and red banner.
          --  Server keeps running and continues serving other requests.
          Ada.Text_IO.Put_Line
@@ -2519,9 +2515,9 @@ package body Adelaide_Server_Pkg is
             ("{""error"": ""Unknown error occurred"", ""detail"": """
              & Ada.Exceptions.Exception_Message (E) & """}",
              AWS.Messages.S500);
-   end;
+      end;
    exception
-   when E : others =>
+      when E : others =>
       Ada.Text_IO.Put_Line (AnsiAda.Background (AnsiAda.Red)
         & "[BUGCHECK] Server Error: "
         & Ada.Exceptions.Exception_Message (E)

@@ -5,6 +5,7 @@ import os
 import subprocess
 import gc
 import types
+import typing
 
 # Global Performance Tuning: Disable Garbage Collection
 gc.disable()
@@ -41,7 +42,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))) # for stella_icar
 sys.path.insert(0, STELLA_ICARUS_DIR) # for any internal imports
 
 # We need to mock CortexConfiguration so stella_icarus_utils doesn't crash
-mock_config = types.ModuleType("CortexConfiguration")
+mock_config: typing.Any = types.ModuleType("CortexConfiguration")
 mock_config.ENABLE_STELLA_ICARUS_HOOKS = True
 mock_config.STELLA_ICARUS_HOOK_DIR = STELLA_ICARUS_DIR
 mock_config.STELLA_ICARUS_CACHE_DIR = os.path.join(STELLA_ICARUS_DIR, "StellaIcarus_Cache")

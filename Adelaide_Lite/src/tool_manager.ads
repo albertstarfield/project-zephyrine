@@ -26,4 +26,8 @@ package Tool_Manager is
    --  Params format: "activate_handless" or "acoustic_trigger" or "schedule_question|time_iso|topic"
    function Execute_Proactive_Tool (Params : String) return Tool_Result;
 
+   --  ROS2 TOOL: Trigger native Ada ROS2 actuator via ELP3
+   --  Params format: "servo_id|angle"
+   function Execute_ROS2_Tool (Params : String) return Tool_Result;
+
 end Tool_Manager;

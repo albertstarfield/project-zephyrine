@@ -20,20 +20,33 @@ import os
 import json
 from datetime import datetime
 from trace_utils import init_trace, trace_print
+from typing import TypedDict, List
 
 
 TODO_FILE = os.path.join(os.path.dirname(__file__), ".todos.json")
 
 
-def load_todos():
+
+class TaskItem(TypedDict):
+    id: int
+    task: str
+    done: bool
+    created: str
+
+class TodoData(TypedDict):
+    tasks: List[TaskItem]
+    next_id: int
+
+def load_todos() -> TodoData:
     """Load todos from file."""
     if os.path.exists(TODO_FILE):
         with open(TODO_FILE, "r") as f:
-            return json.load(f)
+            data = json.load(f)
+            return {"tasks": data.get("tasks", []), "next_id": data.get("next_id", 1)}
     return {"tasks": [], "next_id": 1}
 
 
-def save_todos(todos):
+def save_todos(todos: TodoData) -> None:
     """Save todos to file."""
     with open(TODO_FILE, "w") as f:
         json.dump(todos, f, indent=2)

@@ -4,6 +4,7 @@ import sys
 import os
 import time
 import json
+import typing
 import urllib.request
 import urllib.error
 import types
@@ -43,7 +44,7 @@ sys.path.insert(0, STELLA_ICARUS_DIR) # for any internal imports
 # Global Performance Tuning: Disable Garbage Collection
 gc.disable()
 
-mock_config = types.ModuleType("CortexConfiguration")
+mock_config: typing.Any = types.ModuleType("CortexConfiguration")
 mock_config.ENABLE_STELLA_ICARUS_HOOKS = True
 mock_config.STELLA_ICARUS_HOOK_DIR = STELLA_ICARUS_DIR
 mock_config.STELLA_ICARUS_CACHE_DIR = os.path.join(STELLA_ICARUS_DIR, "StellaIcarus_Cache")
@@ -99,6 +100,15 @@ def main():
         
     manager.start_all()
     
+    # Start ROS2 Telemetry Node Daemon
+    import subprocess
+    ros2_daemon_path = os.path.join(STELLA_ICARUS_DIR, "ros2_daemon", "ros2_telemetry_node.py")
+    if os.path.exists(ros2_daemon_path):
+        logger.info(f"Starting ROS2 Telemetry Daemon: {ros2_daemon_path}")
+        ros2_proc = subprocess.Popen([sys.executable, ros2_daemon_path], stdout=sys.stdout, stderr=sys.stderr)
+    else:
+        ros2_proc = None
+
     # [Debug] DO NOT REMOVE: Mandated hardware inventory on startup
     print_hw_detection()
     
@@ -228,6 +238,9 @@ def main():
     except KeyboardInterrupt:
         logger.info("Interrupt received. Shutting down StellaIcarus Daemons...")
         manager.stop_all()
+        if 'ros2_proc' in locals() and ros2_proc:
+            ros2_proc.terminate()
+            ros2_proc.wait()
 
 if __name__ == "__main__":
     main()

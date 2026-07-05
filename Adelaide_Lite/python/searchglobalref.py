@@ -7,12 +7,14 @@ import subprocess
 import time
 import json
 from datetime import datetime
+import citation_verifier
 
 # This may fail before bootstrap ensures it is in the venv
 try:
     import numpy as np
 except ImportError:
-    np = None
+    import typing
+    np: typing.Any = None
 
 # --- Environment Setup ---
 def apply_base_env():
@@ -221,6 +223,26 @@ def main():
     else:
         final_results = all_flat[:7]
 
+    # --- Crossref DOI Verification ---
+    if not args.jsonIO:
+        trace_print("searchglobalref", "phase2", "Verifying DOIs via Crossref...")
+    for r in final_results:
+        title = r.get('title', '')
+        if title:
+            try:
+                # Query crossref using the title
+                paper = citation_verifier.query_crossref(title)
+                if paper:
+                    r['doi'] = paper.get("DOI", "")
+                    r['crossref_citation'] = citation_verifier.format_citation(paper)
+                    r['trust_score'] = 1.0
+                else:
+                    r['trust_score'] = 0.5
+            except Exception:
+                r['trust_score'] = 0.5
+        else:
+            r['trust_score'] = 0.5
+
     # --- Store in Memory ---
     trace_print("searchglobalref", "memory", "Storing results in memory...")
     for r in final_results:
@@ -249,6 +271,10 @@ def main():
             print(f"- **Engine:** {r.get('source_engine', 'unknown')}", flush=True)
             if 'semantic_rank' in r:
                 print(f"- **Semantic Rank:** {r['semantic_rank']}", flush=True)
+            print(f"- **Trust Score:** {r.get('trust_score', 0.5)}", flush=True)
+            if 'doi' in r:
+                print(f"- **DOI:** {r['doi']}", flush=True)
+                print(f"- **Crossref Citation:** {r.get('crossref_citation', '')}", flush=True)
             print(f"- **Reference:** {r.get('apa7_reference', 'Unknown')}", flush=True)
             print(f"\n### Snippet\n{r.get('snippet', 'No snippet available.')}\n", flush=True)
             

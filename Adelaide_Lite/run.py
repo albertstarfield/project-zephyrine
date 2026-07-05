@@ -309,7 +309,7 @@ def progress_monitor(log_path):
             "\n\033[32m Remember, I am NOT an AI that nor replacement for chatGPT or Gemini you expected. I am NOT following industry standard status quo AI. I am nobody.\033[0m\n"
         )
         term_stdout.write(
-            "\033[35m (made using JavaScript, Python, and Bash script <3)\033[0m\n\n"
+            "\033[35m (preexisting + new) made using javascript, python, and bash script.\033[0m\n\n"
         )
         term_stdout.flush()
 
@@ -400,8 +400,127 @@ def get_git_version():
         return None, None, None
 
 
-def verify_environment():
+def bootstrap_ros2_mac():
+    """
+    Automatically bootstrap ROS2 environment on macOS via Micromamba/RoboStack.
+    
+    Why: Native ROS2 (Humble/Iron) does not officially support macOS without complex
+    workarounds or virtual machines/Docker. Docker adds network and USB bridging overhead
+    which can harm real-time actuator pacing (ELP3/ELP2). RoboStack provides a native
+    conda-forge compiled version of ROS2 for Darwin/macOS.
+    
+    How: On Linux (Ubuntu), this is typically handled via standard `apt install ros-humble-desktop`.
+    Here, we download Micromamba (a fast C++ Conda implementation), create an isolated
+    environment in `.ros_env`, and inject the ROS2 paths into os.environ so all
+    subprocesses inherit the native ROS2 DDS bindings.
+    """
+    if "ROS_DISTRO" in os.environ:
+        return # Already have ROS2 active
+
+    print(f"\n{BOLD}{WHT}[*] Bootstrapping ROS2 RoboStack Environment...{RST}")
+    bin_dir = os.path.join(PROJECT_ROOT, ".bin")
+    ros_env_dir = os.path.join(PROJECT_ROOT, ".ros_env")
+    micromamba_bin = os.path.join(bin_dir, "bin", "micromamba")
+    
+    os.makedirs(bin_dir, exist_ok=True)
+    
+    if not os.path.exists(micromamba_bin):
+        print(f"  {CYN}[~] Downloading micromamba...{RST}")
+        try:
+            subprocess.check_call(
+                "curl -Ls https://micro.mamba.pm/api/micromamba/osx-arm64/latest | tar -xvj bin/micromamba",
+                shell=True,
+                cwd=bin_dir
+            )
+        except Exception as e:
+            print(f"  {RED}[!!] Failed to download micromamba: {e}{RST}")
+            return
+            
+    if not os.path.exists(os.path.join(ros_env_dir, "conda-meta")):
+        print(f"  {CYN}[~] Creating ROS2 environment (this may take several minutes)...{RST}")
+        try:
+            subprocess.check_call(
+                [micromamba_bin, "create", "-y", "-p", ros_env_dir, "-c", "robostack-staging", "-c", "conda-forge", "ros-humble-desktop"],
+                cwd=PROJECT_ROOT
+            )
+        except Exception as e:
+            print(f"  {RED}[!!] Failed to create ROS2 environment: {e}{RST}")
+            return
+            
+    print(f"  {GRN}[ok]{RST} ROS2 RoboStack environment ready.")
+    
+    # Inject variables into os.environ for subprocesses
+    os.environ["ROS_DISTRO"] = "humble"
+    os.environ["AMENT_PREFIX_PATH"] = ros_env_dir
+    os.environ["PYTHONPATH"] = f"{ros_env_dir}/lib/python3.11/site-packages" + (f":{os.environ['PYTHONPATH']}" if "PYTHONPATH" in os.environ else "")
+    os.environ["PATH"] = f"{ros_env_dir}/bin:{os.environ['PATH']}"
+
+
+def bootstrap_px4():
+    """Clone and compile PX4-Autopilot for ELP2/ELP3 simulation tools."""
+    px4_dir = os.path.join(PROJECT_ROOT, "PX4-Autopilot")
+    if not os.path.exists(px4_dir):
+        print(f"\n{BOLD}{WHT}[*] Cloning PX4-Autopilot...{RST}")
+        try:
+            subprocess.check_call(
+                ["git", "clone", "https://github.com/PX4/PX4-Autopilot.git", "--recursive"],
+                cwd=PROJECT_ROOT
+            )
+        except Exception as e:
+            print(f"  {RED}[!!] Failed to clone PX4-Autopilot: {e}{RST}")
+            return
+            
+    # Clone MAVLink C Headers for Ada FFI
+    mavlink_dir = os.path.join(PROJECT_ROOT, "mavlink_c_v2")
+    if not os.path.exists(mavlink_dir):
+        print(f"\n{BOLD}{WHT}[*] Cloning MAVLink C Headers for FFI...{RST}")
+        try:
+            subprocess.check_call(
+                ["git", "clone", "https://github.com/mavlink/c_library_v2.git", mavlink_dir],
+                cwd=PROJECT_ROOT
+            )
+        except Exception as e:
+            print(f"  {RED}[!!] Failed to clone MAVLink C Headers: {e}{RST}")
+            return
+
+    # Check if compiled
+    px4_build_dir = os.path.join(px4_dir, "build", "px4_sitl_default")
+    if not os.path.exists(px4_build_dir):
+        print(f"\n{BOLD}{WHT}[*] Compiling PX4-Autopilot (SITL)...{RST}")
+        print(f"  {CYN}[~] This may take a while to download modules and compile.{RST}")
+        try:
+            # Install python dependencies for PX4
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "--user", "-r", "Tools/setup/requirements.txt"],
+                cwd=px4_dir
+            )
+            # Run the SITL compile
+            subprocess.check_call(
+                ["make", "px4_sitl_default"],
+                cwd=px4_dir
+            )
+            print(f"  {GRN}[ok]{RST} PX4-Autopilot SITL compiled successfully.")
+            
+            # Compile for FMU-v6x (Hardware fallback for FMC)
+            print(f"\n{BOLD}{WHT}[*] Compiling PX4-Autopilot (fmu-v6x hardware target)...{RST}")
+            subprocess.check_call(
+                ["make", "px4_fmu-v6x_default"],
+                cwd=px4_dir
+            )
+            print(f"  {GRN}[ok]{RST} PX4-Autopilot Hardware target compiled successfully.")
+        except Exception as e:
+            print(f"  {RED}[!!] Failed to compile PX4-Autopilot: {e}{RST}")
+            return
+    else:
+        print(f"\n{GRN}[ok]{RST} PX4-Autopilot is already cloned and compiled.")
+
+def verify_environment(build_px4=False):
     """Check for all required tools and libraries before proceeding."""
+    if build_px4:
+        bootstrap_px4()
+
+    if platform.system() == "Darwin":
+        bootstrap_ros2_mac()
     print(f"\n{BOLD}{WHT}[*] Verifying Environment Prerequisites...{RST}")
 
     critical_tools = {
@@ -445,6 +564,11 @@ def verify_environment():
             )
             missing.append("macos-sdk")
 
+    if "ROS_DISTRO" in os.environ:
+        print(f"  {GRN}[ok]{RST} ROS2 Detected ({os.environ['ROS_DISTRO']})")
+    else:
+        print(f"  {YLW}[warn]{RST} ROS2 environment not detected (ROS_DISTRO missing). ELP2/ELP3 Actuators will be disabled.")
+
     if missing:
         print(
             f"\n{BG_RED}[BUGCHECK] [FATAL] Environment check failed. Please install the missing tools listed above.{RST}"
@@ -478,6 +602,7 @@ def show_help():
     {GRN}--no-gui{RST}                        Launch server without the Python Sidecar UI
     {GRN}--host{RST} {CYN}HOST{RST}                     Bind address (default: 0.0.0.0, env: ADLAIDE_SERVER_HOST)
     {GRN}--port{RST} {CYN}PORT{RST}                     Bind port (default: 11420, env: ADLAIDE_SERVER_PORT)
+    {GRN}--build-px4{RST}                     Clone and compile PX4-Autopilot for simulation tools
     {GRN}--test-build-integrity-check{RST}    Build only, verify integrity, then exit
     {GRN}--show-key{RST}                      Show the current AES-256 master key, then exit
     {GRN}--enforce-api-key{RST}               Enable x-api-key validation on the Ada server
@@ -1168,7 +1293,8 @@ def real_main():
     hash_file = os.path.join(BASE_DIR, ".build_hash")
 
     # 0. Verify all critical prerequisites are installed
-    verify_environment()
+    build_px4 = "--build-px4" in sys.argv
+    verify_environment(build_px4=build_px4)
 
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
 
@@ -1977,6 +2103,7 @@ def real_main():
                 )
                 env["SDKROOT"] = sdk_path
                 env["CPATH"] = os.path.join(sdk_path, "usr", "include")
+                env["C_INCLUDE_PATH"] = os.path.join(sdk_path, "usr", "include")
                 env["LIBRARY_PATH"] = os.path.join(sdk_path, "usr", "lib")
             except Exception as e:
                 print(f"[!] Warning: Could not set macOS SDK paths: {e}")
@@ -2081,7 +2208,8 @@ def real_main():
         # 4a. CrossHair Symbolic Analysis for python/ sidecars
         print("[*] Ensuring CrossHair is installed...")
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "crosshair-tool"], check=True, capture_output=True)
+            pyvenv_python = os.path.join(BASE_DIR, "pyvenv", "bin", "python")
+            subprocess.run([pyvenv_python, "-m", "pip", "install", "crosshair-tool"], check=True, capture_output=True)
             print("[*] Running CrossHair Symbolic Verification on python sidecars...")
             
             python_dir = os.path.join(BASE_DIR, "python")
@@ -2093,19 +2221,13 @@ def real_main():
             
             if target_files:
                 result = subprocess.run(
-                    [sys.executable, "-m", "crosshair", "check", "--per_condition_timeout", "1"] + target_files,
-                    capture_output=True,
-                    text=True,
+                    [pyvenv_python, "-m", "crosshair", "check", "--verbose", "--per_condition_timeout", "1"] + target_files,
                 )
                 if result.returncode == 1:
-                    print(result.stdout)
-                    print(result.stderr)
                     raise RuntimeError(
                         "INTEGRITY_CHECK_FAILURE: CrossHair contract violations detected in python/ sidecars."
                     )
                 elif result.returncode == 2:
-                    print(result.stdout)
-                    print(result.stderr)
                     raise RuntimeError(
                         "INTEGRITY_CHECK_FAILURE: CrossHair execution error in python/ sidecars."
                     )
@@ -2122,6 +2244,9 @@ def real_main():
             print("[*] Running Pyrefly Type Check on python sidecars...")
             try:
                 python_dir = os.path.join(BASE_DIR, "python")
+                env_vars = os.environ.copy()
+                env_vars["PATH"] = f"{os.path.join(BASE_DIR, 'pyvenv', 'bin')}{os.pathsep}{env_vars.get('PATH', '')}"
+                env_vars["VIRTUAL_ENV"] = os.path.join(BASE_DIR, "pyvenv")
                 result = subprocess.run(
                     [
                         pyrefly_cmd, 
@@ -2132,6 +2257,7 @@ def real_main():
                     ],
                     capture_output=True,
                     text=True,
+                    env=env_vars
                 )
                 if result.returncode != 0:
                     print(result.stdout)

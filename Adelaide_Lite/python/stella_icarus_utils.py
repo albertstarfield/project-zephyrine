@@ -14,7 +14,7 @@ from loguru import logger
 
 # --- Configuration Import with Fallbacks ---
 try:
-    from CortexConfiguration import (
+    from CortexConfiguration import ( # type: ignore
         ENABLE_STELLA_ICARUS_HOOKS, STELLA_ICARUS_HOOK_DIR, STELLA_ICARUS_CACHE_DIR,
         ENABLE_STELLA_ICARUS_DAEMON, STELLA_ICARUS_ADA_DIR, ALR_DEFAULT_EXECUTABLE_NAME,
         STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR,
@@ -130,7 +130,7 @@ class StellaIcarusHookManager:
                         continue
 
                     # Register
-                    self.hooks.append((compiled_pattern, handler_func, module_name))
+                    self.hooks.append((compiled_pattern, handler_func, module_name)) # type: ignore
 
                     log_msg = f"  Loaded Hook: '{module_name}'"
                     if not is_jit_reliable:

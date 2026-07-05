@@ -71,6 +71,9 @@ class TestAdelaideCore(unittest.TestCase):
             text=True
         )
         
+        assert p.stdout is not None
+        assert p.stdin is not None
+        
         # Read the initial ready line
         p.stdout.readline()
         

@@ -7,6 +7,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}/python:${PYTHONPATH:-}"
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  export SDKROOT="$(xcrun --show-sdk-path)"
+  export CPATH="${SDKROOT}/usr/include"
+  export C_INCLUDE_PATH="${SDKROOT}/usr/include"
+  export LIBRARY_PATH="${SDKROOT}/usr/lib"
+fi
+
 mkdir -p .bin
 cat << 'RANLIB' > .bin/ranlib
 #!/bin/bash
