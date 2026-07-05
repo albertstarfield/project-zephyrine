@@ -511,6 +511,47 @@ int adl_decrypt(const char *sub_key_hex,
 
     /* Finalize (verifies auth tag) */
     if (EVP_DecryptFinal_ex(ctx, plaintext + out_len, &out_len) != 1) {
+        /* If AAD was provided, try again without AAD (backward compatibility) */
+        if (aad && aad_len > 0) {
+            EVP_CIPHER_CTX_free(ctx);
+            ctx = EVP_CIPHER_CTX_new();
+            if (!ctx) {
+                snprintf(err_buf, ADL_ERROR_SIZE, "Failed to create EVP_CIPHER_CTX for retry");
+                goto cleanup;
+            }
+            
+            if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1) {
+                get_openssl_error(err_buf, ADL_ERROR_SIZE);
+                goto cleanup;
+            }
+            if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, ADL_NONCE_SIZE, NULL) != 1) {
+                get_openssl_error(err_buf, ADL_ERROR_SIZE);
+                goto cleanup;
+            }
+            if (EVP_DecryptInit_ex(ctx, NULL, NULL, key, nonce) != 1) {
+                get_openssl_error(err_buf, ADL_ERROR_SIZE);
+                goto cleanup;
+            }
+            /* Retry WITHOUT AAD */
+            out_len = 0;
+            if (EVP_DecryptUpdate(ctx, plaintext, &out_len, blob + ADL_NONCE_SIZE, (int)ct_len) != 1) {
+                get_openssl_error(err_buf, ADL_ERROR_SIZE);
+                goto cleanup;
+            }
+            if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ADL_TAG_SIZE, tag) != 1) {
+                get_openssl_error(err_buf, ADL_ERROR_SIZE);
+                goto cleanup;
+            }
+            if (EVP_DecryptFinal_ex(ctx, plaintext + out_len, &out_len) != 1) {
+                snprintf(err_buf, ADL_ERROR_SIZE,
+                         "Decryption failed (wrong key, corrupted data, or AAD mismatch)");
+                goto cleanup;
+            }
+            /* Success without AAD — data is legacy, will be migrated on next write */
+            *plaintext_len = ct_len;
+            ret = 0;
+            goto cleanup;
+        }
         snprintf(err_buf, ADL_ERROR_SIZE,
                  "Decryption failed (wrong key, corrupted data, or AAD mismatch)");
         goto cleanup;
