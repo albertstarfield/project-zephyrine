@@ -1,0 +1,8 @@
+#!/bin/bash
+ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" != "-c" && "$arg" != "c" ]]; then
+    ARGS+=("$arg")
+  fi
+done
+/usr/bin/ranlib "${ARGS[@]}"

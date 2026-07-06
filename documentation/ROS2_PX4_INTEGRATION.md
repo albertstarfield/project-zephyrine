@@ -1,10 +1,10 @@
 # ROS2 and PX4 Integration Guide
 
-Welcome to the Adelaide_Lite robotics integration guide! This document explains how to wire and program ROS2 and PX4 components while adhering to the deterministic safety standards of our architecture.
+Welcome to the AdelaideZephyrineSystem robotics integration guide! This document explains how to wire and program ROS2 and PX4 components while adhering to the deterministic safety standards of our architecture.
 
 ## Architectural Constraints (CRITICAL)
 
-Adelaide_Lite runs a multi-band priority scheduler:
+AdelaideZephyrineSystem runs a multi-band priority scheduler:
 - **ELP0/ELP1**: Non-deterministic (LLM Generative Tasks, Web Search, Data Processing)
 - **ELP2 (StellaIcarus)**: Deterministic low-priority robotics (e.g., Lidar sweeps, path planning)
 - **ELP3 (ZenithOrion)**: Deterministic high-priority robotics (e.g., 4000Hz balancing, flight control)
