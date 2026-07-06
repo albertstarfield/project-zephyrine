@@ -182,4 +182,4 @@ end Master_Key_Store;
 | `src/database_manager.adb` | MODIFY - Add integrity test blob verification |
 | `src/adelaide_server.adb` | MODIFY - Add stdio protocol for key exchange |
 | `run.py` | MODIFY - Add stdio handler, KISS mode prompts |
-| `adelaide_lite.gpr` | MODIFY - Add new source files |
+| `AdelaideZephyrineSystem.gpr` | MODIFY - Add new source files |

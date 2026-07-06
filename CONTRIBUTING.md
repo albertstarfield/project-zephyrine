@@ -2,7 +2,7 @@
 
 ### The Launcher is the main startup sequence
 
-The `run.sh` → `Adelaide_Lite/run.py` chain is the sole authority for building and launching all project components. It handles dependency verification, source compilation (Ada/Alire, C++, Python), model downloads, and spawning the runtime processes. This ensures that every contributor can build a functional, portable, and reproducible version of the application on their own machine from a clean source checkout.
+The `run.sh` → `AdelaideZephyrineSystem/run.py` chain is the sole authority for building and launching all project components. It handles dependency verification, source compilation (Ada/Alire, C++, Python), model downloads, and spawning the runtime processes. This ensures that every contributor can build a functional, portable, and reproducible version of the application on their own machine from a clean source checkout.
 
 **Committing compiled, architecture-specific binaries is strictly forbidden.** This is a core architectural principle. See Article II of our Code of Conduct.
 

@@ -59,7 +59,7 @@
 ## Logs and Temp Files
 ## ============================
 # Runtime telemetry and logs
-Adelaide_Lite/run/*
+AdelaideZephyrineSystem/run/*
 **/.adelaide.lock
 **/build_err.txt
 **/build_output.txt
