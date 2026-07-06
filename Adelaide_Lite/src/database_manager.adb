@@ -211,7 +211,7 @@ package body Database_Manager is
           --
           --  Master key is loaded from:
           --    1. ADELAIDE_MASTER_KEY env var (set by run.py before spawn)
-          --    2. ~/.config/adelaide/master.key (created by run.py bootstrap)
+          --    2. config/master.key (local to project, created by run.py bootstrap)
           --  ═══════════════════════════════════════════════════════════════
           Crypto_Enabled := Adelaide_Crypto.Initialize_Crypto;
 
@@ -320,6 +320,93 @@ package body Database_Manager is
            Ada.Exceptions.Exception_Message (E));
          return Default;
    end Get_System_State;
+
+   --  ============================================================================
+   --  INTEGRITY TEST BLOB: Hardware-bound key verification
+   --  ============================================================================
+
+   ----------------------------
+   -- Store_Integrity_Test_Blob --
+   ----------------------------
+   procedure Store_Integrity_Test_Blob (Sub_Key_Hex : String) is
+   begin
+      if Main_DB_Ptr = null then
+         Put_Line (Standard_Error, "[DB] Cannot store integrity test blob: DB not initialized");
+         return;
+      end if;
+
+      if not Crypto_Enabled then
+         Put_Line (Standard_Error, "[DB] Cannot store integrity test blob: Crypto not enabled");
+         return;
+      end if;
+
+      declare
+         Encrypted : constant String := Adelaide_Crypto.Try_Encrypt (
+            Sub_Key_Hex, Integrity_Test_Plaintext);
+      begin
+         if Encrypted = Integrity_Test_Plaintext then
+            Put_Line (Standard_Error, "[DB] Failed to encrypt integrity test blob");
+            return;
+         end if;
+
+         Set_System_State ("integrity_test", Encrypted);
+         Put_Line (Standard_Error, "[DB] Integrity test blob stored successfully");
+      end;
+   end Store_Integrity_Test_Blob;
+
+   ----------------------------
+   -- Verify_Integrity_Test_Blob --
+   ----------------------------
+   function Verify_Integrity_Test_Blob (Sub_Key_Hex : String) return Boolean is
+   begin
+      if Main_DB_Ptr = null then
+         Put_Line (Standard_Error, "[DB] Cannot verify integrity test blob: DB not initialized");
+         return False;
+      end if;
+
+      if not Crypto_Enabled then
+         Put_Line (Standard_Error, "[DB] Cannot verify integrity test blob: Crypto not enabled");
+         return False;
+      end if;
+
+      declare
+         Stored_Blob : constant String := Get_System_State ("integrity_test", "");
+      begin
+         if Stored_Blob'Length = 0 then
+            Put_Line (Standard_Error, "[DB] No integrity test blob found in database");
+            return False;
+         end if;
+
+         declare
+            Decrypted : constant String := Adelaide_Crypto.Try_Decrypt (
+               Sub_Key_Hex, Stored_Blob);
+         begin
+            if Decrypted = Integrity_Test_Plaintext then
+               Put_Line (Standard_Error, "[DB] Integrity test blob verification PASSED");
+               return True;
+            else
+               Put_Line (Standard_Error, "[DB] Integrity test blob verification FAILED (wrong key or corrupted data)");
+               return False;
+            end if;
+         end;
+      end;
+   end Verify_Integrity_Test_Blob;
+
+   ----------------------------
+   -- Has_Integrity_Test_Blob --
+   ----------------------------
+   function Has_Integrity_Test_Blob return Boolean is
+   begin
+      if Main_DB_Ptr = null then
+         return False;
+      end if;
+
+      declare
+         Stored_Blob : constant String := Get_System_State ("integrity_test", "");
+      begin
+         return Stored_Blob'Length > 0;
+      end;
+   end Has_Integrity_Test_Blob;
 
    --------------------------
    -- Add_Literature_Chunk --

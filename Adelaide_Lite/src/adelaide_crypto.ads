@@ -28,7 +28,7 @@ package Adelaide_Crypto is
    end record;
 
    --  Initialize: loads master key from ADELAIDE_MASTER_KEY env var or
-   --  ~/.config/adelaide/master.key. Must be called once at startup.
+   --  config/master.key (local to project). Must be called once at startup.
    --  Returns True if initialization succeeded.
    function Initialize_Crypto return Boolean;
 

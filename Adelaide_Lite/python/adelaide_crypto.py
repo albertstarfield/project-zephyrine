@@ -8,10 +8,12 @@ Mirrors the C shim (src/adl_crypto.c) exactly — same key derivation, same
 encrypted blob format (nonce||ciphertext||tag), same hex encoding. Ensures
 that Ada-encrypted fields can be decrypted by Python and vice-versa.
 
-MASTER KEY PRIORITY (first wins):
-  1. ADELAIDE_MASTER_KEY env var       ← portable, for CI/migration
-  2. ~/.config/adelaide/master.key     ← file, chmod 0600
-  3. Generate new → write to both      ← first boot
+MASTER KEY:
+  The master key is derived from hardware state + user password via HKDF-SHA512.
+  It is NEVER written to disk in plain text. The key exists ONLY in Ada runtime
+  memory (SPARK-verified package) and is passed to Python via environment variable.
+
+  ADELAIDE_MASTER_KEY env var must be set before using this module.
 
 SUB-KEY DERIVATION (per DB):
   HKDF-SHA384(master_key, context_string) → 32-byte AES-256 sub-key
@@ -54,37 +56,30 @@ CTX_LITERATURE   = "adelaide:db:literature:v1"
 CTX_ASSISTANT    = "adelaide:db:assistant:v1"
 CTX_MEMORY_INDEX = "adelaide:db:memory_index:v1"
 
-CONFIG_DIR = os.path.expanduser("~/.config/adelaide")
-KEY_FILE = os.path.join(CONFIG_DIR, "master.key")
+# CONFIG_DIR is a local directory in the project root (not ~/.config)
+# This keeps all Adelaide data self-contained within the project
+CONFIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config")
 
 # ── Key Management ───────────────────────────────────────────────────────
 
 def load_master_key() -> str:
     """
-    Load the master key following the priority chain.
+    Load the master key from environment variable ONLY.
+    The key is NEVER read from disk - it is derived from hardware state
+    and user password via HKDF-SHA512, and passed via ADELAIDE_MASTER_KEY env var.
+    
     Returns hex-encoded 256-bit key (64 hex chars).
     Raises RuntimeError if no key found.
     """
-    # Priority 1: Environment variable
+    # Only read from environment variable - NEVER from disk
     key = os.environ.get("ADELAIDE_MASTER_KEY", "").strip()
     if key and len(key) == 64:
         _validate_hex(key, "ADELAIDE_MASTER_KEY")
         return key
 
-    # Priority 2: Config file
-    if os.path.exists(KEY_FILE):
-        try:
-            with open(KEY_FILE, "r") as f:
-                key = f.read().strip()
-            if key and len(key) == 64:
-                _validate_hex(key, KEY_FILE)
-                return key
-        except (OSError, IOError) as e:
-            raise RuntimeError(f"Cannot read master key file {KEY_FILE}: {e}")
-
     raise RuntimeError(
-        "No master key found. Set ADELAIDE_MASTER_KEY env var "
-        "or run bootstrap_crypto() first."
+        "No master key found. ADELAIDE_MASTER_KEY env var must be set. "
+        "Key is derived from hardware state + user password via HKDF-SHA512."
     )
 
 
@@ -99,37 +94,13 @@ def generate_master_key() -> str:
 
 def bootstrap_crypto() -> str:
     """
-    First-boot key bootstrap.
-    1. Try to load existing key (from env or file).
-    2. If none found, generate new key and persist to file.
-
-    Returns the hex-encoded master key.
+    DEPRECATED: Key is never written to disk.
+    Use hardware-bound key derivation via run.py instead.
     """
-    # Try loading first
-    try:
-        return load_master_key()
-    except RuntimeError:
-        pass
-
-    # Generate new key
-    print("[CRYPTO] No master key found. Generating new 256-bit AES key...")
-    master_hex = generate_master_key()
-
-    # Persist to file
-    try:
-        os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
-        with open(KEY_FILE, "w") as f:
-            f.write(master_hex + "\n")
-        os.chmod(KEY_FILE, 0o600)
-        print(f"[CRYPTO] Master key written to {KEY_FILE} (chmod 0600)")
-    except (OSError, IOError) as e:
-        print(f"[CRYPTO] WARNING: Could not persist master key to {KEY_FILE}: {e}")
-        print("[CRYPTO] You must set ADELAIDE_MASTER_KEY env var on next boot.")
-
-    # Also set env var for child processes
-    os.environ["ADELAIDE_MASTER_KEY"] = master_hex
-
-    return master_hex
+    raise RuntimeError(
+        "bootstrap_crypto() is deprecated. Key is derived from hardware state "
+        "+ user password via HKDF-SHA512. Set ADELAIDE_MASTER_KEY env var."
+    )
 
 
 def save_master_key_to_env(master_hex: str) -> None:
@@ -556,20 +527,11 @@ def rotate_master_key(new_master_hex: str | None = None) -> str:
         except Exception as e:
             print(f"[CRYPTO] WARNING: Failed to re-encrypt api_keys.enc: {e}")
     
-    # Persist new key
-    try:
-        os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
-        with open(KEY_FILE, "w") as f:
-            f.write(new_master_hex + "\n")
-        os.chmod(KEY_FILE, 0o600)
-        print(f"[CRYPTO] New master key written to {KEY_FILE}")
-    except (OSError, IOError) as e:
-        print(f"[CRYPTO] WARNING: Could not persist new key to {KEY_FILE}: {e}")
-    
-    # Set env var
+    # Set env var (NEVER write to disk)
     os.environ["ADELAIDE_MASTER_KEY"] = new_master_hex
     
     print("[CRYPTO] Key rotation complete!")
+    print("[CRYPTO] IMPORTANT: Update ADELAIDE_MASTER_KEY env var in your shell.")
     return new_master_hex
 
 
@@ -804,36 +766,12 @@ if __name__ == "__main__":
     assert not is_field_encrypted(""), "Should reject empty string"
     assert not is_field_encrypted("abc"), "Should reject short string"
 
-    # Test bootstrap_crypto (will generate key if none exists)
-    print("\n=== Testing bootstrap_crypto ===")
-    # Save current env, restore after
-    saved_env = os.environ.get("ADELAIDE_MASTER_KEY")
-    if "ADELAIDE_MASTER_KEY" in os.environ:
-        del os.environ["ADELAIDE_MASTER_KEY"]
-
-    # Temporarily remove key file if exists
-    key_backup = None
-    if os.path.exists(KEY_FILE):
-        with open(KEY_FILE) as f:
-            key_backup = f.read().strip()
-        os.remove(KEY_FILE)
-
-    try:
-        boot_key = bootstrap_crypto()
-        print(f"Bootstrapped key: {boot_key}")
-        assert len(boot_key) == 64, "Bootstrap should return valid key"
-        assert os.path.exists(KEY_FILE), "Key file should exist after bootstrap"
-
-        # Second call should load existing
-        boot_key2 = bootstrap_crypto()
-        assert boot_key == boot_key2, "Second bootstrap should return same key"
-        print("Bootstrap idempotency: OK")
-    finally:
-        # Restore
-        if saved_env:
-            os.environ["ADELAIDE_MASTER_KEY"] = saved_env
-        if key_backup:
-            with open(KEY_FILE, "w") as f:
-                f.write(key_backup + "\n")
+    # Test env var key loading
+    print("\n=== Testing env var key loading ===")
+    os.environ["ADELAIDE_MASTER_KEY"] = master_hex
+    loaded = load_master_key()
+    assert loaded == master_hex, "Env var key loading failed"
+    print("Env var key loading: OK")
+    del os.environ["ADELAIDE_MASTER_KEY"]
 
     print("\n=== ALL TESTS PASSED ===")
