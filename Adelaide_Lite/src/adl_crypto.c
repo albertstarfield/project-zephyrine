@@ -10,7 +10,7 @@
  *
  * MASTER KEY:
  *   - 256-bit (32-byte) key, hex-encoded when stored/transmitted
- *   - Read from ADELAIDE_MASTER_KEY env var, or ~/.config/adelaide/master.key
+ *   - Read from ADELAIDE_MASTER_KEY env var, or config/master.key (local)
  *   - Each DB gets a unique sub-key via HKDF-SHA384
  *
  * THREAD SAFETY:
@@ -134,9 +134,30 @@ int adl_init(const char *key_hex_override, char *err_buf)
         goto store;
     }
 
-    /* Priority 3: Config file */
+    /* Priority 3: Config file (local to project) */
     {
+        /* Try local config directory first, then legacy ~/.config/adelaide */
+        const char *local_path = "config/master.key";
         const char *home = getenv("HOME");
+        
+        /* Check local config directory first */
+        FILE *fp = fopen(local_path, "r");
+        if (fp) {
+            size_t n = 0;
+            int c;
+            while ((c = fgetc(fp)) != EOF && n < sizeof(expanded_hex) - 1) {
+                if (c == '\n' || c == '\r') continue;
+                expanded_hex[n++] = (char)c;
+            }
+            expanded_hex[n] = '\0';
+            fclose(fp);
+            if (n > 0) {
+                src = expanded_hex;
+                goto store;
+            }
+        }
+        
+        /* Fall back to legacy ~/.config/adelaide/master.key */
         if (home) {
             char path[1024];
             snprintf(path, sizeof(path), "%s/.config/adelaide/master.key", home);
@@ -150,7 +171,7 @@ int adl_init(const char *key_hex_override, char *err_buf)
 
     snprintf(err_buf, ADL_ERROR_SIZE,
              "No master key found. Set ADELAIDE_MASTER_KEY env var or "
-             "create ~/.config/adelaide/master.key (run.py handles this)");
+             "create config/master.key (run.py handles this)");
     return -1;
 
 store:
@@ -792,3 +813,151 @@ int main(void)
     return 0;
 }
 #endif /* ADL_CRYPTO_TEST */
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  HKDF Key Derivation (RFC 5869)                                           */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * HKDF-SHA512 implementation using OpenSSL EVP API.
+ * Implements HKDF according to RFC 5869:
+ *   1. HKDF-Extract: PRK = HMAC-SHA512(salt, IKM)
+ *   2. HKDF-Expand:  OKM = HKDF-Expand(PRK, info, L)
+ */
+int adl_hkdf_sha512(const unsigned char *salt, size_t salt_len,
+                    const unsigned char *ikm, size_t ikm_len,
+                    const unsigned char *info, size_t info_len,
+                    unsigned char *okm, size_t okm_len)
+{
+    unsigned char prk[64];  /* SHA-512 hash size = 64 bytes */
+    unsigned int prk_len = 64;
+    unsigned char *p = okm;
+    size_t remaining = okm_len;
+    unsigned char counter = 1;
+    
+    /* Default salt (all zeros) if NULL */
+    unsigned char default_salt[64] = {0};
+    const unsigned char *actual_salt = salt ? salt : default_salt;
+    size_t actual_salt_len = salt ? salt_len : 64;
+    
+    /* Step 1: HKDF-Extract
+     * PRK = HMAC-SHA512(salt, IKM) */
+    if (!HMAC(EVP_sha512(), actual_salt, (int)actual_salt_len,
+              ikm, ikm_len, prk, &prk_len)) {
+        return -1;
+    }
+    
+    /* Step 2: HKDF-Expand
+     * T(1) = HMAC-SHA512(PRK, info || 0x01)
+     * T(2) = HMAC-SHA512(PRK, T(1) || info || 0x02)
+     * ... */
+    while (remaining > 0) {
+        unsigned char hmac_input[256];
+        size_t hmac_input_len = 0;
+        unsigned char hmac_result[64];
+        unsigned int hmac_result_len = 64;
+        
+        /* Build input: previous_result || info || counter */
+        if (counter > 1) {
+            /* Copy previous result (T(n-1)) */
+            memcpy(hmac_input, p - 64, 64);
+            hmac_input_len = 64;
+        }
+        
+        /* Copy info */
+        if (info && info_len > 0) {
+            memcpy(hmac_input + hmac_input_len, info, info_len);
+            hmac_input_len += info_len;
+        }
+        
+        /* Add counter byte */
+        hmac_input[hmac_input_len++] = counter;
+        
+        /* Compute HMAC-SHA512(PRK, hmac_input) */
+        if (!HMAC(EVP_sha512(), prk, prk_len,
+                  hmac_input, hmac_input_len,
+                  hmac_result, &hmac_result_len)) {
+            secure_zero(prk, sizeof(prk));
+            return -1;
+        }
+        
+        /* Copy result to output */
+        size_t to_copy = (remaining < 64) ? remaining : 64;
+        memcpy(p, hmac_result, to_copy);
+        p += to_copy;
+        remaining -= to_copy;
+        counter++;
+        
+        secure_zero(hmac_result, sizeof(hmac_result));
+    }
+    
+    secure_zero(prk, sizeof(prk));
+    return 0;
+}
+
+/*
+ * HKDF-SHA256 implementation using OpenSSL EVP API.
+ * Same as HKDF-SHA512 but with SHA-256 (32-byte output per block).
+ */
+int adl_hkdf_sha256(const unsigned char *salt, size_t salt_len,
+                    const unsigned char *ikm, size_t ikm_len,
+                    const unsigned char *info, size_t info_len,
+                    unsigned char *okm, size_t okm_len)
+{
+    unsigned char prk[32];  /* SHA-256 hash size = 32 bytes */
+    unsigned int prk_len = 32;
+    unsigned char *p = okm;
+    size_t remaining = okm_len;
+    unsigned char counter = 1;
+    
+    /* Default salt (all zeros) if NULL */
+    unsigned char default_salt[32] = {0};
+    const unsigned char *actual_salt = salt ? salt : default_salt;
+    size_t actual_salt_len = salt ? salt_len : 32;
+    
+    /* Step 1: HKDF-Extract
+     * PRK = HMAC-SHA256(salt, IKM) */
+    if (!HMAC(EVP_sha256(), actual_salt, (int)actual_salt_len,
+              ikm, ikm_len, prk, &prk_len)) {
+        return -1;
+    }
+    
+    /* Step 2: HKDF-Expand */
+    while (remaining > 0) {
+        unsigned char hmac_input[256];
+        size_t hmac_input_len = 0;
+        unsigned char hmac_result[32];
+        unsigned int hmac_result_len = 32;
+        
+        /* Build input: previous_result || info || counter */
+        if (counter > 1) {
+            memcpy(hmac_input, p - 32, 32);
+            hmac_input_len = 32;
+        }
+        
+        if (info && info_len > 0) {
+            memcpy(hmac_input + hmac_input_len, info, info_len);
+            hmac_input_len += info_len;
+        }
+        
+        hmac_input[hmac_input_len++] = counter;
+        
+        if (!HMAC(EVP_sha256(), prk, prk_len,
+                  hmac_input, hmac_input_len,
+                  hmac_result, &hmac_result_len)) {
+            secure_zero(prk, sizeof(prk));
+            return -1;
+        }
+        
+        size_t to_copy = (remaining < 32) ? remaining : 32;
+        memcpy(p, hmac_result, to_copy);
+        p += to_copy;
+        remaining -= to_copy;
+        counter++;
+        
+        secure_zero(hmac_result, sizeof(hmac_result));
+    }
+    
+    secure_zero(prk, sizeof(prk));
+    return 0;
+}

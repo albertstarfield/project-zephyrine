@@ -11,7 +11,7 @@ pragma SPARK_Mode (Off);
 --  OFF for backward compatibility with Ollama clients).
 --
 --  The key file is written by run.py (decrypted from the encrypted store
---  at ~/.config/adelaide/api_keys.enc) just before spawning the server.
+--  at config/api_keys.enc (local to project) just before spawning the server.
 --
 --  USAGE
 --  -----

@@ -1,0 +1,231 @@
+--  ── Key Derivation Implementation ────────────────────────────────────────────
+--  HKDF-SHA512 key derivation using OpenSSL C FFI.
+--  Derives encryption keys from integrity hash and user secret.
+--  ──────────────────────────────────────────────────────────────────────────────
+
+with Interfaces;          use Interfaces;
+with Interfaces.C;        use Interfaces.C;
+with Ada.Text_IO;         use Ada.Text_IO;
+with Ada.Strings;         use Ada.Strings;
+with Ada.Strings.Fixed;   use Ada.Strings.Fixed;
+
+package body Key_Derivation
+  with SPARK_Mode => Off
+is
+
+   --  ── C FFI for HKDF-SHA512 ────────────────────────────────────────────────
+   --  These functions are implemented in adl_crypto.c
+
+   function HKDF_SHA512
+     (Salt      : System.Address;
+      Salt_Len  : Interfaces.C.size_t;
+      IKM       : System.Address;
+      IKM_Len   : Interfaces.C.size_t;
+      Info      : System.Address;
+      Info_Len  : Interfaces.C.size_t;
+      OKM       : System.Address;
+      OKM_Len   : Interfaces.C.size_t) return Interfaces.C.int
+     with Import => True, Convention => C,
+          External_Name => "adl_hkdf_sha512";
+
+   function HKDF_SHA256
+     (Salt      : System.Address;
+      Salt_Len  : Interfaces.C.size_t;
+      IKM       : System.Address;
+      IKM_Len   : Interfaces.C.size_t;
+      Info      : System.Address;
+      Info_Len  : Interfaces.C.size_t;
+      OKM       : System.Address;
+      OKM_Len   : Interfaces.C.size_t) return Interfaces.C.int
+     with Import => True, Convention => C,
+          External_Name => "adl_hkdf_sha256";
+
+   --  ── Internal State ────────────────────────────────────────────────────────
+
+   Stored_Integrity_Hash : Hash_Type := Empty_Hash;
+   Integrity_Hash_Set    : Boolean := False;
+
+   --  ── String Conversion Helpers ─────────────────────────────────────────────
+
+   function Master_Key_To_Hex (K : Master_Key_Type) return String is
+      Result : String (1 .. 128);
+      Hex_Chars : constant String := "0123456789abcdef";
+   begin
+      for I in Master_Key_Index loop
+         Result ((I - 1) * 2 + 1) := Hex_Chars (Natural (K (I)) / 16 + 1);
+         Result ((I - 1) * 2 + 2) := Hex_Chars (Natural (K (I)) mod 16 + 1);
+      end loop;
+      return Result;
+   end Master_Key_To_Hex;
+
+   function Hex_To_Master_Key (S : String) return Master_Key_Type is
+      Result : Master_Key_Type := (others => 0);
+      Hex_To_Nibble : function (C : Character) return Interfaces.Unsigned_8 is
+         (case C is
+          when '0' .. '9' => Interfaces.Unsigned_8'Value ("" & C),
+          when 'a' .. 'f' => Interfaces.Unsigned_8'Value ("" & C) - 10,
+          when 'A' .. 'F' => Interfaces.Unsigned_8'Value ("" & C) - 10,
+          when others => 0);
+   begin
+      if S'Length /= 128 then
+         return Empty_Master_Key;
+      end if;
+
+      for I in Master_Key_Index loop
+         Result (I) := Hex_To_Nibble (S ((I - 1) * 2 + 1)) * 16 +
+                        Hex_To_Nibble (S ((I - 1) * 2 + 2));
+      end loop;
+      return Result;
+   end Hex_To_Master_Key;
+
+   function AES_Key_To_Hex (K : AES_Key_Type) return String is
+      Result : String (1 .. 64);
+      Hex_Chars : constant String := "0123456789abcdef";
+   begin
+      for I in AES_Key_Index loop
+         Result ((I - 1) * 2 + 1) := Hex_Chars (Natural (K (I)) / 16 + 1);
+         Result ((I - 1) * 2 + 2) := Hex_Chars (Natural (K (I)) mod 16 + 1);
+      end loop;
+      return Result;
+   end AES_Key_To_Hex;
+
+   function Hex_To_AES_Key (S : String) return AES_Key_Type is
+      Result : AES_Key_Type := (others => 0);
+      Hex_To_Nibble : function (C : Character) return Interfaces.Unsigned_8 is
+         (case C is
+          when '0' .. '9' => Interfaces.Unsigned_8'Value ("" & C),
+          when 'a' .. 'f' => Interfaces.Unsigned_8'Value ("" & C) - 10,
+          when 'A' .. 'F' => Interfaces.Unsigned_8'Value ("" & C) - 10,
+          when others => 0);
+   begin
+      if S'Length /= 64 then
+         return Empty_AES_Key;
+      end if;
+
+      for I in AES_Key_Index loop
+         Result (I) := Hex_To_Nibble (S ((I - 1) * 2 + 1)) * 16 +
+                        Hex_To_Nibble (S ((I - 1) * 2 + 2));
+      end loop;
+      return Result;
+   end Hex_To_AES_Key;
+
+   --  ── Key Derivation Functions ──────────────────────────────────────────────
+
+   function Derive_Master_Key
+     (Integrity_Hash : Hash_Type;
+      User_Secret    : String) return Master_Key_Type
+   is
+      Result : Master_Key_Type := (others => 0);
+      Info : constant String := "adelaide:master-key:v1";
+   begin
+      --  Use C FFI for HKDF-SHA512
+      declare
+         Salt_Ptr  : constant System.Address := Integrity_Hash'Address;
+         Salt_Len  : constant Interfaces.C.size_t := Hash_Type'Size / 8;
+         IKM_Ptr   : constant System.Address := User_Secret'Address;
+         IKM_Len   : constant Interfaces.C.size_t := User_Secret'Length;
+         Info_Ptr  : constant System.Address := Info'Address;
+         Info_Len  : constant Interfaces.C.size_t := Info'Length;
+         OKM_Ptr   : constant System.Address := Result'Address;
+         OKM_Len   : constant Interfaces.C.size_t := Master_Key_Type'Size / 8;
+         Ret       : Interfaces.C.int;
+      begin
+         Ret := HKDF_SHA512 (Salt_Ptr, Salt_Len,
+                             IKM_Ptr, IKM_Len,
+                             Info_Ptr, Info_Len,
+                             OKM_Ptr, OKM_Len);
+         if Ret /= 0 then
+            Put_Line (Standard_Error, "HKDF-SHA512 failed, using fallback");
+            --  Fallback: simple XOR combination (not as secure, but functional)
+            for I in Master_Key_Index loop
+               Result (I) := Integrity_Hash ((I - 1) mod 64 + 1) xor
+                             Interfaces.Unsigned_8 (Character'Pos (
+                               User_Secret ((I - 1) mod User_Secret'Length + 1)));
+            end loop;
+         end if;
+      end;
+
+      return Result;
+   end Derive_Master_Key;
+
+   function Derive_AES_Key
+     (Master_Key : Master_Key_Type;
+      Context    : String) return AES_Key_Type
+   is
+      Result : AES_Key_Type := (others => 0);
+      Info : constant String := "adelaide:db:" & Context & ":v1";
+   begin
+      --  Use C FFI for HKDF-SHA256
+      declare
+         Salt_Ptr  : constant System.Address := Master_Key'Address;
+         Salt_Len  : constant Interfaces.C.size_t := Master_Key_Type'Size / 8;
+         IKM_Ptr   : constant System.Address := Context'Address;
+         IKM_Len   : constant Interfaces.C.size_t := Context'Length;
+         Info_Ptr  : constant System.Address := Info'Address;
+         Info_Len  : constant Interfaces.C.size_t := Info'Length;
+         OKM_Ptr   : constant System.Address := Result'Address;
+         OKM_Len   : constant Interfaces.C.size_t := AES_Key_Type'Size / 8;
+         Ret       : Interfaces.C.int;
+      begin
+         Ret := HKDF_SHA256 (Salt_Ptr, Salt_Len,
+                             IKM_Ptr, IKM_Len,
+                             Info_Ptr, Info_Len,
+                             OKM_Ptr, OKM_Len);
+         if Ret /= 0 then
+            Put_Line (Standard_Error, "HKDF-SHA256 failed, using fallback");
+            --  Fallback: simple XOR combination
+            for I in AES_Key_Index loop
+               Result (I) := Master_Key (I) xor
+                             Interfaces.Unsigned_8 (Character'Pos (
+                               Context ((I - 1) mod Context'Length + 1)));
+            end loop;
+         end if;
+      end;
+
+      return Result;
+   end Derive_AES_Key;
+
+   --  ── Initialization ────────────────────────────────────────────────────────
+
+   function Initialize_Key_Derivation return Boolean is
+   begin
+      Put_Line (Standard_Error, "[KEY-DERIV] Computing system integrity hash...");
+      Stored_Integrity_Hash := System_Integrity.Compute_Integrity_Hash;
+      Integrity_Hash_Set := True;
+      Put_Line (Standard_Error, "[KEY-DERIV] Integrity hash: " &
+                Hash_To_String (Stored_Integrity_Hash));
+      return True;
+   exception
+      when others =>
+         Put_Line (Standard_Error, "[KEY-DERIV] Failed to compute integrity hash");
+         return False;
+   end Initialize_Key_Derivation;
+
+   procedure Derive_And_Store_Master_Key (User_Secret : String) is
+   begin
+      if not Integrity_Hash_Set then
+         Put_Line (Standard_Error, "[KEY-DERIV] Integrity hash not computed");
+         return;
+      end if;
+
+      Put_Line (Standard_Error, "[KEY-DERIV] Deriving master key from user secret...");
+      declare
+         Master_Key : constant Master_Key_Type :=
+           Derive_Master_Key (Stored_Integrity_Hash, User_Secret);
+      begin
+         Master_Key_Store.Set_Key (Master_Key);
+         Put_Line (Standard_Error, "[KEY-DERIV] Master key stored (512-bit)");
+      end;
+   end Derive_And_Store_Master_Key;
+
+   function Get_Master_Key return Master_Key_Type is
+   begin
+      return Master_Key_Store.Get_Key;
+   end Get_Master_Key;
+
+   procedure Clear_Master_Key is
+   begin
+      Master_Key_Store.Clear_Key;
+   end Clear_Master_Key;
+
+end Key_Derivation;

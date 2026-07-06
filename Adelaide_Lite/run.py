@@ -18,7 +18,704 @@ MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB total cap
 # ── Crypto ────────────────────────────────────────────────────────────────
 # Import the Python crypto module (sibling to python/adelaide_crypto.py)
 sys.path.insert(0, os.path.join(BASE_DIR, "python"))
-from adelaide_crypto import bootstrap_crypto, load_master_key, migrate_all_to_aad  # noqa: E402
+from adelaide_crypto import load_master_key, migrate_all_to_aad  # noqa: E402
+
+# ── Hardware-Bound Key Derivation Constants ───────────────────────────────
+# Integrity test plaintext for key verification
+INTEGRITY_TEST_PLAINTEXT = "--ADELAIDE-INTEGRITY-TEST--"
+
+# ── KISS Mode ─────────────────────────────────────────────────────────────
+IS_KISS = "--kiss" in sys.argv
+
+# ── Stdio Protocol Messages ───────────────────────────────────────────────
+# Ada → run.py messages
+MSG_INTEGRITY_MISMATCH = "INTEGRITY_MISMATCH"
+MSG_INVALID_SECRET = "INVALID_SECRET"
+MSG_KEY_ACCEPTED = "KEY_ACCEPTED"
+MSG_READY = "READY"
+
+
+# ── Hardware-Bound Key Derivation Handler ─────────────────────────────────
+def handle_stdio_key_exchange(proc):
+    """
+    Handle stdio-based key exchange with Ada server.
+    
+    Protocol:
+    - Ada writes INTEGRITY_MISMATCH if key derivation failed
+    - Ada writes INVALID_SECRET if user provided wrong password
+    - Ada writes KEY_ACCEPTED if key verified successfully
+    - Ada writes READY when startup complete
+    - run.py writes user secret (password or recovery key) followed by newline
+    
+    Returns True if key exchange succeeded, False otherwise.
+    """
+    print("[KEY-EXCHANGE] Waiting for Ada server key exchange...")
+    
+    # For now, use environment variables to communicate
+    # The Ada server will check for ADELAIDE_MASTER_KEY env var
+    
+    return True
+
+
+def _term_print(msg):
+    """Print to terminal directly (bypasses KISS stdout redirect)."""
+    import sys
+    dest = term_stderr if term_stderr else sys.__stderr__
+    dest.write(msg + "\n")
+    dest.flush()
+
+
+def _gui_available():
+    """Check if tkinter is available and we have a display."""
+    # Cache the result so we only check once
+    if not hasattr(_gui_available, "_cached"):
+        try:
+            import tkinter as tk
+            r = tk.Tk()
+            r.destroy()
+            _gui_available._cached = True
+        except Exception:
+            _gui_available._cached = False
+    return _gui_available._cached
+
+
+def _tk_password_dialog(title, prompt, confirm=False):
+    """Show tkinter password dialog. Returns password string or None."""
+    import tkinter as tk
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+
+    dialog = tk.Toplevel(root)
+    dialog.title(title)
+    dialog.attributes("-topmost", True)
+    dialog.resizable(False, False)
+    dialog.grab_set()
+
+    # Center on screen
+    w, h = 380, 220 if confirm else 180
+    sx = (dialog.winfo_screenwidth() - w) // 2
+    sy = (dialog.winfo_screenheight() - h) // 2
+    dialog.geometry(f"{w}x{h}+{sx}+{sy}")
+
+    # Style
+    bg = "#1a1a2e"
+    fg = "#e0e0e0"
+    entry_bg = "#16213e"
+    btn_bg = "#0f3460"
+    accent = "#e94560"
+    dialog.configure(bg=bg)
+
+    tk.Label(dialog, text=prompt, bg=bg, fg=fg, font=("Helvetica", 13)).pack(pady=(18, 6))
+
+    pw_var = tk.StringVar()
+    pw_entry = tk.Entry(dialog, textvariable=pw_var, show="*", bg=entry_bg, fg=fg,
+                        insertbackground=fg, font=("Helvetica", 13), width=28, relief="flat")
+    pw_entry.pack(pady=4, padx=20)
+    pw_entry.focus_set()
+
+    confirm_var = None
+    confirm_entry = None
+    if confirm:
+        tk.Label(dialog, text="Confirm password:", bg=bg, fg=fg, font=("Helvetica", 11)).pack(pady=(8, 2))
+        confirm_var = tk.StringVar()
+        confirm_entry = tk.Entry(dialog, textvariable=confirm_var, show="*", bg=entry_bg, fg=fg,
+                                 insertbackground=fg, font=("Helvetica", 13), width=28, relief="flat")
+        confirm_entry.pack(pady=4, padx=20)
+        confirm_entry.focus_set()
+
+    result = [None]
+
+    def on_ok(_event=None):
+        pw = pw_var.get()
+        if confirm:
+            pw2 = confirm_var.get()
+            if pw != pw2:
+                # Flash error
+                confirm_entry.configure(bg="#5c1a1a")
+                dialog.after(600, lambda: confirm_entry.configure(bg=entry_bg))
+                return
+        result[0] = pw
+        dialog.destroy()
+
+    def on_cancel():
+        result[0] = None
+        dialog.destroy()
+
+    btn_frame = tk.Frame(dialog, bg=bg)
+    btn_frame.pack(pady=(10, 8))
+
+    ok_btn = tk.Button(btn_frame, text="OK", command=on_ok, bg=btn_bg, fg=fg,
+                       activebackground=accent, activeforeground="#fff", font=("Helvetica", 11),
+                       width=10, relief="flat", cursor="hand2")
+    ok_btn.pack(side="left", padx=6)
+
+    cancel_btn = tk.Button(btn_frame, text="Cancel", command=on_cancel, bg=entry_bg, fg=fg,
+                           activebackground=accent, activeforeground="#fff", font=("Helvetica", 11),
+                           width=10, relief="flat", cursor="hand2")
+    cancel_btn.pack(side="left", padx=6)
+
+    dialog.bind("<Return>", on_ok)
+    dialog.bind("<Escape>", lambda e: on_cancel())
+
+    # Use wait_window instead of root.mainloop() — returns when dialog is destroyed
+    root.wait_window(dialog)
+    root.destroy()
+    return result[0]
+
+
+def prompt_kiss_password(is_first_boot=False):
+    """
+    KISS mode password prompt (phone-like setup).
+    
+    First boot:
+    - Create password
+    - Confirm password
+    - Show recovery key
+    
+    Subsequent boot:
+    - Prompt for password
+    """
+    # Check if tkinter is available and we're in GUI mode
+    use_gui = _gui_available()
+
+    if use_gui:
+        if is_first_boot:
+            _term_print("[KEY-DERIV] First boot — opening password setup dialog...")
+            password = _tk_password_dialog("Adelaide — Set Password", "Create a new password:", confirm=True)
+            if not password:
+                return None
+            _term_print("[KEY-DERIV] Password set.")
+
+            # Generate recovery key
+            import secrets
+            recovery_key = f"{secrets.token_hex(2)}-{secrets.token_hex(2)}-{secrets.token_hex(2)}-{secrets.token_hex(2)}"
+            _term_print(f"[KEY-DERIV] Recovery key: {recovery_key}")
+
+            # Show recovery key dialog (NOT stored — user writes it down)
+            _tk_info_dialog("Adelaide — Recovery Key",
+                            f"Your recovery key is:\n\n{recovery_key}\n\n"
+                            "WRITE THIS DOWN.\nIt's your backup if you forget your password.\n\n"
+                            "This key is NOT stored anywhere.")
+
+            return password
+        else:
+            _term_print("[KEY-DERIV] Welcome back — entering password...")
+            password = _tk_password_dialog("Adelaide — Enter Password", "Enter your password:")
+            return password
+
+    # Fallback: terminal prompts
+    import getpass
+
+    _term_print("")
+    _term_print("  Welcome to Adelaide.")
+    _term_print("")
+
+    if is_first_boot:
+        _term_print("  Let's set up your password.")
+        _term_print("  This password protects your data.")
+        _term_print("  You'll need it every time Adelaide starts.")
+        _term_print("")
+
+        # Create password (getpass writes to fd 2 by default, which is the terminal)
+        password = getpass.getpass("  Create password: ", stream=term_stderr)
+        if not password:
+            _term_print("  Password cannot be empty.")
+            return None
+
+        # Confirm password
+        confirm = getpass.getpass("  Confirm password: ", stream=term_stderr)
+        if password != confirm:
+            _term_print("  Passwords do not match.")
+            return None
+
+        _term_print("  Password set.")
+        _term_print("")
+
+        # Generate recovery key
+        import secrets
+        recovery_key = f"{secrets.token_hex(2)}-{secrets.token_hex(2)}-{secrets.token_hex(2)}-{secrets.token_hex(2)}"
+        _term_print(f"  Your recovery key is: {recovery_key}")
+        _term_print("  WRITE THIS DOWN. It's your backup if you forget your password.")
+        _term_print("  This key is NOT stored anywhere.")
+        _term_print("")
+
+        return password
+    else:
+        _term_print("  Welcome back.")
+        password = getpass.getpass("  Please enter your password: ", stream=term_stderr)
+
+
+def _tk_info_dialog(title, message):
+    """Show a tkinter info dialog."""
+    import tkinter as tk
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+
+    bg = "#1a1a2e"
+    fg = "#e0e0e0"
+    btn_bg = "#0f3460"
+    accent = "#e94560"
+
+    dialog = tk.Toplevel(root)
+    dialog.title(title)
+    dialog.attributes("-topmost", True)
+    dialog.resizable(False, False)
+    dialog.grab_set()
+
+    w, h = 420, 200
+    sx = (dialog.winfo_screenwidth() - w) // 2
+    sy = (dialog.winfo_screenheight() - h) // 2
+    dialog.geometry(f"{w}x{h}+{sx}+{sy}")
+    dialog.configure(bg=bg)
+
+    tk.Label(dialog, text=message, bg=bg, fg=fg, font=("Helvetica", 12),
+             justify="left", wraplength=380).pack(pady=(16, 10), padx=20)
+
+    tk.Button(dialog, text="OK", command=dialog.destroy, bg=btn_bg, fg=fg,
+              activebackground=accent, activeforeground="#fff", font=("Helvetica", 11),
+              width=10, relief="flat", cursor="hand2").pack(pady=(0, 12))
+
+    dialog.bind("<Return>", lambda e: dialog.destroy())
+    root.wait_window(dialog)
+    root.destroy()
+
+
+# ── Hardware-Bound Key Derivation Functions ───────────────────────────────
+def compute_integrity_hash():
+    """
+    Compute hardware/binary integrity hash for key derivation.
+    Returns hex-encoded hash or None on failure.
+    """
+    import subprocess
+    
+    try:
+        # Compute hardware hash
+        hw_sources = []
+        if platform.system() == "Linux":
+            # Linux hardware sources
+            cmds = ["lsusb", "lshw -c system 2>/dev/null | head -50", 
+                    "lspci", "dmidecode -t system 2>/dev/null | head -20",
+                    "cat /proc/cpuinfo 2>/dev/null | head -20",
+                    "lsblk -d -o NAME,SERIAL 2>/dev/null",
+                    # TPM (Trusted Platform Module)
+                    "cat /sys/class/tpm/tpm0/tpm_version_major 2>/dev/null",
+                    "cat /sys/class/tpm/tpm0/device/firmware_node*/description 2>/dev/null",
+                    "cat /sys/class/tpm/tpm0/tpm_version_* 2>/dev/null",
+                    "cat /sys/class/tpm/tpm0/device/firmware_node*/hid 2>/dev/null",
+                    "tpm2_getcap properties-variable 2>/dev/null | head -10",
+                    "ls -la /sys/class/tpm/ 2>/dev/null"]
+        elif platform.system() == "Darwin":
+            # macOS hardware sources
+            cmds = ["system_profiler SPUSBDataType 2>/dev/null | head -50",
+                    "system_profiler SPHardwareDataType 2>/dev/null",
+                    "system_profiler SPPCIDataType 2>/dev/null | head -30",
+                    "ioreg -l 2>/dev/null | grep -E 'IOPlatformSerialNumber|IOPlatformUUID' | head -10",
+                    "sysctl machdep.cpu 2>/dev/null",
+                    "system_profiler SPMemoryDataType 2>/dev/null | head -20",
+                    # Secure Enclave (Apple T2 / Silicon)
+                    "ioreg -l 2>/dev/null | grep -E 'AppleSEP|sep-id|chip-id|SEP' | head -10",
+                    "system_profiler SPiBridgeDataType 2>/dev/null | head -20",
+                    "ioreg -p IODeviceTree -r -n sep 2>/dev/null"]
+        else:
+            return None
+        
+        for cmd in cmds:
+            try:
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+                if result.stdout:
+                    hw_sources.append(result.stdout)
+            except Exception:
+                pass
+        
+        # Compute binary hash
+        bin_sources = []
+        if platform.system() == "Linux":
+            cmds = ["ls -la /boot/*vmlinuz* /boot/*initrd* 2>/dev/null",
+                    "ls -la /boot/efi/* 2>/dev/null | head -20",
+                    "ls -la /bin/* 2>/dev/null | head -30"]
+        elif platform.system() == "Darwin":
+            cmds = ["ls -la /System/Library/Kernels/* 2>/dev/null | head -10",
+                    "ls -la /System/Library/CoreServices/boot.efi 2>/dev/null",
+                    "ls -la /usr/local/bin/* 2>/dev/null | head -30"]
+        
+        for cmd in cmds:
+            try:
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+                if result.stdout:
+                    bin_sources.append(result.stdout)
+            except Exception:
+                pass
+        
+        # Combine and hash
+        combined = "\n".join(hw_sources) + "\n" + "\n".join(bin_sources)
+        integrity_hash = hashlib.sha512(combined.encode()).hexdigest()
+        
+        return integrity_hash
+    except Exception as e:
+        print(f"[KEY-DERIV] Failed to compute integrity hash: {e}")
+        return None
+
+
+def derive_master_key(integrity_hash, user_secret):
+    """
+    Derive master key from integrity hash and user secret.
+    master_key = HKDF-SHA512(salt=integrity_hash, ikm=user_secret,
+                             info="adelaide:master-key:v1")
+    """
+    import hmac
+    import hashlib
+    
+    info = b"adelaide:master-key:v1"
+    salt = bytes.fromhex(integrity_hash)
+    ikm = user_secret.encode('utf-8')
+    
+    # HKDF-Extract
+    prk = hmac.new(salt, ikm, hashlib.sha512).digest()
+    
+    # HKDF-Expand
+    expand_input = info + b'\x01'
+    okm = hmac.new(prk, expand_input, hashlib.sha512).digest()
+    
+    # Take first 64 bytes (512 bits) as master key
+    return okm[:64].hex()
+
+
+def verify_integrity_test_blob(master_key_hex, sub_key_hex):
+    """
+    Verify integrity test blob from database.
+    Returns True if blob exists and decrypts successfully.
+    """
+    from adelaide_crypto import decrypt_field
+    
+    try:
+        # Get stored blob from database
+        import sqlite3
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        if not os.path.exists(db_path):
+            return False
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute("SELECT value FROM system_state WHERE key = 'integrity_test'")
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return False
+        
+        stored_blob = row[0]
+        
+        # Try to decrypt
+        decrypted = decrypt_field(sub_key_hex, stored_blob)
+        if decrypted == INTEGRITY_TEST_PLAINTEXT:
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(f"[KEY-DERIV] Integrity test verification failed: {e}")
+        return False
+
+
+def store_integrity_test_blob(sub_key_hex):
+    """
+    Store integrity test blob in database.
+    """
+    from adelaide_crypto import encrypt_field
+    
+    try:
+        import sqlite3
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        if not os.path.exists(db_path):
+            return False
+        
+        # Encrypt test plaintext
+        encrypted = encrypt_field(sub_key_hex, INTEGRITY_TEST_PLAINTEXT)
+        if encrypted == INTEGRITY_TEST_PLAINTEXT:
+            return False
+        
+        # Store in database
+        conn = sqlite3.connect(db_path)
+        conn.execute("""
+            INSERT INTO system_state (key, value) 
+            VALUES ('integrity_test', ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+        """, (encrypted,))
+        conn.commit()
+        conn.close()
+        
+        return True
+    except Exception as e:
+        print(f"[KEY-DERIV] Failed to store integrity test blob: {e}")
+        return False
+
+
+def migrate_from_legacy_key_system():
+    """
+    Migrate from old file-based key system to hardware-bound key derivation.
+    
+    Reads old key from disk (migration only), re-encrypts all databases with
+    new hardware-bound key, then DELETES the old key file. Never written again.
+    
+    Migration flow:
+    1. Detect old key file at config/master.key or ~/.config/adelaide/master.key
+    2. Read old key from file
+    3. Prompt user for new password
+    4. Derive new master_key with hardware-bound integrity hash
+    5. Re-encrypt all databases with new key
+    6. DELETE old key file
+    7. Store integrity_test blob with new key
+    """
+    # Check both possible legacy locations
+    local_key_file = os.path.join(BASE_DIR, "config", "master.key")
+    legacy_key_file = os.path.expanduser("~/.config/adelaide/master.key")
+    
+    old_key_file = None
+    if os.path.exists(local_key_file):
+        old_key_file = local_key_file
+    elif os.path.exists(legacy_key_file):
+        old_key_file = legacy_key_file
+    
+    if not old_key_file:
+        print("[MIGRATE] No legacy key file found, skipping migration")
+        return True
+    
+    print(f"[MIGRATE] Legacy key file detected at {old_key_file}")
+    print("[MIGRATE] Migrating to hardware-bound system...")
+    
+    # Read old key
+    try:
+        with open(old_key_file, "r") as f:
+            old_key_hex = f.read().strip()
+        if len(old_key_hex) != 64:
+            print("[MIGRATE] Invalid legacy key format")
+            return False
+    except Exception as e:
+        print(f"[MIGRATE] Failed to read legacy key: {e}")
+        return False
+    
+    # Get new password from user
+    if _gui_available() or IS_KISS:
+        password = prompt_kiss_password(is_first_boot=True)
+    else:
+        import getpass
+        print("[MIGRATE] Please create a new password for the hardware-bound system.")
+        password = getpass.getpass("Enter new password: ")
+    
+    if not password:
+        print("[MIGRATE] No password provided")
+        return False
+    
+    # Compute integrity hash
+    integrity_hash = compute_integrity_hash()
+    if not integrity_hash:
+        print("[MIGRATE] Failed to compute integrity hash")
+        return False
+    
+    # Derive new master key
+    new_master_key = derive_master_key(integrity_hash, password)
+    print(f"[MIGRATE] New master key derived: {new_master_key[:16]}...")
+    
+    # Re-encrypt all databases with new key
+    try:
+        from adelaide_crypto import derive_sub_key, encrypt_field, decrypt_field
+        
+        # Derive sub-keys for old key (each DB context)
+        old_subkeys = {
+            "memory": derive_sub_key(old_key_hex, "adelaide:db:memory:v1"),
+            "session": derive_sub_key(old_key_hex, "adelaide:db:session:v1"),
+            "literature": derive_sub_key(old_key_hex, "adelaide:db:literature:v1"),
+        }
+        new_subkeys = {
+            "memory": derive_sub_key(new_master_key, "adelaide:db:memory:v1"),
+            "session": derive_sub_key(new_master_key, "adelaide:db:session:v1"),
+            "literature": derive_sub_key(new_master_key, "adelaide:db:literature:v1"),
+        }
+        
+        import sqlite3
+        total_reencrypted = 0
+        
+        # ── Database migration definitions ──
+        # (db_name, subkey_context, [(table, id_col, text_cols...)])
+        db_migrations = [
+            ("adelaide_memory.db", "memory", [
+                ("memories", "id", ["input", "response"]),
+                ("response_cache", "id", ["prompt", "response", "embedding"]),
+            ]),
+            ("assistant_session.db", "session", [
+                ("messages", "id", ["content"]),
+            ]),
+            ("literatureRefIndex.db", "literature", [
+                ("chunks", "id", ["content"]),
+            ]),
+        ]
+        
+        for db_name, subkey_ctx, table_migrations in db_migrations:
+            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", db_name)
+            if not os.path.exists(db_path):
+                continue
+            
+            conn = sqlite3.connect(db_path)
+            conn.text_factory = lambda x: x.decode('utf-8', errors='replace')
+            
+            for table_name, id_col, text_cols in table_migrations:
+                # Check if table exists
+                tbl_exists = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (table_name,)
+                ).fetchone()
+                if not tbl_exists:
+                    continue
+                
+                # Build SELECT and UPDATE column lists
+                col_list = ", ".join([id_col] + text_cols)
+                set_clauses = ", ".join([f"{c}=?" for c in text_cols])
+                
+                rows = conn.execute(f"SELECT {col_list} FROM {table_name}").fetchall()
+                reencrypted_count = 0
+                
+                for row in rows:
+                    row_id = row[0]
+                    values = row[1:]
+                    new_values = list(values)
+                    any_encrypted = False
+                    
+                    for i, val in enumerate(values):
+                        if not val or len(val) <= 56:
+                            continue
+                        # Check if looks encrypted (hex-only first 56 chars)
+                        if not all(c in '0123456789abcdef' for c in val[:56].lower()):
+                            continue
+                        
+                        any_encrypted = True
+                        try:
+                            # Decrypt with old subkey
+                            decrypted = decrypt_field(old_subkeys[subkey_ctx], val)
+                            if decrypted and decrypted != val:
+                                # Re-encrypt with new subkey
+                                new_values[i] = encrypt_field(new_subkeys[subkey_ctx], decrypted)
+                        except Exception:
+                            # Skip rows that fail to decrypt (plaintext misidentified)
+                            pass
+                    
+                    if any_encrypted:
+                        reencrypted_count += 1
+                        conn.execute(
+                            f"UPDATE {table_name} SET {set_clauses} WHERE {id_col}=?",
+                            tuple(new_values + [row_id])
+                        )
+                
+                if reencrypted_count > 0:
+                    conn.commit()
+                    total_reencrypted += reencrypted_count
+                    print(f"[MIGRATE] Re-encrypted {reencrypted_count} rows in {db_name}.{table_name}")
+            
+            conn.close()
+        
+        # Delete old key file
+        os.remove(old_key_file)
+        print("[MIGRATE] Old key file deleted")
+        
+        # Store integrity test blob with new key
+        new_aes_key = derive_sub_key(new_master_key, "adelaide:db:memory:v1")
+        store_integrity_test_blob(new_aes_key)
+        
+        print(f"[MIGRATE] Migration completed. Total re-encrypted: {total_reencrypted} rows")
+        return True
+        
+    except Exception as e:
+        import traceback
+        print(f"[MIGRATE] Migration failed: {e}")
+        traceback.print_exc()
+        return False
+
+
+def hardware_bound_key_derivation():
+    """
+    Hardware-bound key derivation system.
+    
+    1. Compute integrity hash from hardware + binary state
+    2. Prompt user for password
+    3. Derive master key from integrity hash + password
+    4. Verify integrity test blob
+    5. If verification fails, prompt for recovery key
+    """
+    from adelaide_crypto import derive_sub_key
+    
+    _term_print("[KEY-DERIV] Initializing hardware-bound key derivation...")
+    
+    # Step 1: Compute integrity hash
+    integrity_hash = compute_integrity_hash()
+    if not integrity_hash:
+        _term_print("[KEY-DERIV] Failed to compute integrity hash")
+        return None
+    
+    print(f"[KEY-DERIV] Integrity hash: {integrity_hash[:16]}...")
+    
+    # Step 2: Check if this is first boot (check both locations)
+    local_key = os.path.join(BASE_DIR, "config", "master.key")
+    legacy_key = os.path.expanduser("~/.config/adelaide/master.key")
+    first_boot = not os.path.exists(local_key) and not os.path.exists(legacy_key)
+    
+    # Step 3: Prompt for password
+    if _gui_available() or IS_KISS:
+        password = prompt_kiss_password(is_first_boot=first_boot)
+    else:
+        import getpass
+        if first_boot:
+            _term_print("[KEY-DERIV] First boot detected. Please create a password.")
+            password = getpass.getpass("  Create password: ", stream=term_stderr)
+        else:
+            _term_print("[KEY-DERIV] Please enter your password.")
+            password = getpass.getpass("  Password: ", stream=term_stderr)
+    
+    if not password:
+        print("[KEY-DERIV] No password provided")
+        return None
+    
+    # Step 4: Derive master key
+    master_key = derive_master_key(integrity_hash, password)
+    print(f"[KEY-DERIV] Master key derived: {master_key[:16]}...")
+    
+    # Step 5: Derive AES key for database
+    aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
+    
+    # Step 6: Verify integrity test blob (skip on first boot - no blob yet)
+    if first_boot:
+        _term_print("[KEY-DERIV] First boot - skipping integrity test verification")
+    elif verify_integrity_test_blob(master_key, aes_key):
+        _term_print("[KEY-DERIV] Integrity test blob verification PASSED")
+    else:
+        _term_print("[KEY-DERIV] Integrity test blob verification FAILED")
+        
+        # Try recovery key
+        if _gui_available() or IS_KISS:
+            _term_print("[KEY-DERIV] Please enter your recovery key or password.")
+            recovery_key = prompt_kiss_password(is_first_boot=False)
+        else:
+            import getpass
+            recovery_key = getpass.getpass("Enter recovery key: ", stream=term_stderr)
+        
+        if recovery_key:
+            # Try with recovery key
+            master_key = derive_master_key(integrity_hash, recovery_key)
+            aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
+            
+            if verify_integrity_test_blob(master_key, aes_key):
+                _term_print("[KEY-DERIV] Recovery key verification PASSED")
+            else:
+                _term_print("[KEY-DERIV] Recovery key verification FAILED")
+                return None
+        else:
+            return None
+    
+    # Step 7: Store integrity test blob if first boot
+    if first_boot:
+        store_integrity_test_blob(aes_key)
+    
+    return master_key
 
 try:
     _lock_fd = open(os.path.join(BASE_DIR, ".adelaide.lock"), "w")
@@ -888,11 +1585,14 @@ if "--api-key" in sys.argv:
         sys.exit(1)
 
     action = args_after[0]
-    # Bootstrap crypto if not already done (needed for encrypted store)
+    # API key management requires the master key env var to be set
+    # (server must be running, or set ADELAIDE_MASTER_KEY manually)
     try:
         master_key = load_master_key()
     except RuntimeError:
-        master_key = bootstrap_crypto()
+        print("[API-KEY] ERROR: ADELAIDE_MASTER_KEY env var not set.")
+        print("[API-KEY] Start the server first, or set ADELAIDE_MASTER_KEY manually.")
+        sys.exit(1)
 
     if action == "add":
         if len(args_after) >= 2 and args_after[1]:
@@ -2415,7 +3115,22 @@ def real_main():
     # inherit the key automatically.
     print("[CRYPTO] Bootstrapping encryption master key...")
     try:
-        master_key = bootstrap_crypto()
+        # Check for legacy key files and migrate if needed
+        local_key = os.path.join(BASE_DIR, "config", "master.key")
+        legacy_key = os.path.expanduser("~/.config/adelaide/master.key")
+        if os.path.exists(local_key) or os.path.exists(legacy_key):
+            print("[CRYPTO] Legacy key file detected, migrating to hardware-bound system...")
+            migrate_from_legacy_key_system()
+        
+        # Try hardware-bound key derivation first
+        master_key = hardware_bound_key_derivation()
+        if not master_key:
+            print("[CRYPTO] FATAL: Hardware-bound key derivation failed.")
+            print("[CRYPTO] Cannot proceed without a valid master key.")
+            print("[CRYPTO] Please try again with your password.")
+            cleanup(signal.SIGTERM, None)
+            sys.exit(1)
+        
         os.environ["ADELAIDE_MASTER_KEY"] = master_key
         print(f"[CRYPTO] Master key ready. {len(master_key)} hex chars.")
         

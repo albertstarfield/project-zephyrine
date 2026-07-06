@@ -25,7 +25,7 @@
  *
  * MASTER KEY PRIORITY (first wins):
  *   1. ADELAIDE_MASTER_KEY env var     ← portable, for CI/migration
- *   2. ~/.config/adelaide/master.key   ← file, chmod 0600
+ *   2. config/master.key               ← file, chmod 0600 (local to project)
  *   3. Generate new → write file       ← first boot (done by run.py)
  * ─────────────────────────────────────────────────────────────────────────────
  */
@@ -50,7 +50,7 @@
  *
  * If key_hex_override is non-NULL and non-empty, use it directly.
  * Otherwise, read from ADELAIDE_MASTER_KEY env var.
- * Otherwise, read from ~/.config/adelaide/master.key.
+ * Otherwise, read from config/master.key (local to project).
  * Otherwise, return -1 (caller must generate and retry).
  *
  * Returns 0 on success, -1 on error (err_buf populated).
@@ -184,5 +184,45 @@ char *adl_decrypt_field_cstr(const char *sub_key_hex, const char *ciphertext_hex
  * Free a string allocated by any adl_*_cstr() wrapper function.
  */
 void adl_free_cstr(char *ptr);
+
+/* ── HKDF Key Derivation ─────────────────────────────────────────────────────── */
+
+/*
+ * adl_hkdf_sha512: HKDF-SHA512 key derivation (RFC 5869).
+ *
+ * salt:     Salt value (may be NULL for empty salt).
+ * salt_len: Length of salt in bytes.
+ * ikm:      Input keying material (the user secret).
+ * ikm_len:  Length of ikm in bytes.
+ * info:     Context/application-specific info.
+ * info_len: Length of info in bytes.
+ * okm:      Output keying material buffer (must be at least okm_len bytes).
+ * okm_len:  Desired output key length in bytes.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int adl_hkdf_sha512(const unsigned char *salt, size_t salt_len,
+                    const unsigned char *ikm, size_t ikm_len,
+                    const unsigned char *info, size_t info_len,
+                    unsigned char *okm, size_t okm_len);
+
+/*
+ * adl_hkdf_sha256: HKDF-SHA256 key derivation (RFC 5869).
+ *
+ * salt:     Salt value (may be NULL for empty salt).
+ * salt_len: Length of salt in bytes.
+ * ikm:      Input keying material (the context string).
+ * ikm_len:  Length of ikm in bytes.
+ * info:     Context/application-specific info.
+ * info_len: Length of info in bytes.
+ * okm:      Output keying material buffer (must be at least okm_len bytes).
+ * okm_len:  Desired output key length in bytes.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int adl_hkdf_sha256(const unsigned char *salt, size_t salt_len,
+                    const unsigned char *ikm, size_t ikm_len,
+                    const unsigned char *info, size_t info_len,
+                    unsigned char *okm, size_t okm_len);
 
 #endif /* ADL_CRYPTO_H */
