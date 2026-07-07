@@ -185,6 +185,16 @@ char *adl_decrypt_field_cstr(const char *sub_key_hex, const char *ciphertext_hex
  */
 void adl_free_cstr(char *ptr);
 
+/*
+ * adl_derive_master_key_cstr: Python-accessible wrapper for adl_derive_master_key.
+ *
+ * Takes integrity_hash and user_secret as C strings, returns malloc'd
+ * hex-encoded master key string (128 hex chars), or NULL on failure.
+ * Caller must free with adl_free_cstr().
+ */
+char *adl_derive_master_key_cstr(const char *integrity_hash,
+                                  const char *user_secret);
+
 /* ── FIPS 140-3 §5.1 / SP 800-90A — CTR_DRBG ────────────────────────────── */
 
 /*
@@ -265,5 +275,24 @@ int adl_hkdf_sha256(const unsigned char *salt, size_t salt_len,
                     const unsigned char *ikm, size_t ikm_len,
                     const unsigned char *info, size_t info_len,
                     unsigned char *okm, size_t okm_len);
+
+/*
+ * adl_derive_master_key: FIPS 140-3 master key derivation.
+ *
+ * Replaces Python run.py → derive_master_key() with a FIPS-approved
+ * HKDF-SHA512 implementation in C.
+ *
+ * Derivation: master_key = HKDF-SHA512(salt=integrity_hash, ikm=user_secret,
+ *                                     info="adelaide:master-key:v1")
+ *
+ * integrity_hash:   Hex-encoded SHA-512 integrity hash (128 hex chars).
+ * user_secret:      UTF-8 password or recovery key.
+ * master_key_out:   Output buffer for hex-encoded master key (must be >= 129 bytes).
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int adl_derive_master_key(const char *integrity_hash,
+                          const char *user_secret,
+                          char *master_key_out);
 
 #endif /* ADL_CRYPTO_H */
