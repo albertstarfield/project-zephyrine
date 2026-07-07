@@ -194,6 +194,18 @@ package Llama_Interface is
      (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t; N_Tokens_Out : access size_t) return Boolean;
    pragma Import (C, Llama_State_Load_File, "llama_state_load_file");
 
+   function Llama_State_Get_Size
+     (Context : Llama_Context) return size_t;
+   pragma Import (C, Llama_State_Get_Size, "llama_state_get_size");
+
+   function Llama_State_Get_Data
+     (Context : Llama_Context; Dst : System.Address; Size : size_t) return size_t;
+   pragma Import (C, Llama_State_Get_Data, "llama_state_get_data");
+
+   function Llama_State_Set_Data
+     (Context : Llama_Context; Src : System.Address; Size : size_t) return size_t;
+   pragma Import (C, Llama_State_Set_Data, "llama_state_set_data");
+
    function Llama_Batch_Init
      (N_Tokens : int; Embd : int; N_Seq_Max : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Init, "llama_batch_init");
