@@ -1173,18 +1173,20 @@ def _try_c_derive_master_key(integrity_hash, user_secret):
             ctypes.c_char_p,  # integrity_hash
             ctypes.c_char_p,  # user_secret
         ]
-        lib.adl_derive_master_key_cstr.restype = ctypes.c_char_p  # malloc'd hex string
-        lib.adl_free_cstr.argtypes = [ctypes.c_char_p]
+        lib.adl_derive_master_key_cstr.restype = ctypes.c_void_p  # raw malloc'd pointer
+        lib.adl_free_cstr.argtypes = [ctypes.c_void_p]
         lib.adl_free_cstr.restype = None
 
         # Call the C function
         c_hash = ctypes.c_char_p(integrity_hash.encode("utf-8"))
         c_secret = ctypes.c_char_p(user_secret.encode("utf-8"))
-        result = lib.adl_derive_master_key_cstr(c_hash, c_secret)
+        result_ptr = lib.adl_derive_master_key_cstr(c_hash, c_secret)
 
-        if result:
-            master_key = result.decode("utf-8")
-            lib.adl_free_cstr(result)
+        if result_ptr:
+            # Extract string from raw C pointer (cast reads a copy)
+            result_bytes = ctypes.cast(result_ptr, ctypes.c_char_p).value
+            master_key = result_bytes.decode("utf-8")
+            lib.adl_free_cstr(result_ptr)  # free the original malloc'd memory
             return master_key
 
         return None
