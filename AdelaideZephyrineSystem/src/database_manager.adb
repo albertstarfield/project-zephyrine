@@ -5,7 +5,7 @@ with Ada_Sqlite3; use Ada_Sqlite3;
 with Ada.Exceptions;
 with Ada.Directories;
 with GNATCOLL.JSON;
-with Interfaces;
+with Interfaces;            use Interfaces;
 with Interfaces.C.Strings;  use Interfaces.C.Strings;
 with Adelaide_Crypto;
 
