@@ -4,10 +4,8 @@ with Ada.Text_IO; use Ada.Text_IO;
 with Ada_Sqlite3; use Ada_Sqlite3;
 with Ada.Exceptions;
 with Ada.Directories;
-with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNATCOLL.JSON;
-with Interfaces;            use Interfaces;
-with Interfaces.C;          use Interfaces.C;
+with Interfaces;
 with Interfaces.C.Strings;  use Interfaces.C.Strings;
 with Adelaide_Crypto;
 
@@ -250,7 +248,7 @@ package body Database_Manager is
               Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[CRYPTO]" &
                 AnsiAda.Reset &
                 " FATAL: No master key. Refusing to run with plaintext storage.");
-              raise Program_Error with "Crypto unavailable — aborting";
+               raise Program_Error with "Crypto unavailable -- aborting";
            end if;
 
           Done := True;
