@@ -29,12 +29,24 @@ package Adelaide_Crypto is
 
    --  Initialize: loads master key from ADELAIDE_MASTER_KEY env var or
    --  config/master.key (local to project). Must be called once at startup.
+   --  Runs FIPS 140-3 §5.9 power-up self-tests (KATs + integrity scan).
+   --  On test failure, keys are zeroized and crypto is permanently disabled
+   --  for the lifetime of this process (InferiorParadoxical anti-tamper).
    --  Returns True if initialization succeeded.
    function Initialize_Crypto return Boolean;
 
    --  Returns True if crypto is initialized and ready. Use this to skip
    --  encryption if no key is available (e.g., after graceful fallback).
    function Is_Crypto_Ready return Boolean;
+
+   --  FIPS 140-3 InferiorParadoxical status checks:
+   --  Is_Poisoned:       Returns True if anti-tamper tripped (keys zeroized).
+   --  Self_Tests_Passed: Returns True if power-up KATs all succeeded.
+   --  Is_FIPS_Ready:     Returns True if crypto is ready AND self-tests passed
+   --                     AND module is not poisoned (one combined check).
+   function Is_Poisoned return Boolean;
+   function Self_Tests_Passed return Boolean;
+   function Is_FIPS_Ready return Boolean;
 
    --  Derive a per-DB sub-key from the master key.
    --  Context examples:
