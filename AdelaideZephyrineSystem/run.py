@@ -4719,6 +4719,20 @@ def real_main():
         else:
             sidecar_python = python_cmd
 
+        # Auto-install sidecar UI dependencies if using pyvenv (which is minimal by default)
+        if sidecar_python != python_cmd:
+            _sidecar_deps = [
+                "networkx", "numpy", "psutil", "tiktoken",
+                "uvicorn", "fastapi", "httpx", "pywebview", "PyMuPDF",
+            ]
+            try:
+                subprocess.run(
+                    [sidecar_python, "-m", "pip", "install", "--quiet"] + _sidecar_deps,
+                    check=True, capture_output=True, timeout=120,
+                )
+            except Exception:
+                print("[!] Warning: failed to auto-install sidecar deps — continuing anyway")
+
         # [DO NOT REMOVE] macOS .app bundle for microphone/camera/screen capture permissions
         # On Darwin, create a proper .app bundle with Info.plist containing
         # NSMicrophoneUsageDescription, NSCameraUsageDescription, and
