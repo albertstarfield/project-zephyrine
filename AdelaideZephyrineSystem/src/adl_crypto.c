@@ -855,6 +855,26 @@ void adl_free_cstr(char *ptr)
     if (ptr) free(ptr);
 }
 
+/*
+ * adl_derive_master_key_cstr: Python-accessible wrapper for adl_derive_master_key.
+ *
+ * Takes integrity_hash and user_secret as C strings, returns malloc'd
+ * hex-encoded master key string, or NULL on failure.
+ * Caller must free with adl_free_cstr().
+ */
+char *adl_derive_master_key_cstr(const char *integrity_hash,
+                                  const char *user_secret)
+{
+    char *out = malloc(129);  /* 128 hex chars + null */
+    if (!out) return NULL;
+
+    if (adl_derive_master_key(integrity_hash, user_secret, out) != 0) {
+        free(out);
+        return NULL;
+    }
+    return out;
+}
+
 /* ── Compile-time self-test (disabled by default) ──────────────────────────── */
 #ifdef ADL_CRYPTO_TEST
 int main(void)
@@ -1061,6 +1081,75 @@ int adl_hkdf_sha256(const unsigned char *salt, size_t salt_len,
     }
     
     secure_zero(prk, sizeof(prk));
+    return 0;
+}
+
+/* ── adl_derive_master_key ──────────────────────────────────────────────────── */
+/*
+ * FIPS 140-3 master key derivation from hardware integrity hash + user secret.
+ *
+ * Replaces Python run.py → derive_master_key() with a FIPS-approved
+ * C implementation using HKDF-SHA512.
+ *
+ * Derivation: master_key = HKDF-SHA512(salt=integrity_hash, ikm=user_secret,
+ *                                     info="adelaide:master-key:v1")
+ *
+ * integrity_hash:   Hex-encoded SHA-512 integrity hash (128 hex chars).
+ * user_secret:      UTF-8 password or recovery key.
+ * master_key_out:   Output buffer for hex-encoded master key (129 bytes
+ *                   for 128 hex chars + null terminator).
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int adl_derive_master_key(const char *integrity_hash,
+                          const char *user_secret,
+                          char *master_key_out)
+{
+    /* Convert integrity_hash hex → binary salt (64 bytes for SHA-512) */
+    size_t hash_hex_len = strlen(integrity_hash);
+    size_t salt_len = hash_hex_len / 2;
+
+    unsigned char *salt = malloc(salt_len);
+    if (!salt) return -1;
+
+    for (size_t i = 0; i < salt_len; i++) {
+        unsigned int byte;
+        if (sscanf(integrity_hash + i * 2, "%2x", &byte) != 1) {
+            free(salt);
+            return -1;
+        }
+        salt[i] = (unsigned char)byte;
+    }
+
+    /* IKM = user_secret as UTF-8 */
+    size_t ikm_len = strlen(user_secret);
+    const unsigned char *ikm = (const unsigned char *)user_secret;
+
+    /* Info = "adelaide:master-key:v1" */
+    const char *info = "adelaide:master-key:v1";
+    size_t info_len = strlen(info);
+
+    /* Output: 64 bytes (512-bit master key) */
+    unsigned char okm[64];
+
+    int ret = adl_hkdf_sha512(salt, salt_len, ikm, ikm_len,
+                               (const unsigned char *)info, info_len,
+                               okm, 64);
+    secure_zero(salt, salt_len);
+    free(salt);
+
+    if (ret != 0) {
+        secure_zero(okm, sizeof(okm));
+        return -1;
+    }
+
+    /* Convert binary okm → hex string */
+    for (size_t i = 0; i < 64; i++) {
+        sprintf(master_key_out + (i * 2), "%02x", okm[i]);
+    }
+    master_key_out[128] = '\0';
+
+    secure_zero(okm, sizeof(okm));
     return 0;
 }
 
@@ -1504,7 +1593,7 @@ static const unsigned char KAT_HKDF256_SALT[32] = {
     0x67,0x30,0x83,0x08,0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,
     0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08
 };
-static const unsigned char KAT_HKDF256_IKM[22] = {
+static const unsigned char KAT_HKDF256_IKM[23] = {
     0x61,0x64,0x65,0x6c,0x61,0x69,0x64,0x65,0x3a,0x64,0x62,0x3a,
     0x6b,0x61,0x74,0x2d,0x74,0x65,0x73,0x74,0x3a,0x76,0x31
 };
@@ -1524,7 +1613,7 @@ static const unsigned char KAT_HKDF384_SALT[32] = {
     0x67,0x30,0x83,0x08,0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,
     0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08
 };
-static const unsigned char KAT_HKDF384_IKM[22] = {
+static const unsigned char KAT_HKDF384_IKM[23] = {
     0x61,0x64,0x65,0x6c,0x61,0x69,0x64,0x65,0x3a,0x64,0x62,0x3a,
     0x6b,0x61,0x74,0x2d,0x74,0x65,0x73,0x74,0x3a,0x76,0x31
 };
@@ -1710,9 +1799,9 @@ static int kat_hkdf_sha384(void)
 
     unsigned char okm[48];
     result_len = 48;
-    int ok = HMAC(EVP_sha384(), prk, 48,
-                  expand_input, sizeof(KAT_HKDF384_INFO) + 1,
-                  okm, &result_len);
+    unsigned char *ok = HMAC(EVP_sha384(), prk, 48,
+                             expand_input, sizeof(KAT_HKDF384_INFO) + 1,
+                             okm, &result_len);
     secure_zero(prk, sizeof(prk));
     if (!ok) return -1;
 
