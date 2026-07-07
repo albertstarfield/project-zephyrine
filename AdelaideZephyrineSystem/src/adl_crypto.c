@@ -33,16 +33,68 @@
 #include <openssl/err.h>
 #include <openssl/hmac.h>
 
+/* POSIX — needed by InferiorParadoxical binary/source integrity scanner */
+#include <dlfcn.h>
+#include <dirent.h>
+
 /* ── Static Master Key Storage ─────────────────────────────────────────────── */
 /* Set once by adl_init(), read-only thereafter. Thread-safe for reads. */
 static char g_master_key_hex[ADL_KEY_HEX_SIZE] = {0};
 static int g_master_key_loaded = 0;
+
+/* ── FIPS 140-3 InferiorParadoxical Poison State ──────────────────────────── */
+/*
+ * InferiorParadoxical — Anti-tamper dead-man's switch.
+ *
+ * When unauthorized modifications are detected (KAT failure, integrity
+ * mismatch, or tampered binary), the master key is zeroized and all crypto
+ * operations permanently cease for the lifetime of this process.
+ *
+ * There is NO un-poison. Recovery requires process restart.
+ *
+ * FIPS 140-3 References:
+ *   §5.9(a)  Power-up self-tests — required for all security levels
+ *   §5.8.8   Zeroization on self-test failure
+ *   §5.9(b)  Software integrity test — detects code tampering
+ */
+static int g_poisoned = 0;
+static int g_self_tests_passed = 0;
+
+/* Forward declarations for KAT functions (implemented at end of file) */
+static int kat_aes256_gcm(void);
+static int kat_sha384(void);
+static int kat_sha512(void);
+static int kat_hkdf_sha256(void);
+static int kat_hkdf_sha384(void);
+static int kat_hmac_sha384(void);
+static int kat_binary_integrity(void);
 
 /* ── Secure Zeroing ────────────────────────────────────────────────────────── */
 /* Zero sensitive memory to prevent key material from lingering. */
 static void secure_zero(void *ptr, size_t len) {
     volatile unsigned char *p = (volatile unsigned char *)ptr;
     while (len--) *p++ = 0;
+}
+
+/* ── InferiorParadoxical Poison API ─────────────────────────────────────────── */
+
+void adl_poison(void)
+{
+    g_poisoned = 1;
+    g_self_tests_passed = 0;
+    /* Zeroize the master key from static memory — irrevocable */
+    secure_zero(g_master_key_hex, ADL_KEY_HEX_SIZE);
+    g_master_key_loaded = 0;
+}
+
+int adl_is_poisoned(void)
+{
+    return g_poisoned;
+}
+
+int adl_self_tests_passed(void)
+{
+    return g_self_tests_passed;
 }
 
 /* ── Internal Helpers ───────────────────────────────────────────────────────── */
@@ -200,6 +252,19 @@ store:
 
     /* Zero the raw key from stack */
     secure_zero(raw_key, ADL_KEY_SIZE);
+
+    /* ── FIPS 140-3 §5.9(a): Run power-up self-tests ───────────────────── */
+    {
+        char kat_err[ADL_ERROR_SIZE];
+        if (adl_run_powerup_self_tests(kat_err) != 0) {
+            /* Self-test failure → poison immediately (FIPS §5.8.8) */
+            snprintf(err_buf, ADL_ERROR_SIZE,
+                     "FIPS power-up self-test FAILED: %s. Keys have been zeroized.",
+                     kat_err);
+            return -1;
+        }
+    }
+
     return 0;
 }
 
@@ -249,6 +314,12 @@ int adl_derive_subkey(const char *master_key_hex,
     unsigned char salt[ADL_KEY_SIZE] = {0};  /* zero salt */
 
     err_buf[0] = '\0';
+
+    /* InferiorParadoxical: Refuse crypto if poisoned */
+    if (g_poisoned) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Module is poisoned — key zeroized due to tamper detection");
+        return -1;
+    }
 
     /* Decode master key from hex */
     if (hex_decode(master_key_hex, 64, master_key) != ADL_KEY_SIZE) {
@@ -310,6 +381,12 @@ int adl_encrypt(const char *sub_key_hex,
     EVP_CIPHER_CTX *ctx = NULL;
 
     err_buf[0] = '\0';
+
+    /* InferiorParadoxical: Refuse crypto if poisoned */
+    if (g_poisoned) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Module is poisoned — key zeroized due to tamper detection");
+        return -1;
+    }
 
     /* Decode sub-key */
     if (hex_decode(sub_key_hex, 64, key) != ADL_KEY_SIZE) {
@@ -439,6 +516,12 @@ int adl_decrypt(const char *sub_key_hex,
     EVP_CIPHER_CTX *ctx = NULL;
 
     err_buf[0] = '\0';
+
+    /* InferiorParadoxical: Refuse crypto if poisoned */
+    if (g_poisoned) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Module is poisoned — key zeroized due to tamper detection");
+        return -1;
+    }
 
     /* Decode sub-key */
     if (hex_decode(sub_key_hex, 64, key) != ADL_KEY_SIZE) {
@@ -829,6 +912,9 @@ int adl_hkdf_sha512(const unsigned char *salt, size_t salt_len,
                     const unsigned char *info, size_t info_len,
                     unsigned char *okm, size_t okm_len)
 {
+    /* InferiorParadoxical: Refuse if poisoned */
+    if (g_poisoned) return -1;
+
     unsigned char prk[64];  /* SHA-512 hash size = 64 bytes */
     unsigned int prk_len = 64;
     unsigned char *p = okm;
@@ -904,6 +990,9 @@ int adl_hkdf_sha256(const unsigned char *salt, size_t salt_len,
                     const unsigned char *info, size_t info_len,
                     unsigned char *okm, size_t okm_len)
 {
+    /* InferiorParadoxical: Refuse if poisoned */
+    if (g_poisoned) return -1;
+
     unsigned char prk[32];  /* SHA-256 hash size = 32 bytes */
     unsigned int prk_len = 32;
     unsigned char *p = okm;
@@ -959,5 +1048,609 @@ int adl_hkdf_sha256(const unsigned char *salt, size_t salt_len,
     }
     
     secure_zero(prk, sizeof(prk));
+    return 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  FIPS 140-3 §5.9 — Power-Up Self-Tests                                    */
+/*  InferiorParadoxical — Source/Binary Integrity Scanner & Auto-Poison      */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*
+ * InferiorParadoxical Anti-Tamper:
+ *
+ *   On every power-up, each cryptographic algorithm is verified against
+ *   Known Answer Test (KAT) vectors. Additionally:
+ *     1. The compiled binary is SHA-512 hashed and compared against expected
+ *     2. The source files (adl_crypto.c, adl_crypto.h) are SHA-512 hashed
+ *        and compared against expected (if source files exist on disk)
+ *
+ *   If ANY check fails:
+ *     1. Master key is immediately zeroized (FIPS §5.8.8)
+ *     2. Poison flag is set — all crypto ops permanently disabled
+ *     3. Process must restart for recovery
+ *
+ *   "The more an attacker tampers, the more they destroy what they seek."
+ */
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  KAT Vectors                                                              */
+/*  Generated deterministically at build time — MUST match or self-tests    */
+/*  will fail and the module will poison itself.                            */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── AES-256-GCM KAT #1 ─────────────────────────────────────────────────── */
+/* Plaintext:  "Hello Adelaide FIPS 140-3 KAT!" */
+static const unsigned char KAT_AES256_KEY_1[32] = {
+    0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,0x6d,0x6a,0x8f,0x94,
+    0x67,0x30,0x83,0x08,0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,
+    0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08
+};
+static const unsigned char KAT_AES256_IV_1[12] = {
+    0xca,0xfe,0xba,0xbe,0xfa,0xce,0xdb,0xad,0xde,0xca,0xf8,0x88
+};
+static const unsigned char KAT_AES256_PT_1[30] = {
+    0x48,0x65,0x6c,0x6c,0x6f,0x20,0x41,0x64,0x65,0x6c,0x61,0x69,
+    0x64,0x65,0x20,0x46,0x49,0x50,0x53,0x20,0x31,0x34,0x30,0x2d,
+    0x33,0x20,0x4b,0x41,0x54,0x21
+};
+static const unsigned char KAT_AES256_CT_1[30] = {
+    0xc3,0x79,0x9f,0xb9,0x0e,0xf2,0x3a,0x86,0x34,0x4a,0x5f,0x0f,
+    0xe1,0x14,0x44,0xa1,0xab,0xcd,0x76,0xaf,0x9b,0xe5,0x07,0x3e,
+    0x68,0xf4,0xd9,0xc1,0xfb,0x45
+};
+static const unsigned char KAT_AES256_TAG_1[16] = {
+    0x24,0xc0,0xc3,0x42,0xcd,0xf5,0x4b,0x66,0x5e,0xe6,0x5f,0x6f,
+    0x6d,0x89,0x40,0x72
+};
+
+/* ── AES-256-GCM KAT #2 ─────────────────────────────────────────────────── */
+/* Plaintext:  "FIPS 140-3 Level 1 Self-Test" */
+static const unsigned char KAT_AES256_KEY_2[32] = {
+    0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,
+    0x0c,0x0d,0x0e,0x0f,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,
+    0x18,0x19,0x1a,0x1b,0x1c,0x1d,0x1e,0x1f
+};
+static const unsigned char KAT_AES256_IV_2[12] = {
+    0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c
+};
+static const unsigned char KAT_AES256_PT_2[28] = {
+    0x46,0x49,0x50,0x53,0x20,0x31,0x34,0x30,0x2d,0x33,0x20,0x4c,
+    0x65,0x76,0x65,0x6c,0x20,0x31,0x20,0x53,0x65,0x6c,0x66,0x2d,
+    0x54,0x65,0x73,0x74
+};
+static const unsigned char KAT_AES256_CT_2[28] = {
+    0x43,0xa3,0x0a,0x86,0xcc,0xa5,0xc4,0xb6,0x61,0x91,0x43,0x0b,
+    0x75,0x65,0x8f,0x44,0x62,0x72,0xc1,0xad,0xf2,0x01,0x36,0xe8,
+    0xf5,0x3a,0x8a,0x50
+};
+static const unsigned char KAT_AES256_TAG_2[16] = {
+    0x80,0x22,0x46,0xb4,0x3e,0x02,0x58,0x7b,0xea,0x5f,0x7e,0x9a,
+    0xaa,0x12,0xb4,0x49
+};
+
+/* ── SHA-384 KAT ────────────────────────────────────────────────────────── */
+/* Message:  "Adelaide FIPS 140-3 SHA-384 KAT Vector" */
+static const unsigned char KAT_SHA384_MSG[38] = {
+    0x41,0x64,0x65,0x6c,0x61,0x69,0x64,0x65,0x20,0x46,0x49,0x50,
+    0x53,0x20,0x31,0x34,0x30,0x2d,0x33,0x20,0x53,0x48,0x41,0x2d,
+    0x33,0x38,0x34,0x20,0x4b,0x41,0x54,0x20,0x56,0x65,0x63,0x74,
+    0x6f,0x72
+};
+static const unsigned char KAT_SHA384_DIGEST[48] = {
+    0xf4,0xb9,0x84,0xf8,0xda,0x06,0x7b,0x9c,0x66,0xbe,0x5c,0xf6,
+    0x05,0x5d,0x44,0xac,0x34,0x86,0x2c,0x61,0xd5,0x2c,0xd9,0xcf,
+    0x90,0xaf,0x6e,0xab,0x73,0x2c,0x79,0x92,0xa1,0x79,0xc6,0x09,
+    0x0e,0x77,0xc1,0x6e,0x71,0x0e,0xfe,0x9d,0xcd,0x7b,0x43,0x70
+};
+
+/* ── SHA-512 KAT ────────────────────────────────────────────────────────── */
+/* Message:  "Adelaide FIPS 140-3 SHA-512 KAT Vector" */
+static const unsigned char KAT_SHA512_MSG[38] = {
+    0x41,0x64,0x65,0x6c,0x61,0x69,0x64,0x65,0x20,0x46,0x49,0x50,
+    0x53,0x20,0x31,0x34,0x30,0x2d,0x33,0x20,0x53,0x48,0x41,0x2d,
+    0x35,0x31,0x32,0x20,0x4b,0x41,0x54,0x20,0x56,0x65,0x63,0x74,
+    0x6f,0x72
+};
+static const unsigned char KAT_SHA512_DIGEST[64] = {
+    0xa0,0x36,0x4c,0xac,0x0b,0xc1,0x73,0x38,0xf7,0x45,0xed,0x46,
+    0xfb,0x26,0x0c,0xbc,0x17,0x2f,0x02,0xd8,0x1d,0x2e,0x81,0x02,
+    0xca,0x23,0x4c,0x87,0xe2,0x77,0x22,0xa2,0x48,0x7b,0xce,0xe2,
+    0xef,0x14,0x2d,0x51,0xa3,0x6a,0xc2,0x1f,0xa8,0x17,0x57,0x00,
+    0xd2,0x23,0x3f,0xc9,0xe3,0x85,0x7e,0xc1,0x5c,0xdc,0x77,0xb6,
+    0x15,0xec,0xa2,0xce
+};
+
+/* ── HKDF-SHA256 KAT ────────────────────────────────────────────────────── */
+/* Salt:   feffe992... (32 bytes) */
+/* IKM:    "adelaide:db:kat-test:v1" */
+/* Info:   "adelaide:db:memory:v1" */
+/* OKM:    4dba418b... (32 bytes) */
+static const unsigned char KAT_HKDF256_SALT[32] = {
+    0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,0x6d,0x6a,0x8f,0x94,
+    0x67,0x30,0x83,0x08,0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,
+    0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08
+};
+static const unsigned char KAT_HKDF256_IKM[22] = {
+    0x61,0x64,0x65,0x6c,0x61,0x69,0x64,0x65,0x3a,0x64,0x62,0x3a,
+    0x6b,0x61,0x74,0x2d,0x74,0x65,0x73,0x74,0x3a,0x76,0x31
+};
+static const unsigned char KAT_HKDF256_INFO[21] = {
+    0x61,0x64,0x65,0x6c,0x61,0x69,0x64,0x65,0x3a,0x64,0x62,0x3a,
+    0x6d,0x65,0x6d,0x6f,0x72,0x79,0x3a,0x76,0x31
+};
+static const unsigned char KAT_HKDF256_OKM[32] = {
+    0x4d,0xba,0x41,0x8b,0x43,0x9f,0xfe,0xf9,0x8d,0x48,0x9a,0xd4,
+    0x32,0x43,0xf6,0x7c,0xa5,0xf1,0xce,0x5f,0x6d,0x71,0x76,0xd5,
+    0xfe,0x8f,0x73,0xa0,0x3b,0x4a,0x56,0xe7
+};
+
+/* ── HKDF-SHA384 KAT (matches existing adl_derive_subkey logic) ─────────── */
+static const unsigned char KAT_HKDF384_SALT[32] = {
+    0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,0x6d,0x6a,0x8f,0x94,
+    0x67,0x30,0x83,0x08,0xfe,0xff,0xe9,0x92,0x86,0x65,0x73,0x1c,
+    0x6d,0x6a,0x8f,0x94,0x67,0x30,0x83,0x08
+};
+static const unsigned char KAT_HKDF384_IKM[22] = {
+    0x61,0x64,0x65,0x6c,0x61,0x69,0x64,0x65,0x3a,0x64,0x62,0x3a,
+    0x6b,0x61,0x74,0x2d,0x74,0x65,0x73,0x74,0x3a,0x76,0x31
+};
+static const unsigned char KAT_HKDF384_INFO[25] = {
+    0x61,0x64,0x65,0x6c,0x61,0x69,0x64,0x65,0x3a,0x64,0x62,0x3a,
+    0x6c,0x69,0x74,0x65,0x72,0x61,0x74,0x75,0x72,0x65,0x3a,0x76,
+    0x31
+};
+static const unsigned char KAT_HKDF384_OKM[32] = {
+    0x51,0xa5,0x0c,0x72,0x39,0x09,0xb4,0x25,0x1f,0xf1,0xf5,0x8c,
+    0x83,0x45,0x1c,0xa0,0x43,0x50,0x69,0xad,0x2e,0x35,0xe6,0x01,
+    0xa4,0xf4,0xc8,0xfd,0x82,0xe0,0x1b,0xa2
+};
+
+/* ── HMAC-SHA384 KAT ────────────────────────────────────────────────────── */
+static const unsigned char KAT_HMAC384_KEY[32] = {
+    0x41,0x64,0x65,0x6c,0x61,0x69,0x64,0x65,0x20,0x46,0x49,0x50,
+    0x53,0x20,0x49,0x6e,0x74,0x65,0x67,0x72,0x69,0x74,0x79,0x20,
+    0x4b,0x65,0x79,0x20,0x32,0x30,0x32,0x36
+};
+static const unsigned char KAT_HMAC384_MSG[37] = {
+    0x41,0x44,0x45,0x4c,0x41,0x49,0x44,0x45,0x5f,0x43,0x52,0x59,
+    0x50,0x54,0x4f,0x5f,0x4d,0x4f,0x44,0x55,0x4c,0x45,0x5f,0x49,
+    0x4e,0x54,0x45,0x47,0x52,0x49,0x54,0x59,0x5f,0x54,0x45,0x53,
+    0x54
+};
+static const unsigned char KAT_HMAC384_DIGEST[48] = {
+    0xe8,0xa6,0xa5,0x9f,0x02,0xee,0x76,0xc3,0x60,0x6e,0xb2,0x2a,
+    0xc9,0x8d,0xa1,0xef,0x62,0xb8,0xab,0xe9,0x8f,0xa6,0xa5,0x3f,
+    0x38,0x8f,0x4e,0xac,0x28,0x9b,0x2d,0xf9,0x5f,0x3c,0x0b,0xeb,
+    0x38,0xdc,0x58,0x66,0xdb,0x58,0x1e,0x14,0x89,0x11,0xf9,0x82
+};
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  KAT Implementation Functions                                             */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── KAT: AES-256-GCM Encrypt/Decrypt ───────────────────────────────────── */
+/* Tests both encrypt and decrypt with known vectors using EVP API.         */
+static int kat_aes256_gcm(void)
+{
+    unsigned char out_buf[256];
+    unsigned char tag[16];
+    int out_len, final_len;
+    int ret;
+    EVP_CIPHER_CTX *ctx = NULL;
+
+    /* ── Vector 1: Encrypt ─────────────────────────────────────── */
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) return -1;
+
+    ret = -1;
+    do {
+        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, NULL) != 1) break;
+        if (EVP_EncryptInit_ex(ctx, NULL, NULL, KAT_AES256_KEY_1, KAT_AES256_IV_1) != 1) break;
+        out_len = 0;
+        if (EVP_EncryptUpdate(ctx, out_buf, &out_len,
+                              KAT_AES256_PT_1, (int)sizeof(KAT_AES256_PT_1)) != 1) break;
+        final_len = 0;
+        if (EVP_EncryptFinal_ex(ctx, out_buf + out_len, &final_len) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) break;
+        if ((out_len + final_len) != (int)sizeof(KAT_AES256_CT_1)) break;
+        if (memcmp(out_buf, KAT_AES256_CT_1, sizeof(KAT_AES256_CT_1)) != 0) break;
+        if (memcmp(tag, KAT_AES256_TAG_1, 16) != 0) break;
+        ret = 0;
+    } while (0);
+    EVP_CIPHER_CTX_free(ctx);
+    ctx = NULL;
+    if (ret != 0) return -1;
+
+    /* ── Vector 2: Encrypt (different key, verify independently) ─ */
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) return -1;
+
+    ret = -1;
+    do {
+        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, NULL) != 1) break;
+        if (EVP_EncryptInit_ex(ctx, NULL, NULL, KAT_AES256_KEY_2, KAT_AES256_IV_2) != 1) break;
+        out_len = 0;
+        if (EVP_EncryptUpdate(ctx, out_buf, &out_len,
+                              KAT_AES256_PT_2, (int)sizeof(KAT_AES256_PT_2)) != 1) break;
+        final_len = 0;
+        if (EVP_EncryptFinal_ex(ctx, out_buf + out_len, &final_len) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) break;
+        if ((out_len + final_len) != (int)sizeof(KAT_AES256_CT_2)) break;
+        if (memcmp(out_buf, KAT_AES256_CT_2, sizeof(KAT_AES256_CT_2)) != 0) break;
+        if (memcmp(tag, KAT_AES256_TAG_2, 16) != 0) break;
+        ret = 0;
+    } while (0);
+    EVP_CIPHER_CTX_free(ctx);
+    ctx = NULL;
+    if (ret != 0) return -1;
+
+    /* ── Vector 1: Decrypt back ────────────────────────────────── */
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) return -1;
+
+    ret = -1;
+    do {
+        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, NULL) != 1) break;
+        if (EVP_DecryptInit_ex(ctx, NULL, NULL, KAT_AES256_KEY_1, KAT_AES256_IV_1) != 1) break;
+        out_len = 0;
+        if (EVP_DecryptUpdate(ctx, out_buf, &out_len,
+                              KAT_AES256_CT_1, (int)sizeof(KAT_AES256_CT_1)) != 1) break;
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16,
+                                (void*)KAT_AES256_TAG_1) != 1) break;
+        final_len = 0;
+        if (EVP_DecryptFinal_ex(ctx, out_buf + out_len, &final_len) != 1) break;
+        if ((out_len + final_len) != (int)sizeof(KAT_AES256_PT_1)) break;
+        if (memcmp(out_buf, KAT_AES256_PT_1, sizeof(KAT_AES256_PT_1)) != 0) break;
+        ret = 0;
+    } while (0);
+    EVP_CIPHER_CTX_free(ctx);
+    if (ret != 0) return -1;
+
+    return 0;
+}
+
+/* ── KAT: SHA-384 ───────────────────────────────────────────────────────── */
+static int kat_sha384(void)
+{
+    unsigned char digest[48];
+    unsigned int digest_len = 48;
+
+    if (!EVP_Digest(KAT_SHA384_MSG, sizeof(KAT_SHA384_MSG),
+                    digest, &digest_len, EVP_sha384(), NULL)) {
+        return -1;
+    }
+    if (digest_len != 48) return -1;
+    return (memcmp(digest, KAT_SHA384_DIGEST, 48) == 0) ? 0 : -1;
+}
+
+/* ── KAT: SHA-512 ───────────────────────────────────────────────────────── */
+static int kat_sha512(void)
+{
+    unsigned char digest[64];
+    unsigned int digest_len = 64;
+
+    if (!EVP_Digest(KAT_SHA512_MSG, sizeof(KAT_SHA512_MSG),
+                    digest, &digest_len, EVP_sha512(), NULL)) {
+        return -1;
+    }
+    if (digest_len != 64) return -1;
+    return (memcmp(digest, KAT_SHA512_DIGEST, 64) == 0) ? 0 : -1;
+}
+
+/* ── KAT: HKDF-SHA256 ───────────────────────────────────────────────────── */
+static int kat_hkdf_sha256(void)
+{
+    unsigned char okm[32];
+    if (adl_hkdf_sha256(KAT_HKDF256_SALT, sizeof(KAT_HKDF256_SALT),
+                        KAT_HKDF256_IKM, sizeof(KAT_HKDF256_IKM),
+                        KAT_HKDF256_INFO, sizeof(KAT_HKDF256_INFO),
+                        okm, sizeof(okm)) != 0) {
+        return -1;
+    }
+    return (memcmp(okm, KAT_HKDF256_OKM, 32) == 0) ? 0 : -1;
+}
+
+/* ── KAT: HKDF-SHA384 (matches adl_derive_subkey logic) ──────────────────── */
+static int kat_hkdf_sha384(void)
+{
+    unsigned char prk[48];
+    unsigned char expand_input[256];
+    unsigned int result_len;
+
+    /* Extract: PRK = HMAC-SHA384(salt, IKM) */
+    result_len = 48;
+    if (!HMAC(EVP_sha384(),
+              KAT_HKDF384_SALT, (int)sizeof(KAT_HKDF384_SALT),
+              KAT_HKDF384_IKM, (int)sizeof(KAT_HKDF384_IKM),
+              prk, &result_len)) {
+        return -1;
+    }
+    if (result_len != 48) { secure_zero(prk, sizeof(prk)); return -1; }
+
+    /* Expand: T(1) = HMAC-SHA384(PRK, info || 0x01) */
+    memcpy(expand_input, KAT_HKDF384_INFO, sizeof(KAT_HKDF384_INFO));
+    expand_input[sizeof(KAT_HKDF384_INFO)] = 0x01;
+
+    unsigned char okm[48];
+    result_len = 48;
+    int ok = HMAC(EVP_sha384(), prk, 48,
+                  expand_input, sizeof(KAT_HKDF384_INFO) + 1,
+                  okm, &result_len);
+    secure_zero(prk, sizeof(prk));
+    if (!ok) return -1;
+
+    return (memcmp(okm, KAT_HKDF384_OKM, 32) == 0) ? 0 : -1;
+}
+
+/* ── KAT: HMAC-SHA384 ───────────────────────────────────────────────────── */
+static int kat_hmac_sha384(void)
+{
+    unsigned char digest[48];
+    unsigned int digest_len = 48;
+
+    if (!HMAC(EVP_sha384(),
+              KAT_HMAC384_KEY, (int)sizeof(KAT_HMAC384_KEY),
+              KAT_HMAC384_MSG, (int)sizeof(KAT_HMAC384_MSG),
+              digest, &digest_len)) {
+        return -1;
+    }
+    if (digest_len != 48) return -1;
+    return (memcmp(digest, KAT_HMAC384_DIGEST, 48) == 0) ? 0 : -1;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  InferiorParadoxical Binary + Source Integrity Scanner (FIPS §5.9(b))    */
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*
+ * Spans BOTH the compiled binary AND the source files on disk.
+ * If source files aren't available (production deployment), binary-only.
+ *
+ * Build-time integration:
+ *   Run scripts/update_integrity_hash.py after compilation to embed both
+ *   the source and binary hashes.
+ *
+ * Dev mode (empty expected hash):
+ *   The first call records the hash and trusts it going forward.
+ */
+
+static char g_expected_bin_hash[129] = "";    /* 128 hex + null */
+static char g_expected_src_hash[129] = "";    /* 128 hex + null */
+static int  g_bin_hash_recorded = 0;
+static int  g_src_hash_recorded = 0;
+
+/* Set expected hashes (called from Python after build). */
+void adl_set_expected_binary_hash(const char *hash_hex)
+{
+    if (hash_hex && strlen(hash_hex) == 128) {
+        strncpy(g_expected_bin_hash, hash_hex, 128);
+        g_expected_bin_hash[128] = '\0';
+        g_bin_hash_recorded = 1;
+    }
+}
+
+void adl_set_expected_source_hash(const char *hash_hex)
+{
+    if (hash_hex && strlen(hash_hex) == 128) {
+        strncpy(g_expected_src_hash, hash_hex, 128);
+        g_expected_src_hash[128] = '\0';
+        g_src_hash_recorded = 1;
+    }
+}
+
+/* Locate own binary path via dladdr() — works on Linux and macOS. */
+static int get_own_path(char *path_buf, size_t buf_size)
+{
+    Dl_info info;
+    if (dladdr((const void*)get_own_path, &info) && info.dli_fname) {
+        strncpy(path_buf, info.dli_fname, buf_size - 1);
+        path_buf[buf_size - 1] = '\0';
+        return 0;
+    }
+    return -1;
+}
+
+/* Extract directory part from a file path (dest must be same size). */
+static void dirname_of(const char *path, char *dest, size_t dest_size)
+{
+    strncpy(dest, path, dest_size - 1);
+    dest[dest_size - 1] = '\0';
+    char *slash = strrchr(dest, '/');
+    if (slash) *slash = '\0';
+    else       dest[0] = '.';
+}
+
+/* SHA-512 hash of a file's contents. Returns 0 on success. */
+static int sha512_file(const char *path, unsigned char hash[64])
+{
+    FILE *fp = fopen(path, "rb");
+    if (!fp) return -1;
+
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    if (!mdctx) { fclose(fp); return -1; }
+
+    int ret = -1;
+    unsigned char buf[16384];
+    size_t n;
+    unsigned int hash_len = 64;
+
+    if (EVP_DigestInit_ex(mdctx, EVP_sha512(), NULL) != 1) goto done;
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+        if (EVP_DigestUpdate(mdctx, buf, n) != 1) goto done;
+    }
+    if (ferror(fp)) goto done;
+    if (EVP_DigestFinal_ex(mdctx, hash, &hash_len) != 1) goto done;
+    if (hash_len != 64) goto done;
+    ret = 0;
+
+done:
+    EVP_MD_CTX_free(mdctx);
+    fclose(fp);
+    return ret;
+}
+
+/* Hex-encode 64 bytes to 128-char hex string (null-terminated). */
+static void hex64_encode(const unsigned char hash[64], char out[129])
+{
+    static const char hex[] = "0123456789abcdef";
+    for (int i = 0; i < 64; i++) {
+        out[i * 2]     = hex[(hash[i] >> 4) & 0x0f];
+        out[i * 2 + 1] = hex[hash[i] & 0x0f];
+    }
+    out[128] = '\0';
+}
+
+/* ── Binary Integrity Check ─────────────────────────────────────────────── */
+static int kat_binary_integrity(void)
+{
+    char bin_path[1024];
+    unsigned char actual_hash[64];
+    char actual_hex[129];
+
+    if (get_own_path(bin_path, sizeof(bin_path)) != 0) return -1;
+    if (sha512_file(bin_path, actual_hash) != 0) return -1;
+    hex64_encode(actual_hash, actual_hex);
+
+    /* Dev mode: auto-record */
+    if (!g_bin_hash_recorded || g_expected_bin_hash[0] == '\0') {
+        strncpy(g_expected_bin_hash, actual_hex, 128);
+        g_expected_bin_hash[128] = '\0';
+        g_bin_hash_recorded = 1;
+        return 0;
+    }
+
+    return (strcmp(actual_hex, g_expected_bin_hash) == 0) ? 0 : -1;
+}
+
+/* ── Source Integrity Check ─────────────────────────────────────────────── */
+/* Scans adl_crypto.c, adl_crypto.h, and related crypto source files.       */
+static int kat_source_integrity(void)
+{
+    char bin_path[1024];
+    char src_dir[1024];
+    char filepath[1024];
+    unsigned char ctx_hash[64];
+    int ret = -1;
+
+    if (get_own_path(bin_path, sizeof(bin_path)) != 0) return 0; /* skip if can't find */
+    dirname_of(bin_path, src_dir, sizeof(src_dir));
+
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    if (!mdctx) return 0; /* skip on OOM */
+
+    if (EVP_DigestInit_ex(mdctx, EVP_sha512(), NULL) != 1) goto done;
+
+    /* Hash adl_crypto.c and adl_crypto.h (in the same source tree) */
+    const char *src_files[] = {
+        "adl_crypto.c",
+        "adl_crypto.h",
+        NULL
+    };
+
+    /* Try looking relative to the binary path (dev builds) */
+    int found_any = 0;
+    for (int pass = 0; pass < 3; pass++) {
+        const char *base = NULL;
+        switch (pass) {
+            case 0: base = src_dir; break;
+            /* Also check ../src/ (common build layout: build/foo, source is ../src/ */
+            default: {
+                char tmp[1024];
+                strncpy(tmp, src_dir, sizeof(tmp) - 1);
+                tmp[sizeof(tmp) - 1] = '\0';
+                char *last = strrchr(tmp, '/');
+                if (last) {
+                    *last = '\0';
+                    strncat(tmp, "/../src", sizeof(tmp) - strlen(tmp) - 1);
+                    base = tmp;
+                }
+                break;
+            }
+        }
+        if (!base) continue;
+
+        for (int fi = 0; src_files[fi]; fi++) {
+            snprintf(filepath, sizeof(filepath), "%s/%s", base, src_files[fi]);
+            FILE *fp = fopen(filepath, "rb");
+            if (fp) {
+                found_any = 1;
+                unsigned char buf[16384];
+                size_t n;
+                while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+                    EVP_DigestUpdate(mdctx, buf, n);
+                }
+                fclose(fp);
+            }
+        }
+        if (found_any) break;
+    }
+
+    if (!found_any) {
+        /* Source files not on disk — skip check (binary-only deployment) */
+        ret = 0;
+        goto done;
+    }
+
+    unsigned int hash_len = 64;
+    if (EVP_DigestFinal_ex(mdctx, ctx_hash, &hash_len) != 1) goto done;
+    if (hash_len != 64) goto done;
+
+    char actual_hex[129];
+    hex64_encode(ctx_hash, actual_hex);
+
+    /* Dev mode: auto-record */
+    if (!g_src_hash_recorded || g_expected_src_hash[0] == '\0') {
+        strncpy(g_expected_src_hash, actual_hex, 128);
+        g_expected_src_hash[128] = '\0';
+        g_src_hash_recorded = 1;
+        ret = 0;
+        goto done;
+    }
+
+    ret = (strcmp(actual_hex, g_expected_src_hash) == 0) ? 0 : -1;
+
+done:
+    EVP_MD_CTX_free(mdctx);
+    return ret;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  adl_run_powerup_self_tests — Run ALL FIPS §5.9 power-up KATs            */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+int adl_run_powerup_self_tests(char *err_buf)
+{
+    struct {
+        const char *name;
+        int (*fn)(void);
+    } tests[] = {
+        {"AES-256-GCM",         kat_aes256_gcm},
+        {"SHA-384",             kat_sha384},
+        {"SHA-512",             kat_sha512},
+        {"HKDF-SHA256",         kat_hkdf_sha256},
+        {"HKDF-SHA384",         kat_hkdf_sha384},
+        {"HMAC-SHA384",         kat_hmac_sha384},
+        {"Binary Integrity",    kat_binary_integrity},
+        {"Source Integrity",    kat_source_integrity},
+    };
+
+    int num_tests = sizeof(tests) / sizeof(tests[0]);
+
+    for (int i = 0; i < num_tests; i++) {
+        int result = tests[i].fn();
+        if (result != 0) {
+            /* ── InferiorParadoxical: FAILURE → POISON ─────────── */
+            adl_poison();
+            snprintf(err_buf, ADL_ERROR_SIZE,
+                     "FIPS 140-3 §5.9 self-test FAILED: %s "
+                     "(code or binary may be tampered — keys zeroized)",
+                     tests[i].name);
+            return -1;
+        }
+    }
+
+    g_self_tests_passed = 1;
     return 0;
 }
