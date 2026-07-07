@@ -91,13 +91,15 @@ package Model_Manager is
     procedure Save_KV_Cache_To_SSD
       (Kind     : Model_Type;
        Tokens   : System.Address;
-       N_Tokens : Interfaces.C.size_t);
+       N_Tokens : Interfaces.C.size_t;
+       Session_ID : String := "");
 
     --  Load KV cache from SSD if available
     function Load_KV_Cache_From_SSD
       (Kind     : Model_Type;
        Tokens   : out System.Address;
-       N_Tokens : out Interfaces.C.size_t) return Boolean;
+       N_Tokens : out Interfaces.C.size_t;
+       Session_ID : String := "") return Boolean;
 
    --  Perform inference
    procedure Generate
