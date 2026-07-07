@@ -32,6 +32,12 @@ package body Adelaide_Crypto is
    function Adl_Master_Key_Available return int;
    pragma Import (C, Adl_Master_Key_Available, "adl_master_key_available");
 
+   function Adl_Is_Poisoned return int;
+   pragma Import (C, Adl_Is_Poisoned, "adl_is_poisoned");
+
+   function Adl_Self_Tests_Passed return int;
+   pragma Import (C, Adl_Self_Tests_Passed, "adl_self_tests_passed");
+
    --  These return malloc'd strings (chars_ptr). Must be freed with Adl_Free_Cstr.
    function Adl_Derive_Subkey_Cstr
      (Context : chars_ptr) return chars_ptr;
@@ -134,6 +140,18 @@ package body Adelaide_Crypto is
       if Adl_Crypto_Init_Wrapper = 0 then
          Crypto_Initialized := True;
          Ada.Text_IO.Put_Line ("[CRYPTO] Master key loaded successfully.");
+         if Adl_Is_Poisoned = 1 then
+            Ada.Text_IO.Put_Line ("[CRYPTO] FATAL: InferiorParadoxical anti-tamper " &
+                                  "tripped on power-up. Keys zeroized. Exiting.");
+            return False;
+         end if;
+         if Adl_Self_Tests_Passed = 1 then
+            Ada.Text_IO.Put_Line ("[CRYPTO] FIPS 140-3 power-up self-tests: PASSED.");
+         else
+            Ada.Text_IO.Put_Line ("[CRYPTO] FATAL: FIPS 140-3 power-up self-tests: FAILED. " &
+                                  "Anti-tamper engaged. Exiting.");
+            return False;
+         end if;
       else
          Ada.Text_IO.Put_Line ("[CRYPTO] WARNING: No master key available. " &
                                "Encryption disabled.");
@@ -146,6 +164,24 @@ package body Adelaide_Crypto is
    begin
       return Crypto_Initialized and then Adl_Master_Key_Available = 1;
    end Is_Crypto_Ready;
+
+   function Is_Poisoned return Boolean is
+   begin
+      return Adl_Is_Poisoned = 1;
+   end Is_Poisoned;
+
+   function Self_Tests_Passed return Boolean is
+   begin
+      return Crypto_Initialized and then Adl_Self_Tests_Passed = 1;
+   end Self_Tests_Passed;
+
+   function Is_FIPS_Ready return Boolean is
+   begin
+      return Crypto_Initialized
+         and then Adl_Master_Key_Available = 1
+         and then Adl_Self_Tests_Passed = 1
+         and then Adl_Is_Poisoned = 0;
+   end Is_FIPS_Ready;
 
    function Derive_Subkey (Context : String) return Crypto_Result is
    begin
