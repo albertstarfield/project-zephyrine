@@ -7038,7 +7038,8 @@ package body Model_Manager is
                                         Tokens   => Tokens.all'Address,
                                         N_Tokens =>
                                            Interfaces.C.size_t (N_Toks),
-                                        Model_ID => Kind'Img);
+                                        Model_ID => Kind'Img,
+                                        Session_ID => Session_ID);
 
                                     --  Clear KV cache from RAM immediately after saving
                                     --  This ensures minimal RAM usage - only current process in memory
@@ -10962,7 +10963,8 @@ package body Model_Manager is
     procedure Save_KV_Cache_To_SSD
        (Kind     : Model_Type;
         Tokens   : System.Address;
-        N_Tokens : Interfaces.C.size_t) is
+        N_Tokens : Interfaces.C.size_t;
+        Session_ID : String := "") is
     begin
         if Models (Kind).Loaded and then Models (Kind).Context /= Null_Context
         then
@@ -10971,7 +10973,8 @@ package body Model_Manager is
                (Context  => Models (Kind).Context,
                 Tokens   => Tokens,
                 N_Tokens => N_Tokens,
-                Model_ID => Kind'Img);
+                Model_ID => Kind'Img,
+                Session_ID => Session_ID);
         end if;
     exception
         when others =>
@@ -10982,7 +10985,8 @@ package body Model_Manager is
     function Load_KV_Cache_From_SSD
        (Kind     : Model_Type;
         Tokens   : out System.Address;
-        N_Tokens : out Interfaces.C.size_t) return Boolean is
+        N_Tokens : out Interfaces.C.size_t;
+        Session_ID : String := "") return Boolean is
     begin
         Tokens := System.Null_Address;
         N_Tokens := 0;
@@ -10992,10 +10996,11 @@ package body Model_Manager is
             --  Load KV cache from SSD (LAZY, on-demand only)
             return
                KV_Cache_Manager.Load_From_SSD_Lazy
-                  (Context  => Models (Kind).Context,
-                   Tokens   => Tokens,
-                   N_Tokens => N_Tokens,
-                   Model_ID => Kind'Img);
+               (Context  => Models (Kind).Context,
+                Tokens   => Tokens,
+                N_Tokens => N_Tokens,
+                Model_ID => Kind'Img,
+                Session_ID => Session_ID);
         else
             return False;
         end if;

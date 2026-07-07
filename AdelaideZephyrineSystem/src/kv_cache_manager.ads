@@ -40,7 +40,7 @@ with Llama_Interface;
 
 package KV_Cache_Manager is
 
-   Cache_Dir : constant String := "cache/kv/";
+   function Cache_Dir (Session_ID : String := "") return String;
 
    --  ============================================================================
    --  ASYNC SAVE (fire-and-forget, non-blocking)
@@ -52,19 +52,17 @@ package KV_Cache_Manager is
       (Context    : Llama_Interface.Llama_Context;
        Tokens     : System.Address;
        N_Tokens   : Interfaces.C.size_t;
-       Model_ID   : String);
-
-    --  ============================================================================
-    --  LAZY LOAD (on-demand only)
-    --  ============================================================================
-    --  WHY: Don't load at startup - only load when Generate is called.
-    --  Use pre-path cache to skip directory scan when possible.
+       Model_ID   : String;
+       Session_ID : String := "");
+       
+    function Cache_Exists (Model_ID : String; Session_ID : String := "") return Boolean;
 
     function Load_From_SSD_Lazy
       (Context    : Llama_Interface.Llama_Context;
        Tokens     : out System.Address;
        N_Tokens   : out Interfaces.C.size_t;
-       Model_ID   : String) return Boolean;
+       Model_ID   : String;
+       Session_ID : String := "") return Boolean;
 
     --  ============================================================================
     --  PRE-PATH CACHE (blackmagic trick #1)

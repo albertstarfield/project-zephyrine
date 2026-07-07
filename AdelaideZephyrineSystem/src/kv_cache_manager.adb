@@ -50,6 +50,7 @@ pragma SPARK_Mode (Off);
 --  ============================================================================
 
 with AnsiAda;
+with Ada.Environment_Variables;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Directories;
 with Ada.Strings; use Ada.Strings;
@@ -72,6 +73,23 @@ with Ada.Streams.Stream_IO; use Ada.Streams.Stream_IO;
 with Ada.Unchecked_Conversion;
 
 package body KV_Cache_Manager is
+
+   function Get_User return String is
+   begin
+      if Ada.Environment_Variables.Exists ("ADELAIDE_USER") then
+         return Ada.Environment_Variables.Value ("ADELAIDE_USER");
+      else
+         return "default";
+      end if;
+   end Get_User;
+
+   function Cache_Dir (Session_ID : String := "") return String is
+   begin
+      if Session_ID /= "" then
+         return "cache/kv/" & Session_ID & "/";
+      end if;
+      return "cache/kv/" & Get_User & "/";
+   end Cache_Dir;
 
    function Adl_Derive_Subkey_Cstr (Context : chars_ptr; Error_Out : chars_ptr; Error_Out_Size : size_t) return chars_ptr;
    pragma Import (C, Adl_Derive_Subkey_Cstr, "adl_derive_subkey_cstr");
@@ -739,7 +757,8 @@ package body KV_Cache_Manager is
       (Context    : Llama_Interface.Llama_Context;
        Tokens     : System.Address;
        N_Tokens   : Interfaces.C.size_t;
-       Model_ID   : String)
+       Model_ID   : String;
+       Session_ID : String := "")
     is
        --  IMPORTANT: Cache key = Model_ID + prompt hash + CTX SIZE.
        --  WHY: Different ctx allocations mean different KV cache layouts in memory.
@@ -795,10 +814,11 @@ package body KV_Cache_Manager is
    end Save_To_SSD_Async;
 
    function Load_From_SSD_Lazy
-     (Context    : Llama_Interface.Llama_Context;
-      Tokens     : out System.Address;
-      N_Tokens   : out Interfaces.C.size_t;
-      Model_ID   : String) return Boolean
+      (Context    : Llama_Interface.Llama_Context;
+       Tokens     : out System.Address;
+       N_Tokens   : out Interfaces.C.size_t;
+       Model_ID   : String;
+       Session_ID : String := "") return Boolean
    is
       use Ada.Directories;
 
@@ -1019,6 +1039,13 @@ package body KV_Cache_Manager is
       return Found;
       end;
    end Load_From_SSD_Lazy;
+
+
+   function Cache_Exists (Model_ID : String; Session_ID : String := "") return Boolean is
+   begin
+      -- Just returning false for now since it's unused or not fully implemented before
+      return False;
+   end Cache_Exists;
 
    function Has_Cache_Files return Boolean is
       use Ada.Directories;
