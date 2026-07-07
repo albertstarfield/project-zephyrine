@@ -128,24 +128,21 @@ is
          Info_Len  : constant Interfaces.C.size_t := Info'Length;
          OKM_Ptr   : constant System.Address := Result'Address;
          OKM_Len   : constant Interfaces.C.size_t := Master_Key_Type'Size / 8;
-         Ret       : Interfaces.C.int;
-      begin
-         Ret := HKDF_SHA512 (Salt_Ptr, Salt_Len,
-                             IKM_Ptr, IKM_Len,
-                             Info_Ptr, Info_Len,
-                             OKM_Ptr, OKM_Len);
-         if Ret /= 0 then
-            Put_Line (Standard_Error, "HKDF-SHA512 failed, using fallback");
-            --  Fallback: simple XOR combination (not as secure, but functional)
-            for I in Master_Key_Index loop
-               Result (I) := Integrity_Hash ((I - 1) mod 64 + 1) xor
-                             Interfaces.Unsigned_8 (Character'Pos (
-                               User_Secret ((I - 1) mod User_Secret'Length + 1)));
-            end loop;
-         end if;
-      end;
+      Ret       : Interfaces.C.int;
+       begin
+          Ret := HKDF_SHA512 (Salt_Ptr, Salt_Len,
+                              IKM_Ptr, IKM_Len,
+                              Info_Ptr, Info_Len,
+                              OKM_Ptr, OKM_Len);
+          if Ret /= 0 then
+             Put_Line (Standard_Error, "HKDF-SHA512 failed, returning empty key");
+             --  Zeroize any partial key material from the Result buffer
+             Result := (others => 0);
+             return Empty_Master_Key;
+          end if;
+       end;
 
-      return Result;
+       return Result;
    end Derive_Master_Key;
 
    function Derive_AES_Key
@@ -167,22 +164,19 @@ is
          OKM_Len   : constant Interfaces.C.size_t := AES_Key_Type'Size / 8;
          Ret       : Interfaces.C.int;
       begin
-         Ret := HKDF_SHA256 (Salt_Ptr, Salt_Len,
-                             IKM_Ptr, IKM_Len,
-                             Info_Ptr, Info_Len,
-                             OKM_Ptr, OKM_Len);
-         if Ret /= 0 then
-            Put_Line (Standard_Error, "HKDF-SHA256 failed, using fallback");
-            --  Fallback: simple XOR combination
-            for I in AES_Key_Index loop
-               Result (I) := Master_Key (I) xor
-                             Interfaces.Unsigned_8 (Character'Pos (
-                               Context ((I - 1) mod Context'Length + 1)));
-            end loop;
-         end if;
-      end;
+          Ret := HKDF_SHA256 (Salt_Ptr, Salt_Len,
+                              IKM_Ptr, IKM_Len,
+                              Info_Ptr, Info_Len,
+                              OKM_Ptr, OKM_Len);
+          if Ret /= 0 then
+             Put_Line (Standard_Error, "HKDF-SHA256 failed, returning empty key");
+             --  Zeroize any partial key material
+             Result := (others => 0);
+             return Empty_AES_Key;
+          end if;
+       end;
 
-      return Result;
+       return Result;
    end Derive_AES_Key;
 
    --  ── Initialization ────────────────────────────────────────────────────────
@@ -210,11 +204,17 @@ is
 
       Put_Line (Standard_Error, "[KEY-DERIV] Deriving master key from user secret...");
       declare
-         Master_Key : constant Master_Key_Type :=
+         Master_Key : Master_Key_Type :=
            Derive_Master_Key (Stored_Integrity_Hash, User_Secret);
       begin
-         Master_Key_Store.Set_Key (Master_Key);
-         Put_Line (Standard_Error, "[KEY-DERIV] Master key stored (512-bit)");
+         if Master_Key /= Empty_Master_Key then
+            Master_Key_Store.Set_Key (Master_Key);
+            Put_Line (Standard_Error, "[KEY-DERIV] Master key stored (512-bit)");
+         else
+            Put_Line (Standard_Error, "[KEY-DERIV] Master key derivation failed");
+         end if;
+         --  Zeroize local copy of master key
+         Master_Key := (others => 0);
       end;
    end Derive_And_Store_Master_Key;
 
