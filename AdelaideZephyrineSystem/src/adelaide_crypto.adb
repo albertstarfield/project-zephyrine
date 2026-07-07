@@ -38,6 +38,12 @@ package body Adelaide_Crypto is
    function Adl_Self_Tests_Passed return int;
    pragma Import (C, Adl_Self_Tests_Passed, "adl_self_tests_passed");
 
+   function Adl_Is_FIPS_Mode return int;
+   pragma Import (C, Adl_Is_FIPS_Mode, "adl_is_fips_mode");
+
+   procedure Adl_Set_FIPS_Mode (Mode : int);
+   pragma Import (C, Adl_Set_FIPS_Mode, "adl_set_fips_mode");
+
    --  These return malloc'd strings (chars_ptr). Must be freed with Adl_Free_Cstr.
    function Adl_Derive_Subkey_Cstr
      (Context : chars_ptr) return chars_ptr;
@@ -182,6 +188,21 @@ package body Adelaide_Crypto is
          and then Adl_Self_Tests_Passed = 1
          and then Adl_Is_Poisoned = 0;
    end Is_FIPS_Ready;
+
+   function Is_FIPS_Mode return Boolean is
+   begin
+      return Adl_Is_FIPS_Mode = 1;
+   end Is_FIPS_Mode;
+
+   procedure Set_FIPS_Mode (Enabled : Boolean) is
+   begin
+      if not Enabled then
+         Adl_Set_FIPS_Mode (0);
+         Ada.Text_IO.Put_Line ("[CRYPTO] FIPS mode disabled (Crypto Officer override).");
+      end if;
+      --  If Enabled = True, this is a no-op (FIPS mode cannot be re-enabled
+      --  without a process restart).
+   end Set_FIPS_Mode;
 
    function Derive_Subkey (Context : String) return Crypto_Result is
    begin

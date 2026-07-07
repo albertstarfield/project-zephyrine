@@ -22,6 +22,40 @@
 
 #include "adl_crypto.h"
 
+/* ── FIPS 140-3 Mode ──────────────────────────────────────────────────────── */
+/*
+ * ADL_FIPS_MODE:
+ *   1 (default) — FIPS mode. Self-tests mandatory, CTR_DRBG enforced,
+ *                 all crypto operations go through FIPS-approved paths.
+ *   0           — Non-FIPS mode. Self-tests can be bypassed, RAND_bytes
+ *                 fallback allowed. Intended for development/debugging only.
+ *
+ * Override at compile time:  -DADL_FIPS_MODE=0
+ */
+#ifndef ADL_FIPS_MODE
+#define ADL_FIPS_MODE 1
+#endif
+
+static int g_fips_mode = ADL_FIPS_MODE;
+
+/*
+ * Query and set FIPS mode at runtime.
+ * Setting mode to 0 is irreversible for this process (must restart to
+ * re-enable FIPS mode).
+ */
+int adl_is_fips_mode(void)
+{
+    return g_fips_mode;
+}
+
+void adl_set_fips_mode(int mode)
+{
+    /* FIPS mode can only be downgraded (1 → 0), never upgraded (0 → 1) */
+    if (mode == 0 && g_fips_mode == 1) {
+        g_fips_mode = 0;
+    }
+}
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

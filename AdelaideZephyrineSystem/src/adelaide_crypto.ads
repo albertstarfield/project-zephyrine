@@ -48,6 +48,13 @@ package Adelaide_Crypto is
    function Self_Tests_Passed return Boolean;
    function Is_FIPS_Ready return Boolean;
 
+   --  FIPS 140-3 mode control:
+   --  Is_FIPS_Mode:  Returns True if operating in FIPS mode.
+   --  Set_FIPS_Mode: Disable FIPS mode (Crypto Officer operation).
+   --                  Can only disable, never re-enable without restart.
+   function Is_FIPS_Mode return Boolean;
+   procedure Set_FIPS_Mode (Enabled : Boolean);
+
    --  Derive a per-DB sub-key from the master key.
    --  Context examples:
    --    "adelaide:db:memory:v1"     -- adelaide_memory.db
