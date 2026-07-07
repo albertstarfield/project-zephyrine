@@ -69,8 +69,10 @@ try:
     _memory_index_sub_key = derive_sub_key(_master_key, CTX_MEMORY_INDEX)
     _literature_sub_key = derive_sub_key(_master_key, CTX_LITERATURE)
     _crypto_available = True
-except Exception:
-    _crypto_available = False
+except Exception as _exc:
+    print(f"[CRYPTO] FATAL: Crypto initialization failed ({_exc}). "
+          "Aborting — refusing to run with plaintext storage.")
+    os.abort()
 
 
 def _enc(val: str, sub_key=None) -> str:
@@ -334,10 +336,6 @@ if _crypto_available:
                     )
     except Exception as _e:
         print(f"[CRYPTO] WARNING: Could not migrate assistant_session.db: {_e}")
-else:
-    print(
-        "[CRYPTO] Encryption not available. assistant_session.db data stored in plaintext."
-    )
 
 
 @app.post("/api/telemetry")

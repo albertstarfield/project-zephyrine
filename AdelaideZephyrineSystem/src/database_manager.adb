@@ -246,11 +246,12 @@ package body Database_Manager is
                      AnsiAda.Reset & " Migration complete.");
                 end if;
              end;
-          else
-             Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[CRYPTO]" &
-               AnsiAda.Reset & " Encryption disabled (no master key). " &
-               "Data stored in plaintext.");
-          end if;
+           else
+              Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[CRYPTO]" &
+                AnsiAda.Reset &
+                " FATAL: No master key. Refusing to run with plaintext storage.");
+              raise Program_Error with "Crypto unavailable — aborting";
+           end if;
 
           Done := True;
           Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" &

@@ -4169,8 +4169,9 @@ def real_main():
             print(f"[CRYPTO] WARNING: AAD migration failed: {e}")
             print("[CRYPTO] Legacy data will still decrypt (backward compatible)")
     except Exception as e:
-        print(f"[CRYPTO] WARNING: Could not bootstrap crypto: {e}")
-        print("[CRYPTO] Encryption disabled. Data will be stored in plaintext.")
+        print(f"[CRYPTO] FATAL: Could not bootstrap crypto: {e}")
+        print("[CRYPTO] Refusing to run with plaintext storage. Aborting.")
+        os.abort()
 
     print("[*] Booting Adelaide Intelligence Server...")
     end_time = int(time.time() * 1000)
@@ -4724,6 +4725,7 @@ def real_main():
             _sidecar_deps = [
                 "networkx", "numpy", "psutil", "tiktoken",
                 "uvicorn", "fastapi", "httpx", "pywebview", "PyMuPDF",
+                "python-multipart",
             ]
             try:
                 subprocess.run(
