@@ -277,6 +277,19 @@ int adl_hkdf_sha256(const unsigned char *salt, size_t salt_len,
                     unsigned char *okm, size_t okm_len);
 
 /*
+ * adl_is_fips_mode: Query FIPS 140-3 mode.
+ * Returns 1 if operating in FIPS mode, 0 if non-FIPS (development/debug).
+ */
+int adl_is_fips_mode(void);
+
+/*
+ * adl_set_fips_mode: Set FIPS 140-3 mode at runtime.
+ * Can only downgrade from FIPS mode (1 → 0), never re-enable.
+ * Pass 0 to disable FIPS mode enforcement for this process lifetime.
+ */
+void adl_set_fips_mode(int mode);
+
+/*
  * adl_derive_master_key: FIPS 140-3 master key derivation.
  *
  * Replaces Python run.py → derive_master_key() with a FIPS-approved
