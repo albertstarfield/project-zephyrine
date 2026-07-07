@@ -185,6 +185,31 @@ char *adl_decrypt_field_cstr(const char *sub_key_hex, const char *ciphertext_hex
  */
 void adl_free_cstr(char *ptr);
 
+/* ── FIPS 140-3 Self-Tests & InferiorParadoxical Anti-Tamper ───────────────── */
+
+/*
+ * InferiorParadoxical — Anti-tamper dead-man's switch.
+ *
+ * When unauthorized modifications are detected (KAT failure, integrity
+ * mismatch), the master key is zeroized and all crypto operations cease.
+ * Named for the paradoxical effect: the more an attacker tampers, the more
+ * they destroy what they seek.
+ *
+ * adl_is_poisoned:      Returns 1 if the system is poisoned (all crypto off).
+ * adl_self_tests_passed: Returns 1 if power-up KATs succeeded.
+ * adl_run_powerup_self_tests: Run all KATs. Returns 0 on success, -1 on
+ *                        failure (also sets poisoned flag on failure).
+ * adl_poison:           Force-poison the module (zeroize keys, disable crypto).
+ * adl_set_expected_binary_hash: Set expected SHA-512 of compiled binary.
+ * adl_set_expected_source_hash: Set expected SHA-512 of crypto source files.
+ */
+int adl_is_poisoned(void);
+int adl_self_tests_passed(void);
+int adl_run_powerup_self_tests(char *err_buf);
+void adl_poison(void);
+void adl_set_expected_binary_hash(const char *hash_hex);
+void adl_set_expected_source_hash(const char *hash_hex);
+
 /* ── HKDF Key Derivation ─────────────────────────────────────────────────────── */
 
 /*
