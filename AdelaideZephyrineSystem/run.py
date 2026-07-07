@@ -173,7 +173,8 @@ def _gui_available():
 
 def _password_entropy(password):
     """Calculate password entropy in bits (lower bound) based on character pool."""
-    import math, string
+    import math
+    import string
     if not password:
         return 0
     pool = 0
@@ -520,7 +521,10 @@ def _tk_info_dialog(title, message):
 
 def _ip_tpm_store(uuid_str):
     """Store InferiorParadoxical UUID in TPM2 NVRAM (Linux)."""
-    import subprocess, tempfile, os, time
+    import subprocess
+    import tempfile
+    import os
+    import time
     nv_index = "0x1500000"
     try:
         # Try to undefine first (ignore failure if not exist)
@@ -714,7 +718,10 @@ def _get_inferior_paradoxical_uuid():
 
 def _ip_signature_store(sig_hash):
     """Store static InferiorParadoxical signature in TPM2 NVRAM (Linux)."""
-    import subprocess, tempfile, os, time
+    import subprocess
+    import tempfile
+    import os
+    import time
     nv_index = "0x1500001"
     try:
         subprocess.run(["tpm2_nvundefine", "-C", "o", nv_index],
@@ -738,8 +745,10 @@ def _ip_signature_store(sig_hash):
         os.unlink(tmp)
         return True
     except Exception:
-        try: os.unlink(tmp)
-        except Exception: pass
+        try:
+            os.unlink(tmp)
+        except Exception:
+            pass
         return False
 
 
