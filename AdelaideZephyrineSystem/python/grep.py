@@ -73,7 +73,7 @@ def main():
             options["exclude"] = args[i + 1]
             i += 2
         elif args[i] == "--ignore-case":
-            options["ignore_case"] = True
+            options["ignore_case"] = "1"
             i += 1
         else:
             paths.append(args[i])
