@@ -11,6 +11,9 @@ with Adelaide_Crypto;
 
 package body Database_Manager is
 
+   procedure C_Abort;
+   pragma Import (C, C_Abort, "abort");
+
    DB_Dir   : constant String := "NetworkMemoryPool";
    DB_File : constant String := DB_Dir & "/adelaide_memory.db";
    Lit_DB_File : constant String := DB_Dir & "/literatureRefIndex.db";
@@ -245,10 +248,12 @@ package body Database_Manager is
                 end if;
              end;
            else
-              Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[CRYPTO]" &
-                AnsiAda.Reset &
-                " FATAL: No master key. Refusing to run with plaintext storage.");
-               raise Program_Error with "Crypto unavailable -- aborting";
+               Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[CRYPTO]" &
+                 AnsiAda.Reset &
+                 " FATAL: No master key. Refusing to run with plaintext storage.");
+               Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[BUGCHECK]" &
+                 AnsiAda.Reset & " Aborting process -- SIGABORT.");
+               C_Abort;
            end if;
 
           Done := True;
@@ -268,6 +273,10 @@ package body Database_Manager is
          Put_Line (AnsiAda.Foreground (AnsiAda.Magenta) & "[DB]" &
            AnsiAda.Reset & " Critical Init Error: " &
            Ada.Exceptions.Exception_Message (E));
+         --  [BUGCHECK] Critical failures (e.g. crypto unavailable) must
+         --  terminate the process. The handler above catches DB errors,
+         --  but C_Abort inside Do_Init bypasses this entirely via SIGABRT.
+         null;
    end Initialize;
 
    ----------------------
