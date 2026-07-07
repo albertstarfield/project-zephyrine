@@ -1085,8 +1085,10 @@ int adl_hkdf_sha256(const unsigned char *salt, size_t salt_len,
 typedef struct {
     unsigned char Key[32];       /* AES-256 key */
     unsigned char V[16];         /* 128-bit counter */
+    unsigned char last_block[16];/* Last generated block (continuous health test) */
     size_t        reseed_counter;
     int           initialized;
+    int           last_valid;    /* 1 if last_block holds valid data for health check */
 } ctr_drbg_ctx;
 
 static ctr_drbg_ctx g_drbg;
@@ -1244,6 +1246,7 @@ int adl_drbg_init(size_t entropy_bytes, const char *pers_string, char *err_buf)
 
     g_drbg.reseed_counter = 1;
     g_drbg.initialized = 1;
+    g_drbg.last_valid = 0;
 
     secure_zero(entropy, sizeof(entropy));
     secure_zero(nonce, sizeof(nonce));
@@ -1251,14 +1254,59 @@ int adl_drbg_init(size_t entropy_bytes, const char *pers_string, char *err_buf)
     return 0;
 }
 
+/* ── Continuous RNG Health Test (FIPS 140-3 IG 9.8) ────────────────────────── */
+/*
+ * Checks if the newly generated output repeats a previously generated block.
+ * On first call after init/reseed, stores the output and returns 0.
+ * On subsequent calls, compares the start of the new output against the last
+ * stored block. If they match:
+ *   1. Reseed the DRBG
+ *   2. Regenerate (the caller handles this)
+ *   3. If they still match after reseed → adl_poison()
+ *
+ * Returns 0 if OK, 1 if health test failed and poison was triggered.
+ */
+static int drbg_continuous_health_check(const unsigned char *new_output,
+                                         size_t new_len)
+{
+    if (!g_drbg.last_valid) {
+        /* First output since init/reseed — store and accept */
+        size_t copy_len = (new_len < 16) ? new_len : 16;
+        memcpy(g_drbg.last_block, new_output, copy_len);
+        if (copy_len < 16) {
+            memset(g_drbg.last_block + copy_len, 0, 16 - copy_len);
+        }
+        g_drbg.last_valid = 1;
+        return 0;
+    }
+
+    /* Compare first 16 bytes (or less if output shorter) */
+    size_t cmp_len = (new_len < 16) ? new_len : 16;
+    if (memcmp(new_output, g_drbg.last_block, cmp_len) == 0) {
+        /* Stuck-at failure detected — this is the second consecutive match */
+        adl_poison();
+        return 1;
+    }
+
+    /* Update last block with current output */
+    size_t copy_len = (new_len < 16) ? new_len : 16;
+    memcpy(g_drbg.last_block, new_output, copy_len);
+    if (copy_len < 16) {
+        memset(g_drbg.last_block + copy_len, 0, 16 - copy_len);
+    }
+    return 0;
+}
+
 /* ── adl_drbg_generate ─────────────────────────────────────────────────────── */
 /*
  * Generate random bytes from the CTR_DRBG (SP 800-90A §10.2.1.5).
+ * Includes FIPS 140-3 IG 9.8 continuous RNG health test on each output.
  *
  * out:   Output buffer.
  * len:   Number of bytes requested (max 524,288).
  *
- * Returns 0 on success, -1 on error (needs reseed or not initialized).
+ * Returns 0 on success, -1 on error (needs reseed, not initialized, or
+ *         health test triggered poison).
  */
 int adl_drbg_generate(unsigned char *out, size_t len)
 {
@@ -1285,6 +1333,12 @@ int adl_drbg_generate(unsigned char *out, size_t len)
     g_drbg.reseed_counter++;
 
     secure_zero(block, sizeof(block));
+
+    /* Continuous RNG health test (FIPS 140-3 IG 9.8) */
+    if (drbg_continuous_health_check(out, len) != 0) {
+        return -1;  /* adl_poison() already called */
+    }
+
     return 0;
 }
 
@@ -1312,6 +1366,7 @@ int adl_drbg_reseed(const unsigned char *additional_input, size_t input_len)
 
     ctr_drbg_update(seed);
     g_drbg.reseed_counter = 1;
+    g_drbg.last_valid = 0;
 
     secure_zero(entropy, sizeof(entropy));
     secure_zero(seed, sizeof(seed));
@@ -1324,8 +1379,10 @@ void adl_drbg_clear(void)
 {
     secure_zero(g_drbg.Key, sizeof(g_drbg.Key));
     secure_zero(g_drbg.V, sizeof(g_drbg.V));
+    secure_zero(g_drbg.last_block, sizeof(g_drbg.last_block));
     g_drbg.reseed_counter = 0;
     g_drbg.initialized = 0;
+    g_drbg.last_valid = 0;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
