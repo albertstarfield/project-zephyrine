@@ -16,26 +16,30 @@ pragma SPARK_Mode (Off);
 --  line.  Blank lines and lines starting with '#' are ignored.
 --  ============================================================================
 
-with Ada.Characters.Latin_1;
 with Ada.Text_IO;
 with Ada.Environment_Variables;
 with Ada.Strings.Fixed;
+with Interfaces; use Interfaces;
 
 package body API_Key_Manager is
 
    --  ── Constant-time Comparison (FIPS 140-3 §5.7) ──────────────────────────
    --  Prevents timing side-channel attacks on API key and Crypto Officer
    --  key comparisons.  Always compares every byte, even after a mismatch.
+   --  Uses Unsigned_32 for bitwise XOR/OR operations (modular type).
 
    function Constant_Time_Compare (A, B : String) return Boolean is
-      Result : Integer := A'Length xor B'Length;
+      Result : Unsigned_32 :=
+        Unsigned_32 (A'Length) xor Unsigned_32 (B'Length);
    begin
       for I in 1 .. A'Length loop
          declare
             A_Char : Character := (if I <= A'Length then A (A'First + I - 1) else ' ');
             B_Char : Character := (if I <= B'Length then B (B'First + I - 1) else ' ');
          begin
-            Result := Result or (Character'Pos (A_Char) xor Character'Pos (B_Char));
+            Result := Result or
+              (Unsigned_32 (Character'Pos (A_Char)) xor
+               Unsigned_32 (Character'Pos (B_Char)));
          end;
       end loop;
       for I in 1 .. B'Length loop
@@ -43,7 +47,9 @@ package body API_Key_Manager is
             A_Char : Character := (if I <= A'Length then A (A'First + I - 1) else ' ');
             B_Char : Character := (if I <= B'Length then B (B'First + I - 1) else ' ');
          begin
-            Result := Result or (Character'Pos (A_Char) xor Character'Pos (B_Char));
+            Result := Result or
+              (Unsigned_32 (Character'Pos (A_Char)) xor
+               Unsigned_32 (Character'Pos (B_Char)));
          end;
       end loop;
       return Result = 0;
@@ -300,21 +306,18 @@ package body API_Key_Manager is
       --  Constant-time scan through all keys (FIPS 140-3 §5.7),
       --  always checks every key, even after finding a match.
       declare
-         Found   : Boolean := False;
-         Key_Buf : String (1 .. Key'Length);
+         Found : Boolean := False;
       begin
-         --  Copy Key to a fixed buffer for alignment
-         Key_Buf (1 .. Key'Length) := Key;
-
          for Cursor in Loaded_Keys.Iterate loop
-            declare
-               Stored_Key : constant String := To_String (Element (Cursor));
-            begin
-               if Constant_Time_Compare (Key, Stored_Key) then
-                  Found := True;
-               end if;
-            end;
-         end loop;
+             declare
+                Stored_Key : constant String :=
+                  To_String (Key_Sets.Element (Cursor));
+             begin
+                if Constant_Time_Compare (Key, Stored_Key) then
+                   Found := True;
+                end if;
+             end;
+          end loop;
 
          return Found;
       end;
