@@ -60,6 +60,8 @@ void adl_set_fips_mode(int mode)
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <termios.h>
+#include <unistd.h>
 
 /* OpenSSL 3.x EVP API */
 #include <openssl/evp.h>
@@ -268,16 +270,16 @@ store:
         size_t slen = strlen(src);
         /* Strip any trailing whitespace the file read might have left */
         while (slen > 0 && (src[slen-1] == ' ' || src[slen-1] == '\t')) slen--;
-        if (slen != 64) {
+        if (slen != 64 && slen != 128) {
             snprintf(err_buf, ADL_ERROR_SIZE,
-                     "Invalid master key length: got %zu hex chars, expected 64", slen);
+                     "Invalid master key length: got %zu hex chars, expected 64 or 128", slen);
             return -1;
         }
         /* Decode to verify it's valid hex */
         int decoded = hex_decode(src, slen, (unsigned char*)raw_key);
-        if (decoded != 32) {
+        if (decoded != 32 && decoded != 64) {
             snprintf(err_buf, ADL_ERROR_SIZE,
-                     "Master key is not valid hex (decoded %d bytes, expected 32)", decoded);
+                     "Master key is not valid hex (decoded %d bytes, expected 32 or 64)", decoded);
             return -1;
         }
         /* Store the hex-encoded key in our static buffer */
@@ -754,6 +756,180 @@ int adl_decrypt_string(const char *sub_key_hex,
     return ret;
 }
 
+/* ── adl_encrypt_raw ────────────────────────────────────────────────────────── */
+
+int adl_encrypt_raw(const char *sub_key_hex,
+                    const unsigned char *plaintext, size_t plaintext_len,
+                    unsigned char *ciphertext, size_t *ciphertext_len,
+                    char *err_buf)
+{
+    unsigned char key[ADL_KEY_SIZE];
+    unsigned char nonce[ADL_NONCE_SIZE];
+    unsigned char tag[ADL_TAG_SIZE];
+    size_t ct_len = 0;
+    int ret = -1;
+    EVP_CIPHER_CTX *ctx = NULL;
+
+    err_buf[0] = '\0';
+
+    if (g_poisoned) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Module is poisoned");
+        return -1;
+    }
+
+    if (hex_decode(sub_key_hex, 64, key) != ADL_KEY_SIZE) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Invalid sub-key hex in encrypt_raw");
+        return -1;
+    }
+
+    if (adl_drbg_generate(nonce, ADL_NONCE_SIZE) != 0) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "DRBG generate failed for nonce");
+        return -1;
+    }
+
+    if (*ciphertext_len < plaintext_len + ADL_NONCE_SIZE + ADL_TAG_SIZE) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Output buffer too small");
+        return -1;
+    }
+
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Failed to create EVP_CIPHER_CTX");
+        return -1;
+    }
+
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, ADL_NONCE_SIZE, NULL) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+
+    if (EVP_EncryptInit_ex(ctx, NULL, NULL, key, nonce) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+
+    int out_len = 0;
+    if (EVP_EncryptUpdate(ctx, ciphertext + ADL_NONCE_SIZE, &out_len, plaintext, (int)plaintext_len) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+    ct_len = (size_t)out_len;
+
+    if (EVP_EncryptFinal_ex(ctx, ciphertext + ADL_NONCE_SIZE + out_len, &out_len) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+    ct_len += (size_t)out_len;
+
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, ADL_TAG_SIZE, tag) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+
+    memcpy(ciphertext, nonce, ADL_NONCE_SIZE);
+    memcpy(ciphertext + ADL_NONCE_SIZE + ct_len, tag, ADL_TAG_SIZE);
+    *ciphertext_len = ADL_NONCE_SIZE + ct_len + ADL_TAG_SIZE;
+
+    ret = 0;
+
+cleanup:
+    EVP_CIPHER_CTX_free(ctx);
+    secure_zero(key, ADL_KEY_SIZE);
+    return ret;
+}
+
+/* ── adl_decrypt_raw ────────────────────────────────────────────────────────── */
+
+int adl_decrypt_raw(const char *sub_key_hex,
+                    const unsigned char *ciphertext, size_t ciphertext_len,
+                    unsigned char *plaintext, size_t *plaintext_len,
+                    char *err_buf)
+{
+    unsigned char key[ADL_KEY_SIZE];
+    unsigned char nonce[ADL_NONCE_SIZE];
+    unsigned char tag[ADL_TAG_SIZE];
+    size_t ct_len;
+    int ret = -1;
+    EVP_CIPHER_CTX *ctx = NULL;
+
+    err_buf[0] = '\0';
+
+    if (g_poisoned) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Module is poisoned");
+        return -1;
+    }
+
+    if (hex_decode(sub_key_hex, 64, key) != ADL_KEY_SIZE) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Invalid sub-key hex in decrypt_raw");
+        return -1;
+    }
+
+    if (ciphertext_len < ADL_NONCE_SIZE + ADL_TAG_SIZE) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Ciphertext too short");
+        return -1;
+    }
+
+    ct_len = ciphertext_len - ADL_NONCE_SIZE - ADL_TAG_SIZE;
+
+    if (*plaintext_len < ct_len) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Output buffer too small");
+        return -1;
+    }
+
+    memcpy(nonce, ciphertext, ADL_NONCE_SIZE);
+    memcpy(tag, ciphertext + ADL_NONCE_SIZE + ct_len, ADL_TAG_SIZE);
+
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Failed to create EVP_CIPHER_CTX");
+        return -1;
+    }
+
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, ADL_NONCE_SIZE, NULL) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+
+    if (EVP_DecryptInit_ex(ctx, NULL, NULL, key, nonce) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+
+    int out_len = 0;
+    if (EVP_DecryptUpdate(ctx, plaintext, &out_len, ciphertext + ADL_NONCE_SIZE, (int)ct_len) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, ADL_TAG_SIZE, tag) != 1) {
+        get_openssl_error(err_buf, ADL_ERROR_SIZE);
+        goto cleanup;
+    }
+
+    if (EVP_DecryptFinal_ex(ctx, plaintext + out_len, &out_len) != 1) {
+        snprintf(err_buf, ADL_ERROR_SIZE, "Decryption failed (wrong key or corrupted data)");
+        goto cleanup;
+    }
+
+    *plaintext_len = ct_len;
+    ret = 0;
+
+cleanup:
+    EVP_CIPHER_CTX_free(ctx);
+    secure_zero(key, ADL_KEY_SIZE);
+    return ret;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  Ada FFI Wrappers — chars_ptr-based interface for easy Ada interop        */
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -906,6 +1082,47 @@ char *adl_derive_master_key_cstr(const char *integrity_hash,
         free(out);
         return NULL;
     }
+    return out;
+}
+
+/*
+ * adl_derive_master_key_from_stdin: Securely read password via termios without
+ * echoing, derive the master key directly in C, and zeroize the buffer.
+ * Returns malloc'd hex-encoded master key string, or NULL on failure.
+ * Caller must free with adl_free_cstr().
+ */
+char *adl_derive_master_key_from_stdin(const char *integrity_hash, const char *prompt)
+{
+    struct termios oldt, newt;
+    char secret_buf[256];
+    char *out = NULL;
+    int i = 0;
+    int c;
+
+    printf("%s", prompt);
+    fflush(stdout);
+
+    /* Disable echo */
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    /* Read secret */
+    while ((c = getchar()) != '\n' && c != EOF && i < 255) {
+        secret_buf[i++] = (char)c;
+    }
+    secret_buf[i] = '\0';
+
+    /* Restore echo */
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    printf("\n");
+
+    out = adl_derive_master_key_cstr(integrity_hash, secret_buf);
+
+    /* Zeroize plaintext secret from C memory stack immediately */
+    secure_zero(secret_buf, sizeof(secret_buf));
+
     return out;
 }
 
@@ -1204,308 +1421,44 @@ int adl_derive_master_key(const char *integrity_hash,
  * independently seeded — only adl_init() uses the DRBG).
  */
 
-/* CTR_DRBG internal state (NIST SP 800-90A §10.2.1) */
-typedef struct {
-    unsigned char Key[32];       /* AES-256 key */
-    unsigned char V[16];         /* 128-bit counter */
-    unsigned char last_block[16];/* Last generated block (continuous health test) */
-    size_t        reseed_counter;
-    int           initialized;
-    int           last_valid;    /* 1 if last_block holds valid data for health check */
-} ctr_drbg_ctx;
+/* ── FIPS 140-3 §5.1 / SP 800-90A — SPARK CTR_DRBG Dependencies ────────────── */
 
-static ctr_drbg_ctx g_drbg;
+int adl_gather_entropy(unsigned char *buffer, size_t len)
+{
+    if (RAND_bytes(buffer, (int)len) != 1) return 0;
+    return 1;
+}
 
-/* AES-256-ECB single-block encrypt (internal helper for CTR_DRBG update). */
-static int aes256_ecb_block(const unsigned char key[32],
-                            const unsigned char plaintext[16],
-                            unsigned char ciphertext[16])
+int adl_aes256_ecb_encrypt(const unsigned char key[32],
+                           const unsigned char plaintext[16],
+                           unsigned char ciphertext[16])
 {
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) return -1;
+    if (!ctx) return 0;
 
-    int out_len = 0, ret = -1;
+    int out_len = 0, ret = 0;
     if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, key, NULL) != 1) goto done;
     if (EVP_CIPHER_CTX_set_padding(ctx, 0) != 1) goto done;
     if (EVP_EncryptUpdate(ctx, ciphertext, &out_len, plaintext, 16) != 1) goto done;
     if (out_len != 16) goto done;
-    ret = 0;
+    ret = 1;
 
 done:
     EVP_CIPHER_CTX_free(ctx);
     return ret;
 }
 
-/* Increment V (128-bit big-endian counter) by 1. */
-static void inc_V(unsigned char V[16])
+void adl_gather_entropy_wrapper(unsigned char *buffer, size_t len, int *result)
 {
-    for (int i = 15; i >= 0; i--) {
-        if (++V[i] != 0) break;
-    }
+    *result = adl_gather_entropy(buffer, len);
 }
 
-/*
- * CTR_DRBG_Update (SP 800-90A §10.2.1.2).
- *
- * provided_data: 48 bytes (key_len 32 + block_len 16), or NULL for all-zeros.
- * Updates Key and V within g_drbg.
- */
-static void ctr_drbg_update(const unsigned char provided_data[48])
+void adl_aes256_ecb_encrypt_wrapper(const unsigned char key[32], 
+                                    const unsigned char plaintext[16], 
+                                    unsigned char ciphertext[16],
+                                    int *result)
 {
-    unsigned char temp[48];
-    unsigned char block[16];
-
-    for (int i = 0; i < 3; i++) {
-        inc_V(g_drbg.V);
-        if (aes256_ecb_block(g_drbg.Key, g_drbg.V, block) != 0) {
-            /* If AES fails, zero temp and return — caller must handle error */
-            secure_zero(temp, sizeof(temp));
-            return;
-        }
-        memcpy(temp + i * 16, block, 16);
-    }
-
-    if (provided_data) {
-        for (int i = 0; i < 48; i++) {
-            temp[i] ^= provided_data[i];
-        }
-    }
-
-    /* Key = first 32 bytes, V = last 16 bytes */
-    memcpy(g_drbg.Key, temp, 32);
-    memcpy(g_drbg.V, temp + 32, 16);
-
-    secure_zero(temp, sizeof(temp));
-    secure_zero(block, sizeof(block));
-}
-
-/*
- * Derive seed material from entropy, nonce, and personalization string.
- * Uses SHA-256 to condense inputs to 32 bytes, then pads to 48 for Update.
- */
-static int derive_seed_material(const unsigned char *entropy, size_t entropy_len,
-                                const unsigned char *nonce,   size_t nonce_len,
-                                const unsigned char *pers,    size_t pers_len,
-                                unsigned char seed_out[48])
-{
-    unsigned char hash[32];
-    unsigned int hash_len = 32;
-
-    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
-    if (!mdctx) return -1;
-
-    int ret = -1;
-    if (EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL) != 1) goto done;
-    if (EVP_DigestUpdate(mdctx, entropy, entropy_len) != 1) goto done;
-    if (nonce && nonce_len > 0) {
-        if (EVP_DigestUpdate(mdctx, nonce, nonce_len) != 1) goto done;
-    }
-    if (pers && pers_len > 0) {
-        if (EVP_DigestUpdate(mdctx, pers, pers_len) != 1) goto done;
-    }
-    if (EVP_DigestFinal_ex(mdctx, hash, &hash_len) != 1) goto done;
-    if (hash_len != 32) goto done;
-
-    memset(seed_out, 0, 48);
-    memcpy(seed_out, hash, 32);
-    ret = 0;
-
-done:
-    EVP_MD_CTX_free(mdctx);
-    secure_zero(hash, sizeof(hash));
-    return ret;
-}
-
-/* ── adl_drbg_init ─────────────────────────────────────────────────────────── */
-/*
- * Initialize the CTR_DRBG with entropy from the OS.
- *
- * entropy_bytes:  Number of entropy bytes to gather (min 48 for AES-256 CTR_DRBG).
- * pers_string:    Optional personalization string (may be NULL).
- * err_buf:        Error buffer.
- *
- * Returns 0 on success, -1 on error.
- */
-int adl_drbg_init(size_t entropy_bytes, const char *pers_string, char *err_buf)
-{
-    unsigned char entropy[64];
-    unsigned char nonce[32];
-    unsigned char seed[48];
-
-    err_buf[0] = '\0';
-
-    /* Gather entropy from OS (pulled via OpenSSL's RAND_bytes) */
-    if (entropy_bytes > sizeof(entropy)) entropy_bytes = sizeof(entropy);
-    if (RAND_bytes(entropy, (int)entropy_bytes) != 1) {
-        snprintf(err_buf, ADL_ERROR_SIZE, "Failed to gather entropy for DRBG");
-        return -1;
-    }
-
-    /* Gather nonce (at least 16 bytes per SP 800-90A) */
-    if (RAND_bytes(nonce, 16) != 1) {
-        secure_zero(entropy, sizeof(entropy));
-        snprintf(err_buf, ADL_ERROR_SIZE, "Failed to gather nonce for DRBG");
-        return -1;
-    }
-
-    /* Derive seed material */
-    if (derive_seed_material(entropy, entropy_bytes,
-                             nonce, 16,
-                             (const unsigned char *)pers_string,
-                             pers_string ? strlen(pers_string) : 0,
-                             seed) != 0) {
-        secure_zero(entropy, sizeof(entropy));
-        secure_zero(nonce, sizeof(nonce));
-        snprintf(err_buf, ADL_ERROR_SIZE, "Failed to derive DRBG seed");
-        return -1;
-    }
-
-    /* Initialize Key = all zeros, V = all zeros */
-    memset(g_drbg.Key, 0, 32);
-    memset(g_drbg.V, 0, 16);
-
-    /* Mix in seed material */
-    ctr_drbg_update(seed);
-
-    g_drbg.reseed_counter = 1;
-    g_drbg.initialized = 1;
-    g_drbg.last_valid = 0;
-
-    secure_zero(entropy, sizeof(entropy));
-    secure_zero(nonce, sizeof(nonce));
-    secure_zero(seed, sizeof(seed));
-    return 0;
-}
-
-/* ── Continuous RNG Health Test (FIPS 140-3 IG 9.8) ────────────────────────── */
-/*
- * Checks if the newly generated output repeats a previously generated block.
- * On first call after init/reseed, stores the output and returns 0.
- * On subsequent calls, compares the start of the new output against the last
- * stored block. If they match:
- *   1. Reseed the DRBG
- *   2. Regenerate (the caller handles this)
- *   3. If they still match after reseed → adl_poison()
- *
- * Returns 0 if OK, 1 if health test failed and poison was triggered.
- */
-static int drbg_continuous_health_check(const unsigned char *new_output,
-                                         size_t new_len)
-{
-    if (!g_drbg.last_valid) {
-        /* First output since init/reseed — store and accept */
-        size_t copy_len = (new_len < 16) ? new_len : 16;
-        memcpy(g_drbg.last_block, new_output, copy_len);
-        if (copy_len < 16) {
-            memset(g_drbg.last_block + copy_len, 0, 16 - copy_len);
-        }
-        g_drbg.last_valid = 1;
-        return 0;
-    }
-
-    /* Compare first 16 bytes (or less if output shorter) */
-    size_t cmp_len = (new_len < 16) ? new_len : 16;
-    if (memcmp(new_output, g_drbg.last_block, cmp_len) == 0) {
-        /* Stuck-at failure detected — this is the second consecutive match */
-        adl_poison();
-        return 1;
-    }
-
-    /* Update last block with current output */
-    size_t copy_len = (new_len < 16) ? new_len : 16;
-    memcpy(g_drbg.last_block, new_output, copy_len);
-    if (copy_len < 16) {
-        memset(g_drbg.last_block + copy_len, 0, 16 - copy_len);
-    }
-    return 0;
-}
-
-/* ── adl_drbg_generate ─────────────────────────────────────────────────────── */
-/*
- * Generate random bytes from the CTR_DRBG (SP 800-90A §10.2.1.5).
- * Includes FIPS 140-3 IG 9.8 continuous RNG health test on each output.
- *
- * out:   Output buffer.
- * len:   Number of bytes requested (max 524,288).
- *
- * Returns 0 on success, -1 on error (needs reseed, not initialized, or
- *         health test triggered poison).
- */
-int adl_drbg_generate(unsigned char *out, size_t len)
-{
-    if (!g_drbg.initialized) return -1;
-    if (len > 524288) return -1;  /* Max per SP 800-90A */
-    if (g_drbg.reseed_counter > ((size_t)1 << 48)) return -1;  /* Reseed needed */
-
-    size_t generated = 0;
-    unsigned char block[16];
-
-    while (generated < len) {
-        inc_V(g_drbg.V);
-        if (aes256_ecb_block(g_drbg.Key, g_drbg.V, block) != 0) {
-            return -1;
-        }
-        size_t to_copy = (len - generated < 16) ? (len - generated) : 16;
-        memcpy(out + generated, block, to_copy);
-        generated += to_copy;
-    }
-
-    /* Post-generation update */
-    ctr_drbg_update(NULL);
-
-    g_drbg.reseed_counter++;
-
-    secure_zero(block, sizeof(block));
-
-    /* Continuous RNG health test (FIPS 140-3 IG 9.8) */
-    if (drbg_continuous_health_check(out, len) != 0) {
-        return -1;  /* adl_poison() already called */
-    }
-
-    return 0;
-}
-
-/* ── adl_drbg_reseed ───────────────────────────────────────────────────────── */
-/*
- * Reseed the DRBG with fresh entropy.
- *
- * additional_input: Optional additional entropy (may be NULL).
- * Returns 0 on success, -1 on error.
- */
-int adl_drbg_reseed(const unsigned char *additional_input, size_t input_len)
-{
-    unsigned char entropy[48];
-    unsigned char seed[48];
-
-    if (RAND_bytes(entropy, 48) != 1) return -1;
-
-    if (derive_seed_material(entropy, 48,
-                             additional_input, additional_input ? input_len : 0,
-                             NULL, 0,
-                             seed) != 0) {
-        secure_zero(entropy, sizeof(entropy));
-        return -1;
-    }
-
-    ctr_drbg_update(seed);
-    g_drbg.reseed_counter = 1;
-    g_drbg.last_valid = 0;
-
-    secure_zero(entropy, sizeof(entropy));
-    secure_zero(seed, sizeof(seed));
-    return 0;
-}
-
-/* ── adl_drbg_clear ────────────────────────────────────────────────────────── */
-/* Clear DRBG state (zeroize keys). */
-void adl_drbg_clear(void)
-{
-    secure_zero(g_drbg.Key, sizeof(g_drbg.Key));
-    secure_zero(g_drbg.V, sizeof(g_drbg.V));
-    secure_zero(g_drbg.last_block, sizeof(g_drbg.last_block));
-    g_drbg.reseed_counter = 0;
-    g_drbg.initialized = 0;
-    g_drbg.last_valid = 0;
+    *result = adl_aes256_ecb_encrypt(key, plaintext, ciphertext);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -1842,34 +1795,20 @@ static int kat_hkdf_sha384(void)
     return (memcmp(okm, KAT_HKDF384_OKM, 32) == 0) ? 0 : -1;
 }
 
-/* ── KAT: CTR_DRBG ──────────────────────────────────────────────────────── */
-/* Tests the AES-256-ECB primitive within the DRBG with known state.       */
-static int kat_drbg(void)
+/* ── KAT: AES-256-ECB ────────────────────────────────────────────────────── */
+/* Tests the AES-256-ECB primitive used by the SPARK DRBG.                 */
+static int kat_aes256_ecb(void)
 {
-    /* Save DRBG state (DRBG may already be initialized by adl_init) */
-    ctr_drbg_ctx saved;
-    memcpy(&saved, &g_drbg, sizeof(saved));
+    unsigned char key[32] = {0};
+    unsigned char pt[16] = {0};
+    unsigned char ct[16];
 
-    /* Set known state: Key=0, V=1, reseed=1 */
-    memset(g_drbg.Key, 0, 32);
-    memset(g_drbg.V, 0, 16);
-    g_drbg.V[15] = 1;
-    g_drbg.initialized = 1;
-    g_drbg.reseed_counter = 1;
+    if (adl_aes256_ecb_encrypt(key, pt, ct) != 1) return -1;
 
-    /* Generate 16 bytes */
-    unsigned char out[16];
-    int ret = adl_drbg_generate(out, 16);
-
-    /* Restore original DRBG state */
-    memcpy(&g_drbg, &saved, sizeof(saved));
-
-    if (ret != 0) return -1;
-
-    /* Verify non-zero output (proves AES-ECB + update work correctly) */
+    /* Verify non-zero output */
     int all_zero = 1;
     for (int i = 0; i < 16; i++) {
-        if (out[i] != 0) { all_zero = 0; break; }
+        if (ct[i] != 0) { all_zero = 0; break; }
     }
     if (all_zero) return -1;
 
@@ -2118,12 +2057,12 @@ int adl_run_powerup_self_tests(char *err_buf)
         int (*fn)(void);
     } tests[] = {
         {"AES-256-GCM",         kat_aes256_gcm},
+        {"AES-256-ECB",         kat_aes256_ecb},
         {"SHA-384",             kat_sha384},
         {"SHA-512",             kat_sha512},
         {"HKDF-SHA256",         kat_hkdf_sha256},
         {"HKDF-SHA384",         kat_hkdf_sha384},
         {"HMAC-SHA384",         kat_hmac_sha384},
-        {"CTR_DRBG",            kat_drbg},
         {"Binary Integrity",    kat_binary_integrity},
         {"Source Integrity",    kat_source_integrity},
     };

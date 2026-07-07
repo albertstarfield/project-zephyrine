@@ -36,8 +36,8 @@
 #include <stddef.h>
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */
-#define ADL_KEY_SIZE        32    /* 256-bit AES key */
-#define ADL_KEY_HEX_SIZE    65    /* 64 hex chars + null terminator */
+#define ADL_KEY_SIZE        64    /* 512-bit master key (HKDF-SHA512 output) */
+#define ADL_KEY_HEX_SIZE    129   /* 128 hex chars + null terminator */
 #define ADL_NONCE_SIZE      12    /* 96-bit random nonce for GCM */
 #define ADL_TAG_SIZE        16    /* 128-bit GCM auth tag */
 #define ADL_ERROR_SIZE      256   /* max error message length */
@@ -141,6 +141,39 @@ int adl_decrypt_string(const char *sub_key_hex,
                        char *plaintext, size_t *plaintext_len,
                        char *err_buf);
 
+/*
+ * adl_encrypt_raw: AES-256-GCM encrypt plaintext → raw binary ciphertext.
+ *
+ * sub_key_hex:   64-char hex-encoded 32-byte sub-key.
+ * plaintext:     Raw bytes to encrypt.
+ * plaintext_len: Length of plaintext.
+ * ciphertext:    Output buffer (must be plaintext_len + ADL_NONCE_SIZE + ADL_TAG_SIZE).
+ * ciphertext_len: Out: actual length (always plaintext_len + 28 on success).
+ * err_buf:       256-byte error buffer.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int adl_encrypt_raw(const char *sub_key_hex,
+                    const unsigned char *plaintext, size_t plaintext_len,
+                    unsigned char *ciphertext, size_t *ciphertext_len,
+                    char *err_buf);
+
+/*
+ * adl_decrypt_raw: AES-256-GCM decrypt raw binary ciphertext → plaintext.
+ *
+ * sub_key_hex:   64-char hex-encoded 32-byte sub-key.
+ * ciphertext:    Raw binary ciphertext (from adl_encrypt_raw).
+ * ciphertext_len:Length of ciphertext.
+ * plaintext:     Output buffer (must be ciphertext_len - 28).
+ * plaintext_len: Out: actual plaintext length.
+ * err_buf:       256-byte error buffer.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int adl_decrypt_raw(const char *sub_key_hex,
+                    const unsigned char *ciphertext, size_t ciphertext_len,
+                    unsigned char *plaintext, size_t *plaintext_len,
+                    char *err_buf);
 
 /* ── Ada FFI Wrappers ───────────────────────────────────────────────────────── */
 
@@ -198,18 +231,34 @@ char *adl_derive_master_key_cstr(const char *integrity_hash,
 /* ── FIPS 140-3 §5.1 / SP 800-90A — CTR_DRBG ────────────────────────────── */
 
 /*
- * Deterministic Random Bit Generator (CTR_DRBG with AES-256).
- * Replaces direct RAND_bytes() calls with a FIPS-approved DRBG.
- *
- * adl_drbg_init:     Seed the DRBG from OS entropy. Call once at startup.
- * adl_drbg_generate: Generate random bytes (replaces RAND_bytes).
- * adl_drbg_reseed:   Reseed with fresh entropy.
- * adl_drbg_clear:    Zeroize DRBG state.
+ * Expose raw entropy gathering for SPARK DRBG instantiation.
+ * Returns 1 on success, 0 on failure.
+ */
+int adl_gather_entropy(unsigned char *buffer, size_t len);
+
+/*
+ * Expose AES-256-ECB primitive for SPARK CTR_DRBG update function.
+ * Returns 1 on success, 0 on failure.
+ */
+int adl_aes256_ecb_encrypt(const unsigned char key[32], 
+                           const unsigned char plaintext[16], 
+                           unsigned char ciphertext[16]);
+
+/*
+ * SPARK DRBG functions exported to C.
  */
 int adl_drbg_init(size_t entropy_bytes, const char *pers_string, char *err_buf);
 int adl_drbg_generate(unsigned char *out, size_t len);
-int adl_drbg_reseed(const unsigned char *additional_input, size_t input_len);
 void adl_drbg_clear(void);
+
+/* 
+ * SPARK-friendly FFI wrappers (returns void, uses out-parameters for result)
+ */
+void adl_gather_entropy_wrapper(unsigned char *buffer, size_t len, int *result);
+void adl_aes256_ecb_encrypt_wrapper(const unsigned char key[32], 
+                                    const unsigned char plaintext[16], 
+                                    unsigned char ciphertext[16],
+                                    int *result);
 
 /* ── FIPS 140-3 §5.9 Self-Tests & InferiorParadoxical Anti-Tamper ────────── */
 

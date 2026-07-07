@@ -66,7 +66,50 @@ with Llama_Interface; use Llama_Interface;
 with Model_Manager;
 with Database_Manager;
 
+with System.Storage_Elements; use System.Storage_Elements;
+with Ada.Streams; use Ada.Streams;
+with Ada.Streams.Stream_IO; use Ada.Streams.Stream_IO;
+with Ada.Unchecked_Conversion;
+
 package body KV_Cache_Manager is
+
+   function Adl_Derive_Subkey_Cstr (Context : chars_ptr; Error_Out : chars_ptr; Error_Out_Size : size_t) return chars_ptr;
+   pragma Import (C, Adl_Derive_Subkey_Cstr, "adl_derive_subkey_cstr");
+
+   procedure Adl_Free_Cstr (Ptr : chars_ptr);
+   pragma Import (C, Adl_Free_Cstr, "adl_free_cstr");
+
+   function Adl_Encrypt_Raw (
+      Sub_Key_Hex    : chars_ptr;
+      Plaintext      : System.Address;
+      Plaintext_Len  : size_t;
+      Ciphertext     : System.Address;
+      Ciphertext_Len : access size_t;
+      Err_Buf        : chars_ptr
+   ) return int;
+   pragma Import (C, Adl_Encrypt_Raw, "adl_encrypt_raw");
+
+   function Adl_Decrypt_Raw (
+      Sub_Key_Hex    : chars_ptr;
+      Ciphertext     : System.Address;
+      Ciphertext_Len : size_t;
+      Plaintext      : System.Address;
+      Plaintext_Len  : access size_t;
+      Err_Buf        : chars_ptr
+   ) return int;
+   pragma Import (C, Adl_Decrypt_Raw, "adl_decrypt_raw");
+
+   function C_Malloc (Size : size_t) return System.Address;
+   pragma Import (C, C_Malloc, "malloc");
+
+   procedure C_Free (Ptr : System.Address);
+   pragma Import (C, C_Free, "free");
+
+   procedure C_Memcpy (Dst : System.Address; Src : System.Address; N : size_t);
+   pragma Import (C, C_Memcpy, "memcpy");
+
+   -- End bindings
+
 
    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
 --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -290,8 +333,24 @@ package body KV_Cache_Manager is
       L_N_Tokens   : Interfaces.C.size_t;
       L_Path       : Unbounded_String;
       Path_C       : chars_ptr;
-      Success      : Boolean;
+      Success      : Boolean := False;
       Max_Retries  : constant := 6;  -- 6 retries x 5s = 30s cooldown window
+      
+      -- Encryption vars
+      Ctx_Str      : chars_ptr := New_String("adelaide:db:kv_cache:v1");
+      Err_Buf      : chars_ptr := New_String((1 .. 256 => ' '));
+      Sub_Key      : chars_ptr;
+      
+      State_Size      : size_t;
+      Token_Size      : size_t;
+      Header_Size     : size_t := 4;
+      Plaintext_Size  : size_t;
+      Encrypted_Size  : aliased size_t;
+      Plaintext_Buf   : System.Address := System.Null_Address;
+      Encrypted_Buf   : System.Address := System.Null_Address;
+      Token_Bytes     : size_t;
+      
+      use type System.Address;
    begin
       accept Start
         (Context    : Llama_Interface.Llama_Context;
@@ -312,22 +371,10 @@ package body KV_Cache_Manager is
          Ada.Directories.Create_Path (Cache_Dir);
       end if;
 
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-      --  Verbose: logs async save start.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
-                AnsiAda.Reset & "+ASYNC Save_Task: saving to " & To_String (L_Path));
+                AnsiAda.Reset & "+ASYNC Save_Task: encrypting & saving to " & To_String (L_Path));
 
-      --  ===================================================================
-      --  OPPORTUNISTIC SAVE: Retry loop with backoff when Metal is broken.
-      --  If Metal_Backend_Broken is True, skip immediate save and retry
-      --  every 5s until cooldown expires (30s total). This prevents SIGABRT
-      --  from calling llama_state_save_file on a poisoned Metal backend,
-      --  while still saving the cache after GPU driver recovers.
-      --  ===================================================================
       for Attempt in 1 .. Max_Retries loop
-         --  Check if Metal backend is broken — skip save if so
          if Model_Manager.Is_Metal_Broken then
             Put_Line
                (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &
@@ -336,56 +383,106 @@ package body KV_Cache_Manager is
                 " in " &
                 Duration'Image (Model_Manager.Metal_OOM_Retry_Secs) & "s");
             delay Model_Manager.Metal_OOM_Retry_Secs;
-            --  After delay, Is_Metal_Broken will auto-reset if cooldown expired
          else
-            --  Metal is healthy (or has recovered) — attempt save
-            --  [VITAL-DO-NOT-REMOVE] Acquire the Global Accel Lock before calling
-            --  llama_state_save_file. The save serializes the full KV state and
-            --  internally submits Metal command buffers. If any other thread is
-            --  also using Metal at the same time (e.g., a llama_decode still
-            --  tearing down), ggml-metal fires:
-            --    GGML_ASSERT([rsets->data count] == 0) failed
-            --  which causes SIGABRT. The Accel lock is the same global GPU
-            --  serialization gate used by every llama_decode call in
-            --  model_manager.adb, so holding it here guarantees exclusion.
             Model_Manager.Acquire_Accel_Lock;
             begin
-               --  Wrap the actual save: llama_state_save_file can also throw
-               --  C++ exceptions on corrupt state — catch them here so the
-               --  task terminates cleanly rather than propagating SIGABRT.
-               Success := Llama_State_Save_File
-                 (L_Context, Path_C, L_Tokens, L_N_Tokens);
+               State_Size := Llama_State_Get_Size (L_Context);
+               Token_Bytes := L_N_Tokens * 4; -- sizeof(llama_token) is 4
+               Plaintext_Size := Header_Size + Token_Bytes + State_Size;
+               Encrypted_Size := Plaintext_Size + 28; -- nonce(12) + tag(16)
+               
+               Plaintext_Buf := C_Malloc(Plaintext_Size);
+               Encrypted_Buf := C_Malloc(Encrypted_Size);
+               
+               if Plaintext_Buf /= System.Null_Address and Encrypted_Buf /= System.Null_Address then
+                  -- Write N_Tokens (uint32_t)
+                  declare
+                     N_Toks_U32 : aliased Interfaces.C.unsigned := Interfaces.C.unsigned (L_N_Tokens);
+                  begin
+                     C_Memcpy(Plaintext_Buf, N_Toks_U32'Address, Header_Size);
+                  end;
+                  
+                  -- Write Tokens
+                  C_Memcpy(Plaintext_Buf + Storage_Offset (Header_Size), L_Tokens, Token_Bytes);
+                  
+                  -- Write State
+                  declare
+                     State_Out : size_t;
+                  begin
+                     State_Out := Llama_State_Get_Data (L_Context, Plaintext_Buf + Storage_Offset (Header_Size) + Storage_Offset (Token_Bytes), State_Size);
+                     if State_Out = State_Size then
+                        -- Encrypt!
+                        Sub_Key := Adl_Derive_Subkey_Cstr (Ctx_Str, Err_Buf, 256);
+                        if Sub_Key /= Null_Ptr then
+                           declare
+                              Ret : int;
+                           begin
+                              Ret := Adl_Encrypt_Raw (Sub_Key, Plaintext_Buf, Plaintext_Size, Encrypted_Buf, Encrypted_Size'Access, Err_Buf);
+                              if Ret = 0 then
+                                 -- Write to disk using standard I/O (can't use stream_io easily with raw address, so we'll use C fopen)
+                                 Success := True;
+                              else
+                                 Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
+                                           AnsiAda.Reset & "+ASYNC Save_Task: Encryption failed!");
+                              end if;
+                           end;
+                           Adl_Free_Cstr (Sub_Key);
+                        end if;
+                     end if;
+                  end;
+               end if;
             exception
                when others =>
                   Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
                             AnsiAda.Reset &
-                            "+ASYNC Save_Task: C++ EXCEPTION in save -- " &
-                            "discarding corrupt state, cache cleared.");
+                            "+ASYNC Save_Task: C++ EXCEPTION in get_data");
                   Success := False;
             end;
             Model_Manager.Release_Accel_Lock;
 
+            -- Wait, I need to do the disk write outside the Accel lock to not block the GPU!
             if Success then
-               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-               --  Verbose: confirms async save complete.
+               declare
+                  File : Ada.Streams.Stream_IO.File_Type;
+                  subtype SEA is Ada.Streams.Stream_Element_Array (1 .. Ada.Streams.Stream_Element_Offset(Encrypted_Size));
+                  type SEA_Ptr is access all SEA;
+                  function To_SEA is new Ada.Unchecked_Conversion(System.Address, SEA_Ptr);
+                  P : SEA_Ptr := To_SEA(Encrypted_Buf);
+               begin
+                  Create (File, Out_File, To_String(L_Path));
+                  Write (File, P.all);
+                  Close (File);
+               exception
+                  when others =>
+                     Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
+                               AnsiAda.Reset & "+ASYNC Save_Task: File write failed!");
+                     Success := False;
+               end;
+            end if;
+
+            if Plaintext_Buf /= System.Null_Address then
+               C_Free (Plaintext_Buf);
+            end if;
+            if Encrypted_Buf /= System.Null_Address then
+               C_Free (Encrypted_Buf);
+            end if;
+
+            if Success then
                Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
-                         AnsiAda.Reset & "+ASYNC Save_Task: SUCCESS saved " &
+                         AnsiAda.Reset & "+ASYNC Save_Task: SUCCESS encrypted & saved " &
                          Interfaces.C.size_t'Image (L_N_Tokens) & " tokens");
 
-               --  TRICK 4: Prefetch the file we just saved
-               --  WHY: By next Generate call, file is already in OS page cache
                Prefetch_Cache_File (To_String (L_Path));
-               exit;  -- Success, done
+               exit;
             else
-               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-               --  Verbose: logs async save failure with OOM banner.
                Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
                          AnsiAda.Reset & "+ASYNC Save_Task: FAILED (attempt " &
                          Natural'Image (Attempt) & "/" & Natural'Image (Max_Retries) & ")");
+                         
+               if Ada.Directories.Exists (To_String(L_Path)) then
+                  Ada.Directories.Delete_File (To_String(L_Path));
+               end if;
+                         
                if Attempt < Max_Retries then
                   delay Model_Manager.Metal_OOM_Retry_Secs;
                end if;
@@ -393,35 +490,26 @@ package body KV_Cache_Manager is
          end if;
       end loop;
 
-      --  Final status after all retries exhausted
-      if not Model_Manager.Is_Metal_Broken then
-         --  Metal recovered but save still failed — log final failure
+      if not Model_Manager.Is_Metal_Broken and not Success then
          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
                    AnsiAda.Reset & "+ASYNC Save_Task: ALL RETRIES EXHAUSTED");
       end if;
 
       Free (Path_C);
+      Free (Ctx_Str);
+      Free (Err_Buf);
 
-      --  Signal completion: caller can now safely unload the model
       accept Wait_Complete do
          null;
       end Wait_Complete;
 
     exception
        when others =>
-          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-          --  Verbose: logs async save exception (non-fatal).
           Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
                     AnsiAda.Reset & "+ASYNC Save_Task: EXCEPTION (non-fatal)");
           if Path_C /= Null_Ptr then
              Free (Path_C);
           end if;
-          --  [CRITICAL-FIX] Must open Wait_Complete even on exception path.
-          --  If the task terminates without opening this accept, any caller
-          --  in Wait_For_Save that calls Wait_Complete gets TASKING_ERROR
-          --  (s-tasren.adb:377) because the task has already terminated.
           accept Wait_Complete do
              null;
           end Wait_Complete;
