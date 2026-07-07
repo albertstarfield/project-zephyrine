@@ -72,6 +72,59 @@ Before contributing, you must identify the DAL of the module you are modifying. 
     * **Standard GenAI Policy:** Subject to the "300-Line Limit" and citation rules in Section 2.3.
     * **Failure Consequence:** "Repeated Input" errors, hallucinations, application crash. (Caught by DAL B).
 
+## Section 1.3: FIPS 140-3 Cryptographic Compliance
+
+The Adelaide crypto subsystem targets compliance with **NIST FIPS PUB 140-3** (Security Requirements for Cryptographic Modules). This section summarizes what every contributor must know when modifying crypto-related code.
+
+### Affected Files
+
+Any change to the following files triggers FIPS 140-3 review:
+
+| File | Role | FIPS Relevance |
+|------|------|---------------|
+| `src/adl_crypto.c` / `.h` | C crypto shim — AES-256-GCM, HKDF, DRBG | §5.1 Algorithms, §5.8 Key Mgmt, §5.9 Self-Tests |
+| `src/adelaide_crypto.ads/.adb` | Ada crypto wrapper — FFI boundary | §5.2 Interfaces |
+| `src/master_key_store.ads/.adb` | SPARK-verified key storage | §5.8.7 Key Storage, §5.8.8 Zeroization |
+| `src/key_derivation.ads/.adb` | HKDF key derivation | §5.8.2 Key Generation, §5.8.3 Key Establishment |
+| `src/system_integrity.ads/.adb` | Integrity hash computation | §5.9(b) Software Integrity Test |
+| `src/api_key_manager.ads/.adb` | API key validation, roles | §5.3 Roles, Services, Authentication |
+| `src/shutdown_manager.ads/.adb` | Graceful shutdown | §5.8.8 Automated Zeroization |
+
+### Contributor Rules for Crypto Code
+
+1. **No new cryptographic algorithm** may be added without a documented FIPS approval status. Non-approved algorithms (e.g., LSH, CRC-32) must be isolated and clearly separated from security-critical operations.
+
+2. **Self-tests must be maintained.** Every cryptographic algorithm must have a corresponding Known Answer Test (KAT) in `adl_crypto.c`. If you add or modify an algorithm, you **must** add or update its KAT and verify the power-up self-test still passes.
+
+3. **DRBG changes require review.** The module uses CTR_DRBG (SP 800-90A). If you add a new source of randomness, it must be drawn from the approved DRBG, not from `RAND_bytes()` or OS entropy directly.
+
+4. **Key material zeroization is mandatory.** Any function that handles plaintext key material in local variables must call `secure_zero()` (C) or `Clear_Key` (Ada) before returning. This applies to all code paths, including error exits.
+
+5. **Constant-time comparisons required** for security-sensitive values: authentication tags, API keys, HMAC outputs. Use `CRYPTO_memcmp()` (OpenSSL) or a local constant-time comparison function. Do NOT use `memcmp()` or `strcmp()` for these.
+
+6. **No plaintext keys outside the module boundary.** Keys may never be written to disk, logged, or transmitted. The sole exception is the master key export for backup, which must be encrypted under a user-supplied passphrase.
+
+7. **FIPS mode must be respected.** When the module is in FIPS mode:
+   - Only approved algorithms may execute
+   - API key enforcement is mandatory
+   - Self-tests run on every power-up
+   - Non-fatal errors must be logged as audit events
+
+### Quick Checklist for Crypto PRs
+
+Before submitting a PR touching crypto code, verify:
+
+- [ ] All algorithms used are FIPS-approved (list in `documentation/FIPS-140-3-GAP-ANALYSIS.md`)
+- [ ] Power-up KAT covers any new or modified algorithm
+- [ ] Continuous RNG test covers any new random generation
+- [ ] Key material is zeroized on all exit paths (including errors)
+- [ ] Security-sensitive comparisons are constant-time
+- [ ] FIPS mode toggle is respected (no bypass)
+- [ ] No plaintext keys leak to log, file, or network
+- [ ] Ada SPARK contracts updated if `master_key_store` or `integrity_utils` changed
+
+See `documentation/FIPS-140-3-GAP-ANALYSIS.md` for the full gap analysis and remediation plan.
+
 ## Issue and Requirement Tracking
 
 To ensure project resilience in cases where the `.git` history may be unavailable, all substantive changes must be linked to an issue or requirement ID.
