@@ -185,7 +185,23 @@ char *adl_decrypt_field_cstr(const char *sub_key_hex, const char *ciphertext_hex
  */
 void adl_free_cstr(char *ptr);
 
-/* ── FIPS 140-3 Self-Tests & InferiorParadoxical Anti-Tamper ───────────────── */
+/* ── FIPS 140-3 §5.1 / SP 800-90A — CTR_DRBG ────────────────────────────── */
+
+/*
+ * Deterministic Random Bit Generator (CTR_DRBG with AES-256).
+ * Replaces direct RAND_bytes() calls with a FIPS-approved DRBG.
+ *
+ * adl_drbg_init:     Seed the DRBG from OS entropy. Call once at startup.
+ * adl_drbg_generate: Generate random bytes (replaces RAND_bytes).
+ * adl_drbg_reseed:   Reseed with fresh entropy.
+ * adl_drbg_clear:    Zeroize DRBG state.
+ */
+int adl_drbg_init(size_t entropy_bytes, const char *pers_string, char *err_buf);
+int adl_drbg_generate(unsigned char *out, size_t len);
+int adl_drbg_reseed(const unsigned char *additional_input, size_t input_len);
+void adl_drbg_clear(void);
+
+/* ── FIPS 140-3 §5.9 Self-Tests & InferiorParadoxical Anti-Tamper ────────── */
 
 /*
  * InferiorParadoxical — Anti-tamper dead-man's switch.
