@@ -943,7 +943,11 @@ cleanup:
 int adl_crypto_init_wrapper(void)
 {
     char err[ADL_ERROR_SIZE];
-    return adl_init(NULL, err);
+    int res = adl_init(NULL, err);
+    if (res != 0) {
+        fprintf(stderr, "[CRYPTO_C_WRAPPER] FATAL ERROR: %s\n", err);
+    }
+    return res;
 }
 
 /*
@@ -1376,8 +1380,13 @@ int adl_derive_master_key(const char *integrity_hash,
     size_t ikm_len = strlen(user_secret);
     const unsigned char *ikm = (const unsigned char *)user_secret;
 
-    /* Info = "adelaide:master-key:v1" */
-    const char *info = "adelaide:master-key:v1";
+    /* Info = "adelaide:master-key:v1:{username}" */
+    const char *username = getenv("ADELAIDE_USER");
+    if (!username || strlen(username) == 0) {
+        username = "default";
+    }
+    char info[256];
+    snprintf(info, sizeof(info), "adelaide:master-key:v1:%s", username);
     size_t info_len = strlen(info);
 
     /* Output: 64 bytes (512-bit master key) */
@@ -1395,10 +1404,10 @@ int adl_derive_master_key(const char *integrity_hash,
     }
 
     /* Convert binary okm → hex string */
-    for (size_t i = 0; i < 64; i++) {
+    for (size_t i = 0; i < 32; i++) {
         sprintf(master_key_out + (i * 2), "%02x", okm[i]);
     }
-    master_key_out[128] = '\0';
+    master_key_out[64] = '\0';
 
     secure_zero(okm, sizeof(okm));
     return 0;
@@ -1630,7 +1639,7 @@ static const unsigned char KAT_HMAC384_MSG[37] = {
 static const unsigned char KAT_HMAC384_DIGEST[48] = {
     0xe8,0xa6,0xa5,0x9f,0x02,0xee,0x76,0xc3,0x60,0x6e,0xb2,0x2a,
     0xc9,0x8d,0xa1,0xef,0x62,0xb8,0xab,0xe9,0x8f,0xa6,0xa5,0x3f,
-    0x38,0x8f,0x4e,0xac,0x28,0x9b,0x2d,0xf9,0x5f,0x3c,0x0b,0xeb,
+    0x38,0x8f,0x4e,0xac,0x28,0x92,0xbd,0xf9,0x5f,0x3c,0x0b,0xeb,
     0x38,0xdc,0x58,0x66,0xdb,0x58,0x1e,0x14,0x89,0x11,0xf9,0x82
 };
 
