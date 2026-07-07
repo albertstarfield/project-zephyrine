@@ -24,6 +24,96 @@ from adelaide_crypto import load_master_key, migrate_all_to_aad  # noqa: E402
 # Integrity test plaintext for key verification
 INTEGRITY_TEST_PLAINTEXT = "--ADELAIDE-INTEGRITY-TEST--"
 
+# InferiorParadoxical — SHA-512 hardware profiling key (auto-decrypt key)
+#
+# TWO INDEPENDENT keys can decrypt the database (not combined):
+#   Key 1 — User password or recovery key  (user provides on prompt)
+#   Key 2 — InferiorParadoxical             (auto-derived from hardware profiling)
+#
+# InferiorParadoxical = SHA-512 of the hardware integrity hash.
+# On boot we try InferiorParadoxical first (full automation when environment
+# is trusted).  If that fails (hardware changed), fall back to user-password
+# prompt.  After successful password unlock, InferiorParadoxical is re-derived
+# from the current hardware state and the stored master-key is re-wrapped so
+# future boots can auto-decrypt again.
+#
+# Stored in system_state as AES-256-GCM-wrapped master key, encrypted under a
+# sub-key derived from the InferiorParadoxical hash.
+INFERIOR_PARADOXICAL_KEY = "inferior_paradoxical_master_key"
+
+def _compute_inferior_paradoxical_hash(integrity_hash):
+    """Compute InferiorParadoxical = SHA-512(integrity_hash) — pure hardware auto-key."""
+    return hashlib.sha512(integrity_hash.encode("utf-8")).hexdigest()
+
+
+def _store_inferior_paradoxical_wrapped_key(master_key_hex, integrity_hash):
+    """
+    Wrap master_key under InferiorParadoxical and store in system_state.
+
+    Stores AES-256-GCM(ip_subkey, master_key_hex) so that on future boots
+    the master_key can be auto-recovered without user interaction as long as
+    the hardware environment hasn't changed.
+    """
+    from adelaide_crypto import encrypt_field, derive_sub_key
+
+    ip_hash = _compute_inferior_paradoxical_hash(integrity_hash)
+    ip_subkey = derive_sub_key(ip_hash, "adelaide:auto:wrapper:v1")
+    encrypted = encrypt_field(ip_subkey, master_key_hex)
+    try:
+        import sqlite3
+
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        if not os.path.exists(db_path):
+            return False
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "INSERT OR REPLACE INTO system_state (key, value) VALUES (?, ?)",
+            (INFERIOR_PARADOXICAL_KEY, encrypted),
+        )
+        conn.commit()
+        conn.close()
+        print("[KEY-DERIV] InferiorParadoxical wrapped key stored")
+        return True
+    except Exception as e:
+        print(f"[KEY-DERIV] Failed to store InferiorParadoxical wrapped key: {e}")
+        return False
+
+
+def _try_inferior_paradoxical_auto_decrypt(integrity_hash):
+    """
+    Try to auto-recover master_key using InferiorParadoxical hardware key.
+
+    Returns master_key_hex on success, None on failure (hardware changed
+    or first boot).
+    """
+    from adelaide_crypto import decrypt_field, derive_sub_key
+
+    ip_hash = _compute_inferior_paradoxical_hash(integrity_hash)
+    ip_subkey = derive_sub_key(ip_hash, "adelaide:auto:wrapper:v1")
+    try:
+        import sqlite3
+
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        if not os.path.exists(db_path):
+            return None
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute(
+            "SELECT value FROM system_state WHERE key = ?",
+            (INFERIOR_PARADOXICAL_KEY,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        master_key = decrypt_field(ip_subkey, row[0])
+        # Valid master_key is 64 hex chars (256-bit)
+        if master_key and len(master_key) == 64:
+            print("[KEY-DERIV] InferiorParadoxical auto-decrypt SUCCESS")
+            return master_key
+        return None
+    except Exception:
+        return None
+
 # ── KISS Mode ─────────────────────────────────────────────────────────────
 IS_KISS = "--kiss" in sys.argv
 
@@ -81,6 +171,25 @@ def _gui_available():
     return _gui_available._cached
 
 
+def _password_entropy(password):
+    """Calculate password entropy in bits (lower bound) based on character pool."""
+    import math, string
+    if not password:
+        return 0
+    pool = 0
+    if any(c in string.ascii_lowercase for c in password):
+        pool += 26
+    if any(c in string.ascii_uppercase for c in password):
+        pool += 26
+    if any(c in string.digits for c in password):
+        pool += 10
+    if any(c in string.punctuation for c in password):
+        pool += 33
+    if pool == 0:
+        return 0
+    return math.floor(len(password) * math.log2(pool))
+
+
 def _tk_password_dialog(title, prompt, confirm=False):
     """Show tkinter password dialog. Returns password string or None."""
     import tkinter as tk
@@ -95,8 +204,8 @@ def _tk_password_dialog(title, prompt, confirm=False):
     dialog.resizable(False, False)
     dialog.grab_set()
 
-    # Center on screen
-    w, h = 380, 220 if confirm else 180
+    # Center on screen (taller when confirm mode has entropy + tip labels)
+    w, h = 380, 270 if confirm else 180
     sx = (dialog.winfo_screenwidth() - w) // 2
     sy = (dialog.winfo_screenheight() - h) // 2
     dialog.geometry(f"{w}x{h}+{sx}+{sy}")
@@ -107,6 +216,7 @@ def _tk_password_dialog(title, prompt, confirm=False):
     entry_bg = "#16213e"
     btn_bg = "#0f3460"
     accent = "#e94560"
+    green = "#4ecca3"
     dialog.configure(bg=bg)
 
     tk.Label(dialog, text=prompt, bg=bg, fg=fg, font=("Helvetica", 13)).pack(
@@ -128,6 +238,21 @@ def _tk_password_dialog(title, prompt, confirm=False):
     pw_entry.pack(pady=4, padx=20)
     pw_entry.focus_set()
 
+    # Entropy label + tip (only on password creation — confirm=True)
+    entropy_label = None
+    tip_label = None
+    if confirm:
+        entropy_label = tk.Label(
+            dialog, text="Entropy: 0 bits", bg=bg, fg=fg, font=("Helvetica", 10)
+        )
+        entropy_label.pack(pady=(2, 0))
+        tip_label = tk.Label(
+            dialog,
+            text="Use lowercase, uppercase, numbers, and/or symbols.",
+            bg=bg, fg="#777777", font=("Helvetica", 8), wraplength=340,
+        )
+        tip_label.pack(pady=(1, 0))
+
     confirm_var = None
     confirm_entry = None
     if confirm:
@@ -147,25 +272,8 @@ def _tk_password_dialog(title, prompt, confirm=False):
             relief="flat",
         )
         confirm_entry.pack(pady=4, padx=20)
-        confirm_entry.focus_set()
 
     result = [None]
-
-    def on_ok(_event=None):
-        pw = pw_var.get()
-        if confirm:
-            pw2 = confirm_var.get()
-            if pw != pw2:
-                # Flash error
-                confirm_entry.configure(bg="#5c1a1a")
-                dialog.after(600, lambda: confirm_entry.configure(bg=entry_bg))
-                return
-        result[0] = pw
-        dialog.destroy()
-
-    def on_cancel():
-        result[0] = None
-        dialog.destroy()
 
     btn_frame = tk.Frame(dialog, bg=bg)
     btn_frame.pack(pady=(10, 8))
@@ -173,7 +281,7 @@ def _tk_password_dialog(title, prompt, confirm=False):
     ok_btn = tk.Button(
         btn_frame,
         text="OK",
-        command=on_ok,
+        command=lambda: None,  # reassigned after definition
         bg=btn_bg,
         fg=fg,
         activebackground=accent,
@@ -182,13 +290,14 @@ def _tk_password_dialog(title, prompt, confirm=False):
         width=10,
         relief="flat",
         cursor="hand2",
+        state="disabled" if confirm else "normal",
     )
     ok_btn.pack(side="left", padx=6)
 
     cancel_btn = tk.Button(
         btn_frame,
         text="Cancel",
-        command=on_cancel,
+        command=lambda: None,  # reassigned
         bg=entry_bg,
         fg=fg,
         activebackground=accent,
@@ -199,6 +308,46 @@ def _tk_password_dialog(title, prompt, confirm=False):
         cursor="hand2",
     )
     cancel_btn.pack(side="left", padx=6)
+
+    def on_ok(_event=None):
+        pw = pw_var.get()
+        if confirm:
+            pw2 = confirm_var.get()
+            if pw != pw2:
+                confirm_entry.configure(bg="#5c1a1a")
+                dialog.after(600, lambda: confirm_entry.configure(bg=entry_bg))
+                return
+            if _password_entropy(pw) < 20:
+                return  # blocked — OK button is disabled anyway, but safety net
+        result[0] = pw
+        dialog.destroy()
+
+    def on_cancel():
+        result[0] = None
+        dialog.destroy()
+
+    # Wire up button commands
+    ok_btn.configure(command=on_ok)
+    cancel_btn.configure(command=on_cancel)
+
+    # Live entropy update on password creation
+    def on_pw_changed(*_args):
+        if not confirm or entropy_label is None:
+            return
+        pw = pw_var.get()
+        bits = _password_entropy(pw)
+        entropy_label.configure(text=f"Entropy: {bits} bits")
+        if bits < 20:
+            entropy_label.configure(fg=accent)  # red
+            tip_label.configure(fg=accent, text="Make stronger password! Use lowercase, uppercase, numbers, and/or symbols.")
+            ok_btn.configure(state="disabled")
+        else:
+            entropy_label.configure(fg=green)  # green
+            tip_label.configure(fg="#777777", text="Use lowercase, uppercase, numbers, and/or symbols.")
+            ok_btn.configure(state="normal")
+
+    if confirm:
+        pw_var.trace_add("write", on_pw_changed)
 
     dialog.bind("<Return>", on_ok)
     dialog.bind("<Escape>", lambda e: on_cancel())
@@ -269,17 +418,31 @@ def prompt_kiss_password(is_first_boot=False):
         _term_print("  You'll need it every time Adelaide starts.")
         _term_print("")
 
-        # Create password (getpass writes to fd 2 by default, which is the terminal)
-        password = getpass.getpass("  Create password: ", stream=term_stderr)
-        if not password:
-            _term_print("  Password cannot be empty.")
-            return None
+        # Create password with entropy check (loop until strong enough)
+        while True:
+            password = getpass.getpass("  Create password: ", stream=term_stderr)
+            if not password:
+                _term_print("  Password cannot be empty.")
+                return None
 
-        # Confirm password
-        confirm = getpass.getpass("  Confirm password: ", stream=term_stderr)
-        if password != confirm:
-            _term_print("  Passwords do not match.")
-            return None
+            bits = _password_entropy(password)
+            if bits < 20:
+                _term_print(
+                    f"  Make stronger password! (only {bits} bits — need at least 20)"
+                )
+                _term_print(
+                    "  Tip: Use lowercase, uppercase, numbers, and/or symbols together."
+                )
+                _term_print("")
+                continue
+
+            # Confirm password
+            confirm = getpass.getpass("  Confirm password: ", stream=term_stderr)
+            if password != confirm:
+                _term_print("  Passwords do not match.")
+                continue  # re-prompt both
+
+            break
 
         _term_print("  Password set.")
         _term_print("")
@@ -353,10 +516,448 @@ def _tk_info_dialog(title, message):
     root.destroy()
 
 
+# ── InferiorParadoxical UUID — TPM / Secure Enclave Storage ──────────────
+
+def _ip_tpm_store(uuid_str):
+    """Store InferiorParadoxical UUID in TPM2 NVRAM (Linux)."""
+    import subprocess, tempfile, os, time
+    nv_index = "0x1500000"
+    try:
+        # Try to undefine first (ignore failure if not exist)
+        subprocess.run(["tpm2_nvundefine", "-C", "o", nv_index],
+                       capture_output=True, timeout=5)
+    except Exception:
+        pass
+    time.sleep(0.2)
+    try:
+        subprocess.run(
+            ["tpm2_nvdefine", "-C", "o", "-s", "64",
+             "-a", "ownerread|ownerwrite", nv_index],
+            capture_output=True, timeout=5, check=True,
+        )
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".ip") as f:
+            f.write(uuid_str)
+            tmp = f.name
+        subprocess.run(
+            ["tpm2_nvwrite", "-C", "o", nv_index, "--data", tmp],
+            capture_output=True, timeout=5, check=True,
+        )
+        os.unlink(tmp)
+        return True
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except Exception:
+            pass
+        return False
+
+
+def _ip_tpm_read():
+    """Read InferiorParadoxical UUID from TPM2 NVRAM (Linux)."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["tpm2_nvread", "-C", "o", "0x1500000", "-s", "64"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _ip_sep_store(uuid_str):
+    """Store InferiorParadoxical UUID in macOS Keychain (SEP-backed)."""
+    import subprocess
+    try:
+        # -U = update if exists
+        subprocess.run(
+            ["security", "add-generic-password",
+             "-s", "AdelaideZephyrineSystem",
+             "-a", "inferior_paradoxical",
+             "-w", uuid_str,
+             "-U"],
+            capture_output=True, timeout=5, check=True,
+        )
+        return True
+    except Exception:
+        # Try keyring library as fallback
+        try:
+            import keyring
+            keyring.set_password("AdelaideZephyrineSystem", "inferior_paradoxical", uuid_str)
+            return True
+        except Exception:
+            return False
+
+
+def _ip_sep_read():
+    """Read InferiorParadoxical UUID from macOS Keychain (SEP-backed)."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password",
+             "-s", "AdelaideZephyrineSystem",
+             "-a", "inferior_paradoxical",
+             "-w"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    # Try keyring library as fallback
+    try:
+        import keyring
+        val = keyring.get_password("AdelaideZephyrineSystem", "inferior_paradoxical")
+        if val:
+            return val
+    except Exception:
+        pass
+    return None
+
+
+def _get_inferior_paradoxical_uuid():
+    """
+    Get or create InferiorParadoxical UUID.
+    
+    Priority:
+      1. Read existing UUID from TPM2 NVRAM (Linux) or SEP Keychain (macOS)
+      2. If not found, generate new UUID and store in available secure hardware
+      3. Fallback to file storage if no TPM/SEP available
+    """
+
+    # Try TPM (Linux)
+    if platform.system() == "Linux":
+        uuid_str = _ip_tpm_read()
+        if uuid_str:
+            return uuid_str
+
+    # Try SEP (macOS)
+    if platform.system() == "Darwin":
+        uuid_str = _ip_sep_read()
+        if uuid_str:
+            return uuid_str
+
+    # Fallback: read from system_state database
+    try:
+        import sqlite3
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        if os.path.exists(db_path):
+            conn = sqlite3.connect(db_path)
+            cursor = conn.execute(
+                "SELECT value FROM system_state WHERE key = 'inferior_paradoxical_uuid'"
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                return row[0]
+    except Exception:
+        pass
+
+    # Fallback: read from file
+    uuid_file = os.path.join(BASE_DIR, "config", ".inferior_paradoxical_uuid")
+    try:
+        if os.path.exists(uuid_file):
+            with open(uuid_file) as f:
+                return f.read().strip()
+    except Exception:
+        pass
+
+    # Not found anywhere — generate new UUID
+    import secrets
+    uuid_str = secrets.token_hex(16)  # 128-bit random
+
+    # Store in available secure hardware
+    stored = False
+    if platform.system() == "Linux":
+        stored = _ip_tpm_store(uuid_str)
+        if stored:
+            print("[KEY-DERIV] InferiorParadoxical UUID stored in TPM2 NVRAM")
+    elif platform.system() == "Darwin":
+        stored = _ip_sep_store(uuid_str)
+        if stored:
+            print("[KEY-DERIV] InferiorParadoxical UUID stored in macOS Keychain (SEP)")
+
+    # If TPM/SEP not available, store in system_state DB as fallback
+    if not stored:
+        try:
+            import sqlite3
+            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+            if os.path.exists(db_path):
+                conn = sqlite3.connect(db_path)
+                conn.execute(
+                    "INSERT OR REPLACE INTO system_state (key, value) VALUES ('inferior_paradoxical_uuid', ?)",
+                    (uuid_str,),
+                )
+                conn.commit()
+                conn.close()
+                stored = True
+                print("[KEY-DERIV] InferiorParadoxical UUID stored in system_state (fallback)")
+        except Exception:
+            pass
+
+    # Last-resort file fallback
+    if not stored:
+        try:
+            os.makedirs(os.path.join(BASE_DIR, "config"), exist_ok=True)
+            with open(uuid_file, "w") as f:
+                f.write(uuid_str)
+            print("[KEY-DERIV] InferiorParadoxical UUID stored in config/.inferior_paradoxical_uuid (file fallback)")
+        except Exception:
+            print("[KEY-DERIV] WARNING: Could not persist InferiorParadoxical UUID")
+
+    return uuid_str
+
+
+# ── InferiorParadoxical Signature — static identity in TPM/SEP ──────────
+
+def _ip_signature_store(sig_hash):
+    """Store static InferiorParadoxical signature in TPM2 NVRAM (Linux)."""
+    import subprocess, tempfile, os, time
+    nv_index = "0x1500001"
+    try:
+        subprocess.run(["tpm2_nvundefine", "-C", "o", nv_index],
+                       capture_output=True, timeout=5)
+    except Exception:
+        pass
+    time.sleep(0.2)
+    try:
+        subprocess.run(
+            ["tpm2_nvdefine", "-C", "o", "-s", "128",
+             "-a", "ownerread|ownerwrite", nv_index],
+            capture_output=True, timeout=5, check=True,
+        )
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".ipsig") as f:
+            f.write(sig_hash)
+            tmp = f.name
+        subprocess.run(
+            ["tpm2_nvwrite", "-C", "o", nv_index, "--data", tmp],
+            capture_output=True, timeout=5, check=True,
+        )
+        os.unlink(tmp)
+        return True
+    except Exception:
+        try: os.unlink(tmp)
+        except Exception: pass
+        return False
+
+
+def _ip_signature_tpm_read():
+    """Read static InferiorParadoxical signature from TPM2 NVRAM (Linux)."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["tpm2_nvread", "-C", "o", "0x1500001", "-s", "128"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _ip_signature_sep_store(sig_hash):
+    """Store static InferiorParadoxical signature in macOS Keychain (SEP)."""
+    import subprocess
+    try:
+        subprocess.run(
+            ["security", "add-generic-password",
+             "-s", "AdelaideZephyrineSystem",
+             "-a", "inferior_paradoxical_signature",
+             "-w", sig_hash,
+             "-U"],
+            capture_output=True, timeout=5, check=True,
+        )
+        return True
+    except Exception:
+        try:
+            import keyring
+            keyring.set_password("AdelaideZephyrineSystem",
+                                 "inferior_paradoxical_signature", sig_hash)
+            return True
+        except Exception:
+            return False
+
+
+def _ip_signature_sep_read():
+    """Read static InferiorParadoxical signature from macOS Keychain (SEP)."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password",
+             "-s", "AdelaideZephyrineSystem",
+             "-a", "inferior_paradoxical_signature",
+             "-w"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    try:
+        import keyring
+        return keyring.get_password("AdelaideZephyrineSystem",
+                                     "inferior_paradoxical_signature")
+    except Exception:
+        pass
+    return None
+
+
+def _get_ip_signature():
+    """
+    Get or create the static InferiorParadoxical signature.
+    
+    This is a one-time generated SHA-512 hash stored in TPM/SEP as a
+    read-only identity marker.  Unlike the InferiorParadoxical UUID (which
+    participates in key derivation), this is JUST a signature — accumulated
+    into integrity_hash but never used as a key.
+    
+    Only re-written if corrupted or missing.
+    """
+    import secrets
+
+    # Try TPM (Linux)
+    if platform.system() == "Linux":
+        sig = _ip_signature_tpm_read()
+        if sig and len(sig) == 128:
+            return sig
+
+    # Try SEP (macOS)
+    if platform.system() == "Darwin":
+        sig = _ip_signature_sep_read()
+        if sig and len(sig) == 128:
+            return sig
+
+    # Fallback: read from system_state
+    try:
+        import sqlite3
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        if os.path.exists(db_path):
+            conn = sqlite3.connect(db_path)
+            cursor = conn.execute(
+                "SELECT value FROM system_state WHERE key = 'inferior_paradoxical_signature'"
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if row and len(row[0]) == 128:
+                return row[0]
+    except Exception:
+        pass
+
+    # Fallback: read from file
+    sig_file = os.path.join(BASE_DIR, "config", ".inferior_paradoxical_signature")
+    try:
+        if os.path.exists(sig_file):
+            with open(sig_file) as f:
+                content = f.read().strip()
+                if len(content) == 128:
+                    return content
+    except Exception:
+        pass
+
+    # Not found anywhere — generate new SHA-512 signature
+    random_bytes = secrets.token_bytes(64)   # 512-bit random
+    sig_hash = hashlib.sha512(random_bytes).hexdigest()  # 128 hex chars
+
+    # Store in available secure hardware
+    stored = False
+    if platform.system() == "Linux":
+        stored = _ip_signature_store(sig_hash)
+        if stored:
+            print("[KEY-DERIV] InferiorParadoxical signature stored in TPM2 NVRAM")
+    elif platform.system() == "Darwin":
+        stored = _ip_signature_sep_store(sig_hash)
+        if stored:
+            print("[KEY-DERIV] InferiorParadoxical signature stored in macOS Keychain (SEP)")
+
+    # Fallback: system_state DB
+    if not stored:
+        try:
+            import sqlite3
+            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+            if os.path.exists(db_path):
+                conn = sqlite3.connect(db_path)
+                conn.execute(
+                    "INSERT OR REPLACE INTO system_state (key, value) VALUES ('inferior_paradoxical_signature', ?)",
+                    (sig_hash,),
+                )
+                conn.commit()
+                conn.close()
+                stored = True
+                print("[KEY-DERIV] InferiorParadoxical signature stored in system_state (fallback)")
+        except Exception:
+            pass
+
+    # Last-resort file fallback
+    if not stored:
+        try:
+            os.makedirs(os.path.join(BASE_DIR, "config"), exist_ok=True)
+            with open(sig_file, "w") as f:
+                f.write(sig_hash)
+            print("[KEY-DERIV] InferiorParadoxical signature stored in config/ (file fallback)")
+        except Exception:
+            print("[KEY-DERIV] WARNING: Could not persist InferiorParadoxical signature")
+
+    return sig_hash
+
+
+# ── Program Hash ─────────────────────────────────────────────────────────
+def compute_program_hash():
+    """
+    SHA-512 hash of the compiled binary — detects recompilation.
+    
+    If the binary exists, hashes the ELF/Mach-O directly.
+    Otherwise falls back to hashing Ada source + GPR files.
+    Returns hex string, or None on failure.
+    """
+    binary_path = os.path.join(BASE_DIR, "bin", "adelaide_zephyrine_system")
+    try:
+        if os.path.exists(binary_path):
+            with open(binary_path, "rb") as f:
+                return hashlib.sha512(f.read()).hexdigest()
+        else:
+            # Fallback: hash source tree
+            import glob
+            hasher = hashlib.sha512()
+            # Project source
+            patterns = [
+                os.path.join(BASE_DIR, "src", "*.adb"),
+                os.path.join(BASE_DIR, "src", "*.ads"),
+                os.path.join(BASE_DIR, "src", "*.c"),
+                os.path.join(BASE_DIR, "src", "*.h"),
+                os.path.join(BASE_DIR, "config", "*.gpr"),
+                os.path.join(BASE_DIR, "config", "*.ads"),
+                os.path.join(BASE_DIR, "config", "*.h"),
+                os.path.join(BASE_DIR, "python", "*.py"),
+                os.path.join(BASE_DIR, "ui", "*.py"),
+            ]
+            for pattern in patterns:
+                for fpath in sorted(glob.glob(pattern)):
+                    with open(fpath, "rb") as f:
+                        hasher.update(f.read())
+            # Also hash run.py itself
+            run_py = os.path.join(BASE_DIR, "run.py")
+            if os.path.exists(run_py):
+                with open(run_py, "rb") as f:
+                    hasher.update(f.read())
+            return hasher.hexdigest()
+    except Exception as e:
+        print(f"[KEY-DERIV] Failed to compute program hash: {e}")
+        return None
+
+
 # ── Hardware-Bound Key Derivation Functions ───────────────────────────────
 def compute_integrity_hash():
     """
     Compute hardware/binary integrity hash for key derivation.
+    
+    Accumulates:
+      - Hardware profiling data (system commands)
+      - InferiorParadoxical UUID key (SHA-512 of TPM/SEP-stored UUID)
+      - Program hash (binary version — forces re-auth on recompile)
+    
     Returns hex-encoded hash or None on failure.
     """
     import subprocess
@@ -433,8 +1034,93 @@ def compute_integrity_hash():
             except Exception:
                 pass
 
-        # Combine and hash
-        combined = "\n".join(hw_sources) + "\n" + "\n".join(bin_sources)
+        # ── Accumulate additional components ─────────────────────────────
+
+        # 1) InferiorParadoxical UUID → SHA-512 → key component
+        ip_uuid = _get_inferior_paradoxical_uuid()
+        ip_key = hashlib.sha512(ip_uuid.encode("utf-8")).hexdigest()
+
+        # 2) InferiorParadoxical static signature (from TPM/SEP — read-only identity)
+        ip_signature = _get_ip_signature()
+
+        # 3) TPM2 / Secure Enclave hardware identity
+        tpm_hw_id = ""
+        try:
+            if platform.system() == "Linux":
+                results = subprocess.run(
+                    "cat /sys/class/tpm/tpm0/device/firmware_node*/hid 2>/dev/null; "
+                    "cat /sys/class/tpm/tpm0/device/firmware_node*/serial 2>/dev/null; "
+                    "cat /sys/class/tpm/tpm0/device/firmware_node*/description 2>/dev/null; "
+                    "cat /sys/class/tpm/tpm0/tpm_version_major 2>/dev/null; "
+                    "cat /sys/class/tpm/tpm0/tpm_version_minor 2>/dev/null; "
+                    "tpm2_getcap properties-fixed 2>/dev/null | head -20",
+                    shell=True, capture_output=True, text=True, timeout=5,
+                )
+                tpm_hw_id = results.stdout.strip()
+            elif platform.system() == "Darwin":
+                results = subprocess.run(
+                    "system_profiler SPiBridgeDataType 2>/dev/null | head -20; "
+                    "ioreg -l 2>/dev/null | grep -E 'AppleSEP|sep-id|chip-id|SEP' | head -10",
+                    shell=True, capture_output=True, text=True, timeout=5,
+                )
+                tpm_hw_id = results.stdout.strip()
+        except Exception:
+            pass  # skip if unavailable
+
+        # 4) External IP address (skip gracefully if offline)
+        external_ip = ""
+        for url in ("https://api.ipify.org", "https://ifconfig.me", "https://icanhazip.com"):
+            try:
+                result = subprocess.run(
+                    ["curl", "-s", "--max-time", "3", url],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    external_ip = result.stdout.strip()
+                    break
+            except Exception:
+                continue
+
+        # 5) Internal IP address (skip gracefully if unavailable)
+        internal_ip = ""
+        try:
+            if platform.system() == "Darwin":
+                result = subprocess.run(
+                    "ifconfig 2>/dev/null | grep 'inet ' | grep -v 127.0.0.1 | head -1 | awk '{print $2}'",
+                    shell=True, capture_output=True, text=True, timeout=5,
+                )
+            else:
+                result = subprocess.run(
+                    "ip addr show 2>/dev/null | grep 'inet ' | grep -v 127.0.0.1 | head -1 | awk '{print $2}' | cut -d/ -f1; "
+                    "ifconfig 2>/dev/null | grep 'inet ' | grep -v 127.0.0.1 | head -1 | awk '{print $2}'",
+                    shell=True, capture_output=True, text=True, timeout=5,
+                )
+            if result.returncode == 0 and result.stdout.strip():
+                internal_ip = result.stdout.strip().split("\n")[0]
+        except Exception:
+            pass
+
+        # 6) Program hash (recompile detection)
+        program_hash = compute_program_hash() or ""
+
+        # Combine all components into final integrity_hash
+        combined = (
+            "\n".join(hw_sources)
+            + "\n"
+            + "\n".join(bin_sources)
+            + "\n"
+            + "IP_KEY:" + ip_key
+            + "\n"
+            + "IP_SIG:" + ip_signature
+            + "\n"
+            + "TPM_HW:" + tpm_hw_id
+            + "\n"
+            + "EXT_IP:" + external_ip
+            + "\n"
+            + "INT_IP:" + internal_ip
+            + "\n"
+            + "PROG_HASH:" + program_hash
+        )
         integrity_hash = hashlib.sha512(combined.encode()).hexdigest()
 
         return integrity_hash
@@ -443,12 +1129,75 @@ def compute_integrity_hash():
         return None
 
 
+def _try_c_derive_master_key(integrity_hash, user_secret):
+    """
+    Try to derive master key using the C library (adl_crypto).
+    Returns the master key hex string on success, None if C lib unavailable.
+    """
+    try:
+        import ctypes
+        import ctypes.util
+        import os
+
+        # Try to find the C library — check common build output paths
+        lib_paths = [
+            os.path.join(BASE_DIR, "bin", "libadl_crypto.dylib"),
+            os.path.join(BASE_DIR, "bin", "libadl_crypto.so"),
+            os.path.join(BASE_DIR, "build", "libadl_crypto.dylib"),
+            os.path.join(BASE_DIR, "build", "libadl_crypto.so"),
+            os.path.join(BASE_DIR, "libadl_crypto.dylib"),
+            os.path.join(BASE_DIR, "libadl_crypto.so"),
+        ]
+        lib_path = None
+        for p in lib_paths:
+            if os.path.exists(p):
+                lib_path = p
+                break
+
+        if not lib_path:
+            return None  # C library not available
+
+        lib = ctypes.CDLL(lib_path)
+
+        # Configure the function signature
+        lib.adl_derive_master_key_cstr.argtypes = [
+            ctypes.c_char_p,  # integrity_hash
+            ctypes.c_char_p,  # user_secret
+        ]
+        lib.adl_derive_master_key_cstr.restype = ctypes.c_char_p  # malloc'd hex string
+        lib.adl_free_cstr.argtypes = [ctypes.c_char_p]
+        lib.adl_free_cstr.restype = None
+
+        # Call the C function
+        c_hash = ctypes.c_char_p(integrity_hash.encode("utf-8"))
+        c_secret = ctypes.c_char_p(user_secret.encode("utf-8"))
+        result = lib.adl_derive_master_key_cstr(c_hash, c_secret)
+
+        if result:
+            master_key = result.decode("utf-8")
+            lib.adl_free_cstr(result)
+            return master_key
+
+        return None
+    except Exception:
+        return None
+
+
 def derive_master_key(integrity_hash, user_secret):
     """
     Derive master key from integrity hash and user secret.
     master_key = HKDF-SHA512(salt=integrity_hash, ikm=user_secret,
                              info="adelaide:master-key:v1")
+
+    Uses FIPS 140-3 C implementation when available (adl_crypto shared library),
+    falls back to pure Python HKDF-SHA512.
     """
+    # Try C implementation first (FIPS 140-3 approved path)
+    c_result = _try_c_derive_master_key(integrity_hash, user_secret)
+    if c_result is not None:
+        return c_result
+
+    # Fallback: pure Python implementation (mirrors the C code identically)
     import hashlib
     import hmac
 
@@ -459,7 +1208,7 @@ def derive_master_key(integrity_hash, user_secret):
     # HKDF-Extract
     prk = hmac.new(salt, ikm, hashlib.sha512).digest()
 
-    # HKDF-Expand
+    # HKDF-Expand (single block: output <= SHA-512 digest size)
     expand_input = info + b"\x01"
     okm = hmac.new(prk, expand_input, hashlib.sha512).digest()
 
@@ -593,7 +1342,21 @@ def migrate_from_legacy_key_system():
         import getpass
 
         print("[MIGRATE] Please create a new password for the hardware-bound system.")
-        password = getpass.getpass("Enter new password: ")
+        while True:
+            password = getpass.getpass("Enter new password: ")
+            if not password:
+                print("[MIGRATE] No password provided")
+                return False
+            bits = _password_entropy(password)
+            if bits < 20:
+                print(
+                    f"  Make stronger password! (only {bits} bits — need at least 20)"
+                )
+                print(
+                    "  Tip: Use lowercase, uppercase, numbers, and/or symbols together."
+                )
+                continue
+            break
 
     if not password:
         print("[MIGRATE] No password provided")
@@ -745,13 +1508,21 @@ def migrate_from_legacy_key_system():
 
 def hardware_bound_key_derivation():
     """
-    Hardware-bound key derivation system.
+    Hardware-bound key derivation system (dual-key architecture).
 
-    1. Compute integrity hash from hardware + binary state
-    2. Prompt user for password
-    3. Derive master key from integrity hash + password
-    4. Verify integrity test blob
-    5. If verification fails, prompt for recovery key
+    Two independent keys can decrypt — NOT combined:
+      Key 1 — User password / recovery key
+      Key 2 — InferiorParadoxical (SHA-512 hardware profiling auto-key)
+
+    Flow
+    ----
+    1. Compute InferiorParadoxical from hardware state
+    2. Try auto-decrypt master_key using InferiorParadoxical stored blob
+    3. If auto-decrypt fails → prompt user for password
+       → derive master_key = HKDF(integrity_hash, password)
+       → verify with integrity test blob
+       → re-wrap master_key under new InferiorParadoxical for future auto-decrypt
+    4. Return master_key
     """
     from adelaide_crypto import derive_sub_key
 
@@ -765,12 +1536,34 @@ def hardware_bound_key_derivation():
 
     print(f"[KEY-DERIV] Integrity hash: {integrity_hash[:16]}...")
 
-    # Step 2: Check if this is first boot (check both locations)
+    # Step 2: Try InferiorParadoxical auto-decrypt (Key 2 — hardware auto-key)
+    # Silently attempt auto-recovery; only prompts user if hardware changed.
+    master_key = _try_inferior_paradoxical_auto_decrypt(integrity_hash)
+    auto_decrypt_ok = master_key is not None
+
+    if auto_decrypt_ok:
+        _term_print("[KEY-DERIV] InferiorParadoxical auto-decrypt — hardware environment trusted")
+        aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
+        if verify_integrity_test_blob(master_key, aes_key):
+            _term_print("[KEY-DERIV] Integrity test blob verification PASSED (auto)")
+            return master_key
+        else:
+            # Stored wrapped key is stale — fall through to password path
+            _term_print("[KEY-DERIV] Auto-decrypt OK but integrity test FAILED — re-keying")
+            master_key = None
+            auto_decrypt_ok = False
+
+    # Step 3: Determine if this is first boot (no key files exist)
     local_key = os.path.join(BASE_DIR, "config", "master.key")
     legacy_key = os.path.expanduser("~/.config/adelaide/master.key")
     first_boot = not os.path.exists(local_key) and not os.path.exists(legacy_key)
 
-    # Step 3: Prompt for password
+    # Step 4: Prompt for password (Key 1 — user password / recovery key)
+    if first_boot:
+        _term_print("[KEY-DERIV] First boot — creating new password")
+    else:
+        _term_print("[KEY-DERIV] Enter password (hardware environment changed or first unlock)")
+
     if _gui_available() or IS_KISS:
         password = prompt_kiss_password(is_first_boot=first_boot)
     else:
@@ -778,7 +1571,21 @@ def hardware_bound_key_derivation():
 
         if first_boot:
             _term_print("[KEY-DERIV] First boot detected. Please create a password.")
-            password = getpass.getpass("  Create password: ", stream=term_stderr)
+            while True:
+                password = getpass.getpass("  Create password: ", stream=term_stderr)
+                if not password:
+                    _term_print("  Password cannot be empty.")
+                    return None
+                bits = _password_entropy(password)
+                if bits < 20:
+                    _term_print(
+                        f"  Make stronger password! (only {bits} bits — need at least 20)"
+                    )
+                    _term_print(
+                        "  Tip: Use lowercase, uppercase, numbers, and/or symbols together."
+                    )
+                    continue
+                break
         else:
             _term_print("[KEY-DERIV] Please enter your password.")
             password = getpass.getpass("  Password: ", stream=term_stderr)
@@ -787,46 +1594,56 @@ def hardware_bound_key_derivation():
         print("[KEY-DERIV] No password provided")
         return None
 
-    # Step 4: Derive master key
+    # Step 5: Derive master key from integrity_hash + password
     master_key = derive_master_key(integrity_hash, password)
     print(f"[KEY-DERIV] Master key derived: {master_key[:16]}...")
 
-    # Step 5: Derive AES key for database
+    # Step 6: Derive AES key for database
     aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
 
-    # Step 6: Verify integrity test blob (skip on first boot - no blob yet)
+    # Step 7: Verify integrity test blob
+    password_ok = False
     if first_boot:
         _term_print("[KEY-DERIV] First boot - skipping integrity test verification")
+        password_ok = True
     elif verify_integrity_test_blob(master_key, aes_key):
         _term_print("[KEY-DERIV] Integrity test blob verification PASSED")
+        password_ok = True
     else:
-        _term_print("[KEY-DERIV] Integrity test blob verification FAILED")
-
+        _term_print("[KEY-DERIV] Integrity test blob verification FAILED — trying recovery key")
         # Try recovery key
         if _gui_available() or IS_KISS:
             _term_print("[KEY-DERIV] Please enter your recovery key or password.")
             recovery_key = prompt_kiss_password(is_first_boot=False)
         else:
             import getpass
-
             recovery_key = getpass.getpass("Enter recovery key: ", stream=term_stderr)
 
         if recovery_key:
-            # Try with recovery key
-            master_key = derive_master_key(integrity_hash, recovery_key)
-            aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
-
-            if verify_integrity_test_blob(master_key, aes_key):
+            recovery_master = derive_master_key(integrity_hash, recovery_key)
+            recovery_aes = derive_sub_key(recovery_master, "adelaide:db:memory:v1")
+            if verify_integrity_test_blob(recovery_master, recovery_aes):
                 _term_print("[KEY-DERIV] Recovery key verification PASSED")
+                master_key = recovery_master
+                aes_key = recovery_aes
+                password_ok = True
             else:
                 _term_print("[KEY-DERIV] Recovery key verification FAILED")
                 return None
         else:
             return None
 
-    # Step 7: Store integrity test blob if first boot
+    # Step 8: Store integrity test blob on first boot
     if first_boot:
         store_integrity_test_blob(aes_key)
+
+    # Step 9: Re-wrap master_key under InferiorParadoxical
+    # On first boot: store initial wrap for future auto-decrypt
+    # On subsequent boot after auto-decrypt failed: hardware changed, update wrap
+    if not auto_decrypt_ok and password_ok and master_key:
+        _store_inferior_paradoxical_wrapped_key(master_key, integrity_hash)
+        if not first_boot:
+            _term_print("[KEY-DERIV] InferiorParadoxical updated for current hardware")
 
     return master_key
 
@@ -1284,9 +2101,10 @@ def bootstrap_ros2_mac():
 
 def bootstrap_px4():
     """Clone and compile PX4-Autopilot for ELP2/ELP3 simulation tools."""
-    px4_dir = os.path.join(PROJECT_ROOT, "PX4-Autopilot")
+    vendor_dir = os.path.join(BASE_DIR, "vendor")
+    px4_dir = os.path.join(vendor_dir, "PX4-Autopilot")
     if not os.path.exists(px4_dir):
-        print(f"\n{BOLD}{WHT}[*] Cloning PX4-Autopilot...{RST}")
+        print(f"\n{BOLD}{WHT}[*] Cloning PX4-Autopilot into vendor/...{RST}")
         try:
             subprocess.check_call(
                 [
@@ -1295,7 +2113,7 @@ def bootstrap_px4():
                     "https://github.com/PX4/PX4-Autopilot.git",
                     "--recursive",
                 ],
-                cwd=PROJECT_ROOT,
+                cwd=vendor_dir,
             )
         except Exception as e:
             print(f"  {RED}[!!] Failed to clone PX4-Autopilot: {e}{RST}")
@@ -1413,6 +2231,18 @@ def verify_environment(build_px4=False):
         print(
             f"  {YLW}[warn]{RST} ROS2 environment not detected (ROS_DISTRO missing). ELP2/ELP3 Actuators will be disabled."
         )
+
+    # PX4-Autopilot check (built locally or on PATH)
+    px4_bin = shutil.which("px4")
+    px4_dir = os.path.join(BASE_DIR, "vendor", "PX4-Autopilot")
+    if px4_bin or (os.path.isdir(px4_dir) and os.path.exists(os.path.join(px4_dir, "build"))):
+        if px4_bin:
+            print(f"  {GRN}[ok]{RST} PX4 detected ({px4_bin})")
+        else:
+            print(f"  {GRN}[ok]{RST} PX4-Autopilot found in vendor/")
+    else:
+        print(f"  {RED}[!!]{RST} PX4-Autopilot not found in vendor/. Use --build-px4 to clone & compile, or install manually.")
+        missing.append("px4")
 
     if missing:
         print(
@@ -2141,8 +2971,8 @@ def real_main():
     hash_file = os.path.join(BASE_DIR, ".build_hash")
 
     # 0. Verify all critical prerequisites are installed
-    build_px4 = "--build-px4" in sys.argv
-    verify_environment(build_px4=build_px4)
+    # PX4 is critical and auto-clones/compiles if missing
+    verify_environment(build_px4=True)
 
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
 
@@ -3056,9 +3886,28 @@ def real_main():
         # 4a. CrossHair Symbolic Analysis for python/ sidecars
         print("[*] Ensuring CrossHair is installed...")
         try:
-            pyvenv_python = os.path.join(BASE_DIR, "pyvenv", "bin", "python")
+            pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
+            pyvenv_python = os.path.join(pyvenv_dir, "bin", "python")
+            if not os.path.exists(pyvenv_python):
+                print(f"  [~] Creating pyvenv at {pyvenv_dir}...")
+                subprocess.run(
+                    [sys.executable, "-m", "venv", pyvenv_dir],
+                    check=True,
+                    capture_output=True,
+                )
             subprocess.run(
                 [pyvenv_python, "-m", "pip", "install", "crosshair-tool"],
+                check=True,
+                capture_output=True,
+            )
+            # Install python/ sidecar dependencies (loguru, httpx, requests, sympy, etc.)
+            # so CrossHair can import them when checking the sidecar files.
+            subprocess.run(
+                [pyvenv_python, "-m", "pip", "install",
+                 "loguru", "httpx", "requests", "sympy",
+                 "numpy", "PyMuPDF",
+                 "Pillow", "openpyxl", "python-docx", "python-pptx", "tinytag",
+                 "cryptography", "keyring"],
                 check=True,
                 capture_output=True,
             )
