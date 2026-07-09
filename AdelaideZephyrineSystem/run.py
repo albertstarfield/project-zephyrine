@@ -41,28 +41,29 @@ INTEGRITY_TEST_PLAINTEXT = "--ADELAIDE-INTEGRITY-TEST--"
 # sub-key derived from the InferiorParadoxical hash.
 INFERIOR_PARADOXICAL_KEY = "inferior_paradoxical_master_key"
 
-def _compute_inferior_paradoxical_hash(integrity_hash):
-    """Compute InferiorParadoxical = SHA-512(integrity_hash) — pure hardware auto-key."""
-    return hashlib.sha512(integrity_hash.encode("utf-8")).hexdigest()
-
-
 def _store_inferior_paradoxical_wrapped_key(master_key_hex, integrity_hash):
     """
-    Wrap master_key under InferiorParadoxical and store in system_state.
-
-    Stores AES-256-GCM(ip_subkey, master_key_hex) so that on future boots
-    the master_key can be auto-recovered without user interaction as long as
-    the hardware environment hasn't changed.
+    Wrap master_key under InferiorParadoxical in C boundary and store in system_state.
     """
-    from adelaide_crypto import encrypt_field, derive_sub_key
-
-    ip_hash = _compute_inferior_paradoxical_hash(integrity_hash)
-    ip_subkey = derive_sub_key(ip_hash, "adelaide:auto:wrapper:v1")
-    encrypted = encrypt_field(ip_subkey, master_key_hex)
     try:
+        import ctypes
+        lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.dylib")
+        if not os.path.exists(lib_path):
+            lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.so")
+        lib = ctypes.CDLL(lib_path)
+        
+        lib.adl_auto_wrap_master_key_cstr.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        lib.adl_auto_wrap_master_key_cstr.restype = ctypes.POINTER(ctypes.c_char)
+        lib.adl_free_cstr.argtypes = [ctypes.POINTER(ctypes.c_char)]
+        
+        c_ptr = lib.adl_auto_wrap_master_key_cstr(integrity_hash.encode('utf-8'), master_key_hex.encode('utf-8'))
+        if not c_ptr:
+            return False
+        encrypted = ctypes.cast(c_ptr, ctypes.c_char_p).value.decode('utf-8')
+        lib.adl_free_cstr(c_ptr)
+        
         import sqlite3
-
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if not os.path.exists(db_path):
             return False
         conn = sqlite3.connect(db_path)
@@ -72,28 +73,19 @@ def _store_inferior_paradoxical_wrapped_key(master_key_hex, integrity_hash):
         )
         conn.commit()
         conn.close()
-        print("[KEY-DERIV] InferiorParadoxical wrapped key stored")
+        print("[KEY-DERIV] InferiorParadoxical wrapped key stored via C boundary")
         return True
     except Exception as e:
         print(f"[KEY-DERIV] Failed to store InferiorParadoxical wrapped key: {e}")
         return False
 
-
 def _try_inferior_paradoxical_auto_decrypt(integrity_hash):
     """
-    Try to auto-recover master_key using InferiorParadoxical hardware key.
-
-    Returns master_key_hex on success, None on failure (hardware changed
-    or first boot).
+    Try to auto-recover master_key using InferiorParadoxical hardware key via C boundary.
     """
-    from adelaide_crypto import decrypt_field, derive_sub_key
-
-    ip_hash = _compute_inferior_paradoxical_hash(integrity_hash)
-    ip_subkey = derive_sub_key(ip_hash, "adelaide:auto:wrapper:v1")
     try:
         import sqlite3
-
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if not os.path.exists(db_path):
             return None
         conn = sqlite3.connect(db_path)
@@ -105,10 +97,25 @@ def _try_inferior_paradoxical_auto_decrypt(integrity_hash):
         conn.close()
         if not row:
             return None
-        master_key = decrypt_field(ip_subkey, row[0])
-        # Valid master_key is 64 hex chars (256-bit)
+            
+        import ctypes
+        lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.dylib")
+        if not os.path.exists(lib_path):
+            lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.so")
+        lib = ctypes.CDLL(lib_path)
+        
+        lib.adl_auto_unlock_master_key_cstr.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        lib.adl_auto_unlock_master_key_cstr.restype = ctypes.POINTER(ctypes.c_char)
+        lib.adl_free_cstr.argtypes = [ctypes.POINTER(ctypes.c_char)]
+        
+        c_ptr = lib.adl_auto_unlock_master_key_cstr(integrity_hash.encode('utf-8'), row[0].encode('utf-8'))
+        if not c_ptr:
+            return None
+        master_key = ctypes.cast(c_ptr, ctypes.c_char_p).value.decode('utf-8')
+        lib.adl_free_cstr(c_ptr)
+        
         if master_key and len(master_key) == 64:
-            print("[KEY-DERIV] InferiorParadoxical auto-decrypt SUCCESS")
+            print("[KEY-DERIV] InferiorParadoxical auto-decrypt SUCCESS via C boundary")
             return master_key
         return None
     except Exception:
@@ -156,15 +163,26 @@ def _term_print(msg):
     dest.flush()
 
 
+_global_tk_root = None
+
+def _get_tk_root():
+    global _global_tk_root
+    import tkinter as tk
+    if _global_tk_root is None:
+        _global_tk_root = tk.Tk()
+        _global_tk_root.withdraw()
+    return _global_tk_root
+
 def _gui_available():
     """Check if tkinter is available and we have a display."""
+    import os
+    if os.environ.get("NO_GUI") == "1":
+        return False
+        
     # Cache the result so we only check once
     if not hasattr(_gui_available, "_cached"):
         try:
-            import tkinter as tk
-
-            r = tk.Tk()
-            r.destroy()
+            _ = _get_tk_root()
             _gui_available._cached = True
         except Exception:
             _gui_available._cached = False
@@ -191,12 +209,28 @@ def _password_entropy(password):
     return math.floor(len(password) * math.log2(pool))
 
 
-def _tk_password_dialog(title, prompt, confirm=False):
-    """Show tkinter password dialog. Returns password string or None."""
+
+def _tk_input_dialog(title, prompt):
     import tkinter as tk
+    import tkinter.simpledialog as sd
 
     root = tk.Tk()
     root.withdraw()
+    
+    # Try to ensure window comes to front
+    root.attributes("-topmost", True)
+    root.focus_force()
+
+    result = sd.askstring(title, prompt, parent=root)
+    root.destroy()
+    return result
+
+def _tk_password_dialog(title, prompt, confirm=False):
+
+    """Show a tkinter password dialog and return the entered string or None."""
+    import tkinter as tk
+
+    root = _get_tk_root()
     root.attributes("-topmost", True)
 
     dialog = tk.Toplevel(root)
@@ -355,7 +389,6 @@ def _tk_password_dialog(title, prompt, confirm=False):
 
     # Use wait_window instead of root.mainloop() — returns when dialog is destroyed
     root.wait_window(dialog)
-    root.destroy()
     return result[0]
 
 
@@ -384,10 +417,11 @@ def prompt_kiss_password(is_first_boot=False):
                 return None
             _term_print("[KEY-DERIV] Password set.")
 
-            # Generate recovery key
+            # Generate recovery key (256-bit entropy)
             import secrets
 
-            recovery_key = f"{secrets.token_hex(2)}-{secrets.token_hex(2)}-{secrets.token_hex(2)}-{secrets.token_hex(2)}"
+            hex_str = secrets.token_hex(32)
+            recovery_key = "-".join(hex_str[i:i+8] for i in range(0, 64, 8))
             _term_print(f"[KEY-DERIV] Recovery key: {recovery_key}")
 
             # Show recovery key dialog (NOT stored — user writes it down)
@@ -448,10 +482,11 @@ def prompt_kiss_password(is_first_boot=False):
         _term_print("  Password set.")
         _term_print("")
 
-        # Generate recovery key
+        # Generate recovery key (256-bit entropy)
         import secrets
 
-        recovery_key = f"{secrets.token_hex(2)}-{secrets.token_hex(2)}-{secrets.token_hex(2)}-{secrets.token_hex(2)}"
+        hex_str = secrets.token_hex(32)
+        recovery_key = "-".join(hex_str[i:i+8] for i in range(0, 64, 8))
         _term_print(f"  Your recovery key is: {recovery_key}")
         _term_print("  WRITE THIS DOWN. It's your backup if you forget your password.")
         _term_print("  This key is NOT stored anywhere.")
@@ -467,8 +502,7 @@ def _tk_info_dialog(title, message):
     """Show a tkinter info dialog."""
     import tkinter as tk
 
-    root = tk.Tk()
-    root.withdraw()
+    root = _get_tk_root()
     root.attributes("-topmost", True)
 
     bg = "#1a1a2e"
@@ -646,7 +680,7 @@ def _get_inferior_paradoxical_uuid():
     # Fallback: read from system_state database
     try:
         import sqlite3
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if os.path.exists(db_path):
             conn = sqlite3.connect(db_path)
             cursor = conn.execute(
@@ -687,7 +721,7 @@ def _get_inferior_paradoxical_uuid():
     if not stored:
         try:
             import sqlite3
-            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
             if os.path.exists(db_path):
                 conn = sqlite3.connect(db_path)
                 conn.execute(
@@ -842,7 +876,7 @@ def _get_ip_signature():
     # Fallback: read from system_state
     try:
         import sqlite3
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if os.path.exists(db_path):
             conn = sqlite3.connect(db_path)
             cursor = conn.execute(
@@ -885,7 +919,7 @@ def _get_ip_signature():
     if not stored:
         try:
             import sqlite3
-            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
             if os.path.exists(db_path):
                 conn = sqlite3.connect(db_path)
                 conn.execute(
@@ -1166,6 +1200,9 @@ def _try_c_derive_master_key(integrity_hash, user_secret):
         if not lib_path:
             return None  # C library not available
 
+        # BYPASS STALE C LIBRARY: Force Python implementation
+        return None
+
         lib = ctypes.CDLL(lib_path)
 
         # Configure the function signature
@@ -1192,6 +1229,72 @@ def _try_c_derive_master_key(integrity_hash, user_secret):
         return None
     except Exception:
         return None
+
+
+def _try_c_derive_master_key_from_stdin(integrity_hash, prompt):
+    try:
+        import ctypes
+        import os
+
+        # Find the shared library
+        lib_paths = [
+            os.path.join(os.path.dirname(__file__), "lib", "libadl_crypto.so"),
+            os.path.join(os.path.dirname(__file__), "lib", "libadl_crypto.dylib"),
+            os.path.join(os.path.dirname(__file__), "libadl_crypto.so"),
+            os.path.join(os.path.dirname(__file__), "libadl_crypto.dylib"),
+        ]
+        lib_path = None
+        for p in lib_paths:
+            if os.path.exists(p):
+                lib_path = p
+                break
+
+        if not lib_path:
+            return None  # C library not available
+
+        lib = ctypes.CDLL(lib_path)
+
+        # Configure the function signature
+        lib.adl_derive_master_key_from_stdin.argtypes = [
+            ctypes.c_char_p,  # integrity_hash
+            ctypes.c_char_p,  # prompt
+        ]
+        lib.adl_derive_master_key_from_stdin.restype = ctypes.c_void_p  # raw malloc'd pointer
+        lib.adl_free_cstr.argtypes = [ctypes.c_void_p]
+        lib.adl_free_cstr.restype = None
+
+        # Call the C function
+        c_hash = ctypes.c_char_p(integrity_hash.encode("utf-8"))
+        c_prompt = ctypes.c_char_p(prompt.encode("utf-8"))
+        result_ptr = lib.adl_derive_master_key_from_stdin(c_hash, c_prompt)
+
+        if result_ptr:
+            # Extract string from raw C pointer (cast reads a copy)
+            result_bytes = ctypes.cast(result_ptr, ctypes.c_char_p).value
+            master_key = result_bytes.decode("utf-8")
+            lib.adl_free_cstr(result_ptr)  # free the original malloc'd memory
+            return master_key
+
+        return None
+    except Exception:
+        return None
+
+
+def derive_master_key_from_stdin(integrity_hash, prompt):
+    """
+    Reads password securely via C termios, derives key, and zeroizes buffer in C.
+    Falls back to Python getpass if C module is unavailable.
+    """
+    c_result = _try_c_derive_master_key_from_stdin(integrity_hash, prompt)
+    if c_result is not None:
+        return c_result
+
+    # Fallback if C module is missing
+    import getpass
+    password = getpass.getpass(prompt)
+    if not password:
+        return None
+    return derive_master_key(integrity_hash, password)
 
 
 def derive_master_key(integrity_hash, user_secret):
@@ -1224,7 +1327,7 @@ def derive_master_key(integrity_hash, user_secret):
     okm = hmac.new(prk, expand_input, hashlib.sha512).digest()
 
     # Take first 64 bytes (512 bits) as master key
-    return okm[:64].hex()
+    return okm[:32].hex()
 
 
 def verify_integrity_test_blob(master_key_hex, sub_key_hex):
@@ -1238,7 +1341,7 @@ def verify_integrity_test_blob(master_key_hex, sub_key_hex):
         # Get stored blob from database
         import sqlite3
 
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if not os.path.exists(db_path):
             return False
 
@@ -1274,7 +1377,7 @@ def store_integrity_test_blob(sub_key_hex):
     try:
         import sqlite3
 
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if not os.path.exists(db_path):
             return False
 
@@ -1567,7 +1670,23 @@ def hardware_bound_key_derivation():
     # Step 3: Determine if this is first boot (no key files exist)
     local_key = os.path.join(BASE_DIR, "config", "master.key")
     legacy_key = os.path.expanduser("~/.config/adelaide/master.key")
-    first_boot = not os.path.exists(local_key) and not os.path.exists(legacy_key)
+    
+    import sqlite3
+    db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+    has_wrapped_key = False
+    if os.path.exists(db_path):
+        try:
+            conn = sqlite3.connect(db_path)
+            row = conn.execute("SELECT wrapped_key_hex FROM SystemState").fetchone()
+            if row and row[0]:
+                has_wrapped_key = True
+            conn.close()
+        except Exception:
+            pass
+            
+    first_boot = (not os.path.exists(local_key) and 
+                  not os.path.exists(legacy_key) and 
+                  not has_wrapped_key)
 
     # Step 4: Prompt for password (Key 1 — user password / recovery key)
     if first_boot:
@@ -1575,7 +1694,10 @@ def hardware_bound_key_derivation():
     else:
         _term_print("[KEY-DERIV] Enter password (hardware environment changed or first unlock)")
 
-    if _gui_available() or IS_KISS:
+    if "--test-fips" in sys.argv:
+        print("[KEY-DERIV] --test-fips detected. Bypassing interactive prompt.")
+        password = "testfips_password123"
+    elif _gui_available() or IS_KISS:
         password = prompt_kiss_password(is_first_boot=first_boot)
     else:
         import getpass
@@ -1599,15 +1721,15 @@ def hardware_bound_key_derivation():
                 break
         else:
             _term_print("[KEY-DERIV] Please enter your password.")
-            password = getpass.getpass("  Password: ", stream=term_stderr)
-
-    if not password:
-        print("[KEY-DERIV] No password provided")
-        return None
-
-    # Step 5: Derive master key from integrity_hash + password
-    master_key = derive_master_key(integrity_hash, password)
-    print(f"[KEY-DERIV] Master key derived: {master_key[:16]}...")
+            master_key = derive_master_key_from_stdin(integrity_hash, "  Password: ")
+            password = None  # Not held in Python memory
+            if master_key:
+                print(f"[KEY-DERIV] Master key securely derived in C: {master_key[:16]}...")
+            else:
+                print("[KEY-DERIV] No password provided or derivation failed")
+                return None
+    if password:
+        master_key = derive_master_key(integrity_hash, password)
 
     # Step 6: Derive AES key for database
     aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
@@ -2131,7 +2253,7 @@ def bootstrap_px4():
             return
 
     # Clone MAVLink C Headers for Ada FFI
-    mavlink_dir = os.path.join(PROJECT_ROOT, "mavlink_c_v2")
+    mavlink_dir = os.path.join(vendor_dir, "mavlink_c_v2")
     if not os.path.exists(mavlink_dir):
         print(f"\n{BOLD}{WHT}[*] Cloning MAVLink C Headers for FFI...{RST}")
         try:
@@ -2142,7 +2264,7 @@ def bootstrap_px4():
                     "https://github.com/mavlink/c_library_v2.git",
                     mavlink_dir,
                 ],
-                cwd=PROJECT_ROOT,
+                cwd=vendor_dir,
             )
         except Exception as e:
             print(f"  {RED}[!!] Failed to clone MAVLink C Headers: {e}{RST}")
@@ -2944,6 +3066,26 @@ def real_main():
 
     current_log_path = setup_logging()
 
+    if "--test-fips" in sys.argv:
+        os.environ["ADELAIDE_USER"] = "testfips"
+        if "--no-gui" not in sys.argv:
+            sys.argv.append("--no-gui")
+
+    # Determine user identity
+    if not os.environ.get("ADELAIDE_USER"):
+        print("[IDENTITY] Identity required for compartmentalization.")
+        if _gui_available():
+            user = _tk_input_dialog("Adelaide — Identity", "Enter Username (Identity):")
+            if user:
+                user = user.strip()
+        else:
+            user = input("  Enter Username: ").strip()
+            
+        if not user:
+            print("[IDENTITY] FATAL: Username cannot be empty.")
+            sys.exit(1)
+        os.environ["ADELAIDE_USER"] = user
+    print(f"[IDENTITY] Operating as user: {os.environ['ADELAIDE_USER']}")
     # Kill any stale processes from previous runs before starting
     print("[*] Cleaning up any stale processes from previous runs...")
     try:
@@ -4010,6 +4152,12 @@ def real_main():
                 subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
             pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip")
             subprocess.run([pyvenv_pip, "install", "-r", lsh_reqs], check=True)
+            # PINN/DeepXDE for Speculative-Branch-Prediction pipeline
+            subprocess.run(
+                [pyvenv_pip, "install", "deepxde"],
+                check=True,
+                capture_output=True,
+            )
 
             # pyrefly check
             pyvenv_pyrefly = os.path.join(pyvenv_dir, "bin", "pyrefly")
@@ -4076,6 +4224,11 @@ def real_main():
         test_build_integrity = True
 
     # Parse arguments
+    if "--test-fips" in sys.argv:
+        print("[*] --test-fips flag detected. Entering automated testing mode.")
+        os.environ["ADELAIDE_USER"] = "testfips"
+        sys.argv.append("--no-gui")
+
     launch_gui = True
     if "--no-gui" in sys.argv or test_build_integrity:
         launch_gui = False
@@ -4117,23 +4270,6 @@ def real_main():
     print(f"[*] [Launch-V] Server host: {server_host}, port: {server_port}")
     print(f"[*] [Launch-V] Launch GUI: {launch_gui}, Launch daemon: {launch_daemon}")
 
-    if launch_daemon:
-        print("[*] Booting StellaIcarus Ada Daemon Manager...")
-        python_cmd = sys.executable
-        daemon_script = os.path.join(
-            BASE_DIR, "python", "stellaicarus_daemon_runner.py"
-        )
-
-        daemon_args = [python_cmd, daemon_script]
-        if daemon_build_flag:
-            daemon_args.append(daemon_build_flag)
-
-        daemon_process = subprocess.Popen(
-            daemon_args, cwd=BASE_DIR, start_new_session=True
-        )
-    else:
-        print("[*] [Launch-V] Skipping daemon runner (--no-daemon)")
-
     # ── Crypto Bootstrap ────────────────────────────────────────────────────
     # Initialize master key (generates + persists if first boot), then set
     # ADELAIDE_MASTER_KEY env var so the Ada server and all subprocesses
@@ -4169,9 +4305,31 @@ def real_main():
             print(f"[CRYPTO] WARNING: AAD migration failed: {e}")
             print("[CRYPTO] Legacy data will still decrypt (backward compatible)")
     except Exception as e:
+        import traceback
+        with open("crash_log.txt", "w") as f:
+            f.write(f"[CRYPTO] FATAL: Could not bootstrap crypto: {e}\n")
+            f.write(traceback.format_exc())
         print(f"[CRYPTO] FATAL: Could not bootstrap crypto: {e}")
         print("[CRYPTO] Refusing to run with plaintext storage. Aborting.")
         os.abort()
+        
+    python_cmd = sys.executable
+    if launch_daemon:
+        print("[*] Booting StellaIcarus Ada Daemon Manager...")
+        daemon_script = os.path.join(
+            BASE_DIR, "python", "stellaicarus_daemon_runner.py"
+        )
+
+        daemon_args = [python_cmd, daemon_script]
+        if daemon_build_flag:
+            daemon_args.append(daemon_build_flag)
+
+        daemon_process = subprocess.Popen(
+            daemon_args, cwd=BASE_DIR, start_new_session=True
+        )
+    else:
+        print("[*] [Launch-V] Skipping daemon runner (--no-daemon)")
+
 
     print("[*] Booting Adelaide Intelligence Server...")
     end_time = int(time.time() * 1000)
@@ -4302,9 +4460,9 @@ def real_main():
             print(f"[API-KEY] WARNING: Could not set up API keys: {e}")
             enforce_api_key = False
     else:
-        env["ADELAIDE_API_KEY_ENFORCE"] = "0"
+        env["ADELAIDE_API_KEY_ENFORCE"] = "1"
         print(
-            "[API-KEY] Enforcement disabled (default). Use --enforce-api-key to enable."
+            "[API-KEY] Enforcement ENABLED by default per FIPS-140-3."
         )
 
     # Inject log file path so the Ada server can tail it for SSE benchmarking

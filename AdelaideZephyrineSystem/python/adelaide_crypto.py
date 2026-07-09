@@ -73,7 +73,7 @@ def load_master_key() -> str:
     """
     # Only read from environment variable - NEVER from disk
     key = os.environ.get("ADELAIDE_MASTER_KEY", "").strip()
-    if key and len(key) == 64:
+    if key and len(key) in (64, 128):
         _validate_hex(key, "ADELAIDE_MASTER_KEY")
         return key
 
@@ -316,11 +316,11 @@ def migrate_database(db_path: str, sub_key: bytes, field_map: dict) -> None:
 # ── Internal Helpers ─────────────────────────────────────────────────────
 
 def _validate_hex(key: str, source: str) -> None:
-    """Validate that a string is 64-char hex."""
-    if len(key) != KEY_HEX_SIZE:
+    """Validate that a string is valid hex (64 or 128 chars)."""
+    if len(key) not in (64, 128):
         raise RuntimeError(
             f"Invalid key length from {source}: "
-            f"got {len(key)} chars, expected {KEY_HEX_SIZE}"
+            f"got {len(key)} chars, expected 64 or 128"
         )
     try:
         bytes.fromhex(key)
@@ -486,7 +486,7 @@ def rotate_master_key(new_master_hex: str | None = None) -> str:
     print(f"[CRYPTO] New key: {new_master_hex[:8]}...")
     
     # Re-encrypt adelaide_memory.db
-    db_path = os.path.join(os.path.dirname(__file__), "adelaide_memory.db")
+    db_path = os.path.join(os.path.dirname(__file__), "..", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
     if os.path.exists(db_path):
         _re_encrypt_db(db_path, old_sub_keys["memory"], new_sub_keys["memory"],
                        ["memories"], ["input", "response", "image_b64"])
@@ -693,7 +693,7 @@ def migrate_all_to_aad() -> None:
     print("[CRYPTO] === AAD Migration Start ===")
     
     # adelaide_memory.db
-    db_path = os.path.join(os.path.dirname(__file__), "adelaide_memory.db")
+    db_path = os.path.join(os.path.dirname(__file__), "..", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
     sub_key = derive_sub_key(master_hex, CTX_MEMORY)
     total_migrated += migrate_to_aad(db_path, sub_key, "memories", "id", 
                    ["input", "response", "image_b64"], "adelaide:db:memory")
