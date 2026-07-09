@@ -152,10 +152,15 @@ package body Model_Manager is
     --  -- user, 2026-07-01, after 3 hours of debugging this exact issue
     Gen_Retry_Storage_Error : Boolean := False;
 
-    --  Unified constant for Context Fault maximum JMPs (hops).
-    --  Controls: loop exit limit, CtxMonitor page count, and display.
-    --  Syncs all references — change in one place, propagates everywhere.
-    Context_Fault_Max_JMPs : constant Natural := 99;
+     --  Unified constant for Context Fault maximum JMPs (hops).
+     --  Controls: loop exit limit, CtxMonitor page count, and display.
+     --  Syncs all references — change in one place, propagates everywhere.
+     --
+     --  HISTORICAL NOTE: Context Fault was imported from the previous Python
+     --  implementation called "Multi Level Condensed Memory Contextual Fetching
+     --  (MLCMCF)" from the Zephy Architecture, then continued as ContextFault
+     --  in this Ada/SPARK codebase.
+     Context_Fault_Max_JMPs : constant Natural := 99;
 
     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
     --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE

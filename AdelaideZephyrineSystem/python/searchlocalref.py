@@ -28,6 +28,7 @@ except ImportError:
 try:
     import fitz # PyMuPDF
 except ImportError:
+    import typing
     fitz: typing.Any = None
 
 # --- Environment Setup ---

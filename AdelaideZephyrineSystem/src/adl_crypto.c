@@ -1089,6 +1089,120 @@ char *adl_derive_master_key_cstr(const char *integrity_hash,
     return out;
 }
 
+#ifdef __APPLE__
+int adl_get_hardware_secret_apple(char *secret_out, size_t max_len);
+#else
+int adl_get_hardware_secret_linux(char *secret_out, size_t max_len);
+#endif
+
+int adl_get_hardware_secret(char *secret_out, size_t max_len) {
+#ifdef __APPLE__
+    return adl_get_hardware_secret_apple(secret_out, max_len);
+#else
+    return adl_get_hardware_secret_linux(secret_out, max_len);
+#endif
+}
+
+char* adl_auto_unlock_master_key_cstr(const char *integrity_hash, const char *wrapped_key_hex) {
+    char hsm_secret[65] = {0};
+    if (adl_get_hardware_secret(hsm_secret, sizeof(hsm_secret)) != 0) {
+        hsm_secret[0] = '\0';
+    }
+
+    char combined[1024];
+    snprintf(combined, sizeof(combined), "%s%s", integrity_hash, hsm_secret);
+
+    unsigned char combined_hash[64];
+    unsigned int hash_len = 0;
+    if (EVP_Digest(combined, strlen(combined), combined_hash, &hash_len, EVP_sha512(), NULL) != 1) {
+        return NULL;
+    }
+
+    /* Step 1: HKDF-Extract */
+    unsigned char salt[ADL_KEY_SIZE] = {0};
+    unsigned char prk[SHA384_HASH_SIZE];
+    if (hmac_sha384(salt, ADL_KEY_SIZE, combined_hash, hash_len, prk) != 0) {
+        return NULL;
+    }
+
+    /* Step 2: HKDF-Expand */
+    const char *context = "adelaide:auto:wrapper:v1";
+    size_t ctx_len = strlen(context);
+    unsigned char expand_input[512];
+    memcpy(expand_input, context, ctx_len);
+    expand_input[ctx_len] = 0x01;
+    
+    unsigned char okm[SHA384_HASH_SIZE];
+    if (hmac_sha384(prk, SHA384_HASH_SIZE, expand_input, ctx_len + 1, okm) != 0) {
+        return NULL;
+    }
+    
+    char *master_key_plaintext = malloc(2048);
+    if (!master_key_plaintext) return NULL;
+    
+    char okm_hex[65];
+    hex_encode(okm, 32, okm_hex);
+    
+    char err_buf[256];
+    size_t pt_len = 2048;
+    if (adl_decrypt(okm_hex, wrapped_key_hex, NULL, 0, (unsigned char*)master_key_plaintext, &pt_len, err_buf) != 0) {
+        free(master_key_plaintext);
+        return NULL;
+    }
+    master_key_plaintext[pt_len] = '\0';
+    
+    return master_key_plaintext;
+}
+
+char* adl_auto_wrap_master_key_cstr(const char *integrity_hash, const char *master_key_hex) {
+    char hsm_secret[65] = {0};
+    if (adl_get_hardware_secret(hsm_secret, sizeof(hsm_secret)) != 0) {
+        hsm_secret[0] = '\0';
+    }
+
+    char combined[1024];
+    snprintf(combined, sizeof(combined), "%s%s", integrity_hash, hsm_secret);
+
+    unsigned char combined_hash[64];
+    unsigned int hash_len = 0;
+    if (EVP_Digest(combined, strlen(combined), combined_hash, &hash_len, EVP_sha512(), NULL) != 1) {
+        return NULL;
+    }
+
+    unsigned char salt[ADL_KEY_SIZE] = {0};
+    unsigned char prk[SHA384_HASH_SIZE];
+    if (hmac_sha384(salt, ADL_KEY_SIZE, combined_hash, hash_len, prk) != 0) {
+        return NULL;
+    }
+
+    const char *context = "adelaide:auto:wrapper:v1";
+    size_t ctx_len = strlen(context);
+    unsigned char expand_input[512];
+    memcpy(expand_input, context, ctx_len);
+    expand_input[ctx_len] = 0x01;
+    
+    unsigned char okm[SHA384_HASH_SIZE];
+    if (hmac_sha384(prk, SHA384_HASH_SIZE, expand_input, ctx_len + 1, okm) != 0) {
+        return NULL;
+    }
+    
+    char *wrapped_key_hex = malloc(2048);
+    if (!wrapped_key_hex) return NULL;
+    
+    char okm_hex[65];
+    hex_encode(okm, 32, okm_hex);
+    
+    char err_buf[256];
+    size_t ct_len = 2048;
+    if (adl_encrypt(okm_hex, (const unsigned char*)master_key_hex, strlen(master_key_hex), NULL, 0, wrapped_key_hex, &ct_len, err_buf) != 0) {
+        free(wrapped_key_hex);
+        return NULL;
+    }
+    wrapped_key_hex[ct_len] = '\0';
+    
+    return wrapped_key_hex;
+}
+
 /*
  * adl_derive_master_key_from_stdin: Securely read password via termios without
  * echoing, derive the master key directly in C, and zeroize the buffer.

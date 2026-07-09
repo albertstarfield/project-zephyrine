@@ -186,7 +186,9 @@ project AdelaideZephyrineSystem is
                             project'Object_Dir & "/shutdown_handler.o",
                             project'Object_Dir & "/kratos_signal.o",
                             project'Object_Dir & "/sd_helper.o",
-                            project'Object_Dir & "/adl_crypto.o"
+                            project'Object_Dir & "/adl_crypto.o",
+                            project'Object_Dir & "/adl_secure_enclave.o",
+                            project'Object_Dir & "/adl_tpm2.o"
                            );
 
       Platform_Flags := ();
@@ -201,7 +203,9 @@ project AdelaideZephyrineSystem is
                                "-mmacosx-version-min=15.0",
                                "-framework", "Accelerate",
                                "-framework", "Metal",
-                               "-framework", "Foundation"
+                               "-framework", "Foundation",
+                               "-framework", "Security",
+                               "-framework", "CoreFoundation"
                               );
          when "linux" =>
             Platform_Flags := (

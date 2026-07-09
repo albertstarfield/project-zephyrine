@@ -17,7 +17,9 @@ pragma SPARK_Mode (Off);
 --  ============================================================================
 
 with Ada.Text_IO;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Environment_Variables;
+with FIPS_Audit;
 with Ada.Strings.Fixed;
 with Interfaces; use Interfaces;
 
@@ -172,6 +174,7 @@ package body API_Key_Manager is
          Co_Key := To_Unbounded_String (Co_Key_Str);
          Co_Initialized := True;
          Put_Line ("[API_KEY] Crypto Officer key loaded.");
+         FIPS_Audit.Log_Event ("Crypto Officer key initialized successfully.");
       end;
    end Initialize_Crypto_Officer;
 
@@ -319,6 +322,9 @@ package body API_Key_Manager is
              end;
           end loop;
 
+         if not Found then
+            FIPS_Audit.Log_Event ("Failed API Key authentication attempt.");
+         end if;
          return Found;
       end;
    end Validate_API_Key;

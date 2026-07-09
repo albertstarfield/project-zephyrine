@@ -36,8 +36,8 @@
 #include <stddef.h>
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */
-#define ADL_KEY_SIZE        64    /* 512-bit master key (HKDF-SHA512 output) */
-#define ADL_KEY_HEX_SIZE    129   /* 128 hex chars + null terminator */
+#define ADL_KEY_SIZE        32    /* 256-bit master key (HKDF-SHA512 output truncated) */
+#define ADL_KEY_HEX_SIZE    65    /* 64 hex chars + null terminator */
 #define ADL_NONCE_SIZE      12    /* 96-bit random nonce for GCM */
 #define ADL_TAG_SIZE        16    /* 128-bit GCM auth tag */
 #define ADL_ERROR_SIZE      256   /* max error message length */
@@ -227,6 +227,28 @@ void adl_free_cstr(char *ptr);
  */
 char *adl_derive_master_key_cstr(const char *integrity_hash,
                                   const char *user_secret);
+
+/*
+ * adl_get_hardware_secret: Fetch hardware secret from Secure Enclave / TPM2
+ * Returns 0 on success, -1 on failure.
+ */
+int adl_get_hardware_secret(char *secret_out, size_t max_len);
+
+/*
+ * adl_auto_unlock_master_key_cstr: FIPS-compliant auto-unlock
+ * Fetches hardware secret, combines with integrity_hash to form InferiorParadoxical hash,
+ * derives subkey, decrypts wrapped_key_hex, and returns malloc'd raw master key hex.
+ * Returns NULL on failure. Caller must free with adl_free_cstr().
+ */
+char* adl_auto_unlock_master_key_cstr(const char *integrity_hash, const char *wrapped_key_hex);
+
+/*
+ * adl_auto_wrap_master_key_cstr: FIPS-compliant auto-wrap
+ * Fetches hardware secret, combines with integrity_hash, derives subkey,
+ * encrypts master_key_hex, and returns malloc'd wrapped hex string.
+ * Returns NULL on failure. Caller must free with adl_free_cstr().
+ */
+char* adl_auto_wrap_master_key_cstr(const char *integrity_hash, const char *master_key_hex);
 
 /* ── FIPS 140-3 §5.1 / SP 800-90A — CTR_DRBG ────────────────────────────── */
 

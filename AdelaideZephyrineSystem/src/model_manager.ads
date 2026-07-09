@@ -357,6 +357,11 @@ package Model_Manager is
    --  the tokenized prompt + KV cache for attention.
    --  Context Fault: Model requests additional context mid-generation via
    --  [CONTEXT_FAULT: query=... category=...]. Each fault adds a "hop".
+   --
+   --  HISTORICAL NOTE: Context Fault was imported from the previous Python
+   --  implementation called "Multi Level Condensed Memory Contextual Fetching
+   --  (MLCMCF)" from the Zephy Architecture, then continued as ContextFault
+   --  in this Ada/SPARK codebase.
    Current_Context_Fault_JMPs : Natural := 0;
    Current_Internal_State_Len : Natural := 0;
    Current_JMP_Count          : Natural := 0;

@@ -15,6 +15,8 @@ with Ada.Exceptions;
 with Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
+with Spark_Drbg; -- Force linkage of the exported C symbols
+
 package body Adelaide_Crypto is
 
    use Interfaces.C;

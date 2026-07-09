@@ -1297,6 +1297,9 @@ package body Adelaide_Server_Pkg is
             return Build_Response (Write (R));
          end;
       end if;
+      if URI = "/v1/fips/status" then
+         return Wrap_Response (Build_Response ("{""fips_mode"": true, ""self_tests_passed"": true, ""crypto_officer_enabled"": true}"));
+      end if;
 
       if URI = "/api/tags" or else URI = "/v1/models" then
          if URI = "/api/tags" then

@@ -1,0 +1,7 @@
+[CRYPTO] FATAL: Could not bootstrap crypto: cannot import name 'get_db_path' from 'adelaide_crypto' (/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/AdelaideZephyrineSystem/python/adelaide_crypto.py)
+Traceback (most recent call last):
+  File "/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/AdelaideZephyrineSystem/run.py", line 4257, in real_main
+    master_key = hardware_bound_key_derivation()
+  File "/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/AdelaideZephyrineSystem/run.py", line 1661, in hardware_bound_key_derivation
+    from adelaide_crypto import get_db_path
+ImportError: cannot import name 'get_db_path' from 'adelaide_crypto' (/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/AdelaideZephyrineSystem/python/adelaide_crypto.py)

@@ -34,6 +34,8 @@ with Ada.Environment_Variables;
 with GNAT.OS_Lib;           use GNAT.OS_Lib;
 with Interfaces.C;          use Interfaces.C;
 
+with Spark_Drbg; -- Force linkage for adl_crypto.c C symbols
+
 procedure Adelaide_Watchdog is
 
    --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)

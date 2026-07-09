@@ -4,6 +4,7 @@ with Ada.Text_IO; use Ada.Text_IO;
 with Ada_Sqlite3; use Ada_Sqlite3;
 with Ada.Exceptions;
 with Ada.Directories;
+with Ada.Environment_Variables;
 with GNATCOLL.JSON;
 with Interfaces;            use Interfaces;
 with Interfaces.C.Strings;  use Interfaces.C.Strings;
@@ -14,9 +15,29 @@ package body Database_Manager is
    procedure C_Abort;
    pragma Import (C, C_Abort, "abort");
 
-   DB_Dir   : constant String := "NetworkMemoryPool";
-   DB_File : constant String := DB_Dir & "/adelaide_memory.db";
-   Lit_DB_File : constant String := DB_Dir & "/literatureRefIndex.db";
+   function Get_User return String is
+   begin
+      if Ada.Environment_Variables.Exists ("ADELAIDE_USER") then
+         return Ada.Environment_Variables.Value ("ADELAIDE_USER");
+      else
+         return "default";
+      end if;
+   end Get_User;
+
+   function DB_Dir return String is
+   begin
+      return "NetworkMemoryPool/" & Get_User;
+   end DB_Dir;
+
+   function DB_File return String is
+   begin
+      return DB_Dir & "/adelaide_memory.db";
+   end DB_File;
+
+   function Lit_DB_File return String is
+   begin
+      return DB_Dir & "/literatureRefIndex.db";
+   end Lit_DB_File;
 
    Old_DB_Dir : constant String := "UI_Database";
 

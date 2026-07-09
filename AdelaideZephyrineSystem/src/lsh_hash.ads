@@ -15,4 +15,18 @@ package LSH_Hash is
      (Embedding : Math_Utils.Vector;
       Length    : Natural) return Integer;
 
+   --  Compute a steered 10-bit LSH hash using PINN Schrödinger Bridge.
+   --  Uses pinn_schrodinger.py --steer-hash to apply Orthogonal Latent
+   --  Injection before computing the hash.
+   --
+   --  Pipeline: Schrödinger → PINN → QRNN → Orthogonal Injection → LSH
+   --
+   --  Returns the hash on success, or -1 if:
+   --    - The PINN worker could not be spawned
+   --    - The worker returned an error
+   function Compute_Steered
+     (Embedding : Math_Utils.Vector;
+      Length    : Natural;
+      Alpha     : Float := 0.1) return Integer;
+
 end LSH_Hash;
