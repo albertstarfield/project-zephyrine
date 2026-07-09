@@ -1,4 +1,4 @@
-<mxfile host="Electron" agent="OpenAgent" version="24.7.17" pages="3">
+<mxfile host="Electron" agent="OpenAgent" version="24.7.17" pages="4">
   <diagram name="Request Flow &amp; Core Architecture" id="req-flow-001">
     <mxGraphModel dx="2200" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
       <root>
@@ -711,6 +711,266 @@
         <!-- Provenance Note -->
         <mxCell id="cf-provenance" value="&lt;b&gt;Historical Provenance&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Context Fault was imported from the Python&lt;br&gt;implementation called &quot;Multi Level Condensed&lt;br&gt;Memory Contextual Fetching (MLCMCF)&quot;&lt;br&gt;from the Zephy Architecture.&lt;br&gt;Continued as ContextFault in Ada/SPARK.&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;" vertex="1" parent="1">
           <mxGeometry x="850" y="200" width="280" height="100" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram name="Encryption &amp; Key Derivation" id="encryption-004">
+    <mxGraphModel dx="2400" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="enc-title" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;&lt;b&gt;Encryption &amp;amp; Key Derivation — Hardware-Bound Security&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px; color: #666;&quot;&gt;AES-256-GCM + HKDF-SHA512 | FIPS 140-3 | Post-Quantum Safe&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="800" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- SECTION 1: Hardware Identity -->
+        <!-- ============================================================ -->
+        <mxCell id="hw-identity-box" value="&lt;b&gt;Hardware Identity (System_Integrity)&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="20" y="70" width="900" height="200" as="geometry" />
+        </mxCell>
+
+        <!-- Linux Sources -->
+        <mxCell id="hw-linux" value="&lt;b&gt;Linux Hardware Sources&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• lsusb (USB devices)&lt;br&gt;• lshw -c system (system info)&lt;br&gt;• lspci (PCI devices)&lt;br&gt;• dmidecode -t system (BIOS/Serial)&lt;br&gt;• /proc/cpuinfo (CPU)&lt;br&gt;• dmidecode -t memory (RAM)&lt;br&gt;• lsblk -d -o NAME,SERIAL (disk)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="hw-identity-box">
+          <mxGeometry x="10" y="35" width="200" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- macOS Sources -->
+        <mxCell id="hw-macos" value="&lt;b&gt;macOS Hardware Sources&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• system_profiler SPUSBDataType&lt;br&gt;• system_profiler SPHardwareDataType&lt;br&gt;• system_profiler SPPCIDataType&lt;br&gt;• ioreg (IOPlatformSerialNumber)&lt;br&gt;• system_profiler SPNVMeDataType&lt;br&gt;• sysctl machdep.cpu&lt;br&gt;• system_profiler SPMemoryDataType&lt;br&gt;• system_profiler SPThunderboltDataType&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="hw-identity-box">
+          <mxGeometry x="230" y="35" width="220" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Binary Integrity -->
+        <mxCell id="binary-integrity" value="&lt;b&gt;Binary Integrity Sources&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Linux:&lt;br&gt;• /boot/*vmlinuz*, /boot/*initrd*&lt;br&gt;• /bin/*, /usr/bin/*&lt;br&gt;• /etc/systemd/system/*&lt;br&gt;&lt;br&gt;macOS:&lt;br&gt;• /System/Library/Kernels/*&lt;br&gt;• /usr/local/bin/*&lt;br&gt;• /Library/LaunchDaemons/*&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;" vertex="1" parent="hw-identity-box">
+          <mxGeometry x="470" y="35" width="200" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- SHA-512 Hash -->
+        <mxCell id="sha512-hw" value="&lt;b&gt;SHA-512 Hash&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;openssl dgst -sha512 -binary&lt;br&gt;64 bytes (512 bits)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="hw-identity-box">
+          <mxGeometry x="690" y="35" width="190" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Combined Hash -->
+        <mxCell id="combined-hash" value="&lt;b&gt;Integrity_Hash&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;SHA512(HW_Hash || Binary_Hash)&lt;br&gt;XOR combination&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="hw-identity-box">
+          <mxGeometry x="690" y="110" width="190" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e-hw-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;" edge="1" source="hw-linux" target="sha512-hw" parent="hw-identity-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-hw-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;" edge="1" source="hw-macos" target="sha512-hw" parent="hw-identity-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-hw-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#d79b00;" edge="1" source="binary-integrity" target="combined-hash" parent="hw-identity-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-hw-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;" edge="1" source="sha512-hw" target="combined-hash" parent="hw-identity-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- SECTION 2: Key Derivation Chain -->
+        <!-- ============================================================ -->
+        <mxCell id="key-deriv-box" value="&lt;b&gt;Key Derivation Chain (HKDF-SHA512 / HKDF-SHA256)&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="20" y="290" width="900" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- Step 1 -->
+        <mxCell id="key-step1" value="&lt;b&gt;Step 1: Integrity Hash&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;SHA512(HW_Hash || Binary_Hash)&lt;br&gt;64 bytes (512 bits)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="key-deriv-box">
+          <mxGeometry x="10" y="35" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Step 2 -->
+        <mxCell id="key-step2" value="&lt;b&gt;Step 2: Master Key&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;HKDF-SHA512&lt;br&gt;salt = integrity_hash&lt;br&gt;ikm = user_secret (password/recovery key)&lt;br&gt;info = &amp;quot;adelaide:master-key:v1&amp;quot;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="key-deriv-box">
+          <mxGeometry x="190" y="35" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Step 3 -->
+        <mxCell id="key-step3" value="&lt;b&gt;Step 3: Per-DB AES Key&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;HKDF-SHA256&lt;br&gt;salt = master_key&lt;br&gt;ikm = context_string&lt;br&gt;info = &amp;quot;adelaide:db:&amp;quot; &amp;amp; context &amp;amp; &amp;quot;:v1&amp;quot;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="key-deriv-box">
+          <mxGeometry x="430" y="35" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Master Key Store -->
+        <mxCell id="master-key-store" value="&lt;b&gt;Master_Key_Store&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;SPARK-Verified (SPARK_Mode=On)&lt;br&gt;512-bit key in volatile memory&lt;br&gt;Never written to disk&lt;br&gt;Clear_Key: volatile write&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="key-deriv-box">
+          <mxGeometry x="670" y="35" width="210" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Context Examples -->
+        <mxCell id="context-examples" value="&lt;b&gt;Context Examples&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:8px;&quot;&gt;&amp;quot;adelaide:db:memory:v1&amp;quot;     — adelaide_memory.db&lt;br&gt;&amp;quot;adelaide:db:literature:v1&amp;quot; — literatureRefIndex.db&lt;br&gt;&amp;quot;adelaide:db:assistant:v1&amp;quot;  — assistant_session.db&lt;br&gt;&amp;quot;adelaide:db:memory_index:v1&amp;quot; — memoryRefIndex.db&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="key-deriv-box">
+          <mxGeometry x="10" y="115" width="350" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e-key-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#6c8ebf;" edge="1" source="key-step1" target="key-step2" parent="key-deriv-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-key-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#6c8ebf;" edge="1" source="key-step2" target="key-step3" parent="key-deriv-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-key-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#9673a6;dashed=1;" edge="1" source="key-step2" target="master-key-store" parent="key-deriv-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- SECTION 3: AES-256-GCM Encryption -->
+        <!-- ============================================================ -->
+        <mxCell id="aes-box" value="&lt;b&gt;AES-256-GCM Encryption (Field-Level)&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="20" y="490" width="900" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Encrypted Blob Format -->
+        <mxCell id="blob-format" value="&lt;b&gt;Encrypted Blob Format&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;nonce(12 bytes) || AES-256-GCM ciphertext || auth_tag(16 bytes)&lt;br&gt;Total overhead: 28 bytes per encrypted field&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="aes-box">
+          <mxGeometry x="10" y="35" width="350" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Encrypt -->
+        <mxCell id="encrypt-fn" value="&lt;b&gt;Encrypt_Field&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;AES-256-GCM&lt;br&gt;sub_key_hex + plaintext&lt;br&gt;→ hex-encoded ciphertext&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="aes-box">
+          <mxGeometry x="380" y="35" width="150" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Decrypt -->
+        <mxCell id="decrypt-fn" value="&lt;b&gt;Decrypt_Field&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;AES-256-GCM&lt;br&gt;sub_key_hex + ciphertext&lt;br&gt;→ plaintext UTF-8&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="aes-box">
+          <mxGeometry x="550" y="35" width="150" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- C FFI -->
+        <mxCell id="c-ffi-crypto" value="&lt;b&gt;C FFI (adl_crypto.c)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;adl_encrypt / adl_decrypt&lt;br&gt;OpenSSL EVP_aes_256_gcm&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="aes-box">
+          <mxGeometry x="720" y="35" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Post-Quantum Note -->
+        <mxCell id="pq-note" value="&lt;b&gt;Post-Quantum Safe&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:8px;&quot;&gt;AES-256: 128-bit post-quantum security (Grover)&lt;br&gt;No asymmetric keys → no Shor vulnerability&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="aes-box">
+          <mxGeometry x="10" y="100" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e-aes-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;" edge="1" source="encrypt-fn" target="c-ffi-crypto" parent="aes-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-aes-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;" edge="1" source="decrypt-fn" target="c-ffi-crypto" parent="aes-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- SECTION 4: FIPS 140-3 & Anti-Tamper -->
+        <!-- ============================================================ -->
+        <mxCell id="fips-box" value="&lt;b&gt;FIPS 140-3 Compliance &amp;amp; Anti-Tamper&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="20" y="660" width="900" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Self-Tests -->
+        <mxCell id="self-tests" value="&lt;b&gt;Power-Up Self-Tests (KATs)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Known Answer Tests&lt;br&gt;Integrity scan of crypto source&lt;br&gt;Binary hash verification&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;" vertex="1" parent="fips-box">
+          <mxGeometry x="10" y="35" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- InferiorParadoxical -->
+        <mxCell id="inferior-paradox" value="&lt;b&gt;InferiorParadoxical&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Anti-tamper dead-man's switch&lt;br&gt;KAT failure → key zeroized&lt;br&gt;Crypto permanently disabled&lt;br&gt;The more attacker tampers, the more they destroy&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="fips-box">
+          <mxGeometry x="210" y="35" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- CTR_DRBG -->
+        <mxCell id="ctr-drbg" value="&lt;b&gt;CTR_DRBG (SPARK-Verified)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;FIPS 140-3 SP 800-90A&lt;br&gt;AES-256-ECB primitive&lt;br&gt;SPARK formal verification&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="fips-box">
+          <mxGeometry x="450" y="35" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- FIPS Mode -->
+        <mxCell id="fips-mode" value="&lt;b&gt;FIPS Mode Control&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Is_FIPS_Mode / Set_FIPS_Mode&lt;br&gt;Can only disable, never re-enable&lt;br&gt;Crypto Officer operation&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="fips-box">
+          <mxGeometry x="650" y="35" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Integrity Test Blob -->
+        <mxCell id="integrity-blob" value="&lt;b&gt;Integrity Test Blob&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Known plaintext: &amp;quot;--ADELAIDE-INTEGRITY-TEST--&amp;quot;&lt;br&gt;Stored in system_state table&lt;br&gt;Verify on boot → failure = recovery key prompt&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="fips-box">
+          <mxGeometry x="10" y="110" width="350" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e-fips-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#d79b00;" edge="1" source="self-tests" target="inferior-paradox" parent="fips-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- SECTION 5: Master Key Priority -->
+        <!-- ============================================================ -->
+        <mxCell id="priority-box" value="&lt;b&gt;Master Key Priority (First Wins)&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="940" y="70" width="300" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="priority-1" value="&lt;b&gt;1. ADELAIDE_MASTER_KEY&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Environment variable&lt;br&gt;Portable, for CI/migration&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="priority-box">
+          <mxGeometry x="10" y="35" width="270" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="priority-2" value="&lt;b&gt;2. config/master.key&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;File, chmod 0600&lt;br&gt;Local to project&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="priority-box">
+          <mxGeometry x="10" y="85" width="270" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="priority-3" value="&lt;b&gt;3. Generate New&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;First boot (run.py)&lt;br&gt;Write to config/master.key&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;" vertex="1" parent="priority-box">
+          <mxGeometry x="10" y="135" width="270" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- SECTION 6: Recovery Flow -->
+        <!-- ============================================================ -->
+        <mxCell id="recovery-box" value="&lt;b&gt;Recovery Key Flow&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="940" y="270" width="300" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="recov-boot" value="&lt;b&gt;Boot&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Compute Integrity_Hash&lt;br&gt;Derive Master_Key&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="recovery-box">
+          <mxGeometry x="10" y="35" width="130" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="recov-verify" value="&lt;b&gt;Verify Integrity Blob&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Decrypt test blob&lt;br&gt;with derived key&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="recovery-box">
+          <mxGeometry x="50" y="95" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="recov-ok" value="&lt;b&gt;OK&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Key verified&lt;br&gt;Continue boot&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="recovery-box">
+          <mxGeometry x="10" y="165" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="recov-fail" value="&lt;b&gt;FAIL&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Prompt user&lt;br&gt;for recovery key&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="recovery-box">
+          <mxGeometry x="190" y="165" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e-recov-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#9673a6;" edge="1" source="recov-boot" target="recov-verify" parent="recovery-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-recov-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;" edge="1" source="recov-verify" target="recov-ok" parent="recovery-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-recov-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;" edge="1" source="recov-verify" target="recov-fail" parent="recovery-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- SECTION 7: SPARK DRBG -->
+        <!-- ============================================================ -->
+        <mxCell id="spark-drbg-box" value="&lt;b&gt;SPARK DRBG (FIPS 140-3 SP 800-90A)&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="940" y="490" width="300" height="150" as="geometry" />
+        </mxCell>
+
+        <mxCell id="drbg-entropy" value="&lt;b&gt;Entropy Gathering&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;adl_gather_entropy&lt;br&gt;/dev/urandom or OS RNG&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="spark-drbg-box">
+          <mxGeometry x="10" y="35" width="130" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="drbg-aes" value="&lt;b&gt;AES-256-ECB&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;adl_aes256_ecb_encrypt&lt;br&gt;CTR_DRBG update&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="spark-drbg-box">
+          <mxGeometry x="155" y="35" width="130" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="drbg-generate" value="&lt;b&gt;Generate&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;adl_drbg_generate&lt;br&gt;Cryptographic random bytes&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="spark-drbg-box">
+          <mxGeometry x="80" y="100" width="140" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e-drbg-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#9673a6;" edge="1" source="drbg-entropy" target="drbg-aes" parent="spark-drbg-box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-drbg-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#9673a6;" edge="1" source="drbg-aes" target="drbg-generate" parent="spark-drbg-box">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
       </root>
