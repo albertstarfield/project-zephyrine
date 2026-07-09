@@ -89,12 +89,12 @@
         </mxCell>
 
         <!-- ELP3 Fast-Path -->
-        <mxCell id="elp3-box" value="&lt;b&gt;ELP3: Zenith_Orion&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Hardware/actuator control&lt;br&gt;SHM trigger check&lt;br&gt;Deterministic, no LLM&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="layer3">
+        <mxCell id="elp3-box" value="&lt;b&gt;ELP3: Zenith_Orion&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Hardware/actuator control&lt;br&gt;Fixed 250µs (4000 Hz)&lt;br&gt;DETERMINISTIC DOMAIN&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="layer3">
           <mxGeometry x="240" y="40" width="160" height="70" as="geometry" />
         </mxCell>
 
         <!-- ELP2 Fast-Path -->
-        <mxCell id="elp2-box" value="&lt;b&gt;ELP2: Stella_Icarus&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Avionics/API trigger check&lt;br&gt;ROS2 telemetry poll&lt;br&gt;Deterministic, no LLM&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="layer3">
+        <mxCell id="elp2-box" value="&lt;b&gt;ELP2: Stella_Icarus&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Avionics/API trigger check&lt;br&gt;ROS2 telemetry poll&lt;br&gt;DETERMINISTIC DOMAIN&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="layer3">
           <mxGeometry x="420" y="40" width="160" height="70" as="geometry" />
         </mxCell>
 
@@ -225,8 +225,13 @@
           <mxGeometry x="20" y="35" width="130" height="60" as="geometry" />
         </mxCell>
 
-        <mxCell id="tool-imagine" value="&lt;b&gt;imagine&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;FLUX.1 Schnell (Q2_K)&lt;br&gt;+ SD Refinement&lt;br&gt;Two-stage pipeline&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;" vertex="1" parent="layer4">
-          <mxGeometry x="170" y="35" width="150" height="70" as="geometry" />
+        <mxCell id="tool-imagine" value="&lt;b&gt;imagine&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;FLUX.1 Schnell (Q2_K)&lt;br&gt;+ SD Refinement&lt;br&gt;Two-stage pipeline&lt;br&gt;→ Stores in imagined_images&lt;br&gt;→ Multimodal feedback to ELP0&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;" vertex="1" parent="layer4">
+          <mxGeometry x="170" y="35" width="150" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Multimodal feedback note -->
+        <mxCell id="imagine-feedback" value="&lt;b&gt;Multimodal Pipeline Integration&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;imagine tool generates images via ELP0&lt;br&gt;Stores in imagined_images table (SQLite)&lt;br&gt;Images fed back as multimodal context&lt;br&gt;to Hybrid_Generate for richer answers&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;" vertex="1" parent="layer4">
+          <mxGeometry x="340" y="110" width="280" height="80" as="geometry" />
         </mxCell>
 
         <mxCell id="tool-schedule" value="&lt;b&gt;schedule&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Cronia Scheduler&lt;br&gt;Background tasks&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="layer4">
@@ -351,24 +356,46 @@
           <mxGeometry x="20" y="10" width="700" height="50" as="geometry" />
         </mxCell>
 
+        <!-- Domain Labels -->
+        <mxCell id="domain-det" value="&lt;b&gt;DETERMINISTIC DOMAIN&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Fixed timing, no LLM, pure logic&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="20" y="60" width="670" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="domain-spec" value="&lt;b&gt;NON-DETERMINISTIC SPECULATIVE DOMAIN&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;LLM inference, context fault reasoning, speculative prefetch&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="20" y="240" width="700" height="30" as="geometry" />
+        </mxCell>
+
         <!-- ELP3 -->
-        <mxCell id="elp3" value="&lt;b&gt;ELP3 — Zenith_Orion&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;HARDWARE/ACTUATOR CONTROL&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• SHM trigger check (deterministic)&lt;br&gt;• Actuator commands (servo, motor)&lt;br&gt;• No LLM inference — pure logic&lt;br&gt;• WCET tracking (worst-case exec time)&lt;br&gt;• ROS2 actuator publish&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="20" y="80" width="320" height="150" as="geometry" />
+        <mxCell id="elp3" value="&lt;b&gt;ELP3 — Zenith_Orion&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;HARDWARE/ACTUATOR CONTROL&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• SHM trigger check (deterministic)&lt;br&gt;• Actuator commands (servo, motor)&lt;br&gt;• No LLM inference — pure logic&lt;br&gt;• Fixed 250µs cadence (4000 Hz)&lt;br&gt;• ROS2 actuator publish&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="90" width="320" height="140" as="geometry" />
         </mxCell>
 
         <!-- ELP2 -->
         <mxCell id="elp2" value="&lt;b&gt;ELP2 — Stella_Icarus&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;AVIONICS/TELEMETRY&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• API trigger check (deterministic)&lt;br&gt;• ROS2 telemetry poll (DDS network)&lt;br&gt;• Sensor reads, flight data&lt;br&gt;• No LLM inference — pure logic&lt;br&gt;• WCET tracking&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="370" y="80" width="320" height="150" as="geometry" />
+          <mxGeometry x="370" y="90" width="320" height="140" as="geometry" />
         </mxCell>
 
         <!-- ELP1 -->
         <mxCell id="elp1" value="&lt;b&gt;ELP1 — Hybrid_Generate (User-Facing)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;LLM INFERENCE + REASONING&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• Main user request processing&lt;br&gt;• Snowball-Enaga model inference&lt;br&gt;• Context Fault multi-hop reasoning&lt;br&gt;• Tool execution (search, imagine, etc.)&lt;br&gt;• Memory injection + Reranker&lt;br&gt;• Streaming response delivery&lt;br&gt;• Unlimited retry budget (20 max)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="20" y="260" width="350" height="180" as="geometry" />
+          <mxGeometry x="20" y="270" width="350" height="170" as="geometry" />
         </mxCell>
 
         <!-- ELP0 -->
         <mxCell id="elp0" value="&lt;b&gt;ELP0 — Background Tasks&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;SPECULATION + PREFETCH&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• QRNN/LSH speculative context retrieval&lt;br&gt;• Proactive cache prediction&lt;br&gt;• Speculative_Cache population&lt;br&gt;• Knowledge graph background updates&lt;br&gt;• Preemptible — killed on ELP1 arrival&lt;br&gt;• Limited retry budget (3 max)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="400" y="260" width="320" height="180" as="geometry" />
+          <mxGeometry x="400" y="270" width="320" height="170" as="geometry" />
+        </mxCell>
+
+        <!-- Database/GraphML interconnection -->
+        <mxCell id="db-graphml" value="&lt;b&gt;SQLite + GraphML&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;ELP0/ELP1 data interconnected&lt;br&gt;• imagined_images table&lt;br&gt;• interaction_memory&lt;br&gt;• literature_memory&lt;br&gt;• knowledge_graph (GraphML export)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="780" y="270" width="220" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Edges to DB -->
+        <mxCell id="e-db-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;dashed=1;" edge="1" source="elp1" target="db-graphml" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-db-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;dashed=1;" edge="1" source="elp0" target="db-graphml" parent="1">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
         <!-- Priority arrows -->
@@ -393,7 +420,7 @@
         </mxCell>
 
         <!-- Timing info -->
-        <mxCell id="timing-info" value="&lt;b&gt;Timing Requirements&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• ELP3 WCET: &lt;500µs (deterministic)&lt;br&gt;• ELP2 WCET: &lt;1ms (deterministic)&lt;br&gt;• ELP1 TTFB: &lt;10ms (streaming)&lt;br&gt;• ELP0: background, preemptible&lt;br&gt;• Watchdog timeout: 600s (10 min)&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="1">
+        <mxCell id="timing-info" value="&lt;b&gt;Timing Requirements&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• ELP3 WCET: Fixed 250µs (4000 Hz)&lt;br&gt;• ELP2 WCET: &lt;1ms (deterministic)&lt;br&gt;• ELP1 TTFB: &lt;10ms (streaming)&lt;br&gt;• ELP0: background, preemptible&lt;br&gt;• Watchdog timeout: 600s (10 min)&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="1">
           <mxGeometry x="780" y="200" width="250" height="100" as="geometry" />
         </mxCell>
 
