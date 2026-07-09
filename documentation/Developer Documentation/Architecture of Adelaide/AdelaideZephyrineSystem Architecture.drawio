@@ -1,0 +1,530 @@
+<mxfile host="Electron" agent="OpenAgent" version="24.7.17" pages="3">
+  <diagram name="Request Flow &amp; Core Architecture" id="req-flow-001">
+    <mxGraphModel dx="2200" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title-1" value="&lt;font style=&quot;font-size: 24px;&quot;&gt;&lt;b&gt;AdelaideZephyrineSystem — Request Flow &amp;amp; Core Architecture&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 12px; color: #666;&quot;&gt;Current architecture (2026-07) — Replaces old Adelaide &amp;amp; Albert Paradigm&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="800" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- LAYER 1: CLIENT REQUESTS -->
+        <!-- ============================================================ -->
+        <mxCell id="layer1" value="Client Requests" style="swimlane;startSize=25;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="70" width="1560" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="client-ollama-chat" value="/api/chat&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Ollama-style&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;fontColor=#666666;" vertex="1" parent="layer1">
+          <mxGeometry x="20" y="30" width="120" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="client-ollama-gen" value="/api/generate&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Ollama-style&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;fontColor=#666666;" vertex="1" parent="layer1">
+          <mxGeometry x="160" y="30" width="120" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="client-openai-chat" value="/v1/chat/completions&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;OpenAI-compatible&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;fontColor=#666666;" vertex="1" parent="layer1">
+          <mxGeometry x="300" y="30" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="client-openai-comp" value="/v1/completions&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;OpenAI-compatible&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;fontColor=#666666;" vertex="1" parent="layer1">
+          <mxGeometry x="460" y="30" width="120" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="client-openai-img" value="/v1/images/generations&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Image generation&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;fontColor=#666666;" vertex="1" parent="layer1">
+          <mxGeometry x="600" y="30" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="client-acp" value="/api/acp&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;JSON-RPC 2.0&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;fontColor=#666666;" vertex="1" parent="layer1">
+          <mxGeometry x="760" y="30" width="100" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- LAYER 2: AWS SERVER + AUTH -->
+        <!-- ============================================================ -->
+        <mxCell id="layer2" value="AWS Server (Port 11420) + Authentication" style="swimlane;startSize=25;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;fontStyle=1;fontSize=12;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="190" width="1560" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="aws-server" value="&lt;b&gt;AWS (Ada Web Server)&lt;/b&gt;&lt;br&gt;HTTP listener on port 11420&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Handles all API endpoints&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666666;fontSize=11;fontColor=#666666;" vertex="1" parent="layer2">
+          <mxGeometry x="20" y="30" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="api-key-mgr" value="&lt;b&gt;API_Key_Manager&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Validate x-api-key header&lt;br&gt;FIPS 140-3 role enforcement&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;fontColor=#666666;" vertex="1" parent="layer2">
+          <mxGeometry x="250" y="30" width="180" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="payload-parser" value="&lt;b&gt;Payload Parser&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;JSON → ChatML format&lt;br&gt;Extract messages, images, stream, agentic&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666666;fontColor=#666666;" vertex="1" parent="layer2">
+          <mxGeometry x="460" y="30" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="streaming-queue" value="&lt;b&gt;Streaming_Queue&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;NDJSON/SSE streaming&lt;br&gt;Immediate TTFB&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666666;fontColor=#666666;" vertex="1" parent="layer2">
+          <mxGeometry x="690" y="30" width="150" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="response-cache" value="&lt;b&gt;Response_Cache&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;O(1) embedding lookup&lt;br&gt;String cache for repeated queries&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;fontColor=#666666;" vertex="1" parent="layer2">
+          <mxGeometry x="870" y="30" width="170" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Edges: Layer 1 → Layer 2 -->
+        <mxCell id="e-l1-l2-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#999;" edge="1" source="client-ollama-chat" target="aws-server" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-l1-l2-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#999;" edge="1" source="client-openai-chat" target="aws-server" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- LAYER 3: HYBRID_GENERATE (Core Orchestrator) -->
+        <!-- ============================================================ -->
+        <mxCell id="layer3" value="Hybrid_Generate — Core Orchestrator (model_manager.adb)" style="swimlane;startSize=25;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="20" y="310" width="1560" height="580" as="geometry" />
+        </mxCell>
+
+        <!-- ELP Priority Gate -->
+        <mxCell id="elp-gate" value="&lt;b&gt;Priority_Model_Gate&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;ELP0/ELP1/ELP2/ELP3 priority arbitration&lt;br&gt;Preempt lower priority on arrival&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="layer3">
+          <mxGeometry x="20" y="40" width="180" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- ELP3 Fast-Path -->
+        <mxCell id="elp3-box" value="&lt;b&gt;ELP3: Zenith_Orion&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Hardware/actuator control&lt;br&gt;SHM trigger check&lt;br&gt;Deterministic, no LLM&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="layer3">
+          <mxGeometry x="240" y="40" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- ELP2 Fast-Path -->
+        <mxCell id="elp2-box" value="&lt;b&gt;ELP2: Stella_Icarus&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Avionics/API trigger check&lt;br&gt;ROS2 telemetry poll&lt;br&gt;Deterministic, no LLM&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="layer3">
+          <mxGeometry x="420" y="40" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Embedding -->
+        <mxCell id="embedding-box" value="&lt;b&gt;Get_Embedding&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Qwen embedding model&lt;br&gt;1536-D vector&lt;br&gt;Load → compute → unload&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="layer3">
+          <mxGeometry x="20" y="170" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Cache Checks -->
+        <mxCell id="db-cache" value="&lt;b&gt;Database_Manager&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Cached_Response lookup&lt;br&gt;Embedding similarity match&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="layer3">
+          <mxGeometry x="210" y="170" width="170" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="spec-cache" value="&lt;b&gt;Speculative_Cache&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;ELP0 prefetched responses&lt;br&gt;Proactive predictions&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="layer3">
+          <mxGeometry x="400" y="170" width="170" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Memory Injection -->
+        <mxCell id="memory-inject" value="&lt;b&gt;Memory Injection&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Search Interaction + Literature (top-10)&lt;br&gt;Reranker re-rank by semantic relevance&lt;br&gt;Inject top-1 into system prompt&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="layer3">
+          <mxGeometry x="20" y="270" width="250" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- QRNN/LSH -->
+        <mxCell id="qrnn-box" value="&lt;b&gt;QRNN/LSH (ELP0)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Quantum-inspired RNN&lt;br&gt;1024-D → 10-bit LSH hash&lt;br&gt;Python sidecar worker&lt;br&gt;Speculative context retrieval&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="layer3">
+          <mxGeometry x="300" y="270" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Factual Context -->
+        <mxCell id="factual-ctx" value="&lt;b&gt;Factual Context Check&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Generate search keywords via LLM&lt;br&gt;Tool_Manager.Execute_Tool(searchglobalref)&lt;br&gt;Append to Internal_State&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="layer3">
+          <mxGeometry x="510" y="270" width="230" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Context Fault Loop -->
+        <mxCell id="ctx-fault-loop" value="&lt;b&gt;Context Fault Loop (Multi-Hop Reasoning)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Imported from Python MLCMCF (Zephy Architecture)&lt;br&gt;Max 99 hops | Model requests [CONTEXT_FAULT: query=X category=Y]&lt;br&gt;Fetch knowledge → append to Internal_State → retry generation&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="layer3">
+          <mxGeometry x="20" y="370" width="380" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Generate Call -->
+        <mxCell id="generate-call" value="&lt;b&gt;Model_Manager.Generate&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Snowball-Enaga model via llama.cpp FFI&lt;br&gt;KV cache, GPU acceleration, OOM retry&lt;br&gt;Streaming support&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666666;fontSize=11;" vertex="1" parent="layer3">
+          <mxGeometry x="430" y="370" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Tool Execution -->
+        <mxCell id="tool-mgr" value="&lt;b&gt;Tool_Manager&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Parse [ACTION: tool(params)]&lt;br&gt;Execute tool, return result&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="layer3">
+          <mxGeometry x="680" y="370" width="170" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Quality Checks -->
+        <mxCell id="quality-check" value="&lt;b&gt;Quality Checks&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Think-only detection → retry&lt;br&gt;Repeating response → retry&lt;br&gt;F_Detected → re-generate&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="layer3">
+          <mxGeometry x="880" y="370" width="170" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Axiom Derivation -->
+        <mxCell id="axiom-derive" value="&lt;b&gt;AxiomAether Pipeline&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;[AXIOM_DERIVE: statement=...]&lt;br&gt;First-principles logic derivation&lt;br&gt;Bypass social consensus falsehoods&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="layer3">
+          <mxGeometry x="1080" y="370" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Response Output -->
+        <mxCell id="response-output" value="&lt;b&gt;Response Output&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Push to stream / return JSON&lt;br&gt;Grade_Response_Quality (self-assessment)&lt;br&gt;Log performance metrics&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="layer3">
+          <mxGeometry x="1290" y="370" width="200" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Edges within Layer 3 -->
+        <mxCell id="e3-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="aws-server" target="elp-gate" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="elp-gate" target="elp3-box" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="elp-gate" target="elp2-box" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="elp-gate" target="embedding-box" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="embedding-box" target="db-cache" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="db-cache" target="spec-cache" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="spec-cache" target="memory-inject" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="memory-inject" target="qrnn-box" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="qrnn-box" target="factual-ctx" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="factual-ctx" target="ctx-fault-loop" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="ctx-fault-loop" target="generate-call" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="generate-call" target="tool-mgr" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="tool-mgr" target="quality-check" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="quality-check" target="axiom-derive" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="axiom-derive" target="response-output" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Loop back edge for Context Fault -->
+        <mxCell id="e3-loop" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#d79b00;strokeWidth=2;dashed=1;" edge="1" source="generate-call" target="ctx-fault-loop" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="540" y="340" />
+              <mxPoint x="210" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- LAYER 4: TOOLS & SUBSYSTEMS -->
+        <!-- ============================================================ -->
+        <mxCell id="layer4" value="Tools &amp; Subsystems" style="swimlane;startSize=25;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="20" y="910" width="1560" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool-search" value="&lt;b&gt;searchglobalref&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Knowledge search&lt;br&gt;SQLite + embedding&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="layer4">
+          <mxGeometry x="20" y="35" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool-imagine" value="&lt;b&gt;imagine&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;FLUX.1 Schnell (Q2_K)&lt;br&gt;+ SD Refinement&lt;br&gt;Two-stage pipeline&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;" vertex="1" parent="layer4">
+          <mxGeometry x="170" y="35" width="150" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool-schedule" value="&lt;b&gt;schedule&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Cronia Scheduler&lt;br&gt;Background tasks&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="layer4">
+          <mxGeometry x="340" y="35" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool-px4" value="&lt;b&gt;px4_gnc&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;PX4 flight control&lt;br&gt;GNC bindings&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="layer4">
+          <mxGeometry x="490" y="35" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="tool-ros2" value="&lt;b&gt;ros2_actuate&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;ROS2 actuator commands&lt;br&gt;DDS network&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="layer4">
+          <mxGeometry x="630" y="35" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- FLUX Pipeline Detail -->
+        <mxCell id="flux-pipeline" value="&lt;b&gt;FLUX.1 Image Generation Pipeline&lt;/b&gt;" style="swimlane;startSize=20;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;fontStyle=1;fontSize=10;" vertex="1" parent="layer4">
+          <mxGeometry x="790" y="30" width="350" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="flux-stage1" value="&lt;b&gt;Stage 1&lt;/b&gt;&lt;br&gt;FLUX Schnell Q2_K&lt;br&gt;&lt;font style=&quot;font-size:8px;&quot;&gt;2-4 steps, ~4GB VRAM&lt;br&gt;Sparse/fast output&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="flux-pipeline">
+          <mxGeometry x="10" y="25" width="130" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="flux-free" value="FreeParallelMemory&lt;br&gt;&lt;font style=&quot;font-size:8px;&quot;&gt;Unload FLUX ~7GB&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="flux-pipeline">
+          <mxGeometry x="150" y="25" width="90" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="flux-stage2" value="&lt;b&gt;Stage 2&lt;/b&gt;&lt;br&gt;SD Refinement&lt;br&gt;&lt;font style=&quot;font-size:8px;&quot;&gt;8+ steps, ~1.9GB&lt;br&gt;High quality output&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="flux-pipeline">
+          <mxGeometry x="250" y="25" width="90" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-flux-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="flux-stage1" target="flux-free" parent="flux-pipeline">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-flux-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="flux-free" target="flux-stage2" parent="flux-pipeline">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Knowledge Pipeline -->
+        <mxCell id="knowledge-pipeline" value="&lt;b&gt;Knowledge Pipeline&lt;/b&gt;" style="swimlane;startSize=20;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;fontStyle=1;fontSize=10;" vertex="1" parent="layer4">
+          <mxGeometry x="1160" y="30" width="380" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="kb-interaction" value="&lt;font style=&quot;font-size:9px;&quot;&gt;Interaction Memory&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666;" vertex="1" parent="knowledge-pipeline">
+          <mxGeometry x="10" y="25" width="100" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="kb-literature" value="&lt;font style=&quot;font-size:9px;&quot;&gt;Literature Memory&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666;" vertex="1" parent="knowledge-pipeline">
+          <mxGeometry x="120" y="25" width="100" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="kb-reranker" value="&lt;font style=&quot;font-size:9px;&quot;&gt;Reranker&lt;br&gt;(BERT cross-encoder)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="knowledge-pipeline">
+          <mxGeometry x="230" y="25" width="110" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-kb-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="kb-interaction" target="kb-reranker" parent="knowledge-pipeline">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-kb-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="kb-literature" target="kb-reranker" parent="knowledge-pipeline">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- QRNN Detail -->
+        <mxCell id="qrnn-detail" value="&lt;b&gt;QRNN/LSH Worker (Python sidecar)&lt;/b&gt;" style="swimlane;startSize=20;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;fontStyle=1;fontSize=10;" vertex="1" parent="layer4">
+          <mxGeometry x="790" y="120" width="350" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="qrnn-embed" value="1024-D Embedding" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666;" vertex="1" parent="qrnn-detail">
+          <mxGeometry x="10" y="25" width="90" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="qrnn-ry" value="16-qubit RY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666;" vertex="1" parent="qrnn-detail">
+          <mxGeometry x="110" y="25" width="70" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="qrnn-cnot" value="CNOT Chain" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666;" vertex="1" parent="qrnn-detail">
+          <mxGeometry x="190" y="25" width="70" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="qrnn-hash" value="10-bit Hash" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="qrnn-detail">
+          <mxGeometry x="270" y="25" width="70" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-qrnn-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="qrnn-embed" target="qrnn-ry" parent="qrnn-detail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-qrnn-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="qrnn-ry" target="qrnn-cnot" parent="qrnn-detail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-qrnn-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="qrnn-cnot" target="qrnn-hash" parent="qrnn-detail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Edges: Layer 3 → Layer 4 -->
+        <mxCell id="e-l3-l4-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#999;" edge="1" source="tool-mgr" target="tool-search" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-l3-l4-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#999;" edge="1" source="tool-mgr" target="tool-imagine" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-l3-l4-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#999;" edge="1" source="tool-mgr" target="tool-schedule" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-l3-l4-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#999;" edge="1" source="tool-mgr" target="tool-px4" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-l3-l4-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#999;" edge="1" source="tool-mgr" target="tool-ros2" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram name="ELP Priority System" id="elp-system-002">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="elp-title" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;&lt;b&gt;ELP Priority System — Execution Level Priority&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px; color: #666;&quot;&gt;Deterministic priority arbitration for GPU resource sharing (parallel=1 constraint)&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="700" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ELP3 -->
+        <mxCell id="elp3" value="&lt;b&gt;ELP3 — Zenith_Orion&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;HARDWARE/ACTUATOR CONTROL&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• SHM trigger check (deterministic)&lt;br&gt;• Actuator commands (servo, motor)&lt;br&gt;• No LLM inference — pure logic&lt;br&gt;• WCET tracking (worst-case exec time)&lt;br&gt;• ROS2 actuator publish&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="80" width="320" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- ELP2 -->
+        <mxCell id="elp2" value="&lt;b&gt;ELP2 — Stella_Icarus&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;AVIONICS/TELEMETRY&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• API trigger check (deterministic)&lt;br&gt;• ROS2 telemetry poll (DDS network)&lt;br&gt;• Sensor reads, flight data&lt;br&gt;• No LLM inference — pure logic&lt;br&gt;• WCET tracking&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="370" y="80" width="320" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- ELP1 -->
+        <mxCell id="elp1" value="&lt;b&gt;ELP1 — Hybrid_Generate (User-Facing)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;LLM INFERENCE + REASONING&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• Main user request processing&lt;br&gt;• Snowball-Enaga model inference&lt;br&gt;• Context Fault multi-hop reasoning&lt;br&gt;• Tool execution (search, imagine, etc.)&lt;br&gt;• Memory injection + Reranker&lt;br&gt;• Streaming response delivery&lt;br&gt;• Unlimited retry budget (20 max)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="260" width="350" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- ELP0 -->
+        <mxCell id="elp0" value="&lt;b&gt;ELP0 — Background Tasks&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px;&quot;&gt;SPECULATION + PREFETCH&lt;/font&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• QRNN/LSH speculative context retrieval&lt;br&gt;• Proactive cache prediction&lt;br&gt;• Speculative_Cache population&lt;br&gt;• Knowledge graph background updates&lt;br&gt;• Preemptible — killed on ELP1 arrival&lt;br&gt;• Limited retry budget (3 max)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="260" width="320" height="180" as="geometry" />
+        </mxCell>
+
+        <!-- Priority arrows -->
+        <mxCell id="prio-arrow-1" value="&lt;b&gt;HIGHEST&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="710" y="130" width="60" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="prio-arrow-2" value="&lt;b&gt;LOWEST&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="710" y="390" width="60" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="prio-line" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#666;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="740" y="160" as="sourcePoint" />
+            <mxPoint x="740" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Constraint note -->
+        <mxCell id="constraint-note" value="&lt;b&gt;PARALLEL=1 CONSTRAINT&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Only ONE model can be loaded in GPU at any time.&lt;br&gt;ELP3/ELP2 are deterministic (no GPU).&lt;br&gt;ELP1 and ELP0 share GPU — ELP0 is preempted on ELP1 arrival.&lt;br&gt;Violation = Metal OOM = server crash.&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="780" y="80" width="300" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Timing info -->
+        <mxCell id="timing-info" value="&lt;b&gt;Timing Requirements&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• ELP3 WCET: &lt;500µs (deterministic)&lt;br&gt;• ELP2 WCET: &lt;1ms (deterministic)&lt;br&gt;• ELP1 TTFB: &lt;10ms (streaming)&lt;br&gt;• ELP0: background, preemptible&lt;br&gt;• Watchdog timeout: 600s (10 min)&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="780" y="200" width="250" height="100" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram name="Context Fault &amp; Memory System" id="ctx-fault-003">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="cf-title" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;&lt;b&gt;Context Fault System — Multi-Hop Reasoning&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px; color: #666;&quot;&gt;Imported from Python &quot;Multi Level Condensed Memory Contextual Fetching (MLCMCF)&quot; — Zephy Architecture&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="800" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Initial Prompt -->
+        <mxCell id="cf-prompt" value="&lt;b&gt;User Prompt&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;ChatML formatted&lt;br&gt;+ System prompt (personality)&lt;br&gt;+ Memory citations&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="20" y="80" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- First Generation -->
+        <mxCell id="cf-gen1" value="&lt;b&gt;Generate (Hop 1)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Snowball-Enaga model&lt;br&gt;llama.cpp FFI call&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666;" vertex="1" parent="1">
+          <mxGeometry x="210" y="80" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Context Fault Detection -->
+        <mxCell id="cf-detect" value="&lt;b&gt;Parse Response&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Check for [CONTEXT_FAULT:&lt;br&gt;query=X category=Y]&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="400" y="70" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- No Fault Path -->
+        <mxCell id="cf-no-fault" value="&lt;b&gt;Response Complete&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;No context fault detected&lt;br&gt;Return to client&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;fontColor=#666666;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="600" y="70" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Fault Found Path -->
+        <mxCell id="cf-fault-found" value="&lt;b&gt;Context Fault Found&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;category=knowledge|graph|files&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="400" y="180" width="160" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Knowledge Search -->
+        <mxCell id="cf-search" value="&lt;b&gt;Knowledge Search&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Tool_Manager.Execute_Tool&lt;br&gt;(&amp;quot;searchglobalref&amp;quot;, query)&lt;br&gt;SQLite + embedding similarity&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="200" y="180" width="170" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Append to Internal State -->
+        <mxCell id="cf-append" value="&lt;b&gt;Append to Internal_State&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Add factual data to prompt&lt;br&gt;Increment JMP counter&lt;br&gt;Max 99 hops&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="200" y="280" width="170" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Retry Generation -->
+        <mxCell id="cf-retry" value="&lt;b&gt;Generate (Hop N+1)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Re-run with enriched prompt&lt;br&gt;Internal_State now has facts&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#666666;strokeColor=#666;" vertex="1" parent="1">
+          <mxGeometry x="400" y="280" width="170" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Max Hops Check -->
+        <mxCell id="cf-max-check" value="&lt;b&gt;JMP &amp;lt; 99?&lt;/b&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;fontColor=#666666;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="600" y="270" width="100" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Force Exit -->
+        <mxCell id="cf-force-exit" value="&lt;b&gt;Force Exit&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Max hops reached&lt;br&gt;Return best effort&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;fontColor=#666666;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="740" y="280" width="120" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Loop back -->
+        <mxCell id="cf-loop-back" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#d79b00;strokeWidth=2;dashed=1;" edge="1" source="cf-retry" target="cf-gen1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="485" y="250" />
+              <mxPoint x="100" y="250" />
+              <mxPoint x="100" y="110" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="ecf-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="cf-prompt" target="cf-gen1" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ecf-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="cf-gen1" target="cf-detect" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ecf-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="cf-detect" target="cf-no-fault" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="580" y="110" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ecf-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="cf-detect" target="cf-fault-found" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ecf-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="cf-fault-found" target="cf-search" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ecf-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="cf-search" target="cf-append" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ecf-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="cf-append" target="cf-retry" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ecf-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="cf-retry" target="cf-max-check" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ecf-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" source="cf-max-check" target="cf-force-exit" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Axiom Derivation branch -->
+        <mxCell id="cf-axiom" value="&lt;b&gt;Axiom Derivation&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;If [AXIOM_DERIVE: statement=...] detected&lt;br&gt;Run AxiomAether pipeline&lt;br&gt;First-principles logic derivation&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;fontColor=#666666;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="600" y="180" width="200" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ecf-axiom" style="edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;strokeColor=#9673a6;" edge="1" source="cf-detect" target="cf-axiom" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Category Legend -->
+        <mxCell id="cf-legend" value="&lt;b&gt;Context Fault Categories&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;• category=knowledge: document chunks, literature&lt;br&gt;• category=graph: knowledge graph triples&lt;br&gt;• category=files: filesystem content&lt;br&gt;• category=imagine: image generation&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#dae8fc;fontColor=#666666;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="850" y="80" width="250" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Provenance Note -->
+        <mxCell id="cf-provenance" value="&lt;b&gt;Historical Provenance&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px;&quot;&gt;Context Fault was imported from the Python&lt;br&gt;implementation called &quot;Multi Level Condensed&lt;br&gt;Memory Contextual Fetching (MLCMCF)&quot;&lt;br&gt;from the Zephy Architecture.&lt;br&gt;Continued as ContextFault in Ada/SPARK.&lt;/font&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffe6cc;fontColor=#666666;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="850" y="200" width="280" height="100" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
