@@ -19,7 +19,7 @@ MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB total cap
 # ── Crypto ────────────────────────────────────────────────────────────────
 # Import the Python crypto module (sibling to python/adelaide_crypto.py)
 sys.path.insert(0, os.path.join(BASE_DIR, "python"))
-from adelaide_crypto import load_master_key, migrate_all_to_aad  # noqa: E402
+from adelaide_crypto import load_master_key  # noqa: E402
 
 # ── Hardware-Bound Key Derivation Constants ───────────────────────────────
 # Integrity test plaintext for key verification
@@ -69,86 +69,7 @@ def _load_adl_crypto_lib():
         sys.exit(1)
     return lib
 
-def _store_inferior_paradoxical_wrapped_key(master_key_hex, integrity_hash):
-    """
-    Wrap master_key under InferiorParadoxical in C boundary and store in system_state.
-    Crashes hard if the shared library is missing — this indicates a broken build.
-    """
-    import ctypes
-    lib = _load_adl_crypto_lib()
 
-    lib.adl_auto_wrap_master_key_cstr.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-    lib.adl_auto_wrap_master_key_cstr.restype = ctypes.POINTER(ctypes.c_char)
-    lib.adl_free_cstr.argtypes = [ctypes.POINTER(ctypes.c_char)]
-
-    c_ptr = lib.adl_auto_wrap_master_key_cstr(integrity_hash.encode('utf-8'), master_key_hex.encode('utf-8'))
-    if not c_ptr:
-        print("[FATAL] adl_auto_wrap_master_key_cstr returned NULL — hardware binding failed")
-        sys.exit(1)
-    encrypted = ctypes.cast(c_ptr, ctypes.c_char_p).value.decode('utf-8')
-    lib.adl_free_cstr(c_ptr)
-
-    import sqlite3
-    db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
-    if not os.path.exists(db_path):
-        print(f"[FATAL] Database not found at {db_path} — cannot store InferiorParadoxical wrapped key")
-        sys.exit(1)
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        "INSERT OR REPLACE INTO system_state (key, value) VALUES (?, ?)",
-        (INFERIOR_PARADOXICAL_KEY, encrypted),
-    )
-    conn.commit()
-    conn.close()
-    _wipe_string(encrypted)
-    encrypted = None
-    print("[KEY-DERIV] InferiorParadoxical wrapped key stored via C boundary")
-    return True
-
-def _try_inferior_paradoxical_auto_decrypt(integrity_hash):
-    """
-    Try to auto-recover master_key using InferiorParadoxical hardware key via C boundary.
-    Crashes hard if the shared library is missing — this indicates a broken build.
-    Returns None only when there is no stored wrapped key (normal on first boot).
-    """
-    import sqlite3
-    db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
-    if not os.path.exists(db_path):
-        return None
-    conn = sqlite3.connect(db_path)
-    cursor = conn.execute(
-        "SELECT value FROM system_state WHERE key = ?",
-        (INFERIOR_PARADOXICAL_KEY,),
-    )
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        return None
-
-    import ctypes
-    lib = _load_adl_crypto_lib()
-
-    lib.adl_auto_unlock_master_key_cstr.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-    lib.adl_auto_unlock_master_key_cstr.restype = ctypes.POINTER(ctypes.c_char)
-    lib.adl_free_cstr.argtypes = [ctypes.POINTER(ctypes.c_char)]
-
-    wrapped_blob = row[0]
-    row = None  # drop DB row reference
-    c_ptr = lib.adl_auto_unlock_master_key_cstr(integrity_hash.encode('utf-8'), wrapped_blob.encode('utf-8'))
-    _wipe_string(wrapped_blob)
-    wrapped_blob = None
-    if not c_ptr:
-        print("[FATAL] adl_auto_unlock_master_key_cstr returned NULL — hardware binding mismatch or corrupt key")
-        sys.exit(1)
-    master_key = ctypes.cast(c_ptr, ctypes.c_char_p).value.decode('utf-8')
-    lib.adl_free_cstr(c_ptr)
-
-    if master_key and len(master_key) == 64:
-        print("[KEY-DERIV] InferiorParadoxical auto-decrypt SUCCESS via C boundary")
-        return master_key
-
-    print("[FATAL] InferiorParadoxical auto-decrypt returned invalid key (expected 64 hex chars)")
-    sys.exit(1)
 
 # ── KISS Mode ─────────────────────────────────────────────────────────────
 IS_KISS = "--kiss" in sys.argv
@@ -197,6 +118,13 @@ _global_tk_root = None
 def _get_tk_root():
     global _global_tk_root
     import tkinter as tk
+    if _global_tk_root is not None:
+        try:
+            _global_tk_root.state()
+        except tk.TclError:
+            # The root was destroyed
+            _global_tk_root = None
+
     if _global_tk_root is None:
         _global_tk_root = tk.Tk()
         _global_tk_root.withdraw()
@@ -286,11 +214,28 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):
         dialog.resizable(False, False)
         dialog.grab_set()
 
-        w, h = 420, 320
+        w, h = 420, 480
         sx = (dialog.winfo_screenwidth() - w) // 2
         sy = (dialog.winfo_screenheight() - h) // 2
         dialog.geometry(f"{w}x{h}+{sx}+{sy}")
         dialog.configure(bg=bg)
+        
+        try:
+            from PIL import Image, ImageTk
+            
+            # Top logo
+            top_logo = os.path.join(BASE_DIR, "ui", "frontend", "dist", "ProjectZephy023LogoRenewal.png")
+            if os.path.exists(top_logo):
+                img_top = Image.open(top_logo)
+                img_top.thumbnail((300, 120))
+                photo_top = ImageTk.PhotoImage(img_top, master=dialog)
+                lbl_top = tk.Label(dialog, image=photo_top, bg=bg)
+                lbl_top.image = photo_top
+                lbl_top.pack(pady=(15, 0))
+        except Exception as e:
+            with open("ui_error.log", "a") as f:
+                f.write(f"Top logo error: {e}\n")
+            print(f"[UI] Could not load top logo: {e}")
 
         tk.Label(
             dialog, text=welcome_msg, bg=bg, fg=fg,
@@ -331,16 +276,34 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):
         btn_frame.pack(pady=(10, 8))
 
         tk.Button(
-            btn_frame, text="OK", command=on_ok, bg=btn_bg, fg="#ffffff",
-            activebackground=accent, activeforeground="#ffffff",
+            btn_frame, text="OK", command=on_ok, bg=btn_bg, fg="black",
+            activebackground=accent, activeforeground="black",
             font=("Helvetica", 11, "bold"), width=10, relief="flat", cursor="hand2",
         ).pack(side="left", padx=6)
 
         tk.Button(
-            btn_frame, text="Cancel", command=on_cancel, bg="#2a2a4a", fg="#ffffff",
-            activebackground="#555577", activeforeground="#ffffff",
+            btn_frame, text="Cancel", command=on_cancel, bg="#2a2a4a", fg="black",
+            activebackground="#555577", activeforeground="black",
             font=("Helvetica", 11), width=10, relief="flat", cursor="hand2",
         ).pack(side="left", padx=6)
+        
+
+        try:
+            from PIL import Image, ImageTk
+            
+            # Bottom logo
+            bottom_logo = os.path.join(BASE_DIR, "ui", "frontend", "dist", "madeFromZephyFoundation.png")
+            if os.path.exists(bottom_logo):
+                img_bot = Image.open(bottom_logo)
+                img_bot.thumbnail((150, 40))
+                photo_bot = ImageTk.PhotoImage(img_bot, master=dialog)
+                lbl_bot = tk.Label(dialog, image=photo_bot, bg=bg)
+                lbl_bot.image = photo_bot
+                lbl_bot.pack(side="bottom", pady=(5, 10))
+        except Exception as e:
+            with open("ui_error.log", "a") as f:
+                f.write(f"Bottom logo error: {e}\n")
+            print(f"[UI] Could not load bottom logo: {e}")
 
         dialog.protocol("WM_DELETE_WINDOW", on_cancel)
         # Do NOT bind <Return> — it steals the keystroke from the Entry widget.
@@ -348,6 +311,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):
         dialog.bind("<Escape>", lambda e: on_cancel())
 
         root.wait_window(dialog)
+        root.update()
         root.withdraw()
         if not IS_KISS:
             print(f"[DEBUG] _tk_input_dialog returning: {result[0]!r}")
@@ -357,8 +321,8 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):
         root.destroy()
         return result
 
-def _tk_progress_dialog(title, message):
-    """Show a tkinter progress dialog with an animated bar, step text, and ETA. Returns the dialog object for updates."""
+def _tk_progress_dialog(title, message, total_eta=300.0):
+    """Show a tkinter progress dialog with an animated bar, step text, and time-based ETA. Returns the dialog object for updates."""
     import tkinter as tk
 
     root = _get_tk_root()
@@ -413,41 +377,28 @@ def _tk_progress_dialog(title, message):
     )
     step_label.pack(pady=(2, 4))
 
-    _pulse_state = [0]
-    _pulse_id = [None]
-
-    def _pulse_bar():
-        """Indeterminate pulse animation for unknown-duration steps."""
+    import time
+    start_time = time.time()
+    
+    def update_bar(pct=None, eta_text="", step_text="", pulse=False):
         try:
-            _pulse_state[0] = (_pulse_state[0] + 6) % 380
-            x = _pulse_state[0]
-            canvas.coords(fill_rect, x, 0, min(x + 80, 380), 20)
-            _pulse_id[0] = dialog.after(30, _pulse_bar)
-        except Exception:
-            pass
-
-    def update_bar(pct, eta_text="", step_text="", pulse=False):
-        try:
-            if pulse:
-                if _pulse_id[0] is None:
-                    _pulse_bar()
-                pct_label.configure(text="")
-                if eta_text:
-                    eta_label.configure(text=eta_text)
-                if step_text:
-                    step_label.configure(text=step_text)
-                dialog.update()
+            if not dialog.winfo_exists():
                 return
-            # Stop pulse if running
-            if _pulse_id[0] is not None:
-                dialog.after_cancel(_pulse_id[0])
-                _pulse_id[0] = None
-            canvas.coords(fill_rect, 0, 0, int(380 * pct / 100), 20)
-            pct_label.configure(text=f"{int(pct)}%")
-            if eta_text:
-                eta_label.configure(text=eta_text)
             if step_text:
                 step_label.configure(text=step_text)
+            
+            if pct is not None:
+                p = max(0, min(100, pct))
+                canvas.coords(fill_rect, 0, 0, int(380 * p / 100), 20)
+                pct_label.configure(text=f"{int(p)}%")
+                
+                if p > 0 and p < 100:
+                    # Estimate remaining time based on the fixed total_eta and current pct
+                    rem = int(total_eta * (100 - p) / 100.0)
+                    eta_label.configure(text=f"ETA: {rem}s")
+                elif p == 100:
+                    eta_label.configure(text="")
+                    
             dialog.update()
         except Exception:
             pass
@@ -455,35 +406,33 @@ def _tk_progress_dialog(title, message):
     dialog._update_bar = update_bar
     dialog._root_ref = root
 
-    # Background pulse thread — keeps tkinter alive while main thread is blocked
-    _pulse_alive = [True]
-    _pulse_thread_ref = [None]
-
-    def _pulse_thread_fn():
-        while _pulse_alive[0]:
-            try:
-                dialog.after(0, lambda: dialog.update() if dialog.winfo_exists() else None)
-            except Exception:
-                break
-            time.sleep(0.15)
-
     def _start_pulse():
-        if _pulse_thread_ref[0] is None:
-            t = threading.Thread(target=_pulse_thread_fn, daemon=True)
-            _pulse_thread_ref[0] = t
-            t.start()
+        pass
 
     def _stop_pulse():
-        _pulse_alive[0] = False
+        pass
+
+    def _mark_done(eta_path):
+        elapsed = time.time() - start_time
+        # Average with previous if it exists, otherwise just save elapsed
+        new_eta = (total_eta + elapsed) / 2.0 if total_eta != 300.0 else elapsed
+        try:
+            with open(eta_path, "w") as f:
+                f.write(str(new_eta))
+        except Exception:
+            pass
 
     dialog._start_pulse = _start_pulse
     dialog._stop_pulse = _stop_pulse
+    dialog._mark_done = _mark_done
     return dialog
 
 
 def _tk_progress_done(dialog):
     """Close the progress dialog and withdraw the root tk window."""
     try:
+        if hasattr(dialog, '_stop_pulse'):
+            dialog._stop_pulse()
         dialog.destroy()
     except Exception:
         pass
@@ -510,7 +459,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
 
     # Center on screen (taller when confirm mode has entropy + tip labels, or promise msg)
     extra_h = 60 if promise_msg else 0
-    w, h = 380, (270 if confirm else 180) + extra_h
+    w, h = 380, (270 if confirm else 180) + extra_h + 200 # +200 for logos and extra button
     sx = (dialog.winfo_screenwidth() - w) // 2
     sy = (dialog.winfo_screenheight() - h) // 2
     dialog.geometry(f"{w}x{h}+{sx}+{sy}")
@@ -523,6 +472,23 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
     accent = "#e94560"
     green = "#4ecca3"
     dialog.configure(bg=bg)
+    
+    try:
+        from PIL import Image, ImageTk
+        
+        # Top logo
+        top_logo = os.path.join(BASE_DIR, "ui", "frontend", "dist", "ProjectZephy023LogoRenewal.png")
+        if os.path.exists(top_logo):
+            img_top = Image.open(top_logo)
+            img_top.thumbnail((260, 100))
+            photo_top = ImageTk.PhotoImage(img_top, master=dialog)
+            lbl_top = tk.Label(dialog, image=photo_top, bg=bg)
+            lbl_top.image = photo_top
+            lbl_top.pack(pady=(15, 0))
+    except Exception as e:
+        with open("ui_error.log", "a") as f:
+            f.write(f"Password dialog top logo error: {e}\n")
+        print(f"[UI] Could not load top logo: {e}")
 
     if promise_msg:
         tk.Label(
@@ -594,9 +560,9 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
         text="OK",
         command=lambda: None,  # reassigned after definition
         bg=btn_bg,
-        fg=fg,
+        fg="black",
         activebackground=accent,
-        activeforeground="#fff",
+        activeforeground="black",
         font=("Helvetica", 11),
         width=10,
         relief="flat",
@@ -610,9 +576,9 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
         text="Cancel",
         command=lambda: None,  # reassigned
         bg=entry_bg,
-        fg=fg,
+        fg="black",
         activebackground=accent,
-        activeforeground="#fff",
+        activeforeground="black",
         font=("Helvetica", 11),
         width=10,
         relief="flat",
@@ -640,6 +606,52 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
     # Wire up button commands
     ok_btn.configure(command=on_ok)
     cancel_btn.configure(command=on_cancel)
+    
+    if not confirm:
+        def on_reset():
+            import tkinter.messagebox as mb
+            ans = mb.askyesno(
+                "Reset Data",
+                "Are you sure you want to format/reset your data?\n\nThis will delete your encrypted memory and databases, allowing you to start fresh.",
+                parent=dialog
+            )
+            if ans:
+                try:
+                    import os
+                    import shutil
+                    username = os.environ.get("ADELAIDE_USER", "default")
+                    user_dir = os.path.join(BASE_DIR, "NetworkMemoryPool", username)
+                    if os.path.exists(user_dir):
+                        shutil.rmtree(user_dir, ignore_errors=True)
+                    mb.showinfo("Reset Complete", "Your data has been reset. Please restart the application.", parent=dialog)
+                except Exception as e:
+                    mb.showerror("Error", f"Could not fully reset: {e}", parent=dialog)
+                
+                result[0] = "<RESET>"
+                dialog.destroy()
+
+        tk.Button(
+            dialog, text="Forgot Password / Reset Data", command=on_reset,
+            bg=bg, fg="#ff6b6b", activebackground=bg, activeforeground="#ff4757",
+            font=("Helvetica", 10, "underline"), relief="flat", cursor="hand2", bd=0, highlightthickness=0
+        ).pack(pady=(5, 5))
+        
+    try:
+        from PIL import Image, ImageTk
+        
+        # Bottom logo
+        bottom_logo = os.path.join(BASE_DIR, "ui", "frontend", "dist", "madeFromZephyFoundation.png")
+        if os.path.exists(bottom_logo):
+            img_bot = Image.open(bottom_logo)
+            img_bot.thumbnail((120, 30))
+            photo_bot = ImageTk.PhotoImage(img_bot, master=dialog)
+            lbl_bot = tk.Label(dialog, image=photo_bot, bg=bg)
+            lbl_bot.image = photo_bot
+            lbl_bot.pack(side="bottom", pady=(5, 10))
+    except Exception as e:
+        with open("ui_error.log", "a") as f:
+            f.write(f"Password dialog bottom logo error: {e}\n")
+        print(f"[UI] Could not load bottom logo: {e}")
 
     # Live entropy update on password creation
     def on_pw_changed(*_args):
@@ -665,6 +677,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
 
     # Use wait_window instead of root.mainloop() — returns when dialog is destroyed
     root.wait_window(dialog)
+    root.update()  # Flush the UI event loop so the window physically disappears
     return result[0]
 
 
@@ -854,8 +867,11 @@ def _tk_info_dialog(title, message, countdown=60):
 
     def _countdown_tick():
         remaining[0] -= 1
+        print(f"[DEBUG] _tk_info_dialog tick: {remaining[0]}s remaining")
         if remaining[0] <= 0:
+            print("[DEBUG] _tk_info_dialog auto-closing...")
             dialog.destroy()
+            root.quit()
             return
         timer_label.configure(text=f"Auto-closes in {remaining[0]}s")
         timer_id[0] = dialog.after(1000, _countdown_tick)
@@ -864,12 +880,14 @@ def _tk_info_dialog(title, message, countdown=60):
         timer_id[0] = dialog.after(1000, _countdown_tick)
 
     def _on_ok():
+        print("[DEBUG] _tk_info_dialog _on_ok clicked or Enter pressed.")
         if timer_id[0] is not None:
             try:
                 dialog.after_cancel(timer_id[0])
             except Exception:
                 pass
         dialog.destroy()
+        root.quit()
 
     tk.Button(
         dialog,
@@ -886,8 +904,11 @@ def _tk_info_dialog(title, message, countdown=60):
     ).pack(pady=(4, 14))
 
     dialog.bind("<Return>", lambda e: _on_ok())
-    root.wait_window(dialog)
-    root.destroy()
+    root.mainloop()
+    try:
+        root.destroy()
+    except Exception:
+        pass
 
 
 # ── InferiorParadoxical UUID — TPM / Secure Enclave Storage ──────────────
@@ -1750,463 +1771,9 @@ def store_integrity_test_blob(sub_key_hex):
         return False
 
 
-def migrate_from_legacy_key_system():
-    """
-    Migrate from old file-based key system to hardware-bound key derivation.
-
-    Reads old key from disk (migration only), re-encrypts all databases with
-    new hardware-bound key, then DELETES the old key file. Never written again.
-
-    Migration flow:
-    1. Detect old key file at config/master.key or ~/.config/adelaide/master.key
-    2. Read old key from file
-    3. Prompt user for new password
-    4. Derive new master_key with hardware-bound integrity hash
-    5. Re-encrypt all databases with new key
-    6. DELETE old key file
-    7. Store integrity_test blob with new key
-    """
-    # Check both possible legacy locations
-    local_key_file = os.path.join(BASE_DIR, "config", "master.key")
-    legacy_key_file = os.path.expanduser("~/.config/adelaide/master.key")
-
-    old_key_file = None
-    if os.path.exists(local_key_file):
-        old_key_file = local_key_file
-    elif os.path.exists(legacy_key_file):
-        old_key_file = legacy_key_file
-
-    if not old_key_file:
-        print("[MIGRATE] No legacy key file found, skipping migration")
-        return True
-
-    print(f"[MIGRATE] Legacy key file detected at {old_key_file}")
-    print("[MIGRATE] Migrating to hardware-bound system...")
-
-    # Read old key
-    try:
-        with open(old_key_file, "r") as f:
-            old_key_hex = f.read().strip()
-        if len(old_key_hex) != 64:
-            print("[MIGRATE] Invalid legacy key format")
-            return False
-    except Exception as e:
-        print(f"[MIGRATE] Failed to read legacy key: {e}")
-        return False
-
-    # Get new password from user
-    if _gui_available() or IS_KISS:
-        password = prompt_kiss_password(is_first_boot=True)
-    else:
-        import getpass
-
-        print("[MIGRATE] Please create a new password for the hardware-bound system.")
-        while True:
-            password = getpass.getpass("Enter new password: ")
-            if not password:
-                print("[MIGRATE] No password provided")
-                return False
-            bits = _password_entropy(password)
-            if bits < 20:
-                print(
-                    f"  Make stronger password! (only {bits} bits — need at least 20)"
-                )
-                print(
-                    "  Tip: Use lowercase, uppercase, numbers, and/or symbols together."
-                )
-                continue
-            break
-
-    if not password:
-        print("[MIGRATE] No password provided")
-        return False
-
-    # Compute integrity hash
-    integrity_hash = compute_integrity_hash()
-    if not integrity_hash:
-        print("[MIGRATE] Failed to compute integrity hash")
-        return False
-
-    # Derive new master key
-    new_master_key = derive_master_key(integrity_hash, password)
-    print("[MIGRATE] New master key derived")
-
-    # Re-encrypt all databases with new key
-    try:
-        from adelaide_crypto import decrypt_field, derive_sub_key, encrypt_field
-
-        # Derive sub-keys for old key (each DB context)
-        old_subkeys = {
-            "memory": derive_sub_key(old_key_hex, "adelaide:db:memory:v1"),
-            "session": derive_sub_key(old_key_hex, "adelaide:db:session:v1"),
-            "literature": derive_sub_key(old_key_hex, "adelaide:db:literature:v1"),
-        }
-        new_subkeys = {
-            "memory": derive_sub_key(new_master_key, "adelaide:db:memory:v1"),
-            "session": derive_sub_key(new_master_key, "adelaide:db:session:v1"),
-            "literature": derive_sub_key(new_master_key, "adelaide:db:literature:v1"),
-        }
-
-        import sqlite3
-
-        total_reencrypted = 0
-
-        # ── Database migration definitions ──
-        # (db_name, subkey_context, [(table, id_col, text_cols...)])
-        db_migrations = [
-            (
-                "adelaide_memory.db",
-                "memory",
-                [
-                    ("memories", "id", ["input", "response"]),
-                    ("response_cache", "id", ["prompt", "response", "embedding"]),
-                ],
-            ),
-            (
-                "assistant_session.db",
-                "session",
-                [
-                    ("messages", "id", ["content"]),
-                ],
-            ),
-            (
-                "literatureRefIndex.db",
-                "literature",
-                [
-                    ("chunks", "id", ["content"]),
-                ],
-            ),
-        ]
-
-        for db_name, subkey_ctx, table_migrations in db_migrations:
-            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", db_name)
-            if not os.path.exists(db_path):
-                continue
-
-            conn = sqlite3.connect(db_path)
-            conn.text_factory = lambda x: x.decode("utf-8", errors="replace")
-
-            for table_name, id_col, text_cols in table_migrations:
-                # Check if table exists
-                tbl_exists = conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                    (table_name,),
-                ).fetchone()
-                if not tbl_exists:
-                    continue
-
-                # Build SELECT and UPDATE column lists
-                col_list = ", ".join([id_col] + text_cols)
-                set_clauses = ", ".join([f"{c}=?" for c in text_cols])
-
-                rows = conn.execute(f"SELECT {col_list} FROM {table_name}").fetchall()
-                reencrypted_count = 0
-
-                for row in rows:
-                    row_id = row[0]
-                    values = row[1:]
-                    new_values = list(values)
-                    any_encrypted = False
-
-                    for i, val in enumerate(values):
-                        if not val or len(val) <= 56:
-                            continue
-                        # Check if looks encrypted (hex-only first 56 chars)
-                        if not all(c in "0123456789abcdef" for c in val[:56].lower()):
-                            continue
-
-                        any_encrypted = True
-                        try:
-                            # Decrypt with old subkey
-                            decrypted = decrypt_field(old_subkeys[subkey_ctx], val)
-                            if decrypted and decrypted != val:
-                                # Re-encrypt with new subkey
-                                new_values[i] = encrypt_field(
-                                    new_subkeys[subkey_ctx], decrypted
-                                )
-                        except Exception:
-                            # Skip rows that fail to decrypt (plaintext misidentified)
-                            pass
-
-                    if any_encrypted:
-                        reencrypted_count += 1
-                        conn.execute(
-                            f"UPDATE {table_name} SET {set_clauses} WHERE {id_col}=?",
-                            tuple(new_values + [row_id]),
-                        )
-
-                if reencrypted_count > 0:
-                    conn.commit()
-                    total_reencrypted += reencrypted_count
-                    print(
-                        f"[MIGRATE] Re-encrypted {reencrypted_count} rows in {db_name}.{table_name}"
-                    )
-
-            conn.close()
-
-        # Delete old key file
-        os.remove(old_key_file)
-        print("[MIGRATE] Old key file deleted")
-
-        # Store integrity test blob with new key
-        new_aes_key = derive_sub_key(new_master_key, "adelaide:db:memory:v1")
-        store_integrity_test_blob(new_aes_key)
-
-        print(
-            f"[MIGRATE] Migration completed. Total re-encrypted: {total_reencrypted} rows"
-        )
-        return True
-
-    except Exception as e:
-        import traceback
-
-        print(f"[MIGRATE] Migration failed: {e}")
-        traceback.print_exc()
-        return False
 
 
-def hardware_bound_key_derivation():
-    """
-    Hardware-bound key derivation system (dual-key architecture).
 
-    Two independent keys can decrypt — NOT combined:
-      Key 1 — User password / recovery key
-      Key 2 — InferiorParadoxical (SHA-512 hardware profiling auto-key)
-
-    Flow
-    ----
-    1. Compute InferiorParadoxical from hardware state
-    2. Try auto-decrypt master_key using InferiorParadoxical stored blob
-    3. If auto-decrypt fails → prompt user for password
-       → derive master_key = HKDF(integrity_hash, password)
-       → verify with integrity test blob
-       → re-wrap master_key under new InferiorParadoxical for future auto-decrypt
-    4. Return master_key
-    """
-    from adelaide_crypto import derive_sub_key
-
-    _term_print("[KEY-DERIV] Initializing hardware-bound key derivation...")
-
-    # Step 1: Compute integrity hash (with loading bar)
-    _hash_result = [None]
-    _hash_done = threading.Event()
-
-    def _compute_hash():
-        _hash_result[0] = compute_integrity_hash()
-        _hash_done.set()
-
-    _hash_thread = threading.Thread(target=_compute_hash, daemon=True)
-    _hash_thread.start()
-
-    # Show loading bar while hash computes
-    use_gui_progress = _gui_available() and not IS_KISS
-    gui_dialog = None
-
-    if use_gui_progress:
-        gui_dialog = _tk_progress_dialog(
-            "Adelaide — Loading",
-            "Loading preparing for Model...\n(Nothing to see here)"
-        )
-
-    bar_width = 40
-    elapsed = 0.0
-    eta_target = 8.0  # estimated seconds for hash computation
-    while not _hash_done.is_set():
-        pct = min(95, int(100 * elapsed / eta_target))
-        eta = max(0, int(eta_target - elapsed))
-        if gui_dialog:
-            gui_dialog._update_bar(pct, eta_text=f"ETA: {eta}s")
-        elif not IS_KISS:
-            filled = int(bar_width * pct / 100)
-            bar = "█" * filled + "░" * (bar_width - filled)
-            _term_print(f"\r\033[K  Loading preparing for Model... |{bar}| {pct}%  ETA: {eta}s")
-        time.sleep(0.1)
-        elapsed += 0.1
-
-    _hash_thread.join()
-    integrity_hash = _hash_result[0]
-
-    # Clear loading bar
-    if gui_dialog:
-        gui_dialog._update_bar(100)
-        time.sleep(0.2)
-        _tk_progress_done(gui_dialog)
-    elif not IS_KISS:
-        _term_print(f"\r\033[K  Loading preparing for Model... |{'█' * bar_width}| 100%  Done!")
-
-    if not integrity_hash:
-        _term_print("[KEY-DERIV] Failed to compute integrity hash")
-        return None
-
-    print(f"[KEY-DERIV] Integrity hash: {integrity_hash[:16]}...")
-
-    # Step 2: Try InferiorParadoxical auto-decrypt (Key 2 — hardware auto-key)
-    # Silently attempt auto-recovery; only prompts user if hardware changed.
-    master_key = _try_inferior_paradoxical_auto_decrypt(integrity_hash)
-    auto_decrypt_ok = master_key is not None
-
-    if auto_decrypt_ok:
-        _term_print("[KEY-DERIV] InferiorParadoxical auto-decrypt — hardware environment trusted")
-        aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
-        if verify_integrity_test_blob(master_key, aes_key):
-            _term_print("[KEY-DERIV] Integrity test blob verification PASSED (auto)")
-            return master_key
-        else:
-            # Stored wrapped key is stale — fall through to password path
-            _term_print("[KEY-DERIV] Auto-decrypt OK but integrity test FAILED — re-keying")
-            master_key = None
-            auto_decrypt_ok = False
-
-    # Step 3: Determine if this is first boot (no key files exist)
-    local_key = os.path.join(BASE_DIR, "config", "master.key")
-    legacy_key = os.path.expanduser("~/.config/adelaide/master.key")
-    
-    import sqlite3
-    db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
-    has_wrapped_key = False
-    if os.path.exists(db_path):
-        try:
-            conn = sqlite3.connect(db_path)
-            row = conn.execute(
-                "SELECT value FROM system_state WHERE key = ?",
-                (INFERIOR_PARADOXICAL_KEY,)
-            ).fetchone()
-            if row and row[0]:
-                has_wrapped_key = True
-            conn.close()
-        except Exception:
-            pass
-            
-    first_boot = (not os.path.exists(local_key) and 
-                  not os.path.exists(legacy_key) and 
-                  not has_wrapped_key)
-
-    # Step 4: Prompt for password (Key 1 — user password / recovery key)
-    MAX_PASSWORD_ATTEMPTS = 5
-    password_ok = False
-    master_key = None
-    aes_key = None
-
-    if "--test-fips" in sys.argv:
-        print("[KEY-DERIV] --test-fips detected. Bypassing interactive prompt.")
-        password = "testfips_password123"
-        master_key = derive_master_key(integrity_hash, password)
-        _wipe_string(password)
-        password = None
-    elif first_boot:
-        _term_print("[KEY-DERIV] First boot — creating new password")
-        if _gui_available() or IS_KISS:
-            password = prompt_kiss_password(is_first_boot=True)
-            if password:
-                master_key = derive_master_key(integrity_hash, password)
-                _wipe_string(password)
-                password = None
-        else:
-            import getpass
-            _term_print("[KEY-DERIV] First boot detected. Please create a password.")
-            while True:
-                password = getpass.getpass("  Create password: ", stream=term_stderr)
-                if not password:
-                    _term_print("  Password cannot be empty.")
-                    return None
-                bits = _password_entropy(password)
-                if bits < 20:
-                    _term_print(
-                        f"  Make stronger password! (only {bits} bits — need at least 20)"
-                    )
-                    _term_print(
-                        "  Tip: Use lowercase, uppercase, numbers, and/or symbols together."
-                    )
-                    continue
-                break
-            master_key = derive_master_key(integrity_hash, password)
-            _wipe_string(password)
-            password = None
-        if master_key:
-            aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
-            password_ok = True
-            _term_print("[KEY-DERIV] First boot — password created successfully")
-    else:
-        _term_print("[KEY-DERIV] Enter password (hardware environment changed or first unlock)")
-
-        for attempt in range(MAX_PASSWORD_ATTEMPTS):
-            if attempt > 0:
-                delay = min(2 ** attempt, 30)
-                _term_print(
-                    f"[KEY-DERIV] Wrong password. Retry in {delay}s "
-                    f"(attempt {attempt + 1}/{MAX_PASSWORD_ATTEMPTS})"
-                )
-                time.sleep(delay)
-
-            if _gui_available() or IS_KISS:
-                password = prompt_kiss_password(is_first_boot=False)
-                if not password:
-                    return None
-                master_key = derive_master_key(integrity_hash, password)
-                _wipe_string(password)
-                password = None
-            else:
-                import getpass
-                _term_print("[KEY-DERIV] Please enter your password.")
-                master_key = derive_master_key_from_stdin(integrity_hash, "  Password: ")
-                if not master_key:
-                    print("[KEY-DERIV] No password provided or derivation failed")
-                    return None
-                print("[KEY-DERIV] Master key securely derived in C")
-
-            aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
-            if verify_integrity_test_blob(master_key, aes_key):
-                if attempt == 0:
-                    _term_print("[KEY-DERIV] Integrity test blob verification PASSED")
-                else:
-                    _term_print(f"[KEY-DERIV] Correct password (attempt {attempt + 1}/{MAX_PASSWORD_ATTEMPTS})")
-                password_ok = True
-                break
-            else:
-                _term_print(f"[KEY-DERIV] Incorrect password (attempt {attempt + 1}/{MAX_PASSWORD_ATTEMPTS})")
-                master_key = None
-                aes_key = None
-                continue
-
-        # After password attempts exhausted, try recovery key
-        if not password_ok:
-            _term_print("[KEY-DERIV] Password attempts exhausted — offering recovery key")
-            if _gui_available() or IS_KISS:
-                recovery_key = prompt_kiss_password(is_first_boot=False, is_recovery=True)
-            else:
-                import getpass
-                recovery_key = getpass.getpass("Enter recovery key: ", stream=term_stderr)
-
-            if recovery_key:
-                master_key = derive_master_key(integrity_hash, recovery_key)
-                aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
-                _wipe_string(recovery_key)
-                recovery_key = None
-                if verify_integrity_test_blob(master_key, aes_key):
-                    _term_print("[KEY-DERIV] Recovery key verification PASSED")
-                    password_ok = True
-                else:
-                    _term_print("[KEY-DERIV] Recovery key verification FAILED")
-                    return None
-            else:
-                return None
-
-    if not password_ok:
-        return None
-
-    # Step 8: Store integrity test blob on first boot
-    if first_boot:
-        store_integrity_test_blob(aes_key)
-
-    # Step 9: Re-wrap master_key under InferiorParadoxical
-    # On first boot: store initial wrap for future auto-decrypt
-    # On subsequent boot after auto-decrypt failed: hardware changed, update wrap
-    if not auto_decrypt_ok and password_ok and master_key:
-        _store_inferior_paradoxical_wrapped_key(master_key, integrity_hash)
-        if not first_boot:
-            _term_print("[KEY-DERIV] InferiorParadoxical updated for current hardware")
-
-    return master_key
 
 
 try:
@@ -3440,48 +3007,59 @@ def cleanup(signum=None, frame=None):
     # SIGTERM path: Collect PIDs to kill directly — do NOT rely on
     # proc.terminate() inside a signal handler (can deadlock with main
     # thread's proc.wait()).
+    # SIGTERM path: Collect PIDs to kill directly — do NOT rely on
+    # proc.terminate() inside a signal handler (can deadlock with main
+    # thread's proc.wait()).
     pids_to_kill = []
-    for proc in [
+    # Using global list of processes including kokoro_process
+    all_procs = [
         daemon_process,
         server_process,
         watchdog_process,
         vad_process,
         sidecar_process,
-    ]:
+        kokoro_process,
+    ]
+    for proc in all_procs:
         if proc and proc.poll() is None:
             pids_to_kill.append((proc.pid, proc.args[0] if proc.args else "unknown"))
 
-    # Send SIGTERM first, then SIGKILL after 2s grace period
     SIGTERM = signal.SIGTERM
     SIGKILL = signal.SIGKILL
 
     for pid, name in pids_to_kill:
-        print(f"[*] Sending SIGTERM to {name} (PID {pid})...")
+        print(f"[*] Sending SIGTERM to process group of {name} (PID {pid})...")
         try:
-            os.kill(pid, SIGTERM)
-        except ProcessLookupError:
+            os.killpg(os.getpgid(pid), SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
             pass
 
-    # Give 2 seconds for graceful shutdown
-    time.sleep(2.0)
+    # Wait up to 60 seconds for graceful shutdown
+    start_time = time.time()
+    while time.time() - start_time < 60.0:
+        all_dead = True
+        for pid, name in pids_to_kill:
+            try:
+                os.kill(pid, 0)
+                all_dead = False
+                break
+            except ProcessLookupError:
+                pass
+        if all_dead:
+            break
+        time.sleep(0.5)
 
     for pid, name in pids_to_kill:
         try:
             # Check if still alive
             os.kill(pid, 0)
-            print(f"[*] PID {pid} still alive, sending SIGKILL...")
+            print(f"[*] PID {pid} still alive after timeout, sending SIGKILL...")
             os.kill(pid, SIGKILL)
         except ProcessLookupError:
             print(f"[*] PID {pid} exited cleanly.")
 
     # Force-kill any remaining zombie processes via process group
-    for proc in [
-        daemon_process,
-        server_process,
-        watchdog_process,
-        vad_process,
-        sidecar_process,
-    ]:
+    for proc in all_procs:
         if proc:
             try:
                 os.killpg(os.getpgid(proc.pid), SIGKILL)
@@ -3497,6 +3075,13 @@ def cleanup(signum=None, frame=None):
                            stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         except Exception:
             pass
+            
+    # Also explicitly pkill run.py to ensure Python itself doesn't hang
+    try:
+        subprocess.run(["pkill", "-9", "-f", "run.py"],
+                       stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+    except Exception:
+        pass
 
     # Wipe master key from environment + remove temp key file
     os.environ.pop("ADELAIDE_MASTER_KEY", None)
@@ -3668,7 +3253,7 @@ def real_main():
         )
         if _gui_available() and not IS_KISS:
             # GUI mode: show welcome in dialog, not on terminal
-            user = _tk_input_dialog("Adelaide — Identity", "Who am I speaking to?", welcome_msg=_welcome_msg)
+            user = _tk_input_dialog("Adelaide — Identity", "Who am I speaking to? (Username or Email)", welcome_msg=_welcome_msg)
             if user:
                 user = user.strip()
             if not user:
@@ -3676,7 +3261,7 @@ def real_main():
                 _term_print("")
                 _term_print("  (GUI dialog didn't work, let's try here instead)")
                 _term_print("")
-                user = input("  Your name: ").strip()
+                user = input("  Your username or email: ").strip()
         elif not IS_KISS:
             # Verbose mode: print welcome on terminal
             _term_print("")
@@ -3685,15 +3270,19 @@ def real_main():
             _term_print("  star that light pouring above the cloud here")
             _term_print("  and fancy to meet you!")
             _term_print("")
-            user = input("  Your name: ").strip()
+            user = input("  Your username or email: ").strip()
         else:
             # KISS mode: no terminal output, just prompt
-            user = input("  Your name: ").strip()
+            user = input("  Your username or email: ").strip()
             
         if not user:
             print("[IDENTITY] FATAL: I need a name to call you by!")
             sys.exit(1)
-        os.environ["ADELAIDE_USER"] = user
+            
+        import hashlib
+        hashed_user = hashlib.sha512(user.encode('utf-8')).hexdigest()
+        os.environ["ADELAIDE_USER"] = hashed_user
+        
         if not IS_KISS:
             _term_print(f"  Nice to meet you, {user}! :D")
             _term_print("")
@@ -3708,11 +3297,22 @@ def real_main():
     # a full mapping of hex → actual task.
     _setup_gui = None
     if _gui_available() and not IS_KISS:
+        total_eta = 300.0
+        eta_file = os.path.join(BASE_DIR, "logs", ".adelaide_eta")
+        if os.path.exists(eta_file):
+            try:
+                with open(eta_file, "r") as f:
+                    total_eta = float(f.read().strip())
+            except Exception:
+                pass
+                
         _setup_gui = _tk_progress_dialog(
             "Adelaide — Loading",
-            "Loading preparing for Model...\n(Nothing to see here)"
+            "Loading preparing for Model...\n(Nothing to see here)",
+            total_eta=total_eta
         )
-        _setup_gui._update_bar(0, step_text="code step 0x0001", pulse=True)  # Starting up
+        _setup_gui.eta_file_path = eta_file
+        _setup_gui._update_bar(pct=5, step_text="code step 0x0001")  # Starting up
         _setup_gui._start_pulse()
 
     # Whimsical password promise (only on first entry when user was just created)
@@ -3727,7 +3327,7 @@ def real_main():
     # Kill any stale processes from previous runs before starting
     print("[*] Cleaning up any stale processes from previous runs...")
     if _setup_gui:
-        _setup_gui._update_bar(2, step_text="code step 0x0002", pulse=True)  # Clean up stale processes from previous runs
+        _setup_gui._update_bar(pct=10, step_text="code step 0x0002", pulse=True)  # Clean up stale processes from previous runs
     try:
         subprocess.run(
             ["pkill", "-9", "-f", "adelaide_server"], stderr=subprocess.DEVNULL
@@ -3764,7 +3364,7 @@ def real_main():
     # 0. Verify all critical prerequisites are installed
     # PX4 is critical and auto-clones/compiles if missing
     if _setup_gui:
-        _setup_gui._update_bar(5, step_text="code step 0x0003", pulse=True)  # Verify environment prerequisites
+        _setup_gui._update_bar(pct=15, step_text="code step 0x0003", pulse=True)  # Verify environment prerequisites
     verify_environment(build_px4=True)
 
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
@@ -3810,7 +3410,7 @@ def real_main():
     if current_hash != saved_hash:
         print("[*] Changes detected, checking downloads and rebuilding...")
         if _setup_gui:
-            _setup_gui._update_bar(15, step_text="code step 0x0004", pulse=True)  # Download and rebuild components
+            _setup_gui._update_bar(pct=25, step_text="code step 0x0004", pulse=True)  # Download and rebuild components
         threads = str(os.cpu_count() or 4)
 
         # =====================================================================
@@ -4596,7 +4196,7 @@ def real_main():
         # ═══════════════════════════════════════════════════════════════════
         print("[*] Resolving Ada dependencies and building project...")
         if _setup_gui:
-            _setup_gui._update_bar(70, step_text="code step 0x0005", pulse=True)  # Build core engine (Ada compilation)
+            _setup_gui._update_bar(pct=40, step_text="code step 0x0005", pulse=True)  # Build core engine (Ada compilation)
 
         env = os.environ.copy()
         if platform.system() == "Darwin":
@@ -4673,7 +4273,7 @@ def real_main():
         # 1. GNATprove Formal Verification (always on rebuild)
         print("\n[*] Stage: GNATprove SPARK Static Analysis...")
         if _setup_gui:
-            _setup_gui._update_bar(82, step_text="code step 0x0007", pulse=True)  # Formal proof verification of core logic
+            _setup_gui._update_bar(pct=50, step_text="code step 0x0007", pulse=True)  # Formal proof verification of core logic
         prove_cmd = [
             alr_cmd,
             "exec",
@@ -4702,7 +4302,7 @@ def real_main():
         # 2. AFL++ Fuzzing Environment Check
         print("\n[*] Stage: AFL++ Fuzzing Readiness Check...")
         if _setup_gui:
-            _setup_gui._update_bar(85, step_text="code step 0x0008", pulse=True)  # Fuzz testing setup
+            _setup_gui._update_bar(pct=55, step_text="code step 0x0008", pulse=True)  # Fuzz testing setup
         fuzz_ready = False
         for compiler in ["afl-clang-fast", "afl-gcc-fast", "afl-clang-lto"]:
             if shutil.which(compiler):
@@ -4716,7 +4316,7 @@ def real_main():
         # 3. Vite Frontend build (runs tsc and vite build)
         print("[*] Building Vite Frontend for Sidecar UI...")
         if _setup_gui:
-            _setup_gui._update_bar(88, step_text="code step 0x0009", pulse=True)  # Build user interface
+            _setup_gui._update_bar(pct=65, step_text="code step 0x0009", pulse=True)  # Build user interface
         frontend_dir = os.path.join(BASE_DIR, "ui", "frontend")
         if os.path.exists(frontend_dir):
             npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
@@ -4735,7 +4335,7 @@ def real_main():
         if shutil.which(ruff_cmd):
             print("[*] Running Platform Self-Integrity Quality Check (Ruff)...")
             if _setup_gui:
-                _setup_gui._update_bar(90, step_text="code step 0x000A", pulse=True)  # Code quality check
+                _setup_gui._update_bar(pct=70, step_text="code step 0x000A", pulse=True)  # Code quality check
             try:
                 result = subprocess.run(
                     [ruff_cmd, "check", BASE_DIR, "--exclude", "vendor,moonshine"],
@@ -4763,7 +4363,7 @@ def real_main():
         # 4a. CrossHair Symbolic Analysis for python/ sidecars
         print("[*] Ensuring CrossHair is installed...")
         if _setup_gui:
-            _setup_gui._update_bar(92, step_text="code step 0x000B", pulse=True)  # Symbolic analysis of code paths
+            _setup_gui._update_bar(pct=75, step_text="code step 0x000B", pulse=True)  # Symbolic analysis of code paths
         try:
             pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
             pyvenv_python = os.path.join(pyvenv_dir, "bin", "python")
@@ -4834,7 +4434,7 @@ def real_main():
         if shutil.which(pyrefly_cmd):
             print("[*] Running Pyrefly Type Check on python sidecars...")
             if _setup_gui:
-                _setup_gui._update_bar(93, step_text="code step 0x000C", pulse=True)  # Type consistency check
+                _setup_gui._update_bar(pct=80, step_text="code step 0x000C", pulse=True)  # Type consistency check
             try:
                 python_dir = os.path.join(BASE_DIR, "python")
                 env_vars = os.environ.copy()
@@ -4877,7 +4477,7 @@ def real_main():
         if os.path.exists(lsh_reqs):
             print("[LSH] Bootstrapping QRNN LSH worker venv...")
             if _setup_gui:
-                _setup_gui._update_bar(94, step_text="code step 0x000D", pulse=True)  # Initialize background processing systems
+                _setup_gui._update_bar(pct=85, step_text="code step 0x000D", pulse=True)  # Initialize background processing systems
             if not os.path.exists(pyvenv_python):
                 subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
             pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip")
@@ -4924,7 +4524,7 @@ def real_main():
         if os.path.exists(vad_worker_script):
             print("[VAD] Bootstrapping ONNX VAD worker...")
             if _setup_gui:
-                _setup_gui._update_bar(95, step_text="code step 0x000E", pulse=True)  # Initialize audio processing pipeline
+                _setup_gui._update_bar(pct=90, step_text="code step 0x000E", pulse=True)  # Initialize audio processing pipeline
             if not os.path.exists(pyvenv_python):
                 subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
             pyvenv_pip = (
@@ -5006,79 +4606,20 @@ def real_main():
     print(f"[*] [Launch-V] Launch GUI: {launch_gui}, Launch daemon: {launch_daemon}")
 
     # ── Crypto Bootstrap ────────────────────────────────────────────────────
-    # Initialize master key (generates + persists if first boot), then set
-    # ADELAIDE_MASTER_KEY env var so the Ada server and all subprocesses
-    # inherit the key automatically.
+    # In Ada/SPARK architecture, the Python orchestrator just launches the
+    # server. If the server needs a password (exit 70/71), the main loop catches it.
     if not IS_KISS:
         _term_print("  Loading preparing for Model... (Nothing to see here)")
         _term_print("")
-    print("[CRYPTO] Bootstrapping encryption master key...")
-    try:
-        # Check for legacy key files and migrate if needed
-        local_key = os.path.join(BASE_DIR, "config", "master.key")
-        legacy_key = os.path.expanduser("~/.config/adelaide/master.key")
-        if os.path.exists(local_key) or os.path.exists(legacy_key):
-            print(
-                "[CRYPTO] Legacy key file detected, migrating to hardware-bound system..."
-            )
-            migrate_from_legacy_key_system()
-
-        # Try hardware-bound key derivation first
-        master_key = hardware_bound_key_derivation()
-        if not master_key:
-            print("[CRYPTO] FATAL: Hardware-bound key derivation failed.")
-            print("[CRYPTO] Cannot proceed without a valid master key.")
-            print("[CRYPTO] Please try again with your password.")
-            cleanup(signal.SIGTERM, None)
-            sys.exit(1)
-
-        # Write master key to secure temp file instead of leaking via env var
-        # to all subprocess environments. Subprocesses inherit ADELAIDE_MASTER_KEY_FILE
-        # and read the key on init, then the file is cleaned up on shutdown.
-        global _master_key_file_path
-        fd, _master_key_file_path = tempfile.mkstemp(prefix="adelaide_mk_", suffix=".key")
-        with os.fdopen(fd, 'w') as f:
-            f.write(master_key)
-        os.chmod(_master_key_file_path, 0o400)
-        os.environ["ADELAIDE_MASTER_KEY_FILE"] = _master_key_file_path
-        print(f"[CRYPTO] Master key ready. {len(master_key)} hex chars (secure temp file).")
-        _wipe_string(master_key)
-        master_key = None
-
-        # Migrate existing data to AAD-bound encryption (one-time)
-        print("[CRYPTO] Checking for AAD migration...")
-        try:
-            migrate_all_to_aad()
-        except Exception as e:
-            print(f"[CRYPTO] WARNING: AAD migration failed: {e}")
-            print("[CRYPTO] Legacy data will still decrypt (backward compatible)")
-    except Exception as e:
-        import traceback
-        with open("crash_log.txt", "w") as f:
-            f.write(f"[CRYPTO] FATAL: Could not bootstrap crypto: {e}\n")
-            f.write(traceback.format_exc())
-        print(f"[CRYPTO] FATAL: Could not bootstrap crypto: {e}")
-        print("[CRYPTO] Refusing to run with plaintext storage. Aborting.")
-        os.abort()
+    print("[CRYPTO] Bootstrapping delegated to Ada Server...")
+    
+    # We still want to perform AAD migration if possible, but wait...
+    # AAD migration requires the master key. Since Ada handles it, 
+    # Python cannot easily run `migrate_all_to_aad()`. We will skip Python-side migration
+    # as the user requested "less python". The Ada side already does `Migrate_Databases`.
         
+    # Daemon runner and sidecar launch moved to the main loop after Ada Server authenticates
     python_cmd = sys.executable
-    if launch_daemon:
-        print("[*] Booting StellaIcarus Ada Daemon Manager...")
-        daemon_script = os.path.join(
-            BASE_DIR, "python", "stellaicarus_daemon_runner.py"
-        )
-
-        daemon_args = [python_cmd, daemon_script]
-        if daemon_build_flag:
-            daemon_args.append(daemon_build_flag)
-
-        daemon_process = subprocess.Popen(
-            daemon_args, cwd=BASE_DIR, start_new_session=True
-        )
-    else:
-        print("[*] [Launch-V] Skipping daemon runner (--no-daemon)")
-
-
     print("[*] Booting Adelaide Intelligence Server...")
     end_time = int(time.time() * 1000)
     print(f"[*] Startup completed in {end_time - start_time}ms (WCET)")
@@ -5216,9 +4757,20 @@ def real_main():
     # Inject log file path so the Ada server can tail it for SSE benchmarking
     env["ADELAIDE_LOG_FILE"] = current_log_path
 
-    # Launch server through tee so its output goes to terminal + log file
+    # Clear old telemetry CSVs so panic plots don't mix timelines from different runs
+    wcet_csv = os.path.join(BASE_DIR, "run", "wcet.csv")
+    accel_csv = os.path.join(BASE_DIR, "run", "acceleration.csv")
+    for f_csv in [wcet_csv, accel_csv]:
+        if os.path.exists(f_csv):
+            try:
+                os.remove(f_csv)
+            except Exception:
+                pass
+
+    # Launch server through log_rotator so its output goes to terminal + rotated log files
+    log_rotator_script = os.path.join(BASE_DIR, "scripts", "log_rotator.py")
     tee_process = subprocess.Popen(
-        ["tee", "-a", current_log_path], stdin=subprocess.PIPE, start_new_session=True
+        [sys.executable, log_rotator_script, current_log_path], stdin=subprocess.PIPE, start_new_session=True
     )
     server_process = subprocess.Popen(
         [server_path] + server_args,
@@ -5645,75 +5197,106 @@ def real_main():
                 print("[!] Warning: failed to auto-install sidecar deps — continuing anyway")
 
         # [DO NOT REMOVE] macOS .app bundle for microphone/camera/screen capture permissions
-        # On Darwin, create a proper .app bundle with Info.plist containing
-        # NSMicrophoneUsageDescription, NSCameraUsageDescription, and
-        # NSScreenCaptureUsageDescription for hardware access permissions.
-        # The .app launches Terminal and runs the server with GUI.
-        #
-        # IMPORTANT: Only launch .app if NOT already running in Terminal.
-        # If launched from Terminal, just run sidecar_ui.py directly to avoid bootloop.
         if sys.platform == "darwin":
-            # Check if we're already in a Terminal session or launched from .app
-            # ADELAIDE_LAUNCHED_FROM_APP is set by .app launcher script
-            # TERM_SESSION_ID is set by bash/zsh when in terminal
-            launched_from_app = os.environ.get("ADELAIDE_LAUNCHED_FROM_APP") == "1"
-            in_terminal = os.environ.get("TERM_SESSION_ID") is not None
-
-            # [DO NOT REMOVE] Clear stale flag after reading
-            # Prevents false positives if flag persists in shell environment
-            if launched_from_app:
-                os.environ.pop("ADELAIDE_LAUNCHED_FROM_APP", None)
-
-            if launched_from_app or in_terminal:
-                # Already in Terminal or launched from .app - launch sidecar directly (no .app)
-                print("[*] Running in Terminal - launching sidecar directly...")
-                # Add pyvenv/bin to PATH so the sidecar can find pyrefly/ruff
-                sidecar_env = os.environ.copy()
-                pyvenv_bin = os.path.join(BASE_DIR, "pyvenv", "bin")
-                if os.path.exists(pyvenv_bin):
-                    sidecar_env["PATH"] = pyvenv_bin + os.pathsep + sidecar_env.get("PATH", "")
-                sidecar_process = subprocess.Popen(
-                    [sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=sidecar_env
+            app_bundle_path = os.path.join(BASE_DIR, "run", "Adelaide Zephyrine Assistant.app")
+            create_app_script = os.path.join(ui_dir, "create_macos_app.py")
+            if not os.path.exists(app_bundle_path):
+                print("[*] Creating macOS .app bundle for microphone/camera permissions...")
+                subprocess.run(
+                    [sidecar_python, create_app_script, "--output", app_bundle_path],
+                    cwd=ui_dir,
                 )
-                print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
-            else:
-                # Not in Terminal (e.g., launched from Finder) - use .app
-                app_bundle_path = os.path.join(
-                    BASE_DIR, "run", "Adelaide Zephyrine Assistant.app"
-                )
-                create_app_script = os.path.join(ui_dir, "create_macos_app.py")
-
-                # Create .app bundle if it doesn't exist
-                if not os.path.exists(app_bundle_path):
-                    print(
-                        "[*] Creating macOS .app bundle for microphone/camera permissions..."
-                    )
-                    subprocess.run(
-                        [
-                            sidecar_python,
-                            create_app_script,
-                            "--output",
-                            app_bundle_path,
-                        ],
-                        cwd=ui_dir,
-                    )
-
-                # Launch via .app bundle for proper permissions
-                print(
-                    "[*] Launching Adelaide Zephyrine Assistant.app for hardware access..."
-                )
-                subprocess.run(["open", app_bundle_path])
-        else:
-            # Non-Darwin: launch directly
-            sidecar_process = subprocess.Popen(
-                [sidecar_python, "sidecar_ui.py"], cwd=ui_dir
-            )
-            print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
+        
+        # Sidecar execution moved to the event loop (after Ada server authentication)
 
     if True:
+        user_secret = None
         try:
             while True:
-                exit_code = server_process.wait()
+                # Wait up to 5 seconds for the server to either fully boot or exit with 70/71
+                start_wait = time.time()
+                exit_code = None
+                while time.time() - start_wait < 5.0:
+                    exit_code = server_process.poll()
+                    if exit_code is not None:
+                        break
+                    time.sleep(0.5)
+                
+                if exit_code is None:
+                    # Server is running successfully after FIPS tests and crypto init!
+                    if not env.get("ADELAIDE_MASTER_KEY"):
+                        print("[*] Server is running, but no master key is set in Python. Re-deriving for sidecar...")
+                        if user_secret:
+                            try:
+                                integrity_hash = compute_integrity_hash()
+                                mk_hex = derive_master_key(integrity_hash, user_secret)
+                                env["ADELAIDE_MASTER_KEY"] = mk_hex
+                                
+                                # Now that we have the master key, we can load or generate API keys for the sidecar
+                                try:
+                                    import secrets
+                                    sys.path.insert(0, os.path.join(BASE_DIR, "python"))
+                                    from adelaide_crypto import load_api_keys, add_api_key, API_KEY_FILE
+                                    
+                                    all_keys = load_api_keys()
+                                    if not all_keys and not os.path.exists(API_KEY_FILE):
+                                        print("[API-KEY] First boot: Generating default sidecar API key...")
+                                        new_key = "zephy-" + secrets.token_hex(24)
+                                        all_keys = add_api_key(new_key)
+                                        
+                                    if all_keys:
+                                        api_key_file = os.path.join(BASE_DIR, "run", "api_keys_plain.txt")
+                                        os.makedirs(os.path.dirname(api_key_file), exist_ok=True)
+                                        with open(api_key_file, "w") as f:
+                                            for k in all_keys:
+                                                f.write(k + "\n")
+                                        os.chmod(api_key_file, 0o600)
+                                        env["ADELAIDE_API_KEY_FILE"] = api_key_file
+                                        env["ADELAIDE_SIDECAR_API_KEY"] = all_keys[0]
+                                        print(f"[API-KEY] Successfully loaded {len(all_keys)} API key(s) for sidecar authentication.")
+                                except Exception as e:
+                                    print(f"[API-KEY] Failed to setup API keys after password derivation: {e}")
+                                    
+                            except Exception as e:
+                                print(f"[CRYPTO] Python derivation failed: {e}")
+                    
+                    if not env.get("SIDECAR_LAUNCHED"):
+                        env["SIDECAR_LAUNCHED"] = "1"
+                        
+                        # Start Daemon Runner
+                        if launch_daemon:
+                            print("[*] Booting StellaIcarus Ada Daemon Manager...")
+                            daemon_script = os.path.join(BASE_DIR, "python", "stellaicarus_daemon_runner.py")
+                            daemon_args = [python_cmd, daemon_script]
+                            if daemon_build_flag:
+                                daemon_args.append(daemon_build_flag)
+                            daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR, env=env, start_new_session=True)
+
+                        # Start Sidecar UI
+                        if sys.platform == "darwin":
+                            launched_from_app = os.environ.get("ADELAIDE_LAUNCHED_FROM_APP") == "1"
+                            in_terminal = os.environ.get("TERM_SESSION_ID") is not None
+                            if launched_from_app:
+                                os.environ.pop("ADELAIDE_LAUNCHED_FROM_APP", None)
+
+                            if launched_from_app or in_terminal:
+                                print("[*] Running in Terminal - launching sidecar directly...")
+                                sidecar_env = env.copy()
+                                pyvenv_bin = os.path.join(BASE_DIR, "pyvenv", "bin")
+                                if os.path.exists(pyvenv_bin):
+                                    sidecar_env["PATH"] = pyvenv_bin + os.pathsep + sidecar_env.get("PATH", "")
+                                sidecar_process = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=sidecar_env)
+                                print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
+                            else:
+                                app_bundle_path = os.path.join(BASE_DIR, "run", "Adelaide Zephyrine Assistant.app")
+                                print("[*] Launching Adelaide Zephyrine Assistant.app for hardware access...")
+                                subprocess.run(["open", app_bundle_path])
+                        else:
+                            sidecar_process = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=env)
+                            print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
+                            
+                    print("[*] System fully booted. Waiting for server to exit...")
+                    exit_code = server_process.wait()
                 shutdown_flag = os.path.join(BASE_DIR, "run", ".shutdown_requested")
                 intentional_exit_flag = os.path.join(
                     BASE_DIR, "run", ".intentional_exit"
@@ -5722,6 +5305,85 @@ def real_main():
                 is_intentional = os.path.exists(shutdown_flag) or os.path.exists(
                     intentional_exit_flag
                 )
+
+                if exit_code == 70 or exit_code == 71:
+                    msg = "Wrong Password" if exit_code == 70 else "Password Required"
+                    print(f"\n[*] Ada Server requested password: {msg} (code: {exit_code})")
+                    
+                    if _gui_available() or IS_KISS:
+                        user_secret = prompt_kiss_password(is_first_boot=(exit_code == 71))
+                    else:
+                        import getpass
+                        user_secret = getpass.getpass(f"{msg}. Enter Master Password: ")
+                        
+                    if user_secret:
+                        # Pre-derive master key and API keys so Ada server has them on boot
+                        try:
+                            print("[*] Deriving master key to unlock API keys...")
+                            integrity_hash = compute_integrity_hash()
+                            mk_hex = derive_master_key(integrity_hash, user_secret)
+                            
+                            import secrets
+                            sys.path.insert(0, os.path.join(BASE_DIR, "python"))
+                            from adelaide_crypto import load_api_keys, add_api_key, API_KEY_FILE
+                            
+                            os.environ["ADELAIDE_MASTER_KEY"] = mk_hex
+                            
+                            all_keys = load_api_keys()
+                            if not all_keys and not os.path.exists(API_KEY_FILE):
+                                print("[API-KEY] First boot: Generating default sidecar API key...")
+                                new_key = "zephy-" + secrets.token_hex(24)
+                                all_keys = add_api_key(new_key)
+                                
+                            if all_keys:
+                                api_key_file = os.path.join(BASE_DIR, "run", "api_keys_plain.txt")
+                                os.makedirs(os.path.dirname(api_key_file), exist_ok=True)
+                                with open(api_key_file, "w") as f:
+                                    for k in all_keys:
+                                        f.write(k + "\n")
+                                os.chmod(api_key_file, 0o600)
+                                env["ADELAIDE_API_KEY_FILE"] = api_key_file
+                                env["ADELAIDE_SIDECAR_API_KEY"] = all_keys[0]
+                                print(f"[API-KEY] Successfully injected {len(all_keys)} API key(s) into server environment.")
+                            
+                            env["ADELAIDE_MASTER_KEY"] = mk_hex
+                        except Exception as e:
+                            print(f"[CRYPTO] Failed to unlock API keys (wrong password?): {e}")
+
+                        # Pass secret to Ada server via secure file
+                        fd, path = tempfile.mkstemp(prefix="adelaide_sec_", suffix=".key")
+                        with os.fdopen(fd, 'w') as f:
+                            f.write(user_secret)
+                        os.chmod(path, 0o400)
+                        env["ADELAIDE_USER_SECRET_FILE"] = path
+                        
+                        # Clear old telemetry CSVs so panic plots don't mix timelines from different runs
+                        wcet_csv = os.path.join(BASE_DIR, "run", "wcet.csv")
+                        accel_csv = os.path.join(BASE_DIR, "run", "acceleration.csv")
+                        for f_csv in [wcet_csv, accel_csv]:
+                            if os.path.exists(f_csv):
+                                try:
+                                    os.remove(f_csv)
+                                except Exception:
+                                    pass
+
+                        # Respawn the server process
+                        log_rotator_script = os.path.join(BASE_DIR, "scripts", "log_rotator.py")
+                        tee_process = subprocess.Popen(
+                            [sys.executable, log_rotator_script, current_log_path], stdin=subprocess.PIPE, start_new_session=True
+                        )
+                        server_process = subprocess.Popen(
+                            [server_path] + server_args,
+                            cwd=BASE_DIR,
+                            env=env,
+                            stdout=tee_process.stdin,
+                            stderr=subprocess.STDOUT,
+                            start_new_session=True,
+                        )
+                        continue
+                    else:
+                        print("[CRYPTO] No password provided. Exiting.")
+                        break
 
                 if is_intentional:
                     print(
@@ -6045,8 +5707,9 @@ def real_main():
                 import time as _kill_wait
 
                 _kill_wait.sleep(0.5)  # Give OS time to release file handles
+                log_rotator_script = os.path.join(BASE_DIR, "scripts", "log_rotator.py")
                 tee_process = subprocess.Popen(
-                    ["tee", "-a", current_log_path],
+                    [sys.executable, log_rotator_script, current_log_path],
                     stdin=subprocess.PIPE,
                     start_new_session=True,
                 )
