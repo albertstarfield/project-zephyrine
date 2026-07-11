@@ -177,7 +177,7 @@ project AdelaideZephyrineSystem is
                             project'Project_Dir & "vendor/stable-diffusion.cpp/build/libstable-diffusion.a",
                             "-lsqlite3",
                             "-lc++",
-                            "-L" & project'Project_Dir & "../.ros_env/lib",
+                            "-L" & project'Project_Dir & "vendor/ros_env/lib",
                             "-lrcl",
                             "-lrcutils",
                             project'Object_Dir & "/llama_safe.o",

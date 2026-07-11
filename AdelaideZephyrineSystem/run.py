@@ -7,6 +7,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -118,7 +119,10 @@ def _try_inferior_paradoxical_auto_decrypt(integrity_hash):
             print("[KEY-DERIV] InferiorParadoxical auto-decrypt SUCCESS via C boundary")
             return master_key
         return None
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[KEY-DERIV] InferiorParadoxical auto-decrypt crashed: {e}")
+        print(f"[KEY-DERIV] Traceback:\n{traceback.format_exc()}")
         return None
 
 # ── KISS Mode ─────────────────────────────────────────────────────────────
@@ -209,8 +213,30 @@ def _password_entropy(password):
     return math.floor(len(password) * math.log2(pool))
 
 
+def _wipe_string(s):
+    """Best-effort wiping of a string from Python heap memory.
+    
+    Python strings are immutable, so we cannot zero them in place. This
+    function overwrites the variable's reference with a new string of the
+    same length (to reduce the chance that the original bytes survive in
+    heap), then forces garbage collection.
+    """
+    if s is None:
+        return
+    try:
+        length = len(s)
+        # Overwrite reference with dummy data
+        s = "X" * length
+        s = "\0" * length  # null bytes
+    except Exception:
+        pass
+    finally:
+        s = None
+    import gc
+    gc.collect()
 
-def _tk_input_dialog(title, prompt):
+
+def _tk_input_dialog(title, prompt, welcome_msg=None):
     import tkinter as tk
     import tkinter.simpledialog as sd
 
@@ -221,11 +247,224 @@ def _tk_input_dialog(title, prompt):
     root.attributes("-topmost", True)
     root.focus_force()
 
-    result = sd.askstring(title, prompt, parent=root)
-    root.destroy()
-    return result
+    if welcome_msg:
+        # Show welcome message in a custom dialog
+        bg = "#1a1a2e"
+        fg = "#e0e0e0"
+        entry_bg = "#16213e"
+        btn_bg = "#0f3460"
+        accent = "#e94560"
 
-def _tk_password_dialog(title, prompt, confirm=False):
+        dialog = tk.Toplevel(root)
+        dialog.title(title)
+        dialog.attributes("-topmost", True)
+        dialog.resizable(False, False)
+        dialog.grab_set()
+
+        w, h = 420, 320
+        sx = (dialog.winfo_screenwidth() - w) // 2
+        sy = (dialog.winfo_screenheight() - h) // 2
+        dialog.geometry(f"{w}x{h}+{sx}+{sy}")
+        dialog.configure(bg=bg)
+
+        tk.Label(
+            dialog, text=welcome_msg, bg=bg, fg=fg,
+            font=("Helvetica", 12), justify="left", wraplength=380,
+        ).pack(pady=(16, 10), padx=20)
+
+        tk.Label(
+            dialog, text=prompt, bg=bg, fg=fg,
+            font=("Helvetica", 13),
+        ).pack(pady=(4, 6))
+
+        name_var = tk.StringVar()
+        name_entry = tk.Entry(
+            dialog, textvariable=name_var, bg=entry_bg, fg=fg,
+            insertbackground=fg, font=("Helvetica", 13), width=28,
+            relief="flat",
+        )
+        name_entry.pack(pady=4, padx=20)
+        name_entry.focus_set()
+
+        result = [None]
+
+        def on_ok(_event=None):
+            # Read directly from Entry widget — StringVar binding is unreliable on macOS
+            val = name_entry.get()
+            if not IS_KISS:
+                print(f"[DEBUG] on_ok fired, name_entry.get() = {val!r}")
+            result[0] = val
+            dialog.destroy()
+
+        def on_cancel():
+            if not IS_KISS:
+                print("[DEBUG] on_cancel fired")
+            result[0] = None
+            dialog.destroy()
+
+        btn_frame = tk.Frame(dialog, bg=bg)
+        btn_frame.pack(pady=(10, 8))
+
+        tk.Button(
+            btn_frame, text="OK", command=on_ok, bg=btn_bg, fg="#ffffff",
+            activebackground=accent, activeforeground="#ffffff",
+            font=("Helvetica", 11, "bold"), width=10, relief="flat", cursor="hand2",
+        ).pack(side="left", padx=6)
+
+        tk.Button(
+            btn_frame, text="Cancel", command=on_cancel, bg="#2a2a4a", fg="#ffffff",
+            activebackground="#555577", activeforeground="#ffffff",
+            font=("Helvetica", 11), width=10, relief="flat", cursor="hand2",
+        ).pack(side="left", padx=6)
+
+        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+        # Do NOT bind <Return> — it steals the keystroke from the Entry widget.
+        # User must click OK button to submit.
+        dialog.bind("<Escape>", lambda e: on_cancel())
+
+        root.wait_window(dialog)
+        root.withdraw()
+        if not IS_KISS:
+            print(f"[DEBUG] _tk_input_dialog returning: {result[0]!r}")
+        return result[0]
+    else:
+        result = sd.askstring(title, prompt, parent=root)
+        root.destroy()
+        return result
+
+def _tk_progress_dialog(title, message):
+    """Show a tkinter progress dialog with an animated bar, step text, and ETA. Returns the dialog object for updates."""
+    import tkinter as tk
+
+    root = _get_tk_root()
+    root.deiconify()
+    root.attributes("-topmost", True)
+
+    bg = "#1a1a2e"
+    fg = "#e0e0e0"
+    bar_bg = "#16213e"
+    bar_fill = "#4ecca3"
+
+    dialog = tk.Toplevel(root)
+    dialog.title(title)
+    dialog.attributes("-topmost", True)
+    dialog.resizable(False, False)
+    dialog.transient(root)
+    dialog.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent close during load
+
+    w, h = 420, 160
+    sx = (dialog.winfo_screenwidth() - w) // 2
+    sy = (dialog.winfo_screenheight() - h) // 2
+    dialog.geometry(f"{w}x{h}+{sx}+{sy}")
+    dialog.configure(bg=bg)
+
+    title_label = tk.Label(
+        dialog, text=message, bg=bg, fg=fg,
+        font=("Helvetica", 12),
+    )
+    title_label.pack(pady=(14, 4))
+
+    # Canvas-based progress bar
+    canvas = tk.Canvas(dialog, width=380, height=20, bg=bar_bg, highlightthickness=0)
+    canvas.pack(pady=(4, 4))
+    fill_rect = canvas.create_rectangle(0, 0, 0, 20, fill=bar_fill, outline="")
+
+    info_frame = tk.Frame(dialog, bg=bg)
+    info_frame.pack(pady=(2, 2))
+
+    pct_label = tk.Label(
+        info_frame, text="0%", bg=bg, fg=fg, font=("Helvetica", 10),
+    )
+    pct_label.pack(side=tk.LEFT, padx=(0, 16))
+
+    eta_label = tk.Label(
+        info_frame, text="", bg=bg, fg="#888888", font=("Helvetica", 10),
+    )
+    eta_label.pack(side=tk.LEFT)
+
+    step_label = tk.Label(
+        dialog, text="", bg=bg, fg="#4ecca3",
+        font=("Helvetica", 10), wraplength=380,
+    )
+    step_label.pack(pady=(2, 4))
+
+    _pulse_state = [0]
+    _pulse_id = [None]
+
+    def _pulse_bar():
+        """Indeterminate pulse animation for unknown-duration steps."""
+        try:
+            _pulse_state[0] = (_pulse_state[0] + 6) % 380
+            x = _pulse_state[0]
+            canvas.coords(fill_rect, x, 0, min(x + 80, 380), 20)
+            _pulse_id[0] = dialog.after(30, _pulse_bar)
+        except Exception:
+            pass
+
+    def update_bar(pct, eta_text="", step_text="", pulse=False):
+        try:
+            if pulse:
+                if _pulse_id[0] is None:
+                    _pulse_bar()
+                pct_label.configure(text="")
+                if eta_text:
+                    eta_label.configure(text=eta_text)
+                if step_text:
+                    step_label.configure(text=step_text)
+                dialog.update()
+                return
+            # Stop pulse if running
+            if _pulse_id[0] is not None:
+                dialog.after_cancel(_pulse_id[0])
+                _pulse_id[0] = None
+            canvas.coords(fill_rect, 0, 0, int(380 * pct / 100), 20)
+            pct_label.configure(text=f"{int(pct)}%")
+            if eta_text:
+                eta_label.configure(text=eta_text)
+            if step_text:
+                step_label.configure(text=step_text)
+            dialog.update()
+        except Exception:
+            pass
+
+    dialog._update_bar = update_bar
+    dialog._root_ref = root
+
+    # Background pulse thread — keeps tkinter alive while main thread is blocked
+    _pulse_alive = [True]
+    _pulse_thread_ref = [None]
+
+    def _pulse_thread_fn():
+        while _pulse_alive[0]:
+            try:
+                dialog.after(0, lambda: dialog.update() if dialog.winfo_exists() else None)
+            except Exception:
+                break
+            time.sleep(0.15)
+
+    def _start_pulse():
+        if _pulse_thread_ref[0] is None:
+            t = threading.Thread(target=_pulse_thread_fn, daemon=True)
+            _pulse_thread_ref[0] = t
+            t.start()
+
+    def _stop_pulse():
+        _pulse_alive[0] = False
+
+    dialog._start_pulse = _start_pulse
+    dialog._stop_pulse = _stop_pulse
+    return dialog
+
+
+def _tk_progress_done(dialog):
+    """Close the progress dialog."""
+    try:
+        dialog.destroy()
+    except Exception:
+        pass
+
+
+def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
 
     """Show a tkinter password dialog and return the entered string or None."""
     import tkinter as tk
@@ -239,8 +478,9 @@ def _tk_password_dialog(title, prompt, confirm=False):
     dialog.resizable(False, False)
     dialog.grab_set()
 
-    # Center on screen (taller when confirm mode has entropy + tip labels)
-    w, h = 380, 270 if confirm else 180
+    # Center on screen (taller when confirm mode has entropy + tip labels, or promise msg)
+    extra_h = 60 if promise_msg else 0
+    w, h = 380, (270 if confirm else 180) + extra_h
     sx = (dialog.winfo_screenwidth() - w) // 2
     sy = (dialog.winfo_screenheight() - h) // 2
     dialog.geometry(f"{w}x{h}+{sx}+{sy}")
@@ -253,6 +493,12 @@ def _tk_password_dialog(title, prompt, confirm=False):
     accent = "#e94560"
     green = "#4ecca3"
     dialog.configure(bg=bg)
+
+    if promise_msg:
+        tk.Label(
+            dialog, text=promise_msg, bg=bg, fg=fg,
+            font=("Helvetica", 11), justify="left", wraplength=340,
+        ).pack(pady=(12, 4), padx=20)
 
     tk.Label(dialog, text=prompt, bg=bg, fg=fg, font=("Helvetica", 13)).pack(
         pady=(18, 6)
@@ -392,7 +638,7 @@ def _tk_password_dialog(title, prompt, confirm=False):
     return result[0]
 
 
-def prompt_kiss_password(is_first_boot=False):
+def prompt_kiss_password(is_first_boot=False, is_recovery=False):
     """
     KISS mode password prompt (phone-like setup).
 
@@ -403,6 +649,9 @@ def prompt_kiss_password(is_first_boot=False):
 
     Subsequent boot:
     - Prompt for password
+
+    is_recovery: True if this prompt is asking for the recovery key
+                 rather than a password (changes the dialog label).
     """
     # Check if tkinter is available and we're in GUI mode
     use_gui = _gui_available()
@@ -410,8 +659,14 @@ def prompt_kiss_password(is_first_boot=False):
     if use_gui:
         if is_first_boot:
             _term_print("[KEY-DERIV] First boot — opening password setup dialog...")
+            _promise_msg = (
+                "Oki :D, now so that we can keep secret between\n"
+                "each other, I am with my pinky finger, promise\n"
+                "to not share your data with others *wink"
+            )
             password = _tk_password_dialog(
-                "Adelaide — Set Password", "Create a new password:", confirm=True
+                "Adelaide — Set Password", "Create a new password:",
+                confirm=True, promise_msg=_promise_msg,
             )
             if not password:
                 return None
@@ -433,6 +688,12 @@ def prompt_kiss_password(is_first_boot=False):
             )
 
             return password
+        elif is_recovery:
+            _term_print("[KEY-DERIV] Recovery key requested...")
+            password = _tk_password_dialog(
+                "Adelaide — Recovery Key", "Enter your recovery key:"
+            )
+            return password
         else:
             _term_print("[KEY-DERIV] Welcome back — entering password...")
             password = _tk_password_dialog(
@@ -443,15 +704,19 @@ def prompt_kiss_password(is_first_boot=False):
     # Fallback: terminal prompts
     import getpass
 
-    _term_print("")
-    _term_print("  Welcome to Adelaide.")
-    _term_print("")
+    if not IS_KISS:
+        _term_print("")
+        _term_print("  Oki :D, now so that we can keep secret between")
+        _term_print("  each other, I am with my pinky finger, promise")
+        _term_print("  to not share your data with others *wink")
+        _term_print("")
 
     if is_first_boot:
-        _term_print("  Let's set up your password.")
-        _term_print("  This password protects your data.")
-        _term_print("  You'll need it every time Adelaide starts.")
-        _term_print("")
+        if not IS_KISS:
+            _term_print("  Let's set up your password.")
+            _term_print("  This password protects your data.")
+            _term_print("  You'll need it every time Adelaide starts.")
+            _term_print("")
 
         # Create password with entropy check (loop until strong enough)
         while True:
@@ -493,9 +758,14 @@ def prompt_kiss_password(is_first_boot=False):
         _term_print("")
 
         return password
+    elif is_recovery:
+        _term_print("  Recovery key required.")
+        password = getpass.getpass("  Enter recovery key: ", stream=term_stderr)
+        return password
     else:
         _term_print("  Welcome back.")
         password = getpass.getpass("  Please enter your password: ", stream=term_stderr)
+        return password
 
 
 def _tk_info_dialog(title, message):
@@ -1642,8 +1912,53 @@ def hardware_bound_key_derivation():
 
     _term_print("[KEY-DERIV] Initializing hardware-bound key derivation...")
 
-    # Step 1: Compute integrity hash
-    integrity_hash = compute_integrity_hash()
+    # Step 1: Compute integrity hash (with loading bar)
+    _hash_result = [None]
+    _hash_done = threading.Event()
+
+    def _compute_hash():
+        _hash_result[0] = compute_integrity_hash()
+        _hash_done.set()
+
+    _hash_thread = threading.Thread(target=_compute_hash, daemon=True)
+    _hash_thread.start()
+
+    # Show loading bar while hash computes
+    use_gui_progress = _gui_available() and not IS_KISS
+    gui_dialog = None
+
+    if use_gui_progress:
+        gui_dialog = _tk_progress_dialog(
+            "Adelaide — Loading",
+            "Loading preparing for Model...\n(Nothing to see here)"
+        )
+
+    bar_width = 40
+    elapsed = 0.0
+    eta_target = 8.0  # estimated seconds for hash computation
+    while not _hash_done.is_set():
+        pct = min(95, int(100 * elapsed / eta_target))
+        eta = max(0, int(eta_target - elapsed))
+        if gui_dialog:
+            gui_dialog._update_bar(pct, eta_text=f"ETA: {eta}s")
+        elif not IS_KISS:
+            filled = int(bar_width * pct / 100)
+            bar = "█" * filled + "░" * (bar_width - filled)
+            _term_print(f"\r\033[K  Loading preparing for Model... |{bar}| {pct}%  ETA: {eta}s")
+        time.sleep(0.1)
+        elapsed += 0.1
+
+    _hash_thread.join()
+    integrity_hash = _hash_result[0]
+
+    # Clear loading bar
+    if gui_dialog:
+        gui_dialog._update_bar(100)
+        time.sleep(0.2)
+        _tk_progress_done(gui_dialog)
+    elif not IS_KISS:
+        _term_print(f"\r\033[K  Loading preparing for Model... |{'█' * bar_width}| 100%  Done!")
+
     if not integrity_hash:
         _term_print("[KEY-DERIV] Failed to compute integrity hash")
         return None
@@ -1677,7 +1992,10 @@ def hardware_bound_key_derivation():
     if os.path.exists(db_path):
         try:
             conn = sqlite3.connect(db_path)
-            row = conn.execute("SELECT wrapped_key_hex FROM SystemState").fetchone()
+            row = conn.execute(
+                "SELECT value FROM system_state WHERE key = ?",
+                (INFERIOR_PARADOXICAL_KEY,)
+            ).fetchone()
             if row and row[0]:
                 has_wrapped_key = True
             conn.close()
@@ -1689,20 +2007,27 @@ def hardware_bound_key_derivation():
                   not has_wrapped_key)
 
     # Step 4: Prompt for password (Key 1 — user password / recovery key)
-    if first_boot:
-        _term_print("[KEY-DERIV] First boot — creating new password")
-    else:
-        _term_print("[KEY-DERIV] Enter password (hardware environment changed or first unlock)")
+    MAX_PASSWORD_ATTEMPTS = 5
+    password_ok = False
+    master_key = None
+    aes_key = None
 
     if "--test-fips" in sys.argv:
         print("[KEY-DERIV] --test-fips detected. Bypassing interactive prompt.")
         password = "testfips_password123"
-    elif _gui_available() or IS_KISS:
-        password = prompt_kiss_password(is_first_boot=first_boot)
-    else:
-        import getpass
-
-        if first_boot:
+        master_key = derive_master_key(integrity_hash, password)
+        _wipe_string(password)
+        password = None
+    elif first_boot:
+        _term_print("[KEY-DERIV] First boot — creating new password")
+        if _gui_available() or IS_KISS:
+            password = prompt_kiss_password(is_first_boot=True)
+            if password:
+                master_key = derive_master_key(integrity_hash, password)
+                _wipe_string(password)
+                password = None
+        else:
+            import getpass
             _term_print("[KEY-DERIV] First boot detected. Please create a password.")
             while True:
                 password = getpass.getpass("  Create password: ", stream=term_stderr)
@@ -1719,52 +2044,80 @@ def hardware_bound_key_derivation():
                     )
                     continue
                 break
-        else:
-            _term_print("[KEY-DERIV] Please enter your password.")
-            master_key = derive_master_key_from_stdin(integrity_hash, "  Password: ")
-            password = None  # Not held in Python memory
-            if master_key:
-                print(f"[KEY-DERIV] Master key securely derived in C: {master_key[:16]}...")
-            else:
-                print("[KEY-DERIV] No password provided or derivation failed")
-                return None
-    if password:
-        master_key = derive_master_key(integrity_hash, password)
-
-    # Step 6: Derive AES key for database
-    aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
-
-    # Step 7: Verify integrity test blob
-    password_ok = False
-    if first_boot:
-        _term_print("[KEY-DERIV] First boot - skipping integrity test verification")
-        password_ok = True
-    elif verify_integrity_test_blob(master_key, aes_key):
-        _term_print("[KEY-DERIV] Integrity test blob verification PASSED")
-        password_ok = True
+            master_key = derive_master_key(integrity_hash, password)
+            _wipe_string(password)
+            password = None
+        if master_key:
+            aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
+            password_ok = True
+            _term_print("[KEY-DERIV] First boot — password created successfully")
     else:
-        _term_print("[KEY-DERIV] Integrity test blob verification FAILED — trying recovery key")
-        # Try recovery key
-        if _gui_available() or IS_KISS:
-            _term_print("[KEY-DERIV] Please enter your recovery key or password.")
-            recovery_key = prompt_kiss_password(is_first_boot=False)
-        else:
-            import getpass
-            recovery_key = getpass.getpass("Enter recovery key: ", stream=term_stderr)
+        _term_print("[KEY-DERIV] Enter password (hardware environment changed or first unlock)")
 
-        if recovery_key:
-            recovery_master = derive_master_key(integrity_hash, recovery_key)
-            recovery_aes = derive_sub_key(recovery_master, "adelaide:db:memory:v1")
-            if verify_integrity_test_blob(recovery_master, recovery_aes):
-                _term_print("[KEY-DERIV] Recovery key verification PASSED")
-                master_key = recovery_master
-                aes_key = recovery_aes
-                password_ok = True
+        for attempt in range(MAX_PASSWORD_ATTEMPTS):
+            if attempt > 0:
+                delay = min(2 ** attempt, 30)
+                _term_print(
+                    f"[KEY-DERIV] Wrong password. Retry in {delay}s "
+                    f"(attempt {attempt + 1}/{MAX_PASSWORD_ATTEMPTS})"
+                )
+                time.sleep(delay)
+
+            if _gui_available() or IS_KISS:
+                password = prompt_kiss_password(is_first_boot=False)
+                if not password:
+                    return None
+                master_key = derive_master_key(integrity_hash, password)
+                _wipe_string(password)
+                password = None
             else:
-                _term_print("[KEY-DERIV] Recovery key verification FAILED")
+                import getpass
+                _term_print("[KEY-DERIV] Please enter your password.")
+                master_key = derive_master_key_from_stdin(integrity_hash, "  Password: ")
+                if not master_key:
+                    print("[KEY-DERIV] No password provided or derivation failed")
+                    return None
+                print(f"[KEY-DERIV] Master key securely derived in C: {master_key[:16]}...")
+
+            aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
+            if verify_integrity_test_blob(master_key, aes_key):
+                if attempt == 0:
+                    _term_print("[KEY-DERIV] Integrity test blob verification PASSED")
+                else:
+                    _term_print(f"[KEY-DERIV] Correct password (attempt {attempt + 1}/{MAX_PASSWORD_ATTEMPTS})")
+                password_ok = True
+                break
+            else:
+                _term_print(f"[KEY-DERIV] Incorrect password (attempt {attempt + 1}/{MAX_PASSWORD_ATTEMPTS})")
+                master_key = None
+                aes_key = None
+                continue
+
+        # After password attempts exhausted, try recovery key
+        if not password_ok:
+            _term_print("[KEY-DERIV] Password attempts exhausted — offering recovery key")
+            if _gui_available() or IS_KISS:
+                recovery_key = prompt_kiss_password(is_first_boot=False, is_recovery=True)
+            else:
+                import getpass
+                recovery_key = getpass.getpass("Enter recovery key: ", stream=term_stderr)
+
+            if recovery_key:
+                master_key = derive_master_key(integrity_hash, recovery_key)
+                aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
+                _wipe_string(recovery_key)
+                recovery_key = None
+                if verify_integrity_test_blob(master_key, aes_key):
+                    _term_print("[KEY-DERIV] Recovery key verification PASSED")
+                    password_ok = True
+                else:
+                    _term_print("[KEY-DERIV] Recovery key verification FAILED")
+                    return None
+            else:
                 return None
-        else:
-            return None
+
+    if not password_ok:
+        return None
 
     # Step 8: Store integrity test blob on first boot
     if first_boot:
@@ -2179,8 +2532,8 @@ def bootstrap_ros2_mac():
         return  # Already have ROS2 active
 
     print(f"\n{BOLD}{WHT}[*] Bootstrapping ROS2 RoboStack Environment...{RST}")
-    bin_dir = os.path.join(PROJECT_ROOT, ".bin")
-    ros_env_dir = os.path.join(PROJECT_ROOT, ".ros_env")
+    bin_dir = os.path.join(BASE_DIR, "vendor", ".micromamba")
+    ros_env_dir = os.path.join(BASE_DIR, "vendor", "ros_env")
     micromamba_bin = os.path.join(bin_dir, "bin", "micromamba")
 
     os.makedirs(bin_dir, exist_ok=True)
@@ -2781,6 +3134,9 @@ watchdog_process = None
 sidecar_process = None
 kokoro_process = None
 
+# Master key temp file path (cleaned up on shutdown)
+_master_key_file_path = None
+
 
 def get_files_to_hash():
     # NOTE: run.py itself is NOT hashed - it's an interpreter script, not a
@@ -2807,23 +3163,16 @@ def get_files_to_hash():
             if os.path.exists(os.path.join(BASE_DIR, pattern)):
                 files.append(os.path.join(BASE_DIR, pattern))
 
-        # Also hash mtmd source files in llama.cpp (for multimodal rebuild detection)
-        # Why: Changes to mtmd source files should trigger a rebuild of the mtmd library.
-        #      Without this, code changes in llama.cpp/tools/mtmd/ would be silently ignored.
-        mtmd_dir = os.path.abspath(
-            os.path.join(BASE_DIR, "vendor", "llama.cpp", "tools", "mtmd")
-        )
-    mtmd_count = 0
+    # Also hash mtmd source files (cloned by run.py into vendor/llama.cpp)
+    # Detects when a fresh clone or update changes multimodal source
+    mtmd_dir = os.path.abspath(
+        os.path.join(BASE_DIR, "vendor", "llama.cpp", "tools", "mtmd")
+    )
     if os.path.exists(mtmd_dir):
         for root, _, filenames in os.walk(mtmd_dir):
             for name in filenames:
                 if name.endswith((".cpp", ".h", ".c")):
                     files.append(os.path.join(root, name))
-                    mtmd_count += 1
-    if mtmd_count > 0:
-        print(
-            f"[MTMD] [{time.strftime('%H:%M:%S')}] Tracking {mtmd_count} mtmd source files for rebuild detection"
-        )
 
     return sorted(files)
 
@@ -2839,6 +3188,147 @@ def calculate_hash(file_paths):
     return hasher.hexdigest()
 
 
+# ── Venv Validity Detection ────────────────────────────────────────────────
+# Detects when the pyvenv is stale due to:
+#   1. Project directory moved (shebangs, .pth files, installed paths break)
+#   2. Requirements files changed (new deps needed)
+#   3. Python sidecar scripts changed (installed in venv)
+#
+# Uses a separate .venv_hash file (independent of .build_hash) so venv
+# rebuilds don't trigger a full source rebuild and vice versa.
+
+def get_venv_files_to_hash():
+    """Collect files whose changes invalidate the pyvenv."""
+    patterns = [
+        # Requirements files
+        "lsh/requirements-lsh.txt",
+        "vendor/tts_kokoro_component/requirements.txt",
+        # Python sidecar scripts installed into pyvenv
+        "vad_component/vad_worker.py",
+        "lsh/lsh_qrnn_worker.py",
+        # Python crypto/sidecar modules
+        "python/**/*.py",
+    ]
+    files = []
+    for pattern in patterns:
+        path = os.path.join(BASE_DIR, pattern)
+        if "/**/" in pattern:
+            base = path.split("/**/")[0]
+            if os.path.exists(base):
+                for root, _, filenames in os.walk(base):
+                    for name in filenames:
+                        files.append(os.path.join(root, name))
+        else:
+            if os.path.exists(path):
+                files.append(path)
+    return sorted(files)
+
+
+def calculate_venv_hash():
+    """
+    Compute venv validity hash.
+
+    Includes BASE_DIR path so directory moves are detected instantly.
+    When the project moves, every venv path (shebangs, .pth, installed
+    metadata) becomes stale — this forces a full venv rebuild.
+    """
+    hasher = hashlib.md5()
+
+    # 1. Hash the project directory path itself (detects moves)
+    hasher.update(BASE_DIR.encode("utf-8"))
+
+    # 2. Hash all venv-relevant files
+    for fpath in get_venv_files_to_hash():
+        if os.path.isfile(fpath):
+            with open(fpath, "rb") as f:
+                hasher.update(f.read())
+
+    return hasher.hexdigest()
+
+
+def check_venv_validity():
+    """
+    Check if pyvenv is valid. Returns True if venv is OK, False if rebuild needed.
+
+    Detects:
+      - Project moved to a different directory
+      - Requirements files changed
+      - Python sidecar scripts changed
+    """
+    venv_dirs = [
+        os.path.join(BASE_DIR, "pyvenv"),
+        os.path.join(BASE_DIR, "vendor", "tts_kokoro_component", "venv"),
+    ]
+    venv_hash_file = os.path.join(BASE_DIR, ".venv_hash")
+
+    current_hash = calculate_venv_hash()
+
+    # Read stored hash
+    stored_hash = ""
+    if os.path.exists(venv_hash_file):
+        with open(venv_hash_file, "r") as f:
+            stored_hash = f.read().strip()
+
+    # Check if ALL venvs exist and hash matches
+    all_exist = all(os.path.isdir(d) for d in venv_dirs)
+    if current_hash == stored_hash and all_exist:
+        return True  # venv is valid
+
+    # Venv is invalid — determine why
+    missing = [d for d in venv_dirs if not os.path.isdir(d)]
+    if missing:
+        print(f"[VENV] Missing venvs: {', '.join(os.path.basename(d) for d in missing)} — will create fresh")
+    elif stored_hash:
+        # Hash mismatch — check if project moved
+        try:
+            main_venv_python = os.path.join(venv_dirs[0], "bin", "python3")
+            if os.path.exists(main_venv_python):
+                import subprocess
+                result = subprocess.run(
+                    [main_venv_python, "-c", "import sys; print(sys.prefix)"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode == 0:
+                    old_prefix = result.stdout.strip()
+                    if old_prefix != BASE_DIR:
+                        print(f"[VENV] Project moved: {old_prefix} → {BASE_DIR}")
+                    else:
+                        print("[VENV] Requirements or sidecar scripts changed")
+        except Exception:
+            print("[VENV] Venv state unclear — rebuilding")
+    else:
+        print("[VENV] Venv hash missing or corrupted — rebuilding")
+
+    return False
+
+
+def invalidate_venv():
+    """Destroy all project venvs and clear venv hash so next check forces rebuild."""
+    venv_hash_file = os.path.join(BASE_DIR, ".venv_hash")
+
+    # All project venvs that contain hardcoded paths (shebangs, .pth, metadata)
+    venv_dirs = [
+        os.path.join(BASE_DIR, "pyvenv"),                                    # main venv (LSH, VAD, sidecars)
+        os.path.join(BASE_DIR, "vendor", "tts_kokoro_component", "venv"),    # Kokoro TTS isolated venv
+    ]
+
+    for venv_dir in venv_dirs:
+        if os.path.isdir(venv_dir):
+            print(f"[VENV] Destroying stale venv at {venv_dir}...")
+            shutil.rmtree(venv_dir, ignore_errors=True)
+
+    # Clear stored hash
+    if os.path.exists(venv_hash_file):
+        os.remove(venv_hash_file)
+
+
+def save_venv_hash():
+    """Save current venv hash after successful rebuild."""
+    venv_hash_file = os.path.join(BASE_DIR, ".venv_hash")
+    with open(venv_hash_file, "w") as f:
+        f.write(calculate_venv_hash())
+
+
 # [DO NOT REMOVE] Graceful shutdown via SIGQUIT (Ctrl+\ by default).
 # Writes .shutdown_requested flag so run.py signals the Ada server to
 # delete it and exit gracefully.  run.py does NOT kill children here —
@@ -2846,18 +3336,16 @@ def calculate_hash(file_paths):
 # deletes it, does its own clean shutdown.  This prevents accidental
 # single-key presses from killing the server.
 #
-# SIGTERM is kept as a hard kill fallback (process group kill).
+# SIGTERM and SIGINT (Ctrl+C) are kept as hard kill fallbacks (process group kill).
 def cleanup(signum=None, frame=None):
     """Signal handler for graceful shutdown.
 
     SIGQUIT: Write .shutdown_requested flag → Ada server polls for it,
              deletes it, and exits gracefully.  run.py returns without
              killing children — Ada owns its own lifecycle.
-    SIGTERM: Hard kill — terminate all children immediately.
+    SIGTERM / SIGINT (Ctrl+C): Hard kill — terminate all children immediately.
     """
-    if signum == signal.SIGTERM:
-        print("\n[*] SIGTERM received — hard killing all children...")
-    else:
+    if signum == signal.SIGQUIT:
         print("\n[*] SIGQUIT received — writing shutdown flag for Ada...")
         shutdown_flag = os.path.join(BASE_DIR, "run", ".shutdown_requested")
         try:
@@ -2869,6 +3357,10 @@ def cleanup(signum=None, frame=None):
         # Flag written — return without killing.  Ada will detect and exit
         # gracefully on its next main-loop tick.
         return
+
+    # SIGTERM / SIGINT path: Hard kill all children via process group.
+    sig_name = signal.Signals(signum).name if signum else "UNKNOWN"
+    print(f"\n[*] {sig_name} received — hard killing all children...")
 
     # SIGTERM path: Collect PIDs to kill directly — do NOT rely on
     # proc.terminate() inside a signal handler (can deadlock with main
@@ -2921,6 +3413,25 @@ def cleanup(signum=None, frame=None):
             except (ProcessLookupError, PermissionError, OSError):
                 pass
 
+    # Nuclear option: pkill by name for processes that survive SIGKILL
+    # (e.g. daemon runner with its own child threads)
+    for proc_name in ["adelaide_server", "adelaide_watchdog", "vad_worker.py",
+                       "stellaicarus_daemon_runner"]:
+        try:
+            subprocess.run(["pkill", "-9", "-f", proc_name],
+                           stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+    # Wipe master key from environment + remove temp key file
+    os.environ.pop("ADELAIDE_MASTER_KEY", None)
+    os.environ.pop("ADELAIDE_MASTER_KEY_FILE", None)
+    if _master_key_file_path and os.path.exists(_master_key_file_path):
+        try:
+            os.unlink(_master_key_file_path)
+        except Exception:
+            pass
+
     print("[*] Cleanup complete.")
     os._exit(0)
 
@@ -2928,9 +3439,10 @@ def cleanup(signum=None, frame=None):
 # [DO NOT REMOVE] Register signal handlers.
 # SIGQUIT (Ctrl+\ by default) triggers graceful shutdown: writes flag
 # file → Ada polls for flag → deletes it → exits gracefully.
-# SIGTERM triggers hard kill (process group kill) as fallback.
+# SIGTERM and SIGINT (Ctrl+C) trigger hard kill (process group kill).
 signal.signal(signal.SIGQUIT, cleanup)
 signal.signal(signal.SIGTERM, cleanup)
+signal.signal(signal.SIGINT, cleanup)
 
 
 def checkout_latest_release(repo_dir, module_name):
@@ -3073,21 +3585,69 @@ def real_main():
 
     # Determine user identity
     if not os.environ.get("ADELAIDE_USER"):
-        print("[IDENTITY] Identity required for compartmentalization.")
-        if _gui_available():
-            user = _tk_input_dialog("Adelaide — Identity", "Enter Username (Identity):")
+        _welcome_msg = (
+            "Heya! I'm Adelaide Zephyrine Charlotte,\n"
+            "Today is quite a nice windy with the sun as a\n"
+            "star that light pouring above the cloud here\n"
+            "and fancy to meet you!"
+        )
+        if _gui_available() and not IS_KISS:
+            # GUI mode: show welcome in dialog, not on terminal
+            user = _tk_input_dialog("Adelaide — Identity", "Who am I speaking to?", welcome_msg=_welcome_msg)
             if user:
                 user = user.strip()
+            if not user:
+                # GUI dialog failed or was cancelled — fall back to terminal
+                _term_print("")
+                _term_print("  (GUI dialog didn't work, let's try here instead)")
+                _term_print("")
+                user = input("  Your name: ").strip()
+        elif not IS_KISS:
+            # Verbose mode: print welcome on terminal
+            _term_print("")
+            _term_print("  Heya! I'm Adelaide Zephyrine Charlotte,")
+            _term_print("  Today is quite a nice windy with the sun as a")
+            _term_print("  star that light pouring above the cloud here")
+            _term_print("  and fancy to meet you!")
+            _term_print("")
+            user = input("  Your name: ").strip()
         else:
-            user = input("  Enter Username: ").strip()
+            # KISS mode: no terminal output, just prompt
+            user = input("  Your name: ").strip()
             
         if not user:
-            print("[IDENTITY] FATAL: Username cannot be empty.")
+            print("[IDENTITY] FATAL: I need a name to call you by!")
             sys.exit(1)
         os.environ["ADELAIDE_USER"] = user
-    print(f"[IDENTITY] Operating as user: {os.environ['ADELAIDE_USER']}")
+        if not IS_KISS:
+            _term_print(f"  Nice to meet you, {user}! :D")
+            _term_print("")
+        print(f"[IDENTITY] Operating as user: {os.environ['ADELAIDE_USER']}")
+
+    # ── Show GUI loading bar immediately ──────────────────────────────────
+    # Prevents freeze UX between name dialog and first visible work.
+    _setup_gui = None
+    if _gui_available() and not IS_KISS:
+        _setup_gui = _tk_progress_dialog(
+            "Adelaide — Loading",
+            "Loading preparing for Model...\n(Nothing to see here)"
+        )
+        _setup_gui._update_bar(0, step_text="Starting up...", pulse=True)
+        _setup_gui._start_pulse()
+
+    # Whimsical password promise (only on first entry when user was just created)
+    if not os.environ.get("_ZEPZEP_PASSWORD_PROMPTED"):
+        os.environ["_ZEPZEP_PASSWORD_PROMPTED"] = "1"
+        if not IS_KISS:
+            _term_print("")
+            _term_print("  Oki :D, now so that we can keep secret between")
+            _term_print("  each other, I am with my pinky finger, promise")
+            _term_print("  to not share your data with others *wink")
+            _term_print("")
     # Kill any stale processes from previous runs before starting
     print("[*] Cleaning up any stale processes from previous runs...")
+    if _setup_gui:
+        _setup_gui._update_bar(2, step_text="Cleaning up stale processes...", pulse=True)
     try:
         subprocess.run(
             ["pkill", "-9", "-f", "adelaide_server"], stderr=subprocess.DEVNULL
@@ -3102,8 +3662,6 @@ def real_main():
         pass
 
     if IS_KISS:
-        import threading
-
         p_thread = threading.Thread(
             target=progress_monitor, args=(current_log_path,), daemon=True
         )
@@ -3125,6 +3683,8 @@ def real_main():
 
     # 0. Verify all critical prerequisites are installed
     # PX4 is critical and auto-clones/compiles if missing
+    if _setup_gui:
+        _setup_gui._update_bar(5, step_text="Verifying environment prerequisites...", pulse=True)
     verify_environment(build_px4=True)
 
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
@@ -3156,10 +3716,21 @@ def real_main():
         with open(hash_file, "r") as f:
             saved_hash = f.read().strip()
 
+    # ── Venv Validity Check ────────────────────────────────────────────────
+    # Detects stale pyvenv from directory moves, requirements changes, etc.
+    # If invalid, forces a full rebuild (clears .build_hash).
+    venv_valid = check_venv_validity()
+    if not venv_valid:
+        print("[*] Venv invalid — forcing full rebuild...")
+        invalidate_venv()
+        saved_hash = ""  # force current_hash != saved_hash → triggers rebuild
+
     daemon_build_flag = ""
 
     if current_hash != saved_hash:
         print("[*] Changes detected, checking downloads and rebuilding...")
+        if _setup_gui:
+            _setup_gui._update_bar(15, step_text="Downloading and rebuilding components...", pulse=True)
         threads = str(os.cpu_count() or 4)
 
         # =====================================================================
@@ -3923,6 +4494,8 @@ def real_main():
             print("[!] Deno not found in PATH, skipping playwright installation.")
 
         print("[*] Resolving Ada dependencies and building project...")
+        if _setup_gui:
+            _setup_gui._update_bar(70, step_text="Compiling Ada project...", pulse=True)
 
         env = os.environ.copy()
         if platform.system() == "Darwin":
@@ -3945,9 +4518,51 @@ def real_main():
         version_script = os.path.join(BASE_DIR, "scripts", "update_version.sh")
         if os.path.exists(version_script):
             subprocess.run(["bash", version_script], cwd=BASE_DIR, check=False)
-        try:
-            subprocess.run([alr_cmd, "build"], env=env, cwd=BASE_DIR, check=True)
-        except subprocess.CalledProcessError:
+
+        # Run build in a thread so tkinter GUI stays responsive with progress bar
+        _build_result = [None]
+        _build_done = threading.Event()
+
+        def _run_build():
+            try:
+                subprocess.run([alr_cmd, "build"], env=env, cwd=BASE_DIR, check=True)
+                _build_result[0] = True
+            except subprocess.CalledProcessError:
+                _build_result[0] = False
+            _build_done.set()
+
+        _build_thread = threading.Thread(target=_run_build, daemon=True)
+        _build_thread.start()
+
+        # Reuse the existing setup GUI dialog instead of creating a new one
+        build_gui_dialog = _setup_gui
+
+        build_bar_width = 40
+        build_elapsed = 0.0
+        build_eta_target = 60.0  # estimate for build
+        while not _build_done.is_set():
+            pct = min(99, int(100 * build_elapsed / build_eta_target))
+            eta = max(0, int(build_eta_target - build_elapsed))
+            if build_gui_dialog:
+                build_gui_dialog._update_bar(pct, eta_text=f"ETA: {eta}s", step_text="Compiling Ada project...")
+            elif not IS_KISS:
+                filled = int(build_bar_width * pct / 100)
+                bar = "█" * filled + "░" * (build_bar_width - filled)
+                _term_print(f"\r\033[K  Loading preparing for Model... |{bar}| {pct}%  ETA: {eta}s")
+            time.sleep(0.5)
+            build_elapsed += 0.5
+
+        _build_thread.join()
+
+        if build_gui_dialog:
+            build_gui_dialog._update_bar(80, eta_text="", step_text="Build complete. Running verification...")
+            time.sleep(0.3)
+        elif not IS_KISS:
+            _term_print(f"\r\033[K  Loading preparing for Model... |{'█' * build_bar_width}| 100%  Done!")
+
+        if not _build_result[0]:
+            if build_gui_dialog:
+                _tk_progress_done(build_gui_dialog)
             raise RuntimeError("CORE_INIT_FAILURE: Core initialization failed.")
 
         # =====================================================================
@@ -3956,6 +4571,8 @@ def real_main():
 
         # 1. GNATprove Formal Verification (always on rebuild)
         print("\n[*] Stage: GNATprove SPARK Static Analysis...")
+        if _setup_gui:
+            _setup_gui._update_bar(82, step_text="Running GNATprove formal verification...", pulse=True)
         prove_cmd = [
             alr_cmd,
             "exec",
@@ -3983,6 +4600,8 @@ def real_main():
 
         # 2. AFL++ Fuzzing Environment Check
         print("\n[*] Stage: AFL++ Fuzzing Readiness Check...")
+        if _setup_gui:
+            _setup_gui._update_bar(85, step_text="Checking AFL++ fuzzing readiness...", pulse=True)
         fuzz_ready = False
         for compiler in ["afl-clang-fast", "afl-gcc-fast", "afl-clang-lto"]:
             if shutil.which(compiler):
@@ -3995,6 +4614,8 @@ def real_main():
 
         # 3. Vite Frontend build (runs tsc and vite build)
         print("[*] Building Vite Frontend for Sidecar UI...")
+        if _setup_gui:
+            _setup_gui._update_bar(88, step_text="Building Vite frontend...", pulse=True)
         frontend_dir = os.path.join(BASE_DIR, "ui", "frontend")
         if os.path.exists(frontend_dir):
             npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
@@ -4012,6 +4633,8 @@ def real_main():
         ruff_cmd = "ruff.exe" if platform.system() == "Windows" else "ruff"
         if shutil.which(ruff_cmd):
             print("[*] Running Platform Self-Integrity Quality Check (Ruff)...")
+            if _setup_gui:
+                _setup_gui._update_bar(90, step_text="Running Ruff quality check...", pulse=True)
             try:
                 result = subprocess.run(
                     [ruff_cmd, "check", BASE_DIR, "--exclude", "vendor,moonshine"],
@@ -4038,6 +4661,8 @@ def real_main():
 
         # 4a. CrossHair Symbolic Analysis for python/ sidecars
         print("[*] Ensuring CrossHair is installed...")
+        if _setup_gui:
+            _setup_gui._update_bar(92, step_text="Running CrossHair symbolic verification...", pulse=True)
         try:
             pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
             pyvenv_python = os.path.join(pyvenv_dir, "bin", "python")
@@ -4107,6 +4732,8 @@ def real_main():
         pyrefly_cmd = "pyrefly.exe" if platform.system() == "Windows" else "pyrefly"
         if shutil.which(pyrefly_cmd):
             print("[*] Running Pyrefly Type Check on python sidecars...")
+            if _setup_gui:
+                _setup_gui._update_bar(93, step_text="Running Pyrefly type check...", pulse=True)
             try:
                 python_dir = os.path.join(BASE_DIR, "python")
                 env_vars = os.environ.copy()
@@ -4148,6 +4775,8 @@ def real_main():
         # 5. LSH QRNN Worker Bootstrap & pyrefly + ruff check
         if os.path.exists(lsh_reqs):
             print("[LSH] Bootstrapping QRNN LSH worker venv...")
+            if _setup_gui:
+                _setup_gui._update_bar(94, step_text="Bootstrapping LSH QRNN worker...", pulse=True)
             if not os.path.exists(pyvenv_python):
                 subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
             pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip")
@@ -4193,6 +4822,8 @@ def real_main():
         # 6. VAD ONNX Sidecar Worker: Python venv bootstrap
         if os.path.exists(vad_worker_script):
             print("[VAD] Bootstrapping ONNX VAD worker...")
+            if _setup_gui:
+                _setup_gui._update_bar(95, step_text="Bootstrapping VAD worker...", pulse=True)
             if not os.path.exists(pyvenv_python):
                 subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
             pyvenv_pip = (
@@ -4214,6 +4845,9 @@ def real_main():
         # Save build hash after all verification steps pass successfully
         with open(hash_file, "w") as f:
             f.write(current_hash)
+
+        # Save venv hash so future runs detect stale venvs
+        save_venv_hash()
 
     # Handle integrity check flag
     test_build_integrity = False
@@ -4274,6 +4908,9 @@ def real_main():
     # Initialize master key (generates + persists if first boot), then set
     # ADELAIDE_MASTER_KEY env var so the Ada server and all subprocesses
     # inherit the key automatically.
+    if not IS_KISS:
+        _term_print("  Loading preparing for Model... (Nothing to see here)")
+        _term_print("")
     print("[CRYPTO] Bootstrapping encryption master key...")
     try:
         # Check for legacy key files and migrate if needed
@@ -4294,8 +4931,18 @@ def real_main():
             cleanup(signal.SIGTERM, None)
             sys.exit(1)
 
-        os.environ["ADELAIDE_MASTER_KEY"] = master_key
-        print(f"[CRYPTO] Master key ready. {len(master_key)} hex chars.")
+        # Write master key to secure temp file instead of leaking via env var
+        # to all subprocess environments. Subprocesses inherit ADELAIDE_MASTER_KEY_FILE
+        # and read the key on init, then the file is cleaned up on shutdown.
+        global _master_key_file_path
+        fd, _master_key_file_path = tempfile.mkstemp(prefix="adelaide_mk_", suffix=".key")
+        with os.fdopen(fd, 'w') as f:
+            f.write(master_key)
+        os.chmod(_master_key_file_path, 0o400)
+        os.environ["ADELAIDE_MASTER_KEY_FILE"] = _master_key_file_path
+        print(f"[CRYPTO] Master key ready. {len(master_key)} hex chars (secure temp file).")
+        _wipe_string(master_key)
+        master_key = None
 
         # Migrate existing data to AAD-bound encryption (one-time)
         print("[CRYPTO] Checking for AAD migration...")
@@ -4544,8 +5191,6 @@ def real_main():
                         stderr=subprocess.STDOUT,
                         start_new_session=True,
                     )
-
-        import threading
 
         t = threading.Thread(
             target=watchdog_monitor,
@@ -4858,12 +5503,17 @@ def real_main():
                     print("[!] Test build integrity check FAILED!")
                     os._exit(1)
 
-        import threading
-
         b_thread = threading.Thread(target=benchmark_runner, daemon=True)
         b_thread.start()
 
     if launch_gui:
+        # Close the setup loading bar — setup is complete
+        if _setup_gui:
+            _setup_gui._stop_pulse()
+            _setup_gui._update_bar(100, step_text="Ready!")
+            time.sleep(0.3)
+            _tk_progress_done(_setup_gui)
+            _setup_gui = None
         print("[*] Booting Python Sidecar UI...")
         ui_dir = os.path.join(BASE_DIR, "ui")
 
@@ -4916,8 +5566,13 @@ def real_main():
             if launched_from_app or in_terminal:
                 # Already in Terminal or launched from .app - launch sidecar directly (no .app)
                 print("[*] Running in Terminal - launching sidecar directly...")
+                # Add pyvenv/bin to PATH so the sidecar can find pyrefly/ruff
+                sidecar_env = os.environ.copy()
+                pyvenv_bin = os.path.join(BASE_DIR, "pyvenv", "bin")
+                if os.path.exists(pyvenv_bin):
+                    sidecar_env["PATH"] = pyvenv_bin + os.pathsep + sidecar_env.get("PATH", "")
                 sidecar_process = subprocess.Popen(
-                    [sidecar_python, "sidecar_ui.py"], cwd=ui_dir
+                    [sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=sidecar_env
                 )
                 print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
             else:
@@ -5336,6 +5991,16 @@ def real_main():
                 os.kill(proc.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+
+    # Nuclear option: pkill by name for processes that survive SIGKILL
+    for proc_name in ["adelaide_server", "adelaide_watchdog", "vad_worker.py",
+                       "stellaicarus_daemon_runner"]:
+        try:
+            subprocess.run(["pkill", "-9", "-f", proc_name],
+                           stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        except Exception:
+            pass
+
     cleanup()
 
 

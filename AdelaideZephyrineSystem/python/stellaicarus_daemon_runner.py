@@ -123,6 +123,17 @@ def main():
         last_power_state = (None, 0) # (on_battery, level)
         
         while True:
+            # Check if parent process (run.py) has died.
+            # If our parent PID is 1 (init/launchd), run.py has exited
+            # and left us orphaned. Self-exit in that case.
+            if os.getppid() <= 1:
+                logger.info("Parent process (run.py) has exited. Shutting down daemon.")
+                manager.stop_all()
+                if 'ros2_proc' in locals() and ros2_proc:
+                    ros2_proc.terminate()
+                    ros2_proc.wait()
+                break
+
             t0 = time.perf_counter_ns()
             
             # --- [Debug] DO NOT REMOVE: System Information Research (psutil) ---

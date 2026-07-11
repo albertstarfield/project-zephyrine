@@ -92,6 +92,9 @@ procedure Adelaide_Watchdog is
    function Get_PID return Integer;
    pragma Import (C, Get_PID, "getpid");
 
+   function Get_PPID return Integer;
+   pragma Import (C, Get_PPID, "getppid");
+
    --  Check if another watchdog is already running.
    --  Uses PID file + heartbeat freshness (same logic as server).
    function Is_Another_Watchdog_Running return Boolean is
@@ -573,6 +576,30 @@ begin
               "[Watchdog] Clean shutdown complete.");
             C_Exit (0);
          end if;
+
+          --  Check if parent process (run.py) has died.
+          --  If our parent PID is 1 (init/launchd), run.py has exited,
+          --  leaving us orphaned.  Self-exit in that case.
+          if Get_PPID <= 1 then
+             Put_Line (Standard_Error,
+               "[Watchdog] Parent process (run.py) has exited. Shutting down.");
+             --  Clean up our own PID and heartbeat files
+             begin
+                if Exists (WD_PID_File) then
+                   Delete_File (WD_PID_File);
+                end if;
+             exception
+                when others => null;
+             end;
+             begin
+                if Exists (Run_Dir & "/adelaide_watchdog.heartbeat") then
+                   Delete_File (Run_Dir & "/adelaide_watchdog.heartbeat");
+                end if;
+             exception
+                when others => null;
+             end;
+             C_Exit (0);
+          end if;
 
          --  Update our heartbeat so future instances can verify we're alive
          Write_Watchdog_Heartbeat;
