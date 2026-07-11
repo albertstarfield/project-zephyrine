@@ -77,13 +77,13 @@ begin
    end if;
 
    -- Create the socket connection
-   Socket := Socket_IO.Connect_Socket (Socket_Path);
-   if Socket = Socket_IO.Null_Socket then
-      Ada.Text_IO.Put_Line ("Error: Failed to connect to socket at " & Socket_Path);
-      Ada.Text_IO.Put_Line ("Make sure the MCU interface is running");
-      Ada.Command_Line.Set_Exit_Status (Ada.Command_Line.Failure);
-      return;
-   end if;
+   loop
+      Socket := Socket_IO.Connect_Socket (Socket_Path);
+      exit when Socket /= Socket_IO.Null_Socket;
+      Ada.Text_IO.Put_Line ("Warning: Failed to connect to socket at " & Socket_Path);
+      Ada.Text_IO.Put_Line ("Retrying in 2 seconds... Make sure the MCU interface is running");
+      delay 2.0;
+   end loop;
 
    Ada.Text_IO.Put_Line ("--> Connected to MCU socket at " & Socket_Path);
 

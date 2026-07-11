@@ -7,7 +7,6 @@ with Ada.Text_IO;           use Ada.Text_IO;
 with Ada.Strings;           use Ada.Strings;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Directories;       use Ada.Directories;
-with Ada.Streams.Stream_IO; use Ada.Streams.Stream_IO;
 with Interfaces;            use Interfaces;
 
 package body System_Integrity
@@ -18,7 +17,7 @@ is
    --  Using the same approach as adelaide_server.adb for platform detection
 
    function Is_Linux return Boolean is
-      F : File_Type;
+      F : Ada.Text_IO.File_Type;
       Line : Unbounded_String;
    begin
       begin
@@ -47,13 +46,13 @@ is
 
    function Execute_Command (Cmd : String) return Unbounded_String is
       Result : Unbounded_String;
-      F : File_Type;
+      F : Ada.Text_IO.File_Type;
    begin
       begin
          Open (F, In_File, "/bin/sh -c " & '"' & Cmd & '"');
          while not End_Of_File (F) loop
-            Append (Result, Get_Line (F));
-            Append (Result, Ascii.LF);
+            Ada.Strings.Unbounded.Append (Result, Get_Line (F));
+            Ada.Strings.Unbounded.Append (Result, Ascii.LF);
          end loop;
          Close (F);
       exception
@@ -152,9 +151,9 @@ is
    begin
       --  Write data to temp file and hash it
       begin
-         Create (F, Out_File, Temp_File);
-         String'Output (F, Data);
-         Close (F);
+         Ada.Text_IO.Create (F, Ada.Text_IO.Out_File, Temp_File);
+         Ada.Text_IO.Put (F, Data);
+         Ada.Text_IO.Close (F);
       exception
          when others =>
             null;
@@ -162,7 +161,11 @@ is
 
       --  Execute OpenSSL command
       begin
-         Execute_Command (Cmd);
+         declare
+            Dummy : Unbounded_String;
+         begin
+            Dummy := Execute_Command (Cmd);
+         end;
       exception
          when others =>
             null;
@@ -170,16 +173,21 @@ is
 
       --  Read binary hash
       begin
-         Open (F, In_File, Temp_File);
+         Ada.Text_IO.Open (F, Ada.Text_IO.In_File, Temp_File);
          for I in Hash_Index loop
             begin
-               Result (I) := Interfaces.Unsigned_8'Value (Get_Line (F));
+               declare
+                  C : Character;
+               begin
+                  Ada.Text_IO.Get_Immediate (F, C);
+                  Result (I) := Interfaces.Unsigned_8 (Character'Pos (C));
+               end;
             exception
                when others =>
                   null;
             end;
          end loop;
-         Close (F);
+         Ada.Text_IO.Close (F);
       exception
          when others =>
             null;
@@ -261,11 +269,11 @@ is
 
    function String_To_Hash (S : String) return Hash_Type is
       Result : Hash_Type := (others => 0);
-      Hex_To_Nibble : function (C : Character) return Interfaces.Unsigned_8 is
+      function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is
          (case C is
-          when '0' .. '9' => Interfaces.Unsigned_8'Value ("" & C),
-          when 'a' .. 'f' => Interfaces.Unsigned_8'Value ("" & C) - 10,
-          when 'A' .. 'F' => Interfaces.Unsigned_8'Value ("" & C) - 10,
+          when '0' .. '9' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('0')),
+          when 'a' .. 'f' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('a') + 10),
+          when 'A' .. 'F' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('A') + 10),
           when others => 0);
    begin
       if S'Length /= 128 then

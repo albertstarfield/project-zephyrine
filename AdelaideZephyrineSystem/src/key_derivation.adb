@@ -8,6 +8,7 @@ with Interfaces.C;        use Interfaces.C;
 with Ada.Text_IO;         use Ada.Text_IO;
 with Ada.Strings;         use Ada.Strings;
 with Ada.Strings.Fixed;   use Ada.Strings.Fixed;
+with System;
 
 package body Key_Derivation
   with SPARK_Mode => Off
@@ -60,11 +61,11 @@ is
 
    function Hex_To_Master_Key (S : String) return Master_Key_Type is
       Result : Master_Key_Type := (others => 0);
-      Hex_To_Nibble : function (C : Character) return Interfaces.Unsigned_8 is
+      function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is
          (case C is
-          when '0' .. '9' => Interfaces.Unsigned_8'Value ("" & C),
-          when 'a' .. 'f' => Interfaces.Unsigned_8'Value ("" & C) - 10,
-          when 'A' .. 'F' => Interfaces.Unsigned_8'Value ("" & C) - 10,
+          when '0' .. '9' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('0')),
+          when 'a' .. 'f' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('a') + 10),
+          when 'A' .. 'F' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('A') + 10),
           when others => 0);
    begin
       if S'Length /= 128 then
@@ -91,11 +92,11 @@ is
 
    function Hex_To_AES_Key (S : String) return AES_Key_Type is
       Result : AES_Key_Type := (others => 0);
-      Hex_To_Nibble : function (C : Character) return Interfaces.Unsigned_8 is
+      function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is
          (case C is
-          when '0' .. '9' => Interfaces.Unsigned_8'Value ("" & C),
-          when 'a' .. 'f' => Interfaces.Unsigned_8'Value ("" & C) - 10,
-          when 'A' .. 'F' => Interfaces.Unsigned_8'Value ("" & C) - 10,
+          when '0' .. '9' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('0')),
+          when 'a' .. 'f' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('a') + 10),
+          when 'A' .. 'F' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('A') + 10),
           when others => 0);
    begin
       if S'Length /= 64 then
@@ -195,7 +196,7 @@ is
          return False;
    end Initialize_Key_Derivation;
 
-   procedure Derive_And_Store_Master_Key (User_Secret : String) is
+   procedure Derive_And_Store_Master_Key (Password_Salt : Hash_Type; User_Secret : String) is
    begin
       if not Integrity_Hash_Set then
          Put_Line (Standard_Error, "[KEY-DERIV] Integrity hash not computed");
@@ -205,10 +206,10 @@ is
       Put_Line (Standard_Error, "[KEY-DERIV] Deriving master key from user secret...");
       declare
          Master_Key : Master_Key_Type :=
-           Derive_Master_Key (Stored_Integrity_Hash, User_Secret);
+           Derive_Master_Key (Password_Salt, User_Secret);
       begin
          if Master_Key /= Empty_Master_Key then
-            Master_Key_Store.Set_Key (Master_Key);
+            Master_Key_Store.Set_Key (Master_Key_Store.Key_Type (Master_Key));
             Put_Line (Standard_Error, "[KEY-DERIV] Master key stored (512-bit)");
          else
             Put_Line (Standard_Error, "[KEY-DERIV] Master key derivation failed");
@@ -220,7 +221,7 @@ is
 
    function Get_Master_Key return Master_Key_Type is
    begin
-      return Master_Key_Store.Get_Key;
+      return Master_Key_Type (Master_Key_Store.Get_Key);
    end Get_Master_Key;
 
    procedure Clear_Master_Key is

@@ -69,7 +69,7 @@ is
 
    --  Derive and store master key from user secret
    --  Uses stored integrity hash
-   procedure Derive_And_Store_Master_Key (User_Secret : String);
+   procedure Derive_And_Store_Master_Key (Password_Salt : Hash_Type; User_Secret : String);
 
    --  Get current master key (from Master_Key_Store)
    function Get_Master_Key return Master_Key_Type;
