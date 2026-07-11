@@ -194,7 +194,12 @@ procedure Adelaide_Watchdog is
    end Write_Watchdog_Heartbeat;
 
    Oneshot       : Boolean := False;
-   Last_Restart  : Ada.Real_Time.Time := Time_Of (0, Time_Span_Zero);
+   Last_Restart  : Ada.Real_Time.Time := Clock;
+   --  [DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
+   --  Last_Restart is initialized to Clock (now) so the full Restart_Cooldown
+   --  grace period is applied IMMEDIATELY on watchdog startup. If we initialize
+   --  to Time_Of(0, Time_Span_Zero) (epoch), Since_RS_D is enormous on first
+   --  boot and the watchdog kills the server before it even writes its PID file.
 
    -------------------
    -- Read_PID --
@@ -550,8 +555,17 @@ begin
 
    if not Oneshot then
       Put_Line (Standard_Error,
+        "[" & Ada.Calendar.Formatting.Image (Ada.Calendar.Clock) & "] " &
         "[Watchdog] Adelaide Watchdog process started. " &
-        "Monitoring server via run/ directory...");
+        "Monitoring server via run/ directory..."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
+      Put_Line (Standard_Error,
+        "[" & Ada.Calendar.Formatting.Image (Ada.Calendar.Clock) & "] " &
+        "[Watchdog] Startup grace period: " & Duration'Image (Restart_Cooldown) &
+        "s -- server will not be checked until grace period expires."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
+      Put_Line (Standard_Error,
+        "[" & Ada.Calendar.Formatting.Image (Ada.Calendar.Clock) & "] " &
+        "[Watchdog] Heartbeat stale limit: " & Duration'Image (HB_Stale_Limit) &
+        "s -- server is considered frozen if heartbeat is older than this."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
    end if;
 
    declare
