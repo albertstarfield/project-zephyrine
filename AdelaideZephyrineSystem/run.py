@@ -3236,6 +3236,24 @@ def real_main():
         vad_process, \
         current_log_path
 
+    valid_args = {
+        "--port", "--host", "--no-gui", "--benchmark", "--no-daemon",
+        "--enforce-api-key", "--no-enforce-api-key", "--verbose",
+        "--test-build-integrity-check", "--test-fips", "--help", "-h",
+        "--kiss", "--show-key", "--api-key", "--verify"
+    }
+    skip_next = False
+    for arg in sys.argv[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in {"--port", "--host"}:
+            skip_next = True
+            continue
+        if arg not in valid_args:
+            print(f"Error: Unknown argument '{arg}'")
+            sys.exit(1)
+
     current_log_path = setup_logging()
 
     if "--test-fips" in sys.argv:
