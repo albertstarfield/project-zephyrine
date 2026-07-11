@@ -72,7 +72,7 @@ def _load_adl_crypto_lib():
 
 
 # ── KISS Mode ─────────────────────────────────────────────────────────────
-IS_KISS = "--kiss" in sys.argv
+IS_KISS = False
 
 # ── Stdio Protocol Messages ───────────────────────────────────────────────
 # Ada → run.py messages
@@ -3237,10 +3237,10 @@ def real_main():
         current_log_path
 
     valid_args = {
-        "--port", "--host", "--no-gui", "--benchmark", "--no-daemon",
-        "--enforce-api-key", "--no-enforce-api-key", "--verbose",
+        "--port", "--host", "--no-gui", "--benchmark",
+        "--enforce-api-key", "--verbose",
         "--test-build-integrity-check", "--test-fips", "--help", "-h",
-        "--kiss", "--show-key", "--api-key", "--verify"
+        "--show-key", "--api-key", "--verify"
     }
     skip_next = False
     for arg in sys.argv[1:]:
@@ -4590,23 +4590,14 @@ def real_main():
     if "--benchmark" in sys.argv or test_build_integrity:
         run_benchmark = True
 
-    # [DO NOT REMOVE] --no-daemon: Skip the StellaIcarus daemon runner.
-    # The daemon runner retries failed MCU bridge connections every 30s,
-    # flooding the terminal with error messages.  Use this flag when you
-    # want clean server-only output for debugging.
     launch_daemon = True
-    if "--no-daemon" in sys.argv:
-        launch_daemon = False
 
     # ── API key enforcement ──────────────────────────────────────────────────
     # --enforce-api-key: enable x-api-key validation on the Ada server
-    # --no-enforce-api-key: explicitly disable (default for Ollama compat)
     # If neither flag is given, enforcement is OFF by default.
     enforce_api_key = False
     if "--enforce-api-key" in sys.argv:
         enforce_api_key = True
-    if "--no-enforce-api-key" in sys.argv:
-        enforce_api_key = False
 
     # Port/Host: args > env > defaults
     server_host = os.environ.get("ADLAIDE_SERVER_HOST", "0.0.0.0")
