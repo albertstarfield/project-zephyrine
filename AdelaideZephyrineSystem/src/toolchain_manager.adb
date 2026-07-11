@@ -135,7 +135,7 @@ package body Toolchain_Manager is
    procedure Start_Orchestrator is
       use GNAT.OS_Lib;
       Python_Path : constant String := "pyvenv/bin/python3";
-      Script_Path : constant String := "python/ollamaCallModifier.py";
+      Script_Path : constant String := "python/think_tag_sanitizer.py";
       Args        : Argument_List (1 .. 2);
       Pid         : Process_Id;
    begin
@@ -144,7 +144,7 @@ package body Toolchain_Manager is
          return;
       end if;
 
-      Put_Line ("[*] Starting Python Orchestrator (ollamaCallModifier.py)...");
+      Put_Line ("[*] Starting Python Orchestrator (think_tag_sanitizer.py)...");
       Args (1) := new String'(Script_Path);
       Args (2) := new String'("--port=11435");
       
