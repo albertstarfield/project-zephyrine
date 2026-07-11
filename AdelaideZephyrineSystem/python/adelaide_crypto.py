@@ -71,8 +71,16 @@ def load_master_key() -> str:
     Returns hex-encoded 256-bit key (64 hex chars).
     Raises RuntimeError if no key found.
     """
-    # Only read from environment variable - NEVER from disk
-    key = os.environ.get("ADELAIDE_MASTER_KEY", "").strip()
+    # Only read from environment variable - NEVER from disk (except the secure temp file passed by run.py)
+    key_file = os.environ.get("ADELAIDE_MASTER_KEY_FILE", "").strip()
+    key = ""
+    if key_file and os.path.exists(key_file):
+        with open(key_file, "r") as f:
+            key = f.read().strip()
+            
+    if not key:
+        key = os.environ.get("ADELAIDE_MASTER_KEY", "").strip()
+        
     if key and len(key) in (64, 128):
         _validate_hex(key, "ADELAIDE_MASTER_KEY")
         return key

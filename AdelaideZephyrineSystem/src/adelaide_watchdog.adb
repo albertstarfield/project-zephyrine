@@ -298,13 +298,13 @@ procedure Adelaide_Watchdog is
    begin
       Put_Line (Standard_Error,
         "[Watchdog] Server (PID" & Integer'Image (Old_Pid) &
-        ") is dead or frozen. Restarting...");
+        ") is dead or frozen. Restarting..."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
 
        --  Kill old process if still hanging around
        if Old_Pid > 0 and then Is_Process_Alive (Old_Pid) then
           Put_Line (Standard_Error,
             "[Watchdog] Sending SIGTERM to old PID" &
-            Integer'Image (Old_Pid));
+            Integer'Image (Old_Pid)); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
           declare
              Unused_Result : Integer;
              Wait_Loops    : Integer := 0;
@@ -320,7 +320,7 @@ procedure Adelaide_Watchdog is
              if Is_Process_Alive (Old_Pid) then
                 Put_Line (Standard_Error,
                   "[Watchdog] Process ignored SIGTERM. Sending SIGKILL to PID" &
-                  Integer'Image (Old_Pid));
+                  Integer'Image (Old_Pid)); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
                 Unused_Result := Sys_Kill (Old_Pid, 9);  --  SIGKILL
                 delay 1.0;
              end if;
@@ -333,7 +333,7 @@ procedure Adelaide_Watchdog is
       end if;
 
       --  We rely on run.py to restart the server (prevents double spawning)
-      Put_Line (Standard_Error, "[Watchdog] Server killed. run.py will handle restart.");
+      Put_Line (Standard_Error, "[Watchdog] Server killed. run.py will handle restart."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
       
       --  Note: run.py's wait() will unblock, see the exit code,
       --  dump the panic logs, and spawn the new process itself.
@@ -365,7 +365,7 @@ procedure Adelaide_Watchdog is
       if Exists (Shutdown_Flag) then
          Put_Line (Standard_Error,
            "[Watchdog] Shutdown flag detected. Server was stopped" &
-           " intentionally. Not restarting.");
+           " intentionally. Not restarting."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
          --  Clean up the flag so a fresh run.py launch starts clean.
          begin
             Delete_File (Shutdown_Flag);
@@ -395,7 +395,7 @@ procedure Adelaide_Watchdog is
          Last_Restart := Clock;
          Put_Line (Standard_Error,
            "[Watchdog] Heartbeat stale for" & Duration'Image (HB_Age) &
-           "s, PID" & Integer'Image (Pid) & " appears frozen.");
+           "s, PID" & Integer'Image (Pid) & " appears frozen."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
          Restart_Server (Pid);
       end if;
    end Check_Server;

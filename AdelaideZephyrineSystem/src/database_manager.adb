@@ -9,6 +9,10 @@ with GNATCOLL.JSON;
 with Interfaces;            use Interfaces;
 with Interfaces.C.Strings;  use Interfaces.C.Strings;
 with Adelaide_Crypto;
+with Key_Derivation;
+with System_Integrity;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with GNAT.OS_Lib;
 
 package body Database_Manager is
 
@@ -235,6 +239,78 @@ package body Database_Manager is
           --    1. ADELAIDE_MASTER_KEY env var (set by run.py before spawn)
           --    2. config/master.key (local to project, created by run.py bootstrap)
           --  ═══════════════════════════════════════════════════════════════
+
+          -- Read ADELAIDE_USER_SECRET_FILE and perform key derivation if present.
+          declare
+             Secret_File : constant String :=
+               (if Ada.Environment_Variables.Exists ("ADELAIDE_USER_SECRET_FILE") then
+                   Ada.Environment_Variables.Value ("ADELAIDE_USER_SECRET_FILE")
+                else "");
+             User_Secret : Unbounded_String := Null_Unbounded_String;
+          begin
+             if Secret_File /= "" then
+                declare
+                   File : Ada.Text_IO.File_Type;
+                begin
+                   Ada.Text_IO.Open (File, Ada.Text_IO.In_File, Secret_File);
+                   if not Ada.Text_IO.End_Of_File (File) then
+                      User_Secret := To_Unbounded_String (Ada.Text_IO.Get_Line (File));
+                   end if;
+                   Ada.Text_IO.Close (File);
+                exception
+                   when others =>
+                      Put_Line (Standard_Error, "[CRYPTO] Failed to read ADELAIDE_USER_SECRET_FILE");
+                end;
+             end if;
+
+             if User_Secret /= Null_Unbounded_String then
+                declare
+                   Salt_Str_Raw : constant String := Get_System_State ("password_salt", "");
+                   Salt_Str : constant String :=
+                      (if Salt_Str_Raw = "" then
+                          System_Integrity.Hash_To_String (System_Integrity.Compute_Integrity_Hash)
+                       else
+                          Salt_Str_Raw);
+                begin
+                   if Salt_Str_Raw = "" then
+                      Set_System_State ("password_salt", Salt_Str);
+                   end if;
+                   
+                   declare
+                      Salt : constant System_Integrity.Hash_Type :=
+                         System_Integrity.String_To_Hash (Salt_Str);
+                   begin
+                      Key_Derivation.Derive_And_Store_Master_Key (Salt, To_String (User_Secret));
+                      
+                      -- Extract master key and pass to C via env var
+                      declare
+                         MK : constant Key_Derivation.Master_Key_Type := Key_Derivation.Get_Master_Key;
+                         MK_Hex : constant String := Key_Derivation.Master_Key_To_Hex (MK);
+                      begin
+                         Ada.Environment_Variables.Set ("ADELAIDE_MASTER_KEY", MK_Hex);
+                      end;
+                   end;
+                end;
+             else
+                -- No user secret provided via file.
+                -- Check if we need one (either first boot or hardware change).
+                declare
+                   Salt_Str : String := Get_System_State ("password_salt", "");
+                   Test_Blob : String := Get_System_State ("integrity_test", "");
+                begin
+                   if Salt_Str = "" or else Test_Blob = "" then
+                      Put_Line (Standard_Error, "[CRYPTO] First boot detected. Exiting to prompt for new password.");
+                      GNAT.OS_Lib.OS_Exit (71);
+                   end if;
+                   -- Auto-decrypt attempt will happen via adl_init using ADELAIDE_MASTER_KEY (if set) 
+                   -- or ADELAIDE_MASTER_KEY_FILE (not used anymore here, we cleared it from run.py)
+                   -- Wait, if no user secret is provided, the Ada wrapper won't set ADELAIDE_MASTER_KEY!
+                   -- If the C library doesn't get it, Initialize_Crypto will fail.
+                   -- We should let it fail, and then exit with 70 below.
+                end;
+             end if;
+          end;
+
           Crypto_Enabled := Adelaide_Crypto.Initialize_Crypto;
 
           if Crypto_Enabled then
@@ -245,6 +321,21 @@ package body Database_Manager is
              begin
                 if Mem_Res.Success then
                    Memory_Sub_Key := Mem_Res.Data;
+                   
+                   -- VERIFY INTEGRITY HERE
+                   declare
+                      Stored_Blob : constant String := Get_System_State ("integrity_test", "");
+                   begin
+                      if Stored_Blob = "" then
+                         -- First boot: store the blob!
+                         Store_Integrity_Test_Blob (To_String (Memory_Sub_Key));
+                      else
+                         if not Verify_Integrity_Test_Blob (To_String (Memory_Sub_Key)) then
+                            Put_Line (Standard_Error, "[CRYPTO] Invalid password or master key");
+                            GNAT.OS_Lib.OS_Exit (70);
+                         end if;
+                      end if;
+                   end;
                 end if;
                 if Lit_Res.Success then
                    Lit_Sub_Key := Lit_Res.Data;
@@ -272,9 +363,8 @@ package body Database_Manager is
                Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[CRYPTO]" &
                  AnsiAda.Reset &
                  " FATAL: No master key. Refusing to run with plaintext storage.");
-               Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[BUGCHECK]" &
-                 AnsiAda.Reset & " Aborting process -- SIGABORT.");
-               C_Abort;
+               Put_Line (Standard_Error, "[CRYPTO] Exiting to prompt for password.");
+               GNAT.OS_Lib.OS_Exit (70);
            end if;
 
           Done := True;
