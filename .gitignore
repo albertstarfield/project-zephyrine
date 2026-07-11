@@ -59,6 +59,15 @@
 **/vendor/.micromamba/
 
 ## ============================
+## One-shot / Orphaned Scripts
+## ============================
+**/fix_*.py
+**/patch_*.py
+**/rename_*.py
+**/tempWorkScratch/
+**/.todos.json
+
+## ============================
 ## Logs and Temp Files
 ## ============================
 # Runtime telemetry and logs
