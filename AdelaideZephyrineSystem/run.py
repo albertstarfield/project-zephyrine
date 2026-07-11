@@ -457,9 +457,14 @@ def _tk_progress_dialog(title, message):
 
 
 def _tk_progress_done(dialog):
-    """Close the progress dialog."""
+    """Close the progress dialog and withdraw the root tk window."""
     try:
         dialog.destroy()
+    except Exception:
+        pass
+    try:
+        root = _get_tk_root()
+        root.withdraw()
     except Exception:
         pass
 
@@ -768,8 +773,14 @@ def prompt_kiss_password(is_first_boot=False, is_recovery=False):
         return password
 
 
-def _tk_info_dialog(title, message):
-    """Show a tkinter info dialog."""
+def _tk_info_dialog(title, message, countdown=60):
+    """Show a tkinter info dialog with countdown auto-close.
+    
+    Args:
+        title: Dialog window title
+        message: Message text to display
+        countdown: Seconds before auto-close (0 = no auto-close)
+    """
     import tkinter as tk
 
     root = _get_tk_root()
@@ -777,7 +788,8 @@ def _tk_info_dialog(title, message):
 
     bg = "#1a1a2e"
     fg = "#e0e0e0"
-    btn_bg = "#0f3460"
+    btn_bg = "#4ecca3"  # Bright green — clearly visible
+    btn_fg = "#1a1a2e"  # Dark text on green
     accent = "#e94560"
 
     dialog = tk.Toplevel(root)
@@ -786,7 +798,7 @@ def _tk_info_dialog(title, message):
     dialog.resizable(False, False)
     dialog.grab_set()
 
-    w, h = 420, 200
+    w, h = 480, 260
     sx = (dialog.winfo_screenwidth() - w) // 2
     sy = (dialog.winfo_screenheight() - h) // 2
     dialog.geometry(f"{w}x{h}+{sx}+{sy}")
@@ -799,24 +811,56 @@ def _tk_info_dialog(title, message):
         fg=fg,
         font=("Helvetica", 12),
         justify="left",
-        wraplength=380,
-    ).pack(pady=(16, 10), padx=20)
+        wraplength=440,
+    ).pack(pady=(18, 6), padx=20)
+
+    # Countdown timer label
+    remaining = [countdown]
+    timer_id = [None]
+
+    timer_label = tk.Label(
+        dialog,
+        text=f"Auto-closes in {remaining[0]}s" if countdown > 0 else "",
+        bg=bg,
+        fg="#888888",
+        font=("Helvetica", 9),
+    )
+    timer_label.pack(pady=(0, 8))
+
+    def _countdown_tick():
+        remaining[0] -= 1
+        if remaining[0] <= 0:
+            dialog.destroy()
+            return
+        timer_label.configure(text=f"Auto-closes in {remaining[0]}s")
+        timer_id[0] = dialog.after(1000, _countdown_tick)
+
+    if countdown > 0:
+        timer_id[0] = dialog.after(1000, _countdown_tick)
+
+    def _on_ok():
+        if timer_id[0] is not None:
+            try:
+                dialog.after_cancel(timer_id[0])
+            except Exception:
+                pass
+        dialog.destroy()
 
     tk.Button(
         dialog,
         text="OK",
-        command=dialog.destroy,
+        command=_on_ok,
         bg=btn_bg,
-        fg=fg,
+        fg=btn_fg,
         activebackground=accent,
         activeforeground="#fff",
-        font=("Helvetica", 11),
-        width=10,
+        font=("Helvetica", 12, "bold"),
+        width=12,
         relief="flat",
         cursor="hand2",
-    ).pack(pady=(0, 12))
+    ).pack(pady=(4, 14))
 
-    dialog.bind("<Return>", lambda e: dialog.destroy())
+    dialog.bind("<Return>", lambda e: _on_ok())
     root.wait_window(dialog)
     root.destroy()
 
