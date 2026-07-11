@@ -42,88 +42,107 @@ INTEGRITY_TEST_PLAINTEXT = "--ADELAIDE-INTEGRITY-TEST--"
 # sub-key derived from the InferiorParadoxical hash.
 INFERIOR_PARADOXICAL_KEY = "inferior_paradoxical_master_key"
 
+def _load_adl_crypto_lib():
+    """
+    Load libadl_crypto.dylib (or .so fallback).
+    Exits the process immediately if the library cannot be found or loaded.
+    """
+    import ctypes
+    lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.dylib")
+    if not os.path.exists(lib_path):
+        lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.so")
+    if not os.path.exists(lib_path):
+        print(f"[FATAL] InferiorParadoxical C boundary library not found at:\n"
+              f"  {os.path.join(BASE_DIR, 'obj', 'release', 'libadl_crypto.dylib')}\n"
+              f"  {os.path.join(BASE_DIR, 'obj', 'release', 'libadl_crypto.so')}\n"
+              f"Run the build pipeline first (--test-build-integrity-check) or rebuild manually:\n"
+              f"  cc -shared -o obj/release/libadl_crypto.dylib src/adl_crypto.c \\\n"
+              f"     src/adl_secure_enclave.c src/adl_drbg_shim.c \\\n"
+              f"     -I/opt/homebrew/opt/openssl@3/include \\\n"
+              f"     -L/opt/homebrew/opt/openssl@3/lib -lcrypto \\\n"
+              f"     -framework CoreFoundation -framework IOKit -framework Security")
+        sys.exit(1)
+    try:
+        lib = ctypes.CDLL(lib_path)
+    except Exception as e:
+        print(f"[FATAL] Cannot load InferiorParadoxical C boundary library: {e}")
+        sys.exit(1)
+    return lib
+
 def _store_inferior_paradoxical_wrapped_key(master_key_hex, integrity_hash):
     """
     Wrap master_key under InferiorParadoxical in C boundary and store in system_state.
+    Crashes hard if the shared library is missing — this indicates a broken build.
     """
-    try:
-        import ctypes
-        lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.dylib")
-        if not os.path.exists(lib_path):
-            lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.so")
-        lib = ctypes.CDLL(lib_path)
-        
-        lib.adl_auto_wrap_master_key_cstr.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-        lib.adl_auto_wrap_master_key_cstr.restype = ctypes.POINTER(ctypes.c_char)
-        lib.adl_free_cstr.argtypes = [ctypes.POINTER(ctypes.c_char)]
-        
-        c_ptr = lib.adl_auto_wrap_master_key_cstr(integrity_hash.encode('utf-8'), master_key_hex.encode('utf-8'))
-        if not c_ptr:
-            return False
-        encrypted = ctypes.cast(c_ptr, ctypes.c_char_p).value.decode('utf-8')
-        lib.adl_free_cstr(c_ptr)
-        
-        import sqlite3
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
-        if not os.path.exists(db_path):
-            return False
-        conn = sqlite3.connect(db_path)
-        conn.execute(
-            "INSERT OR REPLACE INTO system_state (key, value) VALUES (?, ?)",
-            (INFERIOR_PARADOXICAL_KEY, encrypted),
-        )
-        conn.commit()
-        conn.close()
-        print("[KEY-DERIV] InferiorParadoxical wrapped key stored via C boundary")
-        return True
-    except Exception as e:
-        print(f"[KEY-DERIV] Failed to store InferiorParadoxical wrapped key: {e}")
-        return False
+    import ctypes
+    lib = _load_adl_crypto_lib()
+
+    lib.adl_auto_wrap_master_key_cstr.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    lib.adl_auto_wrap_master_key_cstr.restype = ctypes.POINTER(ctypes.c_char)
+    lib.adl_free_cstr.argtypes = [ctypes.POINTER(ctypes.c_char)]
+
+    c_ptr = lib.adl_auto_wrap_master_key_cstr(integrity_hash.encode('utf-8'), master_key_hex.encode('utf-8'))
+    if not c_ptr:
+        print("[FATAL] adl_auto_wrap_master_key_cstr returned NULL — hardware binding failed")
+        sys.exit(1)
+    encrypted = ctypes.cast(c_ptr, ctypes.c_char_p).value.decode('utf-8')
+    lib.adl_free_cstr(c_ptr)
+
+    import sqlite3
+    db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+    if not os.path.exists(db_path):
+        print(f"[FATAL] Database not found at {db_path} — cannot store InferiorParadoxical wrapped key")
+        sys.exit(1)
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT OR REPLACE INTO system_state (key, value) VALUES (?, ?)",
+        (INFERIOR_PARADOXICAL_KEY, encrypted),
+    )
+    conn.commit()
+    conn.close()
+    print("[KEY-DERIV] InferiorParadoxical wrapped key stored via C boundary")
+    return True
 
 def _try_inferior_paradoxical_auto_decrypt(integrity_hash):
     """
     Try to auto-recover master_key using InferiorParadoxical hardware key via C boundary.
+    Crashes hard if the shared library is missing — this indicates a broken build.
+    Returns None only when there is no stored wrapped key (normal on first boot).
     """
-    try:
-        import sqlite3
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
-        if not os.path.exists(db_path):
-            return None
-        conn = sqlite3.connect(db_path)
-        cursor = conn.execute(
-            "SELECT value FROM system_state WHERE key = ?",
-            (INFERIOR_PARADOXICAL_KEY,),
-        )
-        row = cursor.fetchone()
-        conn.close()
-        if not row:
-            return None
-            
-        import ctypes
-        lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.dylib")
-        if not os.path.exists(lib_path):
-            lib_path = os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.so")
-        lib = ctypes.CDLL(lib_path)
-        
-        lib.adl_auto_unlock_master_key_cstr.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-        lib.adl_auto_unlock_master_key_cstr.restype = ctypes.POINTER(ctypes.c_char)
-        lib.adl_free_cstr.argtypes = [ctypes.POINTER(ctypes.c_char)]
-        
-        c_ptr = lib.adl_auto_unlock_master_key_cstr(integrity_hash.encode('utf-8'), row[0].encode('utf-8'))
-        if not c_ptr:
-            return None
-        master_key = ctypes.cast(c_ptr, ctypes.c_char_p).value.decode('utf-8')
-        lib.adl_free_cstr(c_ptr)
-        
-        if master_key and len(master_key) == 64:
-            print("[KEY-DERIV] InferiorParadoxical auto-decrypt SUCCESS via C boundary")
-            return master_key
+    import sqlite3
+    db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+    if not os.path.exists(db_path):
         return None
-    except Exception as e:
-        import traceback
-        print(f"[KEY-DERIV] InferiorParadoxical auto-decrypt crashed: {e}")
-        print(f"[KEY-DERIV] Traceback:\n{traceback.format_exc()}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.execute(
+        "SELECT value FROM system_state WHERE key = ?",
+        (INFERIOR_PARADOXICAL_KEY,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
         return None
+
+    import ctypes
+    lib = _load_adl_crypto_lib()
+
+    lib.adl_auto_unlock_master_key_cstr.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    lib.adl_auto_unlock_master_key_cstr.restype = ctypes.POINTER(ctypes.c_char)
+    lib.adl_free_cstr.argtypes = [ctypes.POINTER(ctypes.c_char)]
+
+    c_ptr = lib.adl_auto_unlock_master_key_cstr(integrity_hash.encode('utf-8'), row[0].encode('utf-8'))
+    if not c_ptr:
+        print("[FATAL] adl_auto_unlock_master_key_cstr returned NULL — hardware binding mismatch or corrupt key")
+        sys.exit(1)
+    master_key = ctypes.cast(c_ptr, ctypes.c_char_p).value.decode('utf-8')
+    lib.adl_free_cstr(c_ptr)
+
+    if master_key and len(master_key) == 64:
+        print("[KEY-DERIV] InferiorParadoxical auto-decrypt SUCCESS via C boundary")
+        return master_key
+
+    print("[FATAL] InferiorParadoxical auto-decrypt returned invalid key (expected 64 hex chars)")
+    sys.exit(1)
 
 # ── KISS Mode ─────────────────────────────────────────────────────────────
 IS_KISS = "--kiss" in sys.argv
