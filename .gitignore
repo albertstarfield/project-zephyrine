@@ -54,6 +54,9 @@
 **/.hf_cache/
 **/ollama_data/
 **/format.py
+**/.ros_env/
+**/ros_env/
+**/vendor/.micromamba/
 
 ## ============================
 ## Logs and Temp Files
@@ -104,3 +107,4 @@ cinst.txt
 **/.sidecar_port
 **.exit_reason
 **/.shutdown_requested
+.ros_env/
