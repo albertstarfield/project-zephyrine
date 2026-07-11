@@ -3670,13 +3670,18 @@ def real_main():
 
     # ── Show GUI loading bar immediately ──────────────────────────────────
     # Prevents freeze UX between name dialog and first visible work.
+    #
+    # NOTE: Step labels use opaque hex codes so the GUI never exposes
+    # implementation details (Ada, Python, Vite, etc.) that could confuse
+    # or intimidate users.  See the build/validation section below for
+    # a full mapping of hex → actual task.
     _setup_gui = None
     if _gui_available() and not IS_KISS:
         _setup_gui = _tk_progress_dialog(
             "Adelaide — Loading",
             "Loading preparing for Model...\n(Nothing to see here)"
         )
-        _setup_gui._update_bar(0, step_text="Starting up...", pulse=True)
+        _setup_gui._update_bar(0, step_text="code step 0x0001", pulse=True)  # Starting up
         _setup_gui._start_pulse()
 
     # Whimsical password promise (only on first entry when user was just created)
@@ -3691,7 +3696,7 @@ def real_main():
     # Kill any stale processes from previous runs before starting
     print("[*] Cleaning up any stale processes from previous runs...")
     if _setup_gui:
-        _setup_gui._update_bar(2, step_text="Cleaning up stale processes...", pulse=True)
+        _setup_gui._update_bar(2, step_text="code step 0x0002", pulse=True)  # Clean up stale processes from previous runs
     try:
         subprocess.run(
             ["pkill", "-9", "-f", "adelaide_server"], stderr=subprocess.DEVNULL
@@ -3728,7 +3733,7 @@ def real_main():
     # 0. Verify all critical prerequisites are installed
     # PX4 is critical and auto-clones/compiles if missing
     if _setup_gui:
-        _setup_gui._update_bar(5, step_text="Verifying environment prerequisites...", pulse=True)
+        _setup_gui._update_bar(5, step_text="code step 0x0003", pulse=True)  # Verify environment prerequisites
     verify_environment(build_px4=True)
 
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
@@ -3774,7 +3779,7 @@ def real_main():
     if current_hash != saved_hash:
         print("[*] Changes detected, checking downloads and rebuilding...")
         if _setup_gui:
-            _setup_gui._update_bar(15, step_text="Downloading and rebuilding components...", pulse=True)
+            _setup_gui._update_bar(15, step_text="code step 0x0004", pulse=True)  # Download and rebuild components
         threads = str(os.cpu_count() or 4)
 
         # =====================================================================
@@ -4537,9 +4542,30 @@ def real_main():
         except FileNotFoundError:
             print("[!] Deno not found in PATH, skipping playwright installation.")
 
+        # ═══════════════════════════════════════════════════════════════════
+        # Build / Verification Step Hex Codes (GUI-safe labels)
+        #
+        # The GUI displays these hex codes instead of technology names so
+        # the interface stays clean and approachable for all users.
+        #
+        #   0x0001  Starting up
+        #   0x0002  Clean up stale processes from previous runs
+        #   0x0003  Verify environment prerequisites
+        #   0x0004  Download and rebuild components
+        #   0x0005  Build core engine
+        #   0x0006  Build complete, running verification suites
+        #   0x0007  Formal proof verification of core logic
+        #   0x0008  Fuzz testing setup
+        #   0x0009  Build user interface
+        #   0x000A  Code quality check
+        #   0x000B  Symbolic analysis of code paths
+        #   0x000C  Type consistency check
+        #   0x000D  Initialize background processing systems
+        #   0x000E  Initialize audio processing pipeline
+        # ═══════════════════════════════════════════════════════════════════
         print("[*] Resolving Ada dependencies and building project...")
         if _setup_gui:
-            _setup_gui._update_bar(70, step_text="Compiling Ada project...", pulse=True)
+            _setup_gui._update_bar(70, step_text="code step 0x0005", pulse=True)  # Build core engine (Ada compilation)
 
         env = os.environ.copy()
         if platform.system() == "Darwin":
@@ -4588,7 +4614,7 @@ def real_main():
             pct = min(99, int(100 * build_elapsed / build_eta_target))
             eta = max(0, int(build_eta_target - build_elapsed))
             if build_gui_dialog:
-                build_gui_dialog._update_bar(pct, eta_text=f"ETA: {eta}s", step_text="Compiling Ada project...")
+                build_gui_dialog._update_bar(pct, eta_text=f"ETA: {eta}s", step_text="code step 0x0005")  # Build core engine (Ada compilation)
             elif not IS_KISS:
                 filled = int(build_bar_width * pct / 100)
                 bar = "█" * filled + "░" * (build_bar_width - filled)
@@ -4599,7 +4625,7 @@ def real_main():
         _build_thread.join()
 
         if build_gui_dialog:
-            build_gui_dialog._update_bar(80, eta_text="", step_text="Build complete. Running verification...")
+            build_gui_dialog._update_bar(80, eta_text="", step_text="code step 0x0006")  # Build complete, running verification suites
             time.sleep(0.3)
         elif not IS_KISS:
             _term_print(f"\r\033[K  Loading preparing for Model... |{'█' * build_bar_width}| 100%  Done!")
@@ -4616,7 +4642,7 @@ def real_main():
         # 1. GNATprove Formal Verification (always on rebuild)
         print("\n[*] Stage: GNATprove SPARK Static Analysis...")
         if _setup_gui:
-            _setup_gui._update_bar(82, step_text="Running GNATprove formal verification...", pulse=True)
+            _setup_gui._update_bar(82, step_text="code step 0x0007", pulse=True)  # Formal proof verification of core logic
         prove_cmd = [
             alr_cmd,
             "exec",
@@ -4645,7 +4671,7 @@ def real_main():
         # 2. AFL++ Fuzzing Environment Check
         print("\n[*] Stage: AFL++ Fuzzing Readiness Check...")
         if _setup_gui:
-            _setup_gui._update_bar(85, step_text="Checking AFL++ fuzzing readiness...", pulse=True)
+            _setup_gui._update_bar(85, step_text="code step 0x0008", pulse=True)  # Fuzz testing setup
         fuzz_ready = False
         for compiler in ["afl-clang-fast", "afl-gcc-fast", "afl-clang-lto"]:
             if shutil.which(compiler):
@@ -4659,7 +4685,7 @@ def real_main():
         # 3. Vite Frontend build (runs tsc and vite build)
         print("[*] Building Vite Frontend for Sidecar UI...")
         if _setup_gui:
-            _setup_gui._update_bar(88, step_text="Building Vite frontend...", pulse=True)
+            _setup_gui._update_bar(88, step_text="code step 0x0009", pulse=True)  # Build user interface
         frontend_dir = os.path.join(BASE_DIR, "ui", "frontend")
         if os.path.exists(frontend_dir):
             npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
@@ -4678,7 +4704,7 @@ def real_main():
         if shutil.which(ruff_cmd):
             print("[*] Running Platform Self-Integrity Quality Check (Ruff)...")
             if _setup_gui:
-                _setup_gui._update_bar(90, step_text="Running Ruff quality check...", pulse=True)
+                _setup_gui._update_bar(90, step_text="code step 0x000A", pulse=True)  # Code quality check
             try:
                 result = subprocess.run(
                     [ruff_cmd, "check", BASE_DIR, "--exclude", "vendor,moonshine"],
@@ -4706,7 +4732,7 @@ def real_main():
         # 4a. CrossHair Symbolic Analysis for python/ sidecars
         print("[*] Ensuring CrossHair is installed...")
         if _setup_gui:
-            _setup_gui._update_bar(92, step_text="Running CrossHair symbolic verification...", pulse=True)
+            _setup_gui._update_bar(92, step_text="code step 0x000B", pulse=True)  # Symbolic analysis of code paths
         try:
             pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
             pyvenv_python = os.path.join(pyvenv_dir, "bin", "python")
@@ -4777,7 +4803,7 @@ def real_main():
         if shutil.which(pyrefly_cmd):
             print("[*] Running Pyrefly Type Check on python sidecars...")
             if _setup_gui:
-                _setup_gui._update_bar(93, step_text="Running Pyrefly type check...", pulse=True)
+                _setup_gui._update_bar(93, step_text="code step 0x000C", pulse=True)  # Type consistency check
             try:
                 python_dir = os.path.join(BASE_DIR, "python")
                 env_vars = os.environ.copy()
@@ -4820,7 +4846,7 @@ def real_main():
         if os.path.exists(lsh_reqs):
             print("[LSH] Bootstrapping QRNN LSH worker venv...")
             if _setup_gui:
-                _setup_gui._update_bar(94, step_text="Bootstrapping LSH QRNN worker...", pulse=True)
+                _setup_gui._update_bar(94, step_text="code step 0x000D", pulse=True)  # Initialize background processing systems
             if not os.path.exists(pyvenv_python):
                 subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
             pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip")
@@ -4867,7 +4893,7 @@ def real_main():
         if os.path.exists(vad_worker_script):
             print("[VAD] Bootstrapping ONNX VAD worker...")
             if _setup_gui:
-                _setup_gui._update_bar(95, step_text="Bootstrapping VAD worker...", pulse=True)
+                _setup_gui._update_bar(95, step_text="code step 0x000E", pulse=True)  # Initialize audio processing pipeline
             if not os.path.exists(pyvenv_python):
                 subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
             pyvenv_pip = (
