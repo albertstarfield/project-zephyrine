@@ -29,6 +29,8 @@ with Ada.Text_IO;           use Ada.Text_IO;
 with Ada.Exceptions;        use Ada.Exceptions;
 with Ada.Directories;       use Ada.Directories;
 with Ada.Real_Time;         use Ada.Real_Time;
+with Ada.Calendar;
+with Ada.Calendar.Formatting;
 with Ada.Command_Line;
 with Ada.Environment_Variables;
 with GNAT.OS_Lib;           use GNAT.OS_Lib;
@@ -76,7 +78,7 @@ procedure Adelaide_Watchdog is
      Run_Dir & "/adelaide_watchdog.heartbeat";
 
    --  Timeouts
-   HB_Stale_Limit : constant Duration := 10.0;
+   HB_Stale_Limit : constant Duration := 60.0;
    Check_Interval : constant Duration := 1.0;
 
    --  After restarting, wait this long before considering another restart.
@@ -297,12 +299,14 @@ procedure Adelaide_Watchdog is
       Arg_End   : Natural;
    begin
       Put_Line (Standard_Error,
+        "[" & Ada.Calendar.Formatting.Image (Ada.Calendar.Clock) & "] " &
         "[Watchdog] Server (PID" & Integer'Image (Old_Pid) &
         ") is dead or frozen. Restarting..."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
 
        --  Kill old process if still hanging around
        if Old_Pid > 0 and then Is_Process_Alive (Old_Pid) then
           Put_Line (Standard_Error,
+            "[" & Ada.Calendar.Formatting.Image (Ada.Calendar.Clock) & "] " &
             "[Watchdog] Sending SIGTERM to old PID" &
             Integer'Image (Old_Pid)); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
           declare
@@ -319,6 +323,7 @@ procedure Adelaide_Watchdog is
              --  If still alive, force kill
              if Is_Process_Alive (Old_Pid) then
                 Put_Line (Standard_Error,
+                  "[" & Ada.Calendar.Formatting.Image (Ada.Calendar.Clock) & "] " &
                   "[Watchdog] Process ignored SIGTERM. Sending SIGKILL to PID" &
                   Integer'Image (Old_Pid)); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
                 Unused_Result := Sys_Kill (Old_Pid, 9);  --  SIGKILL
@@ -333,7 +338,7 @@ procedure Adelaide_Watchdog is
       end if;
 
       --  We rely on run.py to restart the server (prevents double spawning)
-      Put_Line (Standard_Error, "[Watchdog] Server killed. run.py will handle restart."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
+      Put_Line (Standard_Error, "[" & Ada.Calendar.Formatting.Image (Ada.Calendar.Clock) & "] " & "[Watchdog] Server killed. run.py will handle restart."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
       
       --  Note: run.py's wait() will unblock, see the exit code,
       --  dump the panic logs, and spawn the new process itself.
@@ -364,7 +369,8 @@ procedure Adelaide_Watchdog is
       --  If so, the server was stopped on purpose — do NOT restart.
       if Exists (Shutdown_Flag) then
          Put_Line (Standard_Error,
-           "[Watchdog] Shutdown flag detected. Server was stopped" &
+           "[" & Ada.Calendar.Formatting.Image (Ada.Calendar.Clock) & "] " &
+           "[Watchdog] Intentional exit flag detected. Server exited" &
            " intentionally. Not restarting."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
          --  Clean up the flag so a fresh run.py launch starts clean.
          begin
@@ -394,6 +400,7 @@ procedure Adelaide_Watchdog is
       elsif HB_Age > HB_Stale_Limit then
          Last_Restart := Clock;
          Put_Line (Standard_Error,
+           "[" & Ada.Calendar.Formatting.Image (Ada.Calendar.Clock) & "] " &
            "[Watchdog] Heartbeat stale for" & Duration'Image (HB_Age) &
            "s, PID" & Integer'Image (Pid) & " appears frozen."); --[DO NOT REMOVE THIS OR YOU ARE OVERCONFIDENT]
          Restart_Server (Pid);
