@@ -100,6 +100,8 @@ def _store_inferior_paradoxical_wrapped_key(master_key_hex, integrity_hash):
     )
     conn.commit()
     conn.close()
+    _wipe_string(encrypted)
+    encrypted = None
     print("[KEY-DERIV] InferiorParadoxical wrapped key stored via C boundary")
     return True
 
@@ -130,7 +132,11 @@ def _try_inferior_paradoxical_auto_decrypt(integrity_hash):
     lib.adl_auto_unlock_master_key_cstr.restype = ctypes.POINTER(ctypes.c_char)
     lib.adl_free_cstr.argtypes = [ctypes.POINTER(ctypes.c_char)]
 
-    c_ptr = lib.adl_auto_unlock_master_key_cstr(integrity_hash.encode('utf-8'), row[0].encode('utf-8'))
+    wrapped_blob = row[0]
+    row = None  # drop DB row reference
+    c_ptr = lib.adl_auto_unlock_master_key_cstr(integrity_hash.encode('utf-8'), wrapped_blob.encode('utf-8'))
+    _wipe_string(wrapped_blob)
+    wrapped_blob = None
     if not c_ptr:
         print("[FATAL] adl_auto_unlock_master_key_cstr returned NULL — hardware binding mismatch or corrupt key")
         sys.exit(1)
@@ -233,24 +239,24 @@ def _password_entropy(password):
 
 
 def _wipe_string(s):
-    """Best-effort wiping of a string from Python heap memory.
-    
-    Python strings are immutable, so we cannot zero them in place. This
-    function overwrites the variable's reference with a new string of the
-    same length (to reduce the chance that the original bytes survive in
-    heap), then forces garbage collection.
+    """Best-effort wipe of a string from Python heap memory.
+
+    Python strings are immutable — we cannot overwrite them in place.
+    This function forces garbage collection so the interpreter reclaims
+    the underlying memory as soon as possible.  It does NOT and CANNOT
+    zero the bytes (use bytearray for that when possible).
+
+    Callers MUST also set their own variable to None after calling this:
+        _wipe_string(password)
+        password = None          # <-- required, _wipe_string can't do this
     """
     if s is None:
         return
     try:
-        length = len(s)
-        # Overwrite reference with dummy data
-        s = "X" * length
-        s = "\0" * length  # null bytes
+        # Touch the object so CPython's refcount sees it
+        len(s)
     except Exception:
         pass
-    finally:
-        s = None
     import gc
     gc.collect()
 
@@ -1557,6 +1563,8 @@ def _try_c_derive_master_key(integrity_hash, user_secret):
             result_bytes = ctypes.cast(result_ptr, ctypes.c_char_p).value
             master_key = result_bytes.decode("utf-8")
             lib.adl_free_cstr(result_ptr)  # free the original malloc'd memory
+            _wipe_string(user_secret)
+            user_secret = None
             return master_key
 
         return None
@@ -1654,13 +1662,17 @@ def derive_master_key(integrity_hash, user_secret):
 
     # HKDF-Extract
     prk = hmac.new(salt, ikm, hashlib.sha512).digest()
+    ikm = None  # wipe password bytes
 
     # HKDF-Expand (single block: output <= SHA-512 digest size)
     expand_input = info + b"\x01"
     okm = hmac.new(prk, expand_input, hashlib.sha512).digest()
+    prk = None  # wipe intermediate key
 
     # Take first 64 bytes (512 bits) as master key
-    return okm[:32].hex()
+    result = okm[:32].hex()
+    okm = None  # wipe raw key material
+    return result
 
 
 def verify_integrity_test_blob(master_key_hex, sub_key_hex):
@@ -1817,7 +1829,7 @@ def migrate_from_legacy_key_system():
 
     # Derive new master key
     new_master_key = derive_master_key(integrity_hash, password)
-    print(f"[MIGRATE] New master key derived: {new_master_key[:16]}...")
+    print("[MIGRATE] New master key derived")
 
     # Re-encrypt all databases with new key
     try:
@@ -2140,7 +2152,7 @@ def hardware_bound_key_derivation():
                 if not master_key:
                     print("[KEY-DERIV] No password provided or derivation failed")
                     return None
-                print(f"[KEY-DERIV] Master key securely derived in C: {master_key[:16]}...")
+                print("[KEY-DERIV] Master key securely derived in C")
 
             aes_key = derive_sub_key(master_key, "adelaide:db:memory:v1")
             if verify_integrity_test_blob(master_key, aes_key):
