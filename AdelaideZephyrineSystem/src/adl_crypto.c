@@ -224,6 +224,30 @@ int adl_init(const char *key_hex_override, char *err_buf)
         goto store;
     }
 
+    /* Priority 2.5: Master key file (path in ADELAIDE_MASTER_KEY_FILE)
+     * run.py writes the key to a temp file (0600 perms) and sets this
+     * env var instead of ADELAIDE_MASTER_KEY, avoiding leaking the
+     * plaintext key to all subprocess environments.
+     * We leave the file in place — run.py cleans it up on shutdown. */
+    src = getenv("ADELAIDE_MASTER_KEY_FILE");
+    if (src && src[0] != '\0') {
+        FILE *fp = fopen(src, "r");
+        if (fp) {
+            size_t n = 0;
+            int c;
+            while ((c = fgetc(fp)) != EOF && n < sizeof(expanded_hex) - 1) {
+                if (c == '\n' || c == '\r') continue;
+                expanded_hex[n++] = (char)c;
+            }
+            expanded_hex[n] = '\0';
+            fclose(fp);
+            if (n > 0) {
+                src = expanded_hex;
+                goto store;
+            }
+        }
+    }
+
     /* Priority 3: Config file (local to project) */
     {
         /* Try local config directory first, then legacy ~/.config/adelaide */
@@ -260,7 +284,8 @@ int adl_init(const char *key_hex_override, char *err_buf)
     }
 
     snprintf(err_buf, ADL_ERROR_SIZE,
-             "No master key found. Set ADELAIDE_MASTER_KEY env var or "
+             "No master key found. Set ADELAIDE_MASTER_KEY or "
+             "ADELAIDE_MASTER_KEY_FILE env var, or "
              "create config/master.key (run.py handles this)");
     return -1;
 

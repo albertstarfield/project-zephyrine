@@ -15,8 +15,8 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   export LIBRARY_PATH="${SDKROOT}/usr/lib"
 fi
 
-mkdir -p .bin
-cat << 'RANLIB' > .bin/ranlib
+mkdir -p "$SCRIPT_DIR/.bin"
+cat << 'RANLIB' > "$SCRIPT_DIR/.bin/ranlib"
 #!/bin/bash
 ARGS=()
 for arg in "$@"; do
@@ -26,7 +26,7 @@ for arg in "$@"; do
 done
 /usr/bin/ranlib "${ARGS[@]}"
 RANLIB
-chmod +x .bin/ranlib
-export PATH="$PWD/.bin:$PATH"
+chmod +x "$SCRIPT_DIR/.bin/ranlib"
+export PATH="$SCRIPT_DIR/.bin:$PATH"
 
 exec python3 "$SCRIPT_DIR/run.py" "$@"

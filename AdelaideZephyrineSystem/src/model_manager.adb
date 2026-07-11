@@ -1164,10 +1164,11 @@ package body Model_Manager is
                 and then
                    ELP1_Active_Count = 0  -- FIX: Only allow if no ELP1 active
                 and then
-                   (Ada.Real_Time.To_Duration
-                       (Ada.Real_Time.Clock - Last_ELP1_End)
-                    >= ELP0_Cooldown_S
-                    or else Last_ELP1_End = Ada.Real_Time.Time_First))
+                   (Last_ELP1_End = Ada.Real_Time.Time_First
+                    or else
+                      Ada.Real_Time.To_Duration
+                        (Ada.Real_Time.Clock - Last_ELP1_End)
+                      >= ELP0_Cooldown_S))
            and then (not On_Battery_State or else Battery_Level >= 80)
         is
         begin
@@ -1264,9 +1265,11 @@ package body Model_Manager is
         entry Wait_For_ELP1_Idle
            when(ELP1_Pending = 0 and then ELP1_Active_Count = 0)
            and then
-              (Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Last_ELP1_End)
-               >= ELP0_Cooldown_S
-               or else Last_ELP1_End = Ada.Real_Time.Time_First)
+               (Last_ELP1_End = Ada.Real_Time.Time_First
+                or else
+                  Ada.Real_Time.To_Duration
+                    (Ada.Real_Time.Clock - Last_ELP1_End)
+                  >= ELP0_Cooldown_S)
            and then (not On_Battery_State or else Battery_Level >= 80)
         is
         begin
@@ -2779,12 +2782,18 @@ package body Model_Manager is
                                         & AnsiAda.Reset
                                         & " Calling Llama_Init_From_Model (stderr visible)...");
 
+                                    --  [Profile] Context Init timing
+                                    declare
+                                        Ctx_Init_T0 : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+                                    begin
                                     Models (Kind).Context :=
                                        Llama_Init_From_Model
                                           (Models (Kind).Model, C_Params);
 
                                     if Models (Kind).Context /= Null_Context
                                     then
+                                        --  [Profile] Context Init timing
+                                        Put_Line ("[Profile] Context-Init µs=" & Natural'Image (Natural (Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Ctx_Init_T0) * 1_000_000.0)) & " ctx=" & unsigned'Image (Actual_Ctx));
                                         --  SUCCESS! Use this context size
                                         Actual_Ctx := Step_Ctx (Step);
                                         Got_Ctx := True;
@@ -2830,6 +2839,7 @@ package body Model_Manager is
                                         Auto_Config.Record_Failure
                                            (Kind, Step_Ctx (Step));
                                     end if;
+                                    end; -- [Profile] Context Init timing declare
                                 end if;
                             end loop;
 
@@ -5334,6 +5344,10 @@ package body Model_Manager is
         Gen_Retry_Count : Natural := 0;
         Max_Gen_Retries : constant Natural := (if Level = ELP0 then 3 else 20);
 
+        --  [Profile] µs timing variables for pipeline instrumentation
+        Gate_T0      : Ada.Real_Time.Time;
+        Gen_T0       : Ada.Real_Time.Time;
+
         --  Cache_Hit: tracks whether KV cache was restored from SSD.
         --  When True, Llama_Memory_Clear must be SKIPPED to preserve restored state.
         Cache_Hit    : Boolean := False;
@@ -5359,6 +5373,9 @@ package body Model_Manager is
     begin
         Gen_Retry_Loop : loop
             begin
+                --  [Profile] Capture start time for total Generate timing
+                Gen_T0 := Ada.Real_Time.Clock;
+
                 --  [VITAL-DO-NOT-REMOVE] Mandated by user.
                 --  --[Debug] DO NOT REMOVE: Descriptive source tracking
                 if not Skip_Gate then
@@ -5385,6 +5402,8 @@ package body Model_Manager is
                     & Natural'Image (Clean_P'Length));
 
                 begin
+                    --  [Profile] Capture gate acquisition start time
+                    Gate_T0 := Ada.Real_Time.Clock;
                     if not Skip_Gate then
                         if Level = ELP0 then
                             declare
@@ -5436,6 +5455,9 @@ package body Model_Manager is
                         --  Skip_Gate=True: gate already held by caller (Hybrid_Generate).
                         null;
                     end if;
+
+                    --  [Profile] Gate acquisition timing
+                    Put_Line ("[Profile] Gate-Acquire µs=" & Natural'Image (Natural (Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Gate_T0) * 1_000_000.0)));
 
                     --  [DEAD-CODE] Draft-model speculative decoding disabled.
                     --  this status quo speculation decoding does not fit for my need so i use speculation result instead that work on ELP0 that match as an string cache and fuzzy and embed logic that response faster than speculation decoding
@@ -5512,6 +5534,8 @@ package body Model_Manager is
                             & Boolean'Image (Models (Kind).Loaded));
                         declare
                             Loaded_Tokens : System.Address;
+                            --  [Profile] KV Cache Load start time
+                            KV_Load_T0 : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
                         begin
                             Cache_Hit :=
                                KV_Cache_Manager.Load_From_SSD_Lazy
@@ -5519,6 +5543,9 @@ package body Model_Manager is
                                    Tokens   => Loaded_Tokens,
                                    N_Tokens => Loaded_Count,
                                    Model_ID => Kind'Img);
+
+                            --  [Profile] KV Cache Load timing
+                            Put_Line ("[Profile] KV-Cache-Load µs=" & Natural'Image (Natural (Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - KV_Load_T0) * 1_000_000.0)) & " Cache_Hit=" & Boolean'Image (Cache_Hit));
 
                             --  [BUG 3 DBG] Verbose tracing after KV cache load
                             Ada.Text_IO.Put_Line
@@ -6483,6 +6510,9 @@ package body Model_Manager is
                                           (Prefill_End - Prefill_Start_Time);
                                     Prefill_Token_Count := Natural (N_Toks);
 
+                                    --  [Profile] Prefill µs timing
+                                    Put_Line ("[Profile] Prefill µs=" & Natural'Image (Natural (Prefill_Elapsed * 1_000_000.0)) & " tokens=" & Natural'Image (Prefill_Token_Count));
+
                                     --  Compute tok/s (guard against divide-by-zero)
                                     if Prefill_Elapsed > 0.0
                                        and then Prefill_Token_Count > 0
@@ -6662,6 +6692,8 @@ package body Model_Manager is
                                 Accum_Count     : Natural := 0;
                                 Tokens_Gen      : Natural := 0;
                                 Done            : Boolean := False;
+                                --  [Profile] Token generation start time
+                                Proc_T0         : Ada.Real_Time.Time;
                                 Current_Ctx     : constant Natural :=
                                    Natural (Models (Kind).Current_Ctx);
                                 Gen_Buffer_Size : constant Natural :=
@@ -6760,6 +6792,8 @@ package body Model_Manager is
                                 end Process_Token;
 
                             begin
+                                --  [Profile] Capture token generation start time
+                                Proc_T0 := Ada.Real_Time.Clock;
                                 while not Done and then Tokens_Gen < 2048 loop
                                     Print_INOP_Countdown;
                                     if Level = ELP0 and then Should_Abort_ELP0
@@ -7017,6 +7051,9 @@ package body Model_Manager is
                                     end;
                                     --  end if;  -- [DEAD-CODE] was: if Use_OrdinaryStatusQuoDecodeSpeculative
                                 end loop;
+
+                                --  [Profile] Processing (token generation) timing
+                                Put_Line ("[Profile] Processing µs=" & Natural'Image (Natural (Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Proc_T0) * 1_000_000.0)) & " tokens_gen=" & Natural'Image (Tokens_Gen));
                             end; -- Accum_Buffer declare block
 
                             --  =====================================================================
@@ -7036,6 +7073,8 @@ package body Model_Manager is
                             if Models (Kind).Context /= Null_Context then
                                 declare
                                     Success : Boolean;
+                                    --  [Profile] KV Cache Save start time
+                                    KV_Save_T0 : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
                                 begin
                                     --  Save KV cache to SSD (ASYNC, non-blocking)
                                     KV_Cache_Manager.Save_To_SSD_Async
@@ -7045,6 +7084,9 @@ package body Model_Manager is
                                            Interfaces.C.size_t (N_Toks),
                                         Model_ID => Kind'Img,
                                         Session_ID => Session_ID);
+
+                                    --  [Profile] KV Cache Save timing
+                                    Put_Line ("[Profile] KV-Cache-Save µs=" & Natural'Image (Natural (Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - KV_Save_T0) * 1_000_000.0)));
 
                                     --  Clear KV cache from RAM immediately after saving
                                     --  This ensures minimal RAM usage - only current process in memory
@@ -7961,7 +8003,14 @@ package body Model_Manager is
             Last_User_Prompt := To_Unbounded_String (Prompt);
         end if;
 
-        Get_Embedding (Prompt, Emb_Vec, Emb_Len);
+        --  [Profile] Embedding start time
+        declare
+            Emb_T0 : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
+        begin
+            Get_Embedding (Prompt, Emb_Vec, Emb_Len);
+            --  [Profile] Embedding timing
+            Put_Line ("[Profile] Embedding µs=" & Natural'Image (Natural (Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Emb_T0) * 1_000_000.0)));
+        end;
 
         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
         --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
@@ -7988,11 +8037,15 @@ package body Model_Manager is
                 & " External agent detected - passthrough mode.");
         end if;
 
+        --  [Profile] Cache lookup start time
         declare
+            Cache_Lookup_T0 : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
             Cached_Res : constant String :=
                Database_Manager.Get_Cached_Response
                   (Emb_Vec (1 .. Emb_Len), Current_WCET);
         begin
+            --  [Profile] Cache Lookup timing
+            Put_Line ("[Profile] Cache-Lookup µs=" & Natural'Image (Natural (Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Cache_Lookup_T0) * 1_000_000.0)));
             if Cached_Res /= "" then
                 Put_Line
                    (AnsiAda.Foreground (AnsiAda.Light_Magenta)
@@ -10585,6 +10638,9 @@ package body Model_Manager is
                     end if;
             end case;
         end;
+
+        --  [Profile] Runaround (total) timing in µs
+        Put_Line ("[Profile] Runaround µs=" & Natural'Image (Natural ((T1 - T0) * 1_000_000.0)) & " Level=" & ELP_Level'Image (Level));
 
         --
         --  ============================================================
