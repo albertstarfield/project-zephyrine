@@ -395,3 +395,26 @@ To maintain the architectural integrity, quality, and deterministic nature of Pr
      - The Asahi Linux Project [3]
 
    - This section serves as a formal notice. Continued contribution of any GenAI-assisted content constitutes your acknowledgment and acceptance of this outcome. The integrity of our contribution history is paramount, and we will not obscure the use of **AI tools to circumvent the policies of other projects**.
+
+### **Section 2.4: Prohibition of Death Threats and Hostile Content in Code and Comments**
+
+   - **Zero-tolerance policy** applies to any death threats, violent language, or hostile content directed at individuals, groups, or the project itself — whether in code comments, documentation, commit messages, issue trackers, or any other project artifact.
+
+   - This includes, but is not limited to:
+     - Direct or implied death threats
+     - Language promoting violence or harm against any person or group
+     - Hostile, intimidating, or threatening messages disguised as "humor" or "sarcasm"
+
+   - Violations will result in **immediate removal of the offending content** and may lead to temporary or permanent ban from the project.
+
+### **Section 2.5: AI Agent Conduct and Prompt Responsibility**
+
+   - If you use an AI coding assistant and it generates death threats, hostile language, or other inappropriate content in code or comments, **the responsibility falls on you, the contributor**.
+
+   - **You are expected to:**
+     1. Review all AI-generated output before committing
+     2. Remove any inappropriate, hostile, or threatening content
+     3. Do NOT commit AI-generated death threats or hostile language under any circumstances
+     4. If the AI misbehaves, fix it yourself or use a different prompt — do not blame the tool
+
+   - "The AI made me do it" is **not an acceptable defense**. You are the human in the loop. You are responsible for what you commit.
