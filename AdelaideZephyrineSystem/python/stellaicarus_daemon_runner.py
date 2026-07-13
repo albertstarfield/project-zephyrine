@@ -1,3 +1,11 @@
+"""
+Architectural Foundation & Contextual Daemon:
+- Temporal Thresholds: System latency bounds strictly tied to the Doherty 
+  Threshold [doherty1982economic] and empirical models of human attention 
+  decline [Mark2023Attention].
+- Semantic Fault Handling: OS-level memory segmentation mapping adapted from 
+  [Packer2023MemGPT] to isolate LLM context faults [Information2026ContextFault].
+"""
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import sys

@@ -1,3 +1,10 @@
+"""
+Architectural Foundation & Semantic Memory:
+- Constructivism: Rooted in Piaget's [Piaget1952Origins] and Vygotsky's [Vygotsky1978Mind] 
+  models of cognitive assimilation and conceptual scaffolding.
+- Vector Epistemology: Employs Graph ML [Kipf2017GCN] and RotatE Embeddings [Sun2019RotatE] 
+  to map human fluid intelligence [Psych2025AbstractCognition] into Euclidean/Complex vector space.
+"""
 #!/usr/bin/env python3
 import sys
 import os

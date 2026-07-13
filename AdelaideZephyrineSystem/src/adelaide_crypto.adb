@@ -1,3 +1,10 @@
+--  =============================================================================
+--  Architectural Foundation & Security Subsystem:
+--  - Cryptographic Validation: FIPS 140-3 [NIST2019FIPS1403]
+--  - Hardware Constraints: DO-254 [RTCA2000DO254]
+--  - Zero-Trust Posture: Mitigates catastrophic physical data breaches as 
+--    modeled by [AppliedSci2025ZeroTrust, Schneier2018Click].
+--  =============================================================================
 pragma SPARK_Mode (Off);
 
 --  ── Adelaide Crypto Wrapper Implementation ─────────────────────────────────
