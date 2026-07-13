@@ -4313,7 +4313,7 @@ def real_main():
             "-P",
             "adelaide_spark.gpr",
             "--level=4",
-            "--prover=cvc5,z3,altergo",
+            "--prover=cvc5,z3,altergo,coq",
             "--timeout=60",
             "--memlimit=2000",
             "--steps=0",
