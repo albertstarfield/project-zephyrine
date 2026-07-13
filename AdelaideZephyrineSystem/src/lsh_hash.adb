@@ -124,8 +124,6 @@ package body LSH_Hash is
                     Args (2) := new String'("--input");
                     Args (3) := new String'(Tmp_Fixed);
 
-                    --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                    --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
                     --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Yellow)
@@ -155,8 +153,6 @@ package body LSH_Hash is
                         begin
                             if Res_Val.Has_Field ("lsh_hash") then
                                 Result_Hash := Res_Val.Get ("lsh_hash");
-                                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
-                                --  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
                                 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                                 Put_Line
                                    (AnsiAda.Foreground (AnsiAda.Light_Green)

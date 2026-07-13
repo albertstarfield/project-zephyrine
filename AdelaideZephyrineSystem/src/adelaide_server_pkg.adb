@@ -665,8 +665,6 @@ package body Adelaide_Server_Pkg is
         begin
            --  Track last API for heartbeat display
            Adelaide_Server_Pkg.Set_Last_API (URI);
-          --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
           --  Verbose: confirms Dispatch was called and shows which URI.
           Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Dispatch-V]" &
@@ -1684,8 +1682,6 @@ package body Adelaide_Server_Pkg is
                      Handle => S));
                end;
             else
-             --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
              if Is_External_Agent then
                 --  BYPASS CACHE: Dynamic responses for external agents
@@ -1805,7 +1801,6 @@ package body Adelaide_Server_Pkg is
          --     { "jsonrpc": "2.0", "method": "chat/completion", "params": { "prompt": "Hello!" }, "id": 2 }
          --
          --  The local Model_Manager handles agent reasoning natively.
-         --  DO NOT REMOVE, OR YOU WILL BE KILLED
          --  =====================================================================
          if URI = "/api/acp" then
             declare
@@ -1903,7 +1898,6 @@ package body Adelaide_Server_Pkg is
          --  =====================================================================
          --  /v1/messages: Claude API endpoint (Anthropic Messages API)
          --  Forwards requests to Claude API when model name starts with "claude"
-         --  DO NOT REMOVE, OR YOU WILL BE KILLED
          --  =====================================================================
          if URI = "/v1/messages" then
             declare
@@ -2019,8 +2013,6 @@ package body Adelaide_Server_Pkg is
                   end;
                end if;
 
-               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                --  Convert Claude messages to ChatML and call LOCAL model (Snowball-Enaga)
                --  Returns response in Claude Messages API format.
@@ -2067,8 +2059,6 @@ package body Adelaide_Server_Pkg is
                         Content_Arr : JSON_Array;
                         Content_Obj : constant JSON_Value := Create_Object;
                      begin
-                        --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                         Ada.Text_IO.Put_Line
                           (AnsiAda.Foreground (AnsiAda.Cyan)
@@ -2124,7 +2114,6 @@ package body Adelaide_Server_Pkg is
             --  Default: runs BOTH performance AND accuracy benchmarks
             --  Unparseable answers = complete failure
             --  Streams progress via SSE, logs to stdio
-            --  DO NOT REMOVE, OR YOU WILL BE KILLED
             --  =====================================================================
             if URI = "/api/snowballEnagaValidationBenchmark" then
                 declare
@@ -2263,7 +2252,6 @@ package body Adelaide_Server_Pkg is
            --  =====================================================================
            --  /v1/images/generations: OpenAI-compatible image generation endpoint
            --  Two-stage pipeline: FLUX sparse -> SD refinement
-           --  DO NOT REMOVE, OR YOU WILL BE KILLED
            --  =====================================================================
           if URI = "/v1/images/generations" then
              declare
@@ -2286,8 +2274,6 @@ package body Adelaide_Server_Pkg is
                 Data_Arr    : JSON_Value;
                 Resp_Obj    : JSON_Value;
              begin
-                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                 --  Parse request body
                 if Length (Payload) > 0 then
@@ -2448,7 +2434,6 @@ package body Adelaide_Server_Pkg is
                 Set_Field (Img_Obj, "revised_prompt", To_String (Prompt));
 
                 --  GNATCOLL.JSON workaround: wrap in object with "0" key
-                --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
                 Data_Arr := Create_Object;
                 Set_Field (Data_Arr, "0", Img_Obj);
                 Set_Field (Resp_Obj, "data", Data_Arr);
@@ -2466,7 +2451,6 @@ package body Adelaide_Server_Pkg is
       end if;
    exception
       when E : others =>
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
          --  UNKNOWN/CATEGORIZED ERROR: Dump full exception and red banner.
          --  Server keeps running and continues serving other requests.
          Ada.Text_IO.Put_Line

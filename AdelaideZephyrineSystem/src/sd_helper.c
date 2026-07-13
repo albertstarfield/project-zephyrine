@@ -1,6 +1,5 @@
 // sd_helper.c - Helper functions for Ada FFI
 // Provides PNG encoding and Base64 conversion for stable-diffusion.cpp
-// [DO NOT REMOVE, OR YOU WILL BE KILLED]
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
