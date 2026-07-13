@@ -29,6 +29,10 @@ The `run.sh` → `AdelaideZephyrineSystem/run.py` chain is the sole authority fo
 
     *The script will automatically fetch Ada Web Server (AWS) packages via Alire, build llama.cpp and stable-diffusion.cpp from source, generate SSL certificates, and start the local API listener on port `11420`.*
 
+### Vendor Submodules
+
+The `AdelaideZephyrineSystem/vendor/` directory contains third-party submodules (`llama.cpp`, `moonshine`, `kokoro-onnx`, `stable-diffusion.cpp`, `PX4-Autopilot`, etc.) that are **cloned on demand** by `run.py`. These are excluded from version control tracking. Do not attempt to commit changes to vendor submodules — their dirty state is expected and should be ignored.
+
 ### Development Notes
 
 1.  For AWS API `/v1/completion` OpenAI API and Ollama API I/O use pragma profile Jorvik while Watchdog uses Ravenscar separate threading. We still use Ada 2012 SPARK 2014.
