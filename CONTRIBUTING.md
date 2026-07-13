@@ -86,7 +86,7 @@ Before contributing, you must identify the DAL of the module you are modifying. 
 * **Permitted Languages:** **Ada** (Preferred), **C/C++** (Strict Subset/MISRA compliant).
 * **Prohibited:** Python, JavaScript, Garbage Collection, Dynamic Memory Allocation (after initialization).
 * **Contribution Rules:**
-    * **GenAI Permitted with Formal Proof Requirement:** Generative AI may be used to assist with DAL A code, but **every line of generated or modified code must pass `gnatprove --level=4` with the ROCq (Coq) prover backend**. The formal verification chain is: `run.py` invokes `gnatprove` with `--prover=cvc5,z3,altergo,coq` — this is the **minimum required prover set** for DAL A compliance.
+    * **GenAI Permitted with Formal Proof Requirement:** Generative AI may be used to assist with DAL A code, but **every line of generated or modified code must pass `gnatprove --level=4` with the ROCq (Coq) prover backend**. The formal verification chain is: `run.py` invokes `gnatprove` with `--prover=cvc5,z3,altergo,coq` — this is the **minimum required prover set** for DAL A compliance. GenAI is **required** for interfacing with memory or other FFI boundaries, as manual FFI code is error-prone and must be verified against SPARK contracts.
     * **Manual Verification:** All PRs affecting DAL A must include a manual timing analysis (e.g., "Loop guarantees execution in <500µs").
     * **Failure Consequence:** Hardware damage, thermal runaway, or total system loss.
 
