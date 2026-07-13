@@ -11,9 +11,9 @@ The Adelaide Zephyrine System implements a high-security cryptographic boundary 
 * **Authentication**: The system utilizes strict **Identity-based Authentication** using PBKDF2 with HKDF-SHA512 hashing to fulfill Level 3 and 4 access control requirements. 
 * **Key Generation**: 256-bit high-entropy Recovery Keys are generated via the SPARK DRBG backed by AES-256 and `/dev/urandom`. OpenSSL's `RAND_bytes()` reliance for key generation has been fully replaced with a 100% formally verified, memory-safe SPARK Random Number Generator.
 
-## Human Identity Verification & Compartmentalization
+## Multi-User Compartmentalization (one user at a time at login or dedicated)
 
-To guarantee strict data isolation, the Adelaide Zephyrine System employs **compartmentalization based on unique human identities**:
+To guarantee strict data isolation, the Adelaide Zephyrine System employs **Multi-User Compartmentalization**, where only one user is active at a time at login (or the system is dedicated to a single user):
 
 1. **Identity Cryptography**: User identities (e.g., username/email/identity) are registered and verified using PBKDF2/HKDF-SHA512 password hashing. Upon verification, the user is assigned a unique, cryptographically secure 128-bit hash representing their `Session_ID`.
 2. **Database Isolation**: The `identity_store.db` maintains a strict boundary mapping human identities to their secure hashes and credentials.
