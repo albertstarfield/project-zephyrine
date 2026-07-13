@@ -30,7 +30,7 @@ package body Database_Manager is
 
    function DB_Dir return String is
    begin
-      return "NetworkMemoryPool/" & Get_User;
+      return "data/NetworkMemoryPool/" & Get_User;
    end DB_Dir;
 
    function DB_File return String is
@@ -70,7 +70,7 @@ package body Database_Manager is
             return;
          end if;
 
-          --  Migrate from old UI_Database/ to NetworkMemoryPool/ if needed
+          --  Migrate from old UI_Database/ to data/NetworkMemoryPool/ if needed
           if not Ada.Directories.Exists (DB_Dir) then
              if Ada.Directories.Exists (Old_DB_Dir) then
                 Ada.Directories.Rename (Old_DB_Dir, DB_Dir);

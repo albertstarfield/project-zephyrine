@@ -135,7 +135,7 @@ package body Toolchain_Manager is
    procedure Start_Orchestrator is
       use GNAT.OS_Lib;
       Python_Path : constant String := "pyvenv/bin/python3";
-      Script_Path : constant String := "python/think_tag_sanitizer.py";
+      Script_Path : constant String := "src/python/think_tag_sanitizer.py";
       Args        : Argument_List (1 .. 2);
       Pid         : Process_Id;
    begin
@@ -311,7 +311,7 @@ package body Toolchain_Manager is
             Args : Argument_List (1 .. 2);
          begin
             Args (1) := new String'("check");
-            Args (2) := new String'("python/adelaide_bridge.py");
+            Args (2) := new String'("src/python/adelaide_bridge.py");
             Ret := Run_Command ("pyrefly", Args);
             Free (Args (1));
             Free (Args (2));
@@ -329,7 +329,7 @@ package body Toolchain_Manager is
             Args : Argument_List (1 .. 3);
          begin
             Args (1) := new String'("lint");
-            Args (2) := new String'("python/adelaide_bridge.py");
+            Args (2) := new String'("src/python/adelaide_bridge.py");
             Ret := Run_Command ("deal", Args);
             Free (Args (1));
             Free (Args (2));

@@ -65,51 +65,51 @@ package body Tool_Manager is
       --  Tool routing: Maps tool names to Python scripts.
       --  All tools are in python/ directory relative to the server binary.
       if Name = "web_search" or else Name = "searchglobalref" or else Name = "search" then
-         Full_Cmd := To_Unbounded_String ("python/searchglobalref.py");
+         Full_Cmd := To_Unbounded_String ("src/python/searchglobalref.py");
       elsif Name = "local_search" then
-         Full_Cmd := To_Unbounded_String ("python/searchlocalref.py");
+         Full_Cmd := To_Unbounded_String ("src/python/searchlocalref.py");
       elsif Name = "math" then
-         Full_Cmd := To_Unbounded_String ("python/math_tool.py");
+         Full_Cmd := To_Unbounded_String ("src/python/math_tool.py");
       elsif Name = "code" then
-         Full_Cmd := To_Unbounded_String ("python/code_tool.py");
+         Full_Cmd := To_Unbounded_String ("src/python/code_tool.py");
       elsif Name = "cat" then
-         Full_Cmd := To_Unbounded_String ("python/cat_tool.py");
+         Full_Cmd := To_Unbounded_String ("src/python/cat_tool.py");
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  NEW TOOLS: Git, File Edit, Directory, Test, Build, Issue, Review, Security, Hook
       elsif Name = "git" then
-         Full_Cmd := To_Unbounded_String ("python/git.py");
+         Full_Cmd := To_Unbounded_String ("src/python/git.py");
       elsif Name = "file_edit" or else Name = "edit" or else Name = "write" then
-         Full_Cmd := To_Unbounded_String ("python/file_edit.py");
+         Full_Cmd := To_Unbounded_String ("src/python/file_edit.py");
       elsif Name = "dir" or else Name = "ls" or else Name = "find" or else Name = "tree" then
-         Full_Cmd := To_Unbounded_String ("python/directory.py");
+         Full_Cmd := To_Unbounded_String ("src/python/directory.py");
       elsif Name = "test" or else Name = "pytest" or else Name = "lint" then
-         Full_Cmd := To_Unbounded_String ("python/test.py");
+         Full_Cmd := To_Unbounded_String ("src/python/test.py");
       elsif Name = "build" or else Name = "make" or else Name = "compile" then
-         Full_Cmd := To_Unbounded_String ("python/build.py");
+         Full_Cmd := To_Unbounded_String ("src/python/build.py");
       elsif Name = "issue" or else Name = "gh" then
-         Full_Cmd := To_Unbounded_String ("python/issue.py");
+         Full_Cmd := To_Unbounded_String ("src/python/issue.py");
       elsif Name = "review" or else Name = "code_review" then
-         Full_Cmd := To_Unbounded_String ("python/review.py");
+         Full_Cmd := To_Unbounded_String ("src/python/review.py");
       elsif Name = "security" or else Name = "scan" then
-         Full_Cmd := To_Unbounded_String ("python/security.py");
+         Full_Cmd := To_Unbounded_String ("src/python/security.py");
       elsif Name = "hook" then
-         Full_Cmd := To_Unbounded_String ("python/hook.py");
+         Full_Cmd := To_Unbounded_String ("src/python/hook.py");
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  PACKAGE TOOL: Install system packages (apt, brew, pacman, winget, etc.)
       elsif Name = "package" or else Name = "install" or else Name = "pkg" then
-         Full_Cmd := To_Unbounded_String ("python/package.py");
+         Full_Cmd := To_Unbounded_String ("src/python/package.py");
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  GREP TOOL: Search file contents (agentic code tool)
       elsif Name = "grep" or else Name = "search_content" then
-         Full_Cmd := To_Unbounded_String ("python/grep.py");
+         Full_Cmd := To_Unbounded_String ("src/python/grep.py");
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  TODO TOOL: Task management (agentic code tool)
       elsif Name = "todo" or else Name = "task" then
-         Full_Cmd := To_Unbounded_String ("python/todo.py");
+         Full_Cmd := To_Unbounded_String ("src/python/todo.py");
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  KILLSHELL TOOL: Process management (agentic code tool)
       elsif Name = "kill" or else Name = "killshell" or else Name = "process" then
-         Full_Cmd := To_Unbounded_String ("python/killshell.py");
+         Full_Cmd := To_Unbounded_String ("src/python/killshell.py");
       --  CRONIA TOOL: Schedule timed answers (native Ada)
       elsif Name = "cronia" or else Name = "timed_cronia_answer" or else Name = "schedule_answer" then
          Free (Path);

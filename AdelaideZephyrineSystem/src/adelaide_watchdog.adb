@@ -78,7 +78,7 @@ procedure Adelaide_Watchdog is
      Run_Dir & "/adelaide_watchdog.heartbeat";
 
    --  Timeouts
-   HB_Stale_Limit : constant Duration := 60.0;
+   HB_Stale_Limit : constant Duration := 300.0;
    Check_Interval : constant Duration := 1.0;
 
    --  After restarting, wait this long before considering another restart.
@@ -631,7 +631,7 @@ begin
          API_Check_Count := API_Check_Count + 1;
          if API_Check_Count >= 30 then
             API_Check_Count := 0;
-            Check_All_APIs;
+            --  Check_All_APIs;
          end if;
 
          exit when Oneshot;

@@ -19,7 +19,8 @@ import types
 import gc
 
 # --- Bootstrap Virtual Environment ---
-VENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyvenv")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+VENV_DIR = os.path.join(BASE_DIR, "venv", "python")
 if not os.path.exists(VENV_DIR):
     import subprocess
     subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True)
@@ -43,7 +44,7 @@ except ImportError:
 
 # Add the StellaIcarus directory to the python path so we can import stella_icarus_utils
 AdelaideZephyrineSystem_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STELLA_ICARUS_DIR = os.path.join(AdelaideZephyrineSystem_DIR, "stellaicarus")
+STELLA_ICARUS_DIR = os.path.join(AdelaideZephyrineSystem_DIR, "ModuleSensorActuator_ELP2")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))) # for stella_icarus_utils
 sys.path.insert(0, STELLA_ICARUS_DIR) # for any internal imports
 
@@ -121,7 +122,7 @@ def main():
     print_hw_detection()
     
     
-    port_file = os.path.join(AdelaideZephyrineSystem_DIR, "NetworkMemoryPool", ".sidecar_port")
+    port_file = os.path.join(AdelaideZephyrineSystem_DIR, "data/NetworkMemoryPool", ".sidecar_port")
     
     try:
         # Keep the main thread alive so daemon threads can run

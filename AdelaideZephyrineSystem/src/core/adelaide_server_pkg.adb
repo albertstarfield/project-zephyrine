@@ -165,8 +165,8 @@ package body Adelaide_Server_Pkg is
          End_Search (Search);
       end if;
       --  2. Literature + interaction databases
-      if Exists ("NetworkMemoryPool") then
-         Start_Search (Search, "NetworkMemoryPool", "*");
+      if Exists ("data/NetworkMemoryPool") then
+         Start_Search (Search, "data/NetworkMemoryPool", "*");
          while More_Entries (Search) loop
             Get_Next_Entry (Search, Dir_Ent);
             if Kind (Dir_Ent) = Ordinary_File then
