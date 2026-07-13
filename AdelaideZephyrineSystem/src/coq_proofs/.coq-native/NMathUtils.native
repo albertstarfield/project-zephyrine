@@ -1,0 +1,23 @@
+open Nativevalues
+open Nativecode
+open Nativelib
+open Nativeconv
+let symbols_tbl = let Refl = Nativevalues.t_eq in
+  (str_decode "8495a6be0000009a00000018000000560000004ad09390b090a0294d6174685574696c734026766563746f720233e663519390b0040731636f73696e655f73696d696c617269747902254f41f39390b0040b30636f73696e655f73696d5f626f756e640219908f3e9390b0040f38636865636b5f636f73696e655f75707065725f626f756e640211e59eb49390b0041338636865636b5f636f73696e655f6c6f7765725f626f756e64021e118b57")
+
+(* Time spent generating this code: 0.00009s *)
+let const_NMathUtils_vector : Nativevalues.t = let Refl = Nativevalues.t_eq in
+  mk_constant_accu (get_const symbols_tbl 0) (UVars.Instance.empty )
+
+let const_NMathUtils_cosine_similarity : Nativevalues.t = let Refl = Nativevalues.t_eq in
+  mk_constant_accu (get_const symbols_tbl 1) (UVars.Instance.empty )
+
+let const_NMathUtils_cosine_sim_bound : Nativevalues.t = let Refl = Nativevalues.t_eq in
+  mk_constant_accu (get_const symbols_tbl 2) (UVars.Instance.empty )
+
+let const_NMathUtils_check_cosine_upper_bound : Nativevalues.t = let Refl = Nativevalues.t_eq in
+  mk_constant_accu (get_const symbols_tbl 3) (UVars.Instance.empty )
+
+let const_NMathUtils_check_cosine_lower_bound : Nativevalues.t = let Refl = Nativevalues.t_eq in
+  mk_constant_accu (get_const symbols_tbl 4) (UVars.Instance.empty )
+

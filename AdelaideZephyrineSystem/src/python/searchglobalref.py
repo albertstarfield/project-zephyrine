@@ -159,6 +159,25 @@ def main():
 
     engines_str = ",".join(args.engines)
 
+    def check_internet_connection(timeout=1.0):
+        import socket
+        try:
+            socket.setdefaulttimeout(timeout)
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect(("8.8.8.8", 53))
+            s.close()
+            return True
+        except Exception:
+            return False
+
+    if not check_internet_connection():
+        if args.jsonIO:
+            print(json.dumps({"phase": 1, "status": "error", "error": "No internet connection"}), flush=True)
+        else:
+            trace_print("searchglobalref", "error", "No internet connection detected. Aborting search to prevent cascade timeouts.")
+            print("# Global Search Results\n*Error: No internet connection.*")
+        sys.exit(1)
+
     if args.jsonIO:
         print(json.dumps({"phase": 1, "status": "start", "query": args.query}), flush=True)
     else:

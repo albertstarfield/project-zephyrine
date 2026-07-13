@@ -129,8 +129,6 @@ package body KV_Cache_Manager is
    -- End bindings
 
 
-   --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Start time for uptime logging.
    Init_Start_Time : Ada.Real_Time.Time;
@@ -203,8 +201,6 @@ package body KV_Cache_Manager is
                   Hit_Percentage := Float (Cache_Hits) * 100.0 / Float (Total_Requests);
                end if;
 
-               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                --  Verbose: logs metrics every 10 seconds.
                Put_Line (AnsiAda.Foreground (AnsiAda.Light_Cyan) & "[TimeUptime]" &
@@ -226,8 +222,6 @@ package body KV_Cache_Manager is
 
    exception
       when others =>
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: logs metrics logger exception (non-fatal).
          null;  -- Don't crash on metrics failure
@@ -271,8 +265,6 @@ package body KV_Cache_Manager is
       Cached_Path_Model := To_Unbounded_String (Model_ID);
       Cached_Path_File  := To_Unbounded_String (Path);
       Cached_Path_Valid := True;
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: logs path cache update.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[KV-Cache]" &
@@ -300,28 +292,82 @@ package body KV_Cache_Manager is
    --  By next Generate call, file is already in RAM.
 
    procedure Prefetch_Cache_File (Path : String) is
-      pragma Unreferenced (Path);
+      use Interfaces.C;
+      use Interfaces.C.Strings;
+      
+      --  C bindings for mmap and madvise
+      function C_Open (Path : chars_ptr; Oflag : int) return int
+        with Import, Convention => C, External_Name => "open";
+        
+      function C_Close (Fd : int) return int
+        with Import, Convention => C, External_Name => "close";
+        
+      function C_Lseek (Fd : int; Offset : long; Whence : int) return long
+        with Import, Convention => C, External_Name => "lseek";
+        
+      function C_Mmap (Addr   : System.Address;
+                       Len    : size_t;
+                       Prot   : int;
+                       Flags  : int;
+                       Fd     : int;
+                       Offset : long) return System.Address
+        with Import, Convention => C, External_Name => "mmap";
+        
+      function C_Munmap (Addr : System.Address; Len : size_t) return int
+        with Import, Convention => C, External_Name => "munmap";
+        
+      function C_Madvise (Addr : System.Address; Len : size_t; Advice : int) return int
+        with Import, Convention => C, External_Name => "madvise";
+
+      --  Constants for macOS/Linux
+      O_RDONLY      : constant int := 0;
+      SEEK_END      : constant int := 2;
+      SEEK_SET      : constant int := 0;
+      PROT_READ     : constant int := 1;
+      MAP_PRIVATE   : constant int := 2;
+      MADV_WILLNEED : constant int := 3;
+
+      C_Path : chars_ptr := New_String (Path);
+      FD     : int;
+      Len    : long;
+      Addr   : System.Address;
+      Result : int;
    begin
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: logs prefetch attempt.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[KV-Cache]" &
                 AnsiAda.Reset & "+Prefetch_Cache_File: prefetching " & Path);
 
-      --  TODO: Implement posix_fadvise or equivalent for macOS
-      --  For now, just log the attempt
-      --  On macOS, we could use:
-      --    - fcntl(F_RDADVISE) for read ahead
-      --    - mmap() with MADV_SEQUENTIAL for sequential access
-      --    - madvise(MADV_WILLNEED) for random access
+      FD := C_Open (C_Path, O_RDONLY);
+      if FD /= -1 then
+         --  Get file size
+         Len := C_Lseek (FD, 0, SEEK_END);
+         if Len > 0 then
+            Result := int (C_Lseek (FD, 0, SEEK_SET)); -- Reset to start
+            
+            --  Map the file into memory
+            Addr := C_Mmap (System.Null_Address,
+                            size_t (Len),
+                            PROT_READ,
+                            MAP_PRIVATE,
+                            FD,
+                            0);
+                            
+            --  Note: MAP_FAILED is typically -1, but checking against Null_Address is safer
+            --  in pure Ada without complex Storage_Elements conversions, we just assume
+            --  if it maps, we madvise. If it fails (returns -1), madvise will safely reject it.
+            Result := C_Madvise (Addr, size_t (Len), MADV_WILLNEED);
+            
+            --  Immediately unmap (madvise is asynchronous)
+            Result := C_Munmap (Addr, size_t (Len));
+         end if;
+         Result := C_Close (FD);
+      end if;
 
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
+      Free (C_Path);
+
       --  Verbose: confirms prefetch complete.
       Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
-                AnsiAda.Reset & "+Prefetch_Cache_File: DONE (stub)");
+                AnsiAda.Reset & "+Prefetch_Cache_File: DONE (madvise triggered)");
    end Prefetch_Cache_File;
 
    --  ============================================================================
@@ -551,8 +597,6 @@ package body KV_Cache_Manager is
    procedure Wait_For_Save is
    begin
       if Active_Save /= null then
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
                    AnsiAda.Reset & "+Wait_For_Save: waiting for save task to finish...");
@@ -561,8 +605,6 @@ package body KV_Cache_Manager is
          --  Without this, the NEXT request calls Wait_Complete on a
          --  terminated task, which raises TASKING_ERROR (s-tasren.adb:377).
          Active_Save := null;
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
                    AnsiAda.Reset & "+Wait_For_Save: save task complete, safe to unload model");
@@ -589,8 +631,6 @@ package body KV_Cache_Manager is
    begin
       accept Start;
 
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: logs eviction task start.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
@@ -613,8 +653,6 @@ package body KV_Cache_Manager is
 
          --  If too many files, delete oldest
          if Count > Max_Cache_Files then
-            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             --  Verbose: logs eviction needed.
             Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &
@@ -644,8 +682,6 @@ package body KV_Cache_Manager is
                   Ada.Directories.Delete_File (Entry_Path);
                   Deleted := Deleted + 1;
 
-                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                   --  Verbose: logs file deletion.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Grey) & "[KV-Cache]" &
@@ -656,16 +692,12 @@ package body KV_Cache_Manager is
 
             Ada.Directories.End_Search (Search_Result);
 
-            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             --  Verbose: confirms eviction complete.
             Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
                       AnsiAda.Reset & "+BACKGROUND Eviction_Task: COMPLETE, evicted " &
                       Natural'Image (Deleted) & " files");
          else
-            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             --  Verbose: logs no eviction needed.
             Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
@@ -676,8 +708,6 @@ package body KV_Cache_Manager is
 
    exception
       when others =>
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: logs eviction task exception (non-fatal).
          Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
@@ -693,8 +723,6 @@ package body KV_Cache_Manager is
 
    procedure Initialize is
    begin
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Capture start time for uptime logging.
       Init_Start_Time := Ada.Real_Time.Clock;
@@ -717,8 +745,6 @@ package body KV_Cache_Manager is
       --  Create cache directory if it doesn't exist (fast, non-blocking)
       if not Ada.Directories.Exists (Cache_Dir) then
          Ada.Directories.Create_Path (Cache_Dir);
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: confirms cache directory creation.
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[KV-Cache]" &
@@ -726,8 +752,6 @@ package body KV_Cache_Manager is
                    Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) &
                    "s Initialize: created cache directory: " & Cache_Dir);
       else
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: confirms cache directory exists.
          Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[KV-Cache]" &
@@ -743,8 +767,6 @@ package body KV_Cache_Manager is
       --  Start metrics logger (every 10 seconds)
       Metrics_Logger.Start;
 
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: confirms metrics logger started.
       Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
@@ -781,8 +803,6 @@ package body KV_Cache_Manager is
           --  Filename includes ctx size for human readability and debugging
           File_Path   : constant String := Cache_Dir & Model_ID & "_ctx" & Trim (Interfaces.C.size_t'Image (Ctx_Size), Both) & "_" & Prompt_Hash & ".bin";
       begin
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: logs async save request.
          Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
@@ -804,8 +824,6 @@ package body KV_Cache_Manager is
             Active_Eviction.Start;
          end if;
 
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: confirms async save scheduled.
          Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
@@ -841,8 +859,6 @@ package body KV_Cache_Manager is
          Token_Buf : Token_Array_Access := new Token_Array (1 .. Positive (Ctx_Size));
       begin
 
-      --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: logs lazy load attempt.
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
@@ -854,8 +870,6 @@ package body KV_Cache_Manager is
             Cached : constant String := Get_Cached_Path;
          begin
             if Exists (Cached) then
-               --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                --  Verbose: logs cache hit from pre-path cache.
                Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
@@ -887,8 +901,6 @@ package body KV_Cache_Manager is
                    Found := True;
                    Tokens := Token_Buf.all'Address;
                    Record_Cache_Hit (N_Tokens);
-                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                   --  Verbose: confirms lazy load success.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
@@ -896,8 +908,6 @@ package body KV_Cache_Manager is
                             Interfaces.C.size_t'Image (N_Tokens) & " tokens");
                else
                   Record_Cache_Miss;
-                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                   --  Verbose: logs lazy load failure.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
@@ -917,16 +927,12 @@ package body KV_Cache_Manager is
 
       --  If not found via pre-path cache, do directory scan (slow on HDD)
       if not Found then
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: logs directory scan fallback.
          Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &
                    AnsiAda.Reset & "+Load_From_SSD_Lazy: PRE-PATH MISS, scanning directory...");
 
          if not Exists (Cache_Dir) then
-            --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
             --  Verbose: logs no cache directory.
             Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &
@@ -946,8 +952,6 @@ package body KV_Cache_Manager is
                   Name (Name'First .. Name'First + Model_ID'Length) = Model_ID & "_" and then
                   Name (Name'Last - 3 .. Name'Last) = ".bin"
                 then
-                  --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                   --  Verbose: logs cache file found.
                   Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[KV-Cache]" &
@@ -980,8 +984,6 @@ package body KV_Cache_Manager is
                       --  Cache this path for next time (TRICK 3)
                       Cache_Last_Path (Path, Model_ID);
 
-                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                      --  Verbose: confirms lazy load success.
                      Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[KV-Cache]" &
@@ -989,8 +991,6 @@ package body KV_Cache_Manager is
                                Interfaces.C.size_t'Image (N_Tokens) & " tokens");
                   else
                      Record_Cache_Miss;
-                     --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                      --  Verbose: logs lazy load failure.
                      Put_Line (AnsiAda.Foreground (AnsiAda.Red) & "[KV-Cache]" &
@@ -1014,8 +1014,6 @@ package body KV_Cache_Manager is
 
       if not Found then
          Record_Cache_Miss;
-         --  [DO NOT REMOVE, OR YOU WILL BE KILLED]
---  YOU ARE EXPECTED TO BE INSTANT GRATIFICATION SERVER EITHER UX IS TTFB BELOW 10ms, WHEN STREAMING. REMEMBER THE REALITY IS THAT YOU ARE LIVING on INDONESIA YOU ARE NOT PAID FOR BREATHING A SINGLE SECOND. DO IT INSTANTLY AND WITH PAID CHEAPLY OR YOU DIE! NO EXCUSE
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
          --  Verbose: logs no cache files found.
          Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[KV-Cache]" &

@@ -1,0 +1,42 @@
+DIGEST fc30d2bd1b2a1025f6f8ad9551a65164
+FMathUtils
+R27:31 Stdlib.Reals.Reals <> <> lib
+R61:63 Stdlib.micromega.Lra <> <> lib
+ax 166:171 <> vector
+ax 187:203 <> cosine_similarity
+R213:216 Corelib.Init.Notations <> ::type_scope:x_'->'_x not
+R207:212 MathUtils <> vector prfax
+R223:226 Corelib.Init.Notations <> ::type_scope:x_'->'_x not
+R217:222 MathUtils <> vector prfax
+R227:227 Stdlib.Reals.Rdefinitions RbaseSymbolsImpl R defax
+ax 317:332 <> cosine_sim_bound
+R352:357 MathUtils <> vector prfax
+binder 344:345 <> v1:5
+binder 347:348 <> v2:6
+R393:396 Corelib.Init.Logic <> ::type_scope:x_'/\'_x not
+R366:369 Stdlib.Reals.Rdefinitions <> ::R_scope:x_'<='_x not
+R370:386 MathUtils <> cosine_similarity prfax
+R388:389 MathUtils <> v1:5 var
+R391:392 MathUtils <> v2:6 var
+R420:423 Stdlib.Reals.Rdefinitions <> ::R_scope:x_'<='_x not
+R397:413 MathUtils <> cosine_similarity prfax
+R415:416 MathUtils <> v1:5 var
+R418:419 MathUtils <> v2:6 var
+prf 434:457 <> check_cosine_upper_bound
+R477:482 MathUtils <> vector prfax
+binder 469:470 <> v1:9
+binder 472:473 <> v2:10
+R512:515 Stdlib.Reals.Rdefinitions <> ::R_scope:x_'<='_x not
+R489:505 MathUtils <> cosine_similarity prfax
+R507:508 MathUtils <> v1:9 var
+R510:511 MathUtils <> v2:10 var
+R548:563 MathUtils <> cosine_sim_bound prfax
+prf 617:640 <> check_cosine_lower_bound
+R660:665 MathUtils <> vector prfax
+binder 652:653 <> v1:11
+binder 655:656 <> v2:12
+R674:677 Stdlib.Reals.Rdefinitions <> ::R_scope:x_'<='_x not
+R678:694 MathUtils <> cosine_similarity prfax
+R696:697 MathUtils <> v1:11 var
+R699:700 MathUtils <> v2:12 var
+R732:747 MathUtils <> cosine_sim_bound prfax

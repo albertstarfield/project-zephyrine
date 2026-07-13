@@ -1,0 +1,33 @@
+DIGEST 4aca0417c2192033c304edfe5b4adaec
+FElpQueue
+ind 98:105 <> priority
+constr 115:118 <> ELP0
+constr 146:149 <> ELP1
+scheme 98:105 <> priority_rect
+scheme 98:105 <> priority_ind
+scheme 98:105 <> priority_rec
+scheme 98:105 <> priority_sind
+ind 179:189 <> queue_state
+constr 198:201 <> Idle
+constr 207:216 <> Processing
+R223:230 ElpQueue <> priority ind
+binder 219:219 <> p:5
+scheme 179:189 <> queue_state_rect
+scheme 179:189 <> queue_state_ind
+scheme 179:189 <> queue_state_rec
+scheme 179:189 <> queue_state_sind
+def 327:342 <> processes_before
+R353:360 ElpQueue <> priority ind
+binder 345:346 <> p1:6
+binder 348:349 <> p2:7
+R385:386 ElpQueue <> p2:7 var
+R381:382 ElpQueue <> p1:6 var
+R397:400 ElpQueue <> ELP1 constr
+R403:406 ElpQueue <> ELP0 constr
+R411:414 Corelib.Init.Logic <> True ind
+R428:432 Corelib.Init.Logic <> False ind
+prf 448:467 <> elp1_starvation_free
+R471:486 ElpQueue <> processes_before def
+R488:491 ElpQueue <> ELP1 constr
+R493:496 ElpQueue <> ELP0 constr
+R521:521 Corelib.Init.Logic <> I constr

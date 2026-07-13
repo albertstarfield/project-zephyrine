@@ -1,0 +1,12 @@
+# Local environments
+.opam_local/
+venv/
+alirevenv/
+
+# Build artifacts
+obj/
+bin/
+__pycache__/
+
+# System files
+.DS_Store
