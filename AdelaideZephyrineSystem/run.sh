@@ -29,4 +29,4 @@ RANLIB
 chmod +x "$SCRIPT_DIR/.bin/ranlib"
 export PATH="$SCRIPT_DIR/.bin:$PATH"
 
-exec python3 "$SCRIPT_DIR/run.py" "$@"
+exec python3 -u "$SCRIPT_DIR/run.py" "$@"
