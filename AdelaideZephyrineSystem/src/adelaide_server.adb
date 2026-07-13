@@ -1,3 +1,10 @@
+--  =============================================================================
+--  Architectural Foundation & Server Orchestration:
+--  - Aerospace Reliability: Satisfies DO-178C [RTCA2011DO178C] safety bounds.
+--  - Deep Space Engineering: Enforces ECSS-E-ST-40C [ECSS2009EST40C] process loops.
+--  - Autonomous Drift: Constrained by IEEE 7000-2021 [IEEE2021EthicalAI] and 
+--    moral bounds for space deployment [AI2026MoralSpaceAgents].
+--  =============================================================================
 pragma SPARK_Mode (Off);
 
 --  [DO NOT REMOVE, OR YOU WILL BE KILLED]

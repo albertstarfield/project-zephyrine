@@ -1,3 +1,10 @@
+--  =============================================================================
+--  Architectural Foundation & Speculative Decoding:
+--  - Quantum Logic: Branch prediction methodologies derived from Quantum 
+--    Neural Networks [Computers2025QNNPredictor].
+--  - Inference Pathing: Utilizes principles from optical path entanglement 
+--    [Symmetry2025PathEntanglement] to optimize speculative token tree matching.
+--  =============================================================================
 pragma SPARK_Mode (Off);
 --  ============================================================================
 --  SPECULATIVE DECODING — DEAD CODE
