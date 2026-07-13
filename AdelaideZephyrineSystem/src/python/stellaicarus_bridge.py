@@ -11,9 +11,8 @@ import typing
 gc.disable()
 
 # --- Bootstrap Virtual Environment ---
-VENV_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyvenv"
-)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+VENV_DIR = os.path.join(BASE_DIR, "venv", "python")
 REQUIREMENTS = ["loguru"]
 
 

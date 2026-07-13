@@ -494,7 +494,7 @@ def rotate_master_key(new_master_hex: str | None = None) -> str:
     print(f"[CRYPTO] New key: {new_master_hex[:8]}...")
     
     # Re-encrypt adelaide_memory.db
-    db_path = os.path.join(os.path.dirname(__file__), "..", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+    db_path = os.path.join(os.path.dirname(__file__), "..", "data/NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
     if os.path.exists(db_path):
         _re_encrypt_db(db_path, old_sub_keys["memory"], new_sub_keys["memory"],
                        ["memories"], ["input", "response", "image_b64"])
@@ -701,7 +701,7 @@ def migrate_all_to_aad() -> None:
     print("[CRYPTO] === AAD Migration Start ===")
     
     # adelaide_memory.db
-    db_path = os.path.join(os.path.dirname(__file__), "..", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+    db_path = os.path.join(os.path.dirname(__file__), "..", "data/NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
     sub_key = derive_sub_key(master_hex, CTX_MEMORY)
     total_migrated += migrate_to_aad(db_path, sub_key, "memories", "id", 
                    ["input", "response", "image_b64"], "adelaide:db:memory")

@@ -116,4 +116,18 @@ cinst.txt
 **/.sidecar_port
 **.exit_reason
 **/.shutdown_requested
+**/.intentional_exit
 .ros_env/
+
+## ============================
+## Coq / Proof Artifacts
+## ============================
+**/*.aux
+**/*.vo
+**/*.glob
+**/.nra.cache
+
+## ============================
+## Diagnostics Dumps
+## ============================
+**.helm-diag**

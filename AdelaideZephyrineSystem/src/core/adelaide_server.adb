@@ -407,7 +407,7 @@ begin
         --    >200000 MB/s = Next Generation Drive (Ultra High)
         --  ----------------------------------------------------------------
         declare
-            GGUF_Path    : constant String := "model/Mythos9bHybridq4.gguf";
+            GGUF_Path    : constant String := "data/NonDetermenisticGenerativeModel/Mythos9bHybridq4.gguf";
             --  Target: 1GB = 1024 * 1024 * 1024 bytes
             Target_Bytes : constant Long_Long_Integer := 1024 * 1024 * 1024;
             --  Read in 1MB chunks to avoid huge stack allocations
@@ -737,11 +737,11 @@ begin
                   Both)
             & "s STEP 4.5: Calling SD_Manager.Initialize...");
         SD_Manager.Initialize
-           (Flux_Diffusion => "model/flux1-schnell.gguf",
-            Flux_Clip_L    => "model/clip_l.safetensors",
-            Flux_T5XXL     => "model/flux1-t5xxl.gguf",
-            Flux_VAE       => "model/ae.safetensors",
-            Refiner_Model  => "model/sd-refinement.gguf");
+           (Flux_Diffusion => "data/NonDetermenisticGenerativeModel/flux1-schnell.gguf",
+            Flux_Clip_L    => "data/NonDetermenisticGenerativeModel/clip_l.safetensors",
+            Flux_T5XXL     => "data/NonDetermenisticGenerativeModel/flux1-t5xxl.gguf",
+            Flux_VAE       => "data/NonDetermenisticGenerativeModel/ae.safetensors",
+            Refiner_Model  => "data/NonDetermenisticGenerativeModel/sd-refinement.gguf");
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"

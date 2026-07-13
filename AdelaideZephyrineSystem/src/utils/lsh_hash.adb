@@ -16,8 +16,8 @@ package body LSH_Hash is
     --  Paths relative to the executable / working directory.
     --  The Ada server runs from AdelaideZephyrineSystem/ so these are relative.
     Python_Venv   : constant String := "pyvenv/bin/python3";
-    Worker_Script : constant String := "lsh/lsh_qrnn_worker.py";
-    Tmp_Dir       : constant String := "lsh/tmp";
+    Worker_Script : constant String := "src/python/lsh/lsh_qrnn_worker.py";
+    Tmp_Dir       : constant String := "src/python/lsh/tmp";
 
     --  Monotonic counter for unique temp filenames
     Seq_Counter  : Natural := 0;
@@ -237,7 +237,7 @@ package body LSH_Hash is
         Result_Hash : Integer := -1;
 
         --  PINN worker script path
-        PINN_Script : constant String := "lsh/pinn_schrodinger.py";
+        PINN_Script : constant String := "src/python/lsh/pinn_schrodinger.py";
 
         --  Resolve Python interpreter path
         Python_Path : GNAT.OS_Lib.String_Access :=

@@ -19,13 +19,13 @@ class AdelaideBridge:
     def __init__(self):
         self.process = None
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        # Handle running from root directory or from AdelaideZephyrineSystem/python directory
+        # Handle running from root directory or from AdelaideZephyrineSystem/src/python directory
         if (
             os.path.basename(base_dir) == "python"
-            and os.path.basename(os.path.dirname(base_dir)) == "AdelaideZephyrineSystem"
+            and os.path.basename(os.path.dirname(base_dir)) == "src"
         ):
             self.binary_path = os.path.join(
-                os.path.dirname(base_dir), "bin", "AdelaideZephyrineSystem"
+                os.path.dirname(os.path.dirname(base_dir)), "bin", "AdelaideZephyrineSystem"
             )
         else:
             self.binary_path = os.path.join(
