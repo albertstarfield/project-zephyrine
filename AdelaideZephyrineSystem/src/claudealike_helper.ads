@@ -1,7 +1,6 @@
 --  claudealike_helper.ads
 --  Claude API client for Anthropic's Messages API.
 --  Supports non-streaming requests to Claude 3.5 Sonnet, Haiku, Opus, etc.
---  DO NOT REMOVE, OR YOU WILL BE KILLED
 
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNATCOLL.JSON;         use GNATCOLL.JSON;
