@@ -8706,6 +8706,7 @@ package body Model_Manager is
                    & "If you need to search file contents, use [ACTION: grep(pattern path)]. "
                    & "If you need to manage tasks, use [ACTION: todo(add task)]. "
                    & "If you need to kill a process, use [ACTION: kill(pid)]. "
+                   & "If there is a statement that is suspicious, worrying, or might be deceiving, validate the logical statement using [AXIOM_DERIVE: statement=""...""] to invoke the Axiom theories Alchemy. "
                    & "If you are done, output [FINISH]. "
                    & "Output ONLY the tag.";
                 --  Strip base64 images from router context to prevent tokenization
@@ -9324,6 +9325,141 @@ package body Model_Manager is
                                             end if;
                                         end;
                                     end if;
+                                end;
+                            end if;
+                        end;
+                    elsif Index (Step, "[AXIOM_DERIVE:") > 0 then
+                        declare
+                            S_Pos : constant Natural := Index (Step, "statement=""");
+                            E_Pos : constant Natural := (if S_Pos > 0 then Index (Step, """", S_Pos + 11) else 0);
+                        begin
+                            if S_Pos > 0 and E_Pos > S_Pos then
+                                    --  ========================================================================
+                                    --  AXIOM THEORIES ALCHEMY (AXIOM_DERIVE)
+                                    --  Reasoning & Purpose:
+                                    --  This subagent is an unforgiveable internal logic engine designed to
+                                    --  invalidate statements via strict mathematical and logical rigor. It uses
+                                    --  the Curry-Howard correspondence to map statements to types and proofs to
+                                    --  programs, forcing a formalized validation instead of LLM probabilistic
+                                    --  guessing. It acts as a synchronous subagent within Hybrid_Generate.
+                                    --  It has the same toolset, but recursion is disabled to prevent infinite loops.
+                                    --  It evaluates statements using "Tactics" (intros, apply, induction) and
+                                    --  requires a QED validation.
+                                    --  ========================================================================
+                                    Statement : constant String := Step (S_Pos + 11 .. E_Pos - 1);
+                                    Axiom_Sys : constant String :=
+                                       "You are the Axiom theories Alchemy. You are an unforgiveable internal subagent "
+                                       & "that does not even trust itself, and wants to invalidate all statements including "
+                                       & "your own. You must validate the following statement: """ & Statement & """. "
+                                       & "Your reasoning MUST be extremely verbose and follow this strict pipeline: "
+                                       & "1. Analogies into mathematics of the statement (What is this? Explain the math analogy). "
+                                       & "2. Corresponding axiom and logical Curry-Howard Correspondence (What is this? Explain it). "
+                                       & "3. Tactics (The Steps): Write commands called tactics (intros, apply, induction, rewrite). "
+                                       & "4. Qed (Quod Erat Demonstrandum). "
+                                       & "5. Determine what was the falsehood and the truth and the reasoning. "
+                                       & "6. Provide a counter-example that causes the logic to be wrong to evaluate its robustness. "
+                                       & "7. You MUST write and execute code using your tools to prove the mathematical analogies and logic works in reality. It must be tested, not just LLM thought. "
+                                       & "Always be verbose each step of it and add comment of each reason and what is this step belong to and What is this? "
+                                       & "DO NOT REMOVE VERBOSE OR YOU ARE OVERCONFIDENT FROM YOUR SKILL. "
+                                       & "Always understand and watch out for potential sycophancy. You must remain objective. "
+                                       & "You have access to a JIT program interpreter. Use [ACTION: code(python_code_here)] or [ACTION: math(expression)] to validate your formulas and logic. "
+                                       & "You have access to all tools (search, cat, math, code, file_edit, test, etc.) "
+                                       & "EXCEPT AXIOM_DERIVE. Output [ACTION: tool(params)] to use tools. "
+                                       & "When done, output [FINISH].";
+                                    Axiom_JMP  : Positive := 1;
+                                    Axiom_Resp : Unbounded_String;
+                                begin
+                                    Put_Line (AnsiAda.Foreground (AnsiAda.Light_Magenta)
+                                              & "[AxiomAether]" & AnsiAda.Reset
+                                              & " Starting derivation for: " & Statement);
+                                    
+                                    if not External_Agent then
+                                        Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
+                                            "[Adelaide Core]: [Thought] Invoking AxiomAether pipeline to derive truth for: "
+                                            & Sanitize_Orchestration_Output (Statement) & ASCII.LF);
+                                    end if;
+
+                                    loop
+                                        declare
+                                            Axiom_Prompt : constant String :=
+                                                Wrap_ChatML (Axiom_Sys, "Current Data: " & Strip_Base64_Images (To_String (Internal_State)));
+                                        begin
+                                            Generate
+                                                (Kind               => Snowball_Enaga_Orchestrator,
+                                                 Prompt             => Axiom_Prompt,
+                                                 Result             => Axiom_Resp,
+                                                 Stream             => null,
+                                                 Level              => Level,
+                                                 Virtual_Tokens     => null,
+                                                 Virtual_Tok_Len    => 0,
+                                                 FreeParallelMemory => True,
+                                                 Skip_Gate          => False);
+                                        
+                                            declare
+                                                Axiom_Step : constant String := Trim (To_String (Axiom_Resp), Ada.Strings.Both);
+                                            begin
+                                            Put_Line (" [AxiomAether] JMP" & Axiom_JMP'Img & ": " & Axiom_Step);
+                                            if not External_Agent then
+                                                Push_Orchestration_Through_Parser (Stream, Session_ID, Orch_Parser,
+                                                    "[AxiomAether]: [Thought] " & Sanitize_Orchestration_Output (Axiom_Step) & ASCII.LF);
+                                            end if;
+                                            
+                                            begin
+                                                Database_Manager.Remember
+                                                   (Prompt    => Axiom_Prompt,
+                                                    Response  => Axiom_Step,
+                                                    Image_B64 => "");
+                                            exception
+                                                when E : others =>
+                                                    Put_Line ("[AxiomAether] Failed to remember step: " & Ada.Exceptions.Exception_Message (E));
+                                            end;
+                                            
+                                            if Index (Axiom_Step, "[ACTION:") > 0 then
+                                                declare
+                                                    T_S_Pos : constant Natural := Index (Axiom_Step, "[ACTION:") + 8;
+                                                    T_E_Pos : constant Natural := Index (Axiom_Step, "]", T_S_Pos);
+                                                begin
+                                                    if T_E_Pos > T_S_Pos then
+                                                        declare
+                                                            A_Full : constant String := Axiom_Step (T_S_Pos .. T_E_Pos - 1);
+                                                            P_Pos  : constant Natural := Index (A_Full, "(");
+                                                            EP_Pos : constant Natural := (if P_Pos > 0 then Index (A_Full, ")", P_Pos) else 0);
+                                                        begin
+                                                            if P_Pos > 0 and then EP_Pos > P_Pos then
+                                                                declare
+                                                                    T_Name : constant String := Trim (A_Full (A_Full'First .. P_Pos - 1), Ada.Strings.Both);
+                                                                    T_Pars : constant String := Trim (A_Full (P_Pos + 1 .. EP_Pos - 1), Ada.Strings.Both);
+                                                                    R : Tool_Manager.Tool_Result;
+                                                                begin
+                                                                    if T_Name = "AXIOM_DERIVE" then
+                                                                        R.Output := To_Unbounded_String ("ERROR: AxiomAether cannot spawn itself.");
+                                                                    else
+                                                                        R := Tool_Manager.Execute_Tool (T_Name, Sanitize_Think_Tags (T_Pars));
+                                                                    end if;
+                                                                    Append (Internal_State, "[AXIOM_TOOL (" & T_Name & ")]: " & Strip_Base64_Images (To_String (R.Output)) & ASCII.LF);
+                                                                end;
+                                                            else
+                                                                exit;
+                                                            end if;
+                                                        end;
+                                                    end if;
+                                                end;
+                                            elsif Index (Axiom_Step, "[FINISH]") > 0 then
+                                                Append (Internal_State, "[AXIOM_DERIVATION_RESULT]: " & Axiom_Step & ASCII.LF);
+                                                exit;
+                                            else
+                                                Append (Internal_State, "[AXIOM_DERIVATION_RESULT]: " & Axiom_Step & ASCII.LF);
+                                                exit;
+                                            end if;
+                                            end;
+                                        end;
+                                        
+                                        Axiom_JMP := Axiom_JMP + 1;
+                                        exit when Axiom_JMP > 99;
+                                    end loop;
+                                    
+                                    Current_Internal_State_Len := Length (Internal_State);
+                                    Database_Manager.Set_System_State ("Internal_State", To_String (Internal_State));
                                 end;
                             end if;
                         end;
