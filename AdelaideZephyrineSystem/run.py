@@ -5146,6 +5146,14 @@ def real_main():  # nosec
                     check=True,
                     env=_clean_env,
                 )  # nosec
+                # Install pyrefly (type checker) and ruff (linter) into the venv
+                subprocess.run(
+                    # nosec - subprocess.run() is safe in this context
+                    [python_bin, "-m", "pip", "install",
+                     "pyrefly", "ruff"],
+                    check=True,
+                    env=_clean_env,
+                )  # nosec
 
             _ensure_crosshair_venv(pyvenv_python, pyvenv_dir)
 
@@ -5240,7 +5248,15 @@ def real_main():  # nosec
 
         # 4b. Pyrefly check for python/ sidecars
         pyrefly_cmd = "pyrefly.exe" if platform.system() == "Windows" else "pyrefly"
-        if shutil.which(pyrefly_cmd):
+        pyrefly_venv = os.path.join(BASE_DIR, "venv", "python", "bin", pyrefly_cmd)
+        if os.path.exists(pyrefly_venv):
+            pyrefly_bin = pyrefly_venv
+        elif shutil.which(pyrefly_cmd):
+            pyrefly_bin = pyrefly_cmd
+        else:
+            pyrefly_bin = None
+
+        if pyrefly_bin:
             print("[*] Running Pyrefly Type Check on python sidecars...")
             if _setup_gui:
                 _setup_gui._update_bar(pct=80, step_text=("[TEST-BUILD] Type consistency check" if "--test-build-integrity-check" in sys.argv else "code step 0x000C"), pulse=True)  # Type consistency check
@@ -5248,13 +5264,13 @@ def real_main():  # nosec
                 python_dir = os.path.join(BASE_DIR, "src", "python")
                 env_vars = os.environ.copy()
                 env_vars["PATH"] = (
-                    f"{os.path.join(BASE_DIR, 'pyvenv', 'bin')}{os.pathsep}{env_vars.get('PATH', '')}"
+                    f"{os.path.join(BASE_DIR, 'venv', 'python', 'bin')}{os.pathsep}{env_vars.get('PATH', '')}"
                 )
                 env_vars["VIRTUAL_ENV"] = os.path.join(BASE_DIR, "venv", "python")
                 result = subprocess.run(
                     # nosec - subprocess.run() is safe in this context
                     [
-                        pyrefly_cmd,
+                        pyrefly_bin,
                         "check",
                         python_dir,
                         "--check-unannotated-defs=true",
@@ -5279,7 +5295,7 @@ def real_main():  # nosec
                     f"INTEGRITY_CHECK_FAILURE: Pyrefly check execution error: {e}"
                 )
         else:
-            raise RuntimeError("INTEGRITY_CHECK_FAILURE: pyrefly not found in PATH. Required for type check.")
+            raise RuntimeError("INTEGRITY_CHECK_FAILURE: pyrefly not found in PATH or venv. Required for type check.")
 
         # 5. LSH QRNN Worker Bootstrap & pyrefly + ruff check
         if os.path.exists(lsh_reqs):
@@ -5964,6 +5980,12 @@ def real_main():  # nosec
                 pyvenv_bin = os.path.join(BASE_DIR, "venv", "python", "bin")
                 if os.path.exists(pyvenv_bin):
                     sidecar_env["PATH"] = pyvenv_bin + os.pathsep + sidecar_env.get("PATH", "")
+                
+                # Strip vendor/ros_env from PYTHONPATH — it has Python 3.12 numpy
+                # that is incompatible with the Python 3.14 venv
+                cleaned_py = [p for p in sidecar_env.get("PYTHONPATH", "").split(os.pathsep)
+                              if "vendor/ros_env" not in p]
+                sidecar_env["PYTHONPATH"] = os.pathsep.join(cleaned_py)
                     
                 sidecar_python = os.path.join(pyvenv_bin, "python") if os.path.exists(pyvenv_bin) else sys.executable
                 
@@ -6211,6 +6233,10 @@ def real_main():  # nosec
                                     pyvenv_bin = os.path.join(BASE_DIR, "venv", "python", "bin")
                                     if os.path.exists(pyvenv_bin):
                                         sidecar_env["PATH"] = pyvenv_bin + os.pathsep + sidecar_env.get("PATH", "")
+                                    # Strip vendor/ros_env from PYTHONPATH — Python 3.12 numpy incompatible with 3.14
+                                    cleaned_py = [p for p in sidecar_env.get("PYTHONPATH", "").split(os.pathsep)
+                                                  if "vendor/ros_env" not in p]
+                                    sidecar_env["PYTHONPATH"] = os.pathsep.join(cleaned_py)
                                     sidecar_process = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=sidecar_env)
                                     print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
                                 else:
@@ -6218,6 +6244,10 @@ def real_main():  # nosec
                                     print("[*] Launching Adelaide Zephyrine Assistant.app for hardware access...")
                                     subprocess.run(["open", app_bundle_path])  # nosec
                             else:
+                                # Strip vendor/ros_env from PYTHONPATH — Python 3.12 numpy incompatible with 3.14
+                                cleaned_py = [p for p in env.get("PYTHONPATH", "").split(os.pathsep)
+                                              if "vendor/ros_env" not in p]
+                                env["PYTHONPATH"] = os.pathsep.join(cleaned_py)
                                 sidecar_process = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=env)
                                 print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
                             
