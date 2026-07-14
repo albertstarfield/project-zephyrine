@@ -13,7 +13,7 @@
 <img src="documentation/Project%20Zephyrine%20HandDrawnPersonalized%20Logo.png" height=128>
 </sub>
 </h5>
-<p align="center"><i>Heya! I'm Adelaide Zephyrine Charlotte, but you can call me Zephy or ZepZep. I hope you have an absolute wonderful day and night. I'm your GNC companion that lives inside your aircraft.</i></p>
+<p align="center"><i>Heya! I'm Adelaide Zephyrine Charlotte, but you can call me Zephy or ZepZep. I hope you have an absolute wonderful day and night. I'm your GNC companion that lives inside your flying machine!</i></p>
 
 <p align="center"><h5>In Self-learning and Self-improvement We Trust</h5></p>
 <hr>
@@ -92,6 +92,142 @@ I'm built to survive where I live — inside the aircraft, at altitude, with no 
 
 ---
 
+## Simulation Setup
+
+I connect to flight simulators via **Interface.C FFI** for deterministic, real-time GNC testing. All bridges use native Ada → C → protocol stacks — no Python middleware.
+
+### Supported Simulators
+
+| Simulator | Protocol | Port | Use Case |
+|-----------|----------|------|----------|
+| **PX4 SITL** | MAVLink UDP | 14580 | Software-In-The-Loop flight testing |
+| **X-Plane 11/12** | UDP Datarefs | 49000 | Professional flight simulation |
+| **FlightGear** | MAVLink / FDM | varies | Open-source flight dynamics |
+| **Gazebo Classic/Harmonic** | ROS2 DDS | native | Physics-accurate robotics sim |
+| **AirSim** | MAVLink | 14580 | Microsoft flight/drone sim |
+
+### Why ROS2 and PX4?
+
+They serve different purposes and complement each other:
+
+- **PX4** is the **flight logic interface/driver**. It handles the low-level flight control — attitude estimation, motor mixing, failsafes, mission execution. It speaks MAVLink and talks directly to the flight controller hardware (or SITL). PX4 answers: *"How do I keep this aircraft flying?"*
+
+- **ROS2** is the **actuator and sensor middleware**. It provides a standardized publish/subscribe network for components that sit *above* the flight controller — payload actuators, camera gimbals, LiDAR, custom sensors. It speaks DDS and discovers nodes automatically on the network. ROS2 answers: *"How do I move this servo, read this sensor, or talk to this payload?"*
+
+**Together:** PX4 flies the aircraft. ROS2 manages what the aircraft carries. Zephy sits between them — learning from PX4's telemetry (via MAVLink) and commanding actuators through ROS2 (via native Ada RCL bindings). The LLM never touches the flight controller directly — it generates GNC advisories that flow through PX4's safety envelope.
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    ZEPHY (GNC Layer)                  │
+│         Learns mission patterns, generates            │
+│         guidance/navigation/control advisories        │
+└────────────────────┬─────────────────┬───────────────┘
+                     │                 │
+              MAVLink (C FFI)    ROS2 DDS (C FFI)
+                     │                 │
+                     ▼                 ▼
+              ┌─────────────┐  ┌─────────────────┐
+              │     PX4     │  │  ROS2 Actuators  │
+              │  (Flight    │  │  (Servos, Gimbal, │
+              │  Controller)│  │   Sensors, Payload)│
+              └─────────────┘  └─────────────────┘
+                     │                 │
+                     ▼                 ▼
+              ┌─────────────────────────────────────┐
+              │          Physical Aircraft           │
+              │    Motors, ESCs, IMU, GPS, ADCs      │
+              └─────────────────────────────────────┘
+```
+
+### Architecture
+
+```
+┌─────────────┐     ┌──────────────┐     ┌────────────────┐
+│  Simulator   │────►│  C Protocol  │────►│  Ada Interface │
+│  (X-Plane,   │     │  Stack       │     │  (Interfaces.C)│
+│   PX4 SITL)  │     │  (MAVLink,   │     │                │
+└─────────────┘     │   UDP)       │     └────────┬───────┘
+                     └──────────────┘              │
+                                            ┌──────┴───────┐
+                                            │  ELP3/ELP2   │
+                                            │  (250µs loop)│
+                                            └──────────────┘
+```
+
+### PX4 SITL Setup
+
+```bash
+# 1. Build PX4 SITL
+./run.sh --build-px4
+
+# 2. Start PX4 SITL (in another terminal)
+cd vendor/PX4-Autopilot && make px4_sitl gz_x500
+
+# 3. Start Zephy (auto-connects via MAVLink UDP port 14580)
+./run.sh --no-gui
+
+# 4. Verify telemetry
+curl http://localhost:11420/api/telemetry
+```
+
+**GNC Command Flow:** Ada ELP3 → `Interfaces.C` → C MAVLink → PX4 Flight Controller
+
+### X-Plane 11/12 Setup
+
+1. **Enable UDP output in X-Plane:**
+   - Settings → Net Connections → UDP: output on port `49000`
+
+2. **Configure datarefs to stream:**
+   - `sim/flightmodel/position/latitude`
+   - `sim/flightmodel/position/longitude`
+   - `sim/flightmodel/position/elevation`
+   - `sim/flightmodel/position/psi` (heading)
+   - `sim/flightmodel/position/theta` (pitch)
+   - `sim/flightmodel/position/phi` (roll)
+
+3. **Start Zephy:**
+   ```bash
+   ./run.sh --no-gui
+   ```
+
+**Telemetry Flow:** X-Plane → UDP → C `recvfrom` → Ada ELP2 (250µs polling)
+**GNC Advisory Flow:** Ada ELP3 → C `sendto` → X-Plane datarefs
+
+### ROS2 DDS Bridge
+
+Zephy uses native Ada ROS2 RCL bindings (no Python rclpy middleware) for deterministic simulator integration.
+
+**Available Topics:**
+- `/stellaicarus/telemetry` — Sensor data from simulator (ELP2)
+- `/zenith_orion/actuator` — Control commands to simulator (ELP3)
+- `/fmu/out/vehicle_attitude` — PX4 attitude stream
+
+**Verify ROS2 connection:**
+```bash
+source /opt/ros/$ROS_DISTRO/setup.bash
+ros2 topic list
+ros2 topic echo /stellaicarus/telemetry
+```
+
+### Testing Workflow
+
+```bash
+# Headless mode (best for sim testing)
+./run.sh --no-gui --port 11420
+
+# Check telemetry from simulator
+curl http://localhost:11420/api/telemetry
+
+# Send GNC command via API
+curl -X POST http://localhost:11420/api/ZenithRoutine \
+  -d '{"roll":0.0,"pitch":0.1,"yaw":0.0,"thrust":0.5}'
+
+# Check power state (StellaIcarus)
+curl http://localhost:11420/api/power
+```
+
+---
+
 ## Adaptive GNC, Not Autopilot
 
 Most flight systems are *reactive* — they follow commands, execute waypoints, correct errors.
@@ -132,6 +268,34 @@ Talk to me. I've been waiting to learn how you fly.
 ./run.sh --port 8080         # pick your own port
 ./run.sh --host 127.0.0.1    # keep me close (localhost only)
 ```
+
+---
+
+## Project Structure
+
+I know — this codebase can look like a lot at first. Here's the map so you know where to start.
+
+```
+src/
+├── core/                    # Server, watchdog, system init
+├── engine/                  # Cognitive scheduling, ELP queue, decision engine
+├── interfaces/              # Interface.C FFI (LLaMA, PX4, ROS2, TTS, ASR)
+├── crypto/                  # AES-256, FIPS 140-3, key management
+├── managers/                # Database, knowledge, tools
+├── utils/                   # Monitoring, tracing, helpers
+├── c_bindings/              # Raw C code called by Ada via FFI
+├── ModuleSensorActuator_ELP2/   # ELP2 — sensors, telemetry (250µs)
+├── ModuleSensorActuator_ELP3/   # ELP3 — actuators, flight ctrl (250µs)
+├── NonDeterministicGenerativeModelManager/  # LLM model mgmt, KV cache
+├── python/                  # Python tools (non-deterministic)
+├── ui/                      # GUI sidecar (web frontend)
+├── coq_proofs/              # Coq formal verification proofs
+└── Util/                    # Build verification (sabotage_verifier.py)
+```
+
+**The short version:** `core/` is the server, `engine/` is the brain, `interfaces/` is how I talk to hardware and libraries, `crypto/` is security, and `ModuleSensorActuator_ELP2/` + `ELP3/` are the real-time sensor/actuator loops.
+
+**To learn more:** [Full Framework Structure →](documentation/AdelaideZephyrineFrameworkStructure.md)
 
 ---
 

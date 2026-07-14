@@ -2546,7 +2546,7 @@ def show_help():  # nosec
     {GRN}--api-key{RST} {CYN}ACTION [ARGS]{RST}  Manage API keys: add [key] | remove <key> | list | edit <old> <new>
     {GRN}-h{RST}, {GRN}--help{RST}                  Show this help screen
 
-  {BOLD}{WHT}EXAMPLES{RST}
+  {BOLD}{WHT}QUICK START{RST}
     {DIM}Default — full GUI, binds on all interfaces, port 11420:{RST}
       {CYN}./run.sh{RST}
 
@@ -2555,106 +2555,296 @@ def show_help():  # nosec
 
     {DIM}Custom port (e.g. 8080):{RST}
       {CYN}./run.sh --port 8080{RST}
-      {DIM}→ API at http://localhost:8080{RST}
 
     {DIM}Bind to localhost only (private, no LAN access):{RST}
       {CYN}./run.sh --host 127.0.0.1{RST}
-      {DIM}→ API at http://127.0.0.1:11420{RST}
 
     {DIM}Custom host + port:{RST}
       {CYN}./run.sh --host 0.0.0.0 --port 9000{RST}
-      {DIM}→ API at http://localhost:9000{RST}
-
-    {DIM}Headless with custom port:{RST}
-      {CYN}./run.sh --no-gui --port 8080{RST}
 
     {DIM}Via environment variables:{RST}
       {CYN}ADLAIDE_SERVER_PORT=3000 ADLAIDE_SERVER_HOST=127.0.0.1 ./run.sh{RST}
 
-    {DIM}Docker / LAN access (bind all interfaces):{RST}
+  {BOLD}{WHT}LAN / DOCKER / REMOTE ACCESS{RST}
+    {DIM}Bind all interfaces for LAN/Docker:{RST}
       {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
       {DIM}→ API at http://<your-ip>:11420 from other machines{RST}
 
-    {DIM}Phone / Cloud Terminal (access from phone or tablet):{RST}
+    {DIM}Phone / Cloud Terminal:{RST}
       {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
-      {DIM}→ Find your computer's IP: ifconfig | grep 'inet '{RST}
-      {DIM}→ Open http://<your-computer-host-ip>:11420 on your phone browser{RST}
-      {DIM}→ Or use curl in Termux / iSH / a-Shell:{RST}
-      {DIM}  curl http://<your-computer-host-ip>:11420/api/version{RST}
+      {DIM}→ Find IP: ifconfig | grep 'inet '{RST}
+      {DIM}→ Open http://<your-ip>:11420 on phone browser{RST}
+      {DIM}→ Or: curl http://<your-ip>:11420/api/version{RST}
 
-    {DIM}Multiple devices ( LAN party / office ):{RST}
+    {DIM}Multiple devices (LAN party / office):{RST}
       {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
-      {DIM}→ Any device on same network can hit http://<your-computer-host-ip>:11420{RST}
+      {DIM}→ Any device on same network can hit the API{RST}
       {DIM}→ Works with OpenWebUI, OpenCode, curl, or any HTTP client{RST}
 
-    {DIM}API Key Management:{RST}
-      {CYN}./run.sh --api-key list{RST}
-      {DIM}→ List all configured API keys (shows first 8 chars each){RST}
-      {CYN}./run.sh --api-key add my-secret-key-123{RST}
-      {DIM}→ Add a specific API key to the encrypted store{RST}
-      {CYN}./run.sh --api-key add{RST}
-      {DIM}→ Auto-generate a random 256-bit API key and add it{RST}
-      {CYN}./run.sh --api-key remove my-secret-key-123{RST}
-      {DIM}→ Remove an API key from the store{RST}
-      {CYN}./run.sh --api-key edit old-key new-key{RST}
-      {DIM}→ Replace an existing key with a new one{RST}
+  {BOLD}{WHT}ROS2 INTEGRATION{RST}
+    {DIM}ROS2 is auto-bootstrapped on first run (Linux and macOS).{RST}
+    {DIM}On macOS, it uses RoboStack via Micromamba in vendor/ros_env/.{RST}
+    {DIM}On Linux, it installs via apt if not present.{RST}
 
-    {DIM}API Key Enforcement:{RST}
-      {CYN}./run.sh --enforce-api-key{RST}
-      {DIM}→ Enable x-api-key header validation (clients must send a valid key){RST}
-      {CYN}./run.sh --no-enforce-api-key{RST}
-      {DIM}→ Disable enforcement (default, for Ollama app compatibility){RST}
-      {CYN}./run.sh --api-key add --enforce-api-key{RST}
-      {DIM}→ Add a key first, then start server with enforcement{RST}
+    {DIM}If ROS2 is not detected, ELP2/ELP3 actuators are disabled.{RST}
 
-    {DIM}With API key enforcement + curl:{RST}
-      {CYN}./run.sh --api-key add mykey --enforce-api-key{RST}
-      {DIM}  # Then from another terminal:{RST}
-       {CYN}curl http://localhost:11420/api/chat -H "x-api-key: mykey" -d '{{"model":"Snowball-Enaga","messages":[{{"role":"user","content":"Hello"}}],"stream":false}}'{RST}
+    {DIM}To use ROS2 with external nodes:{RST}
+      {CYN}./run.sh --host 0.0.0.0 --port 11420{RST}
+      {DIM}→ ROS2 DDS nodes on same network can discover the bridge{RST}
+      {DIM}→ Topic: /stellaicarus/telemetry (si_ros2_telemetry){RST}
+      {DIM}→ Topic: /zenith_orion/actuator (zo_ros2_actuator){RST}
+
+    {DIM}To check ROS2 status:{RST}
+      {CYN}source /opt/ros/$ROS_DISTRO/setup.bash && ros2 topic list{RST}
+
+    {DIM}To add a custom ROS2 node:{RST}
+      {DIM}  1. Create your node in src/ModuleSensorActuator_ELP2/ or ELP3/{RST}
+      {DIM}  2. Add a .gpr file for the Ada component{RST}
+      {DIM}  3. The daemon manager will auto-discover it on next boot{RST}
+
+  {BOLD}{WHT}PX4 / HARDWARE SETUP{RST}
+    {DIM}Build PX4-Autopilot for simulation:{RST}
+      {CYN}./run.sh --build-px4{RST}
+      {DIM}→ Clones and compiles PX4 SITL (Software-In-The-Loop){RST}
+      {DIM}→ Used for flight simulation and actuator testing{RST}
+
+    {DIM}PX4 module location:{RST}
+      {DIM}  vendor/PX4-Autopilot/  (cloned on first --build-px4){RST}
+
+    {DIM}To modify actuator hooks (ELP2):{RST}
+      {DIM}  1. Edit src/ModuleSensorActuator_ELP2/fmc_servo_manual_hook_test.py{RST}
+      {DIM}  2. Or create a new hook in the same directory{RST}
+      {DIM}  3. The daemon manager auto-discovers Python hooks on boot{RST}
+
+    {DIM}To modify ROS2 actuator bridge (ELP3):{RST}
+      {DIM}  1. Edit src/ModuleSensorActuator_ELP3/zenith_orion.adb{RST}
+      {DIM}  2. The ZenithOrion pacing loop runs at 4kHz{RST}
+      {DIM}  3. ELP0/ELP1/ELP2/ELP3 priority queue governs timing{RST}
+
+    {DIM}ADA dependency management:{RST}
+      {CYN}alr build{RST}  {DIM}→ Build all Ada sources via Alire{RST}
+      {CYN}alr update{RST}  {DIM}→ Update Ada dependencies{RST}
+
+  {BOLD}{WHT}SIMULATOR INTEGRATION{RST}
+    {DIM}Zephy bridges to flight simulators via Interface.C FFI for deterministic,{RST}
+    {DIM}real-time GNC testing. All bridges use native Ada → C → protocol stacks.{RST}
+
+    {BOLD}{WHT}Supported Simulators:{RST}
+      {MGN}PX4 SITL{RST}          {DIM}Software-In-The-Loop via MAVLink UDP (port 14580){RST}
+      {MGN}X-Plane 11/12{RST}     {DIM}Flight sim via UDP datarefs (port 49000){RST}
+      {MGN}FlightGear{RST}        {DIM}Open-source sim via MAVLink or FDM{RST}
+      {MGN}Gazebo Classic/Harmonic{RST}  {DIM}ROS2-native physics sim{RST}
+      {MGN}AirSim{RST}            {DIM}Microsoft/AirSim via MAVLink{RST}
+
+    {BOLD}{WHT}Architecture (Interface.C FFI):{RST}
+      {DIM}┌─────────────┐     ┌──────────────┐     ┌────────────────┐{RST}
+      {DIM}│  Simulator   │────►│  C Protocol  │────►│  Ada Interface │{RST}
+      {DIM}│  (X-Plane,   │     │  Stack       │     │  (Interfaces.C)│{RST}
+      {DIM}│   PX4 SITL)  │     │  (MAVLink,   │     │                │{RST}
+      {DIM}└─────────────┘     │   UDP)       │     └────────┬───────┘{RST}
+                              {DIM}└──────────────┘              │{RST}
+                                                     {DIM}┌──────┴───────┐{RST}
+                                                     {DIM}│  ELP3/ELP2   │{RST}
+                                                     {DIM}│  (250µs loop)│{RST}
+                                                     {DIM}└──────────────┘{RST}
+
+    {BOLD}{WHT}PX4 SITL Setup:{RST}
+      {DIM}  1. Build PX4 SITL:{RST}
+      {CYN}    ./run.sh --build-px4{RST}
+      {DIM}  2. Start PX4 SITL:{RST}
+      {CYN}    cd vendor/PX4-Autopilot && make px4_sitl gz_x500{RST}
+      {DIM}  3. Zephy auto-connects via MAVLink UDP (port 14580){RST}
+      {DIM}  4. GNC commands flow: Ada → Interfaces.C → C MAVLink → PX4{RST}
+
+    {BOLD}{WHT}X-Plane 11/12 Setup:{RST}
+      {DIM}  1. Enable UDP output in X-Plane:{RST}
+      {DIM}     Settings → Net Connections → UDP: output on port 49000{RST}
+      {DIM}  2. Configure datarefs to stream:{RST}
+      {DIM}     sim/flightmodel/position/latitude{RST}
+      {DIM}     sim/flightmodel/position/longitude{RST}
+      {DIM}     sim/flightmodel/position/elevation{RST}
+      {DIM}     sim/flightmodel/position/psi (heading){RST}
+      {DIM}     sim/flightmodel/position/theta (pitch){RST}
+      {DIM}     sim/flightmodel/position/phi (roll){RST}
+      {DIM}  3. Zephy listens on UDP port 49000 via C FFI socket{RST}
+      {DIM}  4. Telemetry flows: X-Plane → UDP → C recvfrom → Ada ELP2{RST}
+      {DIM}  5. GNC advisory flows: Ada ELP3 → C sendto → X-Plane datarefs{RST}
+
+    {BOLD}{WHT}Testing with Simulators:{RST}
+      {DIM}  Headless mode (no GUI, best for sim testing):{RST}
+      {CYN}    ./run.sh --no-gui --port 11420{RST}
+      {DIM}  Check telemetry from simulator:{RST}
+      {CYN}    curl http://localhost:11420/api/telemetry{RST}
+      {DIM}  Check power state (StellaIcarus):{RST}
+      {CYN}    curl http://localhost:11420/api/power{RST}
+      {DIM}  Send GNC command via API:{RST}
+      {CYN}    curl -X POST http://localhost:11420/api/ZenithRoutine \{RST}
+      {CYN}      -d '{{"roll":0.0,"pitch":0.1,"yaw":0.0,"thrust":0.5}}'{RST}
+
+    {BOLD}{WHT}ROS2 DDS Bridge (Simulator ↔ Zephy):{RST}
+      {DIM}  ROS2 topics auto-discover simulators on the DDS network:{RST}
+      {CYN}    /stellaicarus/telemetry{RST}   {DIM}→ Sensor data from simulator{RST}
+      {CYN}    /zenith_orion/actuator{RST}     {DIM}→ Control commands to simulator{RST}
+      {DIM}  PX4 publishes to /fmu/out/vehicle_attitude{RST}
+      {DIM}  Zephy subscribes via native Ada ROS2 RCL bindings{RST}
+      {DIM}  No Python middleware — direct Ada ↔ C ↔ ROS2 stack{RST}
+
+  {BOLD}{WHT}SENSOR & ACTUATOR 101{RST}
+    {DIM}Zephy uses a fixed-time priority queue (ELP) for deterministic I/O.{RST}
+    {DIM}Each level runs at a fixed cadence — no polling, no sleeps, no drift.{RST}
+
+    {BOLD}{WHT}ELP Priority Queue:{RST}
+      {DIM}── Deterministic Domain (hard real-time, fixed cadence) ──{RST}
+      {MGN}ELP3{RST} {DIM}ZenithOrion{RST}     250µs (4kHz)  {DIM}Pacing loop — actuators, sensors, flight ctrl{RST}
+      {MGN}ELP2{RST} {DIM}StellaIcarus{RST}    250µs (4kHz)  {DIM}Deterministic API response hooks — power, telemetry{RST}
+      {DIM}── Non-Deterministic Domain (best-effort, preemptible) ──{RST}
+      {YLW}ELP1{RST} {DIM}Inference{RST}       on-demand     {DIM}User-facing generation (real-time LLM inference){RST}
+      {YLW}ELP0{RST} {DIM}Background{RST}      preemptible   {DIM}RAG indexing, caching (preempted by ELP1){RST}
+
+    {BOLD}{WHT}How to add a sensor (ELP2 — 250µs deterministic):{RST}
+      {DIM}  1. Create a Python hook in src/ModuleSensorActuator_ELP2/{RST}
+      {DIM}  2. Implement a function that reads your sensor{RST}
+      {DIM}  3. Return a dict with the sensor data{RST}
+      {DIM}  4. The StellaIcarus daemon auto-discovers and calls it at 250µs{RST}
+      {DIM}{RST}
+      {DIM}  Example (fmc_servo_manual_hook_test.py):{RST}
+      {CYN}    def read_sensor():{RST}
+      {CYN}        return {{"servo_pos": 1500, "voltage": 12.4}}{RST}
+
+    {BOLD}{WHT}How to add an actuator (ELP3 — 250µs deterministic):{RST}
+      {DIM}  1. Create an Ada component in src/ModuleSensorActuator_ELP3/{RST}
+      {DIM}  2. Add a .gpr project file for the new component{RST}
+      {DIM}  3. Implement the pacing loop body (runs every 250µs){RST}
+      {DIM}  4. The ZenithOrion loop auto-discovers and calls it at 4kHz{RST}
+      {DIM}{RST}
+      {DIM}  Key constraints:{RST}
+      {DIM}    - NO dynamic allocation (use stack or pre-allocated buffers){RST}
+      {DIM}    - NO blocking I/O (non-blocking only){RST}
+      {DIM}    - NO exceptions (use error codes){RST}
+      {DIM}    - Execution must complete within 250µs{RST}
+      {DIM}    - All code must pass gnatprove --level=4{RST}
+
+    {BOLD}{WHT}How to add a ROS2 actuator (ROS2 DDS bridge):{RST}
+      {DIM}  1. Create your ROS2 node in src/ModuleSensorActuator_ELP2/ros2_daemon/{RST}
+      {DIM}  2. Publish/subscribe on standard ROS2 topics{RST}
+      {DIM}  3. The si_ros2_telemetry node bridges ROS2 ↔ HTTP{RST}
+      {DIM}  4. The zo_ros2_actuator node bridges HTTP ↔ ROS2{RST}
+      {DIM}{RST}
+      {DIM}  Available ROS2 topics:{RST}
+      {CYN}    /stellaicarus/telemetry{RST}   {DIM}→ System telemetry (sensor data out){RST}
+      {CYN}    /zenith_orion/actuator{RST}     {DIM}→ Actuator commands (control data in){RST}
+
+    {BOLD}{WHT}Testing your sensor/actuator:{RST}
+      {DIM}  Run with headless mode to test without GUI overhead:{RST}
+      {CYN}    ./run.sh --no-gui --port 11420{RST}
+      {DIM}  Check telemetry endpoint:{RST}
+      {CYN}    curl http://localhost:11420/api/telemetry{RST}
+      {DIM}  Check power state (StellaIcarus):{RST}
+      {CYN}    curl http://localhost:11420/api/power{RST}
+
+  {BOLD}{WHT}ADDING THINGS{RST}
+    {DIM}Add models:{RST}
+      {DIM}  1. Place .gguf files in data/NonDeterministicGenerativeModel/model/{RST}
+      {DIM}  2. Restart — the server auto-discovers available models{RST}
+
+    {DIM}Add knowledge (RAG):{RST}
+      {CYN}curl -X POST http://localhost:11420/api/knowledgestackfrontend/upload{RST}
+      {CYN}  -H "Content-Type: multipart/form-data" -F "file=@document.pdf"{RST}
+      {DIM}  → Supports: PDF, DOCX, PPTX, TXT, MD{RST}
+
+    {DIM}Add memory:{RST}
+      {CYN}curl -X POST http://localhost:11420/api/knowledgestackfrontend/memory/upload{RST}
+      {CYN}  -H "Content-Type: multipart/form-data" -F "file=@notes.txt"{RST}
+
+    {DIM}Add TTS voices:{RST}
+      {DIM}  1. Place voice .bin files in data/NonDeterministicGenerativeModel/voice/{RST}
+      {DIM}  2. Voices are auto-detected by Kokoro TTS{RST}
+
+    {DIM}Add VAD models:{RST}
+      {DIM}  1. Place ONNX model in data/NonDeterministicGenerativeModel/vad_component/{RST}
+      {DIM}  2. Voice Activity Detection auto-loads on boot{RST}
 
   {BOLD}{WHT}RUNTIME PROCESSES{RST}
     {MGN}1. StellaIcarus Daemon{RST}    Hardware monitor, power state, telemetry
     {MGN}2. adelaide_server{RST}        HTTP API (default port 11420)
     {MGN}3. adelaide_watchdog{RST}      Monitors server health, auto-restarts
+    {MGN}4. ROS2 Bridge{RST}            DDS ↔ HTTP bridge (auto-started if ROS2 available)
 
-  {BOLD}{WHT}SERVER API{RST} (connect via {CYN}http://localhost:11420{RST} or {CYN}http://127.0.0.1:11420{RST})
-    {CYN}POST{RST} /api/chat                Chat completion (streaming)
-    {CYN}POST{RST} /api/generate            Text generation
-    {CYN}POST{RST} /v1/chat/completions    OpenAI-compatible chat
-    {CYN}POST{RST} /v1/completions         OpenAI-compatible completions
-    {CYN}POST{RST} /api/embeddings         Text embeddings
-    {CYN}POST{RST} /v1/embeddings          OpenAI-compatible embeddings
-    {CYN}POST{RST} /v1/audio/transcriptions  Speech-to-text (Moonshine)
-    {CYN}POST{RST} /v1/audio/speech        Text-to-speech (Kokoro)
-    {CYN}GET{RST}  /api/health             Health check
-    {CYN}GET{RST}  /api/version            Server version
-    {CYN}GET{RST}  /api/tags               List models
-    {CYN}GET{RST}  /api/power              Power state (StellaIcarus)
-    {CYN}GET{RST}  /api/telemetry          System telemetry
-    {CYN}GET{RST}  /api/ps                 Process status
-    {CYN}POST{RST} /api/schedule           Schedule a delayed task
-    {CYN}POST{RST} /api/ZenithRoutine      ZenithOrion pacing loop
+  {BOLD}{WHT}WARNING{RST}
+    {YLW}This is NOT a general-purpose AI assistant.{RST}
+    {YLW}It is an adaptive GNC system that requires active user participation.{RST}
+    {YLW}It learns from you — you must guide its development.{RST}
+    {YLW}If you want instant answers without effort, this is not for you.{RST}
 
-  {BOLD}{WHT}GUI SIDECAR{RST}
-    {CYN}GET{RST}    /api/sessions             List chat sessions
-    {CYN}POST{RST}   /api/sessions             Create session
-    {CYN}PUT{RST}    /api/sessions/{{id}}      Rename session
-    {CYN}DELETE{RST} /api/sessions/{{id}}      Delete session
-    {CYN}POST{RST}   /api/sessions/{{id}}/duplicate  Duplicate session
-    {CYN}GET{RST}    /api/messages             Message history
-    {CYN}GET{RST}    /api/adelaideenginestats  Engine stats
-    {CYN}POST{RST}   /api/knowledgestackfrontend/upload     Knowledge upload
-    {CYN}GET{RST}    /api/knowledgestackfrontend/search     Knowledge search
-    {CYN}POST{RST}   /api/knowledgestackfrontend/memory/upload   Memory upload
-    {CYN}GET{RST}    /api/knowledgestackfrontend/memory/search   Memory search
-    {CYN}GET{RST}    /api/knowledgestackfrontend/graph          Knowledge graph
-    {CYN}GET{RST}    /api/knowledgestackfrontend/memory/graph   Memory graph
-    {CYN}GET{RST}    /api/docs/readme          Readme
-    {CYN}GET{RST}    /api/docs/license         License
-    {CYN}GET{RST}    /api/user_info            User info
+  {DIM}{"─" * 70}{RST}
+  {DIM}  LEGACY API REFERENCE{RST}
+  {DIM}  For existing Zephyrine Cognitive integrations.{RST}
+  {DIM}  New users: use the GUI sidecar or ROS2 bridge instead.{RST}
+  {DIM}{"─" * 70}{RST}
 
+  {BOLD}{WHT}API KEY MANAGEMENT{RST}
+    {CYN}./run.sh --api-key list{RST}
+      {DIM}→ List all configured API keys (shows first 8 chars each){RST}
+    {CYN}./run.sh --api-key add my-secret-key-123{RST}
+      {DIM}→ Add a specific API key to the encrypted store{RST}
+    {CYN}./run.sh --api-key add{RST}
+      {DIM}→ Auto-generate a random 256-bit API key and add it{RST}
+    {CYN}./run.sh --api-key remove my-secret-key-123{RST}
+      {DIM}→ Remove an API key from the store{RST}
+    {CYN}./run.sh --api-key edit old-key new-key{RST}
+      {DIM}→ Replace an existing key with a new one{RST}
+
+  {BOLD}{WHT}API KEY ENFORCEMENT{RST}
+    {CYN}./run.sh --enforce-api-key{RST}
+      {DIM}→ Enable x-api-key header validation (clients must send a valid key){RST}
+    {CYN}./run.sh --no-enforce-api-key{RST}
+      {DIM}→ Disable enforcement (default, for Ollama app compatibility){RST}
+    {CYN}./run.sh --api-key add mykey --enforce-api-key{RST}
+      {DIM}→ Add a key first, then start server with enforcement{RST}
+
+    {DIM}With enforcement + curl:{RST}
+      {CYN}./run.sh --api-key add mykey --enforce-api-key{RST}
+      {DIM}  # Then from another terminal:{RST}
+      {CYN}curl http://localhost:11420/api/chat -H "x-api-key: mykey" -d '{{"model":"Snowball-Enaga","messages":[{{"role":"user","content":"Hello"}}],"stream":false}}'{RST}
+
+  {BOLD}{WHT}SERVER API{RST} {DIM}(connect via {CYN}http://localhost:11420{RST}{DIM}){RST}
+    {GRN}POST{RST} /api/chat                  Chat completion (streaming)
+    {GRN}POST{RST} /api/generate              Text generation
+    {GRN}POST{RST} /v1/chat/completions      OpenAI-compatible chat
+    {GRN}POST{RST} /v1/completions           OpenAI-compatible completions
+    {GRN}POST{RST} /api/embeddings           Text embeddings
+    {GRN}POST{RST} /v1/embeddings            OpenAI-compatible embeddings
+    {GRN}POST{RST} /v1/audio/transcriptions  Speech-to-text (Moonshine)
+    {GRN}POST{RST} /v1/audio/speech          Text-to-speech (Kokoro)
+    {GRN}GET{RST}  /api/health               Health check
+    {GRN}GET{RST}  /api/version              Server version
+    {GRN}GET{RST}  /api/tags                 List models
+    {GRN}GET{RST}  /api/power                Power state (StellaIcarus)
+    {GRN}GET{RST}  /api/telemetry            System telemetry
+    {GRN}GET{RST}  /api/ps                   Process status
+    {GRN}POST{RST} /api/schedule             Schedule a delayed task
+    {GRN}POST{RST} /api/ZenithRoutine        ZenithOrion pacing loop
+
+  {BOLD}{WHT}GUI SIDECAR{RST} {DIM}(web UI — enabled unless --no-gui){RST}
+    {GRN}GET{RST}    /api/sessions                List chat sessions
+    {GRN}POST{RST}   /api/sessions                Create session
+    {GRN}PUT{RST}    /api/sessions/{{id}}         Rename session
+    {GRN}DELETE{RST} /api/sessions/{{id}}         Delete session
+    {GRN}POST{RST}   /api/sessions/{{id}}/duplicate   Duplicate session
+    {GRN}GET{RST}    /api/messages                Message history
+    {GRN}GET{RST}    /api/adelaideenginestats     Engine stats
+    {GRN}POST{RST}   /api/knowledgestackfrontend/upload       Knowledge upload
+    {GRN}GET{RST}    /api/knowledgestackfrontend/search       Knowledge search
+    {GRN}POST{RST}   /api/knowledgestackfrontend/memory/upload   Memory upload
+    {GRN}GET{RST}    /api/knowledgestackfrontend/memory/search   Memory search
+    {GRN}GET{RST}    /api/knowledgestackfrontend/graph          Knowledge graph
+    {GRN}GET{RST}    /api/knowledgestackfrontend/memory/graph   Memory graph
+    {GRN}GET{RST}    /api/docs/readme             Readme
+    {GRN}GET{RST}    /api/docs/license            License
+    {GRN}GET{RST}    /api/user_info               User info
 
   {DIM}  Documentation:  documentation/{RST}
+  {DIM}  Contributing:   CONTRIBUTING.md{RST}
   {DIM}  Architecture:   AdelaideZephyrineSystem/run.py (line 14){RST}
 """)
 
@@ -2739,10 +2929,12 @@ def show_help():  # nosec
 #   Serial processing — prevents heap corruption from concurrent llama.cpp FFI.
 #   Capacity: 2^63. Priority: ELP3 > ELP2 > ELP1 > ELP0.
 #
-#   ELP3: ZenithOrion — 1ms deterministic pacing loop (highest frequency)
-#   ELP2: StellaIcarus — deterministic API response hooks
-#   ELP1: User-facing generation (real-time inference)
-#   ELP0: Background indexing/RAG (preemptible by ELP1)
+#   Deterministic Domain (hard real-time, fixed 250µs cadence):
+#     ELP3: ZenithOrion — 250µs deterministic pacing loop (highest frequency)
+#     ELP2: StellaIcarus — 250µs deterministic API response hooks
+#   Non-Deterministic Domain (best-effort, preemptible):
+#     ELP1: User-facing generation (real-time inference)
+#     ELP0: Background indexing/RAG (preemptible by ELP1)
 #
 # MODEL TYPES:
 #   Qwen_0_8B       — Small LLM (always loaded, exempt from idle unload)
@@ -2760,7 +2952,7 @@ def show_help():  # nosec
 #   Database_Manager    — SQLite (memory, literature, knowledge graph)
 #   Streaming_Queue     — AWS streaming response support
 #   Watchdog_IPC        — File-based IPC (PID, heartbeat, exit reason)
-#   ZenithOrion         — 1ms deterministic pacing loop (ELP3)
+#   ZenithOrion         — 250µs deterministic pacing loop (ELP3)
 #
 # EXTERNAL DEPENDENCIES (sibling directories):
 #   vendor/llama.cpp/            — LLM inference engine

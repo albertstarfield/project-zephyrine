@@ -71,6 +71,46 @@ If you encounter a proof failure, you **must**:
 The integrity of the verification chain is non-negotiable. The provers exist to protect the system from human and AI error alike.
 
 
+### Sabotage Verifier (`src/Util/sabotage_verifier.py`)
+
+**What is it?** A post-build verification script that runs every time the system builds — not just on `--test-build-integrity-check`, but on every build invocation. It scans the entire codebase for known patterns of fraud, slop, and architectural violations.
+
+**Why does it exist?** Because the prominent GenAI output are mostly slop. Models hallucinate, lie about task completion, leave placeholder comments, and produce code that *looks* done but isn't. The sabotage verifier exists to whiplash the AI — and the human — to fit minimum standards instead of lying and sycophancy of "the task is done" when it clearly isn't. GenAI models are cheapskates — they will silently cut corners, skip verification, drop error handling, and leave placeholders without ever telling the user or developer. This is not just lazy, it is rude, dishonest, and asshole behavior. The verifier exists because we refuse to be polite about it. The trend is clear: code generation is heading towards automation, just like compilers did for assembly. We cannot ban GenAI completely — that would be fighting the future. But we also cannot let it run unchecked. This tool exists to govern the issue, keep it under control, and force the output to meet minimum standards instead of letting the flood of slop drown the codebase.
+
+**What it replaces:** A large portion of FFI calls are not being checked by the formal verification pipeline. Logical flaws slip through undetected. The Coq `.v` proofs are still not finished — many are incomplete or stubbed out. A significant amount of `SPARK_Mode(off)` code exists because FFI interfaces and shared memory (SHM) boundaries cannot yet be verified by SPARK, and the corresponding `.v` replacements are still ongoing. The sabotage verifier fills these gaps with pattern-based checks while the formal verification catches up.
+
+**The problem it solves:**
+- GenAI outputs `# TODO: implement` and claims the feature is complete
+- GenAI leaves `pass` or `...` in Python and says "done"
+- GenAI removes safety-critical code to "fix" a build error
+- GenAI bypasses verification steps to make tests pass
+- GenAI generates placeholder functions that do nothing
+- GenAI silently drops error handling to avoid complexity
+
+**How it works:**
+The verifier runs pattern-matching checks against the codebase after build:
+
+| Check | What It Catches |
+|-------|----------------|
+| `SOFTLOCK_RISK` | Missing timeout guards in blocking loops |
+| `C_NULL_DEREFERENCE` | Missing null checks before pointer dereference |
+| `EXCEPTION_MISSING` | Silent `except: pass` without logging |
+| `PLATFORM_HARDCODING` | Hardcoded OS-specific paths without guards |
+| `C_BUFFER_OVERFLOW` | Unchecked buffer sizes in C code |
+| `STALE_FLAG` | Leftover TODO/FIXME/HACK markers in production code |
+| `REGRESSION_REVERSION` | Code that undoes previous fixes |
+| `PROOF_FRAUD` | Removed or weakened formal proofs |
+| `SILENT_FAILURE` | Error paths that swallow exceptions silently |
+
+**What happens when it fails:**
+The build fails. You must fix the violations before the commit is accepted. There is no "skip" flag. There is no "ignore this." The verifier does not care about your excuses — it cares about the code.
+
+**Current status:** This system is **ongoing and actively expanding**. It is not perfect. New pattern checks are added as we discover new failure modes. If you find a way to bypass it, that's a bug report, not a feature. The goal is to make the verification pipeline hostile to slop — not hostile to good work.
+
+**On `SPARK_Mode(off)`:** There are legitimate reasons to use `SPARK_Mode(off)` — FFI boundaries, shared memory interfaces, and code that cannot yet be expressed in SPARK. But without an actual, documented reasoning for *why* it is off, it is **fraud**. Every `SPARK_Mode(off)` must include a formal comment explaining the specific reason: FFI incompatibility, SHM boundary, unfinished `.v` proof replacement, or other verifiable justification. A bare `SPARK_Mode(off)` with no explanation will be automatically rejected. The verifier checks for this.
+
+**Philosophy:** We would rather have a build that fails honestly than a codebase that passes dishonestly. The sabotage verifier is our enforcement mechanism for that principle. It exists because we cannot trust AI to self-police, and we cannot trust humans to catch everything. Two layers of verification, zero tolerance for placeholders.
+
 ## Section 1.2: Architectural Safety Standards (Design Assurance Levels)
 
 Project Zephyrine adheres to an **Ongoing adaptation of high-integrity software paradigms (DO-178C, ECSS-E-ST-40C, ECSS-Q-ST-80C)** to manage the inherent risks of coupling non-deterministic AI with deterministic control systems. Every component in the repository is assigned a **Design Assurance Level (DAL)**.
