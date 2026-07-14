@@ -32,6 +32,7 @@ gc.disable()
 # Configuration
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(base_dir, "data/NetworkMemoryPool", "assistant_session.db")
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # ── Crypto ────────────────────────────────────────────────────────────────
 # Load the AdaLang encryption module for field-level AES-256-GCM.
@@ -1667,6 +1668,103 @@ if __name__ == "__main__":
 
     # Launch PyWebview native window
     api = SidecarAPI()
+
+    if os.environ.get("ADELAIDE_SIDECAR_TEST_MODE") == "1":
+        def run_automated_test():
+            print("[SIDECAR-TEST] Waiting for FastAPI server to start...", flush=True)
+            time.sleep(3)
+            
+            import urllib.request
+            import json
+
+            # Test 1: HTTP API Loopback
+            try:
+                print("[SIDECAR-TEST] Testing /api/chat endpoint...", flush=True)
+                req_data = json.dumps({
+                    "message": "ping",
+                    "session_id": "test_session_123"
+                }).encode("utf-8")
+                
+                req = urllib.request.Request(
+                    f"http://127.0.0.1:{ui_port}/api/chat",
+                    data=req_data,
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-api-key": os.environ.get("ADELAIDE_MASTER_KEY", "fallback"),
+                        "User-Agent": "Zephy-Sidecar-UI/1.0"
+                    },
+                    method="POST"
+                )
+                
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    status = response.status
+                    if status != 200:
+                        raise Exception(f"HTTP {status}")
+            except Exception as e:
+                print(f"[SIDECAR-TEST] FAILED /api/chat! {e}", flush=True)
+                os._exit(1)
+
+            # Test 2: JavaScript UI DOM Interaction
+            try:
+                print("[SIDECAR-TEST] Testing JavaScript DOM Interaction...", flush=True)
+                if window:
+                    # Click Knowledge Network Nav
+                    window.evaluate_js("document.getElementById('nav-knowledge')?.click()")
+                    time.sleep(0.5)
+                    
+                    # Click Chat Nav
+                    window.evaluate_js("document.getElementById('nav-chat')?.click()")
+                    time.sleep(0.5)
+                    
+                    # Type and send
+                    script = """
+                    (function() {
+                        try {
+                            let input = document.getElementById('chat-input');
+                            let btn = document.getElementById('send-btn');
+                            if (input && btn) {
+                                input.value = 'hello this is an automated UI interaction test';
+                                input.dispatchEvent(new Event('input', { bubbles: true }));
+                                btn.click();
+                                return "SUCCESS";
+                            }
+                            return "ERROR: UI elements not found";
+                        } catch (e) {
+                            return "ERROR: " + e.toString();
+                        }
+                    })();
+                    """
+                    print("[SIDECAR-TEST] Executing chat script...", flush=True)
+                    res = window.evaluate_js(script)
+                    print(f"[SIDECAR-TEST] JS Interaction Result: {res}", flush=True)
+                    if res and str(res).startswith("ERROR"):
+                        os._exit(1)
+                        
+                    # Wait for typing indicator to appear
+                    time.sleep(0.5)
+                    
+                    # Poll for typing indicator to disappear
+                    print("[SIDECAR-TEST] Waiting for assistant response...", flush=True)
+                    for _ in range(60):
+                        typing = window.evaluate_js("document.querySelector('.typing-indicator') !== null")
+                        if not typing:
+                            break
+                        time.sleep(0.5)
+                        
+                    # Extract last message content
+                    last_msg = window.evaluate_js("var msgs = document.querySelectorAll('.message .message-content'); msgs.length > 0 ? msgs[msgs.length - 1].textContent : 'none'")
+                    print(f"[SIDECAR-TEST] Final Response: {last_msg[:100]}...", flush=True)
+            except Exception as e:
+                print(f"[SIDECAR-TEST] FAILED DOM Interaction! {e}", flush=True)
+                os._exit(1)
+                
+            print("[SIDECAR-TEST] PASSED! Exiting gracefully.", flush=True)
+            time.sleep(1)
+            os._exit(0)
+
+        import threading
+        threading.Thread(target=run_automated_test, daemon=True).start()
+        
     window = webview.create_window(
         "Adelaide Zephyrine Assistant",
         f"http://127.0.0.1:{ui_port}",
