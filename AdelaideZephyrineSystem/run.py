@@ -19,17 +19,19 @@ import sys
 import tempfile
 import threading
 import time
+import queue
+_gui_queue = queue.Queue()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
-LOGS_DIR = os.path.join(BASE_DIR, "logs")
+LOGS_DIR = os.path.join(BASE_DIR, "run", "logs")
 MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB total cap
 
 # ── Crypto ────────────────────────────────────────────────────────────────
 # Architecture Compliance: FIPS 140-3 [NIST2019FIPS1403], DO-178C [RTCA2011DO178C], DO-254 [RTCA2000DO254].
 # Zero-trust hardware bounds mitigate catastrophic physical/data breaches modeled by [AppliedSci2025ZeroTrust, Schneier2018Click, Buchanan2020Hacker].
 # Import the Python crypto module (sibling to python/adelaide_crypto.py)
-sys.path.insert(0, os.path.join(BASE_DIR, "python"))
+sys.path.insert(0, os.path.join(BASE_DIR, "src", "python"))
 from adelaide_crypto import load_master_key  # noqa: E402
 
 # ── Hardware-Bound Key Derivation Constants ───────────────────────────────
@@ -235,7 +237,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):
             from PIL import Image, ImageTk
             
             # Top logo
-            top_logo = os.path.join(BASE_DIR, "ui", "frontend", "dist", "ProjectZephy023LogoRenewal.png")
+            top_logo = os.path.join(BASE_DIR, "src", "ui", "frontend", "dist", "ProjectZephy023LogoRenewal.png")
             if os.path.exists(top_logo):
                 img_top = Image.open(top_logo)
                 img_top.thumbnail((300, 120))
@@ -303,7 +305,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):
             from PIL import Image, ImageTk
             
             # Bottom logo
-            bottom_logo = os.path.join(BASE_DIR, "ui", "frontend", "dist", "madeFromZephyFoundation.png")
+            bottom_logo = os.path.join(BASE_DIR, "src", "ui", "frontend", "dist", "madeFromZephyFoundation.png")
             if os.path.exists(bottom_logo):
                 img_bot = Image.open(bottom_logo)
                 img_bot.thumbnail((150, 40))
@@ -352,7 +354,8 @@ def _tk_progress_dialog(title, message, total_eta=300.0):
     dialog.transient(root)
     dialog.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent close during load
 
-    w, h = 420, 160
+    is_test_build = "--test-build-integrity-check" in __import__("sys").argv
+    w, h = 420, (400 if is_test_build else 160)
     sx = (dialog.winfo_screenwidth() - w) // 2
     sy = (dialog.winfo_screenheight() - h) // 2
     dialog.geometry(f"{w}x{h}+{sx}+{sy}")
@@ -364,7 +367,6 @@ def _tk_progress_dialog(title, message, total_eta=300.0):
     )
     title_label.pack(pady=(14, 4))
 
-    # Canvas-based progress bar
     canvas = tk.Canvas(dialog, width=380, height=20, bg=bar_bg, highlightthickness=0)
     canvas.pack(pady=(4, 4))
     fill_rect = canvas.create_rectangle(0, 0, 0, 20, fill=bar_fill, outline="")
@@ -382,11 +384,19 @@ def _tk_progress_dialog(title, message, total_eta=300.0):
     )
     eta_label.pack(side=tk.LEFT)
 
-    step_label = tk.Label(
-        dialog, text="", bg=bg, fg="#4ecca3",
-        font=("Helvetica", 10), wraplength=380,
-    )
-    step_label.pack(pady=(2, 4))
+    dialog._is_scrollable = is_test_build
+    if is_test_build:
+        step_text_widget = tk.Text(
+            dialog, bg=bg, fg="#4ecca3", font=("Helvetica", 10),
+            width=50, height=15, wrap=tk.WORD, state="disabled", borderwidth=0, highlightthickness=0
+        )
+        step_text_widget.pack(pady=(2, 4), padx=10, fill=tk.BOTH, expand=True)
+    else:
+        step_label = tk.Label(
+            dialog, text="", bg=bg, fg="#4ecca3",
+            font=("Helvetica", 10), wraplength=380,
+        )
+        step_label.pack(pady=(2, 4))
 
     import time
     start_time = time.time()
@@ -396,7 +406,13 @@ def _tk_progress_dialog(title, message, total_eta=300.0):
             if not dialog.winfo_exists():
                 return
             if step_text:
-                step_label.configure(text=step_text)
+                if getattr(dialog, '_is_scrollable', False):
+                    step_text_widget.configure(state="normal")
+                    step_text_widget.insert(tk.END, step_text + "\\n")
+                    step_text_widget.see(tk.END)
+                    step_text_widget.configure(state="disabled")
+                else:
+                    step_label.configure(text=step_text)
             
             if pct is not None:
                 p = max(0, min(100, pct))
@@ -488,7 +504,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
         from PIL import Image, ImageTk
         
         # Top logo
-        top_logo = os.path.join(BASE_DIR, "ui", "frontend", "dist", "ProjectZephy023LogoRenewal.png")
+        top_logo = os.path.join(BASE_DIR, "src", "ui", "frontend", "dist", "ProjectZephy023LogoRenewal.png")
         if os.path.exists(top_logo):
             img_top = Image.open(top_logo)
             img_top.thumbnail((260, 100))
@@ -631,7 +647,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
                     import os
                     import shutil
                     username = os.environ.get("ADELAIDE_USER", "default")
-                    user_dir = os.path.join(BASE_DIR, "NetworkMemoryPool", username)
+                    user_dir = os.path.join(BASE_DIR, "data", "NetworkMemoryPool", username)
                     if os.path.exists(user_dir):
                         shutil.rmtree(user_dir, ignore_errors=True)
                     mb.showinfo("Reset Complete", "Your data has been reset. Please restart the application.", parent=dialog)
@@ -651,7 +667,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):
         from PIL import Image, ImageTk
         
         # Bottom logo
-        bottom_logo = os.path.join(BASE_DIR, "ui", "frontend", "dist", "madeFromZephyFoundation.png")
+        bottom_logo = os.path.join(BASE_DIR, "src", "ui", "frontend", "dist", "madeFromZephyFoundation.png")
         if os.path.exists(bottom_logo):
             img_bot = Image.open(bottom_logo)
             img_bot.thumbnail((120, 30))
@@ -1051,7 +1067,7 @@ def _get_inferior_paradoxical_uuid():
     # Fallback: read from system_state database
     try:
         import sqlite3
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "data", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if os.path.exists(db_path):
             conn = sqlite3.connect(db_path)
             cursor = conn.execute(
@@ -1092,7 +1108,7 @@ def _get_inferior_paradoxical_uuid():
     if not stored:
         try:
             import sqlite3
-            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+            db_path = os.path.join(BASE_DIR, "data", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
             if os.path.exists(db_path):
                 conn = sqlite3.connect(db_path)
                 conn.execute(
@@ -1247,7 +1263,7 @@ def _get_ip_signature():
     # Fallback: read from system_state
     try:
         import sqlite3
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "data", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if os.path.exists(db_path):
             conn = sqlite3.connect(db_path)
             cursor = conn.execute(
@@ -1290,7 +1306,7 @@ def _get_ip_signature():
     if not stored:
         try:
             import sqlite3
-            db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+            db_path = os.path.join(BASE_DIR, "data", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
             if os.path.exists(db_path):
                 conn = sqlite3.connect(db_path)
                 conn.execute(
@@ -1344,8 +1360,8 @@ def compute_program_hash():
                 os.path.join(BASE_DIR, "config", "*.gpr"),
                 os.path.join(BASE_DIR, "config", "*.ads"),
                 os.path.join(BASE_DIR, "config", "*.h"),
-                os.path.join(BASE_DIR, "python", "*.py"),
-                os.path.join(BASE_DIR, "ui", "*.py"),
+                os.path.join(BASE_DIR, "src", "python", "*.py"),
+                os.path.join(BASE_DIR, "src", "ui", "*.py"),
             ]
             for pattern in patterns:
                 for fpath in sorted(glob.glob(pattern)):
@@ -1718,7 +1734,7 @@ def verify_integrity_test_blob(master_key_hex, sub_key_hex):
         # Get stored blob from database
         import sqlite3
 
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "data", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if not os.path.exists(db_path):
             return False
 
@@ -1754,7 +1770,7 @@ def store_integrity_test_blob(sub_key_hex):
     try:
         import sqlite3
 
-        db_path = os.path.join(BASE_DIR, "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
+        db_path = os.path.join(BASE_DIR, "data", "NetworkMemoryPool", os.environ.get("ADELAIDE_USER", "default"), "adelaide_memory.db")
         if not os.path.exists(db_path):
             return False
 
@@ -1797,9 +1813,9 @@ except BlockingIOError:
 
 
 # Enforce Huggingface cache location
-os.environ["HF_HOME"] = os.path.join(BASE_DIR, "model")
-os.environ["HF_HUB_CACHE"] = os.path.join(BASE_DIR, "model")
-os.environ["TRANSFORMERS_CACHE"] = os.path.join(BASE_DIR, "model")
+os.environ["HF_HOME"] = os.path.join(BASE_DIR, ".cache", "huggingface")
+os.environ["HF_HUB_CACHE"] = os.path.join(BASE_DIR, ".cache", "huggingface")
+os.environ["TRANSFORMERS_CACHE"] = os.path.join(BASE_DIR, ".cache", "huggingface")
 
 
 # ---------------------------------------------------------------------------
@@ -1924,11 +1940,11 @@ def print_progress(percent, message="Loading AI Model..."):
 
 def render_ascii_logo():
     logo_path = os.path.join(
-        BASE_DIR, "ui", "frontend", "public", "Project Zephyrine Logo.png"
+        BASE_DIR, "src", "ui", "frontend", "public", "Project Zephyrine Logo.png"
     )
     if not os.path.exists(logo_path):
         logo_path = os.path.join(
-            BASE_DIR, "ui", "frontend", "dist", "Project Zephyrine Logo.png"
+            BASE_DIR, "src", "ui", "frontend", "dist", "Project Zephyrine Logo.png"
         )
 
     try:
@@ -2766,8 +2782,10 @@ if platform.system() == "Windows":
     print("[FATAL] See AdelaideZephyrineSystem.gpr QUIRK-005 for details.")
     sys.exit(1)
 
-# Set HF_HOME so huggingface caches locally in the project directory
-os.environ["HF_HOME"] = os.path.join(BASE_DIR, "model")
+# Set HF_HOME and other caches locally to prevent clutter
+os.environ["HF_HOME"] = os.path.join(BASE_DIR, ".cache", "huggingface")
+os.environ["RUFF_CACHE_DIR"] = os.path.join(BASE_DIR, ".cache", "ruff")
+os.environ["XDG_CACHE_HOME"] = os.path.join(BASE_DIR, ".cache")
 os.makedirs(os.environ["HF_HOME"], exist_ok=True)
 
 # Kill any stale processes from previous runs before starting
@@ -2800,9 +2818,9 @@ def get_files_to_hash():
         "src/**/*",
         "config/**/*",
         "AdelaideZephyrineSystem.gpr",
-        "ui/frontend/src/**/*",
-        "ui/frontend/index.html",
-        "ui/frontend/package.json",
+        "src/ui/frontend/src/**/*",
+        "src/ui/frontend/index.html",
+        "src/ui/frontend/package.json",
     ]
     files = []
     for pattern in patterns:
@@ -2856,13 +2874,13 @@ def get_venv_files_to_hash():
     """Collect files whose changes invalidate the pyvenv."""
     patterns = [
         # Requirements files
-        "lsh/requirements-lsh.txt",
+        "src/python/lsh/requirements-lsh.txt",
         "vendor/tts_kokoro_component/requirements.txt",
         # Python sidecar scripts installed into pyvenv
-        "vad_component/vad_worker.py",
-        "lsh/lsh_qrnn_worker.py",
+        "data/NonDetermenisticGenerativeModel/vad_component/vad_worker.py",
+        "src/python/lsh/lsh_qrnn_worker.py",
         # Python crypto/sidecar modules
-        "python/**/*.py",
+        "src/python/**/*.py",
     ]
     files = []
     for pattern in patterns:
@@ -2911,7 +2929,7 @@ def check_venv_validity():
       - Python sidecar scripts changed
     """
     venv_dirs = [
-        os.path.join(BASE_DIR, "pyvenv"),
+        os.path.join(BASE_DIR, "venv", "python"),
         os.path.join(BASE_DIR, "vendor", "tts_kokoro_component", "venv"),
     ]
     venv_hash_file = os.path.join(BASE_DIR, ".venv_hash")
@@ -2963,7 +2981,7 @@ def invalidate_venv():
 
     # All project venvs that contain hardcoded paths (shebangs, .pth, metadata)
     venv_dirs = [
-        os.path.join(BASE_DIR, "pyvenv"),                                    # main venv (LSH, VAD, sidecars)
+        os.path.join(BASE_DIR, "venv", "python"),                                    # main venv (LSH, VAD, sidecars)
         os.path.join(BASE_DIR, "vendor", "tts_kokoro_component", "venv"),    # Kokoro TTS isolated venv
     ]
 
@@ -3269,6 +3287,25 @@ def real_main():
 
     current_log_path = setup_logging()
 
+    # --- Path Integrity Check ---
+    critical_dirs = [
+        os.path.join(BASE_DIR, "src", "python"),
+        os.path.join(BASE_DIR, "src", "ui"),
+        os.path.join(BASE_DIR, "src", "python", "tests"),
+        os.path.join(BASE_DIR, "src", "python", "Util"),
+        os.path.join(BASE_DIR, "src", "python", "lsh"),
+        os.path.join(BASE_DIR, "src", "NonDetermenisticGenerativeModelManager"),
+        os.path.join(BASE_DIR, "data", "NonDetermenisticGenerativeModel")
+    ]
+    missing_dirs = [d for d in critical_dirs if not os.path.exists(d)]
+    if missing_dirs:
+        print("\033[91m[!] FATAL ERROR: Path Integrity Check Failed.\033[0m")
+        print("\033[91m[!] The following critical directories are missing:\033[0m")
+        for d in missing_dirs:
+            print(f"    - {d}")
+        print("\033[91m[!] Please ensure the project directory has been correctly reorganized.\033[0m")
+        sys.exit(1)
+
     if "--test-fips" in sys.argv:
         os.environ["ADELAIDE_USER"] = "testfips"
         if "--no-gui" not in sys.argv:
@@ -3345,7 +3382,7 @@ def real_main():
             total_eta=total_eta
         )
         _setup_gui.eta_file_path = eta_file
-        _setup_gui._update_bar(pct=5, step_text="code step 0x0001")  # Starting up
+        _setup_gui._update_bar(pct=5, step_text=("[TEST-BUILD] Starting up" if "--test-build-integrity-check" in sys.argv else "code step 0x0001"))  # Starting up
         _setup_gui._start_pulse()
 
     # Whimsical password promise (only on first entry when user was just created)
@@ -3360,7 +3397,7 @@ def real_main():
     # Kill any stale processes from previous runs before starting
     print("[*] Cleaning up any stale processes from previous runs...")
     if _setup_gui:
-        _setup_gui._update_bar(pct=10, step_text="code step 0x0002", pulse=True)  # Clean up stale processes from previous runs
+        _setup_gui._update_bar(pct=10, step_text=("[TEST-BUILD] Clean up stale processes from previous runs" if "--test-build-integrity-check" in sys.argv else "code step 0x0002"), pulse=True)  # Clean up stale processes from previous runs
     try:
         subprocess.run(
             ["pkill", "-9", "-f", "adelaide_server"], stderr=subprocess.DEVNULL
@@ -3382,10 +3419,10 @@ def real_main():
 
     # Declare key paths and config objects at the top to prevent UnboundLocalError on direct launch
     env = os.environ.copy()
-    lsh_reqs = os.path.join(BASE_DIR, "lsh", "requirements-lsh.txt")
-    lsh_worker = os.path.join(BASE_DIR, "lsh", "lsh_qrnn_worker.py")
-    vad_worker_script = os.path.join(BASE_DIR, "vad_component", "vad_worker.py")
-    pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
+    lsh_reqs = os.path.join(BASE_DIR, "src", "python", "lsh", "requirements-lsh.txt")
+    lsh_worker = os.path.join(BASE_DIR, "src", "python", "lsh", "lsh_qrnn_worker.py")
+    vad_worker_script = os.path.join(BASE_DIR, "data/NonDetermenisticGenerativeModel", "vad_component", "vad_worker.py")
+    pyvenv_dir = os.path.join(BASE_DIR, "venv", "python")
     pyvenv_python = (
         os.path.join(pyvenv_dir, "bin", "python3")
         if platform.system() != "Windows"
@@ -3397,7 +3434,7 @@ def real_main():
     # 0. Verify all critical prerequisites are installed
     # PX4 is critical and auto-clones/compiles if missing
     if _setup_gui:
-        _setup_gui._update_bar(pct=15, step_text="code step 0x0003", pulse=True)  # Verify environment prerequisites
+        _setup_gui._update_bar(pct=15, step_text=("[TEST-BUILD] Verify environment prerequisites" if "--test-build-integrity-check" in sys.argv else "code step 0x0003"), pulse=True)  # Verify environment prerequisites
     verify_environment(build_px4=True)
 
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
@@ -3443,7 +3480,7 @@ def real_main():
     if current_hash != saved_hash:
         print("[*] Changes detected, checking downloads and rebuilding...")
         if _setup_gui:
-            _setup_gui._update_bar(pct=25, step_text="code step 0x0004", pulse=True)  # Download and rebuild components
+            _setup_gui._update_bar(pct=25, step_text=("[TEST-BUILD] Download and rebuild components" if "--test-build-integrity-check" in sys.argv else "code step 0x0004"), pulse=True)  # Download and rebuild components
         threads = str(os.cpu_count() or 4)
 
         # =====================================================================
@@ -3673,6 +3710,43 @@ def real_main():
             checkout_latest_release(kokoclone_dir, "KOKOCLONE")
         else:
             print("[*] kokoclone already exists, skipping clone.")
+            
+        # Patch kokoclone to download to data/NonDetermenisticGenerativeModel instead of root
+        kokoclone_cloner_py = os.path.join(kokoclone_dir, "core", "cloner.py")
+        if os.path.exists(kokoclone_cloner_py):
+            with open(kokoclone_cloner_py, "r") as f:
+                cloner_content = f.read()
+            
+            target_str = """        filepath = os.path.join(folder, filename)
+        repo_filepath = f"{folder}/{filename}"
+        
+        if not os.path.exists(filepath):
+            print(f"Downloading missing file '{filename}' from {self.hf_repo}...")
+            hf_hub_download(
+                repo_id=self.hf_repo,
+                filename=repo_filepath,
+                local_dir="." # Downloads securely into local ./model or ./voice
+            )
+        return filepath"""
+            
+            replacement_str = """        kokoro_base_dir = os.path.join("data", "NonDetermenisticGenerativeModel")
+        filepath = os.path.join(kokoro_base_dir, folder, filename)
+        repo_filepath = f"{folder}/{filename}"
+        
+        if not os.path.exists(filepath):
+            print(f"Downloading missing file '{filename}' from {self.hf_repo}...")
+            hf_hub_download(
+                repo_id=self.hf_repo,
+                filename=repo_filepath,
+                local_dir=kokoro_base_dir # Downloads securely into data/NonDetermenisticGenerativeModel
+            )
+        return filepath"""
+            
+            if target_str in cloner_content:
+                print("[*] Patching KokoClone to redirect models to data/NonDetermenisticGenerativeModel...")
+                cloner_content = cloner_content.replace(target_str, replacement_str)
+                with open(kokoclone_cloner_py, "w") as f:
+                    f.write(cloner_content)
 
         # Ensure Kokoro TTS component dependencies are installed in an isolated venv
         kokoro_comp_dir = os.path.abspath(
@@ -3719,7 +3793,18 @@ def real_main():
                 check=False,
             )
 
-        # Check and clone moonshine
+        
+            print("[*] Installing kokoclone requirements (kanade_tokenizer, etc)...")
+            subprocess.run(
+                [
+                    kokoro_pip,
+                    "install",
+                    "-r",
+                    os.path.join(kokoclone_dir, "requirements.txt"),
+                ],
+                check=False,
+            )
+# Check and clone moonshine
         moonshine_dir = os.path.abspath(os.path.join(BASE_DIR, "vendor", "moonshine"))
         if not os.path.exists(moonshine_dir):
             print("[*] Cloning moonshine...")
@@ -3942,7 +4027,7 @@ def real_main():
             )
 
         # Check and download Qwen models
-        qwen_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model"))
+        qwen_models_dir = os.path.abspath(os.path.join(BASE_DIR, "data", "NonDetermenisticGenerativeModel"))
         os.makedirs(qwen_models_dir, exist_ok=True)
 
         models_to_download = [
@@ -4068,7 +4153,7 @@ def real_main():
         #   Refinement: second-state/stable-diffusion-v1-5-GGUF (SD 1.5 Q8_0)
         # Reference: stable-diffusion.cpp/docs/flux.md
         #            project-zephyrine imagination_worker.py (two-stage pipeline)
-        flux_models_dir = os.path.abspath(os.path.join(BASE_DIR, "model"))
+        flux_models_dir = os.path.abspath(os.path.join(BASE_DIR, "data", "NonDetermenisticGenerativeModel"))
         os.makedirs(flux_models_dir, exist_ok=True)
 
         #  SHA256 hashes verified from HuggingFace repo metadata.
@@ -4229,7 +4314,7 @@ def real_main():
         # ═══════════════════════════════════════════════════════════════════
         print("[*] Resolving Ada dependencies and building project...")
         if _setup_gui:
-            _setup_gui._update_bar(pct=40, step_text="code step 0x0005", pulse=True)  # Build core engine (Ada compilation)
+            _setup_gui._update_bar(pct=40, step_text=("[TEST-BUILD] Build core engine (Ada compilation)" if "--test-build-integrity-check" in sys.argv else "code step 0x0005"), pulse=True)  # Build core engine (Ada compilation)
 
         env = os.environ.copy()
         if platform.system() == "Darwin":
@@ -4275,7 +4360,7 @@ def real_main():
         # 1. Our Standalone Proofs
         coq_targets.append(os.path.join(BASE_DIR, "src", "coq_proofs", "MathUtils.v"))
         coq_targets.append(os.path.join(BASE_DIR, "src", "coq_proofs", "ElpQueue.v"))
-        coq_targets.append(os.path.join(BASE_DIR, "lsh", "coq_proofs", "Schrodinger.v"))
+        coq_targets.append(os.path.join(BASE_DIR, "src", "python", "lsh", "coq_proofs", "Schrodinger.v"))
 
         build_bar_width = 40
         build_elapsed = 0.0
@@ -4284,7 +4369,7 @@ def real_main():
             pct = min(99, int(100 * build_elapsed / build_eta_target))
             eta = max(0, int(build_eta_target - build_elapsed))
             if build_gui_dialog:
-                build_gui_dialog._update_bar(pct, eta_text=f"ETA: {eta}s", step_text="code step 0x0005")  # Build core engine (Ada compilation)
+                build_gui_dialog._update_bar(pct, eta_text=f"ETA: {eta}s", step_text=("[TEST-BUILD] Build core engine (Ada compilation)" if "--test-build-integrity-check" in sys.argv else "code step 0x0005"))  # Build core engine (Ada compilation)
             elif not IS_KISS:
                 filled = int(build_bar_width * pct / 100)
                 bar = "█" * filled + "░" * (build_bar_width - filled)
@@ -4295,7 +4380,7 @@ def real_main():
         _build_thread.join()
 
         if build_gui_dialog:
-            build_gui_dialog._update_bar(80, eta_text="", step_text="code step 0x0006")  # Build complete, running verification suites
+            build_gui_dialog._update_bar(80, eta_text="", step_text=("[TEST-BUILD] Build complete, running verification suites" if "--test-build-integrity-check" in sys.argv else "code step 0x0006"))  # Build complete, running verification suites
             time.sleep(0.3)
         elif not IS_KISS:
             _term_print(f"\r\033[K  Loading preparing for Model... |{'█' * build_bar_width}| 100%  Done!")
@@ -4314,7 +4399,7 @@ def real_main():
         # supplements and ECSS-E-ST-40C [ECSS2009EST40C] for deep space deployment [Chien2005EO1].
         print("\n[*] Stage: GNATprove SPARK Static Analysis...")
         if _setup_gui:
-            _setup_gui._update_bar(pct=50, step_text="code step 0x0007", pulse=True)  # Formal proof verification of core logic
+            _setup_gui._update_bar(pct=50, step_text=("[TEST-BUILD] Formal proof verification of core logic" if "--test-build-integrity-check" in sys.argv else "code step 0x0007"), pulse=True)  # Formal proof verification of core logic
             
         # --- Auto-Fix Why3 Coq Bug ---
         # GNATprove distributions via Alire often lack the Coq files in the cvc5/altergo bindings
@@ -4362,12 +4447,12 @@ def real_main():
         print("\n[*] Stage: Coq Standalone Formal Verification...")
         coq_files = []
         coq_files.extend(glob.glob(os.path.join(BASE_DIR, "src", "coq_proofs", "*.v")))
-        coq_files.extend(glob.glob(os.path.join(BASE_DIR, "lsh", "coq_proofs", "*.v")))
+        coq_files.extend(glob.glob(os.path.join(BASE_DIR, "src", "python", "lsh", "coq_proofs", "*.v")))
         if not coq_files:
             print("  [ok] No standalone Coq (.v) files found to verify.")
         else:
             # OPAM Local Environment Bootstrap
-            opam_root = os.path.join(BASE_DIR, ".opam_local")
+            opam_root = os.path.join(BASE_DIR, "venv", "om")
             coqc_bin = os.path.join(opam_root, "default", "bin", "coqc")
             if not os.path.exists(coqc_bin):
                 print(f"  [*] Bootstrapping isolated OPAM Coq environment in {opam_root} (using system OCaml)...")
@@ -4402,7 +4487,7 @@ def real_main():
         # 2. AFL++ Fuzzing Environment Check
         print("\n[*] Stage: AFL++ Fuzzing Readiness Check...")
         if _setup_gui:
-            _setup_gui._update_bar(pct=55, step_text="code step 0x0008", pulse=True)  # Fuzz testing setup
+            _setup_gui._update_bar(pct=55, step_text=("[TEST-BUILD] Fuzz testing setup" if "--test-build-integrity-check" in sys.argv else "code step 0x0008"), pulse=True)  # Fuzz testing setup
         fuzz_ready = False
         for compiler in ["afl-clang-fast", "afl-gcc-fast", "afl-clang-lto"]:
             if shutil.which(compiler):
@@ -4416,8 +4501,8 @@ def real_main():
         # 3. Vite Frontend build (runs tsc and vite build)
         print("[*] Building Vite Frontend for Sidecar UI...")
         if _setup_gui:
-            _setup_gui._update_bar(pct=65, step_text="code step 0x0009", pulse=True)  # Build user interface
-        frontend_dir = os.path.join(BASE_DIR, "ui", "frontend")
+            _setup_gui._update_bar(pct=65, step_text=("[TEST-BUILD] Build user interface" if "--test-build-integrity-check" in sys.argv else "code step 0x0009"), pulse=True)  # Build user interface
+        frontend_dir = os.path.join(BASE_DIR, "src", "ui", "frontend")
         if os.path.exists(frontend_dir):
             npm_cmd = "npm.cmd" if platform.system() == "Windows" else "npm"
             try:
@@ -4435,7 +4520,7 @@ def real_main():
         if shutil.which(ruff_cmd):
             print("[*] Running Platform Self-Integrity Quality Check (Ruff)...")
             if _setup_gui:
-                _setup_gui._update_bar(pct=70, step_text="code step 0x000A", pulse=True)  # Code quality check
+                _setup_gui._update_bar(pct=70, step_text=("[TEST-BUILD] Code quality check" if "--test-build-integrity-check" in sys.argv else "code step 0x000A"), pulse=True)  # Code quality check
             try:
                 result = subprocess.run(
                     [ruff_cmd, "check", BASE_DIR, "--exclude", "vendor,moonshine"],
@@ -4463,9 +4548,9 @@ def real_main():
         # 4a. CrossHair Symbolic Analysis for python/ sidecars
         print("[*] Ensuring CrossHair is installed...")
         if _setup_gui:
-            _setup_gui._update_bar(pct=75, step_text="code step 0x000B", pulse=True)  # Symbolic analysis of code paths
+            _setup_gui._update_bar(pct=75, step_text=("[TEST-BUILD] Symbolic analysis of code paths" if "--test-build-integrity-check" in sys.argv else "code step 0x000B"), pulse=True)  # Symbolic analysis of code paths
         try:
-            pyvenv_dir = os.path.join(BASE_DIR, "pyvenv")
+            pyvenv_dir = os.path.join(BASE_DIR, "venv", "python")
             pyvenv_python = os.path.join(pyvenv_dir, "bin", "python")
             if not os.path.exists(pyvenv_python):
                 print(f"  [~] Creating pyvenv at {pyvenv_dir}...")
@@ -4492,7 +4577,7 @@ def real_main():
             )
             print("[*] Running CrossHair Symbolic Verification on python sidecars...")
 
-            python_dir = os.path.join(BASE_DIR, "python")
+            python_dir = os.path.join(BASE_DIR, "src", "python")
             target_files = []
             for root_dir, _, files in os.walk(python_dir):
                 for f in files:
@@ -4500,6 +4585,11 @@ def real_main():
                         target_files.append(os.path.join(root_dir, f))
 
             if target_files:
+                env_vars = os.environ.copy()
+                env_vars["PATH"] = (
+                    f"{os.path.join(BASE_DIR, 'venv', 'python', 'bin')}{os.pathsep}{env_vars.get('PATH', '')}"
+                )
+                env_vars["VIRTUAL_ENV"] = os.path.join(BASE_DIR, "venv", "python")
                 result = subprocess.run(
                     [
                         pyvenv_python,
@@ -4511,6 +4601,7 @@ def real_main():
                         "1",
                     ]
                     + target_files,
+                    env=env_vars,
                 )
                 if result.returncode == 1:
                     raise RuntimeError(
@@ -4534,14 +4625,14 @@ def real_main():
         if shutil.which(pyrefly_cmd):
             print("[*] Running Pyrefly Type Check on python sidecars...")
             if _setup_gui:
-                _setup_gui._update_bar(pct=80, step_text="code step 0x000C", pulse=True)  # Type consistency check
+                _setup_gui._update_bar(pct=80, step_text=("[TEST-BUILD] Type consistency check" if "--test-build-integrity-check" in sys.argv else "code step 0x000C"), pulse=True)  # Type consistency check
             try:
-                python_dir = os.path.join(BASE_DIR, "python")
+                python_dir = os.path.join(BASE_DIR, "src", "python")
                 env_vars = os.environ.copy()
                 env_vars["PATH"] = (
                     f"{os.path.join(BASE_DIR, 'pyvenv', 'bin')}{os.pathsep}{env_vars.get('PATH', '')}"
                 )
-                env_vars["VIRTUAL_ENV"] = os.path.join(BASE_DIR, "pyvenv")
+                env_vars["VIRTUAL_ENV"] = os.path.join(BASE_DIR, "venv", "python")
                 result = subprocess.run(
                     [
                         pyrefly_cmd,
@@ -4577,7 +4668,7 @@ def real_main():
         if os.path.exists(lsh_reqs):
             print("[LSH] Bootstrapping QRNN LSH worker venv...")
             if _setup_gui:
-                _setup_gui._update_bar(pct=85, step_text="code step 0x000D", pulse=True)  # Initialize background processing systems
+                _setup_gui._update_bar(pct=85, step_text=("[TEST-BUILD] Initialize background processing systems" if "--test-build-integrity-check" in sys.argv else "code step 0x000D"), pulse=True)  # Initialize background processing systems
             if not os.path.exists(pyvenv_python):
                 subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
             pyvenv_pip = os.path.join(pyvenv_dir, "bin", "pip")
@@ -4624,7 +4715,7 @@ def real_main():
         if os.path.exists(vad_worker_script):
             print("[VAD] Bootstrapping ONNX VAD worker...")
             if _setup_gui:
-                _setup_gui._update_bar(pct=90, step_text="code step 0x000E", pulse=True)  # Initialize audio processing pipeline
+                _setup_gui._update_bar(pct=90, step_text=("[TEST-BUILD] Initialize audio processing pipeline" if "--test-build-integrity-check" in sys.argv else "code step 0x000E"), pulse=True)  # Initialize audio processing pipeline
             if not os.path.exists(pyvenv_python):
                 subprocess.run([sys.executable, "-m", "venv", pyvenv_dir], check=True)
             pyvenv_pip = (
@@ -4846,6 +4937,7 @@ def real_main():
         )
         if "--test-build-integrity-check" in sys.argv:
             env["ADELAIDE_API_KEYS"] = "IknowtheConsequencesAndWouldLockupTheServerForHours"
+            env["ADELAIDE_SIDECAR_API_KEY"] = "IknowtheConsequencesAndWouldLockupTheServerForHours"
             print("[API-KEY] Injected test benchmark API key for integrity checks.")
 
     # Inject log file path so the Ada server can tail it for SSE benchmarking
@@ -4991,6 +5083,9 @@ def real_main():
                     with urllib.request.urlopen(req, timeout=300) as res:
                         status = res.getcode()
                         print(f"[Benchmark] Connected. HTTP {status}")
+                        if _setup_gui:
+                            _gui_queue.put({"pct": 92, "text": f"[TEST-BUILD-BENCHMARK] Connected HTTP {status}"})
+
 
                         while True:
                             line = res.readline().decode("utf-8")
@@ -5012,6 +5107,9 @@ def real_main():
                                         and parsed["type"] == "progress"
                                     ):
                                         print(f"[Benchmark Progress] {payload}")
+                                        if _setup_gui:
+                                            _gui_queue.put({"pct": 95, "text": f"[TEST-BUILD-BENCHMARK] {payload}"})
+
                                     elif "performance" in parsed:
                                         print("[Benchmark] Scoring Report:")
                                         print(json.dumps(parsed, indent=2))
@@ -5182,6 +5280,37 @@ def real_main():
             ]
 
             all_passed = True
+            
+            if test_build_integrity:
+                print("[*] Running Sidecar UI Automated Headless Test...")
+                ui_dir = os.path.join(BASE_DIR, "src", "ui")
+                sidecar_env = env.copy()
+                sidecar_env["ADELAIDE_SIDECAR_TEST_MODE"] = "1"
+                
+                # Setup PATH for pyvenv
+                pyvenv_bin = os.path.join(BASE_DIR, "venv", "python", "bin")
+                if os.path.exists(pyvenv_bin):
+                    sidecar_env["PATH"] = pyvenv_bin + os.pathsep + sidecar_env.get("PATH", "")
+                    
+                sidecar_python = os.path.join(pyvenv_bin, "python") if os.path.exists(pyvenv_bin) else sys.executable
+                
+                sidecar_test_proc = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=sidecar_env)
+                
+                try:
+                    if _setup_gui:
+                        _gui_queue.put({"pct": 95, "text": "[TEST-BUILD] Running Sidecar UI Automated Test..."})
+                    exit_code = sidecar_test_proc.wait(timeout=75)
+                    if exit_code != 0:
+                        print(f"[!] Sidecar UI Test FAILED with code {exit_code}! Force quitting...", flush=True)
+                        cleanup()
+                        os._exit(1)
+                    else:
+                        print("[+] Sidecar UI Test PASSED.", flush=True)
+                except subprocess.TimeoutExpired:
+                    print("[!] Sidecar UI Test TIMED OUT! Force quitting...", flush=True)
+                    sidecar_test_proc.kill()
+                    cleanup()
+                    os._exit(1)
             for name, endpoint, payload, method in tests:
                 test_passed = False
                 for test_attempt in range(2):  # Try up to 2 times
@@ -5240,22 +5369,29 @@ def real_main():
 
             if not all_passed:
                 success = False
+                if test_build_integrity:
+                    print("[!] API Tests failed during integrity check! Force quitting everything...", flush=True)
+                    cleanup()
+                    os._exit(1)
 
             if test_build_integrity:
                 if success:
                     print(
-                        "[*] Test build integrity check passed! Running evaluation suite..."
+                        "[*] Test build integrity check passed! Running evaluation suite...", flush=True
                     )
                     try:
-                        subprocess.run([sys.executable, "-m", "eval.eval_runner", "--use-openai", "--port", str(server_port)], check=True)
-                        print("[*] Evaluation suite passed! Exiting successfully.")
+                        if _setup_gui:
+                            _gui_queue.put({"pct": 98, "text": "[TEST-BUILD] Running exhaustive API testing..."})
+                        subprocess.run([sys.executable, "-m", "eval.eval_runner", "--use-openai", "--port", str(server_port)], check=True, cwd=os.path.join(BASE_DIR, "src", "python"))
+                        print("[*] Evaluation suite passed! Exiting successfully.", flush=True)
                     except subprocess.CalledProcessError:
-                        print("[!] Evaluation suite FAILED! Force quitting everything...")
+                        print("[!] Evaluation suite FAILED! Force quitting everything...", flush=True)
                         cleanup()
                         os._exit(1)
                     cleanup()
+                    os._exit(0)
                 else:
-                    print("[!] Test build integrity check FAILED! Force quitting everything...")
+                    print("[!] Test build integrity check FAILED! Force quitting everything...", flush=True)
                     cleanup()
                     os._exit(1)
 
@@ -5271,11 +5407,11 @@ def real_main():
             _tk_progress_done(_setup_gui)
             _setup_gui = None
         print("[*] Booting Python Sidecar UI...")
-        ui_dir = os.path.join(BASE_DIR, "ui")
+        ui_dir = os.path.join(BASE_DIR, "src", "ui")
 
         # Check for venv python
-        venv_python_win = os.path.join(BASE_DIR, "pyvenv", "Scripts", "python.exe")
-        venv_python_unix = os.path.join(BASE_DIR, "pyvenv", "bin", "python")
+        venv_python_win = os.path.join(BASE_DIR, "venv", "python", "Scripts", "python.exe")
+        venv_python_unix = os.path.join(BASE_DIR, "venv", "python", "bin", "python")
 
         if os.path.exists(venv_python_win):
             sidecar_python = venv_python_win
@@ -5338,7 +5474,7 @@ def real_main():
                                 # Now that we have the master key, we can load or generate API keys for the sidecar
                                 try:
                                     import secrets
-                                    sys.path.insert(0, os.path.join(BASE_DIR, "python"))
+                                    sys.path.insert(0, os.path.join(BASE_DIR, "src", "python"))
                                     from adelaide_crypto import load_api_keys, add_api_key, API_KEY_FILE
                                     
                                     all_keys = load_api_keys()
@@ -5386,7 +5522,7 @@ def real_main():
                                 if launched_from_app or in_terminal:
                                     print("[*] Running in Terminal - launching sidecar directly...")
                                     sidecar_env = env.copy()
-                                    pyvenv_bin = os.path.join(BASE_DIR, "pyvenv", "bin")
+                                    pyvenv_bin = os.path.join(BASE_DIR, "venv", "python", "bin")
                                     if os.path.exists(pyvenv_bin):
                                         sidecar_env["PATH"] = pyvenv_bin + os.pathsep + sidecar_env.get("PATH", "")
                                     sidecar_process = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=sidecar_env)
@@ -5400,7 +5536,16 @@ def real_main():
                                 print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
                             
                     print("[*] System fully booted. Waiting for server to exit...")
-                    exit_code = server_process.wait()
+                    if test_build_integrity and _setup_gui:
+                        while server_process.poll() is None:
+                            while not _gui_queue.empty():
+                                msg = _gui_queue.get()
+                                _setup_gui._update_bar(pct=msg.get("pct", None), step_text=msg.get("text", ""))
+                            _setup_gui.update()
+                            time.sleep(0.1)
+                        exit_code = server_process.returncode
+                    else:
+                        exit_code = server_process.wait()
                 shutdown_flag = os.path.join(BASE_DIR, "run", ".shutdown_requested")
                 intentional_exit_flag = os.path.join(
                     BASE_DIR, "run", ".intentional_exit"
@@ -5804,6 +5949,10 @@ def real_main():
                     )
                 except Exception as e:
                     print(f"[!] Failed to generate crash plot: {e}")
+
+                if test_build_integrity:
+                    print("\n[!] test_build_integrity is enabled. Auto-restart is disabled. Failing test...")
+                    break
 
                 print("\n[*] Relaunching server instantly (JMP back Rebounce back)...")
                 # Kill any lingering old daemon to prevent CSV write races
