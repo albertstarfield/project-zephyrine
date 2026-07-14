@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Task scheduler requires protected type
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Containers.Doubly_Linked_Lists;

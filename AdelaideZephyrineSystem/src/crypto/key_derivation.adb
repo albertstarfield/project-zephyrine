@@ -18,25 +18,25 @@ is
    --  These functions are implemented in adl_crypto.c
 
    function HKDF_SHA512
-     (Salt      : System.Address;
+     (Salt      : System.Address; -- FFI: System.Address required for C binding
       Salt_Len  : Interfaces.C.size_t;
-      IKM       : System.Address;
+      IKM       : System.Address; -- FFI: System.Address required for C binding
       IKM_Len   : Interfaces.C.size_t;
-      Info      : System.Address;
+      Info      : System.Address; -- FFI: System.Address required for C binding
       Info_Len  : Interfaces.C.size_t;
-      OKM       : System.Address;
+      OKM       : System.Address; -- FFI: System.Address required for C binding
       OKM_Len   : Interfaces.C.size_t) return Interfaces.C.int
      with Import => True, Convention => C,
           External_Name => "adl_hkdf_sha512";
 
    function HKDF_SHA256
-     (Salt      : System.Address;
+     (Salt      : System.Address; -- FFI: System.Address required for C binding
       Salt_Len  : Interfaces.C.size_t;
-      IKM       : System.Address;
+      IKM       : System.Address; -- FFI: System.Address required for C binding
       IKM_Len   : Interfaces.C.size_t;
-      Info      : System.Address;
+      Info      : System.Address; -- FFI: System.Address required for C binding
       Info_Len  : Interfaces.C.size_t;
-      OKM       : System.Address;
+      OKM       : System.Address; -- FFI: System.Address required for C binding
       OKM_Len   : Interfaces.C.size_t) return Interfaces.C.int
      with Import => True, Convention => C,
           External_Name => "adl_hkdf_sha256";
@@ -121,13 +121,13 @@ is
    begin
       --  Use C FFI for HKDF-SHA512
       declare
-         Salt_Ptr  : constant System.Address := Integrity_Hash'Address;
+         Salt_Ptr  : constant System.Address := Integrity_Hash'Address; -- FFI: System.Address required for C binding
          Salt_Len  : constant Interfaces.C.size_t := Hash_Type'Size / 8;
-         IKM_Ptr   : constant System.Address := User_Secret'Address;
+         IKM_Ptr   : constant System.Address := User_Secret'Address; -- FFI: System.Address required for C binding
          IKM_Len   : constant Interfaces.C.size_t := User_Secret'Length;
-         Info_Ptr  : constant System.Address := Info'Address;
+         Info_Ptr  : constant System.Address := Info'Address; -- FFI: System.Address required for C binding
          Info_Len  : constant Interfaces.C.size_t := Info'Length;
-         OKM_Ptr   : constant System.Address := Result'Address;
+         OKM_Ptr   : constant System.Address := Result'Address; -- FFI: System.Address required for C binding
          OKM_Len   : constant Interfaces.C.size_t := Master_Key_Type'Size / 8;
       Ret       : Interfaces.C.int;
        begin
@@ -155,13 +155,13 @@ is
    begin
       --  Use C FFI for HKDF-SHA256
       declare
-         Salt_Ptr  : constant System.Address := Master_Key'Address;
+         Salt_Ptr  : constant System.Address := Master_Key'Address; -- FFI: System.Address required for C binding
          Salt_Len  : constant Interfaces.C.size_t := Master_Key_Type'Size / 8;
-         IKM_Ptr   : constant System.Address := Context'Address;
+         IKM_Ptr   : constant System.Address := Context'Address; -- FFI: System.Address required for C binding
          IKM_Len   : constant Interfaces.C.size_t := Context'Length;
-         Info_Ptr  : constant System.Address := Info'Address;
+         Info_Ptr  : constant System.Address := Info'Address; -- FFI: System.Address required for C binding
          Info_Len  : constant Interfaces.C.size_t := Info'Length;
-         OKM_Ptr   : constant System.Address := Result'Address;
+         OKM_Ptr   : constant System.Address := Result'Address; -- FFI: System.Address required for C binding
          OKM_Len   : constant Interfaces.C.size_t := AES_Key_Type'Size / 8;
          Ret       : Interfaces.C.int;
       begin

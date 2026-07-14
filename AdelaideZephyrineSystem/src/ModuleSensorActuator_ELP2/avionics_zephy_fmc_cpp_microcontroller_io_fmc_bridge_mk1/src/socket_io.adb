@@ -20,7 +20,7 @@ package body Socket_IO is
    pragma Import (C, socket, "socket");
    
    function bind (socket_fd : Interfaces.C.int;
-                  addr : System.Address;
+                  addr : System.Address; -- FFI: System.Address required for C binding
                   addrlen : Interfaces.C.size_t) return Interfaces.C.int;
    pragma Import (C, bind, "bind");
    
@@ -30,12 +30,12 @@ package body Socket_IO is
    
    -- RENAMED to avoid conflict with Ada keyword 'accept'
    function c_accept (socket_fd : Interfaces.C.int;
-                      addr : System.Address;
-                      addrlen : System.Address) return Interfaces.C.int;
+                      addr : System.Address; -- FFI: System.Address required for C binding
+                      addrlen : System.Address) return Interfaces.C.int; -- FFI: System.Address required for C binding
    pragma Import (C, c_accept, "accept");
    
    function connect (socket_fd : Interfaces.C.int;
-                     addr : System.Address;
+                     addr : System.Address; -- FFI: System.Address required for C binding
                      addrlen : Interfaces.C.size_t) return Interfaces.C.int;
    pragma Import (C, connect, "connect");
    
@@ -43,12 +43,12 @@ package body Socket_IO is
    pragma Import (C, close, "close");
    
    function write (fd : Interfaces.C.int;
-                   buf : System.Address;
+                   buf : System.Address; -- FFI: System.Address required for C binding
                    count : Interfaces.C.size_t) return Interfaces.C.long;
    pragma Import (C, write, "write");
    
    function read (fd : Interfaces.C.int;
-                  buf : System.Address;
+                  buf : System.Address; -- FFI: System.Address required for C binding
                   count : Interfaces.C.size_t) return Interfaces.C.long;
    pragma Import (C, read, "read");
    

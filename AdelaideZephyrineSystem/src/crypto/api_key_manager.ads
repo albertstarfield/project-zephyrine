@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Interface.C for key storage FFI
 
 --  ============================================================================
 --  API Key Manager — loads API keys from a plaintext file (one per line) and

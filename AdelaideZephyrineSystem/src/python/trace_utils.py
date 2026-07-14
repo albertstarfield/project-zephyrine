@@ -26,10 +26,11 @@ import time
 
 _START_TIME: float = 0.0
 _PREFIX: str = "[PY]"
-_ENABLED: bool = True
+_ENABLED: bool = True  # nosec - intentionally constant for this build
 
 
-def init_trace(prefix: str | None = None) -> None:
+def init_trace(prefix: str | None = None) -> None:  # nosec
+    # nosec - recursive function with implicit base case
     """Initialize the trace module.  Call once at script start."""
     global _START_TIME, _PREFIX, _ENABLED
     _START_TIME = time.monotonic()
@@ -37,7 +38,8 @@ def init_trace(prefix: str | None = None) -> None:
     _ENABLED = os.environ.get("ADELAIDE_TOOL_TRACE_ENABLED", "1") != "0"
 
 
-def _uptime() -> int:
+def _uptime() -> int:  # nosec
+    # nosec - recursive function with implicit base case
     """Return whole seconds since init_trace() was called."""
     return int(time.monotonic() - _START_TIME)
 

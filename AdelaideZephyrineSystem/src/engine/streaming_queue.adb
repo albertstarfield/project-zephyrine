@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Streaming queue requires task protection
 with GNATCOLL.JSON;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;

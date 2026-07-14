@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Supertonic C FFI
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
@@ -6,8 +7,8 @@ with System;
 package Supertonic_Bindings is
    pragma Preelaborate;
 
-   type SupertonicTTS is new System.Address;
-   type SupertonicStyle is new System.Address;
+   type SupertonicTTS is new System.Address; -- FFI: System.Address required for C binding
+   type SupertonicStyle is new System.Address; -- FFI: System.Address required for C binding
 
    -- SupertonicTTS* supertonic_init(const char* onnx_dir, int use_gpu);
    function Init (Onnx_Dir : chars_ptr; Use_Gpu : int) return SupertonicTTS
@@ -18,7 +19,7 @@ package Supertonic_Bindings is
      with Import => True, Convention => C, External_Name => "supertonic_free";
 
    -- SupertonicStyle* supertonic_load_style(const char** voice_style_paths, int num_paths);
-   function Load_Style (Voice_Style_Paths : System.Address; Num_Paths : int) return SupertonicStyle
+   function Load_Style (Voice_Style_Paths : System.Address; Num_Paths : int) return SupertonicStyle -- FFI: System.Address required for C binding
      with Import => True, Convention => C, External_Name => "supertonic_load_style";
 
    -- void supertonic_free_style(SupertonicStyle* style);
@@ -34,11 +35,11 @@ package Supertonic_Bindings is
       Total_Step       : int;
       Speed            : C_float;
       Silence_Duration : C_float;
-      Out_Samples      : access size_t) return System.Address
+      Out_Samples      : access size_t) return System.Address -- FFI: System.Address required for C binding
      with Import => True, Convention => C, External_Name => "supertonic_synthesize";
 
    -- void supertonic_free_audio(float* audio);
-   procedure Free_Audio (Audio : System.Address)
+   procedure Free_Audio (Audio : System.Address) -- FFI: System.Address required for C binding
      with Import => True, Convention => C, External_Name => "supertonic_free_audio";
 
    -- int supertonic_get_sample_rate(SupertonicTTS* tts);

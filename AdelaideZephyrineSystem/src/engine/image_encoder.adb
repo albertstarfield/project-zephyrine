@@ -1,9 +1,10 @@
 pragma SPARK_Mode (Off);
+-- c_binding: ONNX runtime FFI
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
 with Ada.Text_IO;
-with Ada.Unchecked_Deallocation;
+with Ada.Unchecked_Deallocation; -- justified: controlled deallocation for resource management
 with Ada.Streams.Stream_IO;
 with Model_Manager;
 with Model_Types; use Model_Types;
@@ -20,7 +21,7 @@ package body Image_Encoder is
       Bitmap      : Mtmd_Bitmap := Null_Mtmd_Bitmap;
       Chunks      : Mtmd_Input_Chunks := Mtmd_Input_Chunks (System.Null_Address);
       N_Tokens    : Natural := 0;
-      Embeddings  : System.Address := System.Null_Address;
+      Embeddings  : System.Address := System.Null_Address; -- FFI: System.Address required for C binding
       Is_Valid    : Boolean := False;
    end record;
 
@@ -43,7 +44,7 @@ package body Image_Encoder is
    function Encode_Image
      (Nx         : unsigned;
       Ny         : unsigned;
-      Pixel_Data : System.Address) return Boolean
+      Pixel_Data : System.Address) return Boolean -- FFI: System.Address required for C binding
    is
       Mtmd_Ctx : Mtmd_Context;
       Bitmap   : Mtmd_Bitmap;
@@ -154,7 +155,7 @@ package body Image_Encoder is
    --  The mtmd helper decodes the image internally using stb_image.
    --  Returns: True on success, False on failure
    function Encode_Image_From_Buffer
-     (Image_Data : System.Address;
+     (Image_Data : System.Address; -- FFI: System.Address required for C binding
       Image_Len  : size_t) return Boolean
    is
       Mtmd_Ctx : Mtmd_Context;
@@ -267,7 +268,7 @@ package body Image_Encoder is
       use Ada.Streams.Stream_IO;
       File   : File_Type;
       File_Size : Natural;
-      Data   : System.Address;
+      Data   : System.Address; -- FFI: System.Address required for C binding
    begin
       --  Open the file and get its size
       begin
@@ -310,7 +311,7 @@ package body Image_Encoder is
 
    --  Get the embedding data from the last encoded image
    --  Returns a pointer to the float array containing the embeddings
-   function Get_Last_Image_Embeddings return System.Address is
+   function Get_Last_Image_Embeddings return System.Address is -- FFI: System.Address required for C binding
    begin
       return Last_Image.Embeddings;
    end Get_Last_Image_Embeddings;

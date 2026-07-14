@@ -51,6 +51,7 @@
 ## ============================
 **/model/
 **/cache/
+**NonDeterministicGenerative** 
 **/.hf_cache/
 **/ollama_data/
 **/format.py

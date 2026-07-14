@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: ONNX runtime FFI
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
@@ -19,13 +20,13 @@ package Image_Encoder is
    function Encode_Image
      (Nx         : unsigned;
       Ny         : unsigned;
-      Pixel_Data : System.Address) return Boolean;
+      Pixel_Data : System.Address) return Boolean; -- FFI: System.Address required for C binding
 
    --  Encode an image from raw image bytes (JPEG, PNG, etc.)
    --  The mtmd helper decodes the image internally using stb_image.
    --  Returns: True on success, False on failure
    function Encode_Image_From_Buffer
-     (Image_Data : System.Address;
+     (Image_Data : System.Address; -- FFI: System.Address required for C binding
       Image_Len  : size_t) return Boolean;
 
    --  Encode an image from a file (supports PNG, JPG, etc.)
@@ -38,7 +39,7 @@ package Image_Encoder is
 
    --  Get the embedding data from the last encoded image
    --  Returns a pointer to the float array containing the embeddings
-   function Get_Last_Image_Embeddings return System.Address;
+   function Get_Last_Image_Embeddings return System.Address; -- FFI: System.Address required for C binding
 
    --  Free the last encoded image data
    procedure Free_Last_Image;

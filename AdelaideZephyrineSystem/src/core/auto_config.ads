@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: System configuration FFI
 --  ============================================================================
 --  AUTO_CONFIG — Self-Tuning Hardware Configuration
 --  ============================================================================

@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Tracing requires task-safe logging
 
 --  ============================================================================
 --  ADELAIDE TRACE — Implementation

@@ -1,5 +1,5 @@
 project Adelaide_Spark is
-   for Source_Dirs use ("src", "ZenithOrion/src");
+   for Source_Dirs use ("src", "src/core", "src/utils", "src/managers", "src/interfaces", "src/crypto", "src/NonDeterministicGenerativeModelManager", "src/ModuleSensorActuator_ELP3/src");
    for Source_Files use ("math_utils.ads", "math_utils.adb",
                          "integrity_utils.ads", "integrity_utils.adb",
                          "model_types.ads",

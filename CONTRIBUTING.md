@@ -41,27 +41,27 @@ The `AdelaideZephyrineSystem/vendor/` directory contains third-party submodules 
 
 ### Formal Verification Standards
 
-All Ada/SPARK code in this project must comply with **ISO/IEC 8652:2012** (Ada Reference Manual) and the **SPARK 2014** subset as defined by **ISO/IEC 152201:2012**. Formal proof is conducted using **ROCq** (formerly Coq), an interactive theorem prover that provides the highest level of assurance for safety-critical software.
+All Ada/SPARK code in this project must comply with **ISO/IEC 8652:2012** (Ada Reference Manual) and the **SPARK 2014** subset as defined by **ISO/IEC 152201:2012**. Formal verification uses two complementary systems:
 
-The GNATprove command in `run.py` is configured with the following prover chain:
+**1. GNATprove (SPARK static analysis)** — automated prover chain for Ada/SPARK code:
 ```
---prover=cvc5,z3,altergo,coq
+--prover=cvc5,z3,altergo
 ```
-
-This is the **minimum required prover set** for all formal verification in this project. Each prover serves a distinct role:
 - **cvc5** and **z3**: SMT solvers for constraint satisfaction and arithmetic reasoning
 - **altergo**: ATP for automated theorem proving
-- **ROCq (Coq)**: Interactive theorem prover for deep structural proofs and inductive reasoning
+
+**2. ROCq/Coq (standalone)** — interactive theorem prover for dedicated `.v` proof files (`src/coq_proofs/`, `src/python/lsh/coq_proofs/`). Coq is invoked separately via `coqc`, not through GNATprove's `--prover` flag, due to Alire distribution limitations with Why3 Coq bindings.
 
 ### ⚠️ Prover Integrity Policy
 
 **DO NOT remove, disable, or bypass any prover from the `--prover` list in `run.py`.** This is considered **verification fraud** and will result in immediate rejection and potential ban.
 
 Specifically, the following actions are **strictly prohibited**:
-- Removing `coq` (ROCq) from the prover list to reduce build time
+- Removing `cvc5`, `z3`, or `altergo` from the GNATprove prover list to reduce build time
 - Switching to `--level=0` or `--level=2` to avoid proof obligations
-- Adding `--skip-prover=coq` or similar flags to bypass formal verification
+- Adding `--skip-prover=...` flags to bypass formal verification
 - Modifying `run.py` to silently downgrade verification levels
+- Removing or skipping standalone Coq (`.v`) verification steps
 
 If you encounter a proof failure, you **must**:
 1. Fix the underlying code or contracts to satisfy the proof
@@ -86,7 +86,7 @@ Before contributing, you must identify the DAL of the module you are modifying. 
 * **Permitted Languages:** **Ada** (Preferred), **C/C++** (Strict Subset/MISRA compliant).
 * **Prohibited:** Python, JavaScript, Garbage Collection, Dynamic Memory Allocation (after initialization).
 * **Contribution Rules:**
-    * **GenAI Permitted with Formal Proof Requirement:** Generative AI may be used to assist with DAL A code, but **every line of generated or modified code must pass `gnatprove --level=4` with the ROCq (Coq) prover backend**. The formal verification chain is: `run.py` invokes `gnatprove` with `--prover=cvc5,z3,altergo,coq` — this is the **minimum required prover set** for DAL A compliance. GenAI is **required** for interfacing with memory or other FFI boundaries, as manual FFI code is error-prone and must be verified against SPARK contracts.
+    * **GenAI Permitted with Formal Proof Requirement:** Generative AI may be used to assist with DAL A code, but **every line of generated or modified code must pass `gnatprove --level=4 --prover=cvc5,z3,altergo`**. The formal verification chain is: `run.py` invokes `gnatprove` with `--prover=cvc5,z3,altergo` for SPARK code, and standalone `coqc` for dedicated `.v` proof files. GenAI is **required** for interfacing with memory or other FFI boundaries, as manual FFI code is error-prone and must be verified against SPARK contracts.
     * **Manual Verification:** All PRs affecting DAL A must include a manual timing analysis (e.g., "Loop guarantees execution in <500µs").
     * **Failure Consequence:** Hardware damage, thermal runaway, or total system loss.
 
@@ -95,7 +95,7 @@ Before contributing, you must identify the DAL of the module you are modifying. 
 * **Permitted Languages:** **Ada** (Daemon), **Go** (Watchdog), **Rust**.
 * **Role:** This layer protects the system from the AI. It monitors the "Heartbeat" of DAL C and performs a "Kill/Restart" if the AI hangs or hallucinates unsafe values.
 * **Contribution Rules:**
-    * **Restricted GenAI:** AI assistance is allowed but must be heavily cited. All Ada code must pass `gnatprove --level=4 --prover=cvc5,z3,altergo,coq`.
+    * **Restricted GenAI:** AI assistance is allowed but must be heavily cited. All Ada code must pass `gnatprove --level=4 --prover=cvc5,z3,altergo`.
     * **Focus:** Code must be proofed against deadlocks and race conditions.
     * **Failure Consequence:** Loss of intelligent guidance, reversion to ballistic/fallback mode.
 
@@ -105,7 +105,7 @@ Before contributing, you must identify the DAL of the module you are modifying. 
 * **Role:** High-level reasoning, physics simulation, and user interaction. This layer is considered **Non-Deterministic**.
 * **Contribution Rules:**
     * **Standard GenAI Policy:** Subject to the "300-Line Limit" and citation rules in Section 2.3.
-    * **Ada/SPARK Code:** All Ada/SPARK code in DAL C must also pass `gnatprove --level=4 --prover=cvc5,z3,altergo,coq`. The same prover integrity policy applies.
+    * **Ada/SPARK Code:** All Ada/SPARK code in DAL C must also pass `gnatprove --level=4 --prover=cvc5,z3,altergo`. The same prover integrity policy applies.
     * **Failure Consequence:** "Repeated Input" errors, hallucinations, application crash. (Caught by DAL B).
 
 ## Section 1.3: FIPS 140-3 Cryptographic Compliance

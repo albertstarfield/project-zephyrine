@@ -6,6 +6,7 @@
 --    moral bounds for space deployment [AI2026MoralSpaceAgents].
 --  =============================================================================
 pragma SPARK_Mode (Off);
+-- thread: AWS HTTP client requires task protection
 
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 --  ===========================================================================
@@ -407,7 +408,7 @@ begin
         --    >200000 MB/s = Next Generation Drive (Ultra High)
         --  ----------------------------------------------------------------
         declare
-            GGUF_Path    : constant String := "data/NonDetermenisticGenerativeModel/Mythos9bHybridq4.gguf";
+            GGUF_Path    : constant String := "data/NonDeterministicGenerativeModel/Mythos9bHybridq4.gguf";
             --  Target: 1GB = 1024 * 1024 * 1024 bytes
             Target_Bytes : constant Long_Long_Integer := 1024 * 1024 * 1024;
             --  Read in 1MB chunks to avoid huge stack allocations
@@ -737,11 +738,11 @@ begin
                   Both)
             & "s STEP 4.5: Calling SD_Manager.Initialize...");
         SD_Manager.Initialize
-           (Flux_Diffusion => "data/NonDetermenisticGenerativeModel/flux1-schnell.gguf",
-            Flux_Clip_L    => "data/NonDetermenisticGenerativeModel/clip_l.safetensors",
-            Flux_T5XXL     => "data/NonDetermenisticGenerativeModel/flux1-t5xxl.gguf",
-            Flux_VAE       => "data/NonDetermenisticGenerativeModel/ae.safetensors",
-            Refiner_Model  => "data/NonDetermenisticGenerativeModel/sd-refinement.gguf");
+           (Flux_Diffusion => "data/NonDeterministicGenerativeModel/flux1-schnell.gguf",
+            Flux_Clip_L    => "data/NonDeterministicGenerativeModel/clip_l.safetensors",
+            Flux_T5XXL     => "data/NonDeterministicGenerativeModel/flux1-t5xxl.gguf",
+            Flux_VAE       => "data/NonDeterministicGenerativeModel/ae.safetensors",
+            Refiner_Model  => "data/NonDeterministicGenerativeModel/sd-refinement.gguf");
         Put_Line
            (AnsiAda.Foreground (AnsiAda.Light_Blue)
             & "[Init-V]"

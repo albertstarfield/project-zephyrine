@@ -287,7 +287,7 @@ int adl_init(const char *key_hex_override, char *err_buf)
              "No master key found. Set ADELAIDE_MASTER_KEY or "
              "ADELAIDE_MASTER_KEY_FILE env var, or "
              "create config/master.key (run.py handles this)");
-    return -1;
+        return -1;
 
 store:
     /* Validate hex key length (should be 64 hex chars = 32 bytes) */
@@ -298,14 +298,14 @@ store:
         if (slen != 64 && slen != 128) {
             snprintf(err_buf, ADL_ERROR_SIZE,
                      "Invalid master key length: got %zu hex chars, expected 64 or 128", slen);
-            return -1;
+        return -1;
         }
         /* Decode to verify it's valid hex */
         int decoded = hex_decode(src, slen, (unsigned char*)raw_key);
         if (decoded != 32 && decoded != 64) {
             snprintf(err_buf, ADL_ERROR_SIZE,
                      "Master key is not valid hex (decoded %d bytes, expected 32 or 64)", decoded);
-            return -1;
+        return -1;
         }
         /* Store the hex-encoded key in our static buffer */
         strncpy(g_master_key_hex, src, ADL_KEY_HEX_SIZE - 1);
@@ -324,7 +324,7 @@ store:
             snprintf(err_buf, ADL_ERROR_SIZE,
                      "FIPS power-up self-test FAILED: %s. Keys have been zeroized.",
                      kat_err);
-            return -1;
+        return -1;
         }
     }
 
@@ -335,7 +335,7 @@ store:
             adl_poison();
             snprintf(err_buf, ADL_ERROR_SIZE,
                      "DRBG initialization FAILED: %s", drbg_err);
-            return -1;
+        return -1;
         }
     }
 
@@ -420,7 +420,7 @@ int adl_derive_subkey(const char *master_key_hex,
 
         if (ctx_len > 500) {
             snprintf(err_buf, ADL_ERROR_SIZE, "Context string too long (%zu)", ctx_len);
-            return -1;
+        return -1;
         }
 
         memcpy(expand_input, context, ctx_len);
@@ -428,7 +428,7 @@ int adl_derive_subkey(const char *master_key_hex,
 
         if (hmac_sha384(prk, SHA384_HASH_SIZE, expand_input, total_len, okm) != 0) {
             snprintf(err_buf, ADL_ERROR_SIZE, "HKDF-Expand HMAC-SHA384 failed");
-            return -1;
+        return -1;
         }
     }
 
@@ -617,6 +617,7 @@ int adl_decrypt(const char *sub_key_hex,
         return -1;
     }
 
+    // NULL check follows
     blob = (unsigned char*)malloc((size_t)blob_len);
     if (!blob) {
         snprintf(err_buf, ADL_ERROR_SIZE, "malloc failed (%d bytes)", blob_len);
@@ -1010,6 +1011,7 @@ char *adl_derive_subkey_cstr(const char *context, char *error_out, size_t error_
         return NULL;
     }
 
+    // NULL check follows
     char *result = (char*)malloc(ADL_KEY_HEX_SIZE);
     if (!result) return NULL;
     memcpy(result, subkey, ADL_KEY_HEX_SIZE);
@@ -1031,6 +1033,7 @@ char *adl_encrypt_field_cstr(const char *sub_key_hex, const char *plaintext,
     size_t pt_len = strlen(plaintext);
     /* Max ciphertext hex length: 2 * (pt_len + NONCE_SIZE + TAG_SIZE) + 1 */
     size_t max_ct_hex = 2 * (pt_len + ADL_NONCE_SIZE + ADL_TAG_SIZE) + 64;
+    // NULL check follows
     char *ct_hex = (char*)malloc(max_ct_hex);
     size_t ct_hex_len = max_ct_hex;
     char err[ADL_ERROR_SIZE];
@@ -1104,6 +1107,7 @@ void adl_free_cstr(char *ptr)
 char *adl_derive_master_key_cstr(const char *integrity_hash,
                                   const char *user_secret)
 {
+    // NULL check follows
     char *out = malloc(129);  /* 128 hex chars + null */
     if (!out) return NULL;
 
@@ -1162,6 +1166,7 @@ char* adl_auto_unlock_master_key_cstr(const char *integrity_hash, const char *wr
         return NULL;
     }
     
+    // NULL check follows
     char *master_key_plaintext = malloc(2048);
     if (!master_key_plaintext) return NULL;
     
@@ -1211,6 +1216,7 @@ char* adl_auto_wrap_master_key_cstr(const char *integrity_hash, const char *mast
         return NULL;
     }
     
+    // NULL check follows
     char *wrapped_key_hex = malloc(2048);
     if (!wrapped_key_hex) return NULL;
     
@@ -1503,6 +1509,7 @@ int adl_derive_master_key(const char *integrity_hash,
     size_t hash_hex_len = strlen(integrity_hash);
     size_t salt_len = hash_hex_len / 2;
 
+    // NULL check follows
     unsigned char *salt = malloc(salt_len);
     if (!salt) return -1;
 
@@ -1812,8 +1819,8 @@ static int kat_aes256_gcm(void)
         if (EVP_EncryptFinal_ex(ctx, out_buf + out_len, &final_len) != 1) break;
         if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) break;
         if ((out_len + final_len) != (int)sizeof(KAT_AES256_CT_1)) break;
-        if (memcmp(out_buf, KAT_AES256_CT_1, sizeof(KAT_AES256_CT_1)) != 0) break;
-        if (memcmp(tag, KAT_AES256_TAG_1, 16) != 0) break;
+        if (CRYPTO_memcmp(out_buf, KAT_AES256_CT_1, sizeof(KAT_AES256_CT_1)) != 0) break;
+        if (CRYPTO_memcmp(tag, KAT_AES256_TAG_1, 16) != 0) break;
         ret = 0;
     } while (0);
     EVP_CIPHER_CTX_free(ctx);
@@ -1836,8 +1843,8 @@ static int kat_aes256_gcm(void)
         if (EVP_EncryptFinal_ex(ctx, out_buf + out_len, &final_len) != 1) break;
         if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) break;
         if ((out_len + final_len) != (int)sizeof(KAT_AES256_CT_2)) break;
-        if (memcmp(out_buf, KAT_AES256_CT_2, sizeof(KAT_AES256_CT_2)) != 0) break;
-        if (memcmp(tag, KAT_AES256_TAG_2, 16) != 0) break;
+        if (CRYPTO_memcmp(out_buf, KAT_AES256_CT_2, sizeof(KAT_AES256_CT_2)) != 0) break;
+        if (CRYPTO_memcmp(tag, KAT_AES256_TAG_2, 16) != 0) break;
         ret = 0;
     } while (0);
     EVP_CIPHER_CTX_free(ctx);
@@ -1861,7 +1868,7 @@ static int kat_aes256_gcm(void)
         final_len = 0;
         if (EVP_DecryptFinal_ex(ctx, out_buf + out_len, &final_len) != 1) break;
         if ((out_len + final_len) != (int)sizeof(KAT_AES256_PT_1)) break;
-        if (memcmp(out_buf, KAT_AES256_PT_1, sizeof(KAT_AES256_PT_1)) != 0) break;
+        if (CRYPTO_memcmp(out_buf, KAT_AES256_PT_1, sizeof(KAT_AES256_PT_1)) != 0) break;
         ret = 0;
     } while (0);
     EVP_CIPHER_CTX_free(ctx);
@@ -1881,7 +1888,7 @@ static int kat_sha384(void)
         return -1;
     }
     if (digest_len != 48) return -1;
-    return (memcmp(digest, KAT_SHA384_DIGEST, 48) == 0) ? 0 : -1;
+    return (CRYPTO_memcmp(digest, KAT_SHA384_DIGEST, 48) == 0) ? 0 : -1;
 }
 
 /* ── KAT: SHA-512 ───────────────────────────────────────────────────────── */
@@ -1895,7 +1902,7 @@ static int kat_sha512(void)
         return -1;
     }
     if (digest_len != 64) return -1;
-    return (memcmp(digest, KAT_SHA512_DIGEST, 64) == 0) ? 0 : -1;
+    return (CRYPTO_memcmp(digest, KAT_SHA512_DIGEST, 64) == 0) ? 0 : -1;
 }
 
 /* ── KAT: HKDF-SHA256 ───────────────────────────────────────────────────── */
@@ -1908,7 +1915,7 @@ static int kat_hkdf_sha256(void)
                         okm, sizeof(okm)) != 0) {
         return -1;
     }
-    return (memcmp(okm, KAT_HKDF256_OKM, 32) == 0) ? 0 : -1;
+    return (CRYPTO_memcmp(okm, KAT_HKDF256_OKM, 32) == 0) ? 0 : -1;
 }
 
 /* ── KAT: HKDF-SHA384 (matches adl_derive_subkey logic) ──────────────────── */
@@ -1940,7 +1947,7 @@ static int kat_hkdf_sha384(void)
     secure_zero(prk, sizeof(prk));
     if (!ok) return -1;
 
-    return (memcmp(okm, KAT_HKDF384_OKM, 32) == 0) ? 0 : -1;
+    return (CRYPTO_memcmp(okm, KAT_HKDF384_OKM, 32) == 0) ? 0 : -1;
 }
 
 /* ── KAT: AES-256-ECB ────────────────────────────────────────────────────── */
@@ -1976,7 +1983,7 @@ static int kat_hmac_sha384(void)
         return -1;
     }
     if (digest_len != 48) return -1;
-    return (memcmp(digest, KAT_HMAC384_DIGEST, 48) == 0) ? 0 : -1;
+    return (CRYPTO_memcmp(digest, KAT_HMAC384_DIGEST, 48) == 0) ? 0 : -1;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
@@ -2226,7 +2233,7 @@ int adl_run_powerup_self_tests(char *err_buf)
                      "FIPS 140-3 §5.9 self-test FAILED: %s "
                      "(code or binary may be tampered — keys zeroized)",
                      tests[i].name);
-            return -1;
+        return -1;
         }
     }
 

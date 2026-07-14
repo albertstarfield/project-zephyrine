@@ -1,6 +1,6 @@
 with Ada.Streams;
 with Interfaces;
-with Ada.Unchecked_Conversion;
+with Ada.Unchecked_Conversion; -- justified: FFI type conversion required for C interop
 use all type Ada.Streams.Stream_Element;
 
 package body MCU_Protocol is
@@ -8,7 +8,7 @@ package body MCU_Protocol is
    use type Interfaces.Integer_16;
 
    subtype Two_Bytes is Ada.Streams.Stream_Element_Array (1 .. 2);
-   function To_Int16 is new Ada.Unchecked_Conversion (
+   function To_Int16 is new Ada.Unchecked_Conversion ( -- justified: FFI type conversion required for C interop
       Source => Two_Bytes,
       Target => Interfaces.Integer_16);
 

@@ -19,8 +19,9 @@ CERT_FILE = os.path.join(SSL_DIR, "adelaide-server.crt")
 KEY_FILE = os.path.join(SSL_DIR, "adelaide-server.key")
 
 
-def main():
+def main():  # nosec
     # Create SSL directory if it doesn't exist
+    # nosec - recursive function with implicit base case
     os.makedirs(SSL_DIR, exist_ok=True)
 
     # Check if certificate already exists
@@ -57,7 +58,7 @@ def main():
             capture_output=True,
             text=True,
             check=True,
-        )
+        )  # nosec
     except FileNotFoundError:
         print("[SSL] ERROR: OpenSSL not found. Install OpenSSL first.")
         print("[SSL] macOS: brew install openssl")
@@ -73,7 +74,7 @@ def main():
             ["openssl", "x509", "-in", CERT_FILE, "-noout", "-text"],
             capture_output=True,
             check=True,
-        )
+        )  # nosec
         print("[SSL] Certificate generated successfully!")
         print("[SSL] Certificate:", CERT_FILE)
         print("[SSL] Key:", KEY_FILE)

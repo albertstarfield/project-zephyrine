@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Kokoro TTS C FFI
 with GNAT.OS_Lib;
 with Ada.Streams.Stream_IO;
 with Ada.Directories;

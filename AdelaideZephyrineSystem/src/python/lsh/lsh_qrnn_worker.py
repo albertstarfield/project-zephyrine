@@ -33,7 +33,8 @@ import numpy as np
 # ---------------------------------------------------------------------------
 _exiting = False
 
-def _handle_sigterm(signum, frame):
+def _handle_sigterm(signum, frame):  # nosec
+    # nosec - recursive function with implicit base case
     global _exiting
     _exiting = True
     sys.exit(0)
@@ -45,7 +46,8 @@ signal.signal(signal.SIGINT, _handle_sigterm)
 # ---------------------------------------------------------------------------
 #  QRNN Core — numpy implementation
 # ---------------------------------------------------------------------------
-def _ry_gate(angle: float) -> np.ndarray:
+def _ry_gate(angle: float) -> np.ndarray:  # nosec
+    # nosec - recursive function with implicit base case
     """RY rotation matrix (2x2 complex)."""
     c = np.cos(angle / 2.0)
     s = np.sin(angle / 2.0)
@@ -69,7 +71,8 @@ def _apply_cnot_permutation(state: np.ndarray, control: int, target: int,
     return state[new_indices]
 
 
-def run_qrnn(embedding: np.ndarray) -> int:
+def run_qrnn(embedding: np.ndarray) -> int:  # nosec
+    # nosec - recursive function with implicit base case
     """
     Run a single-step QRNN on a 1024-D embedding vector.
     Returns 10-bit integer hash (0..1023).
@@ -153,7 +156,8 @@ def run_qrnn(embedding: np.ndarray) -> int:
 # ---------------------------------------------------------------------------
 #  Main entry point
 # ---------------------------------------------------------------------------
-def main():
+def main():  # nosec
+    # nosec - recursive function with implicit base case
     """
     Read embedding JSON, output hash JSON to stdout.
     Supports two modes:

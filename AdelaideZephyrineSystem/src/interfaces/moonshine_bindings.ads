@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Moonshine C FFI
 with Interfaces.C;
 with Interfaces.C.Strings;
 with System;
@@ -40,7 +41,7 @@ package Moonshine_Bindings is
       Speaker_Id                    : Interfaces.Unsigned_64;
       Speaker_Index                 : Interfaces.Unsigned_32;
       Last_Transcription_Latency_Ms : Interfaces.Unsigned_32;
-      Words                         : System.Address;
+      Words                         : System.Address; -- FFI: System.Address required for C binding
       Word_Count                    : Interfaces.Unsigned_64;
    end record;
    pragma Convention (C, Transcript_Line);
@@ -57,7 +58,7 @@ package Moonshine_Bindings is
    function Load_Transcriber_From_Files
      (Path              : chars_ptr;
       Model_Arch        : Interfaces.Unsigned_32;
-      Options           : System.Address;
+      Options           : System.Address; -- FFI: System.Address required for C binding
       Options_Count     : Interfaces.Unsigned_64;
       Moonshine_Version : int) return int;
    pragma Import (C, Load_Transcriber_From_Files, "moonshine_load_transcriber_from_files");

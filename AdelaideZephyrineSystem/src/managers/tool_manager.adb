@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Tool execution requires task protection
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;

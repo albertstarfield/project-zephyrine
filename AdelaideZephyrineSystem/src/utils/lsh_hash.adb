@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: LSH requires thread-safe hash computation
 with Ada.Text_IO;           use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Strings.Fixed;     use Ada.Strings.Fixed;

@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Priority queue requires protected type
 with Ada.Text_IO; use Ada.Text_IO;
 with AnsiAda;
 with Ada.Real_Time; use Ada.Real_Time;

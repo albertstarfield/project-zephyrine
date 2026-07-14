@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: TPM2 FFI for identity attestation
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Identity_Manager is

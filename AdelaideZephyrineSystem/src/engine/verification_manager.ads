@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Verification tasks require protection
 package Verification_Manager is
 
    --  Callback type for running text generation during Dafny logic repair

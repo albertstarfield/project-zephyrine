@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: LSH requires thread-safe hash computation
 with Math_Utils;
 
 package LSH_Hash is

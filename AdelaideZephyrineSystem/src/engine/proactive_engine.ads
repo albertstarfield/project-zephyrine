@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Async engine requires task protection
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Calendar;          use Ada.Calendar;
 with Model_Types;           use Model_Types;

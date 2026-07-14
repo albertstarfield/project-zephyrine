@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Benchmark execution requires protection
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Accuracy_Benchmark_Manager is

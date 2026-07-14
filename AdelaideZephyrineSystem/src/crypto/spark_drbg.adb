@@ -159,7 +159,7 @@ is
       end if;
    end Adl_Drbg_Init;
 
-   function Adl_Drbg_Generate (Out_Buf : System.Address; Len : size_t) return int is
+   function Adl_Drbg_Generate (Out_Buf : System.Address; Len : size_t) return int is -- FFI: System.Address required for C binding
       Success : Boolean;
       type Byte_Array is array (1 .. Natural(Len)) of unsigned_char;
       Buffer : Byte_Array with Import, Address => Out_Buf;

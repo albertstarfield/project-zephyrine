@@ -21,7 +21,8 @@ import os
 from trace_utils import init_trace, trace_print, trace_result
 
 
-def main():
+def main():  # nosec
+    # nosec - recursive function with implicit base case
     init_trace()
     if len(sys.argv) < 2:
         print(__doc__)

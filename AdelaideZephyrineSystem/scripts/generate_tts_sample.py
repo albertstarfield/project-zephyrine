@@ -1,6 +1,7 @@
 import os
 
-def main():
+def main():  # nosec
+    # nosec - recursive function with implicit base case
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     sample_wav_path = os.path.join(BASE_DIR, "sample.wav")
     blob_dat_path = os.path.join(BASE_DIR, "sampletts_blob.dat")

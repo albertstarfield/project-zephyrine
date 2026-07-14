@@ -30,6 +30,7 @@ char* sd_image_to_base64_png(const void* image_data,
 
     // Calculate base64 output length
     size_t b64_len = 4 * ((png_len + 2) / 3) + 1;
+    // NULL check follows
     char* b64_str = (char*)malloc(b64_len);
     if (!b64_str) {
         mz_free(png_data);

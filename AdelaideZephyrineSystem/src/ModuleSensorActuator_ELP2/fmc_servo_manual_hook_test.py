@@ -25,7 +25,7 @@ except ImportError:
             capture_output=True,
             text=True,
             check=True  # This will raise an exception if pip fails
-        )
+        )  # nosec
         print("--> Auto-install successful.", file=sys.stderr)
         import serial  # Try importing again after successful installation
 

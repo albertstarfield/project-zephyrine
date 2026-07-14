@@ -6,48 +6,48 @@ package ROS2_RCL_Bindings is
    --  Thin bindings to ROS2 RCL C API
    
    type rcl_context_t is record
-      global_arguments : System.Address;
-      impl : System.Address;
+      global_arguments : System.Address; -- FFI: System.Address required for C binding
+      impl : System.Address; -- FFI: System.Address required for C binding
       instance_id_storage : Interfaces.C.size_t;
    end record;
    pragma Convention (C, rcl_context_t);
 
    type rcl_node_t is record
-      context : System.Address;
-      impl : System.Address;
+      context : System.Address; -- FFI: System.Address required for C binding
+      impl : System.Address; -- FFI: System.Address required for C binding
    end record;
    pragma Convention (C, rcl_node_t);
    
    type rcl_publisher_t is record
-      impl : System.Address;
+      impl : System.Address; -- FFI: System.Address required for C binding
    end record;
    pragma Convention (C, rcl_publisher_t);
 
    type rcl_subscription_t is record
-      impl : System.Address;
+      impl : System.Address; -- FFI: System.Address required for C binding
    end record;
    pragma Convention (C, rcl_subscription_t);
 
    type rcl_allocator_t is record
-      allocate : System.Address;
-      deallocate : System.Address;
-      reallocate : System.Address;
-      zero_allocate : System.Address;
-      state : System.Address;
+      allocate : System.Address; -- FFI: System.Address required for C binding
+      deallocate : System.Address; -- FFI: System.Address required for C binding
+      reallocate : System.Address; -- FFI: System.Address required for C binding
+      zero_allocate : System.Address; -- FFI: System.Address required for C binding
+      state : System.Address; -- FFI: System.Address required for C binding
    end record;
    pragma Convention (C, rcl_allocator_t);
    
    type rcl_init_options_t is record
-      impl : System.Address;
+      impl : System.Address; -- FFI: System.Address required for C binding
    end record;
    pragma Convention (C, rcl_init_options_t);
 
    type rcl_node_options_t is record
       allocator : rcl_allocator_t;
       use_global_arguments : Interfaces.C.char;
-      arguments : System.Address;
+      arguments : System.Address; -- FFI: System.Address required for C binding
       enable_rosout : Interfaces.C.char;
-      rosout_qos : System.Address;
+      rosout_qos : System.Address; -- FFI: System.Address required for C binding
    end record;
    pragma Convention (C, rcl_node_options_t);
 
@@ -70,7 +70,7 @@ package ROS2_RCL_Bindings is
 
    function rcl_init
      (argc : Interfaces.C.int;
-      argv : System.Address;
+      argv : System.Address; -- FFI: System.Address required for C binding
       options : access rcl_init_options_t;
       context : access rcl_context_t) return rcl_ret_t;
    pragma Import (C, rcl_init, "rcl_init");

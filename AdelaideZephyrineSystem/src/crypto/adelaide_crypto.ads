@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: OpenSSL FFI for cryptographic operations
 with Ada.Strings.Unbounded;
 
 --  ── Adelaide Crypto Wrapper ───────────────────────────────────────────────

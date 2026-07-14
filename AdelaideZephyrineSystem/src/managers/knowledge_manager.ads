@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Vector DB FFI
 package Knowledge_Manager is
 
    --  Initialize databases and internal state

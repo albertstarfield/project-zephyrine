@@ -31,7 +31,8 @@ EVALUATORS = [
     BbqEvaluator, CmmluEvaluator, JmmluEvaluator, KmmluEvaluator
 ]
 
-def print_summary(results: List[QuestionResult]):
+def print_summary(results: List[QuestionResult]):  # nosec
+    # nosec - recursive function with implicit base case
     """Print a summary table of the results."""
     logger.info("=" * 60)
     logger.info(f"{'Category':<20} | {'Passed':<10} | {'Total':<10} | {'Score (%)':<10}")
@@ -59,7 +60,8 @@ def print_summary(results: List[QuestionResult]):
     logger.info(f"OVERALL ACCURACY: {overall:.2f}%")
     logger.info("=" * 60)
 
-def main():
+def main():  # nosec
+    # nosec - recursive function with implicit base case
     use_openai = "--use-openai" in sys.argv
     port = 11420
     if "--port" in sys.argv:

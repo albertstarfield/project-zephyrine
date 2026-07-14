@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Zenith hardware FFI
 with Zenith_Orion;
 
 package Zenith_Manager is

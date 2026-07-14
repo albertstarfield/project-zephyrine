@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Stable Diffusion C FFI
 --  ============================================================================
 --  SD_MANAGER — Body implementing two-stage image generation
 --  ============================================================================
@@ -255,7 +256,7 @@ package body SD_Manager is
 
    --  FFI to C helper for PNG+Base64 encoding
    function SD_Image_To_Base64_PNG
-     (Image_Data : System.Address;
+     (Image_Data : System.Address; -- FFI: System.Address required for C binding
       Width      : Interfaces.C.int;
       Height     : Interfaces.C.int;
       Channels   : Interfaces.C.int) return Interfaces.C.Strings.chars_ptr;

@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Main orchestrator requires task protection
 
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;

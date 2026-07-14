@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: multimodal C FFI
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
@@ -10,10 +11,10 @@ with System;
 package Mtmd_Interface is
 
    --  Opaque handle types (void pointers in C)
-   type Mtmd_Context is new System.Address;
-   type Mtmd_Bitmap is new System.Address;
-   type Mtmd_Input_Chunks is new System.Address;
-   type Mtmd_Input_Chunk is new System.Address;
+   type Mtmd_Context is new System.Address; -- FFI: System.Address required for C binding
+   type Mtmd_Bitmap is new System.Address; -- FFI: System.Address required for C binding
+   type Mtmd_Input_Chunks is new System.Address; -- FFI: System.Address required for C binding
+   type Mtmd_Input_Chunk is new System.Address; -- FFI: System.Address required for C binding
 
    Null_Mtmd_Context : constant Mtmd_Context :=
      Mtmd_Context (System.Null_Address);
@@ -29,7 +30,7 @@ package Mtmd_Interface is
    --  Returns Null_Mtmd_Context on failure
    function Mtmd_Init_From_File_Safe
      (Mmproj_Fname : chars_ptr;
-      Text_Model   : System.Address;
+      Text_Model   : System.Address; -- FFI: System.Address required for C binding
       Use_Gpu      : Boolean;
       N_Threads    : int) return Mtmd_Context;
    pragma Import
@@ -44,7 +45,7 @@ package Mtmd_Interface is
    function Mtmd_Bitmap_Init_Safe
      (Nx   : unsigned;
       Ny   : unsigned;
-      Data : System.Address) return Mtmd_Bitmap;
+      Data : System.Address) return Mtmd_Bitmap; -- FFI: System.Address required for C binding
    pragma Import (C, Mtmd_Bitmap_Init_Safe, "mtmd_bitmap_init_safe");
 
    --  Free bitmap
@@ -93,7 +94,7 @@ package Mtmd_Interface is
    --  WARNING: Do not free the returned pointer - it's owned by the chunk
    function Mtmd_Input_Chunk_Get_Tokens_Text_Safe
      (Chunk           : Mtmd_Input_Chunk;
-      N_Tokens_Output : access size_t) return System.Address;
+      N_Tokens_Output : access size_t) return System.Address; -- FFI: System.Address required for C binding
    pragma Import
      (C,
       Mtmd_Input_Chunk_Get_Tokens_Text_Safe,
@@ -108,7 +109,7 @@ package Mtmd_Interface is
    --  Get output embeddings after encoding
    --  Returns pointer to float array
    function Mtmd_Get_Output_Embd_Safe
-     (Ctx : Mtmd_Context) return System.Address;
+     (Ctx : Mtmd_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Mtmd_Get_Output_Embd_Safe, "mtmd_get_output_embd_safe");
 
    --  Check if model supports vision
@@ -139,7 +140,7 @@ package Mtmd_Interface is
       Text          : chars_ptr;
       Add_Special   : Boolean;
       Parse_Special : Boolean;
-      Bitmaps       : System.Address;
+      Bitmaps       : System.Address; -- FFI: System.Address required for C binding
       N_Bitmaps     : size_t) return int;
    pragma Import (C, Mtmd_Tokenize_Safe, "mtmd_tokenize_safe");
 
@@ -148,7 +149,7 @@ package Mtmd_Interface is
    --  Returns Null_Mtmd_Bitmap on failure.
    function Mtmd_Helper_Bitmap_Init_From_Buf_Safe
      (Ctx : Mtmd_Context;
-      Buf : System.Address;
+      Buf : System.Address; -- FFI: System.Address required for C binding
       Len : size_t) return Mtmd_Bitmap;
    pragma Import
      (C, Mtmd_Helper_Bitmap_Init_From_Buf_Safe,

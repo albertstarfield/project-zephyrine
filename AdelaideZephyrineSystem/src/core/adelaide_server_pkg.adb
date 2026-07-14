@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: AWS HTTP client requires task protection
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Calendar;

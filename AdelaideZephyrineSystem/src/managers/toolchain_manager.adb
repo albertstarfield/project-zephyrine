@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Toolchain management requires protection
 with Ada.Text_IO; use Ada.Text_IO;
 with GNAT.OS_Lib;
 with Ada.Directories;
