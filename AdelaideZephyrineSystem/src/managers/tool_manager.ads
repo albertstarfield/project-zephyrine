@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Tool execution requires task protection
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Tool_Manager is

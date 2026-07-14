@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Module requires task protection for safe concurrent access
 
 --  [DO NOT REMOVE THIS]
 --  ===========================================================================

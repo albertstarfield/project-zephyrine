@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Orion sensor FFI
 with Ada.Real_Time; use Ada.Real_Time;
 with Ada.Characters.Handling;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;

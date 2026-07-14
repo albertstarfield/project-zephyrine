@@ -55,7 +55,7 @@ is
    function Adl_Drbg_Init (Entropy_Bytes : size_t; Pers_String : chars_ptr; Err_Buf : chars_ptr) return int
      with Export => True, Convention => C, External_Name => "adl_drbg_init";
 
-   function Adl_Drbg_Generate (Out_Buf : System.Address; Len : size_t) return int
+   function Adl_Drbg_Generate (Out_Buf : System.Address; Len : size_t) return int -- FFI: System.Address required for C binding
      with Export => True, Convention => C, External_Name => "adl_drbg_generate";
 
    procedure Adl_Drbg_Clear

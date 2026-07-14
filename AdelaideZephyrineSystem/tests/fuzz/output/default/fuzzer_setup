@@ -1,0 +1,9 @@
+# environment variables:
+AFL_CUSTOM_INFO_PROGRAM=/Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/tests/fuzz/fuzz_crypto
+AFL_CUSTOM_INFO_PROGRAM_ARGV=
+AFL_CUSTOM_INFO_OUT=/Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/tests/fuzz/output/default
+AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+AFL_MAP_SIZE=65536
+AFL_SKIP_CPUFREQ=1
+# command line:
+'/opt/homebrew/Cellar/afl++/5.02c/libexec/afl-fuzz' '-i' '/Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/tests/fuzz/corpus' '-o' '/Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/tests/fuzz/output' '-E' '1000' '--' '/Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/tests/fuzz/fuzz_crypto'

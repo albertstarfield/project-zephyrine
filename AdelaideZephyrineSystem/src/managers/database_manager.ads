@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: SQLite3 FFI
 with Math_Utils;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Interfaces.C;          use Interfaces.C;

@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Stable Diffusion C FFI
 --  ============================================================================
 --  SD_INTERFACE — Body with verbose logging helpers
 --  ============================================================================

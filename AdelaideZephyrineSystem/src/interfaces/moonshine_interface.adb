@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Moonshine C FFI
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
 with System;

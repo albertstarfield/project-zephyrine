@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- shm: file-based cross-process state export via mmap
 --  Watchdog IPC — file-based cross-process state export
 --
 --  The main server writes its PID, heartbeat, and inference

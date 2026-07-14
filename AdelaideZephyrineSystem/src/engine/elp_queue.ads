@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Priority queue requires protected type
  --  ELP Queue — Priority-based task queue for model execution requests
  --
  --  Architecture: "Volatus Damarae"

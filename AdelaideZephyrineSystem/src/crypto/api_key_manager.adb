@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Interface.C for key storage FFI
 
 --  ============================================================================
 --  Implementation of API_Key_Manager.

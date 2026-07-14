@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Crash isolation requires task protection
 --  Kratos Crash Isolation Layer
 --
 --  Protects inference threads from C-level crashes (SIGSEGV, SIGBUS, SIGFPE,
@@ -55,8 +56,8 @@ package Kratos is
 
    --  Ada-friendly wrappers
    function Safe_Llama_Decode
-     (Context : System.Address;
-      Batch   : System.Address)
+     (Context : System.Address; -- FFI: System.Address required for C binding
+      Batch   : System.Address) -- FFI: System.Address required for C binding
       return Interfaces.C.int;
 
    --  Log crash details to stderr

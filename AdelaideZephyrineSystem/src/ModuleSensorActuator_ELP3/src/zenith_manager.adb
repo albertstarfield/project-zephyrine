@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Zenith hardware FFI
 with Ada.Calendar;
 with Ada.Real_Time;
 with Zenith_Orion;

@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Concurrent benchmark execution
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Benchmark_Manager is

@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: AWS HTTP client requires task protection
 with AWS.Response;
 with AWS.Status;
 with Streaming_Queue;

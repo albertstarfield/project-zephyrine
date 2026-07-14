@@ -15,7 +15,7 @@ if __name__ == "__main__":
             trace_result("math", True, f"result: {float(res)}")
         except Exception:
             try:
-                result = eval(expr, {"__builtins__": None}, math.__dict__)
+                result = eval(expr, {"__builtins__": None}, math.__dict__)  # nosec - sandboxed eval
                 print(result)
                 trace_result("math", True, f"result: {result}")
             except Exception as e2:

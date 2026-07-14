@@ -3,3 +3,4 @@ uvicorn
 kokoro-onnx
 sounddevice
 soundfile
+huggingface-hub

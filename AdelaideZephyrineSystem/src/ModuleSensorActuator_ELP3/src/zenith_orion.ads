@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Orion sensor FFI
 package Zenith_Orion is
 
    type Jitter_Data is record

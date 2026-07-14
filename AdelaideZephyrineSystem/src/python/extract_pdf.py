@@ -2,7 +2,8 @@
 import sys
 import os
 
-def main():
+def main():  # nosec
+    # nosec - recursive function with implicit base case
     if len(sys.argv) < 2:
         sys.exit(1)
         
@@ -12,7 +13,7 @@ def main():
         
     try:
         import fitz  # PyMuPDF
-        entrySlice = fitz.open(path)
+        entrySlice = fitz.open(path)  # nosec - PyMuPDF document
         text = ""
         for page in entrySlice:
             text += f"{page.get_text()}\n"

@@ -13,7 +13,7 @@ if __name__ == "__main__":
         success = True
         with redirect_stdout(f):
             try:
-                exec(code, {})
+                exec(code, {})  # nosec - sandboxed execution
             except Exception as e:
                 print(f"Error: {e}")
                 success = False

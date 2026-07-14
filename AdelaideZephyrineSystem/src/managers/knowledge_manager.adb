@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Vector DB FFI
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;

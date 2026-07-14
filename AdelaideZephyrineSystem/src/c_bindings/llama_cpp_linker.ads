@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Llama.cpp linker FFI
 package Llama_Cpp_Linker is
    pragma Linker_Options ("-L/Users/albertstarfield/LibraryTube/OpenIntellegentiaPlatform/llama.cpp/build/src");
    pragma Linker_Options ("-lllama");

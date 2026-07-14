@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Icarus daemon requires task protection
 
 package Stella_Icarus is
    --  ELP2: Deterministic API Logic Hook

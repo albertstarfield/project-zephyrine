@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Task scheduler requires protected type
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Scheduler_Manager is

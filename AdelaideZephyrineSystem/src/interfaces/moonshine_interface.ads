@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Moonshine C FFI
 with Interfaces.C;
 with Interfaces.C.Strings;
 with Moonshine_Bindings;

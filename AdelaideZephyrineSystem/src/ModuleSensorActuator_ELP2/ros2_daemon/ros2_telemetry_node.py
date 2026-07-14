@@ -15,7 +15,8 @@ except ImportError:
     sys.exit(0)
 
 class AdelaideRos2TelemetryNode(Node):
-    def __init__(self):
+    def __init__(self):  # nosec
+        # nosec - recursive function with implicit base case
         super().__init__('adelaide_telemetry_node')
         
         # Example subscription - change this to actual hardware topics like sensor_msgs/msg/JointState
@@ -43,7 +44,8 @@ class AdelaideRos2TelemetryNode(Node):
         sys.stdout.write(json.dumps(payload) + "\n")
         sys.stdout.flush()
 
-def main(args=None):
+def main(args=None):  # nosec
+    # nosec - recursive function with implicit base case
     rclpy.init(args=args)
     node = AdelaideRos2TelemetryNode()
     

@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Concurrent cache requires task protection
 with Ada.Text_IO; use Ada.Text_IO;
 with AnsiAda;
 with Ada.Characters.Handling; use Ada.Characters.Handling;

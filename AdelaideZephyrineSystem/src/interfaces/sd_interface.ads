@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Stable Diffusion C FFI
 --  ============================================================================
 --  SD_INTERFACE — Ada FFI bindings for stable-diffusion.cpp
 --  ============================================================================
@@ -157,7 +158,7 @@ package SD_Interface is
       Width   : unsigned;    -- Image width in pixels
       Height  : unsigned;    -- Image height in pixels
       Channel : unsigned;    -- Number of channels (3=RGB, 4=RGBA)
-      Data    : System.Address;  -- Pointer to pixel data (uint8_t*)
+      Data    : System.Address;  -- Pointer to pixel data (uint8_t*) -- FFI: System.Address required for C binding
    end record;
    pragma Convention (C, SD_Image);
 
@@ -198,7 +199,7 @@ package SD_Interface is
       Img_Cfg              : interfaces.C.C_float;  -- Image CFG scale
       Distilled_Guidance   : interfaces.C.C_float;  -- FLUX distilled guidance
       -- SLG params (skip layer guidance)
-      SLG_Layers           : System.Address;   -- int* layers
+      SLG_Layers           : System.Address;   -- int* layers -- FFI: System.Address required for C binding
       SLG_Layer_Count      : size_t;
       SLG_Layer_Start      : interfaces.C.C_float;
       SLG_Layer_End        : interfaces.C.C_float;
@@ -208,7 +209,7 @@ package SD_Interface is
       Sample_Steps         : int;
       Eta                  : interfaces.C.C_float;
       Shifted_Timestep     : int;
-      Custom_Sigmas        : System.Address;   -- float*
+      Custom_Sigmas        : System.Address;   -- float* -- FFI: System.Address required for C binding
       Custom_Sigmas_Count  : int;
       Flow_Shift           : interfaces.C.C_float;
       Extra_Sample_Args    : chars_ptr;
@@ -217,7 +218,7 @@ package SD_Interface is
 
    --  SD_PM_Params: PhotoMaker parameters
    type SD_PM_Params is record
-      ID_Images       : System.Address;  -- sd_image_t*
+      ID_Images       : System.Address;  -- sd_image_t* -- FFI: System.Address required for C binding
       ID_Images_Count : int;
       ID_Embed_Path   : chars_ptr;
       Style_Strength  : interfaces.C.C_float;
@@ -271,7 +272,7 @@ package SD_Interface is
       Steps              : int;
       Denoising_Strength : interfaces.C.C_float;
       Upscale_Tile_Size  : int;
-      Custom_Sigmas      : System.Address;  -- float*
+      Custom_Sigmas      : System.Address;  -- float* -- FFI: System.Address required for C binding
       Custom_Sigmas_Count: int;
    end record;
    pragma Convention (C, SD_Hires_Params);
@@ -305,9 +306,9 @@ package SD_Interface is
       Init_Image_Width     : unsigned;
       Init_Image_Height    : unsigned;
       Init_Image_Channel   : unsigned;
-      Init_Image_Data      : System.Address;  -- uint8_t*
+      Init_Image_Data      : System.Address;  -- uint8_t* -- FFI: System.Address required for C binding
       --  Reference images (for IP-Adapter / PhotoMaker)
-      Ref_Images           : System.Address;  -- sd_image_t*
+      Ref_Images           : System.Address;  -- sd_image_t* -- FFI: System.Address required for C binding
       Ref_Images_Count     : int;
       Auto_Resize_Ref      : int;  -- bool
       Increase_Ref_Index   : int;  -- bool
@@ -315,7 +316,7 @@ package SD_Interface is
       Mask_Width           : unsigned;
       Mask_Height          : unsigned;
       Mask_Channel         : unsigned;
-      Mask_Data            : System.Address;  -- uint8_t*
+      Mask_Data            : System.Address;  -- uint8_t* -- FFI: System.Address required for C binding
       --  Output dimensions
       Width                : int;
       Height               : int;
@@ -328,7 +329,7 @@ package SD_Interface is
       Control_Width        : unsigned;
       Control_Height       : unsigned;
       Control_Channel      : unsigned;
-      Control_Data         : System.Address;  -- uint8_t*
+      Control_Data         : System.Address;  -- uint8_t* -- FFI: System.Address required for C binding
       Control_Strength     : interfaces.C.C_float;
       --  PhotoMaker / PuLID
       PM_Params            : SD_PM_Params;
@@ -411,7 +412,7 @@ package SD_Interface is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  sd_ctx_t is an opaque struct in C. We treat it as an Address.
 
-   type SD_Ctx is new System.Address;
+   type SD_Ctx is new System.Address; -- FFI: System.Address required for C binding
    Null_SD_Ctx : constant SD_Ctx := SD_Ctx (System.Null_Address);
 
    --  ============================================================================
@@ -424,7 +425,7 @@ package SD_Interface is
    type SD_Log_Cb_T is access procedure
       (Level : SD_Log_Level_T;
        Text  : chars_ptr;
-       Data  : System.Address);
+       Data  : System.Address); -- FFI: System.Address required for C binding
    pragma Convention (C, SD_Log_Cb_T);
 
    --  Progress callback: called during generation for each step
@@ -432,7 +433,7 @@ package SD_Interface is
       (Step  : int;
        Steps : int;
        Time  : interfaces.C.C_float;
-       Data  : System.Address);
+       Data  : System.Address); -- FFI: System.Address required for C binding
    pragma Convention (C, SD_Progress_Cb_T);
 
    --  ============================================================================
@@ -457,12 +458,12 @@ package SD_Interface is
 
    --  --- Logging ---
    procedure SD_Set_Log_Callback (Cb   : SD_Log_Cb_T;
-                                   Data : System.Address);
+                                   Data : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, SD_Set_Log_Callback, "sd_set_log_callback");
 
    --  --- Progress ---
    procedure SD_Set_Progress_Callback (Cb   : SD_Progress_Cb_T;
-                                        Data : System.Address);
+                                        Data : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, SD_Set_Progress_Callback, "sd_set_progress_callback");
 
    --  --- Context lifecycle ---
@@ -508,15 +509,15 @@ package SD_Interface is
    --  --- PNG encoding (miniz/tdefl) ---
    --  Write raw image data to PNG in memory (returns malloc'd buffer, caller must free with mz_free)
    function Tdefl_Write_Image_To_PNG_File_In_Memory
-     (PImage   : System.Address;
+     (PImage   : System.Address; -- FFI: System.Address required for C binding
       W        : int;
       H        : int;
       Num_Chans: int;
-      PLen_Out : access size_t) return System.Address;
+      PLen_Out : access size_t) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Tdefl_Write_Image_To_PNG_File_In_Memory, "tdefl_write_image_to_png_file_in_memory");
 
    --  Free buffer allocated by tdefl_write_image_to_png_file_in_memory
-   procedure Mz_Free (P : System.Address);
+   procedure Mz_Free (P : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, Mz_Free, "mz_free");
 
    --  --- Enum name lookups (for verbose logging) ---

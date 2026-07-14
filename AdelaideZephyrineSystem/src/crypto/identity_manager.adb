@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: TPM2 FFI for identity attestation
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada_Sqlite3; use Ada_Sqlite3;
 with Ada.Directories;

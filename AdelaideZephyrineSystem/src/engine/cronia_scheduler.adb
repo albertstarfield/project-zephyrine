@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Scheduler requires protected type
 with Ada.Text_IO;           use Ada.Text_IO;
 with Ada.Strings;           use Ada.Strings;
 with Ada.Strings.Fixed;     use Ada.Strings.Fixed;

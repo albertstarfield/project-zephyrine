@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- thread: Parser requires task protection
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Streams;
 with GNATCOLL.JSON;

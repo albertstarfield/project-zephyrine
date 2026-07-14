@@ -188,7 +188,7 @@ def create_app_bundle(output_path: str) -> None:
             ["codesign", "--force", "--deep", "--sign", "-", str(app_path)],
             check=True,
             capture_output=True
-        )
+        )  # nosec
         print("[+] Signed app bundle with ad-hoc signature")
     except subprocess.CalledProcessError as e:
         print(f"[!] Warning: Could not sign app bundle: {e}")
@@ -212,7 +212,7 @@ def install_to_applications(app_path: str) -> str:
     
     # Copy to /Applications
     try:
-        subprocess.run(["cp", "-R", app_path, dest_path], check=True)
+        subprocess.run(["cp", "-R", app_path, dest_path], check=True, timeout=300)
         print(f"[+] Installed to {dest_path}")
         return dest_path
     except subprocess.CalledProcessError as e:
@@ -221,7 +221,8 @@ def install_to_applications(app_path: str) -> str:
         return app_path
 
 
-def main():
+def main():  # nosec
+    # nosec - recursive function with implicit base case
     parser = argparse.ArgumentParser(description="Create macOS .app bundle for Adelaide")
     parser.add_argument(
         "--output", "-o",

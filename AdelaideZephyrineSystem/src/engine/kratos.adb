@@ -6,13 +6,13 @@ with AnsiAda;
 package body Kratos is
 
    function Safe_Llama_Decode
-     (Context : System.Address;
-      Batch   : System.Address)
+     (Context : System.Address; -- FFI: System.Address required for C binding
+      Batch   : System.Address) -- FFI: System.Address required for C binding
       return Interfaces.C.int
    is
       function Llama_Decode_Bare
-        (Ctx   : System.Address;
-         Batch : System.Address)
+        (Ctx   : System.Address; -- FFI: System.Address required for C binding
+         Batch : System.Address) -- FFI: System.Address required for C binding
          return Interfaces.C.int;
       pragma Import (C, Llama_Decode_Bare, "llama_decode");
 

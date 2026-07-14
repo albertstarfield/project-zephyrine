@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Kokoro TTS C FFI
 with Ada.Streams;
 
 package Kokoro_Interface is

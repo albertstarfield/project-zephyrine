@@ -6,6 +6,7 @@
 --    modeled by [AppliedSci2025ZeroTrust, Schneier2018Click].
 --  =============================================================================
 pragma SPARK_Mode (Off);
+-- c_binding: OpenSSL FFI for cryptographic operations
 
 --  ── Adelaide Crypto Wrapper Implementation ─────────────────────────────────
 --  Wraps the C adl_crypto shim (AES-256-GCM + HKDF) for Ada FFI.

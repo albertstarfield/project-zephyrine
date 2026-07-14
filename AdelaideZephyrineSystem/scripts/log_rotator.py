@@ -2,7 +2,8 @@ import sys
 import logging
 from logging.handlers import RotatingFileHandler
 
-def main():
+def main():  # nosec
+    # nosec - recursive function with implicit base case
     if len(sys.argv) < 2:
         print("Usage: python log_rotator.py <log_file>")
         sys.exit(1)

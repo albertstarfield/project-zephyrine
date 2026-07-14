@@ -1,14 +1,15 @@
 pragma SPARK_Mode (Off);
+-- c_binding: Llama.cpp C FFI
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
 
 package Llama_Interface is
 
-   type Llama_Model is new System.Address;
-   type Llama_Context is new System.Address;
-   type Llama_Vocab is new System.Address;
-   type Llama_Sampler is new System.Address;
+   type Llama_Model is new System.Address; -- FFI: System.Address required for C binding
+   type Llama_Context is new System.Address; -- FFI: System.Address required for C binding
+   type Llama_Vocab is new System.Address; -- FFI: System.Address required for C binding
+   type Llama_Sampler is new System.Address; -- FFI: System.Address required for C binding
 
    type Llama_Token is new int;
    type Llama_Pos is new int;
@@ -42,15 +43,15 @@ package Llama_Interface is
 
    --  Minimal set of params to get started
    type Llama_Model_Params is record
-      Devices                    : System.Address;
-      Tensor_Buft_Overrides      : System.Address;
+      Devices                    : System.Address; -- FFI: System.Address required for C binding
+      Tensor_Buft_Overrides      : System.Address; -- FFI: System.Address required for C binding
       N_Gpu_Layers               : int;
       Split_Mode                 : int;
       Main_Gpu                   : int;
-      Tensor_Split               : System.Address;
-      Progress_Callback          : System.Address;
-      Progress_Callback_User_Data : System.Address;
-      Kv_Overrides               : System.Address;
+      Tensor_Split               : System.Address; -- FFI: System.Address required for C binding
+      Progress_Callback          : System.Address; -- FFI: System.Address required for C binding
+      Progress_Callback_User_Data : System.Address; -- FFI: System.Address required for C binding
+      Kv_Overrides               : System.Address; -- FFI: System.Address required for C binding
       Vocab_Only                 : Boolean;
       Use_Mmap                   : Boolean;
       Use_Direct_Io              : Boolean;
@@ -102,14 +103,14 @@ package Llama_Interface is
       Yarn_Orig_Ctx    : unsigned;
       Defrag_Thold     : Float;
 
-      Cb_Eval           : System.Address;
-      Cb_Eval_User_Data : System.Address;
+      Cb_Eval           : System.Address; -- FFI: System.Address required for C binding
+      Cb_Eval_User_Data : System.Address; -- FFI: System.Address required for C binding
 
       Type_K : int;
       Type_V : int;
 
-      Abort_Callback      : System.Address;
-      Abort_Callback_Data : System.Address;
+      Abort_Callback      : System.Address; -- FFI: System.Address required for C binding
+      Abort_Callback_Data : System.Address; -- FFI: System.Address required for C binding
 
       Embeddings  : Boolean;
       Offload_Kqv : Boolean;
@@ -118,25 +119,25 @@ package Llama_Interface is
       Swa_Full    : Boolean;
       Kv_Unified  : Boolean;
 
-      Samplers    : System.Address;
+      Samplers    : System.Address; -- FFI: System.Address required for C binding
       N_Samplers  : size_t;
       --  [VITAL-DO-NOT-REMOVE] Ctx_Other is the last field in llama.h's
       --  llama_context_params struct (b9757). Without it, the Ada struct
       --  is smaller than the C struct. While this doesn't shift other fields,
       --  it means llama_context_default_params() fills more bytes than we
       --  have storage for, which could corrupt memory if the struct grows.
-      Ctx_Other   : System.Address;
+      Ctx_Other   : System.Address; -- FFI: System.Address required for C binding
    end record;
    pragma Convention (C, Llama_Context_Params);
 
    type Llama_Batch is record
       N_Tokens : int;
-      Token    : System.Address;
-      Embd     : System.Address;
-      Pos      : System.Address;
-      N_Seq_Id : System.Address;
-      Seq_Id   : System.Address;
-      Logits   : System.Address;
+      Token    : System.Address; -- FFI: System.Address required for C binding
+      Embd     : System.Address; -- FFI: System.Address required for C binding
+      Pos      : System.Address; -- FFI: System.Address required for C binding
+      N_Seq_Id : System.Address; -- FFI: System.Address required for C binding
+      Seq_Id   : System.Address; -- FFI: System.Address required for C binding
+      Logits   : System.Address; -- FFI: System.Address required for C binding
    end record;
    pragma Convention (C, Llama_Batch);
 
@@ -173,25 +174,25 @@ package Llama_Interface is
    procedure Llama_Free (Context : Llama_Context);
    pragma Import (C, Llama_Free, "llama_free");
 
-   procedure Llama_Memory_Clear (Mem : System.Address; Data : Boolean);
+   procedure Llama_Memory_Clear (Mem : System.Address; Data : Boolean); -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Memory_Clear, "llama_memory_clear");
 
    function Llama_Memory_Seq_Rm
-     (Mem : System.Address; Seq_Id : int; P0 : int; P1 : int) return Boolean;
+     (Mem : System.Address; Seq_Id : int; P0 : int; P1 : int) return Boolean; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Memory_Seq_Rm, "llama_memory_seq_rm");
 
-   function Llama_Get_Memory (Context : Llama_Context) return System.Address;
+   function Llama_Get_Memory (Context : Llama_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Memory, "llama_get_memory");
 
    function Llama_N_Ctx (Context : Llama_Context) return Interfaces.C.unsigned;
    pragma Import (C, Llama_N_Ctx, "llama_n_ctx");
 
    function Llama_State_Save_File
-     (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t) return Boolean;
+     (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t) return Boolean; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Save_File, "llama_state_save_file");
 
    function Llama_State_Load_File
-     (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t; N_Tokens_Out : access size_t) return Boolean;
+     (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t; N_Tokens_Out : access size_t) return Boolean; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Load_File, "llama_state_load_file");
 
    function Llama_State_Get_Size
@@ -199,11 +200,11 @@ package Llama_Interface is
    pragma Import (C, Llama_State_Get_Size, "llama_state_get_size");
 
    function Llama_State_Get_Data
-     (Context : Llama_Context; Dst : System.Address; Size : size_t) return size_t;
+     (Context : Llama_Context; Dst : System.Address; Size : size_t) return size_t; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Get_Data, "llama_state_get_data");
 
    function Llama_State_Set_Data
-     (Context : Llama_Context; Src : System.Address; Size : size_t) return size_t;
+     (Context : Llama_Context; Src : System.Address; Size : size_t) return size_t; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Set_Data, "llama_state_set_data");
 
    function Llama_Batch_Init
@@ -211,10 +212,10 @@ package Llama_Interface is
    pragma Import (C, Llama_Batch_Init, "llama_batch_init");
 
    procedure Llama_Batch_Add_Safe
-     (Batch : System.Address; Token : Llama_Token; Pos : int; Seq_Id : int; Logits : Boolean);
+     (Batch : System.Address; Token : Llama_Token; Pos : int; Seq_Id : int; Logits : Boolean); -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Batch_Add_Safe, "llama_batch_add_safe");
 
-   procedure Llama_Batch_Clear_Safe (Batch : System.Address);
+   procedure Llama_Batch_Clear_Safe (Batch : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Batch_Clear_Safe, "llama_batch_clear_safe");
 
    procedure Llama_Batch_Free (Batch : Llama_Batch);
@@ -224,13 +225,13 @@ package Llama_Interface is
      (Context : Llama_Context; Batch : Llama_Batch) return int;
    pragma Import (C, Llama_Decode, "llama_decode");
 
-   function Llama_Get_Logits (Context : Llama_Context) return System.Address;
+   function Llama_Get_Logits (Context : Llama_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Logits, "llama_get_logits");
 
    procedure Llama_Set_Embeddings (Context : Llama_Context; Value : Interfaces.C.int);
    pragma Import (C, Llama_Set_Embeddings, "llama_set_embeddings");
 
-   function Llama_Get_Embeddings (Context : Llama_Context) return System.Address;
+   function Llama_Get_Embeddings (Context : Llama_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Embeddings, "llama_get_embeddings");
 
    procedure Llama_Set_N_Threads
@@ -253,7 +254,7 @@ package Llama_Interface is
    function Llama_Token_To_Piece
      (Vocab   : Llama_Vocab;
       Token   : Llama_Token;
-      Buf     : System.Address;
+      Buf     : System.Address; -- FFI: System.Address required for C binding
       Length  : int;
       Lstrip  : int;
       Special : Boolean) return int;
@@ -263,7 +264,7 @@ package Llama_Interface is
      (Vocab        : Llama_Vocab;
       Text         : chars_ptr;
       Text_Len     : int;
-      Tokens       : System.Address;
+      Tokens       : System.Address; -- FFI: System.Address required for C binding
       N_Tokens_Max : int;
       Add_Special  : Boolean;
       Parse_Special : Boolean) return int;
@@ -271,7 +272,7 @@ package Llama_Interface is
 
    function Llama_Detokenize
      (Vocab          : Llama_Vocab;
-      Tokens         : System.Address;
+      Tokens         : System.Address; -- FFI: System.Address required for C binding
       N_Tokens       : int;
       Text           : chars_ptr;
       Text_Len_Max   : int;
@@ -367,7 +368,7 @@ function Llama_Sampler_Init_Penalties
    --
    function Llama_Get_Embeddings_Seq
      (Context : Llama_Context;
-      Seq_Id  : Interfaces.C.int) return System.Address;
+      Seq_Id  : Interfaces.C.int) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Embeddings_Seq, "llama_get_embeddings_seq");
 
    --  Returns number of classifier outputs for reranking models.

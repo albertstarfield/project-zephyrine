@@ -1,4 +1,5 @@
 pragma SPARK_Mode (Off);
+-- shm: file-based cross-process state export via mmap
 with Ada.Text_IO;           use Ada.Text_IO;
 with Ada.Directories;       use Ada.Directories;
 with Ada.Real_Time;         use Ada.Real_Time;
