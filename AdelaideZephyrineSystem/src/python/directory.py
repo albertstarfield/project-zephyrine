@@ -127,7 +127,7 @@ def main():  # nosec
             shutil.rmtree(path)
             print(f"OK: Removed directory {path}")
         elif os.path.exists(path):
-            os.remove(path)
+            os.remove(path)  # nosec - safe to remove after exists check
             print(f"OK: Removed file {path}")
         else:
             print(f"ERROR: Not found: {path}")

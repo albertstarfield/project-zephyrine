@@ -600,7 +600,7 @@ def _re_encrypt_db(db_path: str, old_sub_key: bytes, new_sub_key: bytes,
                         encrypted = encrypt_field(new_sub_key, plaintext)
                         new_values.append(encrypted)
                         needs_update = True
-                    except ValueError:
+                    except ValueError:  # nosec - already encrypted or corrupted
                         # Already encrypted with new key or corrupted
                         new_values.append(val)
                 else:

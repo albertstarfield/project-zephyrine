@@ -99,7 +99,12 @@ def _dc(val: str, sub_key) -> str:
     """Conditional decrypt: hex blob → plaintext (or pass-through)."""
     if not _crypto_available or not val or not is_field_encrypted(str(val)):
         return val
-    return decrypt_field(sub_key, val)
+    try:
+        return decrypt_field(sub_key, val)
+    except (ValueError, Exception) as e:
+        # Stale/corrupted encrypted data from a different key — return placeholder
+        print(f"[!] Decrypt failed for stale data, returning placeholder: {e}", flush=True)
+        return "[encrypted data - key mismatch]"
 
 
 # Zephyrine Engine Settings - Configuration dictionary for engine settings
@@ -245,17 +250,54 @@ ADA_BACKEND_URL = "http://localhost:11420"
 DIST_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 # ── API Key for Ada backend ──────────────────────────────────────────────────
-# Injected by run.py via ADELAIDE_SIDECAR_API_KEY when enforcement is enabled.
-# If the env var is not set, we send a default placeholder key so the Ada
-# server's non-enforcement mode (which accepts any non-empty key) still works.
-_ADELAIDE_API_KEY = os.environ.get("ADELAIDE_SIDECAR_API_KEY", "")
-if not _ADELAIDE_API_KEY:
-    _ADELAIDE_API_KEY = "adelaide-sidecar-default-key"
+# SEMAPHORE FIX (2026-07-15):
+# The sidecar process is spawned by run.py BEFORE the master key is derived
+# (key derivation requires the Ada server to boot, prompt for password, then
+# respawn).  At spawn time, ADELAIDE_SIDECAR_API_KEY is not yet in the env,
+# so the sidecar would fall back to "adelaide-sidecar-default-key" — which
+# the Ada server rejects (enforcement is ON by default per FIPS 140-3 §5.3.2).
+#
+# Solution: read the key from run/api_keys_plain.txt on every request.
+# run.py creates this file at startup (line ~5607) with the real key(s),
+# then the Ada server reads the same file.  By having the sidecar also read
+# this file, we decouple the sidecar's launch from the key derivation
+# timeline — the file acts as a semaphore: once it exists with content,
+# the sidecar has the correct key.
+_ADELAIDE_API_KEY_FILE = os.path.join(base_dir, "run", "api_keys_plain.txt")
+
+
+def _read_api_key_from_file() -> str:
+    """Read the first API key from the shared plaintext key file.
+
+    Returns empty string if the file doesn't exist yet or is empty.
+    This is the semaphore: run.py writes the file once the key is derived,
+    and the sidecar picks it up on the next request.
+    """
+    try:
+        if os.path.exists(_ADELAIDE_API_KEY_FILE):
+            with open(_ADELAIDE_API_KEY_FILE, "r") as f:
+                for line in f:
+                    key = line.strip()
+                    if key:
+                        return key
+    except (OSError, IOError):
+        pass
+    return ""
 
 
 def _ada_headers(extra: dict | None = None) -> dict:
-    """Return base headers for Ada backend requests, including x-api-key."""
-    h = {"User-Agent": "Zephy-Sidecar-UI/1.0", "x-api-key": _ADELAIDE_API_KEY}
+    """Return base headers for Ada backend requests, including x-api-key.
+
+    Reads the API key from the shared file (semaphore) on every call,
+    falling back to the env var, then to a placeholder.  This ensures the
+    sidecar always uses the latest key even if it was set after launch.
+    """
+    api_key = _read_api_key_from_file()
+    if not api_key:
+        api_key = os.environ.get("ADELAIDE_SIDECAR_API_KEY", "")
+    if not api_key:
+        api_key = "adelaide-sidecar-default-key"
+    h = {"User-Agent": "Zephy-Sidecar-UI/1.0", "x-api-key": api_key}
     if extra:
         h.update(extra)
     return h
@@ -1453,15 +1495,21 @@ def perform_platform_integrity_check():
     # 1. Pyrefly Check
     pyrefly_cmd = shutil.which("pyrefly")
     if not pyrefly_cmd:
-        # If pyrefly is missing, we consider it a safety violation in this mode
-        print("[!] Safety Violation: pyrefly tool not found in PATH.")
-        sys.exit(1)
+        # Try to find pyrefly in the venv bin directory as a fallback
+        venv_bin = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "venv", "python", "bin")
+        pyrefly_venv_path = os.path.join(venv_bin, "pyrefly")
+        if os.path.exists(pyrefly_venv_path):
+            pyrefly_cmd = pyrefly_venv_path
+        else:
+            # If pyrefly is missing, we consider it a safety violation in this mode
+            print("[!] Safety Violation: pyrefly tool not found in PATH or venv.")
+            sys.exit(1)
 
     print(f"[*] Running Pyrefly Integrity Check on {os.path.basename(__file__)}...")
     try:
         # Setup environment to include project's site-packages for import resolution
         env = os.environ.copy()
-        venv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pyvenv")
+        venv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "venv", "python")
         # Auto-detect lib/python3.x/site-packages
         site_pkgs = None
         lib_dir = os.path.join(venv_path, "lib")
@@ -1502,7 +1550,13 @@ def perform_platform_integrity_check():
     # 2. Ruff Check
     ruff_cmd = shutil.which("ruff")
     if not ruff_cmd:
-        print("[!] Warning: ruff tool not found in PATH. Skipping secondary check.")
+        # Try to find ruff in the venv bin directory as a fallback
+        venv_bin = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "venv", "python", "bin")
+        ruff_venv_path = os.path.join(venv_bin, "ruff")
+        if os.path.exists(ruff_venv_path):
+            ruff_cmd = ruff_venv_path
+        else:
+            print("[!] Warning: ruff tool not found in PATH or venv. Skipping secondary check.")
     else:
         try:
             print("[*] Running Ruff Quality Check on platform components...")

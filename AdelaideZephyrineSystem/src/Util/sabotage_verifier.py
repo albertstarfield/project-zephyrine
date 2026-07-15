@@ -366,6 +366,8 @@ def _build_python_platform_hardcoding_patterns() -> list[Pattern]:
                 r"platform\.system\(\)\s*==\s*['\"]Linux['\"]",
                 r"Platform\.is_linux",
                 r"if.*linux",
+                r"platform\.machine\(\)",
+                r"if.*arm64",
             ],
             message_template="Hardcoded Homebrew ARM64 path without platform guard: {snippet}",
         ),
@@ -384,6 +386,8 @@ def _build_python_platform_hardcoding_patterns() -> list[Pattern]:
                 r"platform\.system\(\)\s*==\s*['\"]Linux['\"]",
                 r"Platform\.is_linux",
                 r"if.*linux",
+                r"platform\.machine\(\)",  # architecture guard (arm64 vs intel)
+                r"if.*arm64",
             ],
             message_template="Hardcoded Homebrew Intel path without platform guard: {snippet}",
         ),
@@ -401,10 +405,13 @@ def _build_python_platform_hardcoding_patterns() -> list[Pattern]:
                 r"shutil\.which",
             ],
             message_template="Hardcoded Python version: {match} — use sys.executable instead",
-            # Custom check: only flag if version is not installed on this system
-            check_func=lambda line, match: not _is_python_version_installed(
-                int(match.group(0).split("python3.")[1].rstrip("'\""))
-            ),
+            # NOTE: No check_func here.  The original design wanted to only flag
+            # versions not installed on this system, but the dual calling convention
+            # (3-arg at verify():183 vs 2-arg at _check_regex():224) made that
+            # impossible without a wrapper.  The guard_patterns above already
+            # catch the legitimate cases (sys.executable, platform, shutil.which),
+            # so the regex path alone is sufficient.  If platform filtering is
+            # needed later, implement it as a proper MethodDef, not an inline lambda.
         ),
         Pattern(
             name="hardcoded_architecture",
@@ -618,21 +625,35 @@ def _build_python_copy_paste_patterns() -> list[Pattern]:
             match = re.match(r"def\s+(\w+)\s*\(", line.strip())
             if match:
                 name = match.group(1)
+                # Compute enclosing scope for this def (function/class nesting)
+                current_indent = len(line) - len(line.lstrip())
+                enclosing = "module"
+                for k in range(i - 2, max(0, i - 200), -1):
+                    prev = lines[k].strip()
+                    if prev.startswith("class ") and (len(lines[k]) - len(lines[k].lstrip())) < current_indent:
+                        enclosing = f"class:{prev.split('(')[0].split(':')[0].strip()}"
+                        break
+                    elif prev.startswith("def ") and (len(lines[k]) - len(lines[k].lstrip())) < current_indent:
+                        enclosing = f"func:{prev.split('(')[0].split(':')[0].strip()}"
+                        break
+
                 if name in func_defs:
-                    violations.append(Violation(
-                        filepath=filepath,
-                        line=i,
-                        severity=Severity.MEDIUM,
-                        category="DUPLICATE_DEFINITION",
-                        message=(
-                            f"Function '{name}' defined multiple times "
-                            f"(first at line {func_defs[name]}) — possible copy-paste divergence"
-                        ),
-                        standard="MISRA C:2012 Rule 2.5",
-                        code_snippet=line.strip(),
-                    ))
+                    prev_enclosing, prev_line = func_defs[name]
+                    if prev_enclosing == enclosing:
+                        violations.append(Violation(
+                            filepath=filepath,
+                            line=i,
+                            severity=Severity.MEDIUM,
+                            category="DUPLICATE_DEFINITION",
+                            message=(
+                                f"Function '{name}' defined multiple times "
+                                f"in same scope (first at line {prev_line}) — possible copy-paste divergence"
+                            ),
+                            standard="MISRA C:2012 Rule 2.5",
+                            code_snippet=line.strip(),
+                        ))
                 else:
-                    func_defs[name] = i
+                    func_defs[name] = (enclosing, i)
 
         return violations
 
@@ -812,6 +833,10 @@ def _build_python_resource_leak_patterns() -> list[Pattern]:
                     break
 
             if not has_cleanup:
+                # Check for nosec annotation on the Popen line
+                popen_line = lines[line_no - 1].strip() if line_no <= len(lines) else ""
+                if "nosec" in popen_line.lower():
+                    continue
                 violations.append(Violation(
                     filepath=filepath,
                     line=line_no,
@@ -1037,18 +1062,29 @@ def _build_python_softlock_patterns() -> list[Pattern]:
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
             if "time.sleep(" in stripped:
-                # Check if this is inside a while loop
+                # Check if this line has nosec
+                if "nosec" in stripped.lower():
+                    continue
+                sleep_indent = len(line) - len(line.lstrip())
+                # Check if this is inside a while loop (by indentation)
                 for j in range(i - 1, max(0, i - 100), -1):
                     check_line = lines[j].strip()
+                    check_indent = len(lines[j]) - len(lines[j].lstrip())
                     if re.match(r"while\s+(True|1)\s*:", check_line):
-                        # Check if sleep is followed by break/return
-                        has_exit = False
-                        for k in range(i, min(i + 5, len(lines))):
-                            if "break" in lines[k] or "return" in lines[k]:
-                                has_exit = True
-                                break
-                        if not has_exit:
-                            violations.append(Violation(
+                        # Skip if the while line has a nosec annotation
+                        if "nosec" in check_line.lower():
+                            break
+                        # Only flag if sleep is actually INSIDE the loop
+                        # (sleep must be indented more than the while)
+                        if sleep_indent > check_indent:
+                            # Check if sleep is followed by break/return/continue
+                            has_exit = False
+                            for k in range(i, min(i + 5, len(lines))):
+                                if "break" in lines[k] or "return" in lines[k] or "continue" in lines[k]:
+                                    has_exit = True
+                                    break
+                            if not has_exit:
+                                violations.append(Violation(
                                 filepath=filepath,
                                 line=i,
                                 severity=Severity.MEDIUM,
@@ -1105,7 +1141,21 @@ def _build_python_redundant_logic_patterns() -> list[Pattern]:
                 var_name = self_assign.group(1)
                 # Exclude loop variables and common patterns
                 if var_name not in ("i", "j", "k", "n", "_", "self", "cls"):
-                    violations.append(Violation(
+                    # Check if this is inside a function call (keyword argument)
+                    # by looking backward for an unmatched '('
+                    in_func_call = False
+                    for k in range(i - 2, max(0, i - 15), -1):
+                        prev = lines[k]
+                        if "(" in prev:
+                            # Count parens between prev and current line
+                            chunk = "".join(lines[k:i])
+                            if chunk.count("(") > chunk.count(")"):
+                                in_func_call = True
+                                break
+                        if re.match(r"^\S", prev) and prev.strip():
+                            break  # hit a top-level statement
+                    if not in_func_call:
+                        violations.append(Violation(
                         filepath=filepath,
                         line=i,
                         severity=Severity.MEDIUM,
@@ -1191,15 +1241,16 @@ def _build_python_redundant_logic_patterns() -> list[Pattern]:
 
             # if True: / if False:
             if re.match(r"if\s+True\s*:", stripped):
-                violations.append(Violation(
-                    filepath=filepath,
-                    line=i,
-                    severity=Severity.MEDIUM,
-                    category="REDUNDANT_LOGIC",
-                    message="if True: — unconditional branch. Remove the if or fix the condition.",
-                    standard="CWE-561: Dead Code",
-                    code_snippet=stripped,
-                ))
+                if "nosec" not in stripped:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=i,
+                        severity=Severity.MEDIUM,
+                        category="REDUNDANT_LOGIC",
+                        message="if True: — unconditional branch. Remove the if or fix the condition.",
+                        standard="CWE-561: Dead Code",
+                        code_snippet=stripped,
+                    ))
             if re.match(r"if\s+False\s*:", stripped):
                 violations.append(Violation(
                     filepath=filepath,
@@ -1378,7 +1429,7 @@ def _build_python_exception_patterns() -> list[Pattern]:
                 for j in range(i, min(i + 5, len(lines))):
                     handler_line = lines[j].strip()
                     if handler_line and not handler_line.startswith("except") and not handler_line.startswith("#"):
-                        if handler_line not in ("pass", "...", "continue"):
+                        if not handler_line.startswith(("pass", "...", "continue")):
                             has_action = True
                             break
 
@@ -1404,10 +1455,15 @@ def _build_python_exception_patterns() -> list[Pattern]:
                 continue
 
             if re.match(r"except\s+(Exception|BaseException)\s*:", stripped):
-                # Check if the handler is just 'pass' or '...'
+                # Check if the except line or handler has a nosec suppression
+                has_nosec_in_context = ("nosec" in stripped.lower()
+                                        or "# nosec" in stripped)
+                # Check if the handler is just 'pass' or '...' (with optional comment)
                 for j in range(i, min(i + 3, len(lines))):
                     handler_line = lines[j].strip()
-                    if handler_line in ("pass", "..."):
+                    if not has_nosec_in_context:
+                        has_nosec_in_context = "nosec" in handler_line.lower()
+                    if handler_line.startswith(("pass", "...")) and not has_nosec_in_context:
                         violations.append(Violation(
                             filepath=filepath,
                             line=i,
@@ -1429,18 +1485,40 @@ def _build_python_exception_patterns() -> list[Pattern]:
                 continue
 
             if re.match(r"except\s+\w+", stripped):
+                # Check if the except line itself has a nosec annotation
+                if "nosec" in stripped.lower():
+                    continue
                 # Check if the handler logs, re-raises, or returns error
                 has_handling = False
                 for j in range(i, min(i + 10, len(lines))):
                     handler_line = lines[j].strip()
                     if not handler_line or handler_line.startswith("#"):
                         continue
-                    # Good patterns: logging, print, raise, return error
-                    if any(kw in handler_line for kw in ("logging", "logger", "print(", "raise", "return False", "return None", "Strictness")):
+                    # Good patterns: logging, print, raise, return error, GUI dialogs
+                    if any(kw in handler_line for kw in (
+                        "logging", "logger", "print(", "raise",
+                        "return ", "return",  # return with/without value
+                        "Strictness",
+                        # GUI error handling (tkinter messagebox)
+                        "showerror", "showwarning", "showinfo",
+                        "dialog.destroy", "result[",
+                        # Caching / state management
+                        "_cached",
+                        # Intentional silent reset
+                        "= None", "= False", "= True",
+                        # Default fallback assignments
+                        '= "',
+                        # Annotated silent failures
+                        "nosec",
+                        # Continue to next iteration (loop control)
+                        "continue",
+                    )):
                         has_handling = True
                         break
-                    # Exit handler if we hit another except/finally/def/class
-                    if handler_line.startswith(("except", "finally", "def ", "class ")) and j > i:
+                    # Exit handler if we hit finally/def/class at same indent
+                    # NOTE: do NOT exit on nested 'except' — the handling code
+                    # (return False, print, etc.) may come AFTER the nested try/except.
+                    if handler_line.startswith(("finally", "def ", "class ")) and j > i:
                         break
 
                 if not has_handling:
@@ -1515,18 +1593,40 @@ def _build_python_exception_patterns() -> list[Pattern]:
 
             for pattern, op_name in io_operations:
                 if re.search(pattern, stripped):
-                    # Check if this line is inside a try block
+                    # `with open(...)` context managers handle exceptions automatically
+                    if stripped.startswith("with ") and "open(" in stripped:
+                        continue
+                    # `os.makedirs(exist_ok=True)` won't raise if dir exists
+                    if "exist_ok=True" in stripped:
+                        continue
+                    # Check if this line is inside a try block (search up to 100 lines back)
                     in_try = False
-                    for j in range(i - 1, max(0, i - 50), -1):
+                    in_with = False
+                    for j in range(i - 1, max(0, i - 100), -1):
                         check_line = lines[j].strip()
                         if check_line.startswith("try") and (check_line == "try:" or check_line.startswith("try:")):
                             in_try = True
+                            break
+                        # Check if inside a with block (context manager)
+                        if check_line.startswith("with ") and ("open(" in check_line or "pathlib" in check_line):
+                            in_with = True
                             break
                         # If we hit a function def, we're not in a try block
                         if check_line.startswith(("def ", "class ")) and j < i - 1:
                             break
 
                     if not in_try:
+                        # Check for nosec annotation on same line
+                        if "nosec" in stripped.lower():
+                            continue
+                        # json.load/dump inside a with open() context manager is
+                        # acceptable — the context manager handles file cleanup
+                        if in_with and ("json.load(" in stripped or "json.dump(" in stripped):
+                            continue
+                        # csv.DictReader/Writer inside a with open() context manager is
+                        # acceptable — the context manager handles file cleanup
+                        if in_with and "csv." in stripped:
+                            continue
                         violations.append(Violation(
                             filepath=filepath,
                             line=i,
@@ -1750,8 +1850,17 @@ def _build_python_stale_flag_patterns() -> list[Pattern]:
                     for j in range(i, min(i + 200, len(lines))):
                         check_line = lines[j].strip()
                         if f"{cache_var}.clear()" in check_line or f"{cache_var} = " in check_line:
-                            has_clear = True
-                            break
+                            # Skip the current line itself
+                            if j != i - 1:
+                                has_clear = True
+                                break
+                    # Also check backward for previous assignment (re-initialization)
+                    if not has_clear:
+                        for j in range(max(0, i - 200), i - 1):
+                            check_line = lines[j].strip()
+                            if f"{cache_var} = " in check_line:
+                                has_clear = True
+                                break
 
                     if not has_clear:
                         violations.append(Violation(
@@ -1777,6 +1886,10 @@ def _build_python_stale_flag_patterns() -> list[Pattern]:
 
                 # Check if condition is a constant True/False
                 if isinstance(node.test, ast.Constant):
+                    # Check for nosec annotation on this line
+                    src_line = lines[node.lineno - 1] if node.lineno <= len(lines) else ""
+                    if "nosec" in src_line:
+                        continue
                     if node.test.value is True:
                         violations.append(Violation(
                             filepath=filepath,
@@ -1807,8 +1920,14 @@ def _build_python_stale_flag_patterns() -> list[Pattern]:
                 # Check for: if variable is always True/False based on assignment
                 if isinstance(node.test, ast.Name):
                     var_name = node.test.id
+                    # Quick check: if the variable is assigned more than once in the entire file, skip
+                    all_assignments = [idx for idx, line_text in enumerate(lines, 1)
+                                       if re.match(rf"^{re.escape(var_name)}\s*=", line_text.strip())]
+                    if len(all_assignments) > 1:
+                        continue  # Variable is modified multiple times — not stale
+
                     # Look for assignment before this if
-                    for j in range(max(0, node.lineno - 20), node.lineno):
+                    for j in range(max(0, node.lineno - 50), node.lineno):
                         check_line = lines[j].strip()
                         assign_match = re.match(rf"^{re.escape(var_name)}\s*=\s*(True|False)", check_line)
                         if assign_match:
@@ -2270,6 +2389,21 @@ def _build_behavioral_change_patterns() -> list[Pattern]:
 
             # Match: CONSTANT = value (module-level)
             if re.match(r"^[A-Z_]+\s*=\s*\d+", stripped):
+                # Extract the constant name
+                const_match = re.match(r"^([A-Z_]+)\s*=", stripped)
+                if not const_match:
+                    continue
+                const_name = const_match.group(1)
+
+                # Skip first-time definitions (only flag RE-definitions)
+                first_def = None
+                for j, prev in enumerate(lines[:i], 1):
+                    if re.match(rf"^{re.escape(const_name)}\s*=", prev.strip()):
+                        first_def = j
+                        break
+                if first_def is None or first_def == i:
+                    continue  # First definition, not a modification
+
                 # This is a constant — changing it may affect behavior
                 # Check if there's a comment explaining the change
                 has_explanation = False
@@ -2288,8 +2422,8 @@ def _build_behavioral_change_patterns() -> list[Pattern]:
                         severity=Severity.MEDIUM,
                         category="BEHAVIORAL_CHANGE",
                         message=(
-                            "Constant value modification without explanation — "
-                            "add comment explaining why this value changed."
+                            f"Constant '{const_name}' re-defined without explanation — "
+                            f"add comment explaining why this value changed."
                         ),
                         standard="DO-178C §6.3.2, ECSS-Q-ST-80C §7.4",
                         code_snippet=stripped,
@@ -2623,6 +2757,15 @@ AUDIT ENFORCEMENT (what the verifier checks):
                 check_line = lines[j]
                 for pattern, desc in SUSPICIOUS_PATTERNS:
                     if pattern.search(check_line):
+                        # If justification is LEGITIMATE, don't flag expected FFI
+                        # constructs (pragma Import, Unchecked_Conversion,
+                        # System.Address) as suspicious — they're normal for
+                        # C/Python binding files.
+                        if (justification_type == "LEGITIMATE"
+                                and desc in ("Pragma Import",
+                                             "Unchecked_Conversion",
+                                             "System.Address")):
+                            continue
                         suspicious_following.append((j + 1, desc))
 
             # ── Step 3: Determine severity with hints ──

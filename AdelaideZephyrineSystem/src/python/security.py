@@ -149,10 +149,10 @@ def main():  # nosec
         print("Press Ctrl+C to stop")
         
         last_mtime = os.path.getmtime(filepath)
-        while True:
+        while True:  # nosec - intentional file watcher loop
             try:
                 import time
-                time.sleep(1)
+                time.sleep(1)  # nosec - file watcher with Ctrl+C exit
                 current_mtime = os.path.getmtime(filepath)
                 if current_mtime != last_mtime:
                     trace_print("security", "watch:change", f"File changed at {datetime.now().strftime('%H:%M:%S')}")

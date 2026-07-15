@@ -1551,7 +1551,7 @@ int adl_derive_master_key(const char *integrity_hash,
 
     /* Convert binary okm → hex string */
     for (size_t i = 0; i < 32; i++) {
-        sprintf(master_key_out + (i * 2), "%02x", okm[i]);
+        snprintf(master_key_out + (i * 2), 3, "%02x", okm[i]);
     }
     master_key_out[64] = '\0';
 

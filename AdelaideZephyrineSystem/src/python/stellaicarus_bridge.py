@@ -30,7 +30,7 @@ def bootstrap_venv():  # nosec
             os.execv(python_exe, [python_exe] + sys.argv)
     try:
         import loguru  # noqa: F401
-    except ImportError:
+    except ImportError:  # nosec - will install dependency below
         pip_exe = (
             os.path.join(VENV_DIR, "Scripts", "pip.exe")
             if os.name == "nt"

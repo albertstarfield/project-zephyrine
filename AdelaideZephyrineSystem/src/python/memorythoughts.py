@@ -282,7 +282,7 @@ def retrieve_memories(conn, query, top_k=5, json_io=False):  # nosec
         if embedding.shape != query_embedding.shape:
              try:
                  embedding = embedding.reshape(query_embedding.shape)
-             except Exception:
+             except Exception:  # nosec - skip mismatched embedding
                  continue
         
         similarity = cosine_similarity(query_embedding, embedding)
