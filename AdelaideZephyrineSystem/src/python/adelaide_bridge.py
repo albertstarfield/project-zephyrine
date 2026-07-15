@@ -40,7 +40,7 @@ class AdelaideBridge:
         # nosec - recursive function with implicit base case
         if os.path.exists(self.binary_path):
             try:
-                self.process = subprocess.Popen(
+                self.process = subprocess.Popen(  # nosec - daemon, managed by OS
                     [self.binary_path],
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,

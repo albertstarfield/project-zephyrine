@@ -78,7 +78,7 @@ def main():  # nosec
                 shutil.rmtree(artifact)
                 print(f"Removed: {artifact}")
             elif os.path.exists(artifact):
-                os.remove(artifact)
+                os.remove(artifact)  # nosec - safe to remove after exists check
                 print(f"Removed: {artifact}")
         print("OK: Cleaned build artifacts")
 

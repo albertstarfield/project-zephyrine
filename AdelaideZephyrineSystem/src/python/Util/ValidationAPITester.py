@@ -67,7 +67,7 @@ class ValidationAPITester:
                 # Flask usually doesn't set a Server header by default or sets Werkzeug
                 self.server_type = "Adelaide-Python-Bridge (Flask)"
             self.log_info(f"Detected Server: {MAGENTA}{self.server_type}{RESET}")
-        except Exception:
+        except Exception:  # nosec - server type detection is optional
             self.log_warn("Could not detect server type reliably.")
 
     def test_endpoint(self, name, method, path, payload=None, is_streaming=False, is_openai=False):

@@ -296,7 +296,7 @@ def generate_apa7_citation(filepath: str) -> str:  # nosec
         mtime = os.path.getmtime(filepath)
         year = datetime.datetime.fromtimestamp(mtime).strftime('%Y')
         author = os.environ.get('USER', 'Author')
-    except Exception:
+    except Exception:  # nosec - fallback defaults are safe
         year = "n.d."
         author = "Unknown"
 

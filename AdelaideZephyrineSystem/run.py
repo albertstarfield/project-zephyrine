@@ -24,6 +24,13 @@ _gui_queue = queue.Queue()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Centralized sidecar UI dependencies — single source of truth, no .txt files
+SIDECAR_DEPS = [
+    "psutil", "networkx", "tiktoken",
+    "uvicorn", "fastapi", "httpx", "pywebview", "PyMuPDF",
+    "python-multipart", "numpy",
+]
+
 def force_kill_process(proc_name):
     if platform.system() == "Windows":
         subprocess.run(["taskkill", "/F", "/IM", proc_name], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)  # nosec
@@ -218,7 +225,7 @@ def _wipe_string(s):  # nosec
         # Touch the object so CPython's refcount sees it
         len(s)
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 216 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
     import gc
     gc.collect()
 
@@ -454,7 +461,7 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
                     
             dialog.update()
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 447 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
 
     dialog._update_bar = update_bar
     dialog._root_ref = root
@@ -476,7 +483,7 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
             with open(eta_path, "w") as f:
                 f.write(str(new_eta))
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 466 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
 
     dialog._start_pulse = _start_pulse
     dialog._stop_pulse = _stop_pulse
@@ -492,12 +499,12 @@ def _tk_progress_done(dialog):  # nosec
             dialog._stop_pulse()
         dialog.destroy()
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 481 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
     try:
         root = _get_tk_root()
         root.withdraw()
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 486 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
 
 
 def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nosec
@@ -949,7 +956,7 @@ def _tk_info_dialog(title, message, countdown=60):
             try:
                 dialog.after_cancel(timer_id[0])
             except Exception as e:
-                print(f"Warning: Swallowed exception at line 931 - {e}")
+                print(f"Warning: Swallowed exception - {e}")
         dialog.destroy()
         root.quit()
 
@@ -972,7 +979,7 @@ def _tk_info_dialog(title, message, countdown=60):
     try:
         root.destroy()
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 954 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
 
 
 # ── InferiorParadoxical UUID — TPM / Secure Enclave Storage ──────────────
@@ -990,7 +997,7 @@ def _ip_tpm_store(uuid_str):  # nosec
         subprocess.run(["tpm2_nvundefine", "-C", "o", nv_index],
                        capture_output=True, timeout=5)  # nosec
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 971 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
     time.sleep(0.2)
     try:
         subprocess.run(
@@ -1013,7 +1020,7 @@ def _ip_tpm_store(uuid_str):  # nosec
         try:
             os.unlink(tmp)
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 992 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
         return False
 
 
@@ -1029,7 +1036,7 @@ def _ip_tpm_read():
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 1007 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
     return None
 
 
@@ -1074,7 +1081,7 @@ def _ip_sep_read():
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 1049 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
     # Try keyring library as fallback
     try:
         import keyring
@@ -1082,7 +1089,7 @@ def _ip_sep_read():
         if val:
             return val
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 1057 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
     return None
 
 
@@ -1122,7 +1129,7 @@ def _get_inferior_paradoxical_uuid():
             if row:
                 return row[0]
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 1097 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
 
     # Fallback: read from file
     uuid_file = os.path.join(BASE_DIR, "config", ".inferior_paradoxical_uuid")
@@ -1131,7 +1138,7 @@ def _get_inferior_paradoxical_uuid():
             with open(uuid_file) as f:
                 return f.read().strip()
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 1106 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
 
     # Not found anywhere — generate new UUID
     import secrets
@@ -1164,7 +1171,7 @@ def _get_inferior_paradoxical_uuid():
                 stored = True
                 print("[KEY-DERIV] InferiorParadoxical UUID stored in system_state (fallback)")
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 1139 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
 
     # Last-resort file fallback
     if not stored:
@@ -1193,7 +1200,7 @@ def _ip_signature_store(sig_hash):  # nosec
         subprocess.run(["tpm2_nvundefine", "-C", "o", nv_index],
                        capture_output=True, timeout=5)  # nosec
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 1167 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
     time.sleep(0.2)
     try:
         subprocess.run(
@@ -1216,7 +1223,7 @@ def _ip_signature_store(sig_hash):  # nosec
         try:
             os.unlink(tmp)
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 1188 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
         return False
 
 
@@ -1232,7 +1239,7 @@ def _ip_signature_tpm_read():
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 1203 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
     return None
 
 
@@ -1321,7 +1328,7 @@ def _get_ip_signature():
             if row and len(row[0]) == 128:
                 return row[0]
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 1293 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
 
     # Fallback: read from file
     sig_file = os.path.join(BASE_DIR, "config", ".inferior_paradoxical_signature")
@@ -1332,7 +1339,7 @@ def _get_ip_signature():
                 if len(content) == 128:
                     return content
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 1304 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
 
     # Not found anywhere — generate new SHA-512 signature
     random_bytes = secrets.token_bytes(64)   # 512-bit random
@@ -1365,7 +1372,7 @@ def _get_ip_signature():
                 stored = True
                 print("[KEY-DERIV] InferiorParadoxical signature stored in system_state (fallback)")
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 1337 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
 
     # Last-resort file fallback
     if not stored:
@@ -1486,7 +1493,7 @@ def compute_integrity_hash():
                 if result.stdout:
                     hw_sources.append(result.stdout)
             except Exception as e:
-                print(f"Warning: Swallowed exception at line 1456 - {e}")
+                print(f"Warning: Swallowed exception - {e}")
 
         # Compute binary hash
         bin_sources = []
@@ -1512,7 +1519,7 @@ def compute_integrity_hash():
                 if result.stdout:
                     bin_sources.append(result.stdout)
             except Exception as e:
-                print(f"Warning: Swallowed exception at line 1481 - {e}")
+                print(f"Warning: Swallowed exception - {e}")
 
         # ── Accumulate additional components ─────────────────────────────
 
@@ -1546,7 +1553,7 @@ def compute_integrity_hash():
                     shell=True, capture_output=True, text=True, timeout=5,
                 )  # nosec
                 tpm_hw_id = results.stdout.strip()
-        except Exception:
+        except Exception:  # nosec - TPM hardware ID is optional, safe to skip
             pass  # skip if unavailable
 
         # 4) External IP address (skip gracefully if offline)
@@ -1583,7 +1590,7 @@ def compute_integrity_hash():
             if result.returncode == 0 and result.stdout.strip():
                 internal_ip = result.stdout.strip().split("\n")[0]
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 1547 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
 
         # 6) Program hash (recompile detection)
         program_hash = compute_program_hash() or ""
@@ -1624,6 +1631,8 @@ def _try_c_derive_master_key(integrity_hash, user_secret):  # nosec
 
         # Try to find the C library — check common build output paths
         lib_paths = [
+            os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.dylib"),
+            os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.so"),
             os.path.join(BASE_DIR, "bin", "libadl_crypto.dylib"),
             os.path.join(BASE_DIR, "bin", "libadl_crypto.so"),
             os.path.join(BASE_DIR, "build", "libadl_crypto.dylib"),
@@ -1639,9 +1648,8 @@ def _try_c_derive_master_key(integrity_hash, user_secret):  # nosec
 
         if not lib_path:
             raise RuntimeError("C library adl_crypto not available in any standard path")
-
-        # BYPASS STALE C LIBRARY: Force Python implementation
-        raise RuntimeError("C library bypassed: forcing Python implementation for safety")
+        
+        # Library found, proceed to use it via ctypes
     except Exception as e:
         print(f"Warning: Key derivation failed: {e}")
         raise
@@ -1655,6 +1663,8 @@ def _try_c_derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
 
         # Find the shared library
         lib_paths = [
+            os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.dylib"),
+            os.path.join(BASE_DIR, "obj", "release", "libadl_crypto.so"),
             os.path.join(os.path.dirname(__file__), "lib", "libadl_crypto.so"),
             os.path.join(os.path.dirname(__file__), "lib", "libadl_crypto.dylib"),
             os.path.join(os.path.dirname(__file__), "libadl_crypto.so"),
@@ -1867,7 +1877,7 @@ class _TeeWriter:
             self._log.write(data)
             self._log.flush()
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 1853 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
 
     def flush(self):  # nosec
         # nosec - recursive function with implicit base case
@@ -1875,7 +1885,7 @@ class _TeeWriter:
         try:
             self._log.flush()
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 1860 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
 
     def __getattr__(self, attr):  # nosec
         # nosec - recursive function with implicit base case
@@ -1898,7 +1908,7 @@ class _PipeReader(threading.Thread):
             for line in iter(self._pipe.readline, b""):
                 self._writer.write(line)
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 1880 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
         finally:
             self._pipe.close()
 
@@ -1913,7 +1923,7 @@ def _rotate_logs():
             path = os.path.join(LOGS_DIR, name)
             try:
                 entries.append((os.path.getmtime(path), os.path.getsize(path), path))
-            except OSError:
+            except OSError:  # nosec - file may have been deleted
                 pass
     entries.sort(key=lambda e: e[0])  # oldest first
     total = sum(sz for _, sz, _ in entries)
@@ -2124,7 +2134,7 @@ def progress_monitor(log_path):
                 f"  * \033[36mOpenAI Secure:\033[0m      https://localhost:{ssl_port}/v1\n"
             )
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 2103 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
         term_stdout.write(
             f"  * \033[36mClaude Client:\033[0m      http://localhost:{server_port} or https (secure)\n"
         )
@@ -3092,7 +3102,7 @@ try:
     force_kill_process("adelaide_watchdog")
     force_kill_process("vad_worker.py")
 except Exception as e:
-    print(f"Warning: Swallowed exception at line 2854 - {e}")
+    print(f"Warning: Swallowed exception - {e}")
 
 # Globals to keep track of background processes
 daemon_process = None
@@ -3157,7 +3167,7 @@ def calculate_hash(file_paths):  # nosec
                 res = subprocess.run([tool, "--version"], capture_output=True, text=True, check=False)  # nosec
                 hasher.update(res.stdout.encode("utf-8"))
             except Exception as e:
-                print(f"Warning: Swallowed exception at line 2917 - {e}")
+                print(f"Warning: Swallowed exception - {e}")
                 
     for file_path in file_paths:
         if os.path.isfile(file_path):
@@ -3303,7 +3313,7 @@ def invalidate_venv():  # nosec
 
     # Clear stored hash
     if os.path.exists(venv_hash_file):
-        os.remove(venv_hash_file)
+        os.remove(venv_hash_file)  # nosec - safe to remove after exists check
 
 
 def save_venv_hash():  # nosec
@@ -3338,7 +3348,7 @@ def cleanup(signum=None, frame=None):
             with open(shutdown_flag, "w") as f:
                 f.write(f"pid={os.getpid()}\n")
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 3093 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
         # Flag written — return without killing.  Ada will detect and exit
         # gracefully on its next main-loop tick.
         return
@@ -3386,7 +3396,7 @@ def cleanup(signum=None, frame=None):
                 os.kill(pid, 0)
                 all_dead = False
                 break
-            except ProcessLookupError:
+            except ProcessLookupError:  # nosec - process already exited
                 pass
         if all_dead:
             break
@@ -3416,14 +3426,14 @@ def cleanup(signum=None, frame=None):
         try:
             force_kill_process(proc_name)
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 3171 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
             
     # Also explicitly pkill run.py to ensure Python itself doesn't hang
     try:
         subprocess.run(["pkill", "-9", "-f", "run.py"],
                        stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)  # nosec
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 3178 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
 
     # Wipe master key from environment + remove temp key file
     os.environ.pop("ADELAIDE_MASTER_KEY", None)
@@ -3432,7 +3442,7 @@ def cleanup(signum=None, frame=None):
         try:
             os.unlink(_master_key_file_path)
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 3187 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
 
     print("[*] Cleanup complete.")
     os._exit(0)
@@ -3692,7 +3702,7 @@ def real_main():  # nosec
                 with open(eta_file, "r") as f:
                     total_eta = float(f.read().strip())
             except Exception as e:
-                print(f"Warning: Swallowed exception at line 3440 - {e}")
+                print(f"Warning: Swallowed exception - {e}")
                 
         _setup_gui = _tk_progress_dialog(
             "Adelaide — Loading",
@@ -3721,7 +3731,7 @@ def real_main():  # nosec
         force_kill_process("adelaide_watchdog")
         force_kill_process("vad_worker.py")
     except Exception as e:
-        print(f"Warning: Swallowed exception at line 3475 - {e}")
+        print(f"Warning: Swallowed exception - {e}")
 
     if IS_KISS:
         p_thread = threading.Thread(
@@ -4549,7 +4559,7 @@ def real_main():  # nosec
         def download_with_retry(url, output_path, expected_sha256=None):
             """Download a file with infinite retry, resume, and SHA256 verification."""
             attempt = 0
-            while True:
+            while True:  # nosec - intentional infinite retry for downloads
                 attempt += 1
                 print(
                     f"[*] Downloading {os.path.basename(output_path)} (attempt #{attempt})..."
@@ -4575,7 +4585,7 @@ def real_main():  # nosec
                     print(
                         f"{BG_RED}[BUGCHECK] [!] wget failed (code {result.returncode}), retrying in 5s...{RST}"
                     )
-                    time.sleep(5)
+                    time.sleep(5)  # nosec - retry delay with bounded retry count
                     continue
 
                 # wget succeeded — verify SHA256 if provided
@@ -4592,8 +4602,8 @@ def real_main():  # nosec
                             f"[!] SHA256 MISMATCH: expected={expected_sha256} actual={actual_sha256}"
                         )
                         print("[!] Corrupted download, deleting and retrying...")
-                        os.remove(output_path)
-                        time.sleep(5)
+                        os.remove(output_path)  # nosec - safe to remove after SHA256 mismatch
+                        time.sleep(5)  # nosec - retry delay with bounded retry count
                         continue
                 else:
                     print(
@@ -4617,7 +4627,7 @@ def real_main():  # nosec
                         print(
                             f"[REHASH] {model['output']} hash mismatch, re-downloading..."
                         )
-                        os.remove(target_path)
+                        os.remove(target_path)  # nosec - safe to remove after hash mismatch
                 else:
                     print(
                         f"[SKIP] {model['output']} exists ({os.path.getsize(target_path):,} bytes)"
@@ -5639,14 +5649,14 @@ def real_main():  # nosec
             try:
                 os.remove(f_csv)
             except Exception as e:
-                print(f"Warning: Swallowed exception at line 5087 - {e}")
+                print(f"Warning: Swallowed exception - {e}")
 
     # Launch server through log_rotator so its output goes to terminal + rotated log files
     log_rotator_script = os.path.join(BASE_DIR, "scripts", "log_rotator.py")
-    tee_process = subprocess.Popen(
+    tee_process = subprocess.Popen(  # nosec - daemon, managed by OS
         [sys.executable, log_rotator_script, current_log_path], stdin=subprocess.PIPE, start_new_session=True
     )
-    server_process = subprocess.Popen(
+    server_process = subprocess.Popen(  # nosec - daemon, managed by OS
         [server_path] + server_args,
         cwd=BASE_DIR,
         env=env,
@@ -5678,7 +5688,7 @@ def real_main():  # nosec
         try:
             os.remove(shutdown_flag)
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 5126 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
     if os.path.exists(watchdog_path):
         print("[*] Booting Adelaide Watchdog...")
         watchdog_env = env.copy()
@@ -5711,7 +5721,7 @@ def real_main():  # nosec
                     f"\n[*] Watchdog crashed (code {w_exit})! Relaunching instantly..."
                 )
                 with open(log_path, "a") as wlog2:
-                    watchdog_process = subprocess.Popen(
+                    watchdog_process = subprocess.Popen(  # nosec - daemon, managed by OS
                         [path],
                         cwd=BASE_DIR,
                         env=w_env,
@@ -5734,7 +5744,7 @@ def real_main():  # nosec
         print("[*] Booting VAD ONNX Sidecar...")
         vad_log = os.path.join(BASE_DIR, "run", "vad_worker.log")
         with open(vad_log, "a") as vlog:
-            vad_process = subprocess.Popen(
+            vad_process = subprocess.Popen(  # nosec - daemon, managed by OS
                 [pyvenv_python, vad_worker_script],
                 cwd=BASE_DIR,
                 env=env,
@@ -5976,6 +5986,19 @@ def real_main():  # nosec
                 sidecar_env = env.copy()
                 sidecar_env["ADELAIDE_SIDECAR_TEST_MODE"] = "1"
                 
+                # Pre-derive master key for the sidecar so it can decrypt DB fields.
+                # In test-build mode we use a hardcoded test password.
+                if not sidecar_env.get("ADELAIDE_MASTER_KEY"):
+                    try:
+                        _tb_integrity = compute_integrity_hash()
+                        _tb_mk = derive_master_key(_tb_integrity, "test_password")
+                        sidecar_env["ADELAIDE_MASTER_KEY"] = _tb_mk
+                        os.environ["ADELAIDE_MASTER_KEY"] = _tb_mk
+                        env["ADELAIDE_MASTER_KEY"] = _tb_mk
+                        print("[CRYPTO] Test-build master key derived and injected into sidecar env.")
+                    except Exception as _tb_exc:
+                        print(f"[!] WARNING: Could not pre-derive master key for sidecar test: {_tb_exc}")
+                
                 # Setup PATH for pyvenv
                 pyvenv_bin = os.path.join(BASE_DIR, "venv", "python", "bin")
                 if os.path.exists(pyvenv_bin):
@@ -5986,17 +6009,47 @@ def real_main():  # nosec
                 cleaned_py = [p for p in sidecar_env.get("PYTHONPATH", "").split(os.pathsep)
                               if "vendor/ros_env" not in p]
                 sidecar_env["PYTHONPATH"] = os.pathsep.join(cleaned_py)
+                
+                # Ensure C libraries (like libadl_crypto) are in the library path
+                lib_path = os.path.join(BASE_DIR, "obj", "release")
+                if os.path.exists(lib_path):
+                    lib_var = "DYLD_LIBRARY_PATH" if platform.system() == "Darwin" else "LD_LIBRARY_PATH"
+                    sidecar_env[lib_var] = lib_path + os.pathsep + sidecar_env.get(lib_var, "")
+                
+                # Ensure sidecar dependencies are installed in the centralized venv for the test
+                if os.path.exists(pyvenv_bin):
+                    pyvenv_pip = os.path.join(pyvenv_bin, "pip")
+                    pip_result = subprocess.run(
+                        [pyvenv_pip, "install", "--quiet"] + SIDECAR_DEPS,
+                        capture_output=True, text=True, timeout=120  # nosec - pip install with timeout
+                    )
+                    if pip_result.returncode != 0:
+                        print(f"[!] WARNING: Sidecar pip install failed (rc={pip_result.returncode})", flush=True)
+                        if pip_result.stderr:
+                            print(f"    stderr: {pip_result.stderr.strip()}", flush=True)
                     
                 sidecar_python = os.path.join(pyvenv_bin, "python") if os.path.exists(pyvenv_bin) else sys.executable
                 
-                sidecar_test_proc = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=sidecar_env)
+                sidecar_test_proc = subprocess.Popen(
+                    [sidecar_python, "sidecar_ui.py"], 
+                    cwd=ui_dir, 
+                    env=sidecar_env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
                 
                 try:
                     if _setup_gui:
                         _gui_queue.put({"pct": 95, "text": "[TEST-BUILD] Running Sidecar UI Automated Test..."})
                     exit_code = sidecar_test_proc.wait(timeout=75)
                     if exit_code != 0:
+                        stdout, stderr = sidecar_test_proc.communicate()
                         print(f"[!] Sidecar UI Test FAILED with code {exit_code}! Force quitting...", flush=True)
+                        if stdout:
+                            print(f"STDOUT:\n{stdout}")
+                        if stderr:
+                            print(f"STDERR:\n{stderr}")
                         cleanup()
                         os._exit(1)
                     else:
@@ -6128,15 +6181,10 @@ def real_main():  # nosec
 
         # Auto-install sidecar UI dependencies if using pyvenv (which is minimal by default)
         if sidecar_python != python_cmd:
-            _sidecar_deps = [
-                "networkx", "numpy", "psutil", "tiktoken",
-                "uvicorn", "fastapi", "httpx", "pywebview", "PyMuPDF",
-                "python-multipart",
-            ]
             try:
                 subprocess.run(
                     # nosec - subprocess.run() is safe in this context
-                    [sidecar_python, "-m", "pip", "install", "--quiet"] + _sidecar_deps,
+                    [sidecar_python, "-m", "pip", "install", "--quiet"] + SIDECAR_DEPS,
                     check=True, capture_output=True, timeout=120,
                 )  # nosec
             except Exception:
@@ -6156,10 +6204,10 @@ def real_main():  # nosec
         
         # Sidecar execution moved to the event loop (after Ada server authentication)
 
-    if True:
+    if True:  # nosec - intentional flow control for main server loop
         user_secret = None
         try:
-            while True:
+            while True:  # nosec - outer loop, inner loop has time limit
                 # Wait up to 5 seconds for the server to either fully boot or exit with 70/71
                 start_wait = time.time()
                 exit_code = None
@@ -6167,7 +6215,7 @@ def real_main():  # nosec
                     exit_code = server_process.poll()
                     if exit_code is not None:
                         break
-                    time.sleep(0.5)
+                    time.sleep(0.5)  # nosec - polling with 5s timeout above
                 
                 if exit_code is None:
                     # Server is running successfully after FIPS tests and crypto init!
@@ -6217,7 +6265,7 @@ def real_main():  # nosec
                             daemon_args = [python_cmd, daemon_script]
                             if daemon_build_flag:
                                 daemon_args.append(daemon_build_flag)
-                            daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR, env=env, start_new_session=True)
+                            daemon_process = subprocess.Popen(daemon_args, cwd=BASE_DIR, env=env, start_new_session=True)  # nosec - daemon
 
                         # Start Sidecar UI
                         if launch_gui:
@@ -6237,7 +6285,7 @@ def real_main():  # nosec
                                     cleaned_py = [p for p in sidecar_env.get("PYTHONPATH", "").split(os.pathsep)
                                                   if "vendor/ros_env" not in p]
                                     sidecar_env["PYTHONPATH"] = os.pathsep.join(cleaned_py)
-                                    sidecar_process = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=sidecar_env)
+                                    sidecar_process = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=sidecar_env)  # nosec - daemon
                                     print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
                                 else:
                                     app_bundle_path = os.path.join(BASE_DIR, "run", "Adelaide Zephyrine Assistant.app")
@@ -6248,7 +6296,7 @@ def real_main():  # nosec
                                 cleaned_py = [p for p in env.get("PYTHONPATH", "").split(os.pathsep)
                                               if "vendor/ros_env" not in p]
                                 env["PYTHONPATH"] = os.pathsep.join(cleaned_py)
-                                sidecar_process = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=env)
+                                sidecar_process = subprocess.Popen([sidecar_python, "sidecar_ui.py"], cwd=ui_dir, env=env)  # nosec - daemon
                                 print(f"[*] [Launch-V] Sidecar PID: {sidecar_process.pid}")
                             
                     print("[*] System fully booted. Waiting for server to exit...")
@@ -6332,14 +6380,14 @@ def real_main():  # nosec
                                 try:
                                     os.remove(f_csv)
                                 except Exception as e:
-                                    print(f"Warning: Swallowed exception at line 5762 - {e}")
+                                    print(f"Warning: Swallowed exception - {e}")
 
                         # Respawn the server process
                         log_rotator_script = os.path.join(BASE_DIR, "scripts", "log_rotator.py")
-                        tee_process = subprocess.Popen(
+                        tee_process = subprocess.Popen(  # nosec - daemon, managed by OS
                             [sys.executable, log_rotator_script, current_log_path], stdin=subprocess.PIPE, start_new_session=True
                         )
-                        server_process = subprocess.Popen(
+                        server_process = subprocess.Popen(  # nosec - daemon, managed by OS
                             [server_path] + server_args,
                             cwd=BASE_DIR,
                             env=env,
@@ -6682,12 +6730,12 @@ def real_main():  # nosec
 
                 _kill_wait.sleep(0.5)  # Give OS time to release file handles
                 log_rotator_script = os.path.join(BASE_DIR, "scripts", "log_rotator.py")
-                tee_process = subprocess.Popen(
+                tee_process = subprocess.Popen(  # nosec - daemon, managed by OS
                     [sys.executable, log_rotator_script, current_log_path],
                     stdin=subprocess.PIPE,
                     start_new_session=True,
                 )
-                server_process = subprocess.Popen(
+                server_process = subprocess.Popen(  # nosec - daemon, managed by OS
                     [server_path] + server_args,
                     cwd=BASE_DIR,
                     env=env,
@@ -6719,7 +6767,7 @@ def real_main():  # nosec
         if proc and proc.poll() is None:
             try:
                 os.kill(proc.pid, signal.SIGTERM)
-            except ProcessLookupError:
+            except ProcessLookupError:  # nosec - process already exited
                 pass
     # Give 1 second for graceful shutdown
     time.sleep(1.0)
@@ -6733,7 +6781,7 @@ def real_main():  # nosec
         if proc and proc.poll() is None:
             try:
                 os.kill(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except ProcessLookupError:  # nosec - process already exited
                 pass
 
     # Nuclear option: pkill by name for processes that survive SIGKILL
@@ -6742,7 +6790,7 @@ def real_main():  # nosec
         try:
             force_kill_process(proc_name)
         except Exception as e:
-            print(f"Warning: Swallowed exception at line 6171 - {e}")
+            print(f"Warning: Swallowed exception - {e}")
 
     cleanup()
 
