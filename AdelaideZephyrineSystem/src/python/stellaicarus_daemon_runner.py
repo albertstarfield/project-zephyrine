@@ -124,7 +124,8 @@ def main():  # nosec
     print_hw_detection()
     
     
-    port_file = os.path.join(AdelaideZephyrineSystem_DIR, "data/NetworkMemoryPool", ".sidecar_port")
+    _user_id = os.environ.get("ADELAIDE_USER", "default")
+    port_file = os.path.join(AdelaideZephyrineSystem_DIR, "data/NetworkMemoryPool", _user_id, ".sidecar_port")
     
     try:
         # Keep the main thread alive so daemon threads can run

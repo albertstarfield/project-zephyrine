@@ -47,6 +47,8 @@ MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB total cap
 # Import the Python crypto module (sibling to python/adelaide_crypto.py)
 sys.path.insert(0, os.path.join(BASE_DIR, "src", "python"))
 from adelaide_crypto import load_master_key  # noqa: E402
+from adelaide_crypto import derive_sub_key  # noqa: E402
+from adelaide_crypto import encrypt_field, decrypt_field  # noqa: E402
 
 # ── Hardware-Bound Key Derivation Constants ───────────────────────────────
 # Integrity test plaintext for key verification
@@ -1431,6 +1433,70 @@ def compute_program_hash():  # nosec
     except Exception as e:
         print(f"[KEY-DERIV] Failed to compute program hash: {e}")
         return None
+
+
+# ── Username Auto-Login (InferiorParadoxical-bound) ──────────────────────
+
+# Context string for the username cache sub-key derivation (HKDF-SHA384)
+_IP_USERNAME_CTX = "adelaide:username:cache:v1"
+_USERNAME_CACHE_FILE = os.path.join(BASE_DIR, "run", ".username_identity")
+
+
+def _derive_ip_username_key():  # nosec
+    # nosec - key derivation, not a security boundary
+    """
+    Derive an AES-256 sub-key bound to the InferiorParadoxical hardware UUID.
+
+    Uses HKDF-SHA384 with the SHA-512 hash of the TPM/SEP-stored UUID as
+    keying material.  The resulting 32-byte key is hardware-bound: it changes
+    when the TPM/SEP identity changes (different machine or secure enclave
+    reset), causing the cached username to fail decryption gracefully.
+
+    Returns 32 raw bytes suitable for adelaide_crypto.encrypt_field / decrypt_field.
+    """
+    ip_uuid = _get_inferior_paradoxical_uuid()
+    ip_key_material = hashlib.sha512(ip_uuid.encode("utf-8")).hexdigest()
+    return derive_sub_key(ip_key_material, _IP_USERNAME_CTX)
+
+
+def _load_cached_username(ip_key):  # nosec
+    # nosec - reading cached identity file
+    """
+    Attempt to decrypt and return the cached username.
+
+    Returns the plaintext username string on success, or None if:
+      - The cache file does not exist
+      - Decryption fails (wrong hardware, corrupted file, AAD mismatch)
+    """
+    if not os.path.exists(_USERNAME_CACHE_FILE):
+        return None
+    try:
+        with open(_USERNAME_CACHE_FILE, "r") as f:
+            encrypted_blob = f.read().strip()
+        if not encrypted_blob:
+            return None
+        return decrypt_field(ip_key, encrypted_blob)
+    except Exception:
+        return None
+
+
+def _save_cached_username(ip_key, username):  # nosec
+    # nosec - writing cached identity file
+    """
+    Encrypt and persist the username for future auto-login.
+
+    Writes the AES-256-GCM-encrypted blob to the cache file with 0600
+    permissions (owner-only read/write).  The encryption key is hardware-bound
+    so the file is unreadable on a different machine.
+    """
+    try:
+        encrypted_blob = encrypt_field(ip_key, username)
+        os.makedirs(os.path.dirname(_USERNAME_CACHE_FILE), exist_ok=True)
+        fd = os.open(_USERNAME_CACHE_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(encrypted_blob)
+    except Exception as e:
+        print(f"[IDENTITY] Warning: Could not cache username: {e}")
 
 
 # ── Hardware-Bound Key Derivation Functions ───────────────────────────────
@@ -3643,6 +3709,25 @@ def real_main():  # nosec
         os.environ["ADELAIDE_USER"] = "test_integrity_bot"
 
     # Determine user identity
+    #
+    # Auto-login path: try InferiorParadoxical hardware-bound cache first.
+    # If the cache exists and hardware hasn't changed, the username is
+    # restored automatically without prompting.  Falls through to the
+    # manual prompt on any failure (first boot, hardware change, etc.).
+    if not os.environ.get("ADELAIDE_USER"):
+        try:
+            _ip_key = _derive_ip_username_key()
+            _cached_user = _load_cached_username(_ip_key)
+            if _cached_user:
+                hashed_user = hashlib.sha512(_cached_user.encode('utf-8')).hexdigest()
+                os.environ["ADELAIDE_USER"] = hashed_user
+                if not IS_KISS:
+                    _term_print(f"  (Welcome back, {_cached_user}!)")
+                print(f"[IDENTITY] Auto-login: {_cached_user}")
+                _save_cached_username(_ip_key, _cached_user)  # re-wrap for current hw
+        except Exception:
+            pass  # fall through to manual prompt
+
     if not os.environ.get("ADELAIDE_USER"):
         _welcome_msg = (
             "Heya! I'm Adelaide Zephyrine Charlotte,\n"
@@ -3685,6 +3770,13 @@ def real_main():  # nosec
             _term_print(f"  Nice to meet you, {user}! :D")
             _term_print("")
         print(f"[IDENTITY] Operating as user: {os.environ['ADELAIDE_USER']}")
+
+        # Cache username for InferiorParadoxical auto-login on next boot
+        try:
+            _ip_key = _derive_ip_username_key()
+            _save_cached_username(_ip_key, user)
+        except Exception:
+            pass
 
     # ── Show GUI loading bar immediately ──────────────────────────────────
     # Prevents freeze UX between name dialog and first visible work.

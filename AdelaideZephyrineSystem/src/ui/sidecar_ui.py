@@ -31,8 +31,14 @@ gc.disable()
 
 # Configuration
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(base_dir, "data/NetworkMemoryPool", "assistant_session.db")
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+# User-segregated data directory: data/NetworkMemoryPool/{ADELAIDE_USER}/
+# Keeps assistant, literature, and memory databases isolated per user.
+_user_id = os.environ.get("ADELAIDE_USER", "default")
+_USER_DATA_DIR = os.path.join(base_dir, "data/NetworkMemoryPool", _user_id)
+
+DB_PATH = os.path.join(_USER_DATA_DIR, "assistant_session.db")
+os.makedirs(_USER_DATA_DIR, exist_ok=True)
 
 # ── Crypto ────────────────────────────────────────────────────────────────
 # Load the AdaLang encryption module for field-level AES-256-GCM.
@@ -1071,14 +1077,14 @@ def get_user_info():
 
 # --- Knowledge Stack Backend ---
 LITERATURE_DB_PATH = os.path.join(
-    base_dir, "data/NetworkMemoryPool", "literatureRefIndex.db"
+    _USER_DATA_DIR, "literatureRefIndex.db"
 )
 LITERATURE_GRAPH_PATH = os.path.join(
-    base_dir, "data/NetworkMemoryPool", "literature.graphml"
+    _USER_DATA_DIR, "literature.graphml"
 )
 
-MEMORY_DB_PATH = os.path.join(base_dir, "data/NetworkMemoryPool", "memoryRefIndex.db")
-MEMORY_GRAPH_PATH = os.path.join(base_dir, "data/NetworkMemoryPool", "memory.graphml")
+MEMORY_DB_PATH = os.path.join(_USER_DATA_DIR, "memoryRefIndex.db")
+MEMORY_GRAPH_PATH = os.path.join(_USER_DATA_DIR, "memory.graphml")
 
 # Ensure dir
 os.makedirs(os.path.dirname(LITERATURE_DB_PATH), exist_ok=True)
