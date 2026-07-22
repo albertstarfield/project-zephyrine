@@ -1,0 +1,127 @@
+/* src/styles/components/_splashScreen.css */
+
+/* Overlay Container */
+.splash-screen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.5s ease-out, visibility 0s linear 0.5s;
+}
+
+.splash-screen-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.5s ease-out; 
+}
+
+.splash-screen-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.8s ease-out, visibility 0s linear 0.8s;
+}
+
+/* Content Container */
+.splash-screen-content {
+  text-align: center;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* --- Logos --- */
+.splash-screen-logo {
+  max-width: 400px;
+  width: 80vw;
+  height: auto;
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.4));
+  /* Start hidden so animation can take over */
+  opacity: 0; 
+}
+
+/* --- Warning Text Box --- */
+.splash-warning-container {
+  max-width: 800px;
+  width: 90%;
+  padding: 2rem;
+  border: 2px solid rgba(255, 50, 50, 0.5);
+  background: rgba(20, 0, 0, 0.8);
+  border-radius: 8px;
+  text-align: center;
+  /* Start hidden so animation can take over */
+  opacity: 0;
+}
+
+.warning-title {
+  font-family: 'Courier New', monospace;
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+  letter-spacing: 4px;
+  font-weight: bold;
+  color: #ff2222;
+  text-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
+  animation: pulse-red 2s infinite;
+}
+
+.splash-warning-text {
+  font-family: 'Courier New', monospace;
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: #ffcccc;
+  font-weight: 500;
+}
+
+/* --- Animations --- */
+
+/* Apply this class when an item appears */
+.content-fade-in {
+  animation: splash-content-in 1.5s ease-out forwards;
+}
+
+/* Apply this class when an item leaves */
+.content-fade-out {
+  animation: splash-content-out 0.5s ease-in forwards;
+}
+
+@keyframes splash-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes splash-content-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+}
+
+@keyframes pulse-red {
+  0% { text-shadow: 0 0 10px rgba(255, 0, 0, 0.6); }
+  50% { text-shadow: 0 0 20px rgba(255, 0, 0, 1); }
+  100% { text-shadow: 0 0 10px rgba(255, 0, 0, 0.6); }
+}

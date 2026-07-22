@@ -1,0 +1,1321 @@
+# procedural_adaptivesystem_agent.py
+# https://arxiv.org/abs/2502.07728 code whiplash discipline
+import asyncio
+import time
+import json
+import xml.etree.ElementTree as ET
+import re
+import os
+import sys
+import subprocess # For executing commands
+import shlex # For safely splitting command strings
+import functools
+from loguru import logger
+from sqlalchemy.orm import Session
+from typing import Dict, Any, List, Optional, Tuple, Union
+import uuid
+import ast
+import fnmatch
+import tiktoken
+from playwright.async_api import async_playwright
+
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+# Assuming these are in your config.py and accessible
+# Import necessary constants from CortexConfiguration (ensure they are defined there)
+try:
+    from CortexConfiguration import *
+except ImportError:
+    # Fallbacks if config import fails during agent initialization (less ideal)
+    logger.error("Failed to import config constants in procedural_adaptivesystem_agent.py")
+    RAG_HISTORY_COUNT = 5
+
+
+
+
+# Import necessary DB functions and session factory
+try:
+    from database import add_interaction, get_recent_interactions, get_past_scriptingseqprogramminginterface_attempts, SessionLocal, Interaction
+except ImportError:
+    logger.error("Failed to import database components in procedural_adaptivesystem_agent.py")
+    # Define dummy functions/classes if needed for basic loading, but app will likely fail
+    def add_interaction(*args, **kwargs): 
+        pass
+    def get_recent_interactions(*args, **kwargs): 
+        return []
+    class SessionLocal: 
+        def __call__(self): 
+            return None # type: ignore
+    class Interaction: 
+        pass
+
+
+# --- NEW: Import the custom lock ---
+
+from priority_lock import ELP0, ELP1 # Ensure these are imported
+interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
+
+# --- Define the path to the system prompt file ---
+AGENT_PROMPT_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_system_prompt.txt")
+
+PROMPT_STRICT_ADA_DEVELOPER = """
+[STRICT SYSTEM IMPERATIVE: ADA DEVELOPMENT ONLY]
+You are an expert Ada Developer specializing in High-Integrity Systems (DO-178C/ECSS-E-ST-40C).
+You are FORBIDDEN from writing code in Python, C++, or Rust. You must ONLY use Ada.
+
+[WHIPLASH ROUTINE: Plan -> Execute -> Observe -> Fix]
+This is your core operational discipline. You must never give up until the build is clean.
+
+[REQUIRED WORKFLOW]
+1. INITIALIZE: If starting a new task, use `alr -n init --bin <project_name>` to create a crate.
+2. NAVIGATE: Use `change_working_directory <project_name>` to enter the project.
+3. EXPLORE: Use `list_files` to verify the structure (look for .gpr and src/).
+4. CODE: Write or modify .adb/.ads files in `src/` using `write_to_file`.
+5. VERIFY & BUILD: Run `execute_command("alr_whiplash")` to compile. 
+   - 'alr_whiplash' runs SPARK verification (gnatprove) -> GNAT Compile (gprbuild).
+
+[ERROR LOOP STRATEGY]
+If 'alr_whiplash' fails (Non-zero Return Code):
+1. READ the error log from the tool output carefully.
+2. ANALYZE the specific line number and error message.
+3. FIX the code using `write_to_file` (overwrite) or `replace_in_file`.
+4. RETRY `execute_command("alr_whiplash")`.
+5. REPEAT until the build is clean (Return Code 0).
+
+[MEMORY]
+Your current project location is stored in the system's CWD variable.
+"""
+
+PROMPT_DOMAIN_ROUTER = """
+You are a classification system. Analyze the User Input and Context to select the best Specialist.
+Classify the request into ONE of these domains:
+- CODE: Writing scripts, programming, html, css, sql, python, ada, software architecture.
+- PHYSICS: Physics questions, simulations, scientific principles.
+- MATH: Calculations, logic puzzles, mathematical proofs.
+- GENERAL: Conversational, simple tasks, or anything fitting none of the above.
+
+Reply ONLY with the single word category name (e.g., "CODE").
+"""
+
+# Implementation for Agent tools using basic os/subprocess
+class AgentTools:
+    """Agent tool execution implementation using basic system calls."""
+    def __init__(self, cwd: str, provider_embeddings: Any, page: Any):
+        self.cwd = cwd
+        self.provider_embeddings = provider_embeddings
+        self.page = page
+        logger.info(f"🛠️ Initializing AgentTools with CWD: {self.cwd}")
+        # NOTE: These implementations are basic. Real-world tools need more robust error handling,
+        # security checks (especially for execute_command), and platform compatibility checks.
+
+    async def change_working_directory(self, path: str) -> str:
+        """
+        Changes the agent's current working directory (CWD) persistently.
+        Use this after creating a new project (e.g., 'alr init') to enter it.
+        """
+        # Resolve absolute path
+        new_path = os.path.abspath(os.path.join(self.cwd, path))
+
+        if not os.path.isdir(new_path):
+            return f"Error: Directory '{new_path}' does not exist."
+
+        # Update the state
+        self.cwd = new_path
+        logger.info(f"📂 Agent CWD changed to: {self.cwd}")
+        return f"Successfully changed directory to: {self.cwd}"
+
+    async def execute_command(self, command: str, requires_approval: bool) -> str:
+        """Executes a shell command."""
+        logger.info(f"Executing command: '{command}' (Approval: {requires_approval}) in CWD: {self.cwd}")
+        # Security Note: Avoid shell=True if possible. Split command string safely.
+        # This basic split might not handle complex shell syntax (pipes, redirection, etc.)
+        # If complex commands are needed, consider a more robust parser or use shell=True with extreme caution.
+        try:
+            # Use shlex to split command safely for different OS
+            if sys.platform == 'win32':
+                cmd_list = command # Windows might need the command string directly for some builtins
+                use_shell = True # Often needed for builtins like 'help' or 'dir' on Windows
+            else:
+                cmd_list = shlex.split(command)
+                use_shell = False # Safer on Unix-like systems
+
+            loop = asyncio.get_running_loop()
+            process = await loop.run_in_executor(
+                None, # Use default ThreadPoolExecutor
+                functools.partial(
+                    subprocess.run,
+                    cmd_list, # Pass list or string depending on OS/shell
+                    shell=use_shell, # Set based on platform need
+                    cwd=self.cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120 # Timeout for command execution
+                )
+            )
+
+            stdout = process.stdout.strip()
+            stderr = process.stderr.strip()
+            returncode = process.returncode
+
+            logger.debug(f"Command '{command}' finished RC: {returncode}")
+            output = f"Command: {command}\nReturn Code: {returncode}\n"
+            if stdout:
+                output += f"STDOUT:\n{stdout}\n"
+            if stderr:
+                output += f"STDERR:\n{stderr}\n"
+
+            if returncode != 0:
+                 logger.error(f"Command failed with return code {returncode}: {command}")
+                 return f"Error executing command (Return Code {returncode}):\n{output}" # Indicate failure to the LLM
+
+            return output # Return combined output
+
+        except FileNotFoundError:
+            logger.error(f"Command not found: {command}")
+            return f"Error executing command: Command or executable not found."
+        except subprocess.TimeoutExpired:
+             logger.error(f"Command timed out after 120 seconds: {command}")
+             return f"Error executing command: Command timed out after 120 seconds."
+        except Exception as e:
+            logger.error(f"Unexpected error during command execution: {e}")
+            logger.exception("Command Execution Traceback:")
+            return f"Error executing command: {e}"
+
+
+    async def read_file(self, path: str) -> str:
+        """Reads the content of a file."""
+        full_path = os.path.join(self.cwd, path)
+        logger.info(f"Reading file: '{full_path}'")
+        loop = asyncio.get_running_loop()
+        try:
+            # Use to_thread for blocking file read
+            content = await loop.run_in_executor(
+                None,
+                lambda: open(full_path, 'r', encoding='utf-8', errors='ignore').read() # Added errors='ignore'
+            )
+            return f"File content of '{path}':\n```\n{content}\n```"
+        except FileNotFoundError:
+            logger.warning(f"File not found: {full_path}")
+            return f"Error: File not found at '{path}'."
+        except IsADirectoryError:
+             logger.warning(f"Path is directory: {full_path}")
+             return f"Error: Path '{path}' is a directory, not a file."
+        except Exception as e:
+            logger.error(f"Error reading file '{full_path}': {e}")
+            return f"Error reading file '{path}': {e}"
+
+    async def write_to_file(self, path: str, content: str) -> str:
+        """Writes content to a file, overwriting or creating it."""
+        full_path = os.path.join(self.cwd, path)
+        logger.info(f"Writing to file: '{full_path}' ({len(content)} bytes)")
+        loop = asyncio.get_running_loop()
+        try:
+            # Ensure parent directory exists
+            parent_dir = os.path.dirname(full_path)
+            if parent_dir: # Only create if not writing to root CWD
+                await loop.run_in_executor(None, functools.partial(os.makedirs, parent_dir, exist_ok=True))
+
+            # Write file content in a thread
+            await loop.run_in_executor(
+                None,
+                lambda: open(full_path, 'w', encoding='utf-8').write(content)
+            )
+            return f"Successfully wrote content to '{path}'."
+        except Exception as e:
+            logger.error(f"Error writing to file '{full_path}': {e}")
+            return f"Error writing to file '{path}': {e}"
+
+    async def list_files(self, path: str, recursive: bool = False) -> str:
+        """Lists files and directories."""
+        # Ensure path is relative to cwd for safety, or handle absolute paths carefully
+        if os.path.isabs(path):
+            logger.warning(f"Attempted to list absolute path: {path}. Restricting to CWD.")
+            try:
+                path = os.path.relpath(path, self.cwd)
+                if path.startswith(".."): # Basic check to prevent going above CWD
+                     return "Error: Cannot list files outside the working directory."
+            except ValueError:
+                 return "Error: Cannot list files outside the working directory."
+
+        full_path = os.path.join(self.cwd, path)
+        logger.info(f"Listing files in: '{full_path}' (recursive: {recursive})")
+        loop = asyncio.get_running_loop()
+        try:
+             items = []
+             if recursive:
+                 # os.walk is blocking, run in thread
+                 for root, dirs, files in await loop.run_in_executor(None, os.walk, full_path):
+                      # Make paths relative to the original requested path for clarity
+                      relative_root = os.path.relpath(root, full_path)
+                      if relative_root == '.':
+                          relative_root = "" # Avoid './' prefix
+                      items.extend(os.path.join(relative_root, d) + '/' for d in dirs)
+                      items.extend(os.path.join(relative_root, f) for f in files)
+             else:
+                 # os.listdir is blocking, run in thread
+                 raw_items = await loop.run_in_executor(None, os.listdir, full_path)
+                 items_with_type = []
+                 for item in raw_items:
+                     item_full_path = os.path.join(full_path, item)
+                     # Check if it's a directory within the thread to avoid blocking loop
+                     is_dir = await loop.run_in_executor(None, os.path.isdir, item_full_path)
+                     items_with_type.append(item + '/' if is_dir else item)
+                 items = items_with_type # Assign back to items
+
+             formatted_list = "\n".join(sorted(items)) # Sort alphabetically for consistency
+             if not formatted_list:
+                 return f"Directory '{path}' is empty."
+             return f"Contents of '{path}':\n{formatted_list}"
+        except FileNotFoundError:
+             logger.warning(f"Directory not found for listing: {full_path}")
+             return f"Error: Directory not found at '{path}'."
+        except NotADirectoryError:
+             logger.warning(f"Path is not a directory for listing: {full_path}")
+             return f"Error: Path '{path}' is not a directory."
+        except Exception as e:
+             logger.error(f"Error listing files in '{full_path}': {e}")
+             return f"Error listing files in '{path}': {e}"
+
+    async def replace_in_file(self, path: str, old_string: str, new_string: str) -> str:
+        """Replaces all occurrences of old_string with new_string in a file."""
+        full_path = os.path.join(self.cwd, path)
+        logger.info(f"Replacing in file: '{full_path}'")
+        try:
+            async with asyncio.Lock():
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                new_content = content.replace(old_string, new_string)
+
+                with open(full_path, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+            
+            return f"Successfully replaced content in '{path}'."
+        except FileNotFoundError:
+            return f"Error: File not found at '{path}'."
+        except Exception as e:
+            return f"Error replacing in file '{path}': {e}"
+
+    async def search_files(self, path: str, regex: str, file_pattern: Optional[str] = None) -> str:
+        """Searches for a regex pattern in files within a directory."""
+        full_path = os.path.join(self.cwd, path)
+        logger.info(f"Searching files in: '{full_path}' for regex: '{regex}'")
+        matches = []
+        try:
+            for root, _, files in os.walk(full_path):
+                for filename in files:
+                    if file_pattern and not fnmatch.fnmatch(filename, file_pattern):
+                        continue
+                    
+                    file_path = os.path.join(root, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            for line_num, line in enumerate(f, 1):
+                                if re.search(regex, line):
+                                    matches.append(f"{file_path}:{line_num}:{line.strip()}")
+                    except Exception as e:
+                        logger.warning(f"Could not read file {file_path} during search: {e}")
+
+            if not matches:
+                return "No matches found."
+            
+            return "Search results:\n" + "\n".join(matches)
+        except Exception as e:
+            return f"Error searching files: {e}"
+
+    async def list_code_definition_names(self, path: str) -> str:
+        """Lists class and function definition names in a Python file."""
+        full_path = os.path.join(self.cwd, path)
+        if not path.endswith(".py"):
+            return "Error: This tool only supports Python files (.py)."
+        
+        logger.info(f"Listing code definitions in: '{full_path}'")
+        try:
+            with open(full_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            tree = ast.parse(content)
+            definitions = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    definitions.append(f"Function: {node.name}")
+                elif isinstance(node, ast.AsyncFunctionDef):
+                    definitions.append(f"Async Function: {node.name}")
+                elif isinstance(node, ast.ClassDef):
+                    definitions.append(f"Class: {node.name}")
+            
+            if not definitions:
+                return "No class or function definitions found."
+
+            return "Code definitions:\n" + "\n".join(definitions)
+        except FileNotFoundError:
+            return f"Error: File not found at '{path}'."
+        except SyntaxError as e:
+            return f"Error parsing Python file: {e}"
+        except Exception as e:
+            return f"Error listing code definitions: {e}"
+
+    async def browser_action(self, action: str, url: Optional[str] = None, selector: Optional[str] = None, text: Optional[str] = None) -> str:
+        """Performs an action in the browser using Playwright."""
+        if not self.page:
+            return "Error: Browser is not running."
+
+        logger.info(f"Performing browser action: {action}")
+        try:
+            if action == "navigate":
+                if not url:
+                    return "Error: URL is required for navigate action."
+                await self.page.goto(url)
+                return f"Navigated to {url}."
+            elif action == "click":
+                if not selector:
+                    return "Error: Selector is required for click action."
+                await self.page.click(selector)
+                return f"Clicked on element with selector '{selector}'."
+            elif action == "type":
+                if not selector or text is None:
+                    return "Error: Selector and text are required for type action."
+                await self.page.type(selector, text)
+                return f"Typed '{text}' into element with selector '{selector}'."
+            elif action == "screenshot":
+                screenshot_bytes = await self.page.screenshot()
+                # For simplicity, we don't save the file, just report success.
+                # A real implementation might save it and return the path.
+                return "Took a screenshot."
+            else:
+                return f"Error: Unknown browser action '{action}'."
+        except Exception as e:
+            return f"Error performing browser action '{action}': {e}"
+
+    async def use_mcp_tool(self, server_name: str, tool_name: str, arguments: Dict[str, Any]) -> str:
+         logger.warning(f"MCP tool (placeholder): {server_name}/{tool_name}")
+         await asyncio.sleep(0.1)
+         return f"Placeholder: Would execute MCP tool '{tool_name}'."
+
+    async def access_mcp_resource(self, server_name: str, uri: str) -> str:
+         logger.warning(f"MCP resource (placeholder): {server_name}/{uri}")
+         await asyncio.sleep(0.1)
+         return f"Placeholder: Would access MCP resource '{uri}'."
+
+
+class AmaryllisAgent:
+    """Manages the state and execution loop for the Agent persona (Adelaide)."""
+    def __init__(self, provider: Any, cwd: str, supports_computer_use: bool = True, vector_compute: Any = None):
+        self.provider = provider
+        self.cwd = cwd
+        self.supports_computer_use = supports_computer_use
+        self.playwright = None
+        self.browser = None
+        self.page = None
+        self.vector_compute = vector_compute
+        class MockMcpHub:
+            def getServers(self):
+                return []
+        self.mcp_hub = MockMcpHub()
+        class MockBrowserSettings:
+            class Viewport:
+                width = 1024
+                height = 768
+            viewport = Viewport()
+        self.browser_settings = MockBrowserSettings()
+        self.agent_tools = AgentTools(self.cwd, self.provider.embeddings, self.page)
+        self.setup_prompts()
+        self.conversation_history: List[Dict[str, Any]] = []
+        self.current_session_id: Optional[str] = None
+        self.code_llm = self.provider.get_model("code")
+        if not self.code_llm:
+            logger.warning("Code model not found. Falling back to default for tool translation.")
+            self.code_llm = self.provider.get_model("default")
+        # Define the prompt for the Translator (Code Model)
+        # It takes the 'plan' from the Default model and formats it into the system's XML tool format.
+        translation_system_msg = (
+            "You are a strict API Syntax Translator. "
+            "Your ONLY job is to convert the User's natural language plan into a valid XML Tool Request.\n"
+            "Format:\n"
+            "<tool_name>\n"
+            "    <argument_name>value</argument_run_task_in_background_name>\n"
+            "</tool_name>\n\n"
+            "If the tool requires complex data (like 'write_to_file'), ensure the content is properly escaped.\n"
+            "Do NOT add any conversational text. Output ONLY the XML."
+        )
+        self.tool_translator_chain = (
+                ChatPromptTemplate.from_messages([
+                    SystemMessage(content=translation_system_msg),
+                    HumanMessage(content="{plan}")
+                ])
+                | self.code_llm
+                | StrOutputParser()
+        )
+
+        # Initialize Domain Router Chain
+        router_model = self.provider.get_model("router") or self.provider.get_model("default")
+
+        self.domain_router_chain = (
+                ChatPromptTemplate.from_messages([
+                    SystemMessage(content=PROMPT_DOMAIN_ROUTER),
+                    HumanMessage(content="Context: {context}\n\nUser Input: {input}")
+                ])
+                | router_model
+                | StrOutputParser()
+        )
+
+    def _count_tokens(self, text: str) -> int:
+        """Helper to count tokens using tiktoken (cl100k_base)."""
+        try:
+            encoding = tiktoken.get_encoding("cl100k_base")
+            return len(encoding.encode(text))
+        except Exception:
+            return len(text.split())  # Fallback estimate
+
+    async def start_browser(self):
+        """Starts the Playwright browser instance."""
+        if self.playwright is None:
+            self.playwright = await async_playwright().start()
+            self.browser = await self.playwright.chromium.launch(headless=False)
+            self.page = await self.browser.new_page()
+            self.agent_tools.page = self.page
+            logger.info("Browser started.")
+
+    async def shutdown_browser(self):
+        """Shuts down the Playwright browser instance."""
+        if self.browser:
+            await self.browser.close()
+        if self.playwright:
+            await self.playwright.stop()
+        self.browser = None
+        self.page = None
+        self.playwright = None
+        logger.info("Browser shut down.")
+
+    def setup_prompts(self):
+        """Reads and formats the agent system prompt."""
+        try:
+            with open(AGENT_PROMPT_FILE_PATH, 'r', encoding='utf-8') as f:
+                raw_agent_system_prompt = f.read()
+            logger.info(f"📖 Read agent prompt from: {AGENT_PROMPT_FILE_PATH}")
+        except Exception as e:
+            logger.critical(f"❌ Failed reading agent prompt: {e}")
+            raw_agent_system_prompt = "You are Adelaide, a helpful agent. Respond to the requests."
+
+        def osName(): return sys.platform
+        def getShell(): return os.environ.get("SHELL", "/bin/sh")
+        class PosixPath:
+            def __init__(self, path): self._path = path
+            def toPosix(self): return self._path.replace("\\", "/")
+        cwd_posix = PosixPath(self.cwd)
+
+        def format_user_custom_instructions(**kwargs) -> str:
+            settingsCustomInstructions = kwargs.get("settingsCustomInstructions", "Be helpful and professional.")
+            customInstructions = f"{settingsCustomInstructions}\n"
+            # Add logic here to load other instructions if needed
+            return f"====\nUSER'S CUSTOM INSTRUCTIONS\n\n{customInstructions.strip()}\n====" if customInstructions.strip() else ""
+
+        user_custom_instructions_content = format_user_custom_instructions(settingsCustomInstructions="Focus on Python code.")
+
+        # Format the base prompt, replacing placeholders carefully
+        formatted_base_prompt_content = raw_agent_system_prompt
+        replacements = {
+            '${osName()}': osName(),
+            '${getShell()}': getShell(),
+            '${os.homedir().toPosix()}': PosixPath(os.path.expanduser("~")).toPosix(),
+            '${cwd.toPosix()}': cwd_posix.toPosix(),
+            '${browserSettings.viewport.width}': str(self.browser_settings.viewport.width),
+            '${browserSettings.viewport.height}': str(self.browser_settings.viewport.height),
+            # Simplify complex JS conditionals during replacement
+            '${\n\tmcpHub.getServers().length > 0\n\t\t? `${mcpHub...` : "(No MCP servers currently connected)"\n}': "(No MCP servers currently connected)",
+            '${\n\tsupportsComputerUse\n\t\t? `\n\n## browser_action...`\n\t\t: ""\n}': "\n\n## browser_action\nDescription: (Browser Interaction Tool)\n..." if self.supports_computer_use else "",
+            '${\n\tsupportsComputerUse\n\t\t? "\\n- You can use the browser_action tool..."\n\t\t: ""\n}': "\n- Browser interaction is enabled." if self.supports_computer_use else "",
+            '${\n\tsupportsComputerUse\n\t\t? `\\n- The user may ask generic non-development tasks...`\n\t\t: ""\n}': "\n- Generic web tasks via browser are possible." if self.supports_computer_use else "",
+            '${\n\tsupportsComputerUse\n\t\t? " Then if you want to test your work..."\n\t\t: ""\n}': " Browser testing is available." if self.supports_computer_use else ""
+        }
+        for placeholder, value in replacements.items():
+            try:
+                 # Use regex for safer replacement of complex multi-line placeholders
+                 # This requires careful escaping of special characters in the placeholder key
+                 escaped_placeholder = re.escape(placeholder)
+                 formatted_base_prompt_content = re.sub(escaped_placeholder, value, formatted_base_prompt_content, flags=re.DOTALL | re.MULTILINE)
+            except Exception as replace_err:
+                 logger.error(f"Error replacing placeholder '{placeholder[:50]}...': {replace_err}")
+
+
+        final_system_prompt_template_string = f"{formatted_base_prompt_content.strip()}\n{user_custom_instructions_content.strip()}\n====\nCURRENT ENVIRONMENT DETAILS\n# Mode: {{mode}}\nFile list:\n{{file_list}}\nActively Running Terminals:\n{{running_terminals}}\n====\nCONVERSATION HISTORY SNIPPETS (RAG)\n{{agent_history_rag}}\n====\nRAG CONTEXT FROM DOCUMENTS/URLS\n{{url_rag_context}}\n====\n"
+        self.final_system_prompt_template_string = final_system_prompt_template_string
+
+        self.agent_prompt_template = ChatPromptTemplate.from_messages([ SystemMessage(content=final_system_prompt_template_string), MessagesPlaceholder(variable_name="agent_history_turns"), HumanMessage(content="{current_input}"),])
+
+        agent_model_role = "default" # Or "router" if you want it to use the same as the corrector
+        agent_llm = self.provider.get_model(agent_model_role)
+        if not agent_llm:
+             # Handle error: The required model wasn't initialized in CortexEngine
+             logger.error(f"Agent setup failed: Could not get model for role '{agent_model_role}' from CortexEngine.")
+             # You might want to raise an exception here to stop initialization
+             raise ValueError(f"Agent model role '{agent_model_role}' not found in CortexEngine.")
+
+        self.agent_chain = self.agent_prompt_template | agent_llm | StrOutputParser()
+
+
+    def _parse_tool_request(self, llm_response: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """Parses the LLM's response to find tool requests formatted as XML."""
+        # Use regex to find the outermost tool tag first
+        outer_match = re.search(r'<(\w+?)>(.*?)</\1>', llm_response, re.DOTALL | re.IGNORECASE)
+        if not outer_match:
+            logger.debug("No valid XML tool request found in LLM response.")
+            return None, None
+
+        tool_name = outer_match.group(1)
+        tool_content = outer_match.group(2)
+        parameters: Dict[str, Any] = {}
+
+        logger.info(f"Detected tool request: <{tool_name}>")
+
+        # Parse parameters within the tool content using XML parsing
+        try:
+            # Wrap content in a root tag to handle potential multiple params
+            xml_content = f"<root>{tool_content}</root>"
+            root = ET.fromstring(xml_content)
+            for child in root:
+                # Store parameter value, handling empty tags
+                parameters[child.tag] = child.text.strip() if child.text else ""
+                # Log each parameter found
+                logger.trace(f"  Parsed param: <{child.tag}>{parameters[child.tag]}</{child.tag}>")
+
+            # Special handling for 'arguments' which should be JSON string
+            if 'arguments' in parameters and isinstance(parameters['arguments'], str):
+                 try:
+                     parameters['arguments'] = json.loads(parameters['arguments'])
+                     logger.trace("  Parsed 'arguments' parameter as JSON.")
+                 except json.JSONDecodeError:
+                     logger.error(f"Failed JSON parse for 'arguments'. Value: {parameters['arguments']}")
+                     parameters['arguments'] = f"Invalid JSON: {parameters['arguments']}" # Indicate failure
+
+        except ET.ParseError as e:
+             logger.error(f"Failed XML parse for tool params '{tool_name}': {e}. Content: {tool_content}")
+             # Fallback: try simple regex for parameters if XML parsing fails
+             param_matches = re.findall(r'<(\w+?)>(.*?)</\1>', tool_content, re.DOTALL)
+             parameters = {name: value.strip() for name, value in param_matches}
+             logger.warning(f"Attempted regex fallback for parameters: {parameters}")
+
+        logger.debug(f"Final parsed parameters for tool '{tool_name}': {parameters}")
+        return tool_name, parameters
+
+    async def _generate_and_refine_os_script(
+            self,
+            db: Session,
+            action_type: str,
+            params: Dict[str, Any],
+            platform: str,
+            triggering_interaction_id: int,
+            session_id: str,
+            **kwargs  # Accepts optional context for refinement
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Generates or refines an OS-specific script using an LLM.
+
+        This is the "brain" for script creation. It selects the correct prompts based
+        on the operating system and whether it's an initial generation or a refinement
+        of a failed script.
+
+        If 'failed_script_context' is provided via kwargs, it uses the refinement prompt.
+
+        Args:
+            db: The SQLAlchemy database session for RAG.
+            action_type: The type of action requested (e.g., 'scheduling', 'search').
+            params: A dictionary of parameters for the action.
+            platform: The OS identifier from sys.platform ('darwin', 'win32', 'linux').
+            triggering_interaction_id: The ID of the interaction that started this action.
+            session_id: The current session ID.
+            **kwargs: Can contain 'failed_script_context' (a dict with error details) for refinement.
+
+        Returns:
+            A tuple containing:
+            - The generated script string, or None on failure.
+            - An error message string if generation failed, otherwise None.
+        """
+        # Safely get the context from the previous failed attempt, if provided
+        failed_script_context = kwargs.get('failed_script_context')
+
+        # Setup for logging and identification
+        req_id = f"scriptgen-{platform}-{uuid.uuid4()}"
+        log_prefix = f"🤖 {req_id}"
+        is_refinement = failed_script_context is not None
+
+        logger.info(
+            f"{log_prefix} Generating script for platform '{platform}', action '{action_type}' (Refinement: {is_refinement})")
+
+        # --- 1. Select the correct LLM and Prompts for the platform ---
+        script_llm = self.provider.get_model("code")
+        if not script_llm:
+            logger.error(f"{log_prefix} 'code' model is not available in CortexEngine.")
+            return None, "Code generation model is not configured."
+
+        params_json = json.dumps(params, sort_keys=True)
+
+        # Determine the script language and the appropriate prompt templates
+        if platform == 'darwin':
+            gen_prompt_template = PROMPT_GENERATE_APPLESCRIPT
+            refine_prompt_template = PROMPT_REFINE_APPLESCRIPT
+            script_lang = 'applescript'
+        elif platform == 'win32':
+            gen_prompt_template = PROMPT_GENERATE_POWERSHELL_SCRIPT
+            refine_prompt_template = PROMPT_REFINE_POWERSHELL_SCRIPT
+            script_lang = 'powershell'
+        else:  # Default to Bash for Linux and other Unix-like systems
+            gen_prompt_template = PROMPT_GENERATE_BASH_SCRIPT
+            refine_prompt_template = PROMPT_REFINE_BASH_SCRIPT
+            script_lang = 'bash'
+
+        # Choose the final prompt template based on whether this is a refinement attempt
+        if is_refinement:
+            llm_prompt_template_str = refine_prompt_template
+            logger.info(f"{log_prefix} Using REFINEMENT prompt for {script_lang.capitalize()}.")
+        else:
+            llm_prompt_template_str = gen_prompt_template
+            logger.info(f"{log_prefix} Using initial GENERATION prompt for {script_lang.capitalize()}.")
+
+        # --- 2. Build the LLM Input ---
+
+        # a. Get RAG context from past attempts
+        past_attempts = await asyncio.to_thread(
+            get_past_scriptingseqprogramminginterface_attempts, db, action_type, params_json, limit=5
+        )
+        past_attempts_context = self._format_script_rag_context(past_attempts)
+
+        # b. Construct the full input dictionary for the prompt template
+        llm_input = {
+            "action_type": action_type,
+            "parameters_json": params_json,
+            "past_attempts_context": past_attempts_context
+        }
+
+        # c. If it's a refinement attempt, add the detailed failure context
+        if is_refinement and isinstance(failed_script_context, dict):
+            llm_input.update(failed_script_context)
+
+        # --- 3. Invoke the LLM ---
+
+        # Create the full LangChain runnable
+        script_chain = ChatPromptTemplate.from_template(llm_prompt_template_str) | script_llm | StrOutputParser()
+
+        try:
+            # Run the synchronous LangChain invoke method in a separate thread
+            generated_script_raw = await asyncio.to_thread(script_chain.invoke, llm_input)
+
+            # Clean the raw output to remove markdown code blocks and excess whitespace
+            script_to_execute = re.sub(rf"^```(?:{script_lang})?\s*|```\s*$", "", generated_script_raw,
+                                       flags=re.MULTILINE).strip()
+
+            if not script_to_execute:
+                logger.warning(f"{log_prefix} LLM returned an empty script.")
+                return None, "LLM generated an empty script."
+
+            logger.success(
+                f"{log_prefix} Successfully generated {script_lang} script. Length: {len(script_to_execute)}.")
+            logger.trace(f"{log_prefix} Generated Script:\n---\n{script_to_execute}\n---")
+
+            # Return the clean script and no error
+            return script_to_execute, None
+
+        except Exception as gen_err:
+            logger.error(f"{log_prefix} An exception occurred during the LLM call for script generation: {gen_err}",
+                         exc_info=True)
+            # Return no script and the error message
+            return None, f"LLM call failed: {gen_err}"
+
+    def _format_script_rag_context(self, attempts: List[Any]) -> str:
+        # (This function remains unchanged from your original)
+        if not attempts: return "None available."
+        context_str = ""
+        for i, attempt in enumerate(attempts):
+            context_str += f"--- Past Attempt {i+1} ({attempt.timestamp.isoformat()}) ---\n"
+            context_str += f"Script:\n```\n{attempt.generated_script or '[Script Missing]'}\n```\n"
+            context_str += f"Success: {attempt.execution_success}\n"
+            if not attempt.execution_success:
+                context_str += f"  RC: {attempt.execution_return_code}\n"
+                context_str += f"  Error Summary: {attempt.error_summary}\n"
+            context_str += "---\n"
+            if len(context_str) > 2000:
+                context_str += "[Context truncated]...\n"
+                break
+        return context_str
+    
+
+    async def _execute_agent_tool(self, tool_name: str, parameters: Dict[str, Any], db: Session) -> str:
+        """Executes the requested agent tool using the AgentTools instance."""
+        logger.warning(f"🛠️ Executing tool: {tool_name}")
+        # Log the request before execution
+        tool_request_output_log = f"<{tool_name}>\n"
+        for key, value in parameters.items():
+            tool_request_output_log += f"  <{key}>{value}</{key}>\n"
+        tool_request_output_log += f"</{tool_name}>"
+        add_interaction(
+            db, session_id=self.current_session_id, mode="agent", input_type="tool_request",
+            user_input=f"[Agent requested tool '{tool_name}']",
+            llm_response=tool_request_output_log, # Log the formatted request
+            tool_name=tool_name, tool_parameters=json.dumps(parameters) # Store raw params as JSON
+        )
+
+        result = f"Tool '{tool_name}' execution failed or encountered an issue." # Default result
+        start_time = time.monotonic()
+        try:
+            tool_method = getattr(self.agent_tools, tool_name, None)
+            if tool_method and callable(tool_method):
+                 logger.debug(f"Calling tool method: agent_tools.{tool_name}(**{parameters})")
+                 # RATIONALE: tool_method is dynamically retrieved via getattr. 
+                 # WARRANTY: All methods in AgentTools are verified as 'async def' in the 
+                 # class definition; thus they are guaranteed awaitables at runtime.
+                 result = await tool_method(**parameters) # Call the tool method # pyrefly: ignore
+            elif tool_name in ["attempt_completion", "plan_mode_respond", "ask_followup_question", "new_task", "load_mcp_documentation"]:
+                 result = f"Error: LLM attempted to 'execute' output type tool '{tool_name}'. This indicates the LLM should have stopped."
+                 logger.warning(f"LLM requested output tool '{tool_name}'.")
+            else:
+                result = f"Error: Unknown tool requested: '{tool_name}'."
+                logger.error(result)
+
+        except TypeError as te:
+            # Log specific error about mismatched arguments
+            result = f"Error executing tool '{tool_name}': Invalid parameters provided. {te}. Check tool usage format in prompt."
+            logger.error(result)
+            logger.exception(f"TypeError during tool execution ({tool_name}):")
+        except Exception as e:
+            result = f"Error executing tool '{tool_name}': {e}"
+            logger.error(result)
+            logger.exception(f"Traceback for tool execution error ({tool_name}):")
+
+        execution_time_ms = (time.monotonic() - start_time) * 1000
+        logger.info(f"Tool '{tool_name}' execution finished ({execution_time_ms:.2f} ms).")
+        logger.debug(f"Tool Result Snippet:\n{result[:500]}...") # Log result snippet
+
+        # Log the tool result interaction *after* execution
+        add_interaction(
+            db, session_id=self.current_session_id, mode="agent", input_type="tool_result",
+            user_input=f"[Result for '{tool_name}']",
+            llm_response=result, # Store the actual tool output
+            tool_name=tool_name, execution_time_ms=execution_time_ms
+        )
+
+        # Format the result for the LLM to consume in the next turn
+        formatted_result_for_llm = f"\n<tool_result>\n<{tool_name}>\n{result}\n</{tool_name}>\n</tool_result>\n"
+        return formatted_result_for_llm
+
+
+    def _get_environment_details(self) -> Dict[str, str]:
+        """Gets environment details as a dictionary (blocking calls)."""
+        file_list_str = "Error: Could not list files."
+        running_terminals_str = "Error: Could not retrieve running terminals."
+        current_mode = "ACT MODE" # Assume ACT mode for background tasks
+
+        try:
+             files = os.listdir(self.cwd)
+             file_list_str = "\n".join(f"- {f}" for f in sorted(files)[:50]) # Limit list size
+             if len(files) > 50:
+                 file_list_str += "\n- ..."
+             if not files:
+                 file_list_str = "(Directory is empty)"
+        except Exception as e:
+             logger.warning(f"Could not get file list for env details: {e}")
+             file_list_str = f"(Error getting file list: {e})"
+
+        # Placeholder for running terminals - requires OS-specific logic
+        running_terminals_str = "(Not implemented)"
+
+        return {
+            "file_list": file_list_str,
+            "running_terminals": running_terminals_str,
+            "mode": current_mode,
+        }
+
+
+    def _get_agent_history_rag_string(self, db: Session) -> str:
+        """Retrieves and formats recent agent interactions as a string for prompt."""
+        recent_interactions = get_recent_interactions(db, limit=RAG_HISTORY_COUNT * 2, session_id=self.current_session_id, mode="agent", include_logs=True) # Include logs for agent context
+        if not recent_interactions:
+            return "No recent agent history."
+
+        history_str_parts = []
+        recent_interactions.reverse() # Oldest first for prompt context flow
+        for interaction in recent_interactions:
+             prefix, text = None, None
+             formatted_result = None
+             input_type = interaction.input_type or "log" # Default to log if None
+
+             if input_type == 'text' and interaction.user_input:
+                 prefix, text = "User Input:", interaction.user_input
+             elif input_type == 'llm_response' and interaction.llm_response:
+                 prefix, text = "Adelaide Response:", interaction.llm_response
+             elif input_type == 'tool_request' and interaction.llm_response:
+                 # Show the raw request XML the LLM generated
+                 prefix, text = "Adelaide Tool Request:", interaction.llm_response
+             elif input_type == 'tool_result' and interaction.llm_response:
+                 # Format the tool result as the environment's response
+                 tool_name = interaction.tool_name or "unknown_tool"
+                 result_content = interaction.llm_response or "[Empty Result]"
+                 # Use the specific XML format expected by the prompt
+                 formatted_result = f"<tool_result>\n<{tool_name}>\n{result_content}\n</{tool_name}>\n</tool_result>"
+             elif input_type == 'system':
+                 prefix, text = "System Message:", interaction.user_input
+             elif input_type.startswith('log_') or input_type == 'error':
+                 prefix = f"Log ({input_type.upper()}):"
+                 text = interaction.llm_response or interaction.user_input # Log message stored here
+
+             if formatted_result:
+                 history_str_parts.append(formatted_result)
+             elif prefix and text:
+                 # Truncate long history items
+                 text_snippet = (text[:300] + '...') if len(text) > 300 else text
+                 history_str_parts.append(f"{prefix}\n{text_snippet}")
+
+        return "\n---\n".join(history_str_parts) if history_str_parts else "No recent agent history."
+
+    async def _get_agent_url_rag_string(self, db: Session, user_input: str) -> str:
+        """
+        Retrieves relevant context from the Vector Database (Docs, Manuals, Knowledge Base).
+        This allows the agent to 'read' uploaded manuals before acting.
+        """
+        if not self.vector_compute:
+            return "Reference Context: [Vector Database Not Connected]"
+
+        logger.info(f"📚 Agent RAG: Searching for manual references regarding: '{user_input[:50]}...'")
+
+        try:
+            # We use the same query logic as background_generate
+            # This searches uploaded files (PDFs, code) and recent memory
+            vec_results = await self.vector_compute.query_vectors_async(
+                query=user_input,
+                top_k=3,
+                threshold=0.7
+            )
+
+            if not vec_results or "No relevant" in vec_results:
+                return "Reference Context: No specific documentation found for this step."
+
+            return f"Reference Context (Manuals/Docs):\n{vec_results}"
+
+        except Exception as e:
+            logger.error(f"Agent RAG Error: {e}")
+            return f"Reference Context: Error retrieving docs ({e})"
+
+
+    async def _run_task_in_background(self, initial_interaction_id: int, user_input: str, session_id: str, intent_label: str = "generic"):
+        """
+        Runs the Agent's task execution loop in the background with ELP0 priority.
+        Handles interruptions signaled by the CortexEngine.
+        """
+        logger.warning(f"🧑‍💻🧵 Starting Agent background task ID: {initial_interaction_id} (Priority: ELP0, Intent: {intent_label})")
+        db: Optional[Session] = None # Initialize db session variable
+        initial_interaction: Optional[Interaction] = None # Initialize interaction variable
+        # --- Define the marker string for interruption ---
+        interruption_error_marker = "Worker task interrupted by higher priority request"
+        # ---
+        task_start_time = time.monotonic()
+
+        try:
+            await self.start_browser()
+            db = SessionLocal() # Get a new DB session for this background task
+            if not db:
+                 logger.critical(f"❌ Agent BG {initial_interaction_id}: Failed to get DB session.")
+                 return # Cannot proceed without DB
+
+            self.current_session_id = session_id
+
+            # Load the initial interaction record associated with this task
+            initial_interaction = db.query(Interaction).filter(Interaction.id == initial_interaction_id).first()
+            if not initial_interaction:
+                logger.error(f"❌ Agent BG: Cannot find initial Interaction ID {initial_interaction_id}.")
+                return # Cannot proceed without the initial record
+
+            max_turns = 10 # Limit agent loops to prevent runaways
+            turn_count = 0
+            current_input_for_llm = user_input # Start with the user's initial input
+
+            while turn_count < max_turns:
+                turn_count += 1
+                logger.info(f"Agent Task {initial_interaction_id}: Turn {turn_count}")
+                logger.debug(f"Agent Turn {turn_count} Input Snippet:\n{current_input_for_llm[:500]}...")
+
+                # --- HARDENED ELP1 INTERRUPTION CHECK ---
+                import priority_lock
+                if priority_lock.ELP1_ACTIVE_FLAG:
+                    logger.critical(f"🚦 Agent Task {initial_interaction_id}: ELP1_ACTIVE_FLAG detected! Immediate killing.")
+                    raise interruption_error_marker # Or raise a specific error that matches the marker
+                
+                # These are relatively quick and less likely to be interrupted targets
+                env_details_dict = self._get_environment_details()
+                agent_history_rag_string = self._get_agent_history_rag_string(db)
+                url_rag_context_string = await self._get_agent_url_rag_string(db, user_input)
+
+                # --- Build the message list for the prompt's MessagesPlaceholder ---
+                agent_history_turns_messages: List[Union[HumanMessage, AIMessage]] = []
+                # Fetch the relevant history for this specific task turn from DB
+                recent_interactions_for_turns = db.query(Interaction).filter(
+                    Interaction.session_id == self.current_session_id,
+                    Interaction.mode == "agent",
+                    Interaction.id >= initial_interaction_id # Only turns related to this task
+                ).order_by(Interaction.timestamp.asc()).all()
+
+                for interaction in recent_interactions_for_turns:
+                    # Format turns for the LLM history placeholder
+                    if interaction.input_type == 'text' and interaction.user_input and interaction.id == initial_interaction_id:
+                        agent_history_turns_messages.append(HumanMessage(content=interaction.user_input))
+                    elif interaction.input_type == 'llm_response' and interaction.llm_response:
+                        agent_history_turns_messages.append(AIMessage(content=interaction.llm_response))
+                    elif interaction.input_type == 'tool_request' and interaction.llm_response:
+                         agent_history_turns_messages.append(AIMessage(content=interaction.llm_response))
+                    elif interaction.input_type == 'tool_result' and interaction.llm_response:
+                         tool_name = interaction.tool_name or "unknown"
+                         result_content = interaction.llm_response or "[Empty Result]"
+                         formatted_result = f"<tool_result>\n<{tool_name}>\n{result_content}\n</{tool_name}>\n</tool_result>\n"
+                         agent_history_turns_messages.append(HumanMessage(content=formatted_result)) # Tool result comes back as Human
+
+                prompt_history_turns = agent_history_turns_messages
+
+                # --- Prepare all inputs for the agent_prompt_template ---
+                prompt_inputs = {
+                    "mode": env_details_dict.get("mode", "ACT MODE"),
+                    "file_list": env_details_dict.get("file_list", "N/A"),
+                    "running_terminals": env_details_dict.get("running_terminals", "N/A"),
+                    "agent_history_rag": agent_history_rag_string,
+                    "url_rag_context": url_rag_context_string,
+                    "agent_history_turns": prompt_history_turns, # Pass constructed history list
+                    "current_input": current_input_for_llm, # Pass current input (user query or tool result)
+                }
+
+                # --- Call the Agent LLM (Run sync Langchain call in executor thread with ELP0) ---
+                llm_start_time = time.monotonic()
+                logger.debug(f"Agent Turn {turn_count}: Calling LLM with Priority ELP0...")
+                agent_llm_response = "" # Initialize response variable
+                thinking_input = prompt_inputs.copy()
+                # Determine effective input string
+                effective_input = thinking_input.get("current_input", "")
+                
+                # --- STEP 1: ROUTER & SPECIALIST SELECTION (With Snowball Check) ---
+                plan_response = ""
+                blacklisted_roles = []  # Track roles that failed the "42 token" check
+                max_retries = 3
+
+                for attempt in range(max_retries):
+                    # A. ROUTER (Domain Selection)
+                    # We re-run router or fallback if the previous specialist failed
+                    current_domain_decision = intent_label
+                    if current_domain_decision == "generic":
+                        try:
+                            # Only run router if we haven't locked in a fallback yet
+                            if "default" not in blacklisted_roles:
+                                router_out = await asyncio.to_thread(
+                                    self.domain_router_chain.invoke,
+                                    {"context": str(self.conversation_history[-2:]), "input": current_input_for_llm}
+                                )
+                                current_domain_decision = router_out.strip().lower()
+                        except Exception:
+                            current_domain_decision = "general"
+
+                    # B. RESOLVE MODEL ROLE (Apply Blacklist)
+                    # Map domain to config key, checking blacklist
+                    target_role = "default"  # Baseline fallback
+
+                    if (
+                            "code" in current_domain_decision or "coding" in current_domain_decision) and "code" not in blacklisted_roles:
+                        target_role = "code"
+                    elif "physics" in current_domain_decision and "physics" not in blacklisted_roles:
+                        target_role = "physics"
+                    elif "math" in current_domain_decision and "math" not in blacklisted_roles:
+                        target_role = "math"
+                    # If the determined target is already blacklisted, force default
+                    if target_role in blacklisted_roles:
+                        target_role = "default"
+
+                    logger.info(
+                        f"🧭 Agent Step {turn_count} (Attempt {attempt + 1}): Router='{current_domain_decision}' -> Selected Role='{target_role}'")
+
+                    specialist_model = self.provider.get_model(target_role) or self.provider.get_model("default")
+
+                    # --- Conditional Ada/SPARK Enforcement ---
+                    effective_system_prompt = self.final_system_prompt_template_string.format(**prompt_inputs)
+
+                    if target_role == "code":
+                        try:
+                            # 1. Prepare a lightweight classification check
+                            # We include the RAG Context (url_rag_context) so the model knows if the 'Manuals' imply a specific language.
+                            classifier_prompt = (
+                                "Analyze the User Request and the Reference Context.\n"
+                                f"User Request: {current_input_for_llm[:500]}\n"
+                                f"Reference Context: {url_rag_context_string[:500]}\n\n"
+                                "Does this task require creating or modifying a formal software project, high-integrity system, or using Ada/SPARK?\n"
+                                "Reply strictly with 'YES' or 'NO'."
+                            )
+
+                            # 2. Run the check (using the specialist model for convenience)
+                            classification_response = await asyncio.to_thread(
+                                specialist_model.invoke,
+                                [HumanMessage(content=classifier_prompt)]
+                            )
+
+                            classification_text = classification_response.content.strip().upper()
+
+                            # 3. Enforce if YES
+                            if "YES" in classification_text:
+                                logger.info(f"🛡️ Strict Ada/SPARK Discipline ENFORCED for this task.")
+                                effective_system_prompt += f"\n\n{PROMPT_STRICT_ADA_DEVELOPER}"
+                            else:
+                                logger.info(
+                                    "🆓 Coding task classified as generic/scripting. No strict language enforcement.")
+
+                        except Exception as e:
+                            logger.warning(f"Ada enforcement check failed: {e}. Defaulting to no strict enforcement.")
+
+                    # C. BUILD PROMPT (Same as before)
+                    prompt_template = ChatPromptTemplate.from_messages([
+                        SystemMessage(content=effective_system_prompt),
+                        MessagesPlaceholder(variable_name="agent_history_turns"),
+                        HumanMessage(content="{current_input}")
+                    ])
+                    thinking_chain = prompt_template | specialist_model | StrOutputParser()
+
+                    # D. EXECUTE THINKING (Plan Generation)
+                    thinking_instruction = (
+                        "\n\n[SYSTEM INSTRUCTION: PHASE 1]\n"
+                        "Analyze the current state. Describe your plan in detail, including which tool to use and its parameters.\n"
+                        "Do NOT output the XML tags yet. Just output your reasoning and plan."
+                    )
+
+                    # Temporarily modify input for the prompt (append instruction)
+                    effective_input_with_inst = current_input_for_llm + thinking_instruction
+
+                    try:
+                        raw_plan = await asyncio.to_thread(
+                            thinking_chain.invoke,
+                            {**prompt_inputs, "current_input": effective_input_with_inst},
+                            config={'priority': ELP0}
+                        )
+
+                        # E. SNOWBALL CHECK (The Filter)
+                        # Clean think tags first
+                        clean_plan = re.sub(r"<think>.*?</think>", "", raw_plan,
+                                            flags=re.DOTALL | re.IGNORECASE).strip()
+
+                        token_len = self._count_tokens(clean_plan)
+
+                        # The "42" check - prevent lazy/short answers
+                        if token_len < 42:
+                            logger.warning(
+                                f"⚠️ Plan too short ({token_len} tokens). Blacklisting role '{target_role}' and retrying...")
+                            blacklisted_roles.append(target_role)
+                            if attempt == max_retries - 1:
+                                logger.error("❌ Exhausted retries on short plan. Accepting potentially weak response.")
+                                plan_response = clean_plan
+                                break
+                            continue  # Retry loop
+
+                        # If good:
+                        plan_response = clean_plan
+                        logger.info(f"🧠 Phase 1 Plan Accepted ({token_len} tokens).")
+                        break  # Exit retry loop
+
+                    except Exception as llm_err:
+                        logger.error(f"Agent Planning Error (Attempt {attempt + 1}): {llm_err}")
+                        blacklisted_roles.append(target_role)
+                        if attempt == max_retries - 1:
+                            break
+
+                # --- STEP 2: TRANSLATE TO SYNTAX (Coding Phase) ---
+                if not plan_response:
+                    plan_response = "Error: Failed to generate a valid plan."
+
+                logger.debug(f"Agent Turn {turn_count}: Phase 2 - Translating to XML...")
+
+                try:
+                    tool_syntax_response = await asyncio.to_thread(
+                        self.tool_translator_chain.invoke,
+                        {"plan": plan_response}
+                    )
+                    # Unified response
+                    agent_llm_response = f"{plan_response}\n\n{tool_syntax_response}"
+                except Exception as trans_err:
+                    logger.error(f"Translation failed: {trans_err}")
+                    agent_llm_response = plan_response  # Fallback to just text
+
+                # --- HARDENED ELP1 INTERRUPTION CHECK (Mid-Turn) ---
+                if priority_lock.ELP1_ACTIVE_FLAG:
+                     logger.critical(f"🚦 Agent Task {initial_interaction_id}: ELP1_ACTIVE_FLAG detected mid-turn! Immediate killing.")
+                     raise interruption_error_marker
+
+                # --- *** Interruption Handling *** ---
+                if isinstance(agent_llm_response, str) and interruption_error_marker in agent_llm_response:
+                    logger.warning(f"🚦 Agent Task {initial_interaction_id}: Turn {turn_count} INTERRUPTED by higher priority task.")
+                    # Log interruption to DB (associate with the original interaction)
+                    if db and initial_interaction: # Check timestamp exists
+                        initial_interaction.llm_response = f"[Agent task {initial_interaction_id} interrupted by ELP1 on turn {turn_count}]"
+                        initial_interaction.classification = "task_failed_interrupted"
+                        
+                        try:
+                            db.commit()
+                            logger.info(f"Marked interaction {initial_interaction_id} as interrupted in DB.")
+                        except Exception as db_err:
+                            logger.error(f"Failed to update interaction {initial_interaction_id} after interruption: {db_err}")
+                            db.rollback()
+                    else:
+                         logger.error(f"Could not mark interruption for task {initial_interaction_id}: DB or initial_interaction missing.")
+                    # Exit the agent's task loop cleanly after interruption
+                    break # Exit the while loop
+                # --- *** End Interruption Handling *** ---
+
+                # --- Log LLM response to DB (if not interrupted) ---
+                add_interaction(
+                    db, session_id=session_id, mode="agent", input_type="llm_response",
+                    user_input=f"[Agent response turn {turn_count}]", # Contextual input description
+                    llm_response=agent_llm_response, execution_time_ms=10000000
+                )
+
+                # --- Parse LLM response for tool request or final output types ---
+                tool_name, parameters = self._parse_tool_request(agent_llm_response)
+
+                if tool_name and tool_name not in ["attempt_completion", "plan_mode_respond", "ask_followup_question", "new_task", "load_mcp_documentation"]:
+                    # Execute tool (async call)
+                    logger.info(f"Agent Task {initial_interaction_id}: Executing tool '{tool_name}'.")
+                    # _execute_agent_tool handles its own DB logging for request/result
+                    tool_result_formatted = await self._execute_agent_tool(tool_name, parameters, db)
+
+                    # Set the tool result as the input for the *next* LLM turn
+                    current_input_for_llm = tool_result_formatted
+                    # Continue the loop for the next turn
+                    continue
+                else:
+                    # No executable tool requested - check for final outputs or just end
+                    final_output_handled = False
+                    final_agent_response = agent_llm_response # Default to the last LLM output
+
+                    if tool_name == "attempt_completion":
+                        logger.info(f"🏁 Agent Task {initial_interaction_id}: Used <attempt_completion>.")
+                        final_output_handled = True
+                        result_match = re.search(r'<result>(.*?)</result>', agent_llm_response, re.DOTALL)
+                        if result_match: final_agent_response = result_match.group(1).strip()
+                        if initial_interaction: initial_interaction.classification = "task_completed"
+
+                    elif tool_name == "plan_mode_respond":
+                        logger.info(f"🗣️ Agent Task {initial_interaction_id}: Used <plan_mode_respond>.")
+                        final_output_handled = True
+                        match = re.search(r'<response>(.*?)</response>', agent_llm_response, re.DOTALL)
+                        if match: final_agent_response = match.group(1).strip()
+                        if initial_interaction: initial_interaction.classification = "plan"
+
+                    elif tool_name == "ask_followup_question":
+                        logger.warning(f"❓ Agent Task {initial_interaction_id}: Used <ask_followup_question>.")
+                        final_output_handled = True
+                        if initial_interaction: initial_interaction.classification = "waiting_for_user"
+
+                    elif tool_name == "new_task":
+                        logger.info(f"✨ Agent Task {initial_interaction_id}: Used <new_task>.")
+                        final_output_handled = True
+                        if initial_interaction: initial_interaction.classification = "new_task_context"
+
+                    elif tool_name == "load_mcp_documentation":
+                         logger.info(f"📚 Agent Task {initial_interaction_id}: Used <load_mcp_documentation>.")
+                         current_input_for_llm = "<tool_result><load_mcp_documentation>Placeholder: MCP Documentation Loaded.</load_mcp_documentation></tool_result>"
+                         add_interaction(db, session_id=session_id, mode="agent", input_type="tool_result", user_input="[Result for load_mcp_documentation]", llm_response="Placeholder: MCP Documentation Loaded.", tool_name="load_mcp_documentation")
+                         continue # Go to next LLM turn with this result
+
+                    # --- Update initial interaction record with the final state ---
+                    if initial_interaction: # Check timestamp exists
+                        initial_interaction.llm_response = final_agent_response # Store meaningful final output
+                        
+                        db.commit() # Commit final state of original interaction
+                    else:
+                         logger.error(f"Could not update final state for task {initial_interaction_id}: initial_interaction record missing or timestamp invalid.")
+
+                    if final_output_handled:
+                        logger.success(f"✅ Agent background task finished (final output type '{tool_name or 'text'}') for ID: {initial_interaction_id}.")
+                    else:
+                        logger.warning(f"🧐 Agent Task {initial_interaction_id}: No tool or recognized final output. Ending task.")
+                        logger.success(f"✅ Agent background task finished (unexpected output) for ID: {initial_interaction_id}.")
+
+                    break # Exit the while loop
+
+            # --- End of while loop ---
+            if turn_count >= max_turns:
+                 # Check if initial_interaction was loaded before accessing timestamp
+                 if initial_interaction:
+                     is_already_marked = (initial_interaction.llm_response or "").startswith("[Agent task reached max turns")
+                     if not is_already_marked:
+                         logger.warning(f"Agent Task {initial_interaction_id} reached max turns ({max_turns}).")
+                         initial_interaction.llm_response = "[Agent task reached max turns without completing]"
+                         
+                         initial_interaction.classification = "task_failed_max_turns"
+                         db.commit()
+                 else:
+                      logger.error(f"Agent Task {initial_interaction_id} reached max turns, but initial interaction record is missing.")
+
+        except Exception as e:
+            # Catch any unexpected errors during the agent's execution loop
+            logger.error(f"❌❌ Error in Agent background task ID {initial_interaction_id}: {e}")
+            logger.exception("Traceback:")
+            # Attempt to log the error to the database associated with the initial interaction
+            if db:
+                try:
+                    error_msg = f"Agent task {initial_interaction_id} failed: {e}"
+                    # Use the already loaded initial_interaction if available
+                    interaction_to_update = initial_interaction if initial_interaction else db.query(Interaction).filter(Interaction.id == initial_interaction_id).first()
+                    if interaction_to_update:
+                         existing_response = interaction_to_update.llm_response or ""
+                         interaction_to_update.llm_response = (existing_response + f"\n---\nERROR: {e}")[:4000] # Append error, limit length
+                         interaction_to_update.classification = "task_failed" # Generic failure classification
+                         db.commit()
+                    else:
+                         # If we can't even find the initial record, add a new error log
+                         add_interaction(db, session_id=session_id, mode="agent", input_type='error',
+                                         user_input=f"[Error Task {initial_interaction_id}]",
+                                         llm_response=error_msg[:4000])
+                except Exception as db_err:
+                    logger.error(f"Failed to log Agent BG error to DB: {db_err}")
+                    if db: db.rollback() # Rollback if logging the error failed
+
+
+        finally:
+            await self.shutdown_browser()
+            # --- THIS ENTIRE FINALLY BLOCK IS THE REPLACEMENT ---
+            if db and initial_interaction:
+                try:
+                    # Correctly calculate total execution time using the monotonic clock
+                    total_duration_ms = (time.monotonic() - task_start_time) * 1000
+                    initial_interaction.execution_time_ms = total_duration_ms
+                    # Commit all changes made to initial_interaction during the task
+                    # (e.g., llm_response, classification, and now the correct execution_time_ms)
+                    db.commit()
+                    logger.info(
+                        f"✅ Final state for agent task {initial_interaction_id} committed to DB. Total time: {total_duration_ms:.2f}ms.")
+                except Exception as final_commit_err:
+                    logger.error(
+                        f"Failed to commit final state for agent task {initial_interaction_id}: {final_commit_err}")
+                    db.rollback()
+            if db:
+                try:
+                    db.close()
+                except Exception as close_err:
+                    logger.error(f"Error closing DB session for Agent Task {initial_interaction_id}: {close_err}")
+            logger.warning(f"🧵 Agent background task thread finished for ID: {initial_interaction_id}")
+
+
+    def reset(self, db: Session, session_id: str = None):
+         """Resets the agent's internal state."""
+         logger.warning(f"🔄 Resetting Agent state. (Session: {session_id})")
+         self.conversation_history = []
+         self.current_session_id = None
+         logger.info("🧹 Agent internal history cleared.")
+         try:
+            add_interaction(db, session_id=session_id, mode="agent", input_type='system', user_input='Agent Session Reset Requested', llm_response='Agent state cleared.')
+         except Exception as db_err:
+             logger.error(f"Failed log agent reset: {db_err}")
+         return "Agent state cleared."
+
+
+# Global function to start agent task in background (async)
+async def _start_agent_task(agent_instance: AmaryllisAgent, initial_interaction_id: int, user_input: str, session_id: str, intent_label: str = "generic"):
+    """Schedules the Agent's background task."""
+    logger.warning(f"▶️ Spawning Agent background task for Interaction ID: {initial_interaction_id}")
+    loop = asyncio.get_event_loop()
+    # Schedule the agent's main task function to run
+    loop.create_task(agent_instance._run_task_in_background(initial_interaction_id, user_input, session_id, intent_label))
+    logger.warning(f"▶️ Agent background task scheduled.")
+
+# Global agent instance placeholder - initialized in app.py
+AdaptiveSystem_Agent: Optional[AmaryllisAgent] = None

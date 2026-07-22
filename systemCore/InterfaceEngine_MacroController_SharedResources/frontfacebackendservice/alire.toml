@@ -1,0 +1,26 @@
+name = "frontfacebackendservice"
+description = ""
+version = "0.1.0-dev"
+
+authors = ["Your Name"]
+maintainers = ["Your Name <example@example.com>"]
+licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = []
+
+executables = ["frontfacebackendservice"]
+
+[[depends-on]]
+aws = "^25.2.0"
+
+[[depends-on]]
+gnatcoll_sqlite = "^25.0.0"
+
+[[depends-on]]
+gnatcoll = "^25.0.0"
+
+[[depends-on]]
+uuids = "^1.0.0"
+
+[[pins]]
+aws = { version='25.2.0' }

@@ -1,0 +1,15 @@
+name = "avionics_daemon"
+description = "StellaIcarus daemon for streaming simulated avionics data."
+version = "0.1.0-dev"
+
+authors = ["Albert"]
+maintainers = ["Albert <no-reply@example.com>"]
+maintainers-logins = ["albert-example"]
+licenses = "MIT"
+website = ""
+tags = ["stella-icarus", "daemon", "avionics", "ipc"]
+
+executables = ["avionics_daemon_main"]
+
+[[depends-on]]
+vss = "^23.0.0"
