@@ -20,6 +20,7 @@ package body Multimodal_Content_Parser is
    type Base64_Table_Type is array (Character) of Natural;
    Base64_Table : Base64_Table_Type := (others => 0);
 
+   --  Populate the Base64 decoding lookup table for alphanumeric and symbol characters.
    procedure Init_Base64_Table is
    begin
       for C in Standard.Character range 'A' .. 'Z' loop

@@ -6,9 +6,12 @@ with Interfaces.C;          use Interfaces.C;
 
 package Database_Manager is
 
+   --  Initialize: Initializes the database manager and opens the database connection.
    procedure Initialize;
 
+   --  Set_System_State: Sets a key-value pair in the system state table.
    procedure Set_System_State (Key : String; Value : String);
+   --  Get_System_State: Returns the value for a key from the system state table.
    function Get_System_State (Key : String; Default : String := "") return String;
 
    --  Scaling parameter for Salience (S = HitFrequency / (1 + Alpha * DeltaT))
@@ -49,6 +52,7 @@ package Database_Manager is
    end record;
    type Chunk_Array is array (Positive range <>) of Chunk_Result;
 
+   --  Search_Literature: Searches literature chunks by embedding similarity.
    procedure Search_Literature
      (Embedding : Math_Utils.Vector;
       Results   : out Chunk_Array;
@@ -88,6 +92,7 @@ package Database_Manager is
       Weight   : Float := 1.0;
       Context  : String := "");
 
+   --  Export_GraphML: Exports the knowledge graph in GraphML format.
    procedure Export_GraphML (Filename : String);
 
    --  [VITAL-DO-NOT-REMOVE] Seed blacklist for think-only/repeating responses.
@@ -99,6 +104,7 @@ package Database_Manager is
    function Is_Seed_Blacklisted (Seed : Interfaces.C.unsigned) return Boolean;
    function Get_Blacklist_Size return Natural;
 
+   --  Close: Closes the database connection and cleans up resources.
    procedure Close;
 
    --  ============================================================================

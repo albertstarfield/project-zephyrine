@@ -13,6 +13,7 @@ package body Watchdog_IPC is
    HB_File   : constant String := Run_Dir & "/adelaide_server.heartbeat";
    Exit_File : constant String := Run_Dir & "/adelaide_server.exit_reason";
 
+   --  Get_PID: C FFI binding to get the current process ID.
    function Get_PID return Integer;
    pragma Import (C, Get_PID, "getpid");
 
@@ -56,22 +57,26 @@ package body Watchdog_IPC is
    end HB_State;
 
    protected body HB_State is
+      --  Update: Updates the heartbeat timestamp to current time.
       procedure Update is
       begin
          Latest_Timestamp :=
            To_Duration (Clock - Time_Of (0, Time_Span_Zero));
       end Update;
 
+      --  Get_Timestamp: Returns the last heartbeat timestamp.
       function Get_Timestamp return Duration is
       begin
          return Latest_Timestamp;
       end Get_Timestamp;
 
+      --  Request_Stop: Requests the heartbeat task to stop.
       procedure Request_Stop is
       begin
          Stop_Requested := True;
       end Request_Stop;
 
+      --  Should_Stop: Returns True if the heartbeat task should stop.
       function Should_Stop return Boolean is
       begin
          return Stop_Requested;

@@ -42,11 +42,13 @@ package body Auto_Config is
       end case;
    end Ctx_To_Unsigned;
 
+   --  Threads_To_Int: Converts thread count to C integer (identity function).
    function Threads_To_Int (T : Interfaces.C.int) return Interfaces.C.int is
    begin
       return T;  -- Identity: threads is already the raw int
    end Threads_To_Int;
 
+   --  Batch_To_Unsigned: Converts batch ladder to C unsigned integer.
    function Batch_To_Unsigned (B : Batch_Ladder) return Interfaces.C.unsigned is
    begin
       case B is
@@ -57,6 +59,7 @@ package body Auto_Config is
       end case;
    end Batch_To_Unsigned;
 
+   --  Accel_Layers_To_Int: Converts acceleration layer count to C integer.
    function Accel_Layers_To_Int (A : Accel_Layer_Ladder) return Interfaces.C.int is
    begin
       case A is
@@ -268,6 +271,7 @@ package body Auto_Config is
       end;
    end Parse_Config_Line;
 
+   --  Load_Config_File: Loads the auto-configuration from the config file.
    procedure Load_Config_File is
       Config_File : File_Type;
    begin
@@ -314,6 +318,7 @@ package body Auto_Config is
          end;
    end Load_Config_File;
 
+   --  Save_Config: Saves the current auto-configuration to the config file.
    procedure Save_Config is
       Config_File : File_Type;
    begin
@@ -387,6 +392,7 @@ package body Auto_Config is
 
 
 
+   --  Next_Batch_Level: Returns the next higher batch ladder level.
    function Next_Batch_Level (Current : Batch_Ladder) return Batch_Ladder is
    begin
       case Current is
@@ -397,6 +403,7 @@ package body Auto_Config is
       end case;
    end Next_Batch_Level;
 
+   --  Next_Accel_Level: Returns the next higher acceleration layer level.
    function Next_Accel_Level (Current : Accel_Layer_Ladder) return Accel_Layer_Ladder is
    begin
       case Current is
@@ -548,6 +555,7 @@ package body Auto_Config is
       return Current_Config (Kind);
    end Get_Config;
 
+   --  Record_Success: Records a successful inference and updates the max working config.
    procedure Record_Success
      (Kind     : Model_Type;
       Ctx_Used : Interfaces.C.unsigned)
@@ -582,6 +590,7 @@ package body Auto_Config is
       Save_Config;
    end Record_Success;
 
+   --  Set_Probe_Target: Sets the probe target context size for a model type.
    procedure Set_Probe_Target
      (Kind   : Model_Type;
       Target : Ctx_Ladder)
@@ -606,6 +615,7 @@ package body Auto_Config is
       end if;
    end Set_Probe_Target;
 
+   --  Get_Probe_Target: Returns and clears the probe target for a model type.
    function Get_Probe_Target (Kind : Model_Type) return Ctx_Ladder is
       C     : Working_Config := Current_Config (Kind);
       Target : constant Ctx_Ladder := C.Probe_Target;
@@ -619,6 +629,7 @@ package body Auto_Config is
       return Target;
    end Get_Probe_Target;
 
+   --  Record_Failure: Records a failed inference and increments the failure counter.
    procedure Record_Failure
      (Kind      : Model_Type;
       Ctx_Tried : Interfaces.C.unsigned)
@@ -656,6 +667,7 @@ package body Auto_Config is
       Save_Config;
    end Record_Failure;
 
+   --  Reset_To_Minimal: Resets all model configurations to minimal settings.
    procedure Reset_To_Minimal is
    begin
       for Kind in Model_Type loop

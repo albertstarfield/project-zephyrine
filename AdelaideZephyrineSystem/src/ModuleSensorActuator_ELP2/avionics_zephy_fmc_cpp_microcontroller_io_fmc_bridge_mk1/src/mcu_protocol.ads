@@ -51,6 +51,7 @@ package MCU_Protocol is
    function Validate_Message (Buffer : Ada.Streams.Stream_Element_Array) 
                             return Validation_Result;
    
+   --  Create_Mixed_Control: Creates a mixed control values record with safety margins.
    function Create_Mixed_Control return Control_Values;
 
 private

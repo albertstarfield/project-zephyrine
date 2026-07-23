@@ -15,7 +15,9 @@ package Zenith_Orion is
    --  ELP3: ZenithOrion - 0.25ms (250us) Pacing Lock (Deterministic)
    procedure Paced_Loop;
 
+   --  Get_Current_Timing: Returns the last measured loop execution time.
    function Get_Current_Timing return Duration;
+   --  Get_Jitter_Profile: Returns the collected jitter statistics (max, min, avg).
    function Get_Jitter_Profile return Jitter_Data;
 
    --  Checks if the prompt maps to an exact SHM/hardware trigger.

@@ -54,20 +54,26 @@ package ROS2_RCL_Bindings is
    type rcl_ret_t is new Interfaces.C.int;
    RCL_RET_OK : constant rcl_ret_t := 0;
 
-   function rcutils_get_default_allocator return rcl_allocator_t;
+    --  Returns the system default memory allocator for ROS2.
+    function rcutils_get_default_allocator return rcl_allocator_t;
    pragma Import (C, rcutils_get_default_allocator, "rcutils_get_default_allocator");
 
-   function rcl_get_zero_initialized_init_options return rcl_init_options_t;
+    --  Returns a zero-initialized RCL init options struct.
+    function rcl_get_zero_initialized_init_options return rcl_init_options_t;
    pragma Import (C, rcl_get_zero_initialized_init_options, "rcl_get_zero_initialized_init_options");
 
-   function rcl_init_options_init
+    --  Initializes the RCL init options struct with the given allocator.
+    --  Initializes the RCL context with command-line arguments and init options.
+    function rcl_init_options_init
      (options : access rcl_init_options_t;
       allocator : rcl_allocator_t) return rcl_ret_t;
    pragma Import (C, rcl_init_options_init, "rcl_init_options_init");
 
-   function rcl_get_zero_initialized_context return rcl_context_t;
+    --  Returns a zero-initialized RCL context struct.
+    function rcl_get_zero_initialized_context return rcl_context_t;
    pragma Import (C, rcl_get_zero_initialized_context, "rcl_get_zero_initialized_context");
 
+   --  rcl_init: C FFI binding to initialize the ROS2 client library.
    function rcl_init
      (argc : Interfaces.C.int;
       argv : System.Address; -- FFI: System.Address required for C binding
@@ -75,13 +81,16 @@ package ROS2_RCL_Bindings is
       context : access rcl_context_t) return rcl_ret_t;
    pragma Import (C, rcl_init, "rcl_init");
 
-   function rcl_get_zero_initialized_node return rcl_node_t;
+    --  Returns a zero-initialized RCL node struct.
+    function rcl_get_zero_initialized_node return rcl_node_t;
    pragma Import (C, rcl_get_zero_initialized_node, "rcl_get_zero_initialized_node");
 
-   function rcl_node_get_default_options return rcl_node_options_t;
+    --  Returns the default node options with standard configuration.
+    function rcl_node_get_default_options return rcl_node_options_t;
    pragma Import (C, rcl_node_get_default_options, "rcl_node_get_default_options");
 
-   function rcl_node_init
+    --  Initializes an RCL node with the given name, namespace, context, and options.
+    function rcl_node_init
      (node : access rcl_node_t;
       name : chars_ptr;
       namespace : chars_ptr;

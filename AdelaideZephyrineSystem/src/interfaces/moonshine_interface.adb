@@ -11,6 +11,8 @@ package body Moonshine_Interface is
 
    Handle : int := -1;
 
+   --  Loads the Moonshine speech recognition model from the given file path.
+   --  Uses the Tiny Streaming architecture. Prints success or failure to stdout.
    procedure Init_Moonshine (Model_Path : String) is
       C_Path : chars_ptr := New_String (Model_Path);
    begin
@@ -31,6 +33,7 @@ package body Moonshine_Interface is
       end if;
    end Init_Moonshine;
 
+   --  Frees the Moonshine transcriber handle and releases all model resources.
    procedure Free_Moonshine is
    begin
       if Handle >= 0 then
@@ -40,6 +43,8 @@ package body Moonshine_Interface is
       end if;
    end Free_Moonshine;
 
+   --  Transcribes raw 16KHz mono float PCM audio data using the Moonshine model
+   --  in one-shot mode. Returns the concatenated transcript text, or an error string.
    function Transcribe_Raw_PCM (Audio_Data : access Float; Audio_Length : Interfaces.Unsigned_64) return String is
       Transcript_Ptr : aliased Moonshine_Bindings.Transcript_Ptr := null;
       Result : int;

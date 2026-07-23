@@ -116,6 +116,7 @@ package body Knowledge_Manager is
                 AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Knowledge_Manager.Initialize COMPLETE.");
    end Initialize;
 
+   --  Start_Tasks: Starts all background knowledge management tasks.
    procedure Start_Tasks is
    begin
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
@@ -262,7 +263,8 @@ package body Knowledge_Manager is
         end;
      end Is_Readable_Text;
 
-     procedure Wait_For_ELP1_Cooldown is
+      --  Wait_For_ELP1_Cooldown: Waits for ELP1 cooldown before resuming indexing.
+      procedure Wait_For_ELP1_Cooldown is
         Timer_Done : Boolean := False;
      begin
         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
@@ -284,6 +286,7 @@ package body Knowledge_Manager is
                   AnsiAda.Reset & " 600s cooldown finished. RESUMING indexing.");
      end Wait_For_ELP1_Cooldown;
 
+   --  Index_References: Indexes literature references from BibTeX files.
    procedure Index_References is
       File          : File_Type;
       Opened        : Boolean := False;
@@ -430,6 +433,7 @@ package body Knowledge_Manager is
                    Ada.Exceptions.Exception_Message (E));
    end Thought_Task;
 
+    --  Crawl_Directory: Recursively crawls a directory and indexes text files.
     procedure Crawl_Directory (Path : String) is
        Search  : Ada.Directories.Search_Type;
        Entry_D : Ada.Directories.Directory_Entry_Type;
@@ -579,6 +583,7 @@ package body Knowledge_Manager is
              type Mount_Path_List is array (1 .. 3) of String (1 .. 10);
              Mount_Points : Mount_Path_List := ("/Volumes  ", "/mnt      ", "/media    ");
 
+             --  Scan_Mount_Point: Scans a mount point for directories to crawl.
              procedure Scan_Mount_Point (Path : String) is
                 Search  : Ada.Directories.Search_Type;
                 Entry_D : Ada.Directories.Directory_Entry_Type;

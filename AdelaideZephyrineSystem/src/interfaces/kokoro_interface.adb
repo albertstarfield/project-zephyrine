@@ -9,6 +9,9 @@ with AnsiAda;
 
 package body Kokoro_Interface is
 
+   --  Synthesizes speech from the given text using the Kokoro TTS sidecar process.
+   --  Returns the generated WAV audio data as a stream element array, or an empty
+   --  array if synthesis fails or the output file is not produced.
    function Synthesize_Speech (Text : String) return Ada.Streams.Stream_Element_Array is
       File_Name : constant String := "kokoro_temp.wav";
       

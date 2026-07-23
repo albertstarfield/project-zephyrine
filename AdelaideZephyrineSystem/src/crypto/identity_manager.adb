@@ -19,6 +19,7 @@ package body Identity_Manager is
       return GNAT.SHA256.Digest (Digest);
    end SHA256_Hash;
 
+   --  Initialize: Initializes the identity manager and creates the database schema.
    procedure Initialize is
    begin
       Main_DB_Ptr := new Ada_Sqlite3.Database'(Open (DB_File));
@@ -36,6 +37,7 @@ package body Identity_Manager is
                "salt TEXT)");
    end Initialize;
 
+   --  Compute_Identity_Hash: Computes a 128-bit identity hash from username and email.
    function Compute_Identity_Hash (Username, Email : String) return String is
       -- 128-bit hash (32 hex characters = 16 bytes of SHA-256)
       Full_Hash : constant String := SHA256_Hash (Username & ":" & Email);
@@ -43,6 +45,7 @@ package body Identity_Manager is
       return Full_Hash (1 .. 32);
    end Compute_Identity_Hash;
 
+   --  Register_User: Registers a new user with username, email, and password.
    function Register_User (Username, Email, Password : String) return Boolean is
       Hash128  : constant String := Compute_Identity_Hash (Username, Email);
       Salt     : constant String := Hash128; -- In a real scenario use secure random
@@ -67,6 +70,7 @@ package body Identity_Manager is
          return False;
    end Register_User;
 
+   --  Authenticate_User: Authenticates a user and returns the identity hash on success.
    function Authenticate_User (Username, Password : String) return String is
       Stmt : Statement := Prepare (Main_DB_Ptr.all,
         "SELECT identity_hash128, password_hash, salt FROM identities WHERE username = ?");

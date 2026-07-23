@@ -4,6 +4,7 @@ with Ada.Numerics.Long_Elementary_Functions; use Ada.Numerics.Long_Elementary_Fu
 
 package body Math_Utils is
 
+   --  Cosine_Similarity: Computes the cosine similarity between two vectors.
    function Cosine_Similarity (V1 : Vector; V2 : Vector) return Float is
       pragma Annotate
         (GNATprove, Intentional, "float overflow check might fail",

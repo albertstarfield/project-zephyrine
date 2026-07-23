@@ -262,9 +262,11 @@ package body SD_Manager is
       Channels   : Interfaces.C.int) return Interfaces.C.Strings.chars_ptr;
    pragma Import (C, SD_Image_To_Base64_PNG, "sd_image_to_base64_png");
 
+   --  SD_Free_String: C FFI binding to free a string allocated by the SD library.
    procedure SD_Free_String (Str : Interfaces.C.Strings.chars_ptr);
    pragma Import (C, SD_Free_String, "sd_free_string");
 
+   --  Generate_Two_Stage: Generates an image using a two-stage Flux pipeline.
    procedure Generate_Two_Stage
      (Prompt         : String;
       Width          : Integer := 1024;

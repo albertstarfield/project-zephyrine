@@ -53,13 +53,19 @@ package body ELP_Queue is
   Last_Prewarm_Failure : Time := Time_First;
   Prewarm_Fail_Count   : Natural := 0;
 
-  protected Load_State is
-     procedure Increment (Level : ELP_Level; Source : String);
-     procedure Decrement (Level : ELP_Level);
-     function Get_Counts return Level_Counts;
-     function Get_Total return Long_Long_Integer;
-     function Get_Last_Source return String;
-     procedure Set_Task_Start (Level : ELP_Level);
+   protected Load_State is
+      --  Increment the count for the given priority level and record the source name.
+      procedure Increment (Level : ELP_Level; Source : String);
+      --  Decrement the count for the given priority level and log completion timing.
+      procedure Decrement (Level : ELP_Level);
+      --  Return the per-level task counts.
+      function Get_Counts return Level_Counts;
+      --  Return the total number of pending tasks across all levels.
+      function Get_Total return Long_Long_Integer;
+      --  Return the source name of the most recently enqueued task.
+      function Get_Last_Source return String;
+      --  Record the time at which a task at the given level begins execution.
+      procedure Set_Task_Start (Level : ELP_Level);
   private
      Counts      : Level_Counts := [others => 0];
      Total       : Long_Long_Integer := 0;
@@ -67,8 +73,9 @@ package body ELP_Queue is
      Source_Len  : Natural := 0;
   end Load_State;
 
-  protected body Load_State is
-    procedure Increment (Level : ELP_Level; Source : String) is
+   protected body Load_State is
+     --  Increment the count for the given priority level and record the source name.
+     procedure Increment (Level : ELP_Level; Source : String) is
        begin
           Counts (Level) := Counts (Level) + 1;
           Total := Total + 1;
@@ -88,6 +95,7 @@ package body ELP_Queue is
                     Source & " (Level: " & Level'Img & ")" & AnsiAda.Reset);
        end Increment;
 
+       --  Decrement the count for the given priority level and log completion timing.
        procedure Decrement (Level : ELP_Level) is
     begin
        if Counts (Level) > 0 then
@@ -151,8 +159,11 @@ package body ELP_Queue is
           Task_Timings (Level).Start_Time := Clock;
        end Set_Task_Start;
 
+       --  Return the per-level task counts.
        function Get_Counts return Level_Counts is (Counts);
+       --  Return the total number of pending tasks across all levels.
        function Get_Total return Long_Long_Integer is (Total);
+       --  Return the source name of the most recently enqueued task.
        function Get_Last_Source return String is (Last_Source (1 .. Source_Len));
     end Load_State;
 
@@ -362,6 +373,7 @@ package body ELP_Queue is
         end if;
      end Dequeue_Level;
 
+   --  Return the total number of pending tasks across all priority levels.
    function Depth return Long_Long_Integer is (Load_State.Get_Total);
    --  (2^64)/2 = 2^63 — fits in Unsigned_64 (max 2^64 - 1).
    function Capacity return Unsigned_64 is ((2**64) / 2);
@@ -408,6 +420,7 @@ package body ELP_Queue is
 
    Initialized : Boolean := False;
 
+   --  Initialize the ELP queue and start the monitor task.
    procedure Initialize is
    begin
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA

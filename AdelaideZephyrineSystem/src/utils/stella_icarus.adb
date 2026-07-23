@@ -7,11 +7,13 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 
 package body Stella_Icarus is
 
+   --  Initialize: Initializes the Stella Icarus subsystem.
    procedure Initialize is
    begin
       null;
    end Initialize;
 
+   --  Check_API_Trigger: Checks if the prompt matches a deterministic API trigger.
    function Check_API_Trigger (Prompt : String) return String is
       Lower_Prompt : constant String := Ada.Characters.Handling.To_Lower (Prompt);
    begin

@@ -109,11 +109,17 @@ with Adelaide_Trace;
 
 procedure Adelaide_Server is
 
+    --  Get_Port: Returns the server port from command-line args or environment.
     function Get_Port return Natural;
+    --  Get_Host: Returns the server host from command-line args or environment.
     function Get_Host return String;
+    --  Get_SSL_Cert_Path: Returns the SSL certificate file path.
     function Get_SSL_Cert_Path return String;
+    --  Get_SSL_Key_Path: Returns the SSL private key file path.
     function Get_SSL_Key_Path return String;
+    --  Use_HTTPS: Returns True if HTTPS is enabled via command-line or environment.
     function Use_HTTPS return Boolean;
+    --  Get_Sidecar_Port: Returns the sidecar UI port from command-line or environment.
     function Get_Sidecar_Port return Natural;
 
     --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM/SIGQUIT)
@@ -121,6 +127,7 @@ procedure Adelaide_Server is
     pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
     function Is_Shutdown_Requested return Interfaces.C.int;
     pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
+    --  Last_Signal_Received: C FFI binding returning the last signal received by the process.
     function Last_Signal_Received return Interfaces.C.int;
     pragma Import (C, Last_Signal_Received, "last_signal_received");
 
@@ -168,11 +175,13 @@ procedure Adelaide_Server is
     end Init_Clock_Control;
 
     protected body Init_Clock_Control is
+        --  Stop_Clock: Stops the initialization clock countdown.
         procedure Stop_Clock is
         begin
             Running := False;
         end Stop_Clock;
 
+        --  Is_Running: Returns True if the initialization clock is still running.
         function Is_Running return Boolean is
         begin
             return Running;
@@ -226,6 +235,7 @@ procedure Adelaide_Server is
         return 11420;
     end Get_Port;
 
+    --  Get_Host: Returns the server host from command-line args or environment.
     function Get_Host return String is
     begin
         for I in 1 .. Ada.Command_Line.Argument_Count loop
@@ -254,6 +264,7 @@ procedure Adelaide_Server is
            Ada.Directories.Current_Directory & "/run/ssl/adelaide-server.crt";
     end Get_SSL_Cert_Path;
 
+    --  Get_SSL_Key_Path: Returns the SSL private key file path.
     function Get_SSL_Key_Path return String is
     begin
         if Ada.Environment_Variables.Exists ("ADLAIDE_SSL_KEY") then

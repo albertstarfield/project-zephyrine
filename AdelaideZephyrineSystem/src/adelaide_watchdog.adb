@@ -39,6 +39,7 @@ with Interfaces.C;          use Interfaces.C;
 
 with Spark_Drbg; -- Force linkage for adl_crypto.c C symbols
 
+--  Adelaide_Watchdog: Main entry point for the Adelaide watchdog daemon.
 procedure Adelaide_Watchdog is
 
    --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
@@ -46,6 +47,7 @@ procedure Adelaide_Watchdog is
    pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
    function Is_Shutdown_Requested return Interfaces.C.int;
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
+   --  Last_Signal_Received: C FFI binding returning the last signal received by the process.
    function Last_Signal_Received return Interfaces.C.int;
    pragma Import (C, Last_Signal_Received, "last_signal_received");
 
@@ -53,17 +55,29 @@ procedure Adelaide_Watchdog is
    procedure C_Exit (Status : Interfaces.C.int);
    pragma Import (C, C_Exit, "_exit");
 
+   --  Is_Another_Watchdog_Running: Checks if another watchdog instance is already running.
    function Is_Another_Watchdog_Running return Boolean;
+   --  Write_Watchdog_PID: Writes the watchdog PID to the PID file.
    procedure Write_Watchdog_PID;
+   --  Write_Watchdog_Heartbeat: Writes the current timestamp to the heartbeat file.
    procedure Write_Watchdog_Heartbeat;
+   --  Read_PID: Reads a PID from the server PID file.
    function Read_PID return Integer;
+   --  Is_Process_Alive: Checks if a process with the given PID is alive.
    function Is_Process_Alive (Pid : Integer) return Boolean;
+   --  Get_Heartbeat_Age_S: Returns the age of the last heartbeat in seconds.
    function Get_Heartbeat_Age_S return Duration;
+   --  Read_Args: Reads the server command-line arguments from the args file.
    function Read_Args return String;
+   --  Restart_Server: Restarts the server process with the given old PID.
    procedure Restart_Server (Old_Pid : Integer);
+   --  Check_Server: Checks server health and restarts if necessary.
    procedure Check_Server;
+   --  Get_Port: Returns the server port from command-line args or environment.
    function Get_Port return String;
+   --  Get_Host: Returns the server host from command-line args or environment.
    function Get_Host return String;
+   --  Check_All_APIs: Checks all API endpoints for health and logs results.
    procedure Check_All_APIs;
 
    Shutdown_Requested : exception;
@@ -92,9 +106,11 @@ procedure Adelaide_Watchdog is
    function Sys_Kill (P : Integer; Sig : Integer) return Integer;
    pragma Import (C, Sys_Kill, "kill");
 
+   --  Get_PID: C FFI binding to get the current process ID.
    function Get_PID return Integer;
    pragma Import (C, Get_PID, "getpid");
 
+   --  Get_PPID: C FFI binding to get the parent process ID.
    function Get_PPID return Integer;
    pragma Import (C, Get_PPID, "getppid");
 
@@ -171,6 +187,7 @@ procedure Adelaide_Watchdog is
       Close (F);
    end Write_Watchdog_PID;
 
+   --  Write_Watchdog_Heartbeat: Writes the current timestamp to the heartbeat file atomically.
    procedure Write_Watchdog_Heartbeat is
       F : File_Type;
       Tmp_File : constant String := WD_HB_File & ".tmp";
@@ -449,6 +466,7 @@ procedure Adelaide_Watchdog is
       return "11420";
    end Get_Port;
 
+   --  Get_Host: Returns the server host from command-line args or environment.
    function Get_Host return String is
    begin
       for I in 1 .. Ada.Command_Line.Argument_Count loop
@@ -464,6 +482,7 @@ procedure Adelaide_Watchdog is
       return "127.0.0.1";
    end Get_Host;
 
+   --  Check_All_APIs: Checks all API endpoints for health and logs results.
    procedure Check_All_APIs is
       Port     : constant String := Get_Port;
       Host     : constant String := Get_Host;

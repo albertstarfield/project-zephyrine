@@ -141,42 +141,55 @@ package Llama_Interface is
    end record;
    pragma Convention (C, Llama_Batch);
 
+   --  Returns the default model loading parameters for llama.cpp.
    function Llama_Model_Default_Params return Llama_Model_Params;
    pragma Import (C, Llama_Model_Default_Params, "llama_model_default_params");
 
+   --  Returns the default context parameters for llama.cpp.
    function Llama_Context_Default_Params return Llama_Context_Params;
    pragma Import
      (C, Llama_Context_Default_Params, "llama_context_default_params");
 
+   --  Initializes the llama.cpp backend. Must be called once before any other llama functions.
    procedure Llama_Backend_Init;
    pragma Import (C, Llama_Backend_Init, "llama_backend_init");
 
+   --  Frees the llama.cpp backend resources. Call once at shutdown.
    procedure Llama_Backend_Free;
    pragma Import (C, Llama_Backend_Free, "llama_backend_free");
 
+   --  Loads a GGUF model from the specified file path with the given parameters.
+   --  Returns Null_Model on failure.
    function Llama_Model_Load_From_File
      (Path_Model : chars_ptr; Params : Llama_Model_Params) return Llama_Model;
    pragma Import
      (C, Llama_Model_Load_From_File, "llama_model_load_from_file_safe");
 
+   --  Frees a previously loaded model and releases its resources.
    procedure Llama_Model_Free (Model : Llama_Model);
    pragma Import (C, Llama_Model_Free, "llama_model_free");
 
-    function Llama_Init_From_Model
+    --  Creates a new inference context from a loaded model with the given parameters.
+    --  Returns a context handle that can be used for tokenization and decoding.
+     function Llama_Init_From_Model
       (Model : Llama_Model; Params : Llama_Context_Params) return Llama_Context;
-    pragma Import (C, Llama_Init_From_Model, "llama_init_from_model");
+     pragma Import (C, Llama_Init_From_Model, "llama_init_from_model");
 
-    function Llama_Init_From_Model_Safe
+    --  Safe variant of Llama_Init_From_Model with C++ exception safety at the FFI boundary.
+     function Llama_Init_From_Model_Safe
       (Model : Llama_Model; Params : Llama_Context_Params) return Llama_Context;
     pragma Import (C, Llama_Init_From_Model_Safe, "llama_init_from_model_safe");
 
 
+   --  Frees a previously created context and releases its resources.
    procedure Llama_Free (Context : Llama_Context);
    pragma Import (C, Llama_Free, "llama_free");
 
    procedure Llama_Memory_Clear (Mem : System.Address; Data : Boolean); -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Memory_Clear, "llama_memory_clear");
 
+   --  Removes a sequence from the KV cache memory, clearing all tokens in that sequence.
+   --  Returns True on success.
    function Llama_Memory_Seq_Rm
      (Mem : System.Address; Seq_Id : int; P0 : int; P1 : int) return Boolean; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Memory_Seq_Rm, "llama_memory_seq_rm");
@@ -184,33 +197,44 @@ package Llama_Interface is
    function Llama_Get_Memory (Context : Llama_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Memory, "llama_get_memory");
 
+   --  Returns the number of tokens in the context's KV cache.
    function Llama_N_Ctx (Context : Llama_Context) return Interfaces.C.unsigned;
    pragma Import (C, Llama_N_Ctx, "llama_n_ctx");
 
+   --  Saves the full context state to a file, including the KV cache and optional tokens.
+   --  Returns True on success.
    function Llama_State_Save_File
      (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t) return Boolean; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Save_File, "llama_state_save_file");
 
+   --  Loads a previously saved context state from a file into the given context.
+   --  Returns True on success.
    function Llama_State_Load_File
      (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t; N_Tokens_Out : access size_t) return Boolean; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Load_File, "llama_state_load_file");
 
+   --  Returns the byte size needed to store the full context state in memory.
    function Llama_State_Get_Size
      (Context : Llama_Context) return size_t;
    pragma Import (C, Llama_State_Get_Size, "llama_state_get_size");
 
+   --  Copies the context state into the destination buffer. Returns bytes written.
    function Llama_State_Get_Data
      (Context : Llama_Context; Dst : System.Address; Size : size_t) return size_t; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Get_Data, "llama_state_get_data");
 
+   --  Restores the context state from the source buffer. Returns bytes consumed.
    function Llama_State_Set_Data
      (Context : Llama_Context; Src : System.Address; Size : size_t) return size_t; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Set_Data, "llama_state_set_data");
 
+   --  Allocates and initializes a batch structure for the given token/embedding/sequence counts.
    function Llama_Batch_Init
      (N_Tokens : int; Embd : int; N_Seq_Max : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Init, "llama_batch_init");
 
+   --  Safely appends a token to a batch at the given position and sequence, optionally
+   --  requesting logits for this token.
    procedure Llama_Batch_Add_Safe
      (Batch : System.Address; Token : Llama_Token; Pos : int; Seq_Id : int; Logits : Boolean); -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Batch_Add_Safe, "llama_batch_add_safe");
@@ -218,9 +242,12 @@ package Llama_Interface is
    procedure Llama_Batch_Clear_Safe (Batch : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Batch_Clear_Safe, "llama_batch_clear_safe");
 
+   --  Frees a previously allocated batch and its internal buffers.
    procedure Llama_Batch_Free (Batch : Llama_Batch);
    pragma Import (C, Llama_Batch_Free, "llama_batch_free");
 
+   --  Decodes the batch through the context, computing forward pass for all tokens.
+   --  Returns 0 on success, negative on failure.
    function Llama_Decode
      (Context : Llama_Context; Batch : Llama_Batch) return int;
    pragma Import (C, Llama_Decode, "llama_decode");
@@ -228,29 +255,37 @@ package Llama_Interface is
    function Llama_Get_Logits (Context : Llama_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Logits, "llama_get_logits");
 
+   --  Enables or disables embedding extraction mode in the context.
    procedure Llama_Set_Embeddings (Context : Llama_Context; Value : Interfaces.C.int);
    pragma Import (C, Llama_Set_Embeddings, "llama_set_embeddings");
 
    function Llama_Get_Embeddings (Context : Llama_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Embeddings, "llama_get_embeddings");
 
+   --  Sets the number of threads used for inference and batch processing.
    procedure Llama_Set_N_Threads
      (Context : Llama_Context; N_Threads : int; N_Threads_Batch : int);
    pragma Import (C, Llama_Set_N_Threads, "llama_set_n_threads");
 
+   --  Returns the vocabulary size of the loaded model.
    function Llama_N_Vocab (Model : Llama_Model) return int;
    pragma Import (C, Llama_N_Vocab, "llama_n_vocab");
 
+   --  Retrieves the vocabulary handle from a loaded model for tokenization operations.
    function Llama_Model_Get_Vocab (Model : Llama_Model) return Llama_Vocab;
    pragma Import (C, Llama_Model_Get_Vocab, "llama_model_get_vocab");
 
+   --  Returns the total number of tokens in the vocabulary.
    function Llama_Vocab_N_Tokens (Vocab : Llama_Vocab) return int;
    pragma Import (C, Llama_Vocab_N_Tokens, "llama_vocab_n_tokens");
 
+   --  Returns True if the given token is an end-of-generation (EOG) token.
    function Llama_Vocab_Is_Eog
      (Vocab : Llama_Vocab; Token : Llama_Token) return Boolean;
    pragma Import (C, Llama_Vocab_Is_Eog, "llama_vocab_is_eog");
 
+   --  Converts a token ID to its text representation, writing up to Length bytes
+   --  into the provided buffer. Returns the number of bytes written.
    function Llama_Token_To_Piece
      (Vocab   : Llama_Vocab;
       Token   : Llama_Token;
@@ -260,6 +295,8 @@ package Llama_Interface is
       Special : Boolean) return int;
    pragma Import (C, Llama_Token_To_Piece, "llama_token_to_piece");
 
+   --  Tokenizes the input text string, writing token IDs into the provided buffer.
+   --  Returns the number of tokens produced.
    function Llama_Tokenize
      (Vocab        : Llama_Vocab;
       Text         : chars_ptr;
@@ -270,6 +307,8 @@ package Llama_Interface is
       Parse_Special : Boolean) return int;
    pragma Import (C, Llama_Tokenize, "llama_tokenize");
 
+   --  Converts an array of token IDs back into text, writing up to Text_Len_Max
+   --  bytes. Returns the number of bytes written.
    function Llama_Detokenize
      (Vocab          : Llama_Vocab;
       Tokens         : System.Address; -- FFI: System.Address required for C binding
@@ -290,28 +329,38 @@ package Llama_Interface is
    pragma Import
      (C, Llama_Sampler_Chain_Default_Params, "llama_sampler_chain_default_params");
 
+   --  Initializes a new sampler chain with the given parameters.
    function Llama_Sampler_Chain_Init
      (Params : Llama_Sampler_Chain_Params) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Chain_Init, "llama_sampler_chain_init");
 
+   --  Appends a sampler to the end of a sampler chain.
    procedure Llama_Sampler_Chain_Add (Chain : Llama_Sampler; Smpl : Llama_Sampler);
    pragma Import (C, Llama_Sampler_Chain_Add, "llama_sampler_chain_add");
 
+   --  Creates a greedy sampler that always selects the highest-probability token.
    function Llama_Sampler_Init_Greedy return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Init_Greedy, "llama_sampler_init_greedy");
 
+   --  Creates a Top-K sampler that considers only the K most probable tokens.
    function Llama_Sampler_Init_Top_K (K : int) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Init_Top_K, "llama_sampler_init_top_k");
 
+   --  Creates a Top-P (nucleus) sampler that considers tokens within cumulative
+   --  probability P, keeping at least Min_Keep tokens.
    function Llama_Sampler_Init_Top_P
      (P : Float; Min_Keep : size_t) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Init_Top_P, "llama_sampler_init_top_p");
+   --  Creates a temperature sampler that adjusts token probabilities by the given temperature T.
 function Llama_Sampler_Init_Temp (T : Float) return Llama_Sampler;
 pragma Import (C, Llama_Sampler_Init_Temp, "llama_sampler_init_temp");
 
+   --  Creates a distribution sampler using the given random seed for reproducibility.
 function Llama_Sampler_Init_Dist (Seed : unsigned) return Llama_Sampler;
 pragma Import (C, Llama_Sampler_Init_Dist, "llama_sampler_init_dist");
 
+   --  Creates a penalties sampler that applies repeat/frequency/presence penalties
+   --  to discourage token repetition.
 function Llama_Sampler_Init_Penalties
 
      (Penalty_Last_N : int;
@@ -321,13 +370,17 @@ function Llama_Sampler_Init_Penalties
    pragma Import
      (C, Llama_Sampler_Init_Penalties, "llama_sampler_init_penalties");
 
+   --  Samples a single token from the context using the given sampler at the specified position.
    function Llama_Sampler_Sample
      (Smpl : Llama_Sampler; Context : Llama_Context; Idx : int) return Llama_Token;
    pragma Import (C, Llama_Sampler_Sample, "llama_sampler_sample");
 
+   --  Frees a previously created sampler and its resources.
    procedure Llama_Sampler_Free (Smpl : Llama_Sampler);
    pragma Import (C, Llama_Sampler_Free, "llama_sampler_free");
 
+   --  Returns a C string containing system information about the llama.cpp build
+   --  and available backends.
    function Llama_Print_System_Info return chars_ptr;
    pragma Import (C, Llama_Print_System_Info, "llama_print_system_info");
 

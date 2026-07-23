@@ -2,6 +2,7 @@ pragma SPARK_Mode (On);
 
 package body Fuzzy_Match is
 
+   --  To_Lower: Converts an uppercase character to lowercase.
    function To_Lower (C : Character) return Character is
    begin
       if C in 'A' .. 'Z' then
@@ -10,6 +11,7 @@ package body Fuzzy_Match is
       return C;
    end To_Lower;
 
+   --  Match: Returns a fuzzy match score between 0.0 (no match) and 1.0 (exact match).
    function Match (Haystack, Needle : String) return Float
    is
       H_Len   : constant Integer := Haystack'Length;

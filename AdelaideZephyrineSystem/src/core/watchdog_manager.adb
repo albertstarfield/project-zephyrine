@@ -7,6 +7,7 @@ package body Watchdog_Manager is
 
    protected body Inference_Monitor is
 
+      --  Start_Inference: Starts monitoring an inference operation for the given model.
       procedure Start_Inference (Model : Model_Type; Now : Time) is
       begin
          Active := True;
@@ -15,21 +16,26 @@ package body Watchdog_Manager is
          Aborted := False;
       end Start_Inference;
 
+      --  Stop_Inference: Stops monitoring the current inference operation.
       procedure Stop_Inference is
       begin
          Active := False;
          Aborted := False;
       end Stop_Inference;
 
+      --  Set_Aborted: Marks the current inference as aborted.
       procedure Set_Aborted is
       begin
          Aborted := True;
       end Set_Aborted;
 
+      --  Is_Aborted: Returns True if the current inference has been aborted.
       function Is_Aborted return Boolean is (Aborted);
 
+      --  Current_Inference_Model: Returns the model type of the current inference.
       function Current_Inference_Model return Model_Type is (Current_Model);
 
+      --  Check_Timeout: Checks if the current inference has exceeded the timeout limit.
       procedure Check_Timeout
         (Limit       : Time_Span;
          Out_Aborted : out Boolean;
@@ -54,16 +60,19 @@ package body Watchdog_Manager is
    end Inference_Monitor;
 
    protected body AWS_Server_Monitor is
+      --  Heartbeat: Updates the AWS server heartbeat timestamp.
       procedure Heartbeat (Now : Time) is
       begin
          Last_Heartbeat := Now;
       end Heartbeat;
 
+      --  Deactivate: Deactivates the AWS server liveness check.
       procedure Deactivate is
       begin
          Active := False;
       end Deactivate;
 
+      --  Check_Liveness: Checks if the AWS server is still alive based on heartbeat.
       procedure Check_Liveness (Limit : Time_Span; OK : out Boolean) is
          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
          pragma Annotate

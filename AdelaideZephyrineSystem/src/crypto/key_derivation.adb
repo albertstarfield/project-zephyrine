@@ -17,6 +17,7 @@ is
    --  ── C FFI for HKDF-SHA512 ────────────────────────────────────────────────
    --  These functions are implemented in adl_crypto.c
 
+   --  HKDF_SHA512: C FFI binding for HKDF-SHA512 key derivation.
    function HKDF_SHA512
      (Salt      : System.Address; -- FFI: System.Address required for C binding
       Salt_Len  : Interfaces.C.size_t;
@@ -29,6 +30,7 @@ is
      with Import => True, Convention => C,
           External_Name => "adl_hkdf_sha512";
 
+   --  HKDF_SHA256: C FFI binding for HKDF-SHA256 key derivation.
    function HKDF_SHA256
      (Salt      : System.Address; -- FFI: System.Address required for C binding
       Salt_Len  : Interfaces.C.size_t;
@@ -59,8 +61,10 @@ is
       return Result;
    end Master_Key_To_Hex;
 
+   --  Hex_To_Master_Key: Converts a hex string to a Master_Key_Type array.
    function Hex_To_Master_Key (S : String) return Master_Key_Type is
       Result : Master_Key_Type := (others => 0);
+      --  Hex_To_Nibble: Converts a hex character to its numeric value.
       function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is
          (case C is
           when '0' .. '9' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('0')),
@@ -79,6 +83,7 @@ is
       return Result;
    end Hex_To_Master_Key;
 
+   --  AES_Key_To_Hex: Converts an AES_Key_Type array to a hex string.
    function AES_Key_To_Hex (K : AES_Key_Type) return String is
       Result : String (1 .. 64);
       Hex_Chars : constant String := "0123456789abcdef";
@@ -90,8 +95,10 @@ is
       return Result;
    end AES_Key_To_Hex;
 
+   --  Hex_To_AES_Key: Converts a hex string to an AES_Key_Type array.
    function Hex_To_AES_Key (S : String) return AES_Key_Type is
       Result : AES_Key_Type := (others => 0);
+      --  Hex_To_Nibble: Converts a hex character to its numeric value.
       function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is
          (case C is
           when '0' .. '9' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('0')),
@@ -146,6 +153,7 @@ is
        return Result;
    end Derive_Master_Key;
 
+   --  Derive_AES_Key: Derives an AES encryption key from the master key and context.
    function Derive_AES_Key
      (Master_Key : Master_Key_Type;
       Context    : String) return AES_Key_Type
@@ -196,6 +204,7 @@ is
          return False;
    end Initialize_Key_Derivation;
 
+   --  Derive_And_Store_Master_Key: Derives and stores the master key from user secret.
    procedure Derive_And_Store_Master_Key (Password_Salt : Hash_Type; User_Secret : String) is
    begin
       if not Integrity_Hash_Set then
@@ -219,11 +228,13 @@ is
       end;
    end Derive_And_Store_Master_Key;
 
+   --  Get_Master_Key: Returns the stored master key.
    function Get_Master_Key return Master_Key_Type is
    begin
       return Master_Key_Type (Master_Key_Store.Get_Key);
    end Get_Master_Key;
 
+   --  Clear_Master_Key: Clears the stored master key (zeroizes memory).
    procedure Clear_Master_Key is
    begin
       Master_Key_Store.Clear_Key;

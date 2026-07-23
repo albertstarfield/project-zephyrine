@@ -8,7 +8,9 @@ package Zenith_Manager is
    protected Telemetry_Store is
       procedure Update (Timing : Duration; Jitter_Max : Duration; Jitter_Avg : Duration);
       function Get_Timing return Duration;
+      --  Get_Jitter_Max: Returns the maximum observed jitter.
       function Get_Jitter_Max return Duration;
+      --  Get_Jitter_Avg: Returns the average observed jitter.
       function Get_Jitter_Avg return Duration;
    private
       Current_Timing : Duration := 0.0;

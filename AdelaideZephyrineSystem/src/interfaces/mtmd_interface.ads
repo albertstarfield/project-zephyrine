@@ -56,7 +56,8 @@ package Mtmd_Interface is
    function Mtmd_Bitmap_Get_Nx_Safe (Bitmap : Mtmd_Bitmap) return unsigned;
    pragma Import (C, Mtmd_Bitmap_Get_Nx_Safe, "mtmd_bitmap_get_nx_safe");
 
-   function Mtmd_Bitmap_Get_Ny_Safe (Bitmap : Mtmd_Bitmap) return unsigned;
+    --  Returns the height (Ny) of the bitmap in pixels.
+    function Mtmd_Bitmap_Get_Ny_Safe (Bitmap : Mtmd_Bitmap) return unsigned;
    pragma Import (C, Mtmd_Bitmap_Get_Ny_Safe, "mtmd_bitmap_get_ny_safe");
 
    --  Initialize empty input chunks list

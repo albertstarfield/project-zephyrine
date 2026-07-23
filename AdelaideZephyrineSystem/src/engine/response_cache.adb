@@ -146,6 +146,7 @@ package body Response_Cache is
    function Miss_Count return Natural is (Miss_Counter);
    function Entry_Count return Natural is (Natural (Cache_Maps.Length (Cache_Map)));
 
+   --  Reset the hit and miss counters to zero.
    procedure Reset_Stats is
    begin
       Hit_Counter := 0;

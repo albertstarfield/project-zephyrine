@@ -8,6 +8,7 @@ package body FIPS_Audit is
    Log_File      : Ada.Text_IO.File_Type;
    Is_Open       : Boolean := False;
 
+   --  Open_Log: Opens the FIPS audit log file for writing.
    procedure Open_Log is
    begin
       if not Is_Open then
@@ -25,6 +26,7 @@ package body FIPS_Audit is
       end if;
    end Open_Log;
 
+   --  Log_Event: Logs a FIPS audit event with timestamp to the audit log.
    procedure Log_Event (Event_Message : String) is
       Timestamp : constant String := Ada.Calendar.Formatting.Image (Ada.Calendar.Clock);
    begin

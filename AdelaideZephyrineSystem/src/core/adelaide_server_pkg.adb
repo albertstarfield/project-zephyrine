@@ -148,6 +148,7 @@ package body Adelaide_Server_Pkg is
    Virtual_Context_Max : constant Unsigned_64 :=
       16#7FFFFFFFFFFFFFFF#;
 
+   --  Calculate_Total_Knowledge_Size: Calculates total size of all knowledge files in bytes.
    function Calculate_Total_Knowledge_Size return Unsigned_64 is
       use Ada.Directories;
       Total : Unsigned_64 := 0;
@@ -192,16 +193,19 @@ package body Adelaide_Server_Pkg is
       when others => return Total;
    end Calculate_Total_Knowledge_Size;
 
+   --  Register: Registers a streaming queue session with the given ID.
    procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is
    begin
       Active_Sessions.Include (ID, Q);
    end Register;
 
+   --  Unregister: Removes a streaming queue session by ID.
    procedure Unregister (ID : String) is
    begin
       Active_Sessions.Exclude (ID);
    end Unregister;
 
+   --  Push_Log: Pushes a log message to the streaming queue for the given session.
    procedure Push_Log (ID : String; Log : String) is
       use type Streaming_Queue.Queue_Access;
    begin
@@ -219,27 +223,32 @@ package body Adelaide_Server_Pkg is
    end Last_API_Tracker;
 
    protected body Last_API_Tracker is
+      --  Set: Stores the last API URI for heartbeat display.
       procedure Set (URI : String) is
       begin
          Last_URI := To_Unbounded_String (URI);
       end Set;
 
+      --  Get: Returns the last API URI for heartbeat display.
       function Get return String is
       begin
          return To_String (Last_URI);
       end Get;
    end Last_API_Tracker;
 
+   --  Set_Last_API: Sets the last API URI for heartbeat display.
    procedure Set_Last_API (URI : String) is
    begin
       Last_API_Tracker.Set (URI);
    end Set_Last_API;
 
+   --  Get_Last_API: Returns the last API URI for heartbeat display.
    function Get_Last_API return String is
    begin
       return Last_API_Tracker.Get;
    end Get_Last_API;
 
+   --  Build_Response: Builds an AWS Response.Data from content, status code, and content type.
    function Build_Response
      (Content : String;
       Status  : AWS.Messages.Status_Code := AWS.Messages.S200;
@@ -251,6 +260,7 @@ package body Adelaide_Server_Pkg is
       return Resp;
    end Build_Response;
 
+   --  Wrap_Response: Wraps an AWS Response.Data with CORS headers.
    function Wrap_Response (R : AWS.Response.Data) return AWS.Response.Data is
       Result : AWS.Response.Data := R;
    begin
@@ -503,6 +513,7 @@ package body Adelaide_Server_Pkg is
       Cfg : Benchmark_Manager.Benchmark_Config;
       Stream_Q : Streaming_Queue.Queue_Access;
       
+      --  Progress_Handler: Handles progress events during benchmark execution.
       procedure Progress_Handler (Event : String) is
       begin
          Stream_Q.Push("data: " & Event & ASCII.LF & ASCII.LF);
@@ -1838,6 +1849,7 @@ package body Adelaide_Server_Pkg is
                               declare
                                  Prompt_Str : Unbounded_String := To_Unbounded_String ("");
                                  Gen_Result : Unbounded_String;
+                                 --  Escape_JSON_Local: Escapes special characters in a string for JSON output.
                                  function Escape_JSON_Local (S : String) return String is
                                     Res : Unbounded_String;
                                  begin

@@ -7,6 +7,7 @@ with Model_Manager;
 with Knowledge_Manager;
 with Ada.Exceptions;
 
+--  AdelaideZephyrineSystem: Main entry point for the Adelaide Zephyrine System.
 procedure AdelaideZephyrineSystem is
 begin
    --  Initialize core systems (fatal on failure)

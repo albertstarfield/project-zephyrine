@@ -4,6 +4,7 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Identity_Manager is
 
+   --  Initialize: Initializes the identity manager and creates the database schema.
    procedure Initialize;
 
    -- Create a new identity. Returns True on success, False if user exists.

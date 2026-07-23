@@ -3,6 +3,7 @@ package body Spark_Drbg
 is
    use type Interfaces.Unsigned_64;
 
+   --  Increment_V: Increments the V counter for CTR_DRBG operation.
    procedure Increment_V
      with Global => (In_Out => State)
    is
@@ -13,6 +14,7 @@ is
       end loop;
    end Increment_V;
 
+   --  Update: Updates the DRBG state with provided data.
    procedure Update (Provided_Data : Seed_Type)
      with Global => (In_Out => State)
    is
@@ -45,6 +47,7 @@ is
       end loop;
    end Update;
 
+   --  Instantiate: Initializes the DRBG with entropy and personalization string.
    procedure Instantiate (Success : out Boolean) is
       Entropy : Seed_Type;
       Ret     : int;
@@ -66,6 +69,7 @@ is
       Success := True;
    end Instantiate;
 
+   --  Continuous_Health_Check: Performs continuous health check on DRBG output.
    procedure Continuous_Health_Check (New_Block : Block_Type; Valid : out Boolean)
      with Global => (In_Out => State)
    is
@@ -93,6 +97,7 @@ is
       State.Last_Block := New_Block;
    end Continuous_Health_Check;
 
+   --  Generate: Generates random bytes using the DRBG.
    procedure Generate (Output : out Output_Buffer; Success : out Boolean) is
       Block     : Block_Type;
       Ret       : int;
@@ -136,6 +141,7 @@ is
       Success := True;
    end Generate;
 
+   --  Clear: Clears the DRBG state (zeroizes key and V).
    procedure Clear is
    begin
       State := (Key => [others => 0], 
@@ -177,6 +183,7 @@ is
       end if;
    end Adl_Drbg_Generate;
 
+   --  Adl_Drbg_Clear: C ABI wrapper to clear the DRBG state.
    procedure Adl_Drbg_Clear is
    begin
       Clear;

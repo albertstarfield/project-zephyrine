@@ -447,12 +447,15 @@ package SD_Interface is
    function SD_Version return chars_ptr;
    pragma Import (C, SD_Version, "sd_version");
 
+   --  Returns the git commit hash of the stable-diffusion.cpp library build.
    function SD_Commit return chars_ptr;
    pragma Import (C, SD_Commit, "sd_commit");
 
+   --  Returns system information including CPU cores, backend type, and memory details.
    function SD_Get_System_Info return chars_ptr;
    pragma Import (C, SD_Get_System_Info, "sd_get_system_info");
 
+   --  Returns the number of physical CPU cores available on the system.
    function SD_Get_Num_Physical_Cores return int;
    pragma Import (C, SD_Get_Num_Physical_Cores, "sd_get_num_physical_cores");
 
@@ -470,6 +473,7 @@ package SD_Interface is
    function New_SD_Ctx (Params : access SD_Ctx_Params) return SD_Ctx;
    pragma Import (C, New_SD_Ctx, "new_sd_ctx");
 
+   --  Frees an SD context and releases all associated model resources and memory.
    procedure Free_SD_Ctx (Ctx : SD_Ctx);
    pragma Import (C, Free_SD_Ctx, "free_sd_ctx");
 
@@ -477,6 +481,7 @@ package SD_Interface is
    function SD_Ctx_Supports_Image_Generation (Ctx : SD_Ctx) return int;
    pragma Import (C, SD_Ctx_Supports_Image_Generation, "sd_ctx_supports_image_generation");
 
+   --  Returns True (nonzero) if the context supports video generation.
    function SD_Ctx_Supports_Video_Generation (Ctx : SD_Ctx) return int;
    pragma Import (C, SD_Ctx_Supports_Video_Generation, "sd_ctx_supports_video_generation");
 
@@ -484,9 +489,11 @@ package SD_Interface is
    procedure SD_Ctx_Params_Init (Params : access SD_Ctx_Params);
    pragma Import (C, SD_Ctx_Params_Init, "sd_ctx_params_init");
 
+   --  Initializes an SD_Img_Gen_Params struct with default values.
    procedure SD_Img_Gen_Params_Init (Params : access SD_Img_Gen_Params);
    pragma Import (C, SD_Img_Gen_Params_Init, "sd_img_gen_params_init");
 
+   --  Initializes an SD_Sample_Params struct with default values.
    procedure SD_Sample_Params_Init (Params : access SD_Sample_Params);
    pragma Import (C, SD_Sample_Params_Init, "sd_sample_params_init");
 
@@ -524,15 +531,19 @@ package SD_Interface is
    function SD_Type_Name (T : int) return chars_ptr;
    pragma Import (C, SD_Type_Name, "sd_type_name");
 
+   --  Returns the human-readable name for the given RNG type enumeration value.
    function SD_RNG_Type_Name (T : int) return chars_ptr;
    pragma Import (C, SD_RNG_Type_Name, "sd_rng_type_name");
 
+   --  Returns the human-readable name for the given sample method enumeration value.
    function SD_Sample_Method_Name (M : int) return chars_ptr;
    pragma Import (C, SD_Sample_Method_Name, "sd_sample_method_name");
 
+   --  Returns the human-readable name for the given scheduler enumeration value.
    function SD_Scheduler_Name (S : int) return chars_ptr;
    pragma Import (C, SD_Scheduler_Name, "sd_scheduler_name");
 
+   --  Returns the human-readable name for the given prediction type enumeration value.
    function SD_Prediction_Name (P : int) return chars_ptr;
    pragma Import (C, SD_Prediction_Name, "sd_prediction_name");
 
@@ -540,6 +551,7 @@ package SD_Interface is
    function SD_Get_Default_Sample_Method (Ctx : SD_Ctx) return int;
    pragma Import (C, SD_Get_Default_Sample_Method, "sd_get_default_sample_method");
 
+   --  Returns the default scheduler for the given sample method in the context.
    function SD_Get_Default_Scheduler (Ctx    : SD_Ctx;
                                        Method : int) return int;
    pragma Import (C, SD_Get_Default_Scheduler, "sd_get_default_scheduler");
@@ -548,9 +560,11 @@ package SD_Interface is
    function SD_Ctx_Params_To_Str (Params : access SD_Ctx_Params) return chars_ptr;
    pragma Import (C, SD_Ctx_Params_To_Str, "sd_ctx_params_to_str");
 
+   --  Converts the image generation parameters struct to a human-readable string.
    function SD_Img_Gen_Params_To_Str (Params : access SD_Img_Gen_Params) return chars_ptr;
    pragma Import (C, SD_Img_Gen_Params_To_Str, "sd_img_gen_params_to_str");
 
+   --  Converts the sample parameters struct to a human-readable string.
    function SD_Sample_Params_To_Str (Params : access SD_Sample_Params) return chars_ptr;
    pragma Import (C, SD_Sample_Params_To_Str, "sd_sample_params_to_str");
 

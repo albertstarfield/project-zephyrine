@@ -24,6 +24,7 @@ package body POSIX_Serial is
    pragma Import (C, open, "open");
    function write (fd : Interfaces.C.int; buf : Interfaces.C.Strings.chars_ptr; count : Interfaces.C.size_t) return Interfaces.C.long;
    pragma Import (C, write, "write");
+   --  close: C FFI binding to close a file descriptor.
    function close (fd : Interfaces.C.int) return Interfaces.C.int;
    pragma Import (C, close, "close");
 

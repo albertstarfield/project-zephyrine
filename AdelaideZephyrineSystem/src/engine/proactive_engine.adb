@@ -35,11 +35,13 @@ package body Proactive_Engine is
    Questions     : array (1 .. Max_Scheduled) of Scheduled_Question;
    Q_Count       : Natural := 0;
 
+   --  Return the elapsed time in seconds since the proactive engine was initialized.
    function Uptime return Duration is
    begin
       return Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Time);
    end Uptime;
 
+   --  Initialize the proactive engine state and clear scheduled questions.
    procedure Initialize is
    begin
       Init_Time := Ada.Real_Time.Clock;
@@ -50,6 +52,7 @@ package body Proactive_Engine is
                 AnsiAda.Reset & " Engine initialized.");
    end Initialize;
 
+   --  Activate handless mode, triggering the initial greeting on first enable.
    procedure Activate_Handless_Mode is
    begin
       if Handless_State = Off then
@@ -111,6 +114,7 @@ package body Proactive_Engine is
       end if;
    end Activate_Handless_Mode;
 
+   --  Deactivate handless mode and stop proactive questioning.
    procedure Deactivate_Handless_Mode is
    begin
       Handless_State := Off;
@@ -118,11 +122,13 @@ package body Proactive_Engine is
                 AnsiAda.Reset & " Handless Mode DEACTIVATED.");
    end Deactivate_Handless_Mode;
 
+   --  Return True if handless mode is currently active.
    function Is_Handless_Mode_Active return Boolean is
    begin
       return Handless_State = Active;
    end Is_Handless_Mode_Active;
 
+   --  Generate and queue a curiosity-driven acoustic question when environment activity is detected.
    procedure Trigger_Acoustic_Question is
    begin
       if Handless_State /= Active then
@@ -174,6 +180,7 @@ package body Proactive_Engine is
       end;
    end Trigger_Acoustic_Question;
 
+   --  Schedule a one-shot question to fire at the specified time.
    procedure Schedule_Question (At_Time : Time; Topic : String) is
    begin
       if Q_Count < Max_Scheduled then
@@ -189,6 +196,7 @@ package body Proactive_Engine is
       end if;
    end Schedule_Question;
 
+   --  Schedule a question that repeats at a fixed interval.
    procedure Schedule_Repeating_Question (Interval : Duration; Topic : String) is
    begin
       if Q_Count < Max_Scheduled then
@@ -203,6 +211,7 @@ package body Proactive_Engine is
       end if;
    end Schedule_Repeating_Question;
 
+   --  Process all scheduled questions and fire those whose trigger time has arrived.
    procedure Tick is
       Now : constant Time := Ada.Calendar.Clock;
    begin
@@ -268,26 +277,31 @@ package body Proactive_Engine is
       end loop;
    end Tick;
 
+   --  Return the text of the most recently generated question.
    function Get_Last_Question return String is
    begin
       return To_String (Last_Question);
    end Get_Last_Question;
 
+   --  Return the text of the most recently generated answer.
    function Get_Last_Answer return String is
    begin
       return To_String (Last_Answer);
    end Get_Last_Answer;
 
+   --  Append raw PCM audio data to the pending audio buffer.
    procedure Queue_Audio (PCM : String) is
    begin
       Pending_Audio := Pending_Audio & PCM;
    end Queue_Audio;
 
+   --  Return True if there is unsent audio data in the pending buffer.
    function Has_Pending_Audio return Boolean is
    begin
       return Length (Pending_Audio) > 0;
    end Has_Pending_Audio;
 
+   --  Retrieve and clear the pending audio buffer, returning its contents.
    function Pop_Pending_Audio return String is
       Result : constant String := To_String (Pending_Audio);
    begin

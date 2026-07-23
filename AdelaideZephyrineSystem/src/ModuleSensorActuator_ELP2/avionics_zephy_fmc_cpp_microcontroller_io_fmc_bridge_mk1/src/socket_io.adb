@@ -19,11 +19,13 @@ package body Socket_IO is
                     protocol : Interfaces.C.int) return Interfaces.C.int;
    pragma Import (C, socket, "socket");
    
+   --  bind: C FFI binding to bind a socket to an address.
    function bind (socket_fd : Interfaces.C.int;
                   addr : System.Address; -- FFI: System.Address required for C binding
                   addrlen : Interfaces.C.size_t) return Interfaces.C.int;
    pragma Import (C, bind, "bind");
    
+   --  listen: C FFI binding to mark socket as passive (listening).
    function listen (socket_fd : Interfaces.C.int; 
                     backlog : Interfaces.C.int) return Interfaces.C.int;
    pragma Import (C, listen, "listen");
@@ -34,19 +36,23 @@ package body Socket_IO is
                       addrlen : System.Address) return Interfaces.C.int; -- FFI: System.Address required for C binding
    pragma Import (C, c_accept, "accept");
    
+   --  connect: C FFI binding to connect to a remote socket address.
    function connect (socket_fd : Interfaces.C.int;
                      addr : System.Address; -- FFI: System.Address required for C binding
                      addrlen : Interfaces.C.size_t) return Interfaces.C.int;
    pragma Import (C, connect, "connect");
    
+   --  close: C FFI binding to close a file descriptor.
    function close (fd : Interfaces.C.int) return Interfaces.C.int;
    pragma Import (C, close, "close");
    
+   --  write: C FFI binding to write data to a file descriptor.
    function write (fd : Interfaces.C.int;
                    buf : System.Address; -- FFI: System.Address required for C binding
                    count : Interfaces.C.size_t) return Interfaces.C.long;
    pragma Import (C, write, "write");
    
+   --  read: C FFI binding to read data from a file descriptor.
    function read (fd : Interfaces.C.int;
                   buf : System.Address; -- FFI: System.Address required for C binding
                   count : Interfaces.C.size_t) return Interfaces.C.long;

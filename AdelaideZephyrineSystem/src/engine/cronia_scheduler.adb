@@ -26,11 +26,13 @@ package body Cronia_Scheduler is
    function "-" (Left : Ada.Calendar.Time; Right : Duration) return Ada.Calendar.Time renames Ada.Calendar."-";
    function "-" (Left, Right : Ada.Calendar.Time) return Duration renames Ada.Calendar."-";
 
+   --  Return the elapsed time in seconds since the scheduler was initialized.
    function Uptime return Duration is
    begin
       return Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Time);
    end Uptime;
 
+   --  Initialize the scheduler by recording the current time and clearing all jobs.
    procedure Initialize is
    begin
       Init_Time := Ada.Real_Time.Clock;
@@ -64,6 +66,7 @@ package body Cronia_Scheduler is
       end if;
    end Add_Job;
 
+   --  Schedule a one-shot job to fire at the specified calendar time.
    procedure Schedule_At (Name : String; At_Time : Ada.Calendar.Time; Prompt : String) is
       New_Job : Cron_Job;
    begin
@@ -75,6 +78,7 @@ package body Cronia_Scheduler is
       Add_Job (New_Job);
    end Schedule_At;
 
+   --  Schedule a job that repeats at a fixed interval after the first trigger.
    procedure Schedule_Repeating (Name : String; Interval : Duration; Prompt : String) is
       New_Job : Cron_Job;
    begin
@@ -86,6 +90,7 @@ package body Cronia_Scheduler is
       Add_Job (New_Job);
    end Schedule_Repeating;
 
+   --  Schedule a one-shot job; if the target time has already passed, it fires on the next Tick.
    procedure Schedule_If_Past (Name : String; At_Time : Time; Prompt : String) is
       New_Job : Cron_Job;
    begin
@@ -109,6 +114,7 @@ package body Cronia_Scheduler is
       Add_Job (New_Job);
    end Schedule_If_Past;
 
+   --  Cancel and remove a named job from the scheduler queue.
    procedure Cancel (Name : String) is
       Idx : constant Natural := Find_Job (Name);
    begin
@@ -124,6 +130,7 @@ package body Cronia_Scheduler is
       end if;
    end Cancel;
 
+   --  Process all scheduled jobs; fire those whose trigger time has arrived.
    procedure Tick is
       Now : constant Time := Ada.Calendar.Clock;
    begin
@@ -188,6 +195,7 @@ package body Cronia_Scheduler is
       end loop;
    end Tick;
 
+   --  Return the number of jobs currently in Scheduled state.
    function Active_Job_Count return Natural is
       Count : Natural := 0;
    begin
@@ -199,6 +207,7 @@ package body Cronia_Scheduler is
       return Count;
    end Active_Job_Count;
 
+   --  Retrieve the job at the given index, or a default empty job if out of range.
    function Get_Job (Index : Positive) return Cron_Job is
    begin
       if Index <= Job_Count then

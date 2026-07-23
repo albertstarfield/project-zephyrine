@@ -5,11 +5,13 @@ with AnsiAda;
 
 package body Kratos is
 
+   --  Wrapper around llama_decode that uses a signal guard to recover from crashes.
    function Safe_Llama_Decode
      (Context : System.Address; -- FFI: System.Address required for C binding
       Batch   : System.Address) -- FFI: System.Address required for C binding
       return Interfaces.C.int
    is
+   --  Raw FFI binding to the llama.cpp llama_decode function.
       function Llama_Decode_Bare
         (Ctx   : System.Address; -- FFI: System.Address required for C binding
          Batch : System.Address) -- FFI: System.Address required for C binding
@@ -36,6 +38,7 @@ package body Kratos is
       end if;
    end Safe_Llama_Decode;
 
+   --  Log the details of an isolated crash signal to stderr.
    procedure Log_Crash is
       Sig : constant Interfaces.C.int := Get_Crash_Signal;
        Sig_Name : constant String :=

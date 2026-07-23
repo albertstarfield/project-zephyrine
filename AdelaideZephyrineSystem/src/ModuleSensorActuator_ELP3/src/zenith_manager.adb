@@ -7,6 +7,7 @@ with Zenith_Orion;
 package body Zenith_Manager is
 
    protected body Telemetry_Store is
+      --  Update: Updates the telemetry store with new timing and jitter values.
       procedure Update
         (Timing : Duration; Jitter_Max : Duration; Jitter_Avg : Duration)
       is
@@ -16,8 +17,11 @@ package body Zenith_Manager is
          Current_J_Avg  := Jitter_Avg;
       end Update;
 
+      --  Get_Timing: Returns the current loop timing duration.
       function Get_Timing return Duration is (Current_Timing);
+      --  Get_Jitter_Max: Returns the maximum observed jitter.
       function Get_Jitter_Max return Duration is (Current_J_Max);
+      --  Get_Jitter_Avg: Returns the average observed jitter.
       function Get_Jitter_Avg return Duration is (Current_J_Avg);
    end Telemetry_Store;
 

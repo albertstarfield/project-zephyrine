@@ -204,6 +204,7 @@ package body MCU_Protocol is
       return Result;
    end Create_Test_Control;
    
+   --  Create_Mixed_Control: Creates a mixed control values record with safety margins.
    function Create_Mixed_Control return Control_Values is
       Result : Control_Values;
    begin

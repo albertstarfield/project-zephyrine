@@ -14,6 +14,7 @@ package body Scheduler_Manager is
    procedure Elab_Trace (Label : Interfaces.C.Strings.chars_ptr);
    pragma Import (C, Elab_Trace, "elab_trace_c");
 
+   --  Emit a raw C trace message confirming body elaboration reached this point.
    function Emit_Elab_Trace return Integer is
    begin
       Elab_Trace (Interfaces.C.Strings.New_String ("SCHEDULER_MANAGER BODY ELABORATION ENTERED"));
@@ -31,18 +32,22 @@ package body Scheduler_Manager is
    use Event_Lists;
 
    protected Event_Queue is
+      --  Append a scheduled event to the back of the queue.
       procedure Add (Item : Scheduled_Event);
+      --  Retrieve and remove the next event whose trigger time has passed.
       procedure Get_Next (Item : out Scheduled_Event; Found : out Boolean);
    private
       List : Event_Lists.List;
    end Event_Queue;
 
    protected body Event_Queue is
+      --  Append a scheduled event to the back of the queue.
       procedure Add (Item : Scheduled_Event) is
       begin
          List.Append (Item);
       end Add;
 
+      --  Retrieve and remove the next event whose trigger time has passed.
       procedure Get_Next (Item : out Scheduled_Event; Found : out Boolean) is
          Cur : Cursor := List.First;
          Now : constant Time := Clock;
@@ -97,6 +102,7 @@ package body Scheduler_Manager is
       end loop;
    end Scheduler_Task_Type;
 
+   --  Create and start the background scheduler worker task.
    procedure Initialize is
    begin
       if Worker = null then
@@ -104,6 +110,7 @@ package body Scheduler_Manager is
       end if;
    end Initialize;
 
+   --  Enqueue a proactive thought prompt to fire after the specified delay.
    procedure Schedule (Delay_Seconds : Integer; Prompt : String) is
       Evt : Scheduled_Event;
    begin

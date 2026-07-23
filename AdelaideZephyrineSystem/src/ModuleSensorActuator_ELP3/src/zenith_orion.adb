@@ -43,11 +43,13 @@ package body Zenith_Orion is
    J_Count : Natural := 0;
    Last_Print : Time := Clock;
 
+   --  Initialize: Initializes the ZenithOrion ELP3 core subsystem.
    procedure Initialize is
    begin
       null;
    end Initialize;
 
+   --  Paced_Loop: Executes the 4000Hz deterministic control loop with microsecond pacing.
    procedure Paced_Loop is
       Start_Time : Time;
       End_Time   : Time;
@@ -113,11 +115,13 @@ package body Zenith_Orion is
       end;
    end Paced_Loop;
 
+   --  Get_Current_Timing: Returns the last measured loop execution time.
    function Get_Current_Timing return Duration is
    begin
       return Last_Execution_Time;
    end Get_Current_Timing;
 
+   --  Get_Jitter_Profile: Returns the collected jitter statistics (max, min, avg).
    function Get_Jitter_Profile return Jitter_Data is
    begin
       if J_Count = 0 then
@@ -127,6 +131,7 @@ package body Zenith_Orion is
       return (Max_J, Min_J, Sum_J / Duration (J_Count));
    end Get_Jitter_Profile;
 
+   --  Check_SHM_Trigger: Checks if the prompt maps to an SHM or hardware trigger.
    function Check_SHM_Trigger (Prompt : String) return String is
       Lower_Prompt : constant String := Ada.Characters.Handling.To_Lower (Prompt);
    begin
@@ -140,6 +145,7 @@ package body Zenith_Orion is
    end Check_SHM_Trigger;
 
    protected body ROS2_Command_Buffer is
+      --  Push_Command: Pushes a servo command into the thread-safe buffer.
       procedure Push_Command (Servo_ID : String; Angle : Float) is
       begin
          Buffer_Len := Natural'Min (Servo_ID'Length, 64);
@@ -148,6 +154,7 @@ package body Zenith_Orion is
          Has_Command := True;
       end Push_Command;
 
+      --  Pop_Command: Pops a servo command from the thread-safe buffer.
       procedure Pop_Command (Servo_ID : out String; Length : out Natural; Angle : out Float; Valid : out Boolean) is
       begin
          Valid := Has_Command;

@@ -52,6 +52,7 @@ package Auto_Config is
        Ctx_16384  => 16384,
        Ctx_32768  => 32768);
 
+   --  Ctx_To_Unsigned: Converts context ladder to C unsigned integer.
    function Ctx_To_Unsigned (C : Ctx_Ladder) return Interfaces.C.unsigned;
    pragma Inline (Ctx_To_Unsigned);
 
@@ -81,6 +82,7 @@ package Auto_Config is
    type Batch_Ladder is (B_64, B_128, B_256, B_512);
    for Batch_Ladder use (B_64 => 64, B_128 => 128, B_256 => 256, B_512 => 512);
 
+   --  Batch_To_Unsigned: Converts batch ladder to C unsigned integer.
    function Batch_To_Unsigned (B : Batch_Ladder) return Interfaces.C.unsigned;
    pragma Inline (Batch_To_Unsigned);
 

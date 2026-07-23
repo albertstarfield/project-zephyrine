@@ -12,7 +12,9 @@ package SI_ROS2_Telemetry is
       Initialized : Boolean := False;
    end record;
 
+   --  Initialize_ROS2: Initializes the ROS2 node and communication infrastructure.
    function Initialize_ROS2 return Boolean;
+   --  Poll_Telemetry: Polls telemetry data from sensors and publishes to ROS2 topics.
    procedure Poll_Telemetry;
 
 end SI_ROS2_Telemetry;

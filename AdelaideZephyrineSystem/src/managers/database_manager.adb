@@ -17,9 +17,11 @@ with GNAT.OS_Lib;
 
 package body Database_Manager is
 
+   --  C_Abort: C FFI binding to abort the process.
    procedure C_Abort;
    pragma Import (C, C_Abort, "abort");
 
+   --  Get_User: Returns the current user name from environment or default.
    function Get_User return String is
    begin
       if Ada.Environment_Variables.Exists ("ADELAIDE_USER") then
@@ -29,16 +31,19 @@ package body Database_Manager is
       end if;
    end Get_User;
 
+   --  DB_Dir: Returns the database directory path for the current user.
    function DB_Dir return String is
    begin
       return "data/NetworkMemoryPool/" & Get_User;
    end DB_Dir;
 
+   --  DB_File: Returns the full path to the main database file.
    function DB_File return String is
    begin
       return DB_Dir & "/adelaide_memory.db";
    end DB_File;
 
+   --  Lit_DB_File: Returns the full path to the literature database file.
    function Lit_DB_File return String is
    begin
       return DB_Dir & "/literatureRefIndex.db";
@@ -58,13 +63,16 @@ package body Database_Manager is
    --  Forward declaration of migration procedure (called from Do_Init)
    procedure Migrate_Databases;
 
+   --  Init_Gate: Protected object for one-time database initialization.
    protected Init_Gate is
+      --  Do_Init: Performs one-time initialization of the database manager.
       procedure Do_Init;
    private
       Done : Boolean := False;
    end Init_Gate;
 
    protected body Init_Gate is
+      --  Do_Init: Performs one-time initialization of the database manager.
       procedure Do_Init is
       begin
          if Done then
@@ -1363,6 +1371,7 @@ package body Database_Manager is
       end;
    end Blacklist_Seed;
 
+   --  Is_Seed_Blacklisted: Returns True if the seed is in the blacklist.
    function Is_Seed_Blacklisted (Seed : Unsigned) return Boolean is
       Result : Boolean := False;
    begin
@@ -1384,6 +1393,7 @@ package body Database_Manager is
       return Result;
    end Is_Seed_Blacklisted;
 
+   --  Get_Blacklist_Size: Returns the number of blacklisted seeds.
    function Get_Blacklist_Size return Natural is
       Count : Natural := 0;
    begin
@@ -1443,6 +1453,7 @@ package body Database_Manager is
       end;
    end Store_Imagined_Image;
 
+   --  Search_Imagined_Images: Searches for imagined images by hash with tolerance.
    procedure Search_Imagined_Images
      (Hash      : Integer;
       Tolerance : Integer;
@@ -1515,6 +1526,7 @@ package body Database_Manager is
       end;
    end Search_Imagined_Images;
 
+   --  Get_Recent_Imagined_Images: Returns the most recent imagined images.
    procedure Get_Recent_Imagined_Images
      (Max_Count : Positive;
       Results   : out Imagined_Image_Array;
@@ -1771,11 +1783,13 @@ package body Database_Manager is
            Ada.Exceptions.Exception_Message (E));
    end Migrate_Databases;
 
+   --  Close: Closes the database connection and cleans up resources.
    procedure Close is
    begin
       null;
    end Close;
 
+   --  Flush_Memory: Flushes WAL and shrinks memory for all databases.
    procedure Flush_Memory is
    begin
       if Main_DB_Ptr /= null then

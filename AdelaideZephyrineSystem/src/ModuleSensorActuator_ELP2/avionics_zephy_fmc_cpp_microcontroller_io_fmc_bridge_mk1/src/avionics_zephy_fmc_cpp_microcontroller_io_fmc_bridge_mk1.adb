@@ -14,6 +14,7 @@ use all type MCU_Protocol.Message_Type;
 
 use Ada.Real_Time;
 
+--  Avionics_Zephy_FMC_CPP_Microcontroller_IO_FMC_Bridge_MK1: Main entry point for the FMC bridge process.
 procedure Avionics_Zephy_FMC_CPP_Microcontroller_IO_FMC_Bridge_MK1 is
    Socket_Path : constant String := "./mcuIO";
    Arg_Count   : constant Natural := Ada.Command_Line.Argument_Count;

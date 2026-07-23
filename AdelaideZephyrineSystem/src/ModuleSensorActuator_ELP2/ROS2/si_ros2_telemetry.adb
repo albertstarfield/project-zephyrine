@@ -19,6 +19,7 @@ package body SI_ROS2_Telemetry is
 
    Global_Node : Telemetry_Node;
 
+   --  Initialize_ROS2: Initializes the ROS2 node and communication infrastructure.
    function Initialize_ROS2 return Boolean is
       --  1. Create zero-initialized options to prevent garbage memory in C structs
       Init_Opts : aliased rcl_init_options_t := rcl_get_zero_initialized_init_options;
@@ -78,6 +79,7 @@ package body SI_ROS2_Telemetry is
       return True;
    end Initialize_ROS2;
 
+   --  Poll_Telemetry: Polls telemetry data from sensors and publishes to ROS2 topics.
    procedure Poll_Telemetry is
    begin
       --  1. Verify the node is active before attempting to poll

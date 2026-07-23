@@ -16,6 +16,7 @@ package body Streaming_Queue is
    Pop_Verbose_Interval : constant Time_Span := Milliseconds (500);
 
    protected body Queue is
+      --  Set the output format and model identifier for streamed responses.
       procedure Set_Format (F : Format_Type; Model : String := "") is
       begin
          Format := F;
@@ -133,6 +134,7 @@ package body Streaming_Queue is
           end if;
       end Pop;
 
+      --  Mark the queue as closed, flushing any format-specific end-of-stream markers.
       procedure Close is
          Resp : constant GNATCOLL.JSON.JSON_Value :=
            GNATCOLL.JSON.Create_Object;
@@ -194,16 +196,19 @@ package body Streaming_Queue is
                    Natural'Image (Ada.Strings.Unbounded.Length (Buffer)));
       end Close;
 
+      --  Return the current number of bytes buffered in the queue.
       function Buffer_Length return Natural is
       begin
          return Length (Buffer);
       end Buffer_Length;
 
+      --  Return True when the queue is closed and all buffered data has been consumed.
       function Is_Empty_And_Closed return Boolean is
       begin
          return Closed and then Length (Buffer) = 0;
       end Is_Empty_And_Closed;
 
+      --  Return the current output format of the queue.
       function Get_Format return Format_Type is
       begin
          return Format;

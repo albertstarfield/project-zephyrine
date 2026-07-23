@@ -37,6 +37,7 @@ is
       return False;
    end Is_Linux;
 
+   --  Is_MacOS: Returns True if the system is running on macOS.
    function Is_MacOS return Boolean is
    begin
       return not Is_Linux;  --  Simplified: assume macOS if not Linux
@@ -84,6 +85,7 @@ is
       return Identity;
    end Get_Linux_Hardware_Identity;
 
+   --  Get_MacOS_Hardware_Identity: Collects macOS hardware identity information.
    function Get_MacOS_Hardware_Identity return Unbounded_String is
       Identity : Unbounded_String;
    begin
@@ -123,6 +125,7 @@ is
       return Integrity;
    end Get_Linux_Binary_Integrity;
 
+   --  Get_MacOS_Binary_Integrity: Collects macOS binary integrity information.
    function Get_MacOS_Binary_Integrity return Unbounded_String is
       Integrity : Unbounded_String;
    begin
@@ -233,6 +236,7 @@ is
       return SHA512_Hash (To_String (Identity));
    end Compute_Hardware_Hash;
 
+   --  Compute_Binary_Hash: Computes SHA-512 hash of binary integrity information.
    function Compute_Binary_Hash return Hash_Type is
       Integrity : Unbounded_String;
    begin
@@ -247,6 +251,7 @@ is
       return SHA512_Hash (To_String (Integrity));
    end Compute_Binary_Hash;
 
+   --  Compute_Integrity_Hash: Computes combined hardware and binary integrity hash.
    function Compute_Integrity_Hash return Hash_Type is
       HW_Hash : constant Hash_Type := Compute_Hardware_Hash;
       Bin_Hash : constant Hash_Type := Compute_Binary_Hash;
@@ -267,8 +272,10 @@ is
       return Result;
    end Hash_To_String;
 
+   --  String_To_Hash: Converts a hex string to a Hash_Type array.
    function String_To_Hash (S : String) return Hash_Type is
       Result : Hash_Type := (others => 0);
+      --  Hex_To_Nibble: Converts a hex character to its numeric value.
       function Hex_To_Nibble (C : Character) return Interfaces.Unsigned_8 is
          (case C is
           when '0' .. '9' => Interfaces.Unsigned_8 (Character'Pos (C) - Character'Pos ('0')),

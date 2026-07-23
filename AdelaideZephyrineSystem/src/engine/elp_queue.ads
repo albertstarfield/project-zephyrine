@@ -40,6 +40,7 @@ with Interfaces; use Interfaces;
 
 package ELP_Queue is
 
+   --  Initialize the ELP queue and start the monitor task.
    procedure Initialize;
 
    --  Enqueue a request at the given priority level.

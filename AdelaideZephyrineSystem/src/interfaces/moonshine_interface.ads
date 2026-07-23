@@ -6,7 +6,9 @@ with Moonshine_Bindings;
 
 package Moonshine_Interface is
 
+   --  Loads the Moonshine speech recognition model from the specified file path.
    procedure Init_Moonshine (Model_Path : String);
+   --  Frees the Moonshine transcriber and releases model resources.
    procedure Free_Moonshine;
    
    --  Transcribe expects raw 16KHz floats

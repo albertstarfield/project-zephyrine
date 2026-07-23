@@ -133,6 +133,7 @@ package body Toolchain_Manager is
       end if;
    end Verify_Python_Package;
 
+   --  Start_Orchestrator: Starts the Python orchestrator process for tool management.
    procedure Start_Orchestrator is
       use GNAT.OS_Lib;
       Python_Path : constant String := "pyvenv/bin/python3";

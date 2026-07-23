@@ -44,6 +44,7 @@ package Response_Cache is
    function Hit_Count return Natural;
    function Miss_Count return Natural;
    function Entry_Count return Natural;
+   --  Reset the hit and miss counters to zero.
    procedure Reset_Stats;
 
 private

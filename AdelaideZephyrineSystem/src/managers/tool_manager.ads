@@ -9,6 +9,7 @@ package Tool_Manager is
       Output  : Unbounded_String;
    end record;
 
+   --  Execute_Tool: Executes a named tool with the given parameters and returns the result.
    function Execute_Tool (Name : String; Params : String) return Tool_Result;
 
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA

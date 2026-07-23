@@ -11,6 +11,7 @@ pragma SPARK_Mode (Off);
 
 package Watchdog_IPC is
 
+   --  Check_Single_Instance: Checks if another adelaide_server instance is already running.
    function Check_Single_Instance return Boolean;
    --  Checks if another adelaide_server instance is already running.
    --  Returns True if another instance is running (should exit).

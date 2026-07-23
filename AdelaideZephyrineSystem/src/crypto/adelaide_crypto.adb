@@ -39,18 +39,23 @@ package body Adelaide_Crypto is
    function Adl_Crypto_Init_Wrapper return int;
    pragma Import (C, Adl_Crypto_Init_Wrapper, "adl_crypto_init_wrapper");
 
+   --  Adl_Master_Key_Available: C FFI binding to check if master key is available.
    function Adl_Master_Key_Available return int;
    pragma Import (C, Adl_Master_Key_Available, "adl_master_key_available");
 
+   --  Adl_Is_Poisoned: C FFI binding to check if crypto is poisoned.
    function Adl_Is_Poisoned return int;
    pragma Import (C, Adl_Is_Poisoned, "adl_is_poisoned");
 
+   --  Adl_Self_Tests_Passed: C FFI binding to check if self-tests passed.
    function Adl_Self_Tests_Passed return int;
    pragma Import (C, Adl_Self_Tests_Passed, "adl_self_tests_passed");
 
+   --  Adl_Is_FIPS_Mode: C FFI binding to check if FIPS mode is enabled.
    function Adl_Is_FIPS_Mode return int;
    pragma Import (C, Adl_Is_FIPS_Mode, "adl_is_fips_mode");
 
+   --  Adl_Set_FIPS_Mode: C FFI binding to enable or disable FIPS mode.
    procedure Adl_Set_FIPS_Mode (Mode : int);
    pragma Import (C, Adl_Set_FIPS_Mode, "adl_set_fips_mode");
 
@@ -59,16 +64,19 @@ package body Adelaide_Crypto is
      (Context : chars_ptr) return chars_ptr;
    pragma Import (C, Adl_Derive_Subkey_Cstr, "adl_derive_subkey_cstr");
 
+   --  Adl_Encrypt_Field_Cstr: C FFI binding to encrypt a field with AES-GCM.
    function Adl_Encrypt_Field_Cstr
      (Sub_Key  : chars_ptr;
       Plaintext : chars_ptr) return chars_ptr;
    pragma Import (C, Adl_Encrypt_Field_Cstr, "adl_encrypt_field_cstr");
 
+   --  Adl_Decrypt_Field_Cstr: C FFI binding to decrypt a field with AES-GCM.
    function Adl_Decrypt_Field_Cstr
      (Sub_Key       : chars_ptr;
       Ciphertext_Hex : chars_ptr) return chars_ptr;
    pragma Import (C, Adl_Decrypt_Field_Cstr, "adl_decrypt_field_cstr");
 
+   --  Adl_Free_Cstr: C FFI binding to free a C string allocated by malloc.
    procedure Adl_Free_Cstr (Ptr : chars_ptr);
    pragma Import (C, Adl_Free_Cstr, "adl_free_cstr");
 
@@ -83,6 +91,7 @@ package body Adelaide_Crypto is
    type C_String2_Func is access function (Arg1 : chars_ptr; Arg2 : chars_ptr) return chars_ptr;
    pragma Convention (C, C_String2_Func);
 
+   --  Call_C_String: Calls a C function that returns a malloc'd string, with error handling.
    function Call_C_String
      (Fn         : C_String_Func;
       Arg1       : String) return Crypto_Result
@@ -113,6 +122,7 @@ package body Adelaide_Crypto is
                  Error   => To_Unbounded_String (Ada.Exceptions.Exception_Message (E)));
    end Call_C_String;
 
+   --  Call_C_String2: Calls a C function with two string arguments, with error handling.
    function Call_C_String2
      (Fn         : C_String2_Func;
       Arg1, Arg2 : String) return Crypto_Result
@@ -176,21 +186,25 @@ package body Adelaide_Crypto is
       return Crypto_Initialized;
    end Initialize_Crypto;
 
+   --  Is_Crypto_Ready: Returns True if crypto is initialized and master key is available.
    function Is_Crypto_Ready return Boolean is
    begin
       return Crypto_Initialized and then Adl_Master_Key_Available = 1;
    end Is_Crypto_Ready;
 
+   --  Is_Poisoned: Returns True if crypto is poisoned (zeroized).
    function Is_Poisoned return Boolean is
    begin
       return Adl_Is_Poisoned = 1;
    end Is_Poisoned;
 
+   --  Self_Tests_Passed: Returns True if FIPS self-tests have passed.
    function Self_Tests_Passed return Boolean is
    begin
       return Crypto_Initialized and then Adl_Self_Tests_Passed = 1;
    end Self_Tests_Passed;
 
+   --  Is_FIPS_Ready: Returns True if crypto is ready for FIPS operations.
    function Is_FIPS_Ready return Boolean is
    begin
       return Crypto_Initialized
@@ -199,11 +213,13 @@ package body Adelaide_Crypto is
          and then Adl_Is_Poisoned = 0;
    end Is_FIPS_Ready;
 
+   --  Is_FIPS_Mode: Returns True if FIPS mode is currently enabled.
    function Is_FIPS_Mode return Boolean is
    begin
       return Adl_Is_FIPS_Mode = 1;
    end Is_FIPS_Mode;
 
+   --  Set_FIPS_Mode: Enables or disables FIPS mode (disable only, no re-enable without restart).
    procedure Set_FIPS_Mode (Enabled : Boolean) is
    begin
       if not Enabled then
@@ -224,6 +240,7 @@ package body Adelaide_Crypto is
       return Call_C_String (Adl_Derive_Subkey_Cstr'Access, Context);
    end Derive_Subkey;
 
+   --  Encrypt_Field: Encrypts a field using AES-GCM with the given sub-key.
    function Encrypt_Field
      (Sub_Key_Hex : String;
       Plaintext   : String) return Crypto_Result
@@ -240,6 +257,7 @@ package body Adelaide_Crypto is
       return Call_C_String2 (Adl_Encrypt_Field_Cstr'Access, Sub_Key_Hex, Plaintext);
    end Encrypt_Field;
 
+   --  Decrypt_Field: Decrypts a field using AES-GCM with the given sub-key.
    function Decrypt_Field
      (Sub_Key_Hex   : String;
       Ciphertext_Hex : String) return Crypto_Result
@@ -256,6 +274,7 @@ package body Adelaide_Crypto is
       return Call_C_String2 (Adl_Decrypt_Field_Cstr'Access, Sub_Key_Hex, Ciphertext_Hex);
    end Decrypt_Field;
 
+   --  Try_Encrypt: Attempts encryption, falls back to plaintext on failure.
    function Try_Encrypt
      (Sub_Key_Hex : String;
       Plaintext   : String) return String
@@ -275,6 +294,7 @@ package body Adelaide_Crypto is
       return Plaintext;  -- fallback (best effort)
    end Try_Encrypt;
 
+   --  Try_Decrypt: Attempts decryption, falls back to ciphertext on failure.
    function Try_Decrypt
      (Sub_Key_Hex   : String;
       Ciphertext_Hex : String) return String
@@ -294,6 +314,7 @@ package body Adelaide_Crypto is
       return Ciphertext_Hex;  -- fallback (best effort)
    end Try_Decrypt;
 
+   --  Is_Encrypted: Returns True if the value appears to be an encrypted hex string.
    function Is_Encrypted (Value : String) return Boolean is
       --  Minimum encrypted blob = nonce(12) + tag(16) = 28 bytes = 56 hex chars
       Min_Hex_Length : constant Natural := 28 * 2;  -- 56

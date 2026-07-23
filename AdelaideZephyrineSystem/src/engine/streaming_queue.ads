@@ -11,10 +11,15 @@ package Streaming_Queue is
    protected type Queue is
       entry Push (Item : String);
       entry Pop (Item : out String; Last : out Natural; Is_Closed : out Boolean; Max_Len : in Natural);
+      --  Mark the queue as closed, flushing any format-specific end-of-stream markers.
       procedure Close;
+      --  Return the current number of bytes buffered in the queue.
       function Buffer_Length return Natural;
+      --  Return True when the queue is closed and all buffered data has been consumed.
       function Is_Empty_And_Closed return Boolean;
+      --  Set the output format and model identifier for streamed responses.
       procedure Set_Format (F : Format_Type; Model : String := "");
+      --  Return the current output format of the queue.
       function Get_Format return Format_Type;
    private
       Buffer    : Unbounded_String := Null_Unbounded_String;

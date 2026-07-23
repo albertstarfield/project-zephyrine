@@ -19,6 +19,7 @@ package body ZO_ROS2_Actuator is
 
    Global_Node : Actuator_Node;
 
+   --  Initialize_ROS2: Initializes the ROS2 node for actuator control.
    function Initialize_ROS2 return Boolean is
       --  1. Create zero-initialized options to prevent garbage memory in C structs
       Init_Opts : aliased rcl_init_options_t := rcl_get_zero_initialized_init_options;
@@ -78,6 +79,7 @@ package body ZO_ROS2_Actuator is
       return True;
    end Initialize_ROS2;
 
+   --  Publish_Actuator_Command: Publishes a servo command to the ROS2 actuator topic.
    procedure Publish_Actuator_Command (Servo_ID : String; Angle : Float) is
    begin
       --  1. Verify the node is active before attempting to publish

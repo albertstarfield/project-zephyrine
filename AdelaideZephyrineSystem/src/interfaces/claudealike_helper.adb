@@ -21,6 +21,7 @@ package body Claudealike_Helper is
    Claude_Prefixes : constant array (1 .. 4) of String (1 .. 6) :=
      ("claude", "Claude", "CLAUDE", "anthro");
 
+   --  Returns True if Model_Name begins with a known Claude model prefix.
    function Is_Claude_Model (Model_Name : String) return Boolean is
    begin
       for Prefix of Claude_Prefixes loop
@@ -96,6 +97,8 @@ package body Claudealike_Helper is
       return To_String (Body_Str);
    end Build_Request_Body;
 
+   --  Sends a message to the Claude-compatible model via the local Hybrid_Generate backend
+   --  and returns a JSON response string in Claude Messages API format.
    function Send_Message
      (API_Key       : String;
       Model         : String;
@@ -141,6 +144,8 @@ package body Claudealike_Helper is
       return To_String (Resp);
    end Send_Message;
 
+   --  Convenience wrapper that sends a message and extracts the plain text content
+   --  from the JSON response.
    function Get_Response_Text
      (API_Key       : String;
       Model         : String;
@@ -156,6 +161,8 @@ package body Claudealike_Helper is
       return Parse_Response_Content (JSON_Response);
    end Get_Response_Text;
 
+   --  Parses a Claude Messages API JSON response and returns the concatenated text
+   --  content from all text blocks in the response.
    function Parse_Response_Content (JSON_Response : String) return String is
       Parsed : constant GNATCOLL.JSON.JSON_Value :=
         GNATCOLL.JSON.Read (JSON_Response);

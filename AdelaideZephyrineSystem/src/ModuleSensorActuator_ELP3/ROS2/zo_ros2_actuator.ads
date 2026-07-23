@@ -12,7 +12,9 @@ package ZO_ROS2_Actuator is
       Initialized : Boolean := False;
    end record;
 
+   --  Initialize_ROS2: Initializes the ROS2 node for actuator control.
    function Initialize_ROS2 return Boolean;
+   --  Publish_Actuator_Command: Publishes a servo command to the ROS2 actuator topic.
    procedure Publish_Actuator_Command (Servo_ID : String; Angle : Float);
 
 end ZO_ROS2_Actuator;

@@ -5,6 +5,7 @@ use Ada.Calendar;
 with Avionics_Types;
 with GNATCOLL.JSON;
 
+--  Main: Entry point for the avionics daemon process.
 procedure Main is
    package U_Strings renames Ada.Strings.Unbounded;
    use GNATCOLL.JSON;
@@ -14,6 +15,7 @@ procedure Main is
    protected type State_Manager is
       procedure Update_Physics (DT : Duration);
       procedure Handle_Command (Cmd : String);
+      --  Get_Snapshot: Returns the current instrument data record state.
       function Get_Snapshot return Avionics_Types.Instrument_Data_Record;
    private
       State : Avionics_Types.Instrument_Data_Record;
@@ -55,6 +57,7 @@ procedure Main is
          State.Timestamp := "2025-12-17T20:00:00Z       ";
       end Update_Physics;
 
+      --  Handle_Command: Processes incoming control commands from Python via pipe.
       procedure Handle_Command (Cmd : String) is
       begin
          --  DAL C COMMAND INTERFACE
@@ -72,6 +75,7 @@ procedure Main is
          end if;
       end Handle_Command;
 
+      --  Get_Snapshot: Returns the current instrument data record state.
       function Get_Snapshot return Avionics_Types.Instrument_Data_Record is
       begin
          return State;
