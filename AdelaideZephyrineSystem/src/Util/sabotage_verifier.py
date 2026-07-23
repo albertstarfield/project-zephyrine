@@ -5148,11 +5148,11 @@ _COMPOSITION_EXCLUDE = frozenset({
 def _build_composition_balance_patterns() -> list[Pattern]:
     """Enforce that Ada is the dominant language — GitHub Linguist style.
 
-    Uses GitHub Linguist's methodology:
-      - Counts BYTES (not lines) — matches how GitHub measures composition
+    Uses git ls-files to get the exact same file list GitHub uses:
+      - Respects .gitignore exclusions automatically
+      - Counts BYTES (not lines) — matches GitHub's methodology
       - Uses Linguist's extension-to-language mapping
-      - Excludes same directories as GitHub (vendor, node_modules, etc.)
-      - Detects generated/vendored files and excludes them
+      - Scans the ENTIRE repo (not just src/)
       - Displays results like GitHub's language bar
 
     Ada MUST have >= the percentage of any other single language.
@@ -5170,15 +5170,16 @@ def _build_composition_balance_patterns() -> list[Pattern]:
         if cache_key in check_composition._cached:
             return violations
 
-        # Find project root (look for AdelaideZephyrineSystem or project marker)
+        # Find git root (where .git/ lives)
         project_root = Path(filepath).parent
-        while project_root.name not in ("AdelaideZephyrineSystem", "project-zephyrine", "/"):
+        while project_root.name not in ("project-zephyrine", "/"):
+            if (project_root / ".git").is_dir():
+                break
             project_root = project_root.parent
             if project_root == project_root.parent:
                 break
 
         # GitHub Linguist extension-to-language mapping
-        # https://github.com/github-linguist/linguist/blob/master/lib/linguist/languages.yml
         linguist_exts = {
             # Ada
             ".adb": "Ada", ".ads": "Ada", ".ada": "Ada",
@@ -5194,8 +5195,11 @@ def _build_composition_balance_patterns() -> list[Pattern]:
             # JavaScript
             ".js": "JavaScript", ".jsx": "JavaScript", ".mjs": "JavaScript",
             ".cjs": "JavaScript",
-            # Coq
-            ".v": "Coq",
+            # Coq / Rocq Prover
+            ".v": "Rocq Prover",
+            # TeX / LaTeX
+            ".tex": "TeX", ".sty": "TeX", ".cls": "TeX", ".bib": "TeX",
+            ".bst": "TeX", ".dtx": "TeX", ".ins": "TeX",
             # Shell
             ".sh": "Shell", ".bash": "Shell", ".zsh": "Shell",
             # YAML
@@ -5220,57 +5224,52 @@ def _build_composition_balance_patterns() -> list[Pattern]:
             ".hs": "Haskell",
             # Lua
             ".lua": "Lua",
+            # OCaml
+            ".ml": "OCaml", ".mli": "OCaml",
+            # Assembly
+            ".asm": "Assembly", ".s": "Assembly", ".S": "Assembly",
         }
 
-        # GitHub Linguist excluded directories
-        # https://github.com/github-linguist/linguist/blob/master/lib/linguist/vendor.yml
-        linguist_exclude_dirs = frozenset({
-            "vendor", "node_modules", ".git", "__pycache__", "build", "obj",
-            "dist", "venv", ".venv", "env", ".env", ".tox", ".mypy_cache",
-            ".pytest_cache", "coverage", ".coverage", "htmlcov",
-            "bower_components", "composer_modules", "third_party",
-            "extern", "external", "packages",
-        })
+        # Use git ls-files to get the file list, then exclude vendored dirs
+        # GitHub marks vendor/ as vendored (gray) — not counted as project code
+        import subprocess
+        vendor_dirs = {"vendor", "node_modules", "alirevenv", "venv", ".venv"}
+        try:
+            result = subprocess.run(
+                ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            all_files = result.stdout.strip().split("\n") if result.stdout.strip() else []
+            # Filter out vendored directories
+            tracked_files = [
+                f for f in all_files
+                if not any(f.startswith(d + "/") or f.startswith("./" + d + "/")
+                           for d in vendor_dirs)
+            ]
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            tracked_files = []
 
-        # GitHub Linguist excluded file patterns (generated/vendored)
-        linguist_exclude_files = re.compile(
-            r"(package-lock\.json|yarn\.lock|Gemfile\.lock|composer\.lock"
-            r"|\.min\.js$|\.min\.css$|\.map$"
-            r"|\.pb\.go$|_generated\.go$"
-            r"|\.snap$|\.svg$)",
-            re.IGNORECASE,
-        )
-
-        # Count bytes per language (GitHub Linguist counts bytes, not lines)
+        # Count bytes per language
         lang_bytes: dict[str, int] = {}
+        for rel_path in tracked_files:
+            fpath = project_root / rel_path
+            fname = Path(rel_path).name
 
-        scan_root = project_root / "src"
-        if not scan_root.is_dir():
-            scan_root = project_root
+            # Check filename-based match first (Makefile, etc.)
+            lang = linguist_exts.get(fname)
+            if lang is None:
+                lang = linguist_exts.get(Path(rel_path).suffix.lower())
+            if lang is None:
+                continue
 
-        for root, dirs, files in os.walk(scan_root):
-            # Exclude directories in-place (GitHub Linguist behavior)
-            dirs[:] = [d for d in dirs if d not in linguist_exclude_dirs]
-
-            for fname in files:
-                # Skip generated/vendored files
-                if linguist_exclude_files.search(fname):
-                    continue
-
-                fpath = Path(root) / fname
-
-                # Check if it's a filename-based match (Makefile, etc.)
-                lang = linguist_exts.get(fname)
-                if lang is None:
-                    lang = linguist_exts.get(fpath.suffix.lower())
-                if lang is None:
-                    continue
-
-                try:
-                    byte_count = fpath.stat().st_size
-                    lang_bytes[lang] = lang_bytes.get(lang, 0) + byte_count
-                except OSError:
-                    pass
+            try:
+                byte_count = fpath.stat().st_size
+                lang_bytes[lang] = lang_bytes.get(lang, 0) + byte_count
+            except OSError:
+                pass
 
         check_composition._cached[cache_key] = lang_bytes
 
