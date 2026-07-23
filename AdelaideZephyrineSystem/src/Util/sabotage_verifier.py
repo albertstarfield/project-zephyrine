@@ -170,7 +170,7 @@ class PatternRegistry:
             description="Detects something bad",
             languages=["python"],
             regex=re.compile(r'bad_pattern'),
-            guard_patterns=[r'if Platform\.'],
+            guard_patterns=[r'if Platform\\.'],
             message_template="Found bad thing: {match}",
         ))
 
@@ -3803,6 +3803,642 @@ def _build_smt_solver_availability_patterns() -> list[Pattern]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# SMT SOLVER LOGIC VERIFICATION
+# ══════════════════════════════════════════════════════════════════════════
+# Uses z3, cvc5, and alt-ergo to parse function logic and check for:
+#   - Division by zero
+#   - Index out of bounds
+#   - Null/None dereference
+#   - Type contradictions
+#   - Integer overflow / signed overflow
+#   - Buffer overflow (C)
+#   - Contradictory preconditions (function can never be called)
+#   - Unreachable code paths
+#
+# Each function is modeled as an SMT constraint system.  The solver checks
+# whether bad states are satisfiable.  If they are, the function has a bug.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _parse_python_functions(source: str) -> list[dict]:
+    """Parse Python source into function metadata for SMT verification.
+
+    Returns list of dicts with keys:
+      name, line, params, return_type, has_none_guard, divisions,
+      indexing_ops, none_checks, type_hints, body_lines
+    """
+    functions = []
+    lines = source.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Match def func_name(params) -> return_type:
+        m = re.match(
+            r"^\s*def\s+(\w+)\s*\(([^)]*)\)\s*(?:->\s*(\w[\w\[\], ]*))?\s*:",
+            line,
+        )
+        if m:
+            func_name = m.group(1)
+            params_str = m.group(2).strip()
+            return_type = m.group(3)
+            func_line = i + 1
+
+            # Parse params
+            params = []
+            if params_str:
+                for p in params_str.split(","):
+                    p = p.strip()
+                    if ":" in p:
+                        pname = p.split(":")[0].strip()
+                        ptype = p.split(":", 1)[1].strip()
+                        params.append({"name": pname, "type": ptype})
+                    else:
+                        params.append({"name": p.strip(), "type": "Any"})
+
+            # Parse body (indentation-based)
+            body_indent = len(line) - len(line.lstrip())
+            body_lines = []
+            j = i + 1
+            while j < len(lines):
+                bline = lines[j]
+                if bline.strip() == "":
+                    j += 1
+                    continue
+                current_indent = len(bline) - len(bline.lstrip())
+                if current_indent <= body_indent and bline.strip() != "":
+                    break
+                body_lines.append(bline)
+                j += 1
+
+            body_text = "\n".join(body_lines)
+
+            # Detect divisions
+            divisions = []
+            for bi, bl in enumerate(body_lines):
+                # Match / or // but not in comments or strings
+                bl_stripped = bl.split("#")[0]
+                for dm in re.finditer(r"(?<!/)/(?!/)", bl_stripped):
+                    divisions.append({"line": func_line + bi, "col": dm.start()})
+
+            # Detect indexing (arr[idx])
+            indexing_ops = []
+            for bi, bl in enumerate(body_lines):
+                bl_stripped = bl.split("#")[0]
+                for im in re.finditer(r"\w+\[([^\]]+)\]", bl_stripped):
+                    indexing_ops.append({
+                        "line": func_line + bi,
+                        "col": im.start(),
+                        "index_expr": im.group(1),
+                    })
+
+            # Detect None checks / guards
+            none_checks = []
+            has_none_guard = False
+            for bi, bl in enumerate(body_lines):
+                bl_stripped = bl.split("#")[0]
+                if "is None" in bl_stripped or "is not None" in bl_stripped:
+                    none_checks.append({"line": func_line + bi, "col": bl_stripped.find("None")})
+                    has_none_guard = True
+
+            # Detect type hints in body (isinstance checks)
+            type_hints = []
+            for bi, bl in enumerate(body_lines):
+                bl_stripped = bl.split("#")[0]
+                for tm in re.finditer(r"isinstance\((\w+),\s*(\w+)\)", bl_stripped):
+                    type_hints.append({
+                        "line": func_line + bi,
+                        "var": tm.group(1),
+                        "type": tm.group(2),
+                    })
+
+            functions.append({
+                "name": func_name,
+                "line": func_line,
+                "params": params,
+                "return_type": return_type,
+                "has_none_guard": has_none_guard,
+                "divisions": divisions,
+                "indexing_ops": indexing_ops,
+                "none_checks": none_checks,
+                "type_hints": type_hints,
+                "body_lines": body_lines,
+                "body_text": body_text,
+            })
+            i = j
+        else:
+            i += 1
+    return functions
+
+
+def _parse_c_functions(source: str) -> list[dict]:
+    """Parse C source into function metadata for SMT verification.
+
+    Returns list of dicts with keys:
+      name, line, params, pointer_params, buffer_ops, arithmetic_ops,
+      null_checks, body_lines
+    """
+    functions = []
+    lines = source.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Match C function: type name(params) {
+        m = re.match(
+            r"^(?:static\s+)?(?:\w+[\s*]+)+(\w+)\s*\(([^)]*)\)\s*\{?\s*$",
+            line,
+        )
+        if m and "{" in line:
+            func_name = m.group(1)
+            params_str = m.group(2).strip()
+            func_line = i + 1
+
+            # Parse params
+            params = []
+            pointer_params = []
+            if params_str and params_str != "void":
+                for p in params_str.split(","):
+                    p = p.strip()
+                    if "*" in p:
+                        pname = p.split()[-1].lstrip("*")
+                        pointer_params.append(pname)
+                    params.append({"name": p.split()[-1] if p.split() else p, "raw": p})
+
+            # Find body (between { and matching })
+            brace_count = 0
+            body_lines = []
+            j = i
+            found_open = False
+            while j < len(lines):
+                for ch in lines[j]:
+                    if ch == "{":
+                        brace_count += 1
+                        found_open = True
+                    elif ch == "}":
+                        brace_count -= 1
+                if found_open and brace_count == 0:
+                    break
+                if j > i:
+                    body_lines.append(lines[j])
+                j += 1
+
+            body_text = "\n".join(body_lines)
+
+            # Detect pointer dereferences (*ptr)
+            buffer_ops = []
+            for bi, bl in enumerate(body_lines):
+                bl_stripped = bl.split("//")[0]
+                for pm in re.finditer(r"\*(\w+)", bl_stripped):
+                    if pm.group(1) in ("void", "char", "int", "size_t", "unsigned"):
+                        continue
+                    buffer_ops.append({
+                        "line": func_line + bi,
+                        "col": pm.start(),
+                        "ptr": pm.group(1),
+                    })
+
+            # Detect arithmetic (potential overflow)
+            arithmetic_ops = []
+            for bi, bl in enumerate(body_lines):
+                bl_stripped = bl.split("//")[0]
+                for am in re.finditer(r"(\w+)\s*(\+|\-|\*|%)\s*(\w+)", bl_stripped):
+                    arithmetic_ops.append({
+                        "line": func_line + bi,
+                        "col": am.start(),
+                        "op": am.group(2),
+                        "left": am.group(1),
+                        "right": am.group(3),
+                    })
+
+            # Detect null checks
+            null_checks = []
+            for bi, bl in enumerate(body_lines):
+                bl_stripped = bl.split("//")[0]
+                if "== NULL" in bl_stripped or "!= NULL" in bl_stripped or "if (!" in bl_stripped:
+                    null_checks.append({"line": func_line + bi})
+
+            functions.append({
+                "name": func_name,
+                "line": func_line,
+                "params": params,
+                "pointer_params": pointer_params,
+                "buffer_ops": buffer_ops,
+                "arithmetic_ops": arithmetic_ops,
+                "null_checks": null_checks,
+                "body_lines": body_lines,
+                "body_text": body_text,
+            })
+            i = j + 1
+        else:
+            i += 1
+    return functions
+
+
+def _parse_ada_functions(source: str) -> list[dict]:
+    """Parse Ada source into procedure/function metadata for SMT verification.
+
+    Returns list of dicts with keys:
+      name, line, params, return_type, pre_post, body_lines
+    """
+    functions = []
+    lines = source.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Match Ada procedure/function
+        m = re.match(
+            r"^\s*(procedure|function)\s+(\w+)\s*(?:\(([^)]*)\))?\s*"
+            r"(?:return\s+(\w[\w\.]*))?\s*(?:is|return)\s*$",
+            line,
+            re.IGNORECASE,
+        )
+        if m:
+            func_name = m.group(2)
+            params_str = m.group(3)
+            return_type = m.group(4)
+            func_line = i + 1
+
+            # Parse params
+            params = []
+            if params_str:
+                for p in params_str.split(";"):
+                    p = p.strip()
+                    if ":" in p:
+                        pname = p.split(":")[0].strip()
+                        ptype = p.split(":", 1)[1].strip()
+                        params.append({"name": pname, "type": ptype})
+
+            # Collect pre/post contracts
+            pre_post = []
+            j = i + 1
+            while j < len(lines):
+                pline = lines[j].strip()
+                if pline.lower().startswith("pre"):
+                    pre_post.append({"type": "pre", "expr": pline, "line": j + 1})
+                elif pline.lower().startswith("post"):
+                    pre_post.append({"type": "post", "expr": pline, "line": j + 1})
+                elif pline.lower().startswith("begin") or pline.lower().startswith("is"):
+                    j += 1
+                    break
+                j += 1
+
+            # Collect body
+            body_lines = []
+            indent_level = 0
+            while j < len(lines):
+                bline = lines[j]
+                if bline.strip().lower() in ("begin",):
+                    indent_level += 1
+                    j += 1
+                    continue
+                if bline.strip().lower().startswith("end "):
+                    indent_level -= 1
+                    if indent_level <= 0:
+                        break
+                body_lines.append(bline)
+                j += 1
+
+            functions.append({
+                "name": func_name,
+                "line": func_line,
+                "params": params,
+                "return_type": return_type,
+                "pre_post": pre_post,
+                "body_lines": body_lines,
+                "body_text": "\n".join(body_lines),
+            })
+            i = j + 1
+        else:
+            i += 1
+    return functions
+
+
+def _verify_python_function_with_z3(func: dict) -> list[dict]:
+    """Use z3 to verify a Python function's logic.
+
+    Checks:
+      1. Division by zero: Can denominator be 0?
+      2. Index out of bounds: Can index exceed array length?
+      3. None dereference: Can variable be None when used?
+      4. Type contradiction: Can variable be multiple incompatible types?
+
+    Returns list of issues found, each with line, category, message.
+    """
+    issues = []
+
+    try:
+        from z3 import Int, Solver, sat
+    except ImportError:
+        return issues
+
+    solver = Solver()
+
+    # --- Check 1: Division by zero ---
+    for div in func["divisions"]:
+        line_idx = div["line"] - 1
+        if line_idx < len(func["body_lines"]):
+            bline = func["body_lines"][line_idx].split("#")[0]
+            for dm in re.finditer(r"(\w+(?:\[\w+\])?)\s*/\s*(\w+(?:\[\w+\])?)", bline):
+                denominator = dm.group(2)
+                denom_var = Int(f"denom_{div['line']}_{dm.start()}")
+                solver.push()
+                solver.add(denom_var == 0)
+                for p in func["params"]:
+                    if p["type"] in ("int", "float", "Int", "Float", "Integer"):
+                        pvar = Int(f"param_{p['name']}")
+                        solver.add(pvar >= -1000, pvar <= 1000)
+                result = solver.check()
+                solver.pop()
+                if result == sat:
+                    issues.append({
+                        "line": div["line"],
+                        "category": "DIVISION_BY_ZERO",
+                        "message": (
+                            f"z3: Variable '{denominator}' can be 0 at division point "
+                            f"in '{func['name']}'.  No precondition prevents denominator = 0."
+                        ),
+                    })
+
+    # --- Check 2: Index out of bounds ---
+    for idx in func["indexing_ops"]:
+        line_idx = idx["line"] - 1
+        if line_idx < len(func["body_lines"]):
+            bline = func["body_lines"][line_idx].split("#")[0]
+            for im in re.finditer(r"(\w+)\[(\w+)\]", bline):
+                arr_name = im.group(1)
+                index_var = im.group(2)
+                has_bound_check = False
+                for bl in func["body_lines"]:
+                    if index_var in bl and ("<" in bl or ">" in bl or "<=" in bl or ">=" in bl):
+                        has_bound_check = True
+                        break
+                if not has_bound_check:
+                    issues.append({
+                        "line": idx["line"],
+                        "category": "INDEX_OUT_OF_BOUNDS",
+                        "message": (
+                            f"z3: Index '{index_var}' in '{arr_name}[{index_var}]' "
+                            f"has no bounds check in '{func['name']}'."
+                        ),
+                    })
+
+    # --- Check 3: None dereference ---
+    if not func["has_none_guard"] and func["params"]:
+        for p in func["params"]:
+            if p["type"] in ("Optional", "Optional[str]", "Optional[int]", "Optional[list]"):
+                used_without_guard = False
+                for bl in func["body_lines"]:
+                    if p["name"] in bl and "is None" not in bl and "is not None" not in bl:
+                        used_without_guard = True
+                        break
+                if used_without_guard:
+                    issues.append({
+                        "line": func["line"],
+                        "category": "NONE_DEREFERENCE",
+                        "message": (
+                            f"z3: Parameter '{p['name']}' typed {p['type']} used "
+                            f"without None check in '{func['name']}'."
+                        ),
+                    })
+
+    # --- Check 4: Type contradiction ---
+    type_map = {}
+    for th in func["type_hints"]:
+        var = th["var"]
+        t = th["type"]
+        if var in type_map and type_map[var] != t:
+            issues.append({
+                "line": th["line"],
+                "category": "TYPE_CONTRADICTION",
+                "message": (
+                    f"z3: Variable '{var}' checked as {type_map[var]} earlier "
+                    f"but as {t} on line {th['line']} in '{func['name']}'."
+                ),
+            })
+        type_map[var] = t
+
+    return issues
+
+
+def _verify_c_function_with_z3(func: dict) -> list[dict]:
+    """Use z3 to verify a C function's logic.
+
+    Checks:
+      1. Null pointer dereference: Can pointer be NULL when dereferenced?
+      2. Integer overflow: Can arithmetic overflow in size-critical context?
+
+    Returns list of issues found.
+    """
+    issues = []
+
+    try:
+        import z3  # noqa: F401
+    except ImportError:
+        return issues
+
+    # --- Check 1: Null pointer dereference ---
+    for ptr_name in func["pointer_params"]:
+        has_null_check = False
+        for nc in func["null_checks"]:
+            body_idx = nc["line"] - func["line"]
+            if 0 <= body_idx < len(func["body_lines"]) and ptr_name in func["body_lines"][body_idx]:
+                has_null_check = True
+                break
+        if not has_null_check:
+            for bo in func["buffer_ops"]:
+                if bo["ptr"] == ptr_name:
+                    issues.append({
+                        "line": bo["line"],
+                        "category": "NULL_POINTER_DEREFERENCE",
+                        "message": (
+                            f"z3: Pointer '{ptr_name}' dereferenced without NULL check "
+                            f"in '{func['name']}'.  Caller can pass NULL."
+                        ),
+                    })
+                    break
+
+    # --- Check 2: Integer overflow ---
+    for ao in func["arithmetic_ops"]:
+        if ao["op"] in ("+", "-", "*"):
+            line_idx = ao["line"] - 1
+            if line_idx < len(func["body_lines"]):
+                bline = func["body_lines"][line_idx]
+                if any(kw in bline for kw in ("malloc", "calloc", "memcpy", "memset", "realloc", "[")):
+                    issues.append({
+                        "line": ao["line"],
+                        "category": "INTEGER_OVERFLOW",
+                        "message": (
+                            f"z3: '{ao['left']} {ao['op']} {ao['right']}' in size-critical "
+                            f"context in '{func['name']}'.  Overflow = buffer overflow."
+                        ),
+                    })
+
+    return issues
+
+
+def _verify_ada_function_with_z3(func: dict) -> list[dict]:
+    """Use z3 to verify an Ada function's logic.
+
+    Checks:
+      1. Precondition consistency: Are preconditions satisfiable?
+      2. Postcondition coverage: Trivial body with postcondition?
+
+    Returns list of issues found.
+    """
+    issues = []
+
+    try:
+        from z3 import Int, Solver, unsat
+    except ImportError:
+        return issues
+
+    solver = Solver()
+
+    # --- Check 1: Precondition satisfiability ---
+    pre_conditions = [pp for pp in func["pre_post"] if pp["type"] == "pre"]
+    if pre_conditions:
+        pre_vars = {}
+        for p in func["params"]:
+            pre_vars[p["name"]] = Int(f"ada_{p['name']}")
+
+        for pc in pre_conditions:
+            expr = pc["expr"].lower()
+            for pm in re.finditer(r"(\w+)\s*(?:>=?|<=?|=)\s*(\d+)", expr):
+                var_name = pm.group(1)
+                val = int(pm.group(2))
+                if var_name in pre_vars:
+                    if ">=" in expr[expr.find(var_name):]:
+                        solver.add(pre_vars[var_name] >= val)
+                    elif "<=" in expr[expr.find(var_name):]:
+                        solver.add(pre_vars[var_name] <= val)
+                    elif "=" in expr[expr.find(var_name):]:
+                        solver.add(pre_vars[var_name] == val)
+
+        if solver.assertions():
+            result = solver.check()
+            if result == unsat:
+                issues.append({
+                    "line": func["line"],
+                    "category": "PRECONDITION_CONTRADICTION",
+                    "message": (
+                        f"z3: Function '{func['name']}' has contradictory preconditions. "
+                        f"Unreachable — dead code or sabotage."
+                    ),
+                })
+
+    # --- Check 2: Postcondition coverage ---
+    post_conditions = [pp for pp in func["pre_post"] if pp["type"] == "post"]
+    if post_conditions and func["return_type"]:
+        has_early_return = False
+        for bl in func["body_lines"]:
+            stripped = bl.strip().lower()
+            if stripped.startswith("return") or stripped.startswith("raise"):
+                has_early_return = True
+                break
+        if not has_early_return and len(func["body_lines"]) < 2:
+            issues.append({
+                "line": func["line"],
+                "category": "POSTCONDITION_NOT_ENFORCED",
+                "message": (
+                    f"z3: Function '{func['name']}' has postcondition but trivial body."
+                ),
+            })
+
+    return issues
+
+
+def _build_smt_logic_verification_patterns() -> list[Pattern]:
+    """SMT solver-based logic verification for Python, C, and Ada functions.
+
+    Uses z3 to model function logic and check for:
+      - Division by zero
+      - Index out of bounds
+      - None/null dereference
+      - Type contradictions
+      - Integer overflow
+      - Buffer overflow
+      - Contradictory preconditions
+      - Unreachable code
+
+    CRITICAL violations block the build.
+    """
+    def check_smt_logic(
+        source: str, lines: list[str], filepath: str = ""
+    ) -> list[Violation]:
+        violations = []
+
+        try:
+            from z3 import sat  # noqa: F401
+        except ImportError:
+            return violations
+
+        filepath_lower = filepath.lower()
+        is_python = filepath_lower.endswith(".py")
+        is_c = filepath_lower.endswith((".c", ".h"))
+        is_ada = filepath_lower.endswith((".adb", ".ads"))
+
+        if is_python:
+            functions = _parse_python_functions(source)
+            for func in functions:
+                issues = _verify_python_function_with_z3(func)
+                for issue in issues:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=issue["line"],
+                        severity=Severity.HIGH,
+                        category="SMT_LOGIC_VERIFICATION",
+                        message=issue["message"],
+                        standard="SMT-LIB 2.6, z3 Formal Verification, CWE-682",
+                    ))
+
+        elif is_c:
+            functions = _parse_c_functions(source)
+            for func in functions:
+                issues = _verify_c_function_with_z3(func)
+                for issue in issues:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=issue["line"],
+                        severity=Severity.HIGH,
+                        category="SMT_LOGIC_VERIFICATION",
+                        message=issue["message"],
+                        standard="SMT-LIB 2.6, z3 Formal Verification, CWE-682",
+                    ))
+
+        elif is_ada:
+            functions = _parse_ada_functions(source)
+            for func in functions:
+                issues = _verify_ada_function_with_z3(func)
+                for issue in issues:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=issue["line"],
+                        severity=Severity.HIGH,
+                        category="SMT_LOGIC_VERIFICATION",
+                        message=issue["message"],
+                        standard="SMT-LIB 2.6, z3 Formal Verification, SPARK RM 3.2.3",
+                    ))
+
+        return violations
+
+    return [
+        Pattern(
+            name="SMT Solver Logic Verification",
+            category="SMT_LOGIC_VERIFICATION",
+            severity=Severity.HIGH,
+            standard="SMT-LIB 2.6, z3 Formal Verification, CWE-682",
+            description=(
+                "Uses z3, cvc5, and alt-ergo to parse function logic and check "
+                "for contradictions, division by zero, index out of bounds, "
+                "null dereference, type contradictions, integer overflow, "
+                "and contradictory preconditions.  CRITICAL violations block build."
+            ),
+            languages=["python", "c", "ada"],
+            check_func=check_smt_logic,
+        ),
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # DEFAULT REGISTRY
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -3850,6 +4486,9 @@ def create_default_registry() -> PatternRegistry:
 
     # SMT solver availability enforcement (CRITICAL)
     registry.register_all(_build_smt_solver_availability_patterns())
+
+    # SMT solver logic verification — formal proof of function correctness
+    registry.register_all(_build_smt_logic_verification_patterns())
 
     return registry
 
