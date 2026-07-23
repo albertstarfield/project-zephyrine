@@ -34,10 +34,16 @@ SIDECAR_DEPS = [
 ]
 
 def force_kill_process(proc_name):
-    if platform.system() == "Windows":
-        subprocess.run(["taskkill", "/F", "/IM", proc_name], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)  # nosec
-    else:
-        subprocess.run(["pkill", "-9", "-f", proc_name], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)  # nosec
+    """Kill a process by name. Returns True if successful."""
+    try:
+        if platform.system() == "Windows":
+            subprocess.run(["taskkill", "/F", "/IM", proc_name], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)  # nosec
+        else:
+            subprocess.run(["pkill", "-9", "-f", proc_name], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)  # nosec
+        return True
+    except (subprocess.SubprocessError, OSError) as e:
+        print(f"  [!] Warning: Could not kill {proc_name}: {e}")
+        return False
 
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 LOGS_DIR = os.path.join(BASE_DIR, "run", "logs")
@@ -2226,11 +2232,18 @@ def setup_logging():  # nosec
     """Create logs/ dir, rotate old logs, redirect stdout/stderr to tee.
     Returns the path of the current log file."""
     global IS_KISS, term_stdout, term_stderr
-    os.makedirs(LOGS_DIR, exist_ok=True)
+    try:
+        os.makedirs(LOGS_DIR, exist_ok=True)
+    except OSError as e:
+        print(f"  [!] Warning: Could not create logs dir: {e}")
     _rotate_logs()
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(LOGS_DIR, f"run_{timestamp}.log")
-    log_fp = open(log_path, "a", encoding="utf-8", buffering=1)  # line-buffered  # nosec - log file handle
+    try:
+        log_fp = open(log_path, "a", encoding="utf-8", buffering=1)  # line-buffered  # nosec - log file handle
+    except OSError as e:
+        print(f"  [!] Warning: Could not open log file: {e}")
+        log_fp = sys.stderr
 
     IS_KISS = not (
         "--verbose" in sys.argv
@@ -2243,8 +2256,13 @@ def setup_logging():  # nosec
     if IS_KISS:
         orig_stdout_fd = os.dup(1)
         orig_stderr_fd = os.dup(2)
-        term_stdout = open(orig_stdout_fd, "w", buffering=1)  # nosec - terminal redirect
-        term_stderr = open(orig_stderr_fd, "w", buffering=1)  # nosec - terminal redirect
+        try:
+            term_stdout = open(orig_stdout_fd, "w", buffering=1)  # nosec - terminal redirect
+            term_stderr = open(orig_stderr_fd, "w", buffering=1)  # nosec - terminal redirect
+        except OSError as e:
+            print(f"  [!] Warning: Could not redirect terminal: {e}")
+            term_stdout = sys.__stdout__
+            term_stderr = sys.__stderr__
         os.dup2(log_fp.fileno(), 1)
         os.dup2(log_fp.fileno(), 2)
         sys.stdout = log_fp
@@ -3306,8 +3324,11 @@ def calculate_venv_hash():  # nosec
     # 2. Hash all venv-relevant files
     for fpath in get_venv_files_to_hash():
         if os.path.isfile(fpath):
-            with open(fpath, "rb") as f:
-                hasher.update(f.read())
+            try:
+                with open(fpath, "rb") as f:
+                    hasher.update(f.read())
+            except OSError as e:
+                print(f"  [!] Warning: Could not hash {fpath}: {e}")
 
     return hasher.hexdigest()
 
@@ -3387,15 +3408,21 @@ def invalidate_venv():  # nosec
 
     # Clear stored hash
     if os.path.exists(venv_hash_file):
-        os.remove(venv_hash_file)  # nosec - safe to remove after exists check
+        try:
+            os.remove(venv_hash_file)  # nosec - safe to remove after exists check
+        except OSError as e:
+            print(f"  [!] Warning: Could not remove venv hash: {e}")
 
 
 def save_venv_hash():  # nosec
     # nosec - recursive function with implicit base case
     """Save current venv hash after successful rebuild."""
     venv_hash_file = os.path.join(BASE_DIR, ".venv_hash")
-    with open(venv_hash_file, "w") as f:
-        f.write(calculate_venv_hash())
+    try:
+        with open(venv_hash_file, "w") as f:
+            f.write(calculate_venv_hash())
+    except OSError as e:
+        print(f"  [!] Warning: Could not save venv hash: {e}")
 
 
 # [DO NOT REMOVE] Graceful shutdown via SIGQUIT (Ctrl+\ by default).
@@ -3575,10 +3602,14 @@ def checkout_latest_release(repo_dir, module_name):
 
 def safe_cmake_configure(cmake_flags, cwd, build_dir, module_name):
     """Robust CMake configure that detects cache corruption and retries cleanly."""
-    result = subprocess.run(
-        # nosec - subprocess.run() is safe in this context
-        cmake_flags, cwd=cwd, check=False, capture_output=True, text=True
-    )  # nosec
+    try:
+        result = subprocess.run(
+            # nosec - subprocess.run() is safe in this context
+            cmake_flags, cwd=cwd, check=False, capture_output=True, text=True
+        )  # nosec
+    except (subprocess.SubprocessError, OSError) as e:
+        print(f"{BG_RED}[BUGCHECK] [{module_name}] CMake execution failed: {e}{RST}")
+        return None
     if result.returncode != 0 and (
         "CMakeCache.txt" in result.stderr or "CMake Error" in result.stderr
     ):
@@ -3588,10 +3619,14 @@ def safe_cmake_configure(cmake_flags, cwd, build_dir, module_name):
         shutil.rmtree(build_dir, ignore_errors=True)
         os.makedirs(build_dir, exist_ok=True)
         # Re-run from scratch
-        result = subprocess.run(
-            # nosec - subprocess.run() is safe in this context
-            cmake_flags, cwd=cwd, check=False, capture_output=True, text=True
-        )  # nosec
+        try:
+            result = subprocess.run(
+                # nosec - subprocess.run() is safe in this context
+                cmake_flags, cwd=cwd, check=False, capture_output=True, text=True
+            )  # nosec
+        except (subprocess.SubprocessError, OSError) as e:
+            print(f"{BG_RED}[BUGCHECK] [{module_name}] CMake retry failed: {e}{RST}")
+            return None
     return result
 
 
@@ -4651,9 +4686,13 @@ def real_main():  # nosec
             # nosec - recursive function with implicit base case
             """Compute SHA256 of a file, streaming in chunks for large files."""
             h = hashlib.sha256()
-            with open(filepath, "rb") as f:
-                for chunk in iter(lambda: f.read(8192 * 1024), b""):
-                    h.update(chunk)
+            try:
+                with open(filepath, "rb") as f:
+                    for chunk in iter(lambda: f.read(8192 * 1024), b""):
+                        h.update(chunk)
+            except OSError as e:
+                print(f"  [!] Warning: Could not read {filepath} for SHA256: {e}")
+                return None
             return h.hexdigest()
 
         def download_with_retry(url, output_path, expected_sha256=None):
@@ -4664,23 +4703,30 @@ def real_main():  # nosec
                 print(
                     f"[*] Downloading {os.path.basename(output_path)} (attempt #{attempt})..."
                 )
-                result = subprocess.run(
-                    # nosec - subprocess.run() is safe in this context
-                    [
-                        "wget",
-                        "-c",
-                        "-t",
-                        "0",
-                        "--timeout=30",
-                        "--waitretry=5",
-                        "--show-progress",
-                        url,
-                        "-O",
-                        output_path,
-                    ],
-                    check=False,
-                    timeout=None,
-                )  # nosec
+                try:
+                    result = subprocess.run(
+                        # nosec - subprocess.run() is safe in this context
+                        [
+                            "wget",
+                            "-c",
+                            "-t",
+                            "0",
+                            "--timeout=30",
+                            "--waitretry=5",
+                            "--show-progress",
+                            url,
+                            "-O",
+                            output_path,
+                        ],
+                        check=False,
+                        timeout=None,
+                    )  # nosec
+                except (subprocess.SubprocessError, OSError) as e:
+                    print(
+                        f"{BG_RED}[BUGCHECK] [!] wget execution failed: {e}, retrying in 5s...{RST}"
+                    )
+                    time.sleep(5)
+                    continue
                 if result.returncode != 0:
                     print(
                         f"{BG_RED}[BUGCHECK] [!] wget failed (code {result.returncode}), retrying in 5s...{RST}"
@@ -5160,10 +5206,7 @@ def real_main():  # nosec
 
                 # Clean stale AFL++ output from previous runs (queue/, plots/, etc.)
                 if os.path.isdir(output_dir):
-                    try:
-                        shutil.rmtree(output_dir, ignore_errors=True)
-                    except Exception:
-                        pass
+                    shutil.rmtree(output_dir, ignore_errors=True)
                 
                 # Run AFL++ for 1000 iterations (-E 1000)
                 fuzz_cmd = [
@@ -5838,15 +5881,24 @@ def real_main():  # nosec
         # terminal is closed.  The watchdog monitors the server via file-based
         # IPC (run/ directory) so it doesn't need a parent process.
         watchdog_log = os.path.join(BASE_DIR, "run", "adelaide_watchdog.log")
-        with open(watchdog_log, "a") as wlog:
+        try:
+            wlog = open(watchdog_log, "a")
+        except OSError as e:
+            print(f"  [!] Warning: Could not open watchdog log: {e}")
+            wlog = None
+        try:
             watchdog_process = subprocess.Popen(
                 [watchdog_path],
                 cwd=BASE_DIR,
                 env=watchdog_env,
-                stdout=wlog,
+                stdout=wlog if wlog else subprocess.DEVNULL,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
+        except (subprocess.SubprocessError, OSError) as e:
+            print(f"  [!] Warning: Could not start watchdog: {e}")
+        if wlog:
+            wlog.close()
 
         def watchdog_monitor(path, w_env, log_path):  # nosec
             # nosec - recursive function with implicit base case

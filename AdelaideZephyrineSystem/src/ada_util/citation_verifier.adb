@@ -16,6 +16,8 @@ with Ada.Strings.Unbounded;
 with Ada.Processes;
 with Trace_Utils;
 
+--  Citation_Verifier: Main entry point. Queries Crossref API via curl
+--  for academic paper citations based on keywords.
 procedure Citation_Verifier is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;

@@ -18,10 +18,13 @@ with Ada.Directories;
 with Ada.Strings.Fixed;
 with Trace_Utils;
 
+--  Review_Tool: Main entry point. Dispatches code review commands
+--  (diff, file, security, quality) for codebase inspection.
 procedure Review_Tool is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 
+   --  Run_Command: Execute a shell command via subprocess.
    function Run_Command (Cmd : in String) return String is
    begin
       begin
@@ -35,6 +38,8 @@ procedure Review_Tool is
       end;
    end Run_Command;
 
+   --  Security_Check: Scan file for dangerous patterns (eval, exec,
+   --  shell=True, pickle, os.system) and report findings.
    procedure Security_Check (Filepath : in String) is
    begin
       if not Ada.Directories.Exists(Filepath) then
@@ -80,6 +85,8 @@ procedure Review_Tool is
       end;
    end Security_Check;
 
+   --  Quality_Check: Scan file for quality issues (long lines,
+   --  TODO/FIXME markers) and report findings.
    procedure Quality_Check (Filepath : in String) is
    begin
       if not Ada.Directories.Exists(Filepath) then

@@ -14,10 +14,13 @@ with Ada.Strings.Unbounded;
 with Ada.Processes;
 with Trace_Utils;
 
+--  Issue_Tool: Main entry point. Dispatches GitHub issue commands
+--  (list, view, create, close, comment, search) via gh CLI.
 procedure Issue_Tool is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 
+   --  Run_Gh: Execute a gh CLI command via subprocess and return output.
    function Run_Gh (Args : in String) return String is
       Cmd : constant String := "gh " & Args;
    begin

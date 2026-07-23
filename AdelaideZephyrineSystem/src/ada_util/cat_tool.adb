@@ -12,6 +12,8 @@ with Ada.Directories;
 with Ada.Command_Line;
 with Trace_Utils;
 
+--  Cat_Tool: Main entry point. Reads a file path from command-line
+--  arguments and prints its contents to stdout.
 procedure Cat_Tool is
    use Ada.Text_IO;
    use Ada.Directories;

@@ -56,7 +56,11 @@ def bootstrap_venv():  # nosec
     if os.path.abspath(sys.prefix) != venv_abs:
         if not os.path.exists(VENV_DIR):
             print(f"[*] Creating virtual environment in {VENV_DIR}...", file=sys.stderr)
-            subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True)  # nosec
+            try:
+                subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True)  # nosec
+            except (subprocess.CalledProcessError, OSError) as e:
+                print(f"  [!] Warning: Could not create venv: {e}", file=sys.stderr)
+                return
             
         if os.name == 'nt':
             python_exe = os.path.join(VENV_DIR, "Scripts", "python.exe")
@@ -78,8 +82,12 @@ def bootstrap_venv():  # nosec
             pip_exe = os.path.join(VENV_DIR, "Scripts", "pip.exe")
         else:
             pip_exe = os.path.join(VENV_DIR, "bin", "pip")
-        subprocess.run([pip_exe, "install", "--upgrade", "pip"], check=True)  # nosec
-        subprocess.run([pip_exe, "install"] + REQUIREMENTS, check=True)  # nosec
+        try:
+            subprocess.run([pip_exe, "install", "--upgrade", "pip"], check=True)  # nosec
+            subprocess.run([pip_exe, "install"] + REQUIREMENTS, check=True)  # nosec
+        except (subprocess.CalledProcessError, OSError) as e:
+            print(f"  [!] Warning: Could not install requirements: {e}", file=sys.stderr)
+            return
         # Re-execute one last time to pick up new packages
         os.execv(sys.executable, [sys.executable] + sys.argv)
 

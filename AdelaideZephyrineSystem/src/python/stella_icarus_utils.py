@@ -197,7 +197,11 @@ class StellaIcarusAdaDaemonManager:
         self.is_enabled = ENABLE_STELLA_ICARUS_DAEMON
         self.ada_projects: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
-        self.data_queue = queue.Queue(maxsize=1000)  # For aggregating data from all daemons
+        try:
+            self.data_queue = queue.Queue(maxsize=1000)  # For aggregating data from all daemons
+        except (TypeError, ValueError) as e:
+            logger.warning(f"Could not create data queue: {e}")
+            self.data_queue = queue.Queue()
 
     def _discover_ada_projects(self):
         """Scans the STELLA_ICARUS_ADA_DIR for valid Ada projects."""
@@ -209,12 +213,21 @@ class StellaIcarusAdaDaemonManager:
             return
 
         logger.info(f"Discovering Ada projects in '{STELLA_ICARUS_ADA_DIR}'...")
-        for item in os.listdir(STELLA_ICARUS_ADA_DIR):
+        try:
+            items = os.listdir(STELLA_ICARUS_ADA_DIR)
+        except (OSError, PermissionError) as e:
+            logger.warning(f"Could not list Ada projects dir: {e}")
+            return
+        for item in items:
             project_path = os.path.join(STELLA_ICARUS_ADA_DIR, item)
             
             if os.path.isdir(project_path):
                 has_alire_toml = os.path.exists(os.path.join(project_path, "alire.toml"))
-                gpr_files = [f for f in os.listdir(project_path) if f.endswith(".gpr")]
+                gpr_files = []
+                try:
+                    gpr_files = [f for f in os.listdir(project_path) if f.endswith(".gpr")]
+                except (OSError, PermissionError) as e:
+                    logger.warning(f"Could not list project dir {project_path}: {e}")
 
                 if has_alire_toml or gpr_files:
                     project_name = item

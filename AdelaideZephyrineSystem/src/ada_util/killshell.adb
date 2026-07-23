@@ -14,10 +14,13 @@ with Ada.Strings.Unbounded;
 with Ada.Processes;
 with Trace_Utils;
 
+--  KillShell: Main entry point. Dispatches process management commands
+--  (kill, killall, pkill, ps, top) to system shell.
 procedure KillShell is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 
+   --  Run_Cmd: Execute a shell command via subprocess and return output.
    function Run_Cmd (Cmd : in String) return String is
    begin
       begin

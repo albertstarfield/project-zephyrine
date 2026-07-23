@@ -17,10 +17,13 @@ with Ada.Processes;
 with Ada.Environment_Variables;
 with Trace_Utils;
 
+--  Package_Tool: Main entry point. Dispatches package management commands
+--  (detect, install, uninstall, update, upgrade, search, list).
 procedure Package_Tool is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 
+   --  Detect_Package_Manager: Return "apt" for Linux, "brew" for macOS.
    function Detect_Package_Manager return Unbounded_String is
       Sys : constant String :=
         (if Ada.Environment_Variables.Exists("OS") then
@@ -38,6 +41,7 @@ procedure Package_Tool is
       end if;
    end Detect_Package_Manager;
 
+   --  Run_Cmd: Execute a shell command via subprocess and return output.
    function Run_Cmd (Cmd : in String) return String is
    begin
       begin
@@ -51,6 +55,7 @@ procedure Package_Tool is
       end;
    end Run_Cmd;
 
+   --  Install_Package: Detect package manager and install the named package.
    function Install_Package (Pkg : in String) return String is
       PM : constant String := To_Unbounded_String(Detect_Package_Manager);
    begin

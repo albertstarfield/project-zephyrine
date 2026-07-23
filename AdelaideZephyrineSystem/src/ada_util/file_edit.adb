@@ -14,10 +14,13 @@ with Ada.Strings;
 with Ada.Strings.Unbounded;
 with Trace_Utils;
 
+--  File_Edit: Main entry point. Dispatches file operations (read, write,
+--  edit, append, exists, head, tail) to filesystem via Ada.Text_IO.
 procedure File_Edit is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 
+   --  Args: Concatenate command-line arguments 2..N into a single string.
    function Args return Unbounded_String is
       Result : Unbounded_String := Null_Unbounded_String;
    begin
@@ -30,6 +33,7 @@ procedure File_Edit is
       return Result;
    end Args;
 
+   --  Do_Read: Read and print file contents line by line.
    procedure Do_Read (Path : in String) is
    begin
       Trace_Utils.Trace_Print("file_edit", "read", "file: " & Path);
@@ -48,6 +52,7 @@ procedure File_Edit is
       end if;
    end Do_Read;
 
+   --  Do_Write: Create/overwrite a file with the given content string.
    procedure Do_Write (Path : in String; Content : in String) is
    begin
       Trace_Utils.Trace_Print("file_edit", "write", "file: " & Path);
@@ -61,6 +66,7 @@ procedure File_Edit is
       end;
    end Do_Write;
 
+   --  Do_Edit: Find and replace the first occurrence of Old with New in file.
    procedure Do_Edit (Path, Old, New : in String) is
    begin
       Trace_Utils.Trace_Print("file_edit", "edit", "file: " & Path);
@@ -107,6 +113,7 @@ procedure File_Edit is
       end;
    end Do_Edit;
 
+   --  Do_Exists: Print "true" if file exists, "false" otherwise.
    procedure Do_Exists (Path : in String) is
    begin
       Trace_Utils.Trace_Print("file_edit", "exists", "file: " & Path);
@@ -117,6 +124,7 @@ procedure File_Edit is
       end if;
    end Do_Exists;
 
+   --  Do_Head: Print the first N lines of a file (default 10).
    procedure Do_Head (Path : in String; N : in Positive := 10) is
    begin
       Trace_Utils.Trace_Print("file_edit", "head", "file: " & Path);
@@ -133,6 +141,7 @@ procedure File_Edit is
       end;
    end Do_Head;
 
+   --  Do_Tail: Print the last N lines of a file (default 10).
    procedure Do_Tail (Path : in String; N : in Positive := 10) is
    begin
       Trace_Utils.Trace_Print("file_edit", "tail", "file: " & Path);

@@ -13,6 +13,8 @@ with Ada.Strings;
 with Ada.Strings.Fixed;
 with Trace_Utils;
 
+--  Math_Tool: Main entry point. Accepts a mathematical expression from
+--  command-line arguments. Limited to basic arithmetic (no sympy equiv).
 procedure Math_Tool is
    use Ada.Text_IO;
 begin

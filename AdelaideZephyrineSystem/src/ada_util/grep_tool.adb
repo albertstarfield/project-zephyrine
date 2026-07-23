@@ -15,10 +15,14 @@ with Ada.Strings.Unbounded;
 with Ada.Processes;
 with Trace_Utils;
 
+--  Grep_Tool: Main entry point. Dispatches grep commands (search, regex,
+--  fixed, count, files) to system grep.
 procedure Grep_Tool is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 
+   --  Run_Grep: Build and execute a grep command with optional flags
+   --  (-i case-insensitive, -c count, -l files-only).
    function Run_Grep (Pattern, Path : in String;
                       Ignore_Case   : Boolean := False;
                       Count_Mode    : Boolean := False;

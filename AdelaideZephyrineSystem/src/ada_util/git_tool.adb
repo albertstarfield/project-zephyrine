@@ -14,10 +14,13 @@ with Ada.Strings.Unbounded;
 with Ada.Processes;
 with Trace_Utils;
 
+--  Git_Tool: Main entry point. Dispatches git commands (status, diff,
+--  commit, push, pull, log, branch, checkout) to system git.
 procedure Git_Tool is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 
+   --  Run_Git: Execute a git command via subprocess and return output.
    function Run_Git (Args : in String) return String is
       Cmd : constant String := "git " & Args;
    begin

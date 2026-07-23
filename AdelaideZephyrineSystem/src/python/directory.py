@@ -114,8 +114,11 @@ def main():  # nosec
             return 1
         path = sys.argv[2]
         trace_print("directory", cmd, f"path: {path}")
-        os.makedirs(path, exist_ok=True)
-        print(f"OK: Created {path}")
+        try:
+            os.makedirs(path, exist_ok=True)
+            print(f"OK: Created {path}")
+        except OSError as e:
+            print(f"ERROR: Could not create {path}: {e}")
 
     elif cmd == "rm":
         if len(sys.argv) < 3:
@@ -123,14 +126,17 @@ def main():  # nosec
             return 1
         path = sys.argv[2]
         trace_print("directory", cmd, f"path: {path}")
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-            print(f"OK: Removed directory {path}")
-        elif os.path.exists(path):
-            os.remove(path)  # nosec - safe to remove after exists check
-            print(f"OK: Removed file {path}")
-        else:
-            print(f"ERROR: Not found: {path}")
+        try:
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+                print(f"OK: Removed directory {path}")
+            elif os.path.exists(path):
+                os.remove(path)  # nosec - safe to remove after exists check
+                print(f"OK: Removed file {path}")
+            else:
+                print(f"ERROR: Not found: {path}")
+        except (OSError, IOError) as e:
+            print(f"ERROR: Could not remove {path}: {e}")
 
     else:
         print(f"ERROR: Unknown command: {cmd}")

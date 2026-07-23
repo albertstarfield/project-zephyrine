@@ -74,9 +74,13 @@ class TestAdelaideCore(unittest.TestCase):
         # 11 XOR cc = 11011101 = dd
         # So parity block should be dddddddd
 
-        p = subprocess.Popen(
-            [binary_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-        )
+        try:
+            p = subprocess.Popen(
+                [binary_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+            )
+        except (subprocess.SubprocessError, OSError) as e:
+            self.fail(f"Could not start binary {binary_path}: {e}")
+            return
 
         assert p.stdout is not None
         assert p.stdin is not None

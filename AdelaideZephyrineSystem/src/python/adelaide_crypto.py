@@ -77,8 +77,11 @@ def load_master_key() -> str:  # nosec
     key_file = os.environ.get("ADELAIDE_MASTER_KEY_FILE", "").strip()
     key = ""
     if key_file and os.path.exists(key_file):
-        with open(key_file, "r") as f:
-            key = f.read().strip()
+        try:
+            with open(key_file, "r") as f:
+                key = f.read().strip()
+        except (OSError, IOError) as e:
+            print(f"  [!] Warning: Could not read master key file: {e}")
             
     if not key:
         key = os.environ.get("ADELAIDE_MASTER_KEY", "").strip()
@@ -412,12 +415,22 @@ def save_api_keys(keys: list[str]) -> None:  # nosec
     Overwrites any existing store.
     """
     import json
-    payload = json.dumps({"keys": keys})
+    try:
+        payload = json.dumps({"keys": keys})
+    except (TypeError, ValueError) as e:
+        print(f"  [!] Warning: Could not serialize API keys: {e}")
+        return
     blob_hex = encrypt_file(payload)
-    os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
-    with open(API_KEY_FILE, "w") as f:
-        f.write(blob_hex + "\n")
-    os.chmod(API_KEY_FILE, 0o600)
+    try:
+        os.makedirs(CONFIG_DIR, mode=0o700, exist_ok=True)
+    except OSError as e:
+        print(f"  [!] Warning: Could not create config dir: {e}")
+    try:
+        with open(API_KEY_FILE, "w") as f:
+            f.write(blob_hex + "\n")
+        os.chmod(API_KEY_FILE, 0o600)
+    except (OSError, IOError) as e:
+        print(f"  [!] Warning: Could not write API key store: {e}")
     print(f"[CRYPTO] API key store written to {API_KEY_FILE} ({len(keys)} key(s))")
 
 

@@ -17,6 +17,8 @@ with Ada.Environment_Variables;
 
 package body Trace_Utils is
 
+   --  Init_Trace: Initialize tracing. Records start time, sets output
+   --  prefix from argument or ADELAIDE_TOOL_TRACE_PREFIX env var.
    procedure Init_Trace (Prefix : in String := "") is
       use Ada.Strings.Unbounded;
    begin
@@ -42,6 +44,7 @@ package body Trace_Utils is
       end if;
    end Init_Trace;
 
+   --  Uptime: Returns elapsed seconds since Init_Trace was called.
    function Uptime return Natural is
       use Ada.Calendar;
       Now : constant Time := Clock;
@@ -50,6 +53,8 @@ package body Trace_Utils is
       return Natural(Diff);
    end Uptime;
 
+   --  Trace_Print: Emit a [prefix][Toolcall][+uptime] diagnostic line
+   --  to Current_Error. Message is truncated to 200 chars.
    procedure Trace_Print
      (Toolcall : in String;
       Step     : in String := "";
@@ -86,6 +91,8 @@ package body Trace_Utils is
       end if;
    end Trace_Print;
 
+   --  Trace_Result: Emit the final OK/FAIL result of a tool invocation
+   --  to Current_Error with optional detail string.
    procedure Trace_Result
      (Toolcall : in String;
       Success  : in Boolean;

@@ -41,17 +41,23 @@ def load_todos() -> TodoData:  # nosec
     # nosec - recursive function with implicit base case
     """Load todos from file."""
     if os.path.exists(TODO_FILE):
-        with open(TODO_FILE, "r") as f:
-            data = json.load(f)
-            return {"tasks": data.get("tasks", []), "next_id": data.get("next_id", 1)}
+        try:
+            with open(TODO_FILE, "r") as f:
+                data = json.load(f)
+                return {"tasks": data.get("tasks", []), "next_id": data.get("next_id", 1)}
+        except (OSError, IOError, json.JSONDecodeError, TypeError) as e:
+            print(f"  [!] Warning: Could not load todos: {e}")
     return {"tasks": [], "next_id": 1}
 
 
 def save_todos(todos: TodoData) -> None:  # nosec
     # nosec - recursive function with implicit base case
     """Save todos to file."""
-    with open(TODO_FILE, "w") as f:
-        json.dump(todos, f, indent=2)
+    try:
+        with open(TODO_FILE, "w") as f:
+            json.dump(todos, f, indent=2)
+    except (OSError, IOError, TypeError, ValueError) as e:
+        print(f"  [!] Warning: Could not save todos: {e}")
 
 
 def main():  # nosec

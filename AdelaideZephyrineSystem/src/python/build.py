@@ -74,12 +74,15 @@ def main():  # nosec
         # Clean common build artifacts
         artifacts = ["build", "dist", "__pycache__", "*.pyc", "*.o"]
         for artifact in artifacts:
-            if os.path.isdir(artifact):
-                shutil.rmtree(artifact)
-                print(f"Removed: {artifact}")
-            elif os.path.exists(artifact):
-                os.remove(artifact)  # nosec - safe to remove after exists check
-                print(f"Removed: {artifact}")
+            try:
+                if os.path.isdir(artifact):
+                    shutil.rmtree(artifact)
+                    print(f"Removed: {artifact}")
+                elif os.path.exists(artifact):
+                    os.remove(artifact)  # nosec - safe to remove after exists check
+                    print(f"Removed: {artifact}")
+            except (OSError, IOError) as e:
+                print(f"  [!] Warning: Could not remove {artifact}: {e}")
         print("OK: Cleaned build artifacts")
 
     else:

@@ -64,7 +64,11 @@ def bootstrap_venv():  # nosec
     if os.path.abspath(sys.prefix) != venv_abs:
         if not os.path.exists(VENV_DIR):
             trace_print("searchlocalref", "bootstrap", f"Creating virtual environment in {VENV_DIR}...")
-            subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True)  # nosec
+            try:
+                subprocess.run([sys.executable, "-m", "venv", VENV_DIR], check=True)  # nosec
+            except (subprocess.CalledProcessError, OSError) as e:
+                print(f"  [!] Warning: Could not create venv: {e}", file=sys.stderr)
+                return
             
         python_exe = os.path.join(VENV_DIR, "bin", "python") if os.name != 'nt' else os.path.join(VENV_DIR, "Scripts", "python.exe")
         
@@ -79,8 +83,12 @@ def bootstrap_venv():  # nosec
     if missing:
         trace_print("searchlocalref", "bootstrap", f"Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...")
         pip_exe = os.path.join(VENV_DIR, "bin", "pip") if os.name != 'nt' else os.path.join(VENV_DIR, "Scripts", "pip.exe")
-        subprocess.run([pip_exe, "install", "--upgrade", "pip"], check=True)  # nosec
-        subprocess.run([pip_exe, "install"] + REQUIREMENTS, check=True)  # nosec
+        try:
+            subprocess.run([pip_exe, "install", "--upgrade", "pip"], check=True)  # nosec
+            subprocess.run([pip_exe, "install"] + REQUIREMENTS, check=True)  # nosec
+        except (subprocess.CalledProcessError, OSError) as e:
+            print(f"  [!] Warning: Could not install requirements: {e}", file=sys.stderr)
+            return
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
 bootstrap_venv()

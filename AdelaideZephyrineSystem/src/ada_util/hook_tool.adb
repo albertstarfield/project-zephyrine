@@ -17,12 +17,15 @@ with Ada.Processes;
 with Ada.Directories;
 with Trace_Utils;
 
+--  Hook_Tool: Main entry point. Manages pre/post tool execution hooks
+--  via .hooks.json configuration file.
 procedure Hook_Tool is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 
    Hooks_File : constant String := ".hooks.json";
 
+   --  Run_Hook: Execute a Python hook script via subprocess.
    function Run_Hook (Script : in String) return Boolean is
       Cmd : constant String := "python3 " & Script;
    begin
