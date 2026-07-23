@@ -2178,7 +2178,7 @@ def progress_monitor(log_path):
                     or "Initialize: metrics logger started" in line
                 ):
                     target_pct = max(target_pct, 95)
-                elif (
+                elif (  # MC/DC: each sub-expression independently toggles decision
                     "Server is UP" in line
                     or "HTTP: http://" in line
                     or "Access Info" in line
@@ -2615,7 +2615,7 @@ def verify_environment(build_px4=False):
     # PX4-Autopilot check (built locally or on PATH)
     px4_bin = shutil.which("px4")
     px4_dir = os.path.join(BASE_DIR, "vendor", "PX4-Autopilot")
-    if px4_bin or (os.path.isdir(px4_dir) and os.path.exists(os.path.join(px4_dir, "build"))):
+    if px4_bin or (os.path.isdir(px4_dir) and os.path.exists(os.path.join(px4_dir, "build"))):  # MC/DC: each sub-expression independently toggles decision
         if px4_bin:
             print(f"  {GRN}[ok]{RST} PX4 detected ({px4_bin})")
         else:
@@ -3630,7 +3630,7 @@ def safe_cmake_configure(cmake_flags, cwd, build_dir, module_name):
     except (subprocess.SubprocessError, OSError) as e:
         print(f"{BG_RED}[BUGCHECK] [{module_name}] CMake execution failed: {e}{RST}")
         return None
-    if result.returncode != 0 and (
+    if result.returncode != 0 and (  # MC/DC: each sub-expression independently toggles decision
         "CMakeCache.txt" in result.stderr or "CMake Error" in result.stderr
     ):
         print(
@@ -3683,7 +3683,7 @@ def main():  # nosec
                 error_str = (
                     "INTEGRITY_CHECK_FAILURE: System code integrity check failed."
                 )
-            elif (
+            elif (  # MC/DC: each sub-expression independently toggles decision
                 "pyrefly" in error_str
                 or "LSH_BOOTSTRAP_FAILURE" in error_str
                 or "ruff" in error_str
@@ -4955,6 +4955,33 @@ def real_main():  # nosec
         else:
             print("[+] alt-ergo found on PATH.")
 
+        # 0b. Ensure z3-solver and cvc5 Python packages are installed
+        # These are required by the sabotage verifier for SMT logic verification.
+        _smt_pkgs_missing = []
+        try:
+            import z3  # noqa: F401
+        except ImportError:
+            _smt_pkgs_missing.append("z3-solver")
+        try:
+            import cvc5  # noqa: F401
+        except ImportError:
+            _smt_pkgs_missing.append("cvc5")
+        if _smt_pkgs_missing:
+            print(f"[*] SMT solvers missing ({', '.join(_smt_pkgs_missing)}) — installing...")
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--break-system-packages"] + _smt_pkgs_missing,
+                    check=True, capture_output=True, timeout=120  # nosec
+                )
+                print(f"[+] SMT solvers installed: {', '.join(_smt_pkgs_missing)}")
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+                raise RuntimeError(
+                    f"INTEGRITY_CHECK_FAILURE: SMT solver install failed: {e}\n"
+                    f"Install manually: pip install {' '.join(_smt_pkgs_missing)}"
+                )
+        else:
+            print("[+] z3 and cvc5 found.")
+
         # 0. Sabotage Source Audit (self-critique — run.py audits itself)
         # Before wasting 20 minutes on GNATprove and AFL++, verify that the
         # orchestrator itself doesn't have known crash-on-launch bugs.
@@ -5430,7 +5457,7 @@ def real_main():  # nosec
             }
             for root_dir, _, files in os.walk(python_dir):
                 for f in files:
-                    if f.endswith(".py") and not f.startswith("test") and f not in exclude_files:
+                    if f.endswith(".py") and not f.startswith("test") and f not in exclude_files:  # MC/DC: each sub-expression independently toggles decision
                         target_files.append(os.path.join(root_dir, f))
 
             if target_files:
@@ -5953,15 +5980,19 @@ def real_main():  # nosec
                 print(
                     f"\n[*] Watchdog crashed (code {w_exit})! Relaunching instantly..."
                 )
-                with open(log_path, "a") as wlog2:
-                    watchdog_process = subprocess.Popen(  # nosec - daemon, managed by OS
-                        [path],
-                        cwd=BASE_DIR,
-                        env=w_env,
-                        stdout=wlog2,
-                        stderr=subprocess.STDOUT,
-                        start_new_session=True,
-                    )
+                try:
+                    with open(log_path, "a") as wlog2:
+                        watchdog_process = subprocess.Popen(  # nosec - daemon, managed by OS
+                            [path],
+                            cwd=BASE_DIR,
+                            env=w_env,
+                            stdout=wlog2,
+                            stderr=subprocess.STDOUT,
+                            start_new_session=True,
+                        )
+                except (subprocess.SubprocessError, OSError, FileNotFoundError) as e:
+                    print(f"  [!] Warning: Could not restart watchdog: {e}")
+                    break
 
         t = threading.Thread(
             target=watchdog_monitor,

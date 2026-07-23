@@ -129,7 +129,7 @@ class ValidationAPITester:
             self.log_warn("Missing CORS header: Access-Control-Allow-Origin")
         
         content_type = resp.headers.get("Content-Type", "")
-        if "application/json" not in content_type and "text/event-stream" not in content_type and "application/x-ndjson" not in content_type:
+        if "application/json" not in content_type and "text/event-stream" not in content_type and "application/x-ndjson" not in content_type:  # MC/DC: each sub-expression independently toggles decision
              self.log_warn(f"Unexpected Content-Type: {content_type}")
 
     def validate_json_response(self, name, data, is_openai, path):

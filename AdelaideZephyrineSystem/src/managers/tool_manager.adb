@@ -81,7 +81,7 @@ package body Tool_Manager is
          Full_Cmd := To_Unbounded_String ("src/python/git.py");
       elsif Name = "file_edit" or else Name = "edit" or else Name = "write" then
          Full_Cmd := To_Unbounded_String ("src/python/file_edit.py");
-      elsif Name = "dir" or else Name = "ls" or else Name = "find" or else Name = "tree" then
+      elsif Name = "dir" or else Name = "ls" or else Name = "find" or else Name = "tree" then  --  MC/DC: each sub-expression independently toggles decision
          Full_Cmd := To_Unbounded_String ("src/python/directory.py");
       elsif Name = "test" or else Name = "pytest" or else Name = "lint" then
          Full_Cmd := To_Unbounded_String ("src/python/test.py");

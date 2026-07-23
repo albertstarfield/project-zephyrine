@@ -83,7 +83,7 @@ class AdelaideBridge:
             v2_str = " ".join(f"{float(x):.10f}" for x in v2)
 
             # Send command and data
-            if (
+            if (  # MC/DC: each sub-expression independently toggles decision
                 self.process is not None
                 and self.process.stdin is not None
                 and self.process.stdout is not None

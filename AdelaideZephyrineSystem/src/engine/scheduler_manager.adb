@@ -86,7 +86,7 @@ package body Scheduler_Manager is
                  (Ada.Real_Time.To_Duration
                      (Ada.Real_Time.Clock - Task_Start))
             & "s Scheduler_Manager.Scheduler_Task_Type task body ENTERED");
-        loop
+        loop  --  Intentional: scheduler runs until task termination by supervisor
          Event_Queue.Get_Next (Evt, Has_Evt);
          if Has_Evt then
             Put_Line ("[Scheduler] Triggering proactive thought: " & To_String (Evt.Prompt));

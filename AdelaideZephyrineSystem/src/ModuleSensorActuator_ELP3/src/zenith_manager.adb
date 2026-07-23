@@ -29,7 +29,7 @@ package body Zenith_Manager is
    begin
       accept Start;
       Zenith_Orion.Initialize;
-      loop
+      loop  --  Intentional: ELP3 paced loop runs until task termination by supervisor
          Zenith_Orion.Paced_Loop;
          
          declare

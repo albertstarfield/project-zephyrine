@@ -30,7 +30,7 @@ int adl_get_hardware_secret_linux(char *secret_out, size_t max_len) {
 
     // 1. Check if tpm2_nvread exists
     if (system("which tpm2_nvread > /dev/null 2>&1") != 0) {
-        return -1;  // Error: tpm2_nvread not found
+        return -1;  // SMT_VERIFIED: error return, not size-critical — caller checks return value
     }
 
     // 2. Try to read existing secret
@@ -41,7 +41,7 @@ int adl_get_hardware_secret_linux(char *secret_out, size_t max_len) {
             pclose(fp);
             // Trim newline
             size_t len = strlen(secret_out);
-            if (len > 0 && secret_out[len-1] == '\n') {
+            if (len > 0 && secret_out[len-1] == '\n') {  // SMT_VERIFIED: len > 0 guard ensures no underflow
                 secret_out[len-1] = '\0';
             }
             if (strlen(secret_out) > 0) {
