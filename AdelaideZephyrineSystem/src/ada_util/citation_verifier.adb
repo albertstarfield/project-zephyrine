@@ -2,6 +2,13 @@
 -- Citation Verifier - Query Crossref API for paper citations.
 -- Note: HTTP requests require external library. Simplified version.
 
+--  SPARK_Mode(off)
+--  Justification: Standalone CLI procedure. Executes external processes
+--  via Ada.Processes.Command_Line (curl HTTP requests), accesses
+--  command-line arguments via Ada.Command_Line, writes output via
+--  Ada.Text_IO. External subprocess and network interaction cannot be
+--  expressed in SPARK.
+
 with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;

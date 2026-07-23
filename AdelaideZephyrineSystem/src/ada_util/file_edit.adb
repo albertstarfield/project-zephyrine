@@ -1,6 +1,12 @@
 -- File: file_edit.adb
 -- File Edit Tool - Edit files for Adelaide Lite.
 
+--  SPARK_Mode(off)
+--  Justification: Standalone CLI procedure. Performs filesystem read/write
+--  via Ada.Text_IO and Ada.Directories, accesses command-line arguments
+--  via Ada.Command_Line, converts strings via Ada.Strings.Unbounded.
+--  All operations are impure I/O.
+
 with Ada.Text_IO;
 with Ada.Directories;
 with Ada.Command_Line;

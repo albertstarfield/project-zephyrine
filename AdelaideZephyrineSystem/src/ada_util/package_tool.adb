@@ -1,6 +1,14 @@
 -- File: package_tool.adb
 -- Package Manager Tool - Install system packages for Adelaide Lite.
 
+--  SPARK_Mode(off)
+--  Justification: Standalone CLI procedure. Executes external processes
+--  via Ada.Processes.Command_Line (apt-get, brew), reads environment
+--  variables via Ada.Environment_Variables, accesses command-line
+--  arguments via Ada.Command_Line, writes output via Ada.Text_IO.
+--  External subprocess and environment interaction cannot be expressed
+--  in SPARK.
+
 with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;

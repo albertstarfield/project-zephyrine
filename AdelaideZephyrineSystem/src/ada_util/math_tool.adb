@@ -2,6 +2,11 @@
 -- Math Tool - Evaluate mathematical expressions for Adelaide Lite.
 -- Note: Ada does not have sympy. Basic arithmetic only.
 
+--  SPARK_Mode(off)
+--  Justification: Standalone CLI procedure. Accesses command-line
+--  arguments via Ada.Command_Line, performs string-to-integer
+--  conversion and writes results via Ada.Text_IO. Impure I/O.
+
 with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;

@@ -2,6 +2,13 @@
 -- Hook System Tool - Pre/post tool execution hooks for Adelaide Lite.
 -- Note: JSON handling is simplified; full JSON parsing would require a library.
 
+--  SPARK_Mode(off)
+--  Justification: Standalone CLI procedure. Executes external processes
+--  via Ada.Processes.Command_Line (python3 hook scripts), reads files
+--  via Ada.Directories and Ada.Text_IO, accesses command-line arguments
+--  via Ada.Command_Line. External subprocess and filesystem interaction
+--  cannot be expressed in SPARK.
+
 with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;

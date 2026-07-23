@@ -1,6 +1,12 @@
 -- File: git_tool.adb
 -- Git Tool - Execute git operations for Adelaide Lite.
 
+--  SPARK_Mode(off)
+--  Justification: Standalone CLI procedure. Executes external processes
+--  via Ada.Processes.Command_Line (system git), accesses command-line
+--  arguments via Ada.Command_Line, writes output via Ada.Text_IO.
+--  External subprocess interaction cannot be expressed in SPARK.
+
 with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;

@@ -1,6 +1,12 @@
 -- File: cat_tool.adb
 -- Cat Tool - Read and print file contents for Adelaide Lite.
 
+--  SPARK_Mode(off)
+--  Justification: Standalone CLI procedure. Reads files via Ada.Text_IO
+--  and Ada.Directories, accesses command-line arguments via
+--  Ada.Command_Line. All operations are impure I/O with filesystem
+--  and external process interaction.
+
 with Ada.Text_IO;
 with Ada.Directories;
 with Ada.Command_Line;

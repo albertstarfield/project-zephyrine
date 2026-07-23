@@ -2,6 +2,12 @@
 -- Grep Tool - Search file contents for Adelaide Lite.
 -- Uses shell execution to invoke system grep.
 
+--  SPARK_Mode(off)
+--  Justification: Standalone CLI procedure. Executes external processes
+--  via Ada.Processes.Command_Line (system grep), accesses command-line
+--  arguments via Ada.Command_Line, writes output via Ada.Text_IO.
+--  External subprocess interaction cannot be expressed in SPARK.
+
 with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;

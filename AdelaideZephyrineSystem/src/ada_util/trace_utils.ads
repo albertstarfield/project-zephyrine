@@ -2,6 +2,14 @@
 -- Trace Utility Module — Standardized verbosity for all Adelaide tool scripts.
 -- Provides trace_print() and trace_result() for consistent [prefix][Toolcall][+uptime] output.
 
+--  SPARK_Mode(off)
+--  Justification: This package reads environment variables via
+--  Ada.Environment_Variables, writes to Current_Error via Ada.Text_IO,
+--  and calls Ada.Calendar.Clock for timing. These are impure I/O
+--  operations that cannot be expressed in SPARK. The package does not
+--  perform any security-critical or safety-critical logic; it is a
+--  diagnostic tracing utility only.
+
 with Ada.Calendar;
 with Ada.Text_IO;
 with Ada.Strings.Fixed;

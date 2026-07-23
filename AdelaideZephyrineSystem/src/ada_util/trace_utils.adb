@@ -1,6 +1,13 @@
 -- File: trace_utils.adb
 -- Trace Utility Module — Standardized verbosity for all Adelaide tool scripts.
 
+--  SPARK_Mode(off)
+--  Justification: This package body performs impure I/O: reads environment
+--  variables (Ada.Environment_Variables), writes diagnostics to
+--  Current_Error (Ada.Text_IO), and calls Ada.Calendar.Clock for uptime.
+--  These operations have side effects and cannot be verified in SPARK.
+--  No security-critical or safety-critical logic is performed.
+
 with Ada.Calendar;
 with Ada.Text_IO;
 with Ada.Strings;

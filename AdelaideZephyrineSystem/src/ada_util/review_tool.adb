@@ -1,6 +1,14 @@
 -- File: review_tool.adb
 -- Review Tool - Code review for Adelaide Lite.
 
+--  SPARK_Mode(off)
+--  Justification: Standalone CLI procedure. Executes external processes
+--  via Ada.Processes.Command_Line (git diff), reads files via
+--  Ada.Text_IO and Ada.Directories, searches strings via
+--  Ada.Strings.Fixed, accesses command-line arguments via
+--  Ada.Command_Line. External subprocess and filesystem interaction
+--  cannot be expressed in SPARK.
+
 with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;
