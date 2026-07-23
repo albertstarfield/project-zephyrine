@@ -29,6 +29,8 @@ SIDECAR_DEPS = [
     "psutil", "networkx", "tiktoken",
     "uvicorn", "fastapi", "httpx", "pywebview", "PyMuPDF",
     "python-multipart", "numpy",
+    # SMT solvers for formal verification / CrossHair symbolic execution
+    "z3-solver", "cvc5",
 ]
 
 def force_kill_process(proc_name):
@@ -1492,9 +1494,15 @@ def _save_cached_username(ip_key, username):  # nosec
     try:
         encrypted_blob = encrypt_field(ip_key, username)
         os.makedirs(os.path.dirname(_USERNAME_CACHE_FILE), exist_ok=True)
-        fd = os.open(_USERNAME_CACHE_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            f.write(encrypted_blob)
+        fd = None
+        try:
+            fd = os.open(_USERNAME_CACHE_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(encrypted_blob)
+                fd = None  # fdopen owns it now
+        finally:
+            if fd is not None:
+                os.close(fd)
     except Exception as e:
         print(f"[IDENTITY] Warning: Could not cache username: {e}")
 
@@ -2754,7 +2762,7 @@ def show_help():  # nosec
       {DIM}  Check power state (StellaIcarus):{RST}
       {CYN}    curl http://localhost:11420/api/power{RST}
       {DIM}  Send GNC command via API:{RST}
-      {CYN}    curl -X POST http://localhost:11420/api/ZenithRoutine \{RST}
+      {CYN}    curl -X POST http://localhost:11420/api/ZenithRoutine {{{RST}
       {CYN}      -d '{{"roll":0.0,"pitch":0.1,"yaw":0.0,"thrust":0.5}}'{RST}
 
     {BOLD}{WHT}ROS2 DDS Bridge (Simulator ↔ Zephy):{RST}
@@ -3725,8 +3733,8 @@ def real_main():  # nosec
                     _term_print(f"  (Welcome back, {_cached_user}!)")
                 print(f"[IDENTITY] Auto-login: {_cached_user}")
                 _save_cached_username(_ip_key, _cached_user)  # re-wrap for current hw
-        except Exception:
-            pass  # fall through to manual prompt
+        except Exception as e:
+            print(f"[IDENTITY] Auto-login cache load failed (falling through to manual prompt): {e}")
 
     if not os.environ.get("ADELAIDE_USER"):
         _welcome_msg = (
@@ -3775,8 +3783,8 @@ def real_main():  # nosec
         try:
             _ip_key = _derive_ip_username_key()
             _save_cached_username(_ip_key, user)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[IDENTITY] Warning: Could not cache username for next boot: {e}")
 
     # ── Show GUI loading bar immediately ──────────────────────────────────
     # Prevents freeze UX between name dialog and first visible work.
@@ -4845,6 +4853,39 @@ def real_main():  # nosec
         # VERIFICATION STAGES: Sabotage Audit, GNATprove, AFL++, Ruff, pyrefly, and tsc
         # =====================================================================
 
+        # 0. Pre-audit: Ensure SMT solvers are available for sabotage verification
+        # z3-solver and cvc5 are Python packages (installed via SIDECAR_DEPS pip).
+        # alt-ergo is a system binary (no pip package — OCaml-based).
+        # All three are needed by the sabotage verifier to formally verify
+        # Python functions, Ada/SPARK contracts, C bounds, and Obj-C invariants.
+        if not shutil.which("alt-ergo"):
+            print("[*] alt-ergo not found on PATH — installing...")
+            if platform.system() == "Darwin":
+                try:
+                    subprocess.run(["brew", "install", "alt-ergo"], check=True, capture_output=True)  # nosec
+                    print("[+] alt-ergo installed via Homebrew.")
+                except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                    raise RuntimeError(
+                        f"INTEGRITY_CHECK_FAILURE: alt-ergo install failed: {e}\n"
+                        f"Install manually: brew install alt-ergo  OR  opam install alt-ergo"
+                    )
+            elif platform.system() == "Linux":
+                try:
+                    subprocess.run(["opam", "install", "alt-ergo", "-y"], check=True, capture_output=True)  # nosec
+                    print("[+] alt-ergo installed via opam.")
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    raise RuntimeError(
+                        "INTEGRITY_CHECK_FAILURE: alt-ergo install failed.\n"
+                        "Install manually: opam install alt-ergo  OR  "
+                        "download from https://github.com/OCamlPro/alt-ergo/releases"
+                    )
+            else:
+                raise RuntimeError(
+                    "INTEGRITY_CHECK_FAILURE: alt-ergo not found and cannot auto-install on this OS."
+                )
+        else:
+            print("[+] alt-ergo found on PATH.")
+
         # 0. Sabotage Source Audit (self-critique — run.py audits itself)
         # Before wasting 20 minutes on GNATprove and AFL++, verify that the
         # orchestrator itself doesn't have known crash-on-launch bugs.
@@ -5116,6 +5157,14 @@ def real_main():  # nosec
                     f.write(b"A" * 64)
                     
                 output_dir = os.path.join(BASE_DIR, "tests", "fuzz", "output")
+
+                # Clean stale AFL++ output from previous runs (queue/, plots/, etc.)
+                if os.path.isdir(output_dir):
+                    try:
+                        import shutil
+                        shutil.rmtree(output_dir, ignore_errors=True)
+                    except Exception:
+                        pass
                 
                 # Run AFL++ for 1000 iterations (-E 1000)
                 fuzz_cmd = [

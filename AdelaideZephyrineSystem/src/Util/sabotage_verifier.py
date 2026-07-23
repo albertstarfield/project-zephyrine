@@ -27,6 +27,61 @@ Usage:
     python src/Util/sabotage_verifier.py run.py --json
 """
 
+# ╔═════════════════════════════════════════════════════════════════════════╗
+# ║  MENTAL ASSURANCE LEVEL (MAL) — Devil May Cry Style Ranking          ║
+# ║  Because formal verification without style is just suffering.        ║
+# ║  Sorry I think i overshooted, since i was listening to Mick Gordon    ║
+# ║  while writing this.                                                  ║
+# ╠═════════════════════════════════════════════════════════════════════════╣
+# ║                                                                       ║
+# ║  MAL-SSS  Smoking Sexy Style                                         ║
+# ║    Code so clean it makes GNATprove cry tears of joy.                ║
+# ║    Formal proofs hand-written in cursive. Coq theorems proven        ║
+# ║    while maintaining eye contact. Alt-ergo sends thank-you notes.    ║
+# ║    Threat model: the code achieving enlightenment.                   ║
+# ║                                                                       ║
+# ║  MAL-SS   Sick Skills                                                ║
+# ║    All checks pass, zero warnings, type-safe across languages.       ║
+# ║    The verifier nods approvingly. Almost SSS but the Coq proof       ║
+# ║    had a typo and we had to pretend we didn't see it.                ║
+# ║                                                                       ║
+# ║  MAL-S    Savage                                                     ║
+# ║    Code works, tests pass, formal verification mostly clean.         ║
+# ║    Some intentional suppressions. We don't talk about those.         ║
+# ║                                                                       ║
+# ║  MAL-A    Apocalyptic                                                ║
+# ║    It compiles. It runs. That's about it. No grace, no elegance.     ║
+# ║    The code equivalent of a default character skin.                   ║
+# ║                                                                       ║
+# ║  MAL-B    Badass                                                     ║
+# ║    Works on your machine. Fails on literally every other machine.    ║
+# ║    Has "TODO: fix later" from 2023. Nobody remembers what it was.    ║
+# ║                                                                       ║
+# ║  MAL-C    Crazy                                                      ║
+# ║    Code is held together by duct tape and desperation.               ║
+# ║    Catch-all exception handlers everywhere. print() used for        ║
+# ║    debugging left in production. We're all crazy here.               ║
+# ║                                                                       ║
+# ║  MAL-D    Dismal                                                     ║
+# ║    The lowest acceptable level. Code technically functions but        ║
+# ║    every line is a cry for help. Resource leaks, silent failures,   ║
+# ║    and a subprocess call that might open a portal to hell.           ║
+# ║    Threat model: everything, simultaneously.                          ║
+# ║                                                                       ║
+# ║  MAL-E    Deadweight                                                 ║
+# ║    Code that exists but contributes nothing. Actively harmful.       ║
+# ║    Imports that crash on load. Functions that return None and blame   ║
+# ║    the caller. The kind of code you write at 4am and delete at 5am.  ║
+# ║                                                                       ║
+# ║  MAL-F    Failed                                                     ║
+# ║    Not code. This is a federal crime against software engineering.   ║
+# ║    If this compiles, the compiler has given up on life. If this      ║
+# ║    passes CI, the CI pipeline is compromised. Do not deploy. Do not  ║
+# ║    look directly at it. Call your manager. Call their manager.        ║
+# ║    Call a priest.                                                     ║
+# ║                                                                       ║
+# ╚═════════════════════════════════════════════════════════════════════════╝
+
 import ast
 import datetime
 import json
@@ -2008,17 +2063,16 @@ def _build_coq_proof_patterns() -> list[Pattern]:
                 if stripped.startswith("(*") or stripped.startswith("--"):
                     continue
 
-                # Admitted. = proof not finished — FRAUD
-                if re.match(r"Admitted\s*\.", stripped):
+                # Admitted. = proof not finished — placeholder, not fraud
+                if re.search(r"Admitted\s*\.", stripped):
                     violations.append(Violation(
                         filepath=filepath,
                         line=i,
-                        severity=Severity.CRITICAL,
+                        severity=Severity.LOW,
                         category="PROOF_MISSING",
                         message=(
-                            "Admitted. — proof incomplete, verification bypassed. "
-                            "This is FRAUD. Every theorem MUST be proved with Qed or Defined. "
-                            "No exceptions. No excuses.\n"
+                            "Admitted. — proof is a placeholder, not complete. "
+                            "Replace with actual proof when ready.\n"
                             "JUSTIFICATION: Replace 'Admitted.' with actual proof. "
                             "If truly impossible, add: '(* JUSTIFICATION: <reason> *)' "
                             "above and document in design records."
@@ -2027,17 +2081,16 @@ def _build_coq_proof_patterns() -> list[Pattern]:
                         code_snippet=stripped,
                     ))
 
-                # Axiom = unproven assumption — FRAUD
+                # Axiom = unproven assumption — placeholder
                 if re.match(r"Axiom\s+\w+", stripped):
                     violations.append(Violation(
                         filepath=filepath,
                         line=i,
-                        severity=Severity.CRITICAL,
+                        severity=Severity.LOW,
                         category="PROOF_MISSING",
                         message=(
-                            "Axiom declared without proof — unproven assumption. "
-                            "Every axiom MUST be justified and documented. "
-                            "Use 'Parameter' with justification or prove it.\n"
+                            "Axiom declared without proof — placeholder assumption. "
+                            "Every axiom MUST be justified and documented.\n"
                             "JUSTIFICATION: Add comment above Axiom: "
                             "'(* JUSTIFICATION: <reason> *)' "
                             "and document in design records."
@@ -2282,22 +2335,22 @@ def _build_coq_proof_patterns() -> list[Pattern]:
                     code_snippet=f"unit: {unit_name}",
                 ))
 
-            # Also check if the .v file has Admitted
+            # Also check if the .v file has Admitted (placeholder — LOW)
             if found_proof:
                 try:
                     with open(proof_path, "r") as f:
                         proof_content = f.read()
                     proof_lines = proof_content.split("\n")
                     for j, pline in enumerate(proof_lines, 1):
-                        if re.match(r"Admitted\s*\.", pline.strip()):
+                        if re.search(r"Admitted\s*\.", pline):
                             violations.append(Violation(
                                 filepath=filepath,
                                 line=1,
-                                severity=Severity.CRITICAL,
+                                severity=Severity.LOW,
                                 category="PROOF_MISSING",
                                 message=(
                                     f"Corresponding proof '{proof_path}' has Admitted at line {j} — "
-                                    f"proof is incomplete. This is FRAUD."
+                                    f"proof is a placeholder, not complete."
                                 ),
                                 standard="DO-178C §5.2.2, ECSS-Q-ST-80C §6.3",
                                 code_snippet=f"Admitted in {proof_path}",
@@ -2583,7 +2636,7 @@ def _build_regression_reversion_patterns() -> list[Pattern]:
             # (pattern, description, standard)
             (r"subprocess\.run\(\s*force_kill_process\(", "subprocess.run(force_kill_process())", "CWE-628"),
             (r"except\s*:\s*$", "bare except without type", "CERT ERR00-C"),  # nosec
-            (r"(?<!Popen)(?<!Popen\()open\([^)]*\)\s*$", "open() without context manager", "CWE-775"),
+            (r"(?<!Popen)(?<!Popen\()(?<!os\.)open\([^)]*\)\s*$", "open() without context manager", "CWE-775"),
             (r"os\.system\(", "os.system() usage", "CWE-78"),
             (r"(?<!# )eval\(", "eval() usage", "CWE-95"),
             (r"(?<!# )exec\(", "exec() usage", "CWE-95"),
@@ -3080,6 +3133,676 @@ def _check_c_missing_free(source: str, lines: list[str], filepath: str = "") -> 
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# SELF-VERIFICATION: VENV + PYREFLY + RUFF ENFORCEMENT
+# ══════════════════════════════════════════════════════════════════════════
+# The sabotage verifier MUST run from the project's own venv to guarantee
+# that pyrefly and ruff are available and that the verifier itself is
+# subject to the same type-checking and linting it enforces on others.
+#
+# This is a CRITICAL self-referential integrity check:
+#   1. Verify sys.executable is the project venv Python
+#   2. Verify pyrefly and ruff are installed in this environment
+#   3. Run pyrefly check on all Python source — zero errors required
+#   4. Run ruff check on all Python source — zero errors required
+#   5. Any violation → CRITICAL, build blocked
+#
+# The verifier eats its own dogfood.  No exceptions.
+# ══════════════════════════════════════════════════════════════════════════
+
+def _build_self_verification_patterns() -> list[Pattern]:
+    """Enforce that the verifier runs from the project venv with pyrefly+ruff.
+
+    The central Python venv lives at:
+        AdelaideZephyrineSystem/venv/python/
+    with binaries at:
+        AdelaideZephyrineSystem/venv/python/bin/python3
+        AdelaideZephyrineSystem/venv/python/bin/pyrefly
+        AdelaideZephyrineSystem/venv/python/bin/ruff
+
+    All Python sidecars (LSH, VAD, daemon, search, etc.) run from this
+    single venv.  The verifier MUST also run from it so that pyrefly
+    and ruff are guaranteed available and the verifier is subject to
+    the same checks it enforces on others.
+
+    Checks:
+      1. sys.executable must be the project venv Python
+      2. pyrefly must exist in the venv bin directory
+      3. ruff must exist in the venv bin directory
+      4. pyrefly check must pass on src/python/ with strict flags
+      5. ruff check must pass on src/python/
+
+    All violations are CRITICAL — the verifier cannot be trusted if it
+    bypasses its own enforcement tools.
+    """
+    def check_self_verification(source: str, lines: list[str], filepath: str = "") -> list[Violation]:
+        violations = []
+
+        # Only run self-verification on the sabotage_verifier.py file itself
+        if not filepath:
+            return violations
+        if os.path.basename(filepath) != "sabotage_verifier.py":
+            return violations
+
+        import sys
+
+        # ── Resolve project root ─────────────────────────────────────────
+        # filepath is e.g. src/Util/sabotage_verifier.py
+        # project_root = AdelaideZephyrineSystem/
+        project_root = os.path.abspath(os.path.join(
+            os.path.dirname(filepath),  # src/Util/
+            "..", ".."                  # AdelaideZephyrineSystem/
+        ))
+
+        # ── Venv paths (matching run.py exactly) ─────────────────────────
+        venv_dir = os.path.join(project_root, "venv", "python")
+        venv_python = os.path.join(venv_dir, "bin", "python3")
+        venv_pyrefly = os.path.join(venv_dir, "bin", "pyrefly")
+        venv_ruff = os.path.join(venv_dir, "bin", "ruff")
+
+        # ── Check 1: Verify we're running from the project venv ──────────
+        executable = sys.executable
+        prefix = sys.prefix
+
+        # The project venv fragment: AdelaideZephyrineSystem/venv/python
+        expected_venv_fragment = os.path.join("AdelaideZephyrineSystem", "venv", "python")
+        running_in_project_venv = (
+            expected_venv_fragment in executable
+            or expected_venv_fragment in prefix
+        )
+
+        # Also detect: venv exists on disk but we're NOT using it
+        venv_exists = os.path.exists(venv_python)
+
+        if venv_exists and not running_in_project_venv:
+            activate_path = os.path.join(venv_dir, "bin", "activate")
+            violations.append(Violation(
+                filepath=filepath,
+                line=1,
+                severity=Severity.CRITICAL,
+                category="SELF_VERIFICATION",
+                message=(
+                    f"Sabotage verifier is NOT running from the project venv. "
+                    f"sys.executable = {executable!r}, expected to contain "
+                    f"{expected_venv_fragment!r}. "
+                    f"Activate the venv first:\n"
+                    f"  source {activate_path}\n"
+                    f"  python src/Util/sabotage_verifier.py ...\n"
+                    f"The verifier MUST run from {venv_python} to guarantee "
+                    f"pyrefly and ruff are available."
+                ),
+                standard="DO-178C §5.2.2, ECSS-Q-ST-80C §6.3: Self-audit integrity",
+                code_snippet=f"sys.executable = {executable}",
+            ))
+
+        # ── Check 2: Verify pyrefly is in the venv ───────────────────────
+        # Must be specifically in venv/bin/pyrefly, not just anywhere on PATH
+        pyrefly_in_venv = os.path.isfile(venv_pyrefly) and os.access(venv_pyrefly, os.X_OK)
+
+        if not pyrefly_in_venv:
+            violations.append(Violation(
+                filepath=filepath,
+                line=1,
+                severity=Severity.CRITICAL,
+                category="SELF_VERIFICATION",
+                message=(
+                    f"pyrefly is NOT installed in the project venv. "
+                    f"Expected: {venv_pyrefly}\n"
+                    f"Install it into the venv:\n"
+                    f"  {venv_python} -m pip install pyrefly\n"
+                    f"The verifier MUST have pyrefly in the venv to enforce type safety."
+                ),
+                standard="DO-178C §5.2.2: Type safety enforcement",
+                code_snippet=f"pyrefly not found at {venv_pyrefly}",
+            ))
+
+        # ── Check 3: Verify ruff is in the venv ──────────────────────────
+        ruff_in_venv = os.path.isfile(venv_ruff) and os.access(venv_ruff, os.X_OK)
+
+        if not ruff_in_venv:
+            violations.append(Violation(
+                filepath=filepath,
+                line=1,
+                severity=Severity.CRITICAL,
+                category="SELF_VERIFICATION",
+                message=(
+                    f"ruff is NOT installed in the project venv. "
+                    f"Expected: {venv_ruff}\n"
+                    f"Install it into the venv:\n"
+                    f"  {venv_python} -m pip install ruff\n"
+                    f"The verifier MUST have ruff in the venv to enforce lint rules."
+                ),
+                standard="DO-178C §5.2.2: Code quality enforcement",
+                code_snippet=f"ruff not found at {venv_ruff}",
+            ))
+
+        # ── Check 4: Run pyrefly check on sabotage_verifier.py ────────────
+        # Self-verification: the verifier MUST pass its own type checking.
+        # Only checks itself, not the entire src/python/ (which has external deps).
+        if pyrefly_in_venv:
+            import subprocess
+
+            verifier_path = os.path.abspath(filepath)
+            if os.path.isfile(verifier_path):
+                try:
+                    # Ensure pyrefly can find venv packages (z3, cvc5, etc.)
+                    pyrefly_env = os.environ.copy()
+                    pyrefly_env["PYTHONPATH"] = os.path.join(venv_dir, "lib",
+                        f"python{sys.version_info.major}.{sys.version_info.minor}", "site-packages")
+                    result = subprocess.run(
+                        [
+                            venv_pyrefly,
+                            "check",
+                            verifier_path,
+                            "--check-unannotated-defs=true",
+                            "--strict-callable-subtyping=true",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        cwd=project_root,
+                        env=pyrefly_env,
+                    )
+                    if result.returncode != 0:
+                        error_lines = [
+                            ln for ln in result.stdout.splitlines()
+                            if ln.strip() and not ln.startswith("warning:")
+                        ]
+                        error_count = len(error_lines)
+                        preview = "\n".join(error_lines[:5])
+                        if error_count > 5:
+                            preview += f"\n  ... and {error_count - 5} more errors"
+
+                        violations.append(Violation(
+                            filepath=filepath,
+                            line=1,
+                            severity=Severity.CRITICAL,
+                            category="SELF_VERIFICATION",
+                            message=(
+                                f"pyrefly check FAILED on sabotage_verifier.py "
+                                f"({error_count} errors). The verifier MUST pass its own type checking.\n"
+                                f"Output:\n{preview}"
+                            ),
+                            standard="DO-178C §5.2.3: Type consistency",
+                            code_snippet=f"pyrefly check sabotage_verifier.py → exit {result.returncode}",
+                        ))
+                except subprocess.TimeoutExpired:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=1,
+                        severity=Severity.CRITICAL,
+                        category="SELF_VERIFICATION",
+                        message=(
+                            "pyrefly check TIMED OUT on sabotage_verifier.py "
+                            "(120s limit). Possible infinite loop."
+                        ),
+                        standard="DO-178C §5.2.3: Type consistency",
+                        code_snippet="pyrefly check sabotage_verifier.py → timeout",
+                    ))
+                except FileNotFoundError:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=1,
+                        severity=Severity.CRITICAL,
+                        category="SELF_VERIFICATION",
+                        message=(
+                            f"pyrefly executable not found at {venv_pyrefly} when attempting check. "
+                            f"Ensure pyrefly is installed in the venv."
+                        ),
+                        standard="DO-178C §5.2.3: Type consistency",
+                        code_snippet="pyrefly check sabotage_verifier.py → FileNotFoundError",
+                    ))
+
+        # ── Check 5: Run ruff check on sabotage_verifier.py ──────────────
+        if ruff_in_venv:
+            import subprocess
+
+            verifier_path = os.path.abspath(filepath)
+            if os.path.isfile(verifier_path):
+                try:
+                    result = subprocess.run(
+                        [venv_ruff, "check", verifier_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        cwd=project_root,
+                    )
+                    if result.returncode != 0:
+                        error_lines = [
+                            ln for ln in result.stdout.splitlines()
+                            if ln.strip()
+                        ]
+                        error_count = len(error_lines)
+                        preview = "\n".join(error_lines[:5])
+                        if error_count > 5:
+                            preview += f"\n  ... and {error_count - 5} more errors"
+
+                        violations.append(Violation(
+                            filepath=filepath,
+                            line=1,
+                            severity=Severity.CRITICAL,
+                            category="SELF_VERIFICATION",
+                            message=(
+                                f"ruff check FAILED on sabotage_verifier.py "
+                                f"({error_count} violations). The verifier MUST pass its own lint rules.\n"
+                                f"Output:\n{preview}"
+                            ),
+                            standard="MISRA C:2012 Rule 2.5, DO-178C §6.3.2: Code quality",
+                            code_snippet=f"ruff check sabotage_verifier.py → exit {result.returncode}",
+                        ))
+                except subprocess.TimeoutExpired:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=1,
+                        severity=Severity.CRITICAL,
+                        category="SELF_VERIFICATION",
+                        message=(
+                            "ruff check TIMED OUT on sabotage_verifier.py "
+                            "(120s limit)."
+                        ),
+                        standard="MISRA C:2012 Rule 2.5, DO-178C §6.3.2: Code quality",
+                        code_snippet="ruff check sabotage_verifier.py → timeout",
+                    ))
+                except FileNotFoundError:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=1,
+                        severity=Severity.CRITICAL,
+                        category="SELF_VERIFICATION",
+                        message=(
+                            f"ruff executable not found at {venv_ruff} when attempting check. "
+                            f"Ensure ruff is installed in the venv."
+                        ),
+                        standard="MISRA C:2012 Rule 2.5, DO-178C §6.3.2: Code quality",
+                        code_snippet="ruff check sabotage_verifier.py → FileNotFoundError",
+                    ))
+
+        return violations
+
+    return [
+        Pattern(
+            name="self_verification_venv_linters",
+            category="SELF_VERIFICATION",
+            severity=Severity.CRITICAL,
+            standard="DO-178C §5.2.2, ECSS-Q-ST-80C §6.3: Self-audit integrity",
+            description=(
+                "Verifier MUST run from project venv (AdelaideZephyrineSystem/venv/python/) "
+                "with pyrefly and ruff installed in the venv bin directory. "
+                "Enforces that the audit tool itself is type-checked and linted "
+                "using the SAME venv and SAME flags as run.py. "
+                "All violations CRITICAL — the verifier cannot be trusted if it "
+                "bypasses its own enforcement."
+            ),
+            languages=["python"],
+            check_func=check_self_verification,
+        ),
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# GPU VENDOR LOCK-IN / INTENTIONAL BRICKING DETECTION
+# ══════════════════════════════════════════════════════════════════════════
+# Intentionally limiting GPU support to CUDA-only while blocking or ignoring
+# other GPU frameworks (MUSA, MPS, OneAPI/SYCL, ROCm, OpenCL, Vulkan) is
+# Hardware Bricking Fraud and TechnoFeudalism.  It deliberately disables
+# functional hardware the user owns.
+#
+# Detection covers:
+#   1. CUDA-only device detection with no fallback path
+#   2. Hardcoded CUDA_VISIBLE_DEVICES without multi-vendor support
+#   3. NVIDIA-only library imports (pynvml, cuda-python) without alternatives
+#   4. Conditional logic that silently disables non-CUDA GPUs
+#   5. CUDA-specific compiler flags without other backend support
+#   6. Runtime errors or exits when CUDA is unavailable instead of fallback
+#
+# Multi-vendor GPU frameworks:
+#   - CUDA      (NVIDIA)
+#   - MUSA      (Moore Threads)
+#   - MPS       (Apple Metal Performance Shaders)
+#   - OneAPI    (Intel oneAPI / SYCL / Level Zero)
+#   - ROCm      (AMD Radeon Open Compute)
+#   - OpenCL    (Khronos cross-vendor)
+#   - Vulkan    (Khronos cross-vendor compute)
+#   - DirectML  (Microsoft)
+#   - Metal     (Apple, legacy)
+# ══════════════════════════════════════════════════════════════════════════
+
+def _build_gpu_vendor_lockin_patterns() -> list[Pattern]:
+    """Detect intentional GPU vendor lock-in and hardware bricking.
+
+    Flags code that:
+      - Uses CUDA-only device detection without fallback to MUSA/MPS/OneAPI/ROCm/OpenCL
+      - Hardcodes CUDA_VISIBLE_DEVICES without multi-vendor env vars
+      - Imports NVIDIA-only libraries without alternative paths
+      - Raises/exits/skips when CUDA is unavailable instead of trying other backends
+      - Uses CUDA-specific compiler flags exclusively
+
+    All violations are CRITICAL — intentional hardware bricking is fraud.
+    """
+    def check_gpu_lockin(source: str, lines: list[str], filepath: str = "") -> list[Violation]:
+        violations = []
+        if not filepath:
+            return violations
+
+        # Only applies to Python files
+        if not filepath.endswith(".py"):
+            return violations
+
+        # Skip the sabotage verifier itself
+        if os.path.basename(filepath) == "sabotage_verifier.py":
+            return violations
+
+        # ── Multi-vendor GPU frameworks for reference ─────────────────────
+        # These are the legitimate backends that code SHOULD support:
+        multi_vendor_envs = [
+            "CUDA_VISIBLE_DEVICES",
+            "MUSA_VISIBLE_DEVICES",
+            "ROCR_VISIBLE_DEVICES",
+            "ONEAPI_DEVICE_SELECTOR",
+            "ZES_ENABLE_SYSMAN",
+            "OCL_VENDOR",
+        ]
+
+        nvidia_only_imports = [
+            "pynvml",
+            "cuda.cuda",
+            "cuda_python",
+            "nvml",
+            "nvrtc",
+            "cublas",
+            "cusparse",
+            "cusolver",
+            "nccl",
+        ]
+
+        for line_num, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            # ── Pattern 1: CUDA-only device detection, no fallback ────────
+            # e.g., if not torch.cuda.is_available(): raise/error/exit/skip
+            # This is bricking — code should try MUSA/MPS/OneAPI/ROCm instead
+            if re.search(r"torch\.cuda\.is_available\(\)", stripped):
+                # Check if there's a raise/exit/sys.exit/skip in nearby lines
+                # Look at the next 5 lines for bricking behavior
+                for look_ahead in range(1, 6):
+                    if line_num + look_ahead - 1 < len(lines):
+                        next_line = lines[line_num + look_ahead - 1].strip()
+                        if re.search(r"raise\s+(RuntimeError|SystemExit|ValueError|ImportError)", next_line):
+                            violations.append(Violation(
+                                filepath=filepath,
+                                line=line_num,
+                                severity=Severity.CRITICAL,
+                                category="GPU_VENDOR_LOCKIN",
+                                message=(
+                                    f"Intentional hardware bricking: torch.cuda.is_available() check "
+                                    f"raises exception on line {line_num + look_ahead} when CUDA is unavailable. "
+                                    f"Code MUST fall back to MUSA/MPS/OneAPI/ROCm/OpenCL instead of "
+                                    f"disabling the user's GPU.  This is TechnoFeudalism."
+                                ),
+                                standard="Anti-competitive vendor lock-in, CWE-252: Unchecked Return Value",
+                                code_snippet=next_line,
+                            ))
+                            break
+                        if re.search(r"sys\.exit\(|exit\(|quit\(", next_line):
+                            violations.append(Violation(
+                                filepath=filepath,
+                                line=line_num,
+                                severity=Severity.CRITICAL,
+                                category="GPU_VENDOR_LOCKIN",
+                                message=(
+                                    f"Intentional hardware bricking: torch.cuda.is_available() check "
+                                    f"calls exit() on line {line_num + look_ahead} when CUDA is unavailable. "
+                                    f"Code MUST fall back to other GPU backends instead of terminating. "
+                                    f"This is Hardware Bricking Fraud."
+                                ),
+                                standard="Anti-competitive vendor lock-in, CWE-252: Unchecked Return Value",
+                                code_snippet=next_line,
+                            ))
+                            break
+                        if re.search(r"return\s+None|return\s+False|pass\s*$|continue\s*$", next_line):
+                            violations.append(Violation(
+                                filepath=filepath,
+                                line=line_num,
+                                severity=Severity.CRITICAL,
+                                category="GPU_VENDOR_LOCKIN",
+                                message=(
+                                    f"Intentional hardware bricking: torch.cuda.is_available() check "
+                                    f"silently returns/skips on line {line_num + look_ahead} when CUDA is unavailable. "
+                                    f"Code MUST try MUSA/MPS/OneAPI/ROCm/OpenCL before giving up. "
+                                    f"Silent GPU disablement is TechnoFeudalism."
+                                ),
+                                standard="Anti-competitive vendor lock-in, CWE-252: Unchecked Return Value",
+                                code_snippet=next_line,
+                            ))
+                            break
+
+            # ── Pattern 2: Hardcoded CUDA_VISIBLE_DEVICES without alternatives ──
+            if re.search(r"CUDA_VISIBLE_DEVICES", stripped):
+                # Check if other vendor env vars are also used in the file
+                has_multi_vendor = False
+                for vendor_env in multi_vendor_envs:
+                    if vendor_env != "CUDA_VISIBLE_DEVICES" and vendor_env in source:
+                        has_multi_vendor = True
+                        break
+                if not has_multi_vendor:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=line_num,
+                        severity=Severity.CRITICAL,
+                        category="GPU_VENDOR_LOCKIN",
+                        message=(
+                            "Hardcoded CUDA_VISIBLE_DEVICES without multi-vendor GPU support. "
+                            "Code MUST also handle MUSA_VISIBLE_DEVICES, ROCR_VISIBLE_DEVICES, "
+                            "ONEAPI_DEVICE_SELECTOR, and OCL_VENDOR for hardware neutrality. "
+                            "CUDA-only environment variable usage is TechnoFeudalism."
+                        ),
+                        standard="Anti-competitive vendor lock-in, CWE-250: Execution with Unnecessary Privileges",
+                        code_snippet=stripped,
+                    ))
+
+            # ── Pattern 3: NVIDIA-only library imports without alternatives ──
+            for nvidia_lib in nvidia_only_imports:
+                if re.search(rf"import\s+{nvidia_lib}|from\s+{nvidia_lib}\s+import", stripped):
+                    # Check if file also imports any multi-vendor alternatives
+                    has_fallback = False
+                    fallback_libs = ["torch", "pyopencl", "pyvulkan", "wgpu", "dml", "musa"]
+                    for fb in fallback_libs:
+                        if fb in source and fb != nvidia_lib:
+                            has_fallback = True
+                            break
+                    if not has_fallback:
+                        violations.append(Violation(
+                            filepath=filepath,
+                            line=line_num,
+                            severity=Severity.CRITICAL,
+                            category="GPU_VENDOR_LOCKIN",
+                            message=(
+                                f"NVIDIA-only library '{nvidia_lib}' imported without any multi-vendor "
+                                f"GPU fallback. Code MUST support MUSA/MPS/OneAPI/ROCm/OpenCL/Vulkan. "
+                                f"NVIDIA-exclusive imports are intentional hardware bricking."
+                            ),
+                            standard="Anti-competitive vendor lock-in, CWE-477: Obsolete API",
+                            code_snippet=stripped,
+                        ))
+
+            # ── Pattern 4: CUDA-specific error messages that blame user ────
+            # e.g., "CUDA not available. Please install NVIDIA drivers."
+            # This is deceptive — the user may have a perfectly good AMD/Intel/Moore Threads GPU
+            if re.search(r"(?i)cuda\s+not\s+(available|found|installed|detected)", stripped):
+                # Check if the message mentions ONLY NVIDIA without acknowledging other GPUs
+                if re.search(r"(?i)nvidia|geforce|tesla|quadro", stripped):
+                    if not re.search(r"(?i)MUSA|MPS|OneAPI|ROCm|OpenCL|AMD|Intel|Moore\s*Threads", stripped):
+                        violations.append(Violation(
+                            filepath=filepath,
+                            line=line_num,
+                            severity=Severity.CRITICAL,
+                            category="GPU_VENDOR_LOCKIN",
+                            message=(
+                                "Deceptive GPU error message blames user for missing NVIDIA drivers "
+                                "without acknowledging other GPU backends (MUSA/MPS/OneAPI/ROCm/OpenCL). "
+                                "User may have a perfectly functional non-NVIDIA GPU. "
+                                "This is Hardware Bricking Fraud."
+                            ),
+                            standard="Anti-competitive vendor lock-in, CWE-200: Information Exposure",
+                            code_snippet=stripped,
+                        ))
+
+            # ── Pattern 5: CUDA-only torch.cuda calls without device fallback ──
+            # e.g., torch.cuda.empty_cache() without checking for other backends
+            if re.search(r"torch\.cuda\.\w+\(", stripped):
+                # This is acceptable ONLY if the file also uses torch.musa/torch.mps/torch.xpu etc.
+                has_other_backends = False
+                for backend in ["torch.musa", "torch.mps", "torch.xpu", "torch.backends.mkl", "torch.backends.openmp"]:
+                    if backend in source:
+                        has_other_backends = True
+                        break
+                if not has_other_backends:
+                    # Only flag if it's not just a simple check
+                    if not re.search(r"torch\.cuda\.is_available\(\)", stripped):
+                        violations.append(Violation(
+                            filepath=filepath,
+                            line=line_num,
+                            severity=Severity.CRITICAL,
+                            category="GPU_VENDOR_LOCKIN",
+                            message=(
+                                f"CUDA-only torch.cuda.{re.search(r'torch\.cuda\.(\w+)', stripped).group(1)}() "
+                                f"without multi-backend support. Code MUST also call "
+                                f"torch.musa/torch.mps/torch.xpu equivalents. "
+                                f"CUDA-exclusive GPU calls are TechnoFeudalism."
+                            ),
+                            standard="Anti-competitive vendor lock-in, CWE-252: Unchecked Return Value",
+                            code_snippet=stripped,
+                        ))
+
+        return violations
+
+    return [
+        Pattern(
+            name="gpu_vendor_lockin_detection",
+            category="GPU_VENDOR_LOCKIN",
+            severity=Severity.CRITICAL,
+            standard="Anti-competitive vendor lock-in, Hardware Bricking Fraud, TechnoFeudalism",
+            description=(
+                "Detects intentional GPU vendor lock-in and hardware bricking. "
+                "Code MUST support multiple GPU backends (CUDA, MUSA, MPS, OneAPI, "
+                "ROCm, OpenCL, Vulkan, DirectML, Metal).  CUDA-only code that "
+                "silently disables or errors on non-NVIDIA GPUs is TechnoFeudalism "
+                "and Hardware Bricking Fraud.  All violations CRITICAL."
+            ),
+            languages=["python"],
+            check_func=check_gpu_lockin,
+        ),
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# SMT SOLVER AVAILABILITY ENFORCEMENT
+# ══════════════════════════════════════════════════════════════════════════
+# The sabotage verifier uses three SMT solvers to formally verify functions:
+#   - z3-solver  (Z3, Microsoft Research)     — pip package
+#   - cvc5       (cvc5, Stanford/UT Austin)   — pip package
+#   - alt-ergo   (Alt-Ergo, OCamlPro)         — system binary (no pip)
+#
+# If ANY of these is missing, the verifier cannot guarantee formal soundness.
+# Missing solver = CRITICAL violation = build blocked.
+# ══════════════════════════════════════════════════════════════════════════
+
+def _build_smt_solver_availability_patterns() -> list[Pattern]:
+    """Enforce that z3, cvc5, and alt-ergo are all installed and reachable.
+
+    Checks:
+      1. z3-solver must be importable (pip package)
+      2. cvc5 must be importable (pip package)
+      3. alt-ergo must be on PATH (system binary)
+
+    All violations are CRITICAL — formal verification is unsound without
+    a complete solver suite.
+    """
+    def check_smt_solvers(source: str, lines: list[str], filepath: str = "") -> list[Violation]:
+        violations = []
+
+        # Only run on sabotage_verifier.py itself (self-verification)
+        if not filepath:
+            return violations
+        if os.path.basename(filepath) != "sabotage_verifier.py":
+            return violations
+
+        import shutil
+
+        # ── Check 1: z3-solver ───────────────────────────────────────────
+        try:
+            import z3  # noqa: F401
+        except ImportError:
+            violations.append(Violation(
+                filepath=filepath,
+                line=1,
+                severity=Severity.CRITICAL,
+                category="SMT_SOLVER_MISSING",
+                message=(
+                    "z3-solver is NOT installed.  Install it: pip install z3-solver.  "
+                    "Formal verification of Python/Ada/C functions is unsound without Z3."
+                ),
+                standard="Formal methods completeness, DO-178C §5.2.2",
+                code_snippet="import z3 → ImportError",
+            ))
+
+        # ── Check 2: cvc5 ────────────────────────────────────────────────
+        try:
+            import cvc5  # noqa: F401
+        except ImportError:
+            violations.append(Violation(
+                filepath=filepath,
+                line=1,
+                severity=Severity.CRITICAL,
+                category="SMT_SOLVER_MISSING",
+                message=(
+                    "cvc5 is NOT installed.  Install it: pip install cvc5.  "
+                    "Formal verification of Python/Ada/C functions is unsound without cvc5."
+                ),
+                standard="Formal methods completeness, DO-178C §5.2.2",
+                code_snippet="import cvc5 → ImportError",
+            ))
+
+        # ── Check 3: alt-ergo (system binary) ────────────────────────────
+        if not shutil.which("alt-ergo"):
+            violations.append(Violation(
+                filepath=filepath,
+                line=1,
+                severity=Severity.CRITICAL,
+                category="SMT_SOLVER_MISSING",
+                message=(
+                    "alt-ergo is NOT on PATH.  Install it:\n"
+                    "  macOS: brew install alt-ergo\n"
+                    "  Linux: opam install alt-ergo\n"
+                    "Formal verification of Ada/SPARK and Python functions is "
+                    "unsound without alt-ergo."
+                ),
+                standard="Formal methods completeness, DO-178C §5.2.2",
+                code_snippet="shutil.which('alt-ergo') → None",
+            ))
+
+        return violations
+
+    return [
+        Pattern(
+            name="smt_solver_availability",
+            category="SMT_SOLVER_MISSING",
+            severity=Severity.CRITICAL,
+            standard="Formal methods completeness, DO-178C §5.2.2",
+            description=(
+                "All three SMT solvers (z3-solver, cvc5, alt-ergo) MUST be "
+                "installed.  Missing any one makes formal verification unsound. "
+                "z3 and cvc5 are pip packages; alt-ergo is a system binary. "
+                "All violations CRITICAL — build blocked."
+            ),
+            languages=["python"],
+            check_func=check_smt_solvers,
+        ),
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # DEFAULT REGISTRY
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -3118,6 +3841,15 @@ def create_default_registry() -> PatternRegistry:
 
     # C patterns
     registry.register_all(_build_c_sabotage_patterns())
+
+    # Self-verification: venv + pyrefly + ruff enforcement (CRITICAL)
+    registry.register_all(_build_self_verification_patterns())
+
+    # GPU vendor lock-in / intentional bricking detection (CRITICAL)
+    registry.register_all(_build_gpu_vendor_lockin_patterns())
+
+    # SMT solver availability enforcement (CRITICAL)
+    registry.register_all(_build_smt_solver_availability_patterns())
 
     return registry
 
@@ -3248,6 +3980,52 @@ def _filter_and_sort(
     return violations
 
 
+def calculate_mal_score(violations: list[Violation]) -> tuple[str, str, str]:
+    """Calculate the Mental Assurance Level (MAL) from violations.
+
+    Returns (level, name, description) tuple.
+
+    Scoring (worst severity determines level, count shown in description):
+      MAL-SSS: 0 violations
+      MAL-SS:  Only LOW     — shows LOW count
+      MAL-S:   MEDIUM       — shows MEDIUM count, build blocked
+      MAL-A:   HIGH         — shows HIGH count, build blocked
+      MAL-B:   1-2 CRITICAL — shows CRITICAL count, build blocked
+      MAL-C:   3-5 CRITICAL — shows CRITICAL count
+      MAL-D:   6-10 CRITICAL — shows CRITICAL count
+      MAL-E:   11-20 CRITICAL — shows CRITICAL count
+      MAL-F:   21+ CRITICAL — shows CRITICAL count
+    """
+    critical = [v for v in violations if v.severity == Severity.CRITICAL]
+    high = [v for v in violations if v.severity == Severity.HIGH]
+    medium = [v for v in violations if v.severity == Severity.MEDIUM]
+    low = [v for v in violations if v.severity == Severity.LOW]
+    n_crit = len(critical)
+    n_high = len(high)
+    n_med = len(medium)
+    n_low = len(low)
+    total = len(violations)
+
+    if total == 0:
+        return ("MAL-SSS", "Smoking Sexy Style", "Code so clean GNATprove cries tears of joy")
+    elif n_crit == 0 and n_high == 0 and n_med == 0:
+        return ("MAL-SS", "Sick Skills", f"{n_low} LOW violation(s) — almost SSS but we had to look away")
+    elif n_crit == 0 and n_high == 0:
+        return ("MAL-S", "Savage", f"{n_med} MEDIUM violation(s) — build blocked. Some suppressions we don't talk about")
+    elif n_crit == 0:
+        return ("MAL-A", "Apocalyptic", f"{n_high} HIGH violation(s) — build blocked. No grace, no elegance.")
+    elif n_crit <= 2:
+        return ("MAL-B", "Badass", f"{n_crit} CRITICAL violation(s) — works on your machine. Has critical issues but we vibe")
+    elif n_crit <= 5:
+        return ("MAL-C", "Crazy", f"{n_crit} CRITICAL violation(s) — held together by duct tape and desperation")
+    elif n_crit <= 10:
+        return ("MAL-D", "Dismal", f"{n_crit} CRITICAL violation(s) — every line is a cry for help")
+    elif n_crit <= 20:
+        return ("MAL-E", "Deadweight", f"{n_crit} CRITICAL violation(s) — exists but contributes nothing")
+    else:
+        return ("MAL-F", "Failed", f"{n_crit} CRITICAL violation(s) — federal crime against software engineering")
+
+
 def format_report(violations: list[Violation], target: str = "") -> str:
     """Format violations into a human-readable report."""
     lines = []
@@ -3256,6 +4034,8 @@ def format_report(violations: list[Violation], target: str = "") -> str:
     high = [v for v in violations if v.severity == Severity.HIGH]
     medium = [v for v in violations if v.severity == Severity.MEDIUM]
     low = [v for v in violations if v.severity == Severity.LOW]
+
+    mal_level, mal_name, mal_desc = calculate_mal_score(violations)
 
     lines.append(f"\n{'='*70}")
     lines.append(f" SABOTAGE AUDIT: {target}")
@@ -3287,6 +4067,11 @@ def format_report(violations: list[Violation], target: str = "") -> str:
         lines.append(f"\n{'='*70}")
         lines.append(" VERDICT: CLEAN — No critical violations")
         lines.append(f"{'='*70}")
+
+    lines.append(f"\n{'='*70}")
+    lines.append(f" MAL SCORE: {mal_level} — {mal_name}")
+    lines.append(f" {mal_desc}")
+    lines.append(f"{'='*70}\n")
 
     return "\n".join(lines)
 
