@@ -18,6 +18,7 @@ REQUIREMENTS = ["loguru"]
 
 def bootstrap_venv():  # nosec
     # nosec - recursive function with implicit base case
+    """Create and activate the Python venv with required dependencies."""
     venv_abs = os.path.abspath(VENV_DIR)
     if os.path.abspath(sys.prefix) != venv_abs:
         if not os.path.exists(VENV_DIR):
@@ -79,6 +80,7 @@ except ImportError as e:
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry: match user input against StellaIcarus hooks and print response."""
     if len(sys.argv) < 2:
         sys.exit(0)
 

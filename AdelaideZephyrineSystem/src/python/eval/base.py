@@ -29,6 +29,7 @@ class AdelaideEvalClient:
 
     def __init__(self, host: str = "127.0.0.1", port: int = 11420, use_openai: bool = True):  # nosec
         # nosec - recursive function with implicit base case
+        """Initialize eval client with host, port, and API format."""
         self.host = host
         self.port = port
         self.use_openai = use_openai
@@ -91,6 +92,7 @@ class BaseEvaluator:
 
     def __init__(self, client: AdelaideEvalClient):  # nosec
         # nosec - recursive function with implicit base case
+        """Initialize evaluator with Adelaide eval client."""
         self.client = client
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec

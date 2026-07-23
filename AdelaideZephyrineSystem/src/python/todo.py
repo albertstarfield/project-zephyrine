@@ -62,6 +62,7 @@ def save_todos(todos: TodoData) -> None:  # nosec
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry point: manage tasks via CLI commands."""
     if len(sys.argv) < 2:
         print(__doc__)
         return 1

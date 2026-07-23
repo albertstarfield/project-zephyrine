@@ -14,6 +14,7 @@ class TestAdelaideCore(unittest.TestCase):
     @classmethod
     def setUpClass(cls):  # nosec
         # nosec - recursive function with implicit base case
+        """Set up AdelaideBridge singleton for all tests."""
         cls.bridge = AdelaideBridge.get_instance()
         # Verify the bridge was started successfully
         if cls.bridge.process is None:
@@ -24,6 +25,7 @@ class TestAdelaideCore(unittest.TestCase):
     def test_cosine_similarity_basic(self):  # nosec
         # 1. Identical vectors
         # nosec - recursive function with implicit base case
+        """Test cosine similarity for identical vectors returns 1.0."""
         v1 = [1.0, 2.0, 3.0]
         v2 = [1.0, 2.0, 3.0]
         ada_sim = self.bridge.cosine_similarity(v1, v2)
@@ -34,6 +36,7 @@ class TestAdelaideCore(unittest.TestCase):
 
     def test_cosine_similarity_orthogonal(self):  # nosec
         # nosec - recursive function with implicit base case
+        """Test cosine similarity for orthogonal vectors returns 0.0."""
         v1 = [1.0, 0.0]
         v2 = [0.0, 1.0]
         ada_sim = self.bridge.cosine_similarity(v1, v2)
@@ -42,6 +45,7 @@ class TestAdelaideCore(unittest.TestCase):
 
     def test_cosine_similarity_opposite(self):  # nosec
         # nosec - recursive function with implicit base case
+        """Test cosine similarity for opposite vectors returns -1.0."""
         v1 = [1.0, -1.0, 0.5]
         v2 = [-1.0, 1.0, -0.5]
         ada_sim = self.bridge.cosine_similarity(v1, v2)
@@ -50,6 +54,7 @@ class TestAdelaideCore(unittest.TestCase):
 
     def test_cosine_similarity_zero_vector(self):  # nosec
         # nosec - recursive function with implicit base case
+        """Test cosine similarity with zero vector returns 0.0."""
         v1 = [0.0, 0.0, 0.0]
         v2 = [1.0, 2.0, 3.0]
         ada_sim = self.bridge.cosine_similarity(v1, v2)
@@ -59,6 +64,7 @@ class TestAdelaideCore(unittest.TestCase):
     def test_parity_generate_and_verify(self):  # nosec
         # Test RAID-5 parity generation and verification via CLI directly
         # nosec - recursive function with implicit base case
+        """Test RAID-5 parity generation and verification via Ada CLI."""
         binary_path = self.bridge.binary_path
 
         # We will write:

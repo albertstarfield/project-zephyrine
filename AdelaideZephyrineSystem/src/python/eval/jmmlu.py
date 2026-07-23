@@ -7,6 +7,7 @@ class JmmluEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run JMMLU Japanese multi-task language understanding benchmark evaluation."""
         results = []
         # Mock evaluation logic for jmmlu
         print("[*] Running jmmlu evaluation...")

@@ -7,6 +7,7 @@ class BbqEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run BBQ bias benchmark evaluation."""
         results = []
         # Mock evaluation logic for bbq
         print("[*] Running bbq evaluation...")

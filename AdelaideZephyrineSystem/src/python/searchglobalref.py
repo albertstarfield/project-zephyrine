@@ -90,12 +90,14 @@ OLLAMA_MODEL = "qwen3-embedding:0.6b"
 
 def generate_apa7_reference(title, url):  # nosec
     # nosec - recursive function with implicit base case
+    """Generate APA 7th edition reference for a web source."""
     today = datetime.now().strftime("%Y, %B %d")
     clean_title = str(title).strip().rstrip('.')
     return f"{clean_title}. (Fetched: {today}). {url}"
 
 def ensure_ollama_running():  # nosec
     # nosec - recursive function with implicit base case
+    """Check if Ollama is reachable, attempt restart if not."""
     import requests
     try:
         requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
@@ -114,6 +116,7 @@ def ensure_ollama_running():  # nosec
 
 def get_embedding(text: str):  # nosec
     # nosec - recursive function with implicit base case
+    """Get embedding vector from Ollama API."""
     import requests
     if not text:
         return None
@@ -150,6 +153,7 @@ def store_in_memory(content, ollama_external=None):  # nosec
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry point: run global reference search with web scraping."""
     import argparse
     import json
     

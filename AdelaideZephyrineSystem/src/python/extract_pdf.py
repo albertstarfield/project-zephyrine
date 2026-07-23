@@ -4,6 +4,7 @@ import os
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Extract text from a PDF file using PyMuPDF and print to stdout."""
     if len(sys.argv) < 2:
         sys.exit(1)
         

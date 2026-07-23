@@ -121,6 +121,7 @@ CACHE_MODIFIED = False
 
 def load_cache():  # nosec
     # nosec - recursive function with implicit base case
+    """Load embedding cache from pickle file into memory."""
     global MEMORY_CACHE
     if os.path.exists(CACHE_FILE_PATH):
         try:
@@ -133,6 +134,7 @@ def load_cache():  # nosec
 
 def save_cache():  # nosec
     # nosec - recursive function with implicit base case
+    """Save embedding cache to pickle file with LRU eviction."""
     global MEMORY_CACHE, CACHE_MODIFIED
     if not CACHE_MODIFIED:
         return
@@ -154,6 +156,7 @@ def save_cache():  # nosec
 
 def get_embedding(text: str) -> Optional[np.ndarray]:  # nosec
     # nosec - recursive function with implicit base case
+    """Get embedding vector from Ollama API with LRU cache."""
     global MEMORY_CACHE, CACHE_MODIFIED
     if not text or not text.strip():
         return None
@@ -191,6 +194,7 @@ def get_embedding(text: str) -> Optional[np.ndarray]:  # nosec
 # --- MAIN LOGIC ---
 def ensure_ollama_running():  # nosec
     # nosec - recursive function with implicit base case
+    """Check if Ollama is reachable, return True if running."""
     try:
         requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
         return True
@@ -200,6 +204,7 @@ def ensure_ollama_running():  # nosec
 
 def cosine_similarity(v1: np.ndarray, v2: np.ndarray) -> float:  # nosec
     # nosec - recursive function with implicit base case
+    """Compute cosine similarity between two vectors via Ada or numpy."""
     if v1 is None or v2 is None:
         return 0.0
     try:
@@ -215,6 +220,7 @@ def cosine_similarity(v1: np.ndarray, v2: np.ndarray) -> float:  # nosec
     return np.dot(v1, v2) / norm if norm != 0 else 0.0
 
 def get_file_paths_from_massive_dump(query: str, limit: int) -> List[str]:
+    """Query Recoll search engine and return ranked file paths."""
     cmd = [recoll_cmd, "-o", query, "-A", "-m", "-C", "-P", "-d"]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)  # nosec
@@ -238,6 +244,7 @@ def get_file_paths_from_massive_dump(query: str, limit: int) -> List[str]:
         sys.exit(e.returncode)
 
 def extract_content_via_python(path: str) -> str:
+    """Extract text content from a file using Python libraries."""
     if not os.path.exists(path):
         return ""
     ext = os.path.splitext(path)[1].lower()
@@ -291,6 +298,7 @@ def extract_content_via_python(path: str) -> str:
     return text
 
 def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
+    """Split text into overlapping chunks for embedding."""
     chunks = []
     if len(text) <= size:
         return [text]
@@ -300,6 +308,7 @@ def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) 
 
 def generate_apa7_citation(filepath: str) -> str:  # nosec
     # nosec - recursive function with implicit base case
+    """Generate APA 7th edition citation for a local file."""
     try:
         mtime = os.path.getmtime(filepath)
         year = datetime.datetime.fromtimestamp(mtime).strftime('%Y')
@@ -334,6 +343,7 @@ def generate_apa7_citation(filepath: str) -> str:  # nosec
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry point: run hybrid local search with Recoll + embeddings."""
     parser = argparse.ArgumentParser(description="Deterministic Hybrid Local Search.")
     parser.add_argument("query", help="The search query.")
     parser.add_argument("--jsonIO", action="store_true", help="Output results in JSON format.")

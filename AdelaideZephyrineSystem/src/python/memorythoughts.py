@@ -330,6 +330,7 @@ def retrieve_memories(conn, query, top_k=5, json_io=False):  # nosec
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry point: store or retrieve memories using Ollama embeddings."""
     parser = argparse.ArgumentParser(description="Store and retrieve memories semantically.")
     parser.add_argument("--string", type=str, help="The memory string to store.")
     parser.add_argument("--inputQuery", type=str, help="The query to search memories.")

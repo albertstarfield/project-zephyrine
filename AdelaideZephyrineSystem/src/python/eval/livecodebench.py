@@ -7,6 +7,7 @@ class LivecodebenchEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run LiveCodeBench competitive programming benchmark evaluation."""
         results = []
         # Mock evaluation logic for livecodebench
         print("[*] Running livecodebench evaluation...")

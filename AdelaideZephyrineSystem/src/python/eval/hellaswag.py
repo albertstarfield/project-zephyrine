@@ -7,6 +7,7 @@ class HellaswagEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run HellaSwag commonsense NLI benchmark evaluation."""
         results = []
         # Mock evaluation logic for hellaswag
         print("[*] Running hellaswag evaluation...")

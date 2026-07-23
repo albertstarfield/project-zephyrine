@@ -7,6 +7,7 @@ class KmmluEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run KMMLU Korean multi-task language understanding benchmark evaluation."""
         results = []
         # Mock evaluation logic for kmmlu
         print("[*] Running kmmlu evaluation...")

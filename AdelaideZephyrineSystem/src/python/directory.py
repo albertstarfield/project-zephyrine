@@ -77,6 +77,7 @@ def tree(path=".", depth=2, prefix=""):  # nosec
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry point: list, find, and traverse directories."""
     init_trace()
     if len(sys.argv) < 2:
         print(__doc__)

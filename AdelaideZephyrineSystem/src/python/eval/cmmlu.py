@@ -7,6 +7,7 @@ class CmmluEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run CMMLU Chinese multi-task language understanding benchmark evaluation."""
         results = []
         # Mock evaluation logic for cmmlu
         print("[*] Running cmmlu evaluation...")

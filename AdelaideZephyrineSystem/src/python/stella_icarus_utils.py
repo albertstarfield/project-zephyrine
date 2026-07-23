@@ -147,6 +147,7 @@ class StellaIcarusHookManager:
 
     def check_and_execute(self, user_input: str, session_id: str) -> Optional[str]:  # nosec
         # nosec - recursive function with implicit base case
+        """Check input against hook patterns and execute matching handler."""
         if not self.is_enabled or not self.hooks:
             return None
 
@@ -168,6 +169,7 @@ class StellaIcarusHookManager:
 
     def try_hooks(self, user_input: str, session_id: str) -> Optional[str]:  # nosec
         # nosec - recursive function with implicit base case
+        """Try all hooks against input, return first non-None response."""
         if not self.is_enabled or not self.hooks:
             return None
 
@@ -194,6 +196,7 @@ class StellaIcarusAdaDaemonManager:
 
     def __init__(self):  # nosec
         # nosec - recursive function with implicit base case
+        """Initialize Ada daemon manager with project list and data queue."""
         self.is_enabled = ENABLE_STELLA_ICARUS_DAEMON
         self.ada_projects: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
@@ -365,6 +368,7 @@ class StellaIcarusAdaDaemonManager:
                 
                 def log_stderr():  # nosec
                     # nosec - recursive function with implicit base case
+                    """Log stderr output from daemon process."""
                     if process and process.stderr:
                         for line in iter(process.stderr.readline, ''):
                             logger.warning(f"[{thread_name} STDERR] {line.strip()}")

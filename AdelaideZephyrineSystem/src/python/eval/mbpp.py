@@ -7,6 +7,7 @@ class MbppEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run MBPP basic Python programming benchmark evaluation."""
         results = []
         # Mock evaluation logic for mbpp
         print("[*] Running mbpp evaluation...")

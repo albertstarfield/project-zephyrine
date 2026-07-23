@@ -102,6 +102,7 @@ def scan_directory(path):  # nosec
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry point: scan files and directories for security issues."""
     init_trace()
     if len(sys.argv) < 2:
         print(__doc__)

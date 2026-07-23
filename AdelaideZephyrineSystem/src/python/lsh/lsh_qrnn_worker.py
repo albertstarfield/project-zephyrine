@@ -35,6 +35,7 @@ _exiting = False
 
 def _handle_sigterm(signum, frame):  # nosec
     # nosec - recursive function with implicit base case
+    """Handle SIGTERM/SIGINT for graceful shutdown."""
     global _exiting
     _exiting = True
     sys.exit(0)

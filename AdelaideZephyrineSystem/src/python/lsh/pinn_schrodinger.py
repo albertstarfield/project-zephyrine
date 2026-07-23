@@ -38,6 +38,7 @@ _exiting = False
 
 def _handle_sigterm(signum: int, frame: Any) -> None:  # nosec
     # nosec - recursive function with implicit base case
+    """Handle SIGTERM/SIGINT for graceful shutdown."""
     global _exiting
     _exiting = True
     sys.exit(0)
@@ -96,6 +97,7 @@ def build_schrodinger_pinn(
 
     def pde(x: np.ndarray, y: np.ndarray) -> List[np.ndarray]:  # nosec
         # nosec - recursive function with implicit base case
+        """Nonlinear Schrodinger PDE residual: i*psi_t + 0.5*psi_xx + |psi|^2*psi = 0."""
         u_r = y[:, 0:1]
         u_i = y[:, 1:2]
         du_r_dt = dde.grad.jacobian(y, x, i=0, j=1)
@@ -116,6 +118,7 @@ def build_schrodinger_pinn(
 
     def initial_condition(x: np.ndarray) -> np.ndarray:  # nosec
         # nosec - recursive function with implicit base case
+        """Initial condition: psi(x,0) = 1/cosh(x)."""
         return 1.0 / np.cosh(x[:, 0:1])
 
     ic_r = dde.icbc.IC(
@@ -217,6 +220,7 @@ def steered_lsh_hash(
     # Inline QRNN computation (pure numpy, matches lsh_qrnn_worker.py)
     def run_qrnn_local(embedding: np.ndarray) -> int:  # nosec
         # nosec - recursive function with implicit base case
+        """Local QRNN hash computation: 1024-D embedding → 10-bit integer hash."""
         n_dim = min(len(embedding), 1024)
         emb = embedding[:n_dim]
         if n_dim < 1024:
@@ -313,6 +317,7 @@ def pipeline_test(
 
     def pde_test(x: np.ndarray, y: np.ndarray) -> List[np.ndarray]:  # nosec
         # nosec - recursive function with implicit base case
+        """PDE residual for pipeline validation tests."""
         u_r = y[:, 0:1]
         u_i = y[:, 1:2]
         du_r_dt = dde.grad.jacobian(y, x, i=0, j=1)
@@ -359,6 +364,7 @@ def pipeline_test(
 
 def main() -> None:  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry point: train PINN or compute steered LSH hash."""
     parser = argparse.ArgumentParser(description="PINN Schrodinger Bridge for Speculative Branch Prediction")
     parser.add_argument("--input", type=str, default=None, help="Path to input JSON file")
     parser.add_argument("--pipeline-test", action="store_true", help="Run pipeline validation tests")

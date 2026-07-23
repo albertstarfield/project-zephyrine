@@ -7,6 +7,7 @@ class Gsm8kEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run GSM8K math reasoning benchmark evaluation."""
         results = []
         # Mock evaluation logic for gsm8k
         print("[*] Running gsm8k evaluation...")

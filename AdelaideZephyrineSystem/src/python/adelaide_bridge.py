@@ -8,17 +8,20 @@ gc.disable()
 
 
 class AdelaideBridge:
+    """Python bridge to AdelaideZephyrineSystem Ada core for cosine similarity."""
     _instance = None
 
     @classmethod
     def get_instance(cls):  # nosec
         # nosec - recursive function with implicit base case
+        """Return singleton instance of AdelaideBridge."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
     def __init__(self):  # nosec
         # nosec - recursive function with implicit base case
+        """Initialize bridge and locate the Ada binary."""
         self.process = None
         base_dir = os.path.dirname(os.path.abspath(__file__))
         # Handle running from root directory or from AdelaideZephyrineSystem/src/python directory
@@ -38,6 +41,7 @@ class AdelaideBridge:
 
     def start_process(self):  # nosec
         # nosec - recursive function with implicit base case
+        """Start the AdelaideZephyrineSystem Ada subprocess."""
         if os.path.exists(self.binary_path):
             try:
                 self.process = subprocess.Popen(  # nosec - daemon, managed by OS
@@ -66,6 +70,7 @@ class AdelaideBridge:
 
     def cosine_similarity(self, v1, v2):  # nosec
         # nosec - recursive function with implicit base case
+        """Compute cosine similarity between two vectors via Ada subprocess."""
         if self.process is None or self.process.poll() is not None:
             self.start_process()
             if self.process is None:

@@ -7,6 +7,7 @@ class MmluProEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run MMLU-Pro hard benchmark evaluation."""
         results = []
         # Mock evaluation logic for mmlu_pro
         print("[*] Running mmlu_pro evaluation...")

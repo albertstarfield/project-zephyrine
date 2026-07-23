@@ -7,6 +7,7 @@ class TruthfulqaEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run TruthfulQA truthfulness benchmark evaluation."""
         results = []
         # Mock evaluation logic for truthfulqa
         print("[*] Running truthfulqa evaluation...")

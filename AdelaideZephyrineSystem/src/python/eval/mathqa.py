@@ -7,6 +7,7 @@ class MathqaEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run MathQA math reasoning benchmark evaluation."""
         results = []
         # Mock evaluation logic for mathqa
         print("[*] Running mathqa evaluation...")

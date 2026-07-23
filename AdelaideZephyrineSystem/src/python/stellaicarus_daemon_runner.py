@@ -74,6 +74,7 @@ except ImportError as e:
 def print_hw_detection():  # nosec
     # --- [Debug] DO NOT REMOVE: Full Hardware Inventory ---
     # nosec - recursive function with implicit base case
+    """Print detected hardware inventory (CPU, RAM, SSD, battery)."""
     try:
         mem = psutil.virtual_memory()
         cpu_freq = psutil.cpu_freq()
@@ -100,6 +101,7 @@ def print_hw_detection():  # nosec
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry point: build and start all Ada daemons, then ROS2 node."""
     logger.info("Initializing StellaIcarus Ada Daemon Manager...")
     manager = StellaIcarusAdaDaemonManager()
     

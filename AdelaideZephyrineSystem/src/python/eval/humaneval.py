@@ -7,6 +7,7 @@ class HumanevalEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run Humaneval coding benchmark evaluation."""
         results = []
         # Mock evaluation logic for humaneval
         print("[*] Running humaneval evaluation...")

@@ -7,6 +7,7 @@ class WinograndeEvaluator(BaseEvaluator):
 
     def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
+        """Run Winogrande coreference resolution benchmark evaluation."""
         results = []
         # Mock evaluation logic for winogrande
         print("[*] Running winogrande evaluation...")

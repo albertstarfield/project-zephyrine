@@ -14,11 +14,14 @@ MAGENTA = "\033[35m"
 RESET = "\033[0m"
 
 class APIValidationException(Exception):
+    """Raised when an API validation check fails."""
     pass
 
 class ValidationAPITester:
+    """Aggressive API validator for Adelaide server endpoints."""
     def __init__(self, base_url="http://localhost:11420", timeout=420):  # nosec
         # nosec - recursive function with implicit base case
+        """Initialize tester with base URL and request timeout."""
         self.base_url = base_url
         self.timeout = timeout
         self.stats = {"passed": 0, "failed": 0, "total": 0}
@@ -26,12 +29,14 @@ class ValidationAPITester:
 
     def log_success(self, msg):  # nosec
         # nosec - recursive function with implicit base case
+        """Log a passed test and update stats."""
         print(f"{GREEN}[PASS]{RESET} {msg}")
         self.stats["passed"] += 1
         self.stats["total"] += 1
 
     def log_failure(self, msg, error=None):  # nosec
         # nosec - recursive function with implicit base case
+        """Log a failed test with optional error detail."""
         print(f"{RED}[FAIL]{RESET} {msg}")
         if error:
             print(f"      {YELLOW}Error:{RESET} {error}")
@@ -40,10 +45,12 @@ class ValidationAPITester:
 
     def log_info(self, msg):  # nosec
         # nosec - recursive function with implicit base case
+        """Log an informational message."""
         print(f"{CYAN}[INFO]{RESET} {msg}")
 
     def log_warn(self, msg):  # nosec
         # nosec - recursive function with implicit base case
+        """Log a warning message."""
         print(f"{YELLOW}[WARN]{RESET} {msg}")
 
     def assert_field(self, data, field, expected_type=None):  # nosec
@@ -57,6 +64,7 @@ class ValidationAPITester:
 
     def detect_server(self):  # nosec
         # nosec - recursive function with implicit base case
+        """Detect server type (Ada Core or Python Bridge) from headers."""
         self.log_info("Detecting server type...")
         try:
             resp = requests.get(f"{self.base_url}/v1/models", timeout=5)
@@ -71,6 +79,7 @@ class ValidationAPITester:
             self.log_warn("Could not detect server type reliably.")
 
     def test_endpoint(self, name, method, path, payload=None, is_streaming=False, is_openai=False):
+        """Test a single API endpoint with method, path, and optional payload."""
         print(f"\n{BOLD}--- {name} ---{RESET}")
         self.log_info(f"Target: {method} {path}")
         url = f"{self.base_url}{path}"
@@ -112,6 +121,7 @@ class ValidationAPITester:
             self.log_failure("Unexpected Exception", e)
 
     def validate_headers(self, resp):  # nosec
+        """Validate response headers (CORS, Content-Type)."""
         # All Adelaide APIs should support CORS
         # nosec - recursive function with implicit base case
         if "Access-Control-Allow-Origin" not in resp.headers:
@@ -122,6 +132,7 @@ class ValidationAPITester:
              self.log_warn(f"Unexpected Content-Type: {content_type}")
 
     def validate_json_response(self, name, data, is_openai, path):
+        """Validate JSON response structure based on endpoint type."""
         if "models" in path or "tags" in path:
             self.assert_field(data, "models", list)
             if not data["models"]:
@@ -165,6 +176,7 @@ class ValidationAPITester:
             self.assert_field(data, "done", bool)
 
     def validate_streaming_response(self, name, resp, is_openai):
+        """Validate streaming response by iterating chunks and checking structure."""
         chunk_count = 0
         full_content = ""
         first_chunk_time = None
@@ -220,6 +232,7 @@ class ValidationAPITester:
         self.log_info(f"      Chunks: {chunk_count}, Total length: {len(full_content)}")
 
     def run_all_tests(self):
+        """Run the full validation suite against all Adelaide API endpoints."""
         print(f"{BOLD}{MAGENTA}=================================================={RESET}")
         print(f"{BOLD}{MAGENTA}   AdelaideZephyrineSystem Aggressive API Validator         {RESET}")
         print(f"{BOLD}{MAGENTA}=================================================={RESET}")

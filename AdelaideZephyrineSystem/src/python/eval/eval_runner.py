@@ -62,6 +62,7 @@ def print_summary(results: List[QuestionResult]):  # nosec
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Main entry point: run all evaluators and print summary."""
     use_openai = "--use-openai" in sys.argv
     port = 11420
     if "--port" in sys.argv:
