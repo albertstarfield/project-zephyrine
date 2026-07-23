@@ -1124,6 +1124,7 @@ int adl_get_hardware_secret_apple(char *secret_out, size_t max_len);
 int adl_get_hardware_secret_linux(char *secret_out, size_t max_len);
 #endif
 
+/* adl_get_hardware_secret: Platform-agnostic wrapper for hardware secret retrieval. */
 int adl_get_hardware_secret(char *secret_out, size_t max_len) {
 #ifdef __APPLE__
     return adl_get_hardware_secret_apple(secret_out, max_len);
@@ -1132,6 +1133,7 @@ int adl_get_hardware_secret(char *secret_out, size_t max_len) {
 #endif
 }
 
+/* adl_auto_unlock_master_key_cstr: Unwraps the master key using integrity hash and HSM secret. */
 char* adl_auto_unlock_master_key_cstr(const char *integrity_hash, const char *wrapped_key_hex) {
     char hsm_secret[65] = {0};
     if (adl_get_hardware_secret(hsm_secret, sizeof(hsm_secret)) != 0) {
@@ -1184,6 +1186,7 @@ char* adl_auto_unlock_master_key_cstr(const char *integrity_hash, const char *wr
     return master_key_plaintext;
 }
 
+/* adl_auto_wrap_master_key_cstr: Wraps the master key using integrity hash and HSM secret. */
 char* adl_auto_wrap_master_key_cstr(const char *integrity_hash, const char *master_key_hex) {
     char hsm_secret[65] = {0};
     if (adl_get_hardware_secret(hsm_secret, sizeof(hsm_secret)) != 0) {

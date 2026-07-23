@@ -30,7 +30,7 @@ int adl_get_hardware_secret_linux(char *secret_out, size_t max_len) {
 
     // 1. Check if tpm2_nvread exists
     if (system("which tpm2_nvread > /dev/null 2>&1") != 0) {
-        return -1;
+        return -1;  // Error: tpm2_nvread not found
     }
 
     // 2. Try to read existing secret
@@ -71,7 +71,7 @@ int adl_get_hardware_secret_linux(char *secret_out, size_t max_len) {
     // 4. Define NVRAM space
     snprintf(cmd_buf, sizeof(cmd_buf), "tpm2_nvdefine -C o -s 32 %s > /dev/null 2>&1", nv_index);
     if (system(cmd_buf) != 0) {
-        return -1;
+        return -1;  // Error: failed to define NVRAM
     }
 
     // 5. Write to NVRAM
@@ -79,12 +79,12 @@ int adl_get_hardware_secret_linux(char *secret_out, size_t max_len) {
     char tmp_template[] = "/tmp/adl_tpm_XXXXXX";
     int fd = mkstemp(tmp_template);
     if (fd == -1) {
-        return -1;
+        return -1;  // Error: failed to create temp file
     }
     if (write(fd, clean_uuid, 32) != 32) {
         close(fd);
         unlink(tmp_template);
-        return -1;
+        return -1;  // Error: failed to write to temp file
     }
     close(fd);
 
@@ -94,10 +94,10 @@ int adl_get_hardware_secret_linux(char *secret_out, size_t max_len) {
 
     if (ret == 0) {
         strncpy(secret_out, clean_uuid, max_len);
-        return 0;
+        return 0;  // Success
     }
 
-    return -1;
+    return -1;  // Error: failed to write to TPM2
 }
 
 #endif /* !__APPLE__ */

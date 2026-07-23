@@ -6,6 +6,7 @@
 #include <mach/thread_policy.h>
 #include <pthread.h>
 
+/* set_darwin_realtime: Sets real-time thread scheduling policy on macOS. */
 void set_darwin_realtime() {
     thread_time_constraint_policy_data_t policy;
     mach_timebase_info_data_t timebase_info;
@@ -37,6 +38,7 @@ void set_darwin_realtime() {
     }
 }
 #else
+/* set_darwin_realtime: No-op on non-macOS platforms. */
 void set_darwin_realtime() {
     // No-op on non-macOS platforms
 }

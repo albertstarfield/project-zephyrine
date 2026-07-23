@@ -217,14 +217,17 @@ def store_memory(conn, content, json_io=False):  # nosec
     
     conn.commit()
     if json_io:
-        print(
-            json.dumps({
-                "type": "store",
-                "status": "complete",
-                "chunks": success_count
-            }),
-            flush=True
-        )
+        try:
+            print(
+                json.dumps({
+                    "type": "store",
+                    "status": "complete",
+                    "chunks": success_count
+                }),
+                flush=True
+            )
+        except (TypeError, ValueError) as e:
+            print(f"Error serializing JSON: {e}", file=sys.stderr)
     elif success_count > 0:
         print(f"✅ Stored {success_count} chunks in memory.", file=sys.stderr)
     else:

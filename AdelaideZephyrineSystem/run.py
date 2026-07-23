@@ -166,6 +166,7 @@ _global_tk_root = None
 
 def _get_tk_root():  # nosec
     # nosec - recursive function with implicit base case
+    """Return the shared Tk root window, creating it if necessary."""
     global _global_tk_root
     import tkinter as tk
     if _global_tk_root is not None:
@@ -242,6 +243,7 @@ def _wipe_string(s):  # nosec
 
 def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
     # nosec - recursive function with implicit base case
+    """Show a tkinter dialog that prompts the user for text input and returns the entered string or None."""
     import tkinter as tk
     import tkinter.simpledialog as sd
 
@@ -313,6 +315,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
         def on_ok(_event=None):  # nosec
             # Read directly from Entry widget — StringVar binding is unreliable on macOS
             # nosec - recursive function with implicit base case
+            """Handle OK button click by reading the entry value and closing the dialog."""
             val = name_entry.get()
             if not IS_KISS:
                 print(f"[DEBUG] on_ok fired, name_entry.get() = {val!r}")
@@ -321,6 +324,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
 
         def on_cancel():  # nosec
             # nosec - recursive function with implicit base case
+            """Handle Cancel button click by setting result to None and closing the dialog."""
             if not IS_KISS:
                 print("[DEBUG] on_cancel fired")
             result[0] = None
@@ -445,6 +449,7 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
     
     def update_bar(pct=None, eta_text="", step_text="", pulse=False):  # nosec
         # nosec - recursive function with implicit base case
+        """Update the progress bar percentage, ETA label, and step text in the dialog."""
         try:
             if not dialog.winfo_exists():
                 return
@@ -478,6 +483,7 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
 
     def _start_pulse():  # nosec
         # nosec - recursive function with implicit base case
+        """Start an animated pulse effect on the progress bar (no-op placeholder)."""
         pass
 
     def _stop_pulse():  # nosec
@@ -946,6 +952,7 @@ def _tk_info_dialog(title, message, countdown=60):
     timer_label.pack(pady=(0, 8))
 
     def _countdown_tick():
+        """Decrement the countdown timer and auto-close the dialog when it reaches zero."""
         remaining[0] -= 1
         print(f"[DEBUG] _tk_info_dialog tick: {remaining[0]}s remaining")
         if remaining[0] <= 0:
@@ -961,6 +968,7 @@ def _tk_info_dialog(title, message, countdown=60):
 
     def _on_ok():  # nosec
         # nosec - recursive function with implicit base case
+        """Handle OK button click by cancelling the countdown timer and closing the dialog."""
         print("[DEBUG] _tk_info_dialog _on_ok clicked or Enter pressed.")
         if timer_id[0] is not None:
             try:
@@ -1737,6 +1745,7 @@ def _try_c_derive_master_key(integrity_hash, user_secret):  # nosec
 
 def _try_c_derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
     # nosec - recursive function with implicit base case
+    """Attempt to derive the master key using the C library's secure stdin reader."""
     try:
         import ctypes
         import os
@@ -1947,11 +1956,13 @@ class _TeeWriter:
 
     def __init__(self, original, log_file):  # nosec
         # nosec - recursive function with implicit base case
+        """Initialize TeeWriter with the original stream and a log file to tee output to."""
         self._orig = original
         self._log = log_file
 
     def write(self, data):  # nosec
         # nosec - recursive function with implicit base case
+        """Write data to both the original stream and the log file."""
         self._orig.write(data)
         try:
             self._log.write(data)
@@ -1961,6 +1972,7 @@ class _TeeWriter:
 
     def flush(self):  # nosec
         # nosec - recursive function with implicit base case
+        """Flush both the original stream and the log file."""
         self._orig.flush()
         try:
             self._log.flush()
@@ -1969,6 +1981,7 @@ class _TeeWriter:
 
     def __getattr__(self, attr):  # nosec
         # nosec - recursive function with implicit base case
+        """Delegate attribute access to the original stream for compatibility."""
         return getattr(self._orig, attr)
 
 
@@ -2024,6 +2037,7 @@ term_stderr = None
 
 def show_bsod(error_msg, log_path, stop_code="0x0000007B"):  # nosec
     # nosec - recursive function with implicit base case
+    """Display a Blue Screen of Death style error banner with the given error message and stop code."""
     bsod_text = f"""\033[44m\033[37;1m
 ================================================================================
                                  SYSTEM ERROR
@@ -2051,6 +2065,7 @@ If this screen appears again, verify your model assets and configuration.
 
 def print_progress(percent, message="Loading AI Model..."):  # nosec
     # nosec - recursive function with implicit base case
+    """Print a text-based progress bar with percentage and message to the terminal."""
     bar_width = 40
     filled = int(bar_width * percent / 100)
     bar = "█" * filled + "░" * (bar_width - filled)
@@ -2069,6 +2084,7 @@ def print_progress(percent, message="Loading AI Model..."):  # nosec
 
 def render_ascii_logo():  # nosec
     # nosec - recursive function with implicit base case
+    """Render the Project Zephyrine logo as ASCII art from the PNG image file."""
     logo_path = os.path.join(
         BASE_DIR, "src", "ui", "frontend", "public", "Project Zephyrine Logo.png"
     )
@@ -2115,6 +2131,7 @@ def render_ascii_logo():  # nosec
 
 
 def progress_monitor(log_path):
+    """Monitor the Ada server log file and display a progress bar during startup."""
     while not os.path.exists(log_path):
         time.sleep(0.1)
 
@@ -2328,6 +2345,7 @@ def get_git_version():  # nosec
 
 def bootstrap_ros2_linux():  # nosec
     # nosec - recursive function with implicit base case
+    """Install ROS2 Humble on Linux via the system package manager if not already available."""
     if "ROS_DISTRO" in os.environ:
         return
     import shutil
@@ -3212,6 +3230,7 @@ def get_files_to_hash():  # nosec
     # NOTE: run.py itself is NOT hashed - it's an interpreter script, not a
     # compiled artifact. Changes to run.py don't trigger rebuilds.
     # nosec - recursive function with implicit base case
+    """Collect all source files whose contents determine whether a rebuild is needed."""
     patterns = [
         "src/**/*",
         "config/**/*",
@@ -3250,6 +3269,7 @@ def get_files_to_hash():  # nosec
 
 def calculate_hash(file_paths):  # nosec
     # nosec - recursive function with implicit base case
+    """Compute an MD5 hash of all specified files and tool versions for rebuild detection."""
     hasher = hashlib.md5()
     
     # Hash tool versions first
@@ -3632,6 +3652,7 @@ def safe_cmake_configure(cmake_flags, cwd, build_dir, module_name):
 
 def main():  # nosec
     # nosec - recursive function with implicit base case
+    """Entry point that wraps real_main with error handling and BSOD display on failure."""
     global current_log_path
     try:
         real_main()
@@ -3697,6 +3718,7 @@ def main():  # nosec
 
 def real_main():  # nosec
     # nosec - recursive function with implicit base case
+    """Core orchestrator that builds dependencies, validates integrity, and spawns all runtime processes."""
     global \
         daemon_process, \
         server_process, \
@@ -4848,6 +4870,7 @@ def real_main():  # nosec
 
         def _run_build():  # nosec
             # nosec - recursive function with implicit base case
+            """Execute the Ada build via alr build and signal completion."""
             try:
                 subprocess.run([alr_cmd, "build"], env=env, cwd=BASE_DIR, check=True)  # nosec
                 _build_result[0] = True
@@ -5293,60 +5316,80 @@ def real_main():  # nosec
                 """Create venv if needed, upgrade pip, install crosshair-tool + all sidecar deps."""
                 if not os.path.exists(python_bin):
                     print(f"  [~] Creating pyvenv at {venv_dir}...")
-                    subprocess.run(
-                        # nosec - subprocess.run() is safe in this context
-                        [sys.executable, "-m", "venv", venv_dir],
-                        check=True,
-                        capture_output=True,
-                    )  # nosec
+                    try:
+                        subprocess.run(
+                            # nosec - subprocess.run() is safe in this context
+                            [sys.executable, "-m", "venv", venv_dir],
+                            check=True,
+                            capture_output=True,
+                        )  # nosec
+                    except (subprocess.CalledProcessError, OSError) as e:
+                        print(f"  [!] Failed to create venv: {e}")
+                        return
                 # Build a CLEAN environment for pip: strip PYTHONPATH and vendor/ros_env
                 # so pip doesn't think packages in vendor/ros_env are "already satisfied"
                 # and skip installing them into the venv's site-packages.
                 _clean_env = os.environ.copy()
                 _clean_env.pop("PYTHONPATH", None)
                 _clean_env.pop("VIRTUAL_ENV", None)
-                subprocess.run(
-                    # nosec - subprocess.run() is safe in this context
-                    [python_bin, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"],
-                    check=True,
-                    capture_output=True,
-                    env=_clean_env,
-                )  # nosec
+                try:
+                    subprocess.run(
+                        # nosec - subprocess.run() is safe in this context
+                        [python_bin, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"],
+                        check=True,
+                        capture_output=True,
+                        env=_clean_env,
+                    )  # nosec
+                except (subprocess.CalledProcessError, OSError) as e:
+                    print(f"  [!] Failed to upgrade pip: {e}")
+                    return
                 # Single pip call: crosshair-tool + all sidecar deps together.
                 # Separate calls let pip's resolver silently drop deps on Python 3.14+.
-                subprocess.run(
-                    # nosec - subprocess.run() is safe in this context
-                    [python_bin, "-m", "pip", "install", "--force-reinstall", "--no-deps",
-                     "crosshair-tool",
-                     "typing_extensions", "importlib_metadata", "packaging",
-                     "loguru", "httpx", "requests", "sympy",
-                     "numpy", "PyMuPDF",
-                     "Pillow", "openpyxl", "python-docx", "python-pptx", "tinytag",
-                     "cryptography", "keyring"],
-                    check=True,
-                    env=_clean_env,
-                )  # nosec
+                try:
+                    subprocess.run(
+                        # nosec - subprocess.run() is safe in this context
+                        [python_bin, "-m", "pip", "install", "--force-reinstall", "--no-deps",
+                         "crosshair-tool",
+                         "typing_extensions", "importlib_metadata", "packaging",
+                         "loguru", "httpx", "requests", "sympy",
+                         "numpy", "PyMuPDF",
+                         "Pillow", "openpyxl", "python-docx", "python-pptx", "tinytag",
+                         "cryptography", "keyring"],
+                        check=True,
+                        env=_clean_env,
+                    )  # nosec
+                except (subprocess.CalledProcessError, OSError) as e:
+                    print(f"  [!] Failed to install crosshair deps: {e}")
+                    return
                 # Second pass: resolve transitive deps that --no-deps skipped
-                subprocess.run(
-                    # nosec - subprocess.run() is safe in this context
-                    [python_bin, "-m", "pip", "install",
-                     "crosshair-tool",
-                     "typing_extensions", "importlib_metadata", "packaging",
-                     "loguru", "httpx", "requests", "sympy",
-                     "numpy", "PyMuPDF",
-                     "Pillow", "openpyxl", "python-docx", "python-pptx", "tinytag",
-                     "cryptography", "keyring"],
-                    check=True,
-                    env=_clean_env,
-                )  # nosec
+                try:
+                    subprocess.run(
+                        # nosec - subprocess.run() is safe in this context
+                        [python_bin, "-m", "pip", "install",
+                         "crosshair-tool",
+                         "typing_extensions", "importlib_metadata", "packaging",
+                         "loguru", "httpx", "requests", "sympy",
+                         "numpy", "PyMuPDF",
+                         "Pillow", "openpyxl", "python-docx", "python-pptx", "tinytag",
+                         "cryptography", "keyring"],
+                        check=True,
+                        env=_clean_env,
+                    )  # nosec
+                except (subprocess.CalledProcessError, OSError) as e:
+                    print(f"  [!] Failed to resolve transitive deps: {e}")
+                    return
                 # Install pyrefly (type checker) and ruff (linter) into the venv
-                subprocess.run(
-                    # nosec - subprocess.run() is safe in this context
-                    [python_bin, "-m", "pip", "install",
-                     "pyrefly", "ruff"],
-                    check=True,
-                    env=_clean_env,
-                )  # nosec
+                try:
+                    subprocess.run(
+                        # nosec - subprocess.run() is safe in this context
+                        [python_bin, "-m", "pip", "install",
+                         "pyrefly", "ruff"],
+                        check=True,
+                        env=_clean_env,
+                    )  # nosec
+                except (subprocess.CalledProcessError, OSError) as e:
+                    print(f"  [!] Failed to install pyrefly/ruff: {e}")
+                    return
 
             _ensure_crosshair_venv(pyvenv_python, pyvenv_dir)
 
@@ -5882,26 +5925,24 @@ def real_main():  # nosec
         # IPC (run/ directory) so it doesn't need a parent process.
         watchdog_log = os.path.join(BASE_DIR, "run", "adelaide_watchdog.log")
         try:
-            wlog = open(watchdog_log, "a")
+            with open(watchdog_log, "a") as wlog:
+                try:
+                    watchdog_process = subprocess.Popen(
+                        [watchdog_path],
+                        cwd=BASE_DIR,
+                        env=watchdog_env,
+                        stdout=wlog,
+                        stderr=subprocess.STDOUT,
+                        start_new_session=True,
+                    )
+                except (subprocess.SubprocessError, OSError) as e:
+                    print(f"  [!] Warning: Could not start watchdog: {e}")
         except OSError as e:
             print(f"  [!] Warning: Could not open watchdog log: {e}")
-            wlog = None
-        try:
-            watchdog_process = subprocess.Popen(
-                [watchdog_path],
-                cwd=BASE_DIR,
-                env=watchdog_env,
-                stdout=wlog if wlog else subprocess.DEVNULL,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-        except (subprocess.SubprocessError, OSError) as e:
-            print(f"  [!] Warning: Could not start watchdog: {e}")
-        if wlog:
-            wlog.close()
 
         def watchdog_monitor(path, w_env, log_path):  # nosec
             # nosec - recursive function with implicit base case
+            """Monitor the watchdog process and restart it automatically if it crashes."""
             global watchdog_process
             while True:
                 w_exit = watchdog_process.wait()
@@ -5949,6 +5990,7 @@ def real_main():  # nosec
         print("[*] Booting benchmark runner thread...")
 
         def benchmark_runner():
+            """Run the server performance benchmark after a short startup delay."""
             import json
             import time
             import urllib.request

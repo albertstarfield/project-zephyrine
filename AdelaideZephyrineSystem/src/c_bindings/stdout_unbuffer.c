@@ -39,6 +39,7 @@ void force_stdout_unbuffered(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
 }
 
+/* force_stderr_unbuffered: Forces stderr to be unbuffered. */
 void force_stderr_unbuffered(void) {
     setvbuf(stderr, NULL, _IONBF, 0);
 }
@@ -75,6 +76,7 @@ void elab_trace_c(const char* label) {
     write(2, "\n", 1);
 }
 
+/* elab_trace_c2: Traces two labels to stderr for Ada elaboration debugging. */
 void elab_trace_c2(const char* label1, const char* label2) {
     const char prefix[] = "[ElabTrace-C] ";
     size_t plen = sizeof(prefix) - 1;

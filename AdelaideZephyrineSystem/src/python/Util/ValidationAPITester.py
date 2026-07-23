@@ -55,6 +55,7 @@ class ValidationAPITester:
 
     def assert_field(self, data, field, expected_type=None):  # nosec
         # nosec - recursive function with implicit base case
+        """Assert that a field exists in the data dict and optionally matches the expected type."""
         if field not in data:
             raise APIValidationException(f"Missing required field: '{field}'")
         if expected_type and not isinstance(data[field], expected_type):

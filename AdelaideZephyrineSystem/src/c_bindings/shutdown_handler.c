@@ -27,6 +27,7 @@
 static volatile sig_atomic_t g_shutdown_requested = 0;
 static volatile sig_atomic_t g_last_signal = 0;
 
+/* shutdown_handler: Signal handler for graceful shutdown. */
 static void shutdown_handler(int sig) {
     g_last_signal = sig;
     g_shutdown_requested = 1;

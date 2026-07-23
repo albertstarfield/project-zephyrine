@@ -27,6 +27,7 @@ static struct sigaction jorvik_prev_fpe;
 static struct sigaction jorvik_prev_trap;
 static struct sigaction jorvik_prev_abrt;
 
+/* jorvik_handler: Signal handler for crash recovery with longjmp support. */
 static void jorvik_handler(int sig) {
     jorvik_crash_signal = sig;
     if (jorvik_guard_depth > 0) {
@@ -50,6 +51,7 @@ static void jorvik_handler(int sig) {
     }
 }
 
+/* jorvik_install_handlers: Installs signal handlers for crash recovery. */
 void jorvik_install_handlers(void) {
     if (jorvik_installed) return;
 

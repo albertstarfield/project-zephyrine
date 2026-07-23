@@ -363,7 +363,10 @@ def main():  # nosec
         sys.exit(1)
 
     if args.jsonIO:
-        print(json.dumps({"phase": 1, "status": "start", "query": args.query}), flush=True)
+        try:
+            print(json.dumps({"phase": 1, "status": "start", "query": args.query}), flush=True)
+        except (TypeError, ValueError) as e:
+            print(f"Error serializing JSON: {e}", file=sys.stderr)
     else:
         trace_print("searchlocalref", "phase1", f"Querying recoll dump for '{args.query}'...")
     
@@ -374,7 +377,10 @@ def main():  # nosec
     
     if not top_10_files:
         if args.jsonIO:
-            print(json.dumps({"phase": 1, "status": "no_results"}), flush=True)
+            try:
+                print(json.dumps({"phase": 1, "status": "no_results"}), flush=True)
+            except (TypeError, ValueError) as e:
+                print(f"Error serializing JSON: {e}", file=sys.stderr)
         else:
             print("❌ No files found in the index.")
         return
@@ -386,7 +392,10 @@ def main():  # nosec
                 "path": path,
                 "citation": generate_apa7_citation(path)
             })
-        print(json.dumps({"phase": 1, "status": "complete", "results": phase1_results, "time_ms": (t1_end - t1_start)*1000}), flush=True)
+        try:
+            print(json.dumps({"phase": 1, "status": "complete", "results": phase1_results, "time_ms": (t1_end - t1_start)*1000}), flush=True)
+        except (TypeError, ValueError) as e:
+            print(f"Error serializing JSON: {e}", file=sys.stderr)
     else:
         trace_print("searchlocalref", "phase1:complete", f"Lexical filter isolated {len(top_10_files)} documents in {(t1_end - t1_start)*1000:.2f} ms")
 
@@ -444,7 +453,10 @@ def main():  # nosec
                 "text": res['text'],
                 "citation": generate_apa7_citation(res['path'])
             })
-        print(json.dumps({"phase": 2, "status": "complete", "results": phase2_results, "time_ms": phase2_ms}), flush=True)
+        try:
+            print(json.dumps({"phase": 2, "status": "complete", "results": phase2_results, "time_ms": phase2_ms}), flush=True)
+        except (TypeError, ValueError) as e:
+            print(f"Error serializing JSON: {e}", file=sys.stderr)
     else:
         trace_print("searchlocalref", "phase2:ranking", f"Chunk embedding completed in {phase2_ms:.2f} ms")
 
