@@ -4439,6 +4439,422 @@ def _build_smt_logic_verification_patterns() -> list[Pattern]:
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# FUNCTION COMMENT / DOCSTRING ENFORCEMENT
+# ══════════════════════════════════════════════════════════════════════════
+# Every function in Python, Ada, C, and TypeScript MUST have a comment
+# or docstring explaining what it does.  Silent functions are sabotage —
+# nobody can maintain code they cannot understand.
+#
+# Python:  def foo(): ... must have """docstring""" or # comment before body
+# Ada:     procedure Foo is ... must have -- comment before begin/body
+# C:       void foo(void) { ... must have /* comment */ or // before body
+# TS:      function foo(): void { ... must have /** jsdoc */ or // before body
+# ══════════════════════════════════════════════════════════════════════════
+
+def _build_function_comment_patterns() -> list[Pattern]:
+    """Enforce that every function has a docstring or comment.
+
+    Checks Python def/async def, Ada procedure/function, C functions,
+    and TypeScript function declarations.  Missing documentation = MEDIUM.
+    """
+    def check_function_comments(
+        source: str, lines: list[str], filepath: str = ""
+    ) -> list[Violation]:
+        violations = []
+        filepath_lower = filepath.lower()
+        is_python = filepath_lower.endswith(".py")
+        is_ada = filepath_lower.endswith((".adb", ".ads"))
+        is_c = filepath_lower.endswith((".c", ".h"))
+        is_ts = filepath_lower.endswith((".ts", ".tsx", ".js", ".jsx"))
+
+        if is_python:
+            # Match def/async def with body
+            for i, line in enumerate(lines):
+                m = re.match(r"^\s*(?:async\s+)?def\s+\w+\s*\(", line)
+                if not m:
+                    continue
+                # Find the colon ending the signature
+                colon_idx = line.find(":")
+                if colon_idx == -1:
+                    continue
+                # Check preceding lines for docstring or comment
+                has_doc = False
+                # Check line right after def (indented triple-quote)
+                j = i + 1
+                while j < len(lines) and lines[j].strip() == "":
+                    j += 1
+                if j < len(lines):
+                    stripped = lines[j].strip()
+                    if stripped.startswith('"""') or stripped.startswith("'''"):
+                        has_doc = True
+                # Check lines before def for comment
+                for k in range(max(0, i - 3), i):
+                    if lines[k].strip().startswith("#"):
+                        has_doc = True
+                        break
+                if not has_doc:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=i + 1,
+                        severity=Severity.MEDIUM,
+                        category="FUNCTION_NO_DOCUMENTATION",
+                        message=f"Python function '{_extract_func_name(line)}' has no docstring or comment.",
+                        standard="PEP 257, ISO/IEC 26514:2022",
+                    ))
+
+        elif is_ada:
+            for i, line in enumerate(lines):
+                m = re.match(r"^\s*(procedure|function)\s+(\w+)", line, re.IGNORECASE)
+                if not m:
+                    continue
+                func_name = m.group(2)
+                # Check preceding lines for comment
+                has_comment = False
+                for k in range(max(0, i - 3), i):
+                    if lines[k].strip().startswith("--"):
+                        has_comment = True
+                        break
+                # Check same line after the declaration
+                if "--" in line[line.find(func_name) + len(func_name):]:
+                    has_comment = True
+                if not has_comment:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=i + 1,
+                        severity=Severity.MEDIUM,
+                        category="FUNCTION_NO_DOCUMENTATION",
+                        message=f"Ada {m.group(1).lower()} '{func_name}' has no comment.",
+                        standard="Ada RM 2.1, ISO/IEC 8652:2012",
+                    ))
+
+        elif is_c:
+            for i, line in enumerate(lines):
+                # Match C function definition: type name(params) {
+                m = re.match(
+                    r"^(?:static\s+)?(?:\w+[\s*]+)+(\w+)\s*\([^)]*\)\s*\{?\s*$",
+                    line,
+                )
+                if not m or "{" not in line:
+                    continue
+                func_name = m.group(1)
+                # Skip main, if it's just a forward declaration
+                if func_name in ("if", "while", "for", "switch", "return"):
+                    continue
+                # Check preceding lines for comment
+                has_comment = False
+                for k in range(max(0, i - 5), i):
+                    stripped = lines[k].strip()
+                    if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                        has_comment = True
+                        break
+                # Check same line after {
+                brace_idx = line.find("{")
+                if "--" in line[brace_idx:] or "//" in line[brace_idx:]:
+                    has_comment = True
+                if not has_comment:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=i + 1,
+                        severity=Severity.MEDIUM,
+                        category="FUNCTION_NO_DOCUMENTATION",
+                        message=f"C function '{func_name}' has no comment or doc.",
+                        standard="CERT C EXP, ISO/IEC 9899:2018",
+                    ))
+
+        elif is_ts:
+            for i, line in enumerate(lines):
+                m = re.match(
+                    r"^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)",
+                    line,
+                )
+                if not m:
+                    continue
+                func_name = m.group(1)
+                # Check preceding lines for JSDoc or comment
+                has_comment = False
+                for k in range(max(0, i - 5), i):
+                    stripped = lines[k].strip()
+                    if stripped.startswith("/**") or stripped.startswith("//") or stripped.startswith("*"):
+                        has_comment = True
+                        break
+                if not has_comment:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=i + 1,
+                        severity=Severity.MEDIUM,
+                        category="FUNCTION_NO_DOCUMENTATION",
+                        message=f"TypeScript function '{func_name}' has no JSDoc or comment.",
+                        standard="ISO/IEC 14882:2020, JSDoc Standard",
+                    ))
+
+        return violations
+
+    return [
+        Pattern(
+            name="Function Documentation Enforcement",
+            category="FUNCTION_NO_DOCUMENTATION",
+            severity=Severity.MEDIUM,
+            standard="PEP 257, Ada RM, CERT C, JSDoc",
+            description=(
+                "Every function in Python, Ada, C, and TypeScript MUST have a "
+                "docstring or comment explaining what it does.  Silent functions "
+                "are sabotage — nobody can maintain code they cannot understand."
+            ),
+            languages=["python", "ada", "c", "typescript"],
+            check_func=check_function_comments,
+        ),
+    ]
+
+
+def _extract_func_name(line: str) -> str:
+    """Extract function name from a def/async def line."""
+    m = re.search(r"def\s+(\w+)", line)
+    return m.group(1) if m else "unknown"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# CODE COMPOSITION BALANCING — ADA DOMINANCE ENFORCEMENT
+# ══════════════════════════════════════════════════════════════════════════
+# Ada is safer and more deterministic than Python, C, or TypeScript.
+# This pattern scans the entire project and calculates the percentage
+# of each language.  If Ada is NOT the dominant language, the build
+# is BLOCKED with a CRITICAL violation.
+#
+# Why Ada matters:
+#   - Strong typing catches bugs at compile time
+#   - SPARK mode enables formal verification
+#   - Deterministic runtime (no GC pauses, no JIT)
+#   - Memory safety without runtime overhead
+#   - Contract-based programming (pre/post conditions)
+#
+# Excludes: vendor/, node_modules/, .git/, __pycache__/, build/, obj/
+# ══════════════════════════════════════════════════════════════════════════
+
+# Directories to exclude from composition analysis
+_COMPOSITION_EXCLUDE = frozenset({
+    "vendor", "node_modules", ".git", "__pycache__", "build", "obj",
+    "dist", "venv", ".venv", "env", ".env", ".tox", ".mypy_cache",
+    ".pytest_cache", "coverage", ".coverage", "htmlcov",
+})
+
+
+def _build_composition_balance_patterns() -> list[Pattern]:
+    """Enforce that Ada is the dominant language — GitHub Linguist style.
+
+    Uses GitHub Linguist's methodology:
+      - Counts BYTES (not lines) — matches how GitHub measures composition
+      - Uses Linguist's extension-to-language mapping
+      - Excludes same directories as GitHub (vendor, node_modules, etc.)
+      - Detects generated/vendored files and excludes them
+      - Displays results like GitHub's language bar
+
+    Ada MUST have >= the percentage of any other single language.
+    If another language dominates → CRITICAL (MAL fraud indicator).
+    """
+    def check_composition(
+        source: str, lines: list[str], filepath: str = ""
+    ) -> list[Violation]:
+        violations = []
+
+        # Only run composition check once per audit (on first file)
+        if not hasattr(check_composition, "_cached"):
+            check_composition._cached = {}
+        cache_key = str(Path(filepath).parent)
+        if cache_key in check_composition._cached:
+            return violations
+
+        # Find project root (look for AdelaideZephyrineSystem or project marker)
+        project_root = Path(filepath).parent
+        while project_root.name not in ("AdelaideZephyrineSystem", "project-zephyrine", "/"):
+            project_root = project_root.parent
+            if project_root == project_root.parent:
+                break
+
+        # GitHub Linguist extension-to-language mapping
+        # https://github.com/github-linguist/linguist/blob/master/lib/linguist/languages.yml
+        linguist_exts = {
+            # Ada
+            ".adb": "Ada", ".ads": "Ada", ".ada": "Ada",
+            # Python
+            ".py": "Python", ".pyw": "Python", ".pyi": "Python",
+            # C
+            ".c": "C", ".h": "C",
+            # C++
+            ".cpp": "C++", ".cc": "C++", ".cxx": "C++", ".hpp": "C++",
+            ".hxx": "C++", ".hh": "C++", ".C": "C++",
+            # TypeScript
+            ".ts": "TypeScript", ".tsx": "TypeScript",
+            # JavaScript
+            ".js": "JavaScript", ".jsx": "JavaScript", ".mjs": "JavaScript",
+            ".cjs": "JavaScript",
+            # Coq
+            ".v": "Coq",
+            # Shell
+            ".sh": "Shell", ".bash": "Shell", ".zsh": "Shell",
+            # YAML
+            ".yml": "YAML", ".yaml": "YAML",
+            # JSON
+            ".json": "JSON",
+            # Markdown
+            ".md": "Markdown", ".markdown": "Markdown",
+            # HTML
+            ".html": "HTML", ".htm": "HTML",
+            # CSS
+            ".css": "CSS", ".scss": "SCSS", ".less": "Less",
+            # Rust
+            ".rs": "Rust",
+            # Go
+            ".go": "Go",
+            # Java
+            ".java": "Java",
+            # Ruby
+            ".rb": "Ruby",
+            # Haskell
+            ".hs": "Haskell",
+            # Lua
+            ".lua": "Lua",
+        }
+
+        # GitHub Linguist excluded directories
+        # https://github.com/github-linguist/linguist/blob/master/lib/linguist/vendor.yml
+        linguist_exclude_dirs = frozenset({
+            "vendor", "node_modules", ".git", "__pycache__", "build", "obj",
+            "dist", "venv", ".venv", "env", ".env", ".tox", ".mypy_cache",
+            ".pytest_cache", "coverage", ".coverage", "htmlcov",
+            "bower_components", "composer_modules", "third_party",
+            "extern", "external", "packages",
+        })
+
+        # GitHub Linguist excluded file patterns (generated/vendored)
+        linguist_exclude_files = re.compile(
+            r"(package-lock\.json|yarn\.lock|Gemfile\.lock|composer\.lock"
+            r"|\.min\.js$|\.min\.css$|\.map$"
+            r"|\.pb\.go$|_generated\.go$"
+            r"|\.snap$|\.svg$)",
+            re.IGNORECASE,
+        )
+
+        # Count bytes per language (GitHub Linguist counts bytes, not lines)
+        lang_bytes: dict[str, int] = {}
+
+        scan_root = project_root / "src"
+        if not scan_root.is_dir():
+            scan_root = project_root
+
+        for root, dirs, files in os.walk(scan_root):
+            # Exclude directories in-place (GitHub Linguist behavior)
+            dirs[:] = [d for d in dirs if d not in linguist_exclude_dirs]
+
+            for fname in files:
+                # Skip generated/vendored files
+                if linguist_exclude_files.search(fname):
+                    continue
+
+                fpath = Path(root) / fname
+
+                # Check if it's a filename-based match (Makefile, etc.)
+                lang = linguist_exts.get(fname)
+                if lang is None:
+                    lang = linguist_exts.get(fpath.suffix.lower())
+                if lang is None:
+                    continue
+
+                try:
+                    byte_count = fpath.stat().st_size
+                    lang_bytes[lang] = lang_bytes.get(lang, 0) + byte_count
+                except OSError:
+                    pass
+
+        check_composition._cached[cache_key] = lang_bytes
+
+        total = sum(lang_bytes.values())
+        if total == 0:
+            return violations
+
+        # Calculate percentages (GitHub Linguist style)
+        lang_pct = {lang: (bsize / total) * 100 for lang, bsize in lang_bytes.items()}
+        ada_pct = lang_pct.get("Ada", 0.0)
+        ada_bytes = lang_bytes.get("Ada", 0)
+
+        # Find the dominant non-Ada language
+        non_ada = {k: v for k, v in lang_pct.items() if k != "Ada"}
+        if not non_ada:
+            return violations
+
+        max_other_lang = max(non_ada, key=non_ada.get)
+        max_other_pct = non_ada[max_other_lang]
+
+        # Build GitHub-style composition summary (sorted by %)
+        sorted_langs = sorted(lang_pct.items(), key=lambda x: -x[1])
+        composition_parts = []
+        for lang, pct in sorted_langs:
+            bsize = lang_bytes.get(lang, 0)
+            if bsize >= 1024 * 1024:
+                size_str = f"{bsize / (1024 * 1024):.1f} MB"
+            elif bsize >= 1024:
+                size_str = f"{bsize / 1024:.1f} KB"
+            else:
+                size_str = f"{bsize} B"
+            composition_parts.append(f"{lang}: {pct:.1f}% ({size_str})")
+        composition_str = " | ".join(composition_parts)
+
+        # Ada MUST be >= any other single language
+        if ada_pct < max_other_pct:
+            violations.append(Violation(
+                filepath=filepath,
+                line=1,
+                severity=Severity.CRITICAL,
+                category="ADA_NOT_DOMINANT",
+                message=(
+                    f"FRAUD — GitHub Linguist byte analysis: Ada is NOT dominant. "
+                    f"{ada_pct:.1f}% Ada vs {max_other_pct:.1f}% {max_other_lang}. "
+                    f"Ada = formal verification + deterministic + compile-time safety. "
+                    f"Non-Ada dominant = quality NOT assured. MAL-CRITICAL. "
+                    f"Reimplement {max_other_lang} into Ada (.adb/.ads). "
+                    f"Composition: {composition_str}"
+                ),
+                standard="Ada RM, DO-178C, ECSS-E-ST-40C, MAL-SCORING, GitHub-Linguist",
+            ))
+
+        # Warn if Ada is below 30% of total (even if it's still largest)
+        if ada_pct < 30.0 and ada_pct > 0:
+            violations.append(Violation(
+                filepath=filepath,
+                line=1,
+                severity=Severity.HIGH,
+                category="ADA_TOO_LOW",
+                message=(
+                    f"QUALITY NOT ASSURED — Ada is only {ada_pct:.1f}% "
+                    f"({ada_bytes:,} bytes) of codebase. Target: >= 30%. "
+                    f"Low Ada = less formal verification, more runtime errors. "
+                    f"Reimplement {max_other_lang} into Ada. "
+                    f"Composition: {composition_str}"
+                ),
+                standard="Ada RM, DO-178C, ECSS-E-ST-40C, MAL-SCORING, GitHub-Linguist",
+            ))
+
+        return violations
+
+    return [
+        Pattern(
+            name="Code Composition Balance — Ada Dominance (GitHub Linguist, MAL Fraud Detection)",
+            category="ADA_NOT_DOMINANT",
+            severity=Severity.CRITICAL,
+            standard="Ada RM, DO-178C, ECSS-E-ST-40C, MAL-SCORING, GitHub-Linguist",
+            description=(
+                "GitHub Linguist-style byte analysis.  Ada is the ONLY language with "
+                "formal verification (SPARK), deterministic runtime, and compile-time "
+                "safety.  Counts bytes like GitHub, excludes same directories, detects "
+                "generated files.  If Ada is NOT dominant, quality is NOT assured — "
+                "potential fraud.  MAL score degraded.  Build blocked."
+            ),
+            languages=["python", "ada", "c", "typescript"],
+            check_func=check_composition,
+        ),
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # DEFAULT REGISTRY
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -4489,6 +4905,12 @@ def create_default_registry() -> PatternRegistry:
 
     # SMT solver logic verification — formal proof of function correctness
     registry.register_all(_build_smt_logic_verification_patterns())
+
+    # Function comment / docstring enforcement (MEDIUM)
+    registry.register_all(_build_function_comment_patterns())
+
+    # Code composition balancing — Ada must be dominant (CRITICAL)
+    registry.register_all(_build_composition_balance_patterns())
 
     return registry
 
