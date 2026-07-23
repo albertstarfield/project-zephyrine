@@ -5161,7 +5161,6 @@ def real_main():  # nosec
                 # Clean stale AFL++ output from previous runs (queue/, plots/, etc.)
                 if os.path.isdir(output_dir):
                     try:
-                        import shutil
                         shutil.rmtree(output_dir, ignore_errors=True)
                     except Exception:
                         pass
