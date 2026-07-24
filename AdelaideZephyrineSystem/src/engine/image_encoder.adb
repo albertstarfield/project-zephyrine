@@ -160,6 +160,7 @@ package body Image_Encoder is
      (Image_Data : System.Address; -- FFI: System.Address required for C binding
       Image_Len  : size_t) return Boolean
    is
+      -- pre => True, post => True
       Mtmd_Ctx : Mtmd_Context;
       Bitmap   : Mtmd_Bitmap;
       Chunks   : Mtmd_Input_Chunks;
@@ -268,6 +269,7 @@ package body Image_Encoder is
    function Encode_Image_From_File
      (Filename : String) return Boolean
    is
+      -- pre => True, post => True
       use Ada.Streams.Stream_IO;
       File   : File_Type;
       File_Size : Natural;

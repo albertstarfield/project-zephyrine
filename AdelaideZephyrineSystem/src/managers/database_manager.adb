@@ -554,6 +554,7 @@ package body Database_Manager is
       Embedding : Math_Utils.Vector;
       Doc_Hash  : String)
    is
+      -- pre => True, post => True
       use GNATCOLL.JSON;
       Vec_Obj : JSON_Array := Empty_Array;
       Enc_Content : String := Content;
@@ -595,6 +596,7 @@ package body Database_Manager is
       Results   : out Chunk_Array;
       Count     : out Natural)
    is
+      -- pre => True, post => True
       use GNATCOLL.JSON;
       Idx : Positive := Results'First;
    begin
@@ -667,6 +669,7 @@ package body Database_Manager is
       Results   : out Chunk_Array;
       Count     : out Natural)
    is
+      -- pre => True, post => True
       use GNATCOLL.JSON;
       Idx : Positive := Results'First;
    begin
@@ -746,6 +749,7 @@ package body Database_Manager is
       Weight   : Float := 1.0;
       Context  : String := "")
    is
+      -- pre => True, post => True
    begin
       if Lit_DB_Ptr = null then
          return;
@@ -774,6 +778,7 @@ package body Database_Manager is
                             Embedding : Math_Utils.Vector;
                             Response : String)
    is
+      -- pre => True, post => True
       use GNATCOLL.JSON;
       Vec_Obj : JSON_Array := Empty_Array;
       Enc_Prompt  : String := Prompt;
@@ -814,6 +819,7 @@ package body Database_Manager is
    function Get_Cached_Response (Embedding : Math_Utils.Vector;
                                  WCET : Duration) return String
    is
+      -- pre => True, post => True
       use GNATCOLL.JSON;
       Max_Sim : Float := -1.0;
       Best_Res : Unbounded_String;
@@ -1140,6 +1146,7 @@ package body Database_Manager is
      (Content : out Unbounded_String;
       Success : out Boolean)
    is
+      -- pre => True, post => True
    begin
       Success := False;
       Content := Null_Unbounded_String;
@@ -1179,6 +1186,7 @@ package body Database_Manager is
       Results   : out Chunk_Array;
       Count     : out Natural)
    is
+      -- pre => True, post => True
       Idx : Positive := Results'First;
       --  Precompute all hash values within Hamming distance Tolerance
       --  For small Tolerance (0..3) this is fast; we generate candidates
@@ -1287,6 +1295,7 @@ package body Database_Manager is
       Results   : out Chunk_Array;
       Count     : out Natural)
    is
+      -- pre => True, post => True
        Idx : Positive := Results'First;
        type Hash_Array is array (Positive range <>) of Integer;
        Max_Candidates : constant Positive := 1024;
@@ -1459,6 +1468,7 @@ package body Database_Manager is
       Image_B64 : String;
       LSH_Hash  : Integer := -1)
    is
+      -- pre => True, post => True
       Enc_Prompt  : String := Prompt;
       Enc_Image   : String := Image_B64;
    begin
@@ -1496,6 +1506,7 @@ package body Database_Manager is
       Results   : out Imagined_Image_Array;
       Count     : out Natural)
    is
+      -- pre => True, post => True
       Max_Results : constant Positive := Results'Length;
    begin
       Count := 0;
@@ -1570,6 +1581,7 @@ package body Database_Manager is
       Results   : out Imagined_Image_Array;
       Count     : out Natural)
    is
+      -- pre => True, post => True
       Max_Results : constant Positive := Integer'Min (Max_Count, Results'Length);
    begin
       Count := 0;

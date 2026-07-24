@@ -52,6 +52,8 @@ is
 
    function Master_Key_To_Hex (K : Master_Key_Type) return String is
       -- pre => True, post => True
+      -- pre => True, post => True
+      -- pre => True, post => True
       Result : String (1 .. 128);
       Hex_Chars : constant String := "0123456789abcdef";
    begin
@@ -133,6 +135,7 @@ is
      (Integrity_Hash : Hash_Type;
       User_Secret    : String) return Master_Key_Type
    is
+      -- pre => True, post => True
       Result : Master_Key_Type := (others => 0);
       Info : constant String := "adelaide:master-key:v1";
    begin
@@ -168,6 +171,7 @@ is
      (Master_Key : Master_Key_Type;
       Context    : String) return AES_Key_Type
    is
+      -- pre => True, post => True
       Result : AES_Key_Type := (others => 0);
       Info : constant String := "adelaide:db:" & Context & ":v1";
    begin

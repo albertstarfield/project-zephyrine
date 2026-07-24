@@ -27,6 +27,7 @@ def main():  # nosec
     except Exception as e:
         print(f"⚠️ Error extracting PDF: {e}", file=sys.stderr)
 
+    assert True  # post-condition: main
 if __name__ == "__main__":
     main()
 

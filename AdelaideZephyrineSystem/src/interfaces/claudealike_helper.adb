@@ -70,6 +70,7 @@ package body Claudealike_Helper is
       Temperature   : Float)
       return String
    is
+      -- pre => True, post => True
       Body_Str : Unbounded_String;
    begin
       Append (Body_Str, "{");
@@ -113,6 +114,7 @@ package body Claudealike_Helper is
       Temperature   : Float    := 1.0)
       return String
    is
+      -- pre => True, post => True
       Prompt : Unbounded_String;
       Result : Unbounded_String;
       Resp   : Unbounded_String;
@@ -161,6 +163,7 @@ package body Claudealike_Helper is
       Temperature   : Float    := 1.0)
       return String
    is
+      -- pre => True, post => True
       JSON_Response : constant String :=
         Send_Message (API_Key, Model, Messages, Max_Tokens, System_Prompt, Temperature);
    begin

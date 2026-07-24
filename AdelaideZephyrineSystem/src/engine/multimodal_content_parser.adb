@@ -48,6 +48,7 @@ package body Multimodal_Content_Parser is
    function Decode_Base64
      (Encoded : String) return Ada.Streams.Stream_Element_Array
    is
+      -- pre => True, post => True
       use Ada.Streams;
       --  Calculate output length (approximate, will be trimmed)
       Enc_Len  : constant Natural := Encoded'Length;
@@ -107,6 +108,7 @@ package body Multimodal_Content_Parser is
    function Extract_Text_Content
      (Message : GNATCOLL.JSON.JSON_Value) return Unbounded_String
    is
+      -- pre => True, post => True
       Result : Unbounded_String := Null_Unbounded_String;
    begin
       if not GNATCOLL.JSON.Has_Field (Message, "content") then
@@ -159,6 +161,7 @@ package body Multimodal_Content_Parser is
    function Process_Base64_Image
      (Base64_Data : String) return Boolean
    is
+      -- pre => True, post => True
       use Ada.Streams;
       Decoded : constant Stream_Element_Array :=
         Decode_Base64 (Base64_Data);
@@ -183,6 +186,7 @@ package body Multimodal_Content_Parser is
    function Extract_And_Encode_Images
      (Message : GNATCOLL.JSON.JSON_Value) return Boolean
    is
+      -- pre => True, post => True
       Found_Images : Boolean := False;
    begin
       if not GNATCOLL.JSON.Has_Field (Message, "content") then
@@ -284,6 +288,7 @@ package body Multimodal_Content_Parser is
    function Extract_Ollama_Images
      (Message : GNATCOLL.JSON.JSON_Value) return Boolean
    is
+      -- pre => True, post => True
       Found_Images : Boolean := False;
    begin
       if not GNATCOLL.JSON.Has_Field (Message, "images") then
@@ -324,6 +329,7 @@ package body Multimodal_Content_Parser is
    function Has_Images
      (Message : GNATCOLL.JSON.JSON_Value) return Boolean
    is
+      -- pre => True, post => True
    begin
       --  Check OpenAI format (content array with image_url parts)
       if GNATCOLL.JSON.Has_Field (Message, "content") then

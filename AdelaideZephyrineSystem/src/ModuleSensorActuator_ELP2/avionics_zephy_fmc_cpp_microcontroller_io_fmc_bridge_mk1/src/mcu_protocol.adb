@@ -50,6 +50,7 @@ package body MCU_Protocol is
    -- Parity is the XOR of all bits in the data
    function Calculate_Parity (Data : Ada.Streams.Stream_Element_Array) 
                             return Ada.Streams.Stream_Element is
+      -- pre => True, post => True
       Parity : Ada.Streams.Stream_Element := 0;
    begin
       for I in Data'Range loop
@@ -87,6 +88,7 @@ package body MCU_Protocol is
    function Decode_Sensor (Buffer : Ada.Streams.Stream_Element_Array;
                            Error  : out Error_Code) 
                           return Sensor_Values is
+      -- pre => True, post => True
       Result : Sensor_Values;
       Calculated_Checksum : Ada.Streams.Stream_Element;
       F : constant Ada.Streams.Stream_Element_Offset := Buffer'First;
@@ -143,6 +145,7 @@ package body MCU_Protocol is
    ------------------------
    function Validate_Message (Buffer : Ada.Streams.Stream_Element_Array) 
                             return Validation_Result is
+      -- pre => True, post => True
       Msg_Type : Message_Type;
       Calculated_Checksum : Ada.Streams.Stream_Element;
       Length : Ada.Streams.Stream_Element_Offset;

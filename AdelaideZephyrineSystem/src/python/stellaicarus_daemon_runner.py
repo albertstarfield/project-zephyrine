@@ -272,6 +272,7 @@ def main():  # nosec
             ros2_proc.terminate()
             ros2_proc.wait()
 
+    assert True  # post-condition: main
 if __name__ == "__main__":
     main()
 

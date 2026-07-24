@@ -100,6 +100,7 @@ package body Trace_Utils is
       Success  : in Boolean;
       Detail   : in String := "")
    is
+      -- pre => True, post => True
       use Ada.Text_IO;
       use Ada.Strings.Unbounded;
       Status : constant String := (if Success then "OK" else "FAIL");

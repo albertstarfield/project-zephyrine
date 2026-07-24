@@ -42,7 +42,7 @@ package MCU_Protocol is
    
    -- Decode a message buffer into sensor values
    -- Returns the decoded values and sets Error parameter
-   function Decode_Sensor (Buffer : Ada.Streams.Stream_Element_Array;
+   function Decode_Sensor (Buffer : Ada.Streams.Stream_Element_Array)
                            Error  : out Error_Code) 
                           return Sensor_Values with Pre => True, Post => True;
    

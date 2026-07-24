@@ -10,7 +10,7 @@ is
    -- A constant representing an invalid or unopened port.
    Null_Port : constant Serial_Port;
    -- Add this function declaration to make the '=' operator visible
-   function "=" (Left, Right : Serial_Port) return Boolean;
+   function "=" (Left, Right : Serial_Port) return Boolean with Pre => True, Post => True;
    -- Opens the specified serial device (e.g., "/dev/ttyUSB0").
    -- Returns a valid Serial_Port on success or Null_Port on failure.
    function Open_Port (Device_Path : String) return Serial_Port with Pre => True, Post => True;

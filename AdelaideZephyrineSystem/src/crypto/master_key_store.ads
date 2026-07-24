@@ -29,24 +29,24 @@ is
 
    --  Store a 512-bit master key
    procedure Set_Key (K : Key_Type)
-     with Global => null;
+     with Global => null, Pre => True, Post => True;
 
    --  Retrieve the 512-bit master key
    --  Returns Empty_Key if not set
    function Get_Key return Key_Type
-     with Global => null;
+     with Global => null, Pre => True, Post => True;
 
    --  Clear the key from memory (volatile write)
    procedure Clear_Key
-     with Global => null;
+     with Global => null, Pre => True, Post => True;
 
    --  Check if a key is currently stored
    function Is_Set return Boolean
-     with Global => null;
+     with Global => null, Pre => True, Post => True;
 
    --  Get first 32 bytes (256 bits) for AES-256 key derivation
    function Get_AES_Part return Key_Type
-     with Global => null;
+     with Global => null, Pre => True, Post => True;
 
 private
    --  Key storage (volatile to prevent optimization)

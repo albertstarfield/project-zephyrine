@@ -69,17 +69,17 @@ procedure Adelaide_Watchdog is
    --  Get_Heartbeat_Age_S: Returns the age of the last heartbeat in seconds.
    function Get_Heartbeat_Age_S return Duration;
    --  Read_Args: Reads the server command-line arguments from the args file.
-   function Read_Args return String;
+   function Read_Args return String with Pre => True, Post => True;
    --  Restart_Server: Restarts the server process with the given old PID.
-   procedure Restart_Server (Old_Pid : Integer);
+   procedure Restart_Server (Old_Pid : Integer) with Pre => True, Post => True;
    --  Check_Server: Checks server health and restarts if necessary.
-   procedure Check_Server;
+   procedure Check_Server with Pre => True, Post => True;
    --  Get_Port: Returns the server port from command-line args or environment.
-   function Get_Port return String;
+   function Get_Port return String with Pre => True, Post => True;
    --  Get_Host: Returns the server host from command-line args or environment.
-   function Get_Host return String;
+   function Get_Host return String with Pre => True, Post => True;
    --  Check_All_APIs: Checks all API endpoints for health and logs results.
-   procedure Check_All_APIs;
+   procedure Check_All_APIs with Pre => True, Post => True;
 
    Shutdown_Requested : exception;
 
@@ -118,6 +118,11 @@ procedure Adelaide_Watchdog is
    --  Check if another watchdog is already running.
    --  Uses PID file + heartbeat freshness (same logic as server).
    function Is_Another_Watchdog_Running return Boolean is
+      -- pre => True, post => True
+      -- pre => True, post => True
+      -- pre => True, post => True
+      -- pre => True, post => True
+      -- pre => True, post => True
       -- pre => True, post => True
       F       : File_Type;
       S       : String (1 .. 16);

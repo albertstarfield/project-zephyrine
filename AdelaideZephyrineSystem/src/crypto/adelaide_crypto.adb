@@ -127,6 +127,7 @@ package body Adelaide_Crypto is
      (Fn         : C_String2_Func;
       Arg1, Arg2 : String) return Crypto_Result
    is
+      -- pre => True, post => True
       C_Arg1 : chars_ptr := New_String (Arg1);
       C_Arg2 : chars_ptr := New_String (Arg2);
       C_Res  : chars_ptr;
@@ -270,6 +271,7 @@ package body Adelaide_Crypto is
      (Sub_Key_Hex   : String;
       Ciphertext_Hex : String) return Crypto_Result
    is
+      -- pre => True, post => True
    begin
       if not Crypto_Initialized then
          return (Success => False,
@@ -307,6 +309,7 @@ package body Adelaide_Crypto is
      (Sub_Key_Hex   : String;
       Ciphertext_Hex : String) return String
    is
+      -- pre => True, post => True
       Res : constant Crypto_Result := Decrypt_Field (Sub_Key_Hex, Ciphertext_Hex);
    begin
       if Res.Success and then Res.Data /= Null_Unbounded_String then

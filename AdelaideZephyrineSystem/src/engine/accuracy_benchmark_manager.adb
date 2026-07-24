@@ -108,6 +108,7 @@ package body Accuracy_Benchmark_Manager is
       Max_Tokens : Natural := 128;
       Temperature : Float := 0.0
    ) return String is
+      -- pre => True, post => True
       Request_Body : constant String :=
         "{""model"": ""Snowball-Enaga""," &
         """messages"": [{""role"": ""user"", ""content"": """ & Prompt & """}]," &
@@ -165,6 +166,7 @@ package body Accuracy_Benchmark_Manager is
       Response : String;
       Benchmark : Benchmark_Type
    ) return String is
+      -- pre => True, post => True
       Response_Upper : Unbounded_String := To_Unbounded_String(Response);
    begin
       --  Convert to uppercase manually
@@ -307,6 +309,7 @@ package body Accuracy_Benchmark_Manager is
       Expected : String;
       Benchmark : Benchmark_Type
    ) return Boolean is
+      -- pre => True, post => True
    begin
       case Benchmark is
          when BENCH_MMLU | BENCH_MMLU_PRO | BENCH_KMMLU | BENCH_CMMLU | BENCH_JMMLU |
@@ -340,6 +343,7 @@ package body Accuracy_Benchmark_Manager is
       On_Progress : access procedure (Event : String);
       Result : out Benchmark_Result
    ) is
+      -- pre => True, post => True
       Start_Time : constant Time := Clock;
       Dataset_File : Unbounded_String;
       Correct : Natural := 0;

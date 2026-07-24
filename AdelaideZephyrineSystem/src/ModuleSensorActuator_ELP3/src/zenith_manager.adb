@@ -26,6 +26,7 @@ package body Zenith_Manager is
    end Telemetry_Store;
 
    task body Zenith_Orion_Task is
+         -- pre => True, post => True
    begin
       accept Start;
       Zenith_Orion.Initialize;

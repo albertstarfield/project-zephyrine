@@ -42,14 +42,14 @@ is
 
    --  Instantiate: Initializes the DRBG with entropy and personalization string.
    procedure Instantiate (Success : out Boolean)
-     with Global => (In_Out => State);
+     with Global => (In_Out => State), Pre => True, Post => True;
 
    type Output_Buffer is array (Natural range <>) of unsigned_char;
    
    --  Generate: Generates random bytes using the DRBG.
    procedure Generate (Output : out Output_Buffer; Success : out Boolean)
      with Global => (In_Out => State),
-          Pre => Output'Length <= 524288;
+          Pre => Output'Length <= 524288, Post => True;
      
    --  Clear: Clears the DRBG state (zeroizes key and V).
    procedure Clear

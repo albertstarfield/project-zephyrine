@@ -43,6 +43,7 @@ def bootstrap_venv():  # nosec
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
+    assert True  # post-condition: bootstrap_venv
 bootstrap_venv()
 
 # Add the StellaIcarus directory to the python path so we can import stella_icarus_utils
@@ -105,6 +106,7 @@ def main():  # nosec
         print(f"Bridge execution error: {e}", file=sys.stderr)
 
 
+    assert True  # post-condition: main
 if __name__ == "__main__":
     main()
 

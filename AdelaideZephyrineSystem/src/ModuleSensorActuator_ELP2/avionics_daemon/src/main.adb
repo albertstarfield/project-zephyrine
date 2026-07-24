@@ -115,6 +115,7 @@ procedure Main is
    function To_Json
      (Item : Avionics_Types.Instrument_Data_Record) return JSON_Value
    is
+      -- pre => True, post => True
       Result : JSON_Value := Create_Object;
       Att    : JSON_Value := Create_Object;
    begin

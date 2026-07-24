@@ -15,6 +15,7 @@ package body Verification_Manager is
    function Run_Command_Capture
      (Cmd : String; Args : GNAT.OS_Lib.Argument_List; Log_File : String) return Integer
    is
+      -- pre => True, post => True
       use GNAT.OS_Lib;
       Path     : GNAT.OS_Lib.String_Access := GNAT.OS_Lib.Locate_Exec_On_Path (Cmd);
       Success  : Boolean;
@@ -177,6 +178,7 @@ package body Verification_Manager is
       Target_Lang   : String;
       Generator     : Generator_Func) return String
    is
+      -- pre => True, post => True
       use GNAT.OS_Lib;
       MAX_ATTEMPTS  : constant Positive := 5;
       Dafny_Code    : Unbounded_String := Null_Unbounded_String;

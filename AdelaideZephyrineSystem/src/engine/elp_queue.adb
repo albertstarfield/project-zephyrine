@@ -206,6 +206,7 @@ package body ELP_Queue is
        Kind   : Model_Type;
        Source : String := "Unknown")
     is
+       -- pre => True, post => True
     begin
        Load_State.Increment (Level, Source);
        

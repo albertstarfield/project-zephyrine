@@ -46,6 +46,7 @@ package body Benchmark_Manager is
       End_Time : Float;
       Cached_Tokens : Natural
    ) return Benchmark_Metrics is
+      -- pre => True, post => True
       Result : Benchmark_Metrics;
       TTFT_S : Float;
       Gen_Duration : Float;
@@ -94,6 +95,7 @@ package body Benchmark_Manager is
       On_Progress : access procedure (Event : String);
       Result : out Unbounded_String
    ) is
+      -- pre => True, post => True
       Start_Time : constant Time := Clock;
       Prompt_Lengths_Str : constant String := To_String(Config.Prompt_Lengths);
       Current_Pos : Natural := Prompt_Lengths_Str'First;

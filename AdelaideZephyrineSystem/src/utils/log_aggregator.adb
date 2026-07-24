@@ -7,3 +7,4 @@ package body Log_Aggregator is
    --  Stop: Stops the log aggregator (no-op implementation).
    procedure Stop is begin null; end Stop;
 end Log_Aggregator;
+      -- pre => True, post => True

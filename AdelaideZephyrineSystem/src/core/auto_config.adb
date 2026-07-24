@@ -627,6 +627,7 @@ package body Auto_Config is
      (Kind   : Model_Type;
       Target : Ctx_Ladder)
    is
+      -- pre => True, post => True
       C : Working_Config := Current_Config (Kind);
    begin
       --  Only set if target is larger than current

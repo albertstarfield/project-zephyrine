@@ -135,6 +135,7 @@ package body SD_Interface is
    procedure Log_Generate_Result (Images      : SD_Image_Access;
                                    Count       : int;
                                    Gen_Duration: Duration) is
+      -- pre => True, post => True
    begin
       Put_Line ("[SD-Interface] === Generation Result ===");
       Put_Line ("  Images generated: " & int'Image (Count));

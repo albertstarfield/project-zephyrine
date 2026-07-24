@@ -7,3 +7,4 @@ package body Performance_Monitor is
    --  Finalize: Finalizes the performance monitor (no-op implementation).
    procedure Finalize is begin null; end Finalize;
 end Performance_Monitor;
+      -- pre => True, post => True

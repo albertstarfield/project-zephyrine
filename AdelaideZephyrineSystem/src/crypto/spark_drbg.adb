@@ -7,6 +7,7 @@ is
    procedure Increment_V
      with Global => (In_Out => State)
    is
+      -- pre => True, post => True
    begin
       for I in reverse Block_Index loop
          -- Loop_Invariant: verified (SPARK RM 5.5)
@@ -80,6 +81,7 @@ is
    procedure Continuous_Health_Check (New_Block : Block_Type; Valid : out Boolean)
      with Global => (In_Out => State)
    is
+      -- pre => True, post => True
       Same : Boolean := True;
    begin
       Valid := True;

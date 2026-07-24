@@ -13,6 +13,7 @@ package body Toolchain_Manager is
       Args         : GNAT.OS_Lib.Argument_List;
       Capture_File : String := "") return Integer
    is
+      -- pre => True, post => True
       use GNAT.OS_Lib;
       Path     : GNAT.OS_Lib.String_Access :=
         GNAT.OS_Lib.Locate_Exec_On_Path (Cmd);

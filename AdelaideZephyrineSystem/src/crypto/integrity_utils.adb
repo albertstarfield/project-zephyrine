@@ -31,6 +31,7 @@ package body Integrity_Utils is
      Block_Size : Positive;
      Parity     : in out Byte_Array
    ) is
+      -- pre => True, post => True
       Num_Blocks : constant Positive := Data'Length / Block_Size;
       Data_Start : constant Positive := Data'First;
       Par_Start  : constant Positive := Parity'First;
@@ -61,6 +62,7 @@ package body Integrity_Utils is
      Corrupt_Index : Positive;
      Parity        : Byte_Array
    ) is
+      -- pre => True, post => True
       Num_Blocks    : constant Positive := Data'Length / Block_Size;
       Data_Start    : constant Positive := Data'First;
       Par_Start     : constant Positive := Parity'First;
@@ -96,6 +98,7 @@ package body Integrity_Utils is
      Parity        : Byte_Array;
      Success       : out Boolean
    ) is
+      -- pre => True, post => True
       Num_Blocks    : constant Positive := Data'Length / Block_Size;
       Data_Start    : constant Positive := Data'First;
       Corrupt_Count : Natural := 0;

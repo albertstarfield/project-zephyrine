@@ -75,6 +75,7 @@ package body Adelaide_Trace is
    --  ------------------------------------------------------------------------
    procedure Trace_Print (Toolcall : String; Step    : String;
                           Message  : String := "") is
+      -- pre => True, post => True
    begin
       if not Trace_Enabled then
          return;
@@ -101,6 +102,7 @@ package body Adelaide_Trace is
    --  ------------------------------------------------------------------------
    procedure Trace_Result (Toolcall : String; Success : Boolean;
                            Detail   : String := "") is
+      -- pre => True, post => True
       Status : constant String := (if Success then "OK" else "FAIL");
    begin
       if not Trace_Enabled then

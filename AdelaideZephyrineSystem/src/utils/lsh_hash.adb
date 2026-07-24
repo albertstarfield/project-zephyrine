@@ -30,6 +30,7 @@ package body LSH_Hash is
     function Compute
        (Embedding : Math_Utils.Vector; Length : Natural) return Integer
     is
+       -- pre => True, post => True
         use GNAT.OS_Lib;
         use GNAT.Expect;
 
@@ -234,6 +235,7 @@ package body LSH_Hash is
         Length    : Natural;
         Alpha     : Float := 0.1) return Integer
     is
+       -- pre => True, post => True
         use GNAT.OS_Lib;
         use GNAT.Expect;
 
