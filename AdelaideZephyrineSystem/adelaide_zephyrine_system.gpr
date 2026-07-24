@@ -95,7 +95,7 @@ with "ada_sqlite3";
 project AdelaideZephyrineSystem is
 
    for Languages use ("Ada", "C", "C++");
-   for Source_Dirs use ("src/", "src/c_bindings/", "src/core/", "src/crypto/", "src/engine/", "src/interfaces/", "src/managers/", "src/NonDeterministicGenerativeModelManager/", "src/utils/", "config/", "src/ModuleSensorActuator_ELP3/src/", "src/ModuleSensorActuator_ELP3/ROS2/", "src/ModuleSensorActuator_ELP2/ROS2/");
+   for Source_Dirs use ("src/", "src/ada_util/", "src/c_bindings/", "src/core/", "src/crypto/", "src/engine/", "src/interfaces/", "src/managers/", "src/NonDeterministicGenerativeModelManager/", "src/utils/", "config/", "src/ModuleSensorActuator_ELP3/src/", "src/ModuleSensorActuator_ELP3/ROS2/", "src/ModuleSensorActuator_ELP2/ROS2/");
    for Object_Dir use "obj/" & AdelaideZephyrineSystem_Config.Build_Profile;
    for Create_Missing_Dirs use "True";
    for Exec_Dir use "bin";

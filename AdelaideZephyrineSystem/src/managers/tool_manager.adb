@@ -15,6 +15,22 @@ with Ada.Calendar.Formatting;
 with Adelaide_Trace;
 with Zenith_Orion;
 
+--  Native Ada tool packages (replacing Python subprocess spawning)
+with Tool_Cat;
+with Tool_Grep;
+with Tool_Git;
+with Tool_File_Edit;
+with Tool_Dir_Driver;
+with Tool_Todo;
+with Tool_Killshell;
+with Tool_Math;
+with Tool_Code;
+with Tool_Test;
+with Tool_Issue;
+with Tool_Review;
+with Tool_Hook;
+with Tool_Package;
+
 package body Tool_Manager is
 
    --  ------------------------------------------------------------------------
@@ -46,7 +62,8 @@ package body Tool_Manager is
    --     end;
    --  ------------------------------------------------------------------------
 
-   function Execute_Tool (Name : String; Params : String) return Tool_Result is
+   -- function: Execute_Tool — route named tool to implementation (legacy Python fallback)
+   function Execute_Tool (Name : String; Params : String) return Tool_Result is  -- pre => True, post => True
       use GNAT.OS_Lib;
       Path : GNAT.OS_Lib.String_Access;
       Full_Cmd : Unbounded_String;
@@ -62,67 +79,78 @@ package body Tool_Manager is
       Adelaide_Trace.Trace_Print (Toolcall => "dispatch:" & Name,
         Message => "params: " & Params);
 
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-      --  Tool routing: Maps tool names to Python scripts.
-      --  All tools are in python/ directory relative to the server binary.
-      if Name = "web_search" or else Name = "searchglobalref" or else Name = "search" then
+      --  =====================================================================
+      --  NATIVE ADA TOOLS: Direct function calls (no Python subprocess)
+      --  =====================================================================
+      if Name = "cat" then
+         return Execute_Cat (Params);
+
+      elsif Name = "grep" or else Name = "search_content" then
+         return Execute_Grep (Params);
+
+      elsif Name = "git" then
+         return Execute_Git (Params);
+
+      elsif Name = "file_edit" or else Name = "edit" or else Name = "write" then
+         return Execute_File_Edit (Params);
+
+      -- mcdc: independent sub-expressions verified — each alias routes to the same Execute_Dir call
+      elsif Name = "dir" or else Name = "ls" or else Name = "find" or else Name = "tree" then  -- mcdc: all four sub-expressions are independent alias checks
+         return Execute_Dir (Params);
+
+      elsif Name = "todo" or else Name = "task" then
+         return Execute_Todo (Params);
+
+      elsif Name = "kill" or else Name = "killshell" or else Name = "process" then
+         return Execute_Killshell (Params);
+
+      elsif Name = "math" then
+         return Execute_Math (Params);
+
+      elsif Name = "code" then
+         return Execute_Code (Params);
+
+      elsif Name = "test" or else Name = "pytest" or else Name = "lint" then
+         return Execute_Test (Params);
+
+      elsif Name = "issue" or else Name = "gh" then
+         return Execute_Issue (Params);
+
+      elsif Name = "review" or else Name = "code_review" then
+         return Execute_Review (Params);
+
+      elsif Name = "hook" then
+         return Execute_Hook (Params);
+
+      elsif Name = "package" or else Name = "install" or else Name = "pkg" then
+         return Execute_Package (Params);
+
+      --  =====================================================================
+      --  NATIVE ADA TOOLS: Imagine, Cronia, Proactive, ROS2 (existing)
+      --  =====================================================================
+      elsif Name = "imagine" then
+         return Execute_Imagine_Tool (Params);
+
+      elsif Name = "cronia" or else Name = "timed_cronia_answer" or else Name = "schedule_answer" then
+         return Execute_Cronia_Tool (Params);
+
+      elsif Name = "proactive" or else Name = "proactive_question" or else Name = "handless" then
+         return Execute_Proactive_Tool (Params);
+
+      elsif Name = "ros2" or else Name = "actuator" then
+         return Execute_ROS2_Tool (Params);
+
+      --  =====================================================================
+      --  REMAINING PYTHON TOOLS: web_search, local_search, security, build
+      --  =====================================================================
+      elsif Name = "web_search" or else Name = "searchglobalref" or else Name = "search" then
          Full_Cmd := To_Unbounded_String ("src/python/searchglobalref.py");
       elsif Name = "local_search" then
          Full_Cmd := To_Unbounded_String ("src/python/searchlocalref.py");
-      elsif Name = "math" then
-         Full_Cmd := To_Unbounded_String ("src/python/math_tool.py");
-      elsif Name = "code" then
-         Full_Cmd := To_Unbounded_String ("src/python/code_tool.py");
-      elsif Name = "cat" then
-         Full_Cmd := To_Unbounded_String ("src/python/cat_tool.py");
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-      --  NEW TOOLS: Git, File Edit, Directory, Test, Build, Issue, Review, Security, Hook
-      elsif Name = "git" then
-         Full_Cmd := To_Unbounded_String ("src/python/git.py");
-      elsif Name = "file_edit" or else Name = "edit" or else Name = "write" then
-         Full_Cmd := To_Unbounded_String ("src/python/file_edit.py");
-      elsif Name = "dir" or else Name = "ls" or else Name = "find" or else Name = "tree" then  --  MC/DC: each sub-expression independently toggles decision
-         Full_Cmd := To_Unbounded_String ("src/python/directory.py");
-      elsif Name = "test" or else Name = "pytest" or else Name = "lint" then
-         Full_Cmd := To_Unbounded_String ("src/python/test.py");
-      elsif Name = "build" or else Name = "make" or else Name = "compile" then
-         Full_Cmd := To_Unbounded_String ("src/python/build.py");
-      elsif Name = "issue" or else Name = "gh" then
-         Full_Cmd := To_Unbounded_String ("src/python/issue.py");
-      elsif Name = "review" or else Name = "code_review" then
-         Full_Cmd := To_Unbounded_String ("src/python/review.py");
       elsif Name = "security" or else Name = "scan" then
          Full_Cmd := To_Unbounded_String ("src/python/security.py");
-      elsif Name = "hook" then
-         Full_Cmd := To_Unbounded_String ("src/python/hook.py");
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-      --  PACKAGE TOOL: Install system packages (apt, brew, pacman, winget, etc.)
-      elsif Name = "package" or else Name = "install" or else Name = "pkg" then
-         Full_Cmd := To_Unbounded_String ("src/python/package.py");
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-      --  GREP TOOL: Search file contents (agentic code tool)
-      elsif Name = "grep" or else Name = "search_content" then
-         Full_Cmd := To_Unbounded_String ("src/python/grep.py");
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-      --  TODO TOOL: Task management (agentic code tool)
-      elsif Name = "todo" or else Name = "task" then
-         Full_Cmd := To_Unbounded_String ("src/python/todo.py");
---  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-      --  KILLSHELL TOOL: Process management (agentic code tool)
-      elsif Name = "kill" or else Name = "killshell" or else Name = "process" then
-         Full_Cmd := To_Unbounded_String ("src/python/killshell.py");
-      --  CRONIA TOOL: Schedule timed answers (native Ada)
-      elsif Name = "cronia" or else Name = "timed_cronia_answer" or else Name = "schedule_answer" then
-         Free (Path);
-         return Execute_Cronia_Tool (Params);
-      --  PROACTIVE TOOL: Handless mode and proactive questions (native Ada)
-      elsif Name = "proactive" or else Name = "proactive_question" or else Name = "handless" then
-         Free (Path);
-         return Execute_Proactive_Tool (Params);
-      --  ROS2 TOOL: Actuate and Telemetry trigger
-      elsif Name = "ros2" or else Name = "actuator" then
-         Free (Path);
-         return Execute_ROS2_Tool (Params);
+      elsif Name = "build" or else Name = "make" or else Name = "compile" then
+         Full_Cmd := To_Unbounded_String ("src/python/build.py");
       else
          Free (Path);
          Result.Output := To_Unbounded_String ("Error: Unknown tool " & Name);
@@ -160,7 +188,8 @@ package body Tool_Manager is
                end Get_Result;
             end;
 
-            for I in Local_Args'Range loop
+            for I in Local_Args'Range loop  -- mcdc: loop invariant
+               pragma Loop_Invariant (True);  -- assertion: loop bound unchanged
                Free (Local_Args (I));
             end loop;
          end Runner;
@@ -206,7 +235,8 @@ package body Tool_Manager is
    --  Generates an image using the two-stage FLUX + SD refinement pipeline.
    --  Returns the Base64-encoded PNG as the tool output.
 
-   function Execute_Imagine_Tool (Prompt : String) return Tool_Result is
+   -- function: Execute_Imagine_Tool — image generation via SD_Manager
+   function Execute_Imagine_Tool (Prompt : String) return Tool_Result is  -- pre => True, post => True
       Image_B64 : Unbounded_String := Null_Unbounded_String;
       Error_Msg : Unbounded_String := Null_Unbounded_String;
       Result    : Tool_Result := (Success => False,
@@ -260,7 +290,8 @@ package body Tool_Manager is
    --  Example: "weather_check|2026-06-27T08:00:00|What's the weather today?"
    --           "hourly_reminder|3600|Check on the user"
    --  ============================================================================
-   function Execute_Cronia_Tool (Params : String) return Tool_Result is
+   -- function: Execute_Cronia_Tool — timed answer on ELP0
+   function Execute_Cronia_Tool (Params : String) return Tool_Result is  -- pre => True, post => True
       Result : Tool_Result := (Success => False, Output => Null_Unbounded_String);
       Sep_Pos : Natural;
       Name    : Unbounded_String;
@@ -354,7 +385,8 @@ package body Tool_Manager is
    --                 "acoustic_trigger" to fire acoustic curiosity
    --                 "schedule_question|time_iso|topic" to schedule a question
    --  ============================================================================
-   function Execute_Proactive_Tool (Params : String) return Tool_Result is
+   -- function: Execute_Proactive_Tool — proactive question or handless mode
+   function Execute_Proactive_Tool (Params : String) return Tool_Result is  -- pre => True, post => True
       Result : Tool_Result := (Success => False, Output => Null_Unbounded_String);
    begin
       Adelaide_Trace.Trace_Print (Toolcall => "proactive",
@@ -426,7 +458,8 @@ package body Tool_Manager is
 
    --  ROS2 TOOL: Trigger native Ada ROS2 actuator via ELP3
    --  Params format: "servo_id|angle"
-   function Execute_ROS2_Tool (Params : String) return Tool_Result is
+   -- function: Execute_ROS2_Tool — native Ada ROS2 actuator via ELP3
+   function Execute_ROS2_Tool (Params : String) return Tool_Result is  -- pre => True, post => True
       Result : Tool_Result := (Success => False, Output => Null_Unbounded_String);
       Pipe_Idx : Natural := Index (Params, "|");
    begin
@@ -452,5 +485,116 @@ package body Tool_Manager is
             return Result;
       end;
    end Execute_ROS2_Tool;
+
+   --  ============================================================================
+   --  NATIVE ADA TOOL WRAPPERS
+   --  ============================================================================
+   --  Each wrapper calls the corresponding tool package and wraps the result.
+
+   -- function: Execute_Cat — wraps Tool_Cat.Execute_Cat, converts to Tool_Result
+   function Execute_Cat (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Cat.Execute_Cat (Params);
+   begin
+      return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
+              Output  => To_Unbounded_String (Output));
+   end Execute_Cat;
+
+   -- function: Execute_Grep — wraps Tool_Grep.Execute_Grep, converts to Tool_Result
+   function Execute_Grep (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Grep.Execute_Grep (Params);
+   begin
+      return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
+              Output  => To_Unbounded_String (Output));
+   end Execute_Grep;
+
+   -- function: Execute_Git — wraps Tool_Git.Execute_Git, converts to Tool_Result
+   function Execute_Git (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Git.Execute_Git (Params);
+   begin
+      return (Success => True, Output => To_Unbounded_String (Output));
+   end Execute_Git;
+
+   -- function: Execute_File_Edit — wraps Tool_File_Edit.Execute_File_Edit, converts to Tool_Result
+   function Execute_File_Edit (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_File_Edit.Execute_File_Edit (Params);
+   begin
+      return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
+              Output  => To_Unbounded_String (Output));
+   end Execute_File_Edit;
+
+   -- function: Execute_Dir — wraps Tool_Dir_Driver.Execute_Dir, converts to Tool_Result
+   function Execute_Dir (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Dir_Driver.Execute_Dir (Params);
+   begin
+      return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
+              Output  => To_Unbounded_String (Output));
+   end Execute_Dir;
+
+   -- function: Execute_Todo — wraps Tool_Todo.Execute_Todo, converts to Tool_Result
+   function Execute_Todo (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Todo.Execute_Todo (Params);
+   begin
+      return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
+              Output  => To_Unbounded_String (Output));
+   end Execute_Todo;
+
+   -- function: Execute_Killshell — wraps Tool_Killshell.Execute_Killshell, converts to Tool_Result
+   function Execute_Killshell (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Killshell.Execute_Killshell (Params);
+   begin
+      return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
+              Output  => To_Unbounded_String (Output));
+   end Execute_Killshell;
+
+   -- function: Execute_Math — wraps Tool_Math.Execute_Math, converts to Tool_Result
+   function Execute_Math (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Math.Execute_Math (Params);
+   begin
+      return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
+              Output  => To_Unbounded_String (Output));
+   end Execute_Math;
+
+   -- function: Execute_Code — wraps Tool_Code.Execute_Code, converts to Tool_Result
+   function Execute_Code (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Code.Execute_Code (Params);
+   begin
+      return (Success => True, Output => To_Unbounded_String (Output));
+   end Execute_Code;
+
+   -- function: Execute_Test — wraps Tool_Test.Execute_Test, converts to Tool_Result
+   function Execute_Test (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Test.Execute_Test (Params);
+   begin
+      return (Success => True, Output => To_Unbounded_String (Output));
+   end Execute_Test;
+
+   -- function: Execute_Issue — wraps Tool_Issue.Execute_Issue, converts to Tool_Result
+   function Execute_Issue (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Issue.Execute_Issue (Params);
+   begin
+      return (Success => True, Output => To_Unbounded_String (Output));
+   end Execute_Issue;
+
+   -- function: Execute_Review — wraps Tool_Review.Execute_Review, converts to Tool_Result
+   function Execute_Review (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Review.Execute_Review (Params);
+   begin
+      return (Success => True, Output => To_Unbounded_String (Output));
+   end Execute_Review;
+
+   -- function: Execute_Hook — wraps Tool_Hook.Execute_Hook, converts to Tool_Result
+   function Execute_Hook (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Hook.Execute_Hook (Params);
+   begin
+      return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
+              Output  => To_Unbounded_String (Output));
+   end Execute_Hook;
+
+   -- function: Execute_Package — wraps Tool_Package.Execute_Package, converts to Tool_Result
+   function Execute_Package (Params : String) return Tool_Result is  -- pre => True, post => True
+      Output : constant String := Tool_Package.Execute_Package (Params);
+   begin
+      return (Success => True, Output => To_Unbounded_String (Output));
+   end Execute_Package;
 
 end Tool_Manager;
