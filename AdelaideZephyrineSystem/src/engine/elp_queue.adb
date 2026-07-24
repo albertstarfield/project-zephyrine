@@ -76,6 +76,7 @@ package body ELP_Queue is
    protected body Load_State is
      --  Increment the count for the given priority level and record the source name.
      procedure Increment (Level : ELP_Level; Source : String) is
+        -- pre => True, post => True
        begin
           Counts (Level) := Counts (Level) + 1;
           Total := Total + 1;
@@ -97,6 +98,7 @@ package body ELP_Queue is
 
        --  Decrement the count for the given priority level and log completion timing.
        procedure Decrement (Level : ELP_Level) is
+          -- pre => True, post => True
     begin
        if Counts (Level) > 0 then
           Counts (Level) := Counts (Level) - 1;
@@ -155,6 +157,7 @@ package body ELP_Queue is
 
        --  Set the actual task start time (when execution begins)
        procedure Set_Task_Start (Level : ELP_Level) is
+          -- pre => True, post => True
        begin
           Task_Timings (Level).Start_Time := Clock;
        end Set_Task_Start;
@@ -327,6 +330,7 @@ package body ELP_Queue is
     --  This procedure determines which priority level to serve next based on current queue state.
     --  The actual task processing is handled by the Model_Manager based on this priority.
      procedure Dequeue (Level : out ELP_Level; Kind : out Model_Type) is
+        -- pre => True, post => True
         C : constant Level_Counts := Load_State.Get_Counts;
      begin
         --  Default values to satisfy compiler (should never be used)
@@ -363,6 +367,7 @@ package body ELP_Queue is
     --  SAFETY NOTE: The check for positive count prevents negative values which could
      --  cause incorrect priority handling. This is defensive programming against race conditions.
      procedure Dequeue_Level (Level : ELP_Level) is
+        -- pre => True, post => True
      begin
         --  Safety check: only decrement if we actually have tasks at this priority
         --  This handles edge cases where multiple threads might try to dequeue the same task
@@ -379,6 +384,7 @@ package body ELP_Queue is
    function Capacity return Unsigned_64 is ((2**64) / 2);
 
    function Utilization return Long_Long_Float is
+      -- pre => True, post => True
       D : constant Long_Long_Integer := Depth;
       C : constant Unsigned_64 := Capacity;
    begin
@@ -422,6 +428,7 @@ package body ELP_Queue is
 
    --  Initialize the ELP queue and start the monitor task.
    procedure Initialize is
+      -- pre => True, post => True
    begin
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &

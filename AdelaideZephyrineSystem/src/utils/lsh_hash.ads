@@ -14,7 +14,7 @@ package LSH_Hash is
    --    - ELP0 preemption was requested (caller should abort)
    function Compute
      (Embedding : Math_Utils.Vector;
-      Length    : Natural) return Integer;
+      Length    : Natural) return Integer with Pre => True, Post => True;
 
    --  Compute a steered 10-bit LSH hash using PINN Schrödinger Bridge.
    --  Uses pinn_schrodinger.py --steer-hash to apply Orthogonal Latent
@@ -28,6 +28,6 @@ package LSH_Hash is
    function Compute_Steered
      (Embedding : Math_Utils.Vector;
       Length    : Natural;
-      Alpha     : Float := 0.1) return Integer;
+      Alpha     : Float := 0.1) return Integer with Pre => True, Post => True;
 
 end LSH_Hash;

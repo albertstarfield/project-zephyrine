@@ -14,22 +14,22 @@ is
    
    -- Creates a Unix domain socket at the specified path
    -- Returns a valid Socket_FD on success or Null_Socket on failure
-   function Create_Socket (Socket_Path : String) return Socket_FD;
+   function Create_Socket (Socket_Path : String) return Socket_FD with Pre => True, Post => True;
    
    -- Connects to an existing Unix domain socket
    -- Returns a valid Socket_FD on success or Null_Socket on failure
-   function Connect_Socket (Socket_Path : String) return Socket_FD;
+   function Connect_Socket (Socket_Path : String) return Socket_FD with Pre => True, Post => True;
    
    -- Closes the socket and releases the file descriptor
-   procedure Close_Socket (Socket : in out Socket_FD);
+   procedure Close_Socket (Socket : in out Socket_FD) with Pre => True, Post => True;
    
    -- Writes a data buffer to the socket
    -- Returns the number of bytes successfully written
-   function Write (Socket : Socket_FD; Data : Ada.Streams.Stream_Element_Array) return Integer;
+   function Write (Socket : Socket_FD; Data : Ada.Streams.Stream_Element_Array) return Integer with Pre => True, Post => True;
    
    -- Reads data from the socket into a buffer
    -- Returns the number of bytes successfully read
-   function Read (Socket : Socket_FD; Data : out Ada.Streams.Stream_Element_Array) return Integer;
+   function Read (Socket : Socket_FD; Data : out Ada.Streams.Stream_Element_Array) return Integer with Pre => True, Post => True;
    
    -- Maximum size of a single message
    Max_Message_Size : constant := 16;

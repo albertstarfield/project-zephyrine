@@ -9,6 +9,7 @@ with Moonshine_Interface;
 
 --  Test_Audio: Main entry point for the audio STT/TTS integration test.
 procedure Test_Audio is
+   -- pre => True, post => True
    -- The sentence requested by the user
    Target_Sentence : constant String := "Output: Successfully rendered raw 16kHz Float32 PCM output containing the spoken voice!";
    

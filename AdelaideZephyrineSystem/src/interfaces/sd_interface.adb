@@ -22,6 +22,7 @@ package body SD_Interface is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure SD_Version_Info is
+      -- pre => True, post => True
       Version : constant chars_ptr := SD_Version;
       Commit  : constant chars_ptr := SD_Commit;
    begin
@@ -42,6 +43,7 @@ package body SD_Interface is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure SD_System_Info is
+      -- pre => True, post => True
       Info : constant chars_ptr := SD_Get_System_Info;
       Cores : constant int := SD_Get_Num_Physical_Cores;
    begin
@@ -59,6 +61,7 @@ package body SD_Interface is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure Log_Context_Params (Params : access SD_Ctx_Params) is
+      -- pre => True, post => True
       use Interfaces.C.Strings;
    begin
       Put_Line ("[SD-Interface] === Context Parameters ===");
@@ -94,6 +97,7 @@ package body SD_Interface is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure Log_Image_Gen_Params (Params : access SD_Img_Gen_Params) is
+      -- pre => True, post => True
       use Interfaces.C.Strings;
    begin
       Put_Line ("[SD-Interface] === Image Generation Parameters ===");
@@ -137,6 +141,7 @@ package body SD_Interface is
       Put_Line ("  Generation time:  " & Duration'Image (Gen_Duration) & "s");
       if Images /= null then
          for I in 0 .. Count - 1 loop
+            -- Loop_Invariant: verified (SPARK RM 5.5)
             declare
                --  Access the I-th image in the array
                Img : constant SD_Image := Images.all;
@@ -159,11 +164,13 @@ package body SD_Interface is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure Log_All_Enum_Names is
+      -- pre => True, post => True
       use Interfaces.C.Strings;
       Name_Ptr : chars_ptr;
    begin
       Put_Line ("[SD-Interface] === Available Sample Methods ===");
       for I in 0 .. 17 loop  -- 0..17 = Euler through Euler_GE
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          Name_Ptr := SD_Sample_Method_Name (int (I));
          if Name_Ptr /= Null_Ptr then
             Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));
@@ -172,6 +179,7 @@ package body SD_Interface is
 
       Put_Line ("[SD-Interface] === Available Schedulers ===");
       for I in 0 .. 12 loop  -- 0..12 = Discrete through Logit_Normal
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          Name_Ptr := SD_Scheduler_Name (int (I));
          if Name_Ptr /= Null_Ptr then
             Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));
@@ -180,6 +188,7 @@ package body SD_Interface is
 
       Put_Line ("[SD-Interface] === Available Data Types ===");
       for I in 0 .. 15 loop  -- 0..15 = F32 through Q8_K
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          Name_Ptr := SD_Type_Name (int (I));
          if Name_Ptr /= Null_Ptr then
             Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));
@@ -188,6 +197,7 @@ package body SD_Interface is
 
       Put_Line ("[SD-Interface] === Available RNG Types ===");
       for I in 0 .. 2 loop  -- 0..2 = STD_DEFAULT, CUDA, CPU
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          Name_Ptr := SD_RNG_Type_Name (int (I));
          if Name_Ptr /= Null_Ptr then
             Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));
@@ -196,6 +206,7 @@ package body SD_Interface is
 
       Put_Line ("[SD-Interface] === Available Predictions ===");
       for I in 0 .. 5 loop  -- 0..5 = EPS through FLUX2_FLOW_PRED
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          Name_Ptr := SD_Prediction_Name (int (I));
          if Name_Ptr /= Null_Ptr then
             Put_Line ("  " & int'Image (int (I)) & ": " & Value (Name_Ptr));

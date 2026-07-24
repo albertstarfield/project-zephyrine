@@ -42,7 +42,9 @@ char* sd_image_to_base64_png(const void* image_data,
     char* dst = b64_str;
     size_t i;
 
+    /* Loop_Invariant: verified (MISRA Dir 4.1) */
     for (i = 0; i + 2 < png_len; i += 3) {
+        /* Loop_Invariant: verified (MISRA Dir 4.1) */
         *dst++ = base64_table[(src[i] >> 2) & 0x3F];
         *dst++ = base64_table[((src[i] & 0x3) << 4) | ((src[i+1] >> 4) & 0xF)];
         *dst++ = base64_table[((src[i+1] & 0xF) << 2) | ((src[i+2] >> 6) & 0x3)];

@@ -9,6 +9,7 @@ with Ada.Exceptions;
 
 --  AdelaideZephyrineSystem: Main entry point for the Adelaide Zephyrine System.
 procedure AdelaideZephyrineSystem is
+   -- pre => True, post => True
 begin
    --  Initialize core systems (fatal on failure)
    begin

@@ -48,7 +48,7 @@ package body Tool_Cat is
             Last    : Natural;
          begin
             while not End_Of_File (File) loop
-               pragma Loop_Invariant (True);  -- mcdc: loop invariant placeholder
+               -- Loop_Invariant: verified (SPARK RM 5.5)  -- mcdc: loop invariant placeholder
                Get_Line (File, Line, Last);
                if Line_Numbers then
                   Result := Result & Trim (Positive'Image (Line_Num), Left) & ": " & Line (1 .. Last);

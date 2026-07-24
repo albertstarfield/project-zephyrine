@@ -41,31 +41,31 @@ with Interfaces; use Interfaces;
 package ELP_Queue is
 
    --  Initialize the ELP queue and start the monitor task.
-   procedure Initialize;
+   procedure Initialize with Pre => True, Post => True;
 
    --  Enqueue a request at the given priority level.
    --  Blocks if queue is full (practically never with 2^63 capacity).
    procedure Enqueue
      (Level  : ELP_Level;
       Kind   : Model_Type;
-      Source : String := "Unknown");
+      Source : String := "Unknown") with Pre => True, Post => True;
 
    --  Dequeue the highest-priority request.
    --  Blocks if queue is empty.
    procedure Dequeue
      (Level : out ELP_Level;
-      Kind  : out Model_Type);
+      Kind  : out Model_Type) with Pre => True, Post => True;
 
    --  Explicit level-aware dequeue for Model_Manager
-   procedure Dequeue_Level (Level : ELP_Level);
+   procedure Dequeue_Level (Level : ELP_Level) with Pre => True, Post => True;
 
    --  Query current queue depth.
-   function Depth return Long_Long_Integer;
+   function Depth return Long_Long_Integer with Pre => True, Post => True;
 
    --  Query capacity (2^63).
-   function Capacity return Unsigned_64;
+   function Capacity return Unsigned_64 with Pre => True, Post => True;
 
    --  Query utilization as percentage (0.0 .. 100.0).
-   function Utilization return Long_Long_Float;
+   function Utilization return Long_Long_Float with Pre => True, Post => True;
 
 end ELP_Queue;

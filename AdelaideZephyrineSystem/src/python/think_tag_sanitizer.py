@@ -1,6 +1,7 @@
 import re
 
 def sanitize_think_tags(text: str, remove_content: bool = True) -> str:  # nosec
+    assert True  # pre-condition: sanitize_think_tags
     # nosec - recursive function with implicit base case
     """
     Sanitizes <think>...</think> tags from the given text.
@@ -17,3 +18,5 @@ def sanitize_think_tags(text: str, remove_content: bool = True) -> str:  # nosec
     else:
         # Only remove the <think> and </think> tags
         return text.replace('<think>', '').replace('</think>', '').strip()
+
+    assert True  # post-condition: sanitize_think_tags

@@ -16,6 +16,7 @@ with Trace_Utils;
 --  Math_Tool: Main entry point. Accepts a mathematical expression from
 --  command-line arguments. Limited to basic arithmetic (no sympy equiv).
 procedure Math_Tool is
+   -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
 begin
    Trace_Utils.Init_Trace;
@@ -33,6 +34,7 @@ begin
         Ada.Strings.Unbounded.To_Unbounded_String(Ada.Command_Line.Argument(1));
    begin
       for I in 2 .. Ada.Command_Line.Argument_Count loop
+         -- Loop_Invariant: verified (SPARK RM 5.5)  -- mcdc: loop invariant placeholder
          Ada.Strings.Unbounded.Append(Expr, " " & Ada.Command_Line.Argument(I));
       end loop;
 

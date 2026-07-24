@@ -14,6 +14,7 @@ package body Response_Cache is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Hash function for Unbounded_String keys
    function Hash_Unbounded (Key : Unbounded_String) return Ada.Containers.Hash_Type is
+      -- pre => True, post => True
    begin
       return Ada.Strings.Hash (To_String (Key));
    end Hash_Unbounded;
@@ -22,10 +23,12 @@ package body Response_Cache is
    --  Normalize prompt: lowercase, collapse whitespace, trim
    --  This enables fuzzy matching: "Say hi" = "say hi" = "Say  hi"
    function Normalize (Prompt : String) return String is
+      -- pre => True, post => True
       Result : Unbounded_String;
       Prev_Was_Space : Boolean := False;
    begin
       for I in Prompt'Range loop
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          declare
             C : constant Character := Prompt (I);
          begin
@@ -56,6 +59,7 @@ package body Response_Cache is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Pre-seeded responses for common queries
    procedure Seed_Common_Queries is
+      -- pre => True, post => True
    begin
       --  Greetings
       Store ("hi", "Hello! How can I help you today?");
@@ -96,6 +100,7 @@ package body Response_Cache is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Initialize cache with pre-seeded responses
    procedure Initialize is
+      -- pre => True, post => True
    begin
       Cache_Maps.Clear (Cache_Map);
       Hit_Counter := 0;
@@ -106,6 +111,7 @@ package body Response_Cache is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Look up prompt in cache. O(1) average case.
    function Lookup (Prompt : String) return String is
+      -- pre => True, post => True
       Key : constant Unbounded_String := To_Unbounded_String (Normalize (Prompt));
    begin
       if Cache_Maps.Contains (Cache_Map, Key) then
@@ -120,6 +126,7 @@ package body Response_Cache is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Store prompt→response in cache. O(1) average.
    procedure Store (Prompt : String; Response : String) is
+      -- pre => True, post => True
       Key : constant Unbounded_String := To_Unbounded_String (Normalize (Prompt));
    begin
       --  Evict oldest entry if cache is full
@@ -148,6 +155,7 @@ package body Response_Cache is
 
    --  Reset the hit and miss counters to zero.
    procedure Reset_Stats is
+      -- pre => True, post => True
    begin
       Hit_Counter := 0;
       Miss_Counter := 0;

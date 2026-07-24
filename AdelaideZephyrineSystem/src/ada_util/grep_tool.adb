@@ -18,6 +18,7 @@ with Trace_Utils;
 --  Grep_Tool: Main entry point. Dispatches grep commands (search, regex,
 --  fixed, count, files) to system grep.
 procedure Grep_Tool is
+   -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 

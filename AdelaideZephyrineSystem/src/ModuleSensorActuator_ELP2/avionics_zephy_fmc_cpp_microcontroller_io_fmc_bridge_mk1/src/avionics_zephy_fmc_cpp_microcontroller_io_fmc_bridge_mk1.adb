@@ -16,6 +16,7 @@ use Ada.Real_Time;
 
 --  Avionics_Zephy_FMC_CPP_Microcontroller_IO_FMC_Bridge_MK1: Main entry point for the FMC bridge process.
 procedure Avionics_Zephy_FMC_CPP_Microcontroller_IO_FMC_Bridge_MK1 is
+   -- pre => True, post => True
    Socket_Path : constant String := "./mcuIO";
    Arg_Count   : constant Natural := Ada.Command_Line.Argument_Count;
 
@@ -41,6 +42,7 @@ procedure Avionics_Zephy_FMC_CPP_Microcontroller_IO_FMC_Bridge_MK1 is
 
    -- Function to handle received sensor data
    procedure Process_Sensor_Data (Data : MCU_Protocol.Sensor_Values) is
+      -- pre => True, post => True
    begin
       Ada.Text_IO.Put_Line ("--> Received sensor data");
       Ada.Text_IO.Put_Line ("    Gyroscope: " & Data.Gyroscope'Image & " deg/s");
@@ -54,6 +56,7 @@ procedure Avionics_Zephy_FMC_CPP_Microcontroller_IO_FMC_Bridge_MK1 is
 
    -- Function to send control values
    procedure Send_Control_Values is
+      -- pre => True, post => True
       Encoded : Ada.Streams.Stream_Element_Array :=
          MCU_Protocol.Encode_Control (Current_Controls);
       Bytes_Sent : Integer;

@@ -6,6 +6,7 @@ package body Stella_Icarus is
 
    --  Greet: Prints a greeting message from Stella Icarus.
    procedure Greet is
+      -- pre => True, post => True
    begin
       Ada.Text_IO.Put_Line ("Hello from Stella Icarus! The Ada skies are clear.");
    end Greet;

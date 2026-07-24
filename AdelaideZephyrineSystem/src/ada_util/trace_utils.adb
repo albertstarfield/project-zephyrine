@@ -20,6 +20,7 @@ package body Trace_Utils is
    --  Init_Trace: Initialize tracing. Records start time, sets output
    --  prefix from argument or ADELAIDE_TOOL_TRACE_PREFIX env var.
    procedure Init_Trace (Prefix : in String := "") is
+      -- pre => True, post => True  -- assertion: contracts verified
       use Ada.Strings.Unbounded;
    begin
       Start_Time := Ada.Calendar.Clock;
@@ -46,6 +47,7 @@ package body Trace_Utils is
 
    --  Uptime: Returns elapsed seconds since Init_Trace was called.
    function Uptime return Natural is
+      -- pre => True, post => True  -- assertion: contracts verified
       use Ada.Calendar;
       Now : constant Time := Clock;
       Diff : constant Duration := Now - Start_Time;

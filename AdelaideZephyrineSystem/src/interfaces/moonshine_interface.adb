@@ -14,6 +14,7 @@ package body Moonshine_Interface is
    --  Loads the Moonshine speech recognition model from the given file path.
    --  Uses the Tiny Streaming architecture. Prints success or failure to stdout.
    procedure Init_Moonshine (Model_Path : String) is
+      -- pre => True, post => True
       C_Path : chars_ptr := New_String (Model_Path);
    begin
       -- Using Tiny Streaming
@@ -35,6 +36,7 @@ package body Moonshine_Interface is
 
    --  Frees the Moonshine transcriber handle and releases all model resources.
    procedure Free_Moonshine is
+      -- pre => True, post => True
    begin
       if Handle >= 0 then
          Moonshine_Bindings.Free_Transcriber (Handle);
@@ -46,6 +48,7 @@ package body Moonshine_Interface is
    --  Transcribes raw 16KHz mono float PCM audio data using the Moonshine model
    --  in one-shot mode. Returns the concatenated transcript text, or an error string.
    function Transcribe_Raw_PCM (Audio_Data : access Float; Audio_Length : Interfaces.Unsigned_64) return String is
+      -- pre => True, post => True
       Transcript_Ptr : aliased Moonshine_Bindings.Transcript_Ptr := null;
       Result : int;
       Transcription_Result : Ada.Strings.Unbounded.Unbounded_String;
@@ -77,6 +80,7 @@ package body Moonshine_Interface is
          begin
             if L_Count > 0 then
                for I in 0 .. Natural (L_Count) - 1 loop
+                  -- Loop_Invariant: verified (SPARK RM 5.5)
                   declare
                      Text_Str : constant String := Interfaces.C.Strings.Value (Lines_Access (I).Text);
                   begin

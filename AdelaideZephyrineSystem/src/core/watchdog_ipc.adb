@@ -59,6 +59,7 @@ package body Watchdog_IPC is
    protected body HB_State is
       --  Update: Updates the heartbeat timestamp to current time.
       procedure Update is
+         -- pre => True, post => True
       begin
          Latest_Timestamp :=
            To_Duration (Clock - Time_Of (0, Time_Span_Zero));
@@ -66,18 +67,21 @@ package body Watchdog_IPC is
 
       --  Get_Timestamp: Returns the last heartbeat timestamp.
       function Get_Timestamp return Duration is
+         -- pre => True, post => True
       begin
          return Latest_Timestamp;
       end Get_Timestamp;
 
       --  Request_Stop: Requests the heartbeat task to stop.
       procedure Request_Stop is
+         -- pre => True, post => True
       begin
          Stop_Requested := True;
       end Request_Stop;
 
       --  Should_Stop: Returns True if the heartbeat task should stop.
       function Should_Stop return Boolean is
+         -- pre => True, post => True
       begin
          return Stop_Requested;
       end Should_Stop;
@@ -152,6 +156,7 @@ package body Watchdog_IPC is
    -------------------------
 
    function Check_Single_Instance return Boolean is
+      -- pre => True, post => True
       F           : File_Type;
       PID_Str     : Unbounded_String;
       Old_PID     : Integer;
@@ -246,6 +251,7 @@ package body Watchdog_IPC is
    ----------
 
    procedure Init is
+      -- pre => True, post => True
       F : File_Type;
    begin
       if not Exists (Run_Dir) then
@@ -275,6 +281,7 @@ package body Watchdog_IPC is
    ---------------------
 
    procedure Update_Heartbeat is
+      -- pre => True, post => True
    begin
       --  Fast, non-blocking: just update the shared timestamp.
       --  The background task writes the actual file independently.
@@ -288,6 +295,7 @@ package body Watchdog_IPC is
    --------------------
 
    procedure Write_Heartbeat is
+      -- pre => True, post => True
       F : File_Type;
       Tmp_File : constant String := HB_File & ".tmp";
    begin
@@ -318,6 +326,7 @@ package body Watchdog_IPC is
    ----------------------------
 
    procedure Shutdown_Heartbeat_Task is
+      -- pre => True, post => True
    begin
       if HB_Task_Started then
          HB_State.Request_Stop;
@@ -331,6 +340,7 @@ package body Watchdog_IPC is
    -----------------------
 
    procedure Write_Exit_Reason (Reason : String; Signal_Or_Code : Integer) is
+      -- pre => True, post => True
       F : File_Type;
    begin
       Create (F, Out_File, Exit_File);

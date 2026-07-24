@@ -5,6 +5,7 @@ package body Shutdown_Manager is
    protected body Shutdown_Status is
       --  Request: Requests a graceful shutdown.
       procedure Request is
+         -- pre => True, post => True
       begin
          Is_Requested := True;
       end Request;

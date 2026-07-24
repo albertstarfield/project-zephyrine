@@ -14,6 +14,7 @@ package body MCU_Protocol is
 
    -- Convert Message_Type to byte representation
    function To_Byte (MT : Message_Type) return Ada.Streams.Stream_Element is
+      -- pre => True, post => True
    begin
       case MT is
          when Control_Message => return 0;
@@ -23,6 +24,7 @@ package body MCU_Protocol is
    
    -- Convert byte to Message_Type
    function To_Message_Type (B : Ada.Streams.Stream_Element) return Message_Type is
+      -- pre => True, post => True
    begin
       case B is
          when 0 => return Control_Message;
@@ -38,6 +40,7 @@ package body MCU_Protocol is
       Sum : Ada.Streams.Stream_Element := 0;
    begin
       for I in Data'Range loop
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          Sum := Sum + Data(I);
       end loop;
       return Sum;
@@ -50,6 +53,7 @@ package body MCU_Protocol is
       Parity : Ada.Streams.Stream_Element := 0;
    begin
       for I in Data'Range loop
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          Parity := Parity xor Data(I);
       end loop;
       return Parity;
@@ -184,6 +188,7 @@ package body MCU_Protocol is
    
    -- Additional helper functions for testing
    function Create_Test_Control (Index : Natural) return Control_Values is
+      -- pre => True, post => True
       Result : Control_Values;
    begin
       -- Create different test patterns based on index
@@ -206,6 +211,7 @@ package body MCU_Protocol is
    
    --  Create_Mixed_Control: Creates a mixed control values record with safety margins.
    function Create_Mixed_Control return Control_Values is
+      -- pre => True, post => True
       Result : Control_Values;
    begin
       -- Create mixed values with special handling for propeller

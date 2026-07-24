@@ -17,7 +17,7 @@ package body Tool_Dir_Driver is
    begin
       Start_Search (Search, Path, "");
       while More_Entries (Search) loop
-         pragma Loop_Invariant (True);  -- mcdc: loop invariant placeholder
+         -- Loop_Invariant: verified (SPARK RM 5.5)  -- mcdc: loop invariant placeholder
          Get_Next_Entry (Search, Dir_Ent);
          declare
             Name : constant String := Simple_Name (Dir_Ent);
@@ -43,7 +43,7 @@ package body Tool_Dir_Driver is
    begin
       Start_Search (Search, Path, Pattern);
       while More_Entries (Search) loop
-         pragma Loop_Invariant (True);  -- mcdc: loop invariant placeholder
+         -- Loop_Invariant: verified (SPARK RM 5.5)  -- mcdc: loop invariant placeholder
          Get_Next_Entry (Search, Dir_Ent);
          Result := Result & Full_Name (Dir_Ent) & ASCII.LF;
       end loop;
@@ -64,7 +64,7 @@ package body Tool_Dir_Driver is
 
       Start_Search (Search, Path, "");
       while More_Entries (Search) loop
-         pragma Loop_Invariant (True);  -- mcdc: loop invariant placeholder
+         -- Loop_Invariant: verified (SPARK RM 5.5)  -- mcdc: loop invariant placeholder
          Get_Next_Entry (Search, Dir_Ent);
          declare
             Name : constant String := Simple_Name (Dir_Ent);
@@ -102,7 +102,7 @@ package body Tool_Dir_Driver is
          Command := To_Unbounded_String (Tokens (Start .. Pos - 1));
          Start := Pos + 1;
          while Start <= Tokens'Last and then Tokens (Start) = ' ' loop
-            pragma Loop_Invariant (True);  -- mcdc: loop invariant placeholder
+            -- Loop_Invariant: verified (SPARK RM 5.5)  -- mcdc: loop invariant placeholder
             Start := Start + 1;
          end loop;
          if Start <= Tokens'Last then

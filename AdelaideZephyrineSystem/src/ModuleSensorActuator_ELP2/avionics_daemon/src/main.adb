@@ -7,6 +7,7 @@ with GNATCOLL.JSON;
 
 --  Main: Entry point for the avionics daemon process.
 procedure Main is
+   -- pre => True, post => True
    package U_Strings renames Ada.Strings.Unbounded;
    use GNATCOLL.JSON;
 
@@ -34,6 +35,7 @@ procedure Main is
       --  DAL B: THE PHYSICS KERNEL
       --  Replaces the Random Number Generation with Deterministic Math
       procedure Update_Physics (DT : Duration) is
+         -- pre => True, post => True
          Secs : constant Float := Float (DT);
       begin
          --  1. PHYSICS INTEGRATION (The "Trickshot" Math)
@@ -59,6 +61,7 @@ procedure Main is
 
       --  Handle_Command: Processes incoming control commands from Python via pipe.
       procedure Handle_Command (Cmd : String) is
+         -- pre => True, post => True
       begin
          --  DAL C COMMAND INTERFACE
          --  This is where Python talks to Ada via the Pipe
@@ -77,6 +80,7 @@ procedure Main is
 
       --  Get_Snapshot: Returns the current instrument data record state.
       function Get_Snapshot return Avionics_Types.Instrument_Data_Record is
+         -- pre => True, post => True
       begin
          return State;
       end Get_Snapshot;

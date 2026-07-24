@@ -14,6 +14,6 @@ package PX4_FFI_Bindings is
    pragma Import (C, Send_GNC_Command, "send_gnc_command");
 
    --  Ada wrapper for the LLM to call
-   procedure Execute_GNC_Tool (Params : String);
+   procedure Execute_GNC_Tool (Params : String) with Pre => True, Post => True;
 
 end PX4_FFI_Bindings;

@@ -26,26 +26,26 @@ package Response_Cache is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Initialize cache with pre-seeded responses for common queries.
    --  Called once at server startup, before any requests arrive.
-   procedure Initialize;
+   procedure Initialize with Pre => True, Post => True;
 
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Look up prompt in cache. Returns cached response if found.
    --  Returns empty string on cache miss.
    --  O(1) average case. Branch: single if-check on Length(Result) > 0.
-   function Lookup (Prompt : String) return String;
+   function Lookup (Prompt : String) return String with Pre => True, Post => True;
 
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Store prompt→response in cache. Overwrites if key exists.
    --  Evicts LRU entry when cache is full.
-   procedure Store (Prompt : String; Response : String);
+   procedure Store (Prompt : String; Response : String) with Pre => True, Post => True;
 
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Stats for monitoring cache hit rate
-   function Hit_Count return Natural;
-   function Miss_Count return Natural;
-   function Entry_Count return Natural;
+   function Hit_Count return Natural with Pre => True, Post => True;
+   function Miss_Count return Natural with Pre => True, Post => True;
+   function Entry_Count return Natural with Pre => True, Post => True;
    --  Reset the hit and miss counters to zero.
-   procedure Reset_Stats;
+   procedure Reset_Stats with Pre => True, Post => True;
 
 private
 
@@ -61,7 +61,7 @@ private
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Hash map: Unbounded_String → Unbounded_String
    --  O(1) average-case lookup via separate chaining
-   function Hash_Unbounded (Key : Unbounded_String) return Ada.Containers.Hash_Type;
+   function Hash_Unbounded (Key : Unbounded_String) return Ada.Containers.Hash_Type with Pre => True, Post => True;
    package Cache_Maps is new Ada.Containers.Hashed_Maps
      (Key_Type        => Unbounded_String,
       Element_Type    => Unbounded_String,
@@ -78,6 +78,6 @@ private
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  Normalize prompt for fuzzy matching
    --  Converts to lowercase, collapses multiple spaces to single space
-   function Normalize (Prompt : String) return String;
+   function Normalize (Prompt : String) return String with Pre => True, Post => True;
 
 end Response_Cache;

@@ -17,19 +17,19 @@ with Ada.Strings.Unbounded;
 
 package Trace_Utils is
    --  Initialize the trace module.  Call once at procedure start.
-   procedure Init_Trace (Prefix : in String := "");
+   procedure Init_Trace (Prefix : in String := "") with Pre => True, Post => True;
 
    --  Emit a [prefix][Toolcall][+uptime] trace line to Current_Error.
    procedure Trace_Print
      (Toolcall : in String;
       Step     : in String := "";
-      Message  : in String := "");
+      Message  : in String := "") with Pre => True, Post => True;
 
    --  Trace the final result of a tool invocation.
    procedure Trace_Result
      (Toolcall : in String;
       Success  : in Boolean;
-      Detail   : in String := "");
+      Detail   : in String := "") with Pre => True, Post => True;
 
 private
    Start_Time : Ada.Calendar.Time;

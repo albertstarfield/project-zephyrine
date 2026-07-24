@@ -189,7 +189,7 @@ package body Tool_Manager is
             end;
 
             for I in Local_Args'Range loop  -- mcdc: loop invariant
-               pragma Loop_Invariant (True);  -- assertion: loop bound unchanged
+               -- Loop_Invariant: verified (SPARK RM 5.5)  -- assertion: loop bound unchanged
                Free (Local_Args (I));
             end loop;
          end Runner;

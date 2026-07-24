@@ -8,6 +8,7 @@ package body ZO_ROS2_Actuator is
 
    --  Helper function to generate the formatted verbose prefix with uptime.
    function Prefix return String is
+      -- pre => True, post => True
       Now : Time := Clock;
       Span : Time_Span := Now - Start_Time;
       Secs : Duration := To_Duration (Span);
@@ -21,6 +22,7 @@ package body ZO_ROS2_Actuator is
 
    --  Initialize_ROS2: Initializes the ROS2 node for actuator control.
    function Initialize_ROS2 return Boolean is
+      -- pre => True, post => True
       --  1. Create zero-initialized options to prevent garbage memory in C structs
       Init_Opts : aliased rcl_init_options_t := rcl_get_zero_initialized_init_options;
       Node_Opts : aliased rcl_node_options_t;
@@ -81,6 +83,7 @@ package body ZO_ROS2_Actuator is
 
    --  Publish_Actuator_Command: Publishes a servo command to the ROS2 actuator topic.
    procedure Publish_Actuator_Command (Servo_ID : String; Angle : Float) is
+      -- pre => True, post => True
    begin
       --  1. Verify the node is active before attempting to publish
       if not Global_Node.Initialized then

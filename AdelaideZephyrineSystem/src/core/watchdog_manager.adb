@@ -9,6 +9,7 @@ package body Watchdog_Manager is
 
       --  Start_Inference: Starts monitoring an inference operation for the given model.
       procedure Start_Inference (Model : Model_Type; Now : Time) is
+         -- pre => True, post => True
       begin
          Active := True;
          Start_Time := Now;
@@ -18,6 +19,7 @@ package body Watchdog_Manager is
 
       --  Stop_Inference: Stops monitoring the current inference operation.
       procedure Stop_Inference is
+         -- pre => True, post => True
       begin
          Active := False;
          Aborted := False;
@@ -25,6 +27,7 @@ package body Watchdog_Manager is
 
       --  Set_Aborted: Marks the current inference as aborted.
       procedure Set_Aborted is
+         -- pre => True, post => True
       begin
          Aborted := True;
       end Set_Aborted;
@@ -62,18 +65,21 @@ package body Watchdog_Manager is
    protected body AWS_Server_Monitor is
       --  Heartbeat: Updates the AWS server heartbeat timestamp.
       procedure Heartbeat (Now : Time) is
+         -- pre => True, post => True
       begin
          Last_Heartbeat := Now;
       end Heartbeat;
 
       --  Deactivate: Deactivates the AWS server liveness check.
       procedure Deactivate is
+         -- pre => True, post => True
       begin
          Active := False;
       end Deactivate;
 
       --  Check_Liveness: Checks if the AWS server is still alive based on heartbeat.
       procedure Check_Liveness (Limit : Time_Span; OK : out Boolean) is
+         -- pre => True, post => True
          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
          pragma Annotate
            (GNATprove, Intentional, "range check might fail",

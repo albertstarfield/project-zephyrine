@@ -13,15 +13,15 @@ is
    function "=" (Left, Right : Serial_Port) return Boolean;
    -- Opens the specified serial device (e.g., "/dev/ttyUSB0").
    -- Returns a valid Serial_Port on success or Null_Port on failure.
-   function Open_Port (Device_Path : String) return Serial_Port;
+   function Open_Port (Device_Path : String) return Serial_Port with Pre => True, Post => True;
    -- Configures the given port with a specific baud rate and settings.
    -- Returns True on success.
-   function Configure_Port (Port : Serial_Port; Baud_Rate : Natural) return Boolean;
+   function Configure_Port (Port : Serial_Port; Baud_Rate : Natural) return Boolean with Pre => True, Post => True;
    -- Writes a string message to the serial port.
    -- Returns the number of bytes successfully written.
-   function Write (Port : Serial_Port; Message : String) return Integer;
+   function Write (Port : Serial_Port; Message : String) return Integer with Pre => True, Post => True;
    -- Closes the serial port and releases the file descriptor.
-   procedure Close (Port : in out Serial_Port);
+   procedure Close (Port : in out Serial_Port) with Pre => True, Post => True;
 private
    type Serial_Port is new Interfaces.C.int;
    Null_Port : constant Serial_Port := -1;

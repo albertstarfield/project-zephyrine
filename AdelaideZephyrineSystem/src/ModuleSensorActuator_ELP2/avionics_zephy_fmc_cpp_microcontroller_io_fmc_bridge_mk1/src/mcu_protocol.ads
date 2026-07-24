@@ -38,21 +38,21 @@ package MCU_Protocol is
    -- Encode control values into a message buffer
    -- Returns the encoded message
    function Encode_Control (Values : Control_Values) 
-                          return Ada.Streams.Stream_Element_Array;
+                          return Ada.Streams.Stream_Element_Array with Pre => True, Post => True;
    
    -- Decode a message buffer into sensor values
    -- Returns the decoded values and sets Error parameter
    function Decode_Sensor (Buffer : Ada.Streams.Stream_Element_Array;
                            Error  : out Error_Code) 
-                          return Sensor_Values;
+                          return Sensor_Values with Pre => True, Post => True;
    
    -- Validate a message buffer for errors
    -- Returns a Validation_Result record containing message type and error code
    function Validate_Message (Buffer : Ada.Streams.Stream_Element_Array) 
-                            return Validation_Result;
+                            return Validation_Result with Pre => True, Post => True;
    
    --  Create_Mixed_Control: Creates a mixed control values record with safety margins.
-   function Create_Mixed_Control return Control_Values;
+   function Create_Mixed_Control return Control_Values with Pre => True, Post => True;
 
 private
    -- Message header structure

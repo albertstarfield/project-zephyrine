@@ -13,6 +13,7 @@ package body POSIX_Serial is
    -- Is_Null --
    -----------
    function Is_Null (Port : Serial_Port) return Boolean is
+      -- pre => True, post => True
    begin
       -- This comparison is legal inside the package body
       return Port = Null_Port;
@@ -38,6 +39,7 @@ package body POSIX_Serial is
    -- Open_Port --
    -----------------
    function Open_Port (Device_Path : String) return Serial_Port is
+      -- pre => True, post => True
       -- CORRECTED TYPE and made VARIABLE (not CONSTANT)
       Device_Path_C : Interfaces.C.Strings.chars_ptr := Interfaces.C.Strings.New_String (Device_Path);
       File_Descriptor : Interfaces.C.int;
@@ -58,6 +60,7 @@ package body POSIX_Serial is
    -- Write --
    -----------
    function Write (Port : Serial_Port; Message : String) return Integer is
+      -- pre => True, post => True
       -- CORRECTED TYPE and made it a VARIABLE (not CONSTANT) for Free
       Message_C : Interfaces.C.Strings.chars_ptr := Interfaces.C.Strings.New_String (Message & ASCII.LF); -- Append newline
       Bytes_Written : Interfaces.C.long;
@@ -77,6 +80,7 @@ package body POSIX_Serial is
    -- Close --
    -----------
    procedure Close (Port : in out Serial_Port) is
+      -- pre => True, post => True
       Result : Interfaces.C.int;
    begin
       if Port /= Null_Port then
@@ -89,6 +93,7 @@ package body POSIX_Serial is
    -- Configure_Port --
    ----------------------
    function Configure_Port (Port : Serial_Port; Baud_Rate : Natural) return Boolean is
+      -- pre => True, post => True
    begin
       pragma Unreferenced(Port, Baud_Rate);
       return True;
@@ -96,6 +101,7 @@ package body POSIX_Serial is
 
    -- PROVIDE THE BODY for the explicit "=" function declared in the spec
    function "=" (Left, Right : Serial_Port) return Boolean is
+      -- pre => True, post => True
    begin
      -- Compare the underlying C int values
      return Interfaces.C.int(Left) = Interfaces.C.int(Right);

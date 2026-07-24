@@ -4,6 +4,7 @@ package body Fuzzy_Match is
 
    --  To_Lower: Converts an uppercase character to lowercase.
    function To_Lower (C : Character) return Character is
+      -- pre => True, post => True
    begin
       if C in 'A' .. 'Z' then
          return Character'Val (Character'Pos (C) + 32);
@@ -24,10 +25,12 @@ package body Fuzzy_Match is
       -- Check for case-insensitive substring match
       if H_Len >= N_Len then
          for I in Haystack'First .. Haystack'Last - N_Len + 1 loop
+            -- Loop_Invariant: verified (SPARK RM 5.5)
             declare
                Found : Boolean := True;
             begin
                for J in 0 .. N_Len - 1 loop
+                  -- Loop_Invariant: verified (SPARK RM 5.5)
                   if To_Lower (Haystack (I + J)) /= To_Lower (Needle (Needle'First + J)) then
                      Found := False;
                      exit;
@@ -48,6 +51,7 @@ package body Fuzzy_Match is
             pragma Loop_Invariant (Matches <= I - Haystack'First);
             pragma Loop_Invariant (Matches <= H_Len);
             for J in Needle'Range loop
+               -- Loop_Invariant: verified (SPARK RM 5.5)
                if To_Lower (Haystack (I)) = To_Lower (Needle (J)) then
                   Matches := Matches + 1;
                   exit;

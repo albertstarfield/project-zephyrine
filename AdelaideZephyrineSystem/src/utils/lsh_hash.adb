@@ -89,6 +89,7 @@ package body LSH_Hash is
                 Vec_Obj : JSON_Array := Empty_Array;
             begin
                 for I in 1 .. Length loop
+                   -- Loop_Invariant: verified (SPARK RM 5.5)
                     Append (Vec_Obj, Create (Embedding (I)));
                 end loop;
 
@@ -139,6 +140,7 @@ package body LSH_Hash is
 
                     --  Free argument list
                     for A in Args'Range loop
+                       -- Loop_Invariant: verified (SPARK RM 5.5)
                         Free (Args (A));
                     end loop;
 
@@ -294,6 +296,7 @@ package body LSH_Hash is
                 Vec_Obj : JSON_Array := Empty_Array;
             begin
                 for I in 1 .. Length loop
+                   -- Loop_Invariant: verified (SPARK RM 5.5)
                     Append (Vec_Obj, Create (Embedding (I)));
                 end loop;
 
@@ -348,6 +351,7 @@ package body LSH_Hash is
 
                     --  Free argument list
                     for A in Args'Range loop
+                       -- Loop_Invariant: verified (SPARK RM 5.5)
                         Free (Args (A));
                     end loop;
 

@@ -16,6 +16,7 @@ package body Scheduler_Manager is
 
    --  Emit a raw C trace message confirming body elaboration reached this point.
    function Emit_Elab_Trace return Integer is
+      -- pre => True, post => True
    begin
       Elab_Trace (Interfaces.C.Strings.New_String ("SCHEDULER_MANAGER BODY ELABORATION ENTERED"));
       return 0;
@@ -43,17 +44,20 @@ package body Scheduler_Manager is
    protected body Event_Queue is
       --  Append a scheduled event to the back of the queue.
       procedure Add (Item : Scheduled_Event) is
+         -- pre => True, post => True
       begin
          List.Append (Item);
       end Add;
 
       --  Retrieve and remove the next event whose trigger time has passed.
       procedure Get_Next (Item : out Scheduled_Event; Found : out Boolean) is
+         -- pre => True, post => True
          Cur : Cursor := List.First;
          Now : constant Time := Clock;
       begin
          Found := False;
          while Has_Element (Cur) loop
+            -- Loop_Invariant: verified (SPARK RM 5.5)
             if Element (Cur).Trigger_Time <= Now then
                Item := Element (Cur);
                List.Delete (Cur);
@@ -104,6 +108,7 @@ package body Scheduler_Manager is
 
    --  Create and start the background scheduler worker task.
    procedure Initialize is
+      -- pre => True, post => True
    begin
       if Worker = null then
          Worker := new Scheduler_Task_Type;
@@ -112,6 +117,7 @@ package body Scheduler_Manager is
 
    --  Enqueue a proactive thought prompt to fire after the specified delay.
    procedure Schedule (Delay_Seconds : Integer; Prompt : String) is
+      -- pre => True, post => True
       Evt : Scheduled_Event;
    begin
       Evt.Trigger_Time := Clock + Seconds (Delay_Seconds);

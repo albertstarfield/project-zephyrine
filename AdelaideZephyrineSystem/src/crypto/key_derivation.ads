@@ -42,39 +42,39 @@ is
    --                           info="adelaide:master-key:v1")
    function Derive_Master_Key
      (Integrity_Hash : Hash_Type;
-      User_Secret    : String) return Master_Key_Type;
+      User_Secret    : String) return Master_Key_Type with Pre => True, Post => True;
 
    --  Derive AES-256 key for specific database context
    --  aes_key = HKDF-SHA256(salt=master_key, ikm=context,
    --                        info="adelaide:db:" & context & ":v1")
    function Derive_AES_Key
      (Master_Key : Master_Key_Type;
-      Context    : String) return AES_Key_Type;
+      Context    : String) return AES_Key_Type with Pre => True, Post => True;
 
    --  Convert Master_Key_Type to hex string (128 hex chars)
-   function Master_Key_To_Hex (K : Master_Key_Type) return String;
+   function Master_Key_To_Hex (K : Master_Key_Type) return String with Pre => True, Post => True;
 
    --  Convert hex string to Master_Key_Type
-   function Hex_To_Master_Key (S : String) return Master_Key_Type;
+   function Hex_To_Master_Key (S : String) return Master_Key_Type with Pre => True, Post => True;
 
    --  Convert AES_Key_Type to hex string (64 hex chars)
-   function AES_Key_To_Hex (K : AES_Key_Type) return String;
+   function AES_Key_To_Hex (K : AES_Key_Type) return String with Pre => True, Post => True;
 
    --  Convert hex string to AES_Key_Type
-   function Hex_To_AES_Key (S : String) return AES_Key_Type;
+   function Hex_To_AES_Key (S : String) return AES_Key_Type with Pre => True, Post => True;
 
    --  Initialize key derivation (compute integrity hash and store)
    --  Returns True if initialization succeeded
-   function Initialize_Key_Derivation return Boolean;
+   function Initialize_Key_Derivation return Boolean with Pre => True, Post => True;
 
    --  Derive and store master key from user secret
    --  Uses stored integrity hash
-   procedure Derive_And_Store_Master_Key (Password_Salt : Hash_Type; User_Secret : String);
+   procedure Derive_And_Store_Master_Key (Password_Salt : Hash_Type; User_Secret : String) with Pre => True, Post => True;
 
    --  Get current master key (from Master_Key_Store)
-   function Get_Master_Key return Master_Key_Type;
+   function Get_Master_Key return Master_Key_Type with Pre => True, Post => True;
 
    --  Clear master key from memory
-   procedure Clear_Master_Key;
+   procedure Clear_Master_Key with Pre => True, Post => True;
 
 end Key_Derivation;

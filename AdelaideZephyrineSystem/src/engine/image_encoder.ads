@@ -20,28 +20,28 @@ package Image_Encoder is
    function Encode_Image
      (Nx         : unsigned;
       Ny         : unsigned;
-      Pixel_Data : System.Address) return Boolean; -- FFI: System.Address required for C binding
+      Pixel_Data : System.Address) return Boolean with Pre => True, Post => True; -- FFI: System.Address required for C binding
 
    --  Encode an image from raw image bytes (JPEG, PNG, etc.)
    --  The mtmd helper decodes the image internally using stb_image.
    --  Returns: True on success, False on failure
    function Encode_Image_From_Buffer
      (Image_Data : System.Address; -- FFI: System.Address required for C binding
-      Image_Len  : size_t) return Boolean;
+      Image_Len  : size_t) return Boolean with Pre => True, Post => True;
 
    --  Encode an image from a file (supports PNG, JPG, etc.)
    --  Reads the file into a buffer and calls Encode_Image_From_Buffer.
    function Encode_Image_From_File
-     (Filename : String) return Boolean;
+     (Filename : String) return Boolean with Pre => True, Post => True;
 
    --  Get the number of embedding tokens from the last encoded image
-   function Get_Last_Image_Tokens return Natural;
+   function Get_Last_Image_Tokens return Natural with Pre => True, Post => True;
 
    --  Get the embedding data from the last encoded image
    --  Returns a pointer to the float array containing the embeddings
-   function Get_Last_Image_Embeddings return System.Address; -- FFI: System.Address required for C binding
+   function Get_Last_Image_Embeddings return System.Address with Pre => True, Post => True; -- FFI: System.Address required for C binding
 
    --  Free the last encoded image data
-   procedure Free_Last_Image;
+   procedure Free_Last_Image with Pre => True, Post => True;
 
 end Image_Encoder;

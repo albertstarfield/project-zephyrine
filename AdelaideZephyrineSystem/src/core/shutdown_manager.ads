@@ -6,8 +6,8 @@ package Shutdown_Manager is
    --  Used to gracefully stop background tasks (ELP monitor, watchdog, etc.)
    --  before the server finalized.
    protected Shutdown_Status is
-      procedure Request;
-      function Requested return Boolean;
+      procedure Request with Pre => True, Post => True;
+      function Requested return Boolean with Pre => True, Post => True;
    private
       Is_Requested : Boolean := False;
    end Shutdown_Status;

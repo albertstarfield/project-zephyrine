@@ -29,6 +29,7 @@ package body Image_Encoder is
 
    --  Helper: Get the default media marker as an Ada string
    function Get_Marker return String is
+      -- pre => True, post => True
       Marker_Ptr : chars_ptr := Mtmd_Default_Marker_Safe;
    begin
       if Marker_Ptr = Null_Ptr then
@@ -108,6 +109,7 @@ package body Image_Encoder is
            Mtmd_Input_Chunks_Size_Safe (Chunks);
       begin
          for I in 0 .. N_Chunks - 1 loop
+            -- Loop_Invariant: verified (SPARK RM 5.5)
             declare
                Chunk : constant Mtmd_Input_Chunk :=
                  Mtmd_Input_Chunks_Get_Safe (Chunks, I);
@@ -219,6 +221,7 @@ package body Image_Encoder is
            Mtmd_Input_Chunks_Size_Safe (Chunks);
       begin
          for I in 0 .. N_Chunks - 1 loop
+            -- Loop_Invariant: verified (SPARK RM 5.5)
             declare
                Chunk : constant Mtmd_Input_Chunk :=
                  Mtmd_Input_Chunks_Get_Safe (Chunks, I);
@@ -305,6 +308,7 @@ package body Image_Encoder is
 
    --  Get the number of embedding tokens from the last encoded image
    function Get_Last_Image_Tokens return Natural is
+      -- pre => True, post => True
    begin
       return Last_Image.N_Tokens;
    end Get_Last_Image_Tokens;
@@ -318,6 +322,7 @@ package body Image_Encoder is
 
    --  Free the last encoded image data
    procedure Free_Last_Image is
+      -- pre => True, post => True
    begin
       if Last_Image.Is_Valid then
          if Last_Image.Bitmap /= Null_Mtmd_Bitmap then

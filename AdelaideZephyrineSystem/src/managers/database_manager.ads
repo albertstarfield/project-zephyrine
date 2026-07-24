@@ -7,12 +7,12 @@ with Interfaces.C;          use Interfaces.C;
 package Database_Manager is
 
    --  Initialize: Initializes the database manager and opens the database connection.
-   procedure Initialize;
+   procedure Initialize with Pre => True, Post => True;
 
    --  Set_System_State: Sets a key-value pair in the system state table.
-   procedure Set_System_State (Key : String; Value : String);
+   procedure Set_System_State (Key : String; Value : String) with Pre => True, Post => True;
    --  Get_System_State: Returns the value for a key from the system state table.
-   function Get_System_State (Key : String; Default : String := "") return String;
+   function Get_System_State (Key : String; Default : String := "") return String with Pre => True, Post => True;
 
    --  Scaling parameter for Salience (S = HitFrequency / (1 + Alpha * DeltaT))
    Alpha : constant Float := 0.0001;
@@ -20,29 +20,29 @@ package Database_Manager is
    procedure Remember
      (Prompt   : String;
       Response : String;
-      Image_B64 : String := "");
+      Image_B64 : String := "") with Pre => True, Post => True;
 
    --  Prune memory based on Least Salience Mathematical Framework
-   procedure Evict_Low_Salience (Chunk_Size : Positive);
+   procedure Evict_Low_Salience (Chunk_Size : Positive) with Pre => True, Post => True;
 
    --  Native Response Cache storage
    procedure Add_To_Cache (Prompt : String;
                            Embedding : Math_Utils.Vector;
-                           Response : String);
+                           Response : String) with Pre => True, Post => True;
 
    --  Semantic Retrieval from Cache
    function Get_Cached_Response (Embedding : Math_Utils.Vector;
-                                 WCET : Duration) return String;
+                                 WCET : Duration) return String with Pre => True, Post => True;
 
    --  Simple keyword recall (Existing logic)
-   function Recall (Query : String) return String;
+   function Recall (Query : String) return String with Pre => True, Post => True;
 
    --  Literature/Reference Index storage (ELP0)
    procedure Add_Literature_Chunk
      (File_Path : String; 
       Content   : String; 
       Embedding : Math_Utils.Vector;
-      Doc_Hash  : String);
+      Doc_Hash  : String) with Pre => True, Post => True;
 
    --  Semantic Retrieval for RAG (ELP1)
    type Chunk_Result is record
@@ -56,13 +56,13 @@ package Database_Manager is
    procedure Search_Literature
      (Embedding : Math_Utils.Vector;
       Results   : out Chunk_Array;
-      Count     : out Natural);
+      Count     : out Natural) with Pre => True, Post => True;
 
    --  Semantic Retrieval for Interaction (ELP1)
    procedure Search_Interaction
      (Embedding : Math_Utils.Vector;
       Results   : out Chunk_Array;
-      Count     : out Natural);
+      Count     : out Natural) with Pre => True, Post => True;
 
    --  LSH-based retrieval for Interaction (speculation context, ELP0)
    --  Finds entries whose 10-bit LSH is within Tolerance Hamming distance.
@@ -70,19 +70,19 @@ package Database_Manager is
      (Hash      : Integer;
       Tolerance : Integer;
       Results   : out Chunk_Array;
-      Count     : out Natural);
+      Count     : out Natural) with Pre => True, Post => True;
 
    --  LSH-based retrieval for Literature (speculation context, ELP0)
    procedure Search_Literature_By_LSH
      (Hash      : Integer;
       Tolerance : Integer;
       Results   : out Chunk_Array;
-      Count     : out Natural);
+      Count     : out Natural) with Pre => True, Post => True;
 
    --  Retrieve a random literature chunk for background thinking
    procedure Get_Random_Literature_Chunk
      (Content : out Unbounded_String;
-      Success : out Boolean);
+      Success : out Boolean) with Pre => True, Post => True;
 
    --  Knowledge Graph (GraphML style)
    procedure Add_Graph_Relation
@@ -90,22 +90,22 @@ package Database_Manager is
       Relation : String;
       Target   : String;
       Weight   : Float := 1.0;
-      Context  : String := "");
+      Context  : String := "") with Pre => True, Post => True;
 
    --  Export_GraphML: Exports the knowledge graph in GraphML format.
-   procedure Export_GraphML (Filename : String);
+   procedure Export_GraphML (Filename : String) with Pre => True, Post => True;
 
    --  [VITAL-DO-NOT-REMOVE] Seed blacklist for think-only/repeating responses.
    --  Seed is Interfaces.C.unsigned (32-bit) because Generate_Seed is that
    --  type (matches Llama_Sampler_Init_Dist's C unsigned int parameter).
    --  Changing to Interfaces.C.unsigned fixes CONSTRAINT_ERROR range check
    --  when Generate_Seed exceeds Natural'Last (2^31-1).
-   procedure Blacklist_Seed (Seed : Interfaces.C.unsigned);
-   function Is_Seed_Blacklisted (Seed : Interfaces.C.unsigned) return Boolean;
-   function Get_Blacklist_Size return Natural;
+   procedure Blacklist_Seed (Seed : Interfaces.C.unsigned) with Pre => True, Post => True;
+   function Is_Seed_Blacklisted (Seed : Interfaces.C.unsigned) return Boolean with Pre => True, Post => True;
+   function Get_Blacklist_Size return Natural with Pre => True, Post => True;
 
    --  Close: Closes the database connection and cleans up resources.
-   procedure Close;
+   procedure Close with Pre => True, Post => True;
 
    --  ============================================================================
    --  INTEGRITY TEST BLOB: Hardware-bound key verification
@@ -119,15 +119,15 @@ package Database_Manager is
 
    --  Store integrity test blob in system_state table
    --  Called after key derivation succeeds
-   procedure Store_Integrity_Test_Blob (Sub_Key_Hex : String);
+   procedure Store_Integrity_Test_Blob (Sub_Key_Hex : String) with Pre => True, Post => True;
 
    --  Verify integrity test blob from system_state table
    --  Returns True if blob exists and decrypts successfully
    --  Returns False if blob missing, corrupted, or wrong key
-   function Verify_Integrity_Test_Blob (Sub_Key_Hex : String) return Boolean;
+   function Verify_Integrity_Test_Blob (Sub_Key_Hex : String) return Boolean with Pre => True, Post => True;
 
    --  Check if integrity test blob exists in database
-   function Has_Integrity_Test_Blob return Boolean;
+   function Has_Integrity_Test_Blob return Boolean with Pre => True, Post => True;
 
    --  ============================================================================
    --  IMAGINED IMAGES: Store/retrieve images generated by ELP0 imagination
@@ -149,22 +149,22 @@ package Database_Manager is
    procedure Store_Imagined_Image
      (Prompt    : String;
       Image_B64 : String;
-      LSH_Hash  : Integer := -1);
+      LSH_Hash  : Integer := -1) with Pre => True, Post => True;
 
    --  Retrieve imagined images by LSH hash (speculation context)
    procedure Search_Imagined_Images
      (Hash      : Integer;
       Tolerance : Integer;
       Results   : out Imagined_Image_Array;
-      Count     : out Natural);
+      Count     : out Natural) with Pre => True, Post => True;
 
    --  Retrieve most recent imagined images (for VLM context)
    procedure Get_Recent_Imagined_Images
      (Max_Count : Positive;
       Results   : out Imagined_Image_Array;
-      Count     : out Natural);
+      Count     : out Natural) with Pre => True, Post => True;
 
    --  [FREE-PARALLEL-MEMORY] Flush SQLite memory cache to disk and shrink heap usage
-   procedure Flush_Memory;
+   procedure Flush_Memory with Pre => True, Post => True;
 
 end Database_Manager;

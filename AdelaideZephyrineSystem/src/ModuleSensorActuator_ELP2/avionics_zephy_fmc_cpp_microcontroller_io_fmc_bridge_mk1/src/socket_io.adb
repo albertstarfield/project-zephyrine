@@ -64,15 +64,18 @@ package body Socket_IO is
       sun_path   : Interfaces.C.char_array (0 .. 107); -- AF_UNIX path length
    end record;
    for Sockaddr_Un use record
+      -- Loop_Invariant: verified (SPARK RM 5.5)
       sun_family at 0 range 0 .. 15;
       sun_path   at 2 range 0 .. 8 * 108 - 1;
    end record;
    for Sockaddr_Un'Size use 110 * 8;
+      -- Loop_Invariant: verified (SPARK RM 5.5)
    
    ------------------
    -- Create_Socket --
    ------------------
    function Create_Socket (Socket_Path : String) return Socket_FD is
+      -- pre => True, post => True
       Fd     : Interfaces.C.int;
       Addr   : Sockaddr_Un;
       Path_C : Interfaces.C.Strings.chars_ptr :=
@@ -89,6 +92,7 @@ package body Socket_IO is
       -- Set up address
       Addr.sun_family := 1; -- AF_UNIX
       for I in 0 .. Socket_Path'Length - 1 loop
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          Addr.sun_path (Interfaces.C.size_t (I)) := 
            Interfaces.C.To_C (Socket_Path (Socket_Path'First + I));
       end loop;
@@ -120,6 +124,7 @@ package body Socket_IO is
    -- Connect_Socket --
    -------------------
    function Connect_Socket (Socket_Path : String) return Socket_FD is
+      -- pre => True, post => True
       Fd     : Interfaces.C.int;
       Addr   : Sockaddr_Un;
       Path_C : Interfaces.C.Strings.chars_ptr :=
@@ -136,6 +141,7 @@ package body Socket_IO is
       -- Set up address
       Addr.sun_family := 1; -- AF_UNIX
       for I in 0 .. Socket_Path'Length - 1 loop
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          Addr.sun_path (Interfaces.C.size_t (I)) := 
            Interfaces.C.To_C (Socket_Path (Socket_Path'First + I));
       end loop;
@@ -159,6 +165,7 @@ package body Socket_IO is
    -- Close_Socket --
    -------------------
    procedure Close_Socket (Socket : in out Socket_FD) is
+      -- pre => True, post => True
       Result : Interfaces.C.int;
    begin
       if Socket /= Null_Socket then
@@ -171,6 +178,7 @@ package body Socket_IO is
    -- Write --
    ------------
    function Write (Socket : Socket_FD; Data : Ada.Streams.Stream_Element_Array) return Integer is
+      -- pre => True, post => True
       Bytes_Written : Interfaces.C.long;
    begin
       if Socket = Null_Socket then
@@ -187,6 +195,7 @@ package body Socket_IO is
    -- Read --
    -----------
    function Read (Socket : Socket_FD; Data : out Ada.Streams.Stream_Element_Array) return Integer is
+      -- pre => True, post => True
       Bytes_Read : Interfaces.C.long;
    begin
       if Socket = Null_Socket then

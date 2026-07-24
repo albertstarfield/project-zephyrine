@@ -48,38 +48,38 @@ package Cronia_Scheduler is
    end record;
 
    --  Initialize the scheduler (called once at startup)
-   procedure Initialize;
+   procedure Initialize with Pre => True, Post => True;
 
    --  Schedule a one-shot job at a specific time
    procedure Schedule_At
      (Name    : String;
       At_Time : Time;
-      Prompt  : String);
+      Prompt  : String) with Pre => True, Post => True;
 
    --  Schedule a repeating job (interval in seconds from now)
    procedure Schedule_Repeating
      (Name     : String;
       Interval : Duration;
-      Prompt   : String);
+      Prompt   : String) with Pre => True, Post => True;
 
    --  Schedule a job that fires if the scheduled time has already passed
    --  (server-sleep compensation: "run this when you wake up if it's late")
    procedure Schedule_If_Past
      (Name    : String;
       At_Time : Time;
-      Prompt  : String);
+      Prompt  : String) with Pre => True, Post => True;
 
    --  Cancel a scheduled job by name
-   procedure Cancel (Name : String);
+   procedure Cancel (Name : String) with Pre => True, Post => True;
 
    --  Check and execute any pending jobs (called from Cronia_Task loop)
    --  Returns True if any job was executed.
-   procedure Tick;
+   procedure Tick with Pre => True, Post => True;
 
    --  Get the number of active scheduled jobs
-   function Active_Job_Count return Natural;
+   function Active_Job_Count return Natural with Pre => True, Post => True;
 
    --  Get a job's state by index (for printing)
-   function Get_Job (Index : Positive) return Cron_Job;
+   function Get_Job (Index : Positive) return Cron_Job with Pre => True, Post => True;
 
 end Cronia_Scheduler;

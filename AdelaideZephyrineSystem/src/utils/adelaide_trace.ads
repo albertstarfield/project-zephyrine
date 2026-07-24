@@ -17,21 +17,21 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 package Adelaide_Trace is
 
    --  Initialize the trace system.  Call once at server start.
-   procedure Initialize;
+   procedure Initialize with Pre => True, Post => True;
 
    --  Whole seconds since Initialize().
-   function Uptime return Natural;
+   function Uptime return Natural with Pre => True, Post => True;
 
    --  -------------------------------------------------------------------------
    --  Trace output — emits to stdout with the standardized prefix format.
    --  -------------------------------------------------------------------------
-   procedure Trace_Print (Toolcall : String; Message : String := "");
+   procedure Trace_Print (Toolcall : String; Message : String := "") with Pre => True, Post => True;
    procedure Trace_Print (Toolcall : String; Step    : String;
-                          Message  : String := "");
+                          Message  : String := "") with Pre => True, Post => True;
 
    --  Final result trace (OK / FAIL with optional detail).
    procedure Trace_Result (Toolcall : String; Success : Boolean;
-                           Detail   : String := "");
+                           Detail   : String := "") with Pre => True, Post => True;
 
 private
    Start_Time  : Ada.Calendar.Time;

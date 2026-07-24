@@ -77,7 +77,7 @@ package SD_Manager is
       Flux_Clip_L    : String;
       Flux_T5XXL     : String;
       Flux_VAE       : String;
-      Refiner_Model  : String);
+      Refiner_Model  : String) with Pre => True, Post => True;
 
    --  ============================================================================
    --  STAGE 1: FLUX CONTEXT
@@ -85,11 +85,11 @@ package SD_Manager is
 
    --  Load FLUX context (Stage 1)
    --  FreeParallelMemory: Unloads refinement context first if loaded
-   procedure Load_Flux_Context;
+   procedure Load_Flux_Context with Pre => True, Post => True;
 
    --  Free FLUX context (FreeParallelMemory)
    --  Calls Free_SD_Ctx, clears Flux_Ctx, logs unload
-   procedure Free_Flux_Context;
+   procedure Free_Flux_Context with Pre => True, Post => True;
 
    --  ============================================================================
    --  STAGE 2: REFINEMENT CONTEXT
@@ -97,11 +97,11 @@ package SD_Manager is
 
    --  Load refinement context (Stage 2)
    --  FreeParallelMemory: Unloads FLUX context first if loaded
-   procedure Load_Refiner_Context;
+   procedure Load_Refiner_Context with Pre => True, Post => True;
 
    --  Free refinement context (FreeParallelMemory)
    --  Calls Free_SD_Ctx, clears Refiner_Ctx, logs unload
-   procedure Free_Refiner_Context;
+   procedure Free_Refiner_Context with Pre => True, Post => True;
 
    --  ============================================================================
    --  TWO-STAGE GENERATION PIPELINE
@@ -125,13 +125,13 @@ package SD_Manager is
       Refine_Strength: Float := 0.4;
       --  Output
       Image_B64      : out Ada.Strings.Unbounded.Unbounded_String;
-      Error_Msg      : out Ada.Strings.Unbounded.Unbounded_String);
+      Error_Msg      : out Ada.Strings.Unbounded.Unbounded_String) with Pre => True, Post => True;
 
    --  ============================================================================
    --  CLEANUP
    --  ============================================================================
 
    --  Free all loaded contexts (shutdown)
-   procedure Free_All;
+   procedure Free_All with Pre => True, Post => True;
 
 end SD_Manager;

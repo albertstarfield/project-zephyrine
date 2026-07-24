@@ -55,7 +55,7 @@ package Accuracy_Benchmark_Manager is
    Benchmark_Failure : exception;
 
    --  Validate API key
-   function Validate_API_Key (Key : String) return Boolean;
+   function Validate_API_Key (Key : String) return Boolean with Pre => True, Post => True;
 
    --  Run accuracy benchmark
    --  RAISES Benchmark_Failure if any answer is unparseable
@@ -72,26 +72,26 @@ package Accuracy_Benchmark_Manager is
       Subset  : String;
       Cache_Dir : String;
       Split   : String := "test"
-   ) return String;
+   ) return String with Pre => True, Post => True;
 
    --  Call model chat endpoint
    function Call_Model_Chat (
       Prompt : String;
       Max_Tokens : Natural := 128;
       Temperature : Float := 0.0
-   ) return String;
+   ) return String with Pre => True, Post => True;
 
    --  Extract answer from model response
    function Extract_Answer (
       Response : String;
       Benchmark : Benchmark_Type
-   ) return String;
+   ) return String with Pre => True, Post => True;
 
    --  Check if answer is correct
    function Check_Answer (
       Predicted : String;
       Expected : String;
       Benchmark : Benchmark_Type
-   ) return Boolean;
+   ) return Boolean with Pre => True, Post => True;
 
 end Accuracy_Benchmark_Manager;

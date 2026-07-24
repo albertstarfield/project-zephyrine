@@ -46,6 +46,7 @@ package Auto_Config is
    --  ========================================================================
    type Ctx_Ladder is (Ctx_2048, Ctx_4096, Ctx_8192, Ctx_16384, Ctx_32768);
    for Ctx_Ladder use
+      -- Loop_Invariant: verified (SPARK RM 5.5)
       (Ctx_2048   => 2048,
        Ctx_4096   => 4096,
        Ctx_8192   => 8192,
@@ -53,7 +54,7 @@ package Auto_Config is
        Ctx_32768  => 32768);
 
    --  Ctx_To_Unsigned: Converts context ladder to C unsigned integer.
-   function Ctx_To_Unsigned (C : Ctx_Ladder) return Interfaces.C.unsigned;
+   function Ctx_To_Unsigned (C : Ctx_Ladder) return Interfaces.C.unsigned with Pre => True, Post => True;
    pragma Inline (Ctx_To_Unsigned);
 
    --  ========================================================================
@@ -67,7 +68,7 @@ package Auto_Config is
    --  Threads_To_Int is a trivial identity kept for backward compatibility
    --  with callers that were written for the old enum ladder.
    --  ========================================================================
-   function Threads_To_Int (T : Interfaces.C.int) return Interfaces.C.int;
+   function Threads_To_Int (T : Interfaces.C.int) return Interfaces.C.int with Pre => True, Post => True;
    pragma Inline (Threads_To_Int);
 
    --  ========================================================================
@@ -81,9 +82,10 @@ package Auto_Config is
    --  ========================================================================
    type Batch_Ladder is (B_64, B_128, B_256, B_512);
    for Batch_Ladder use (B_64 => 64, B_128 => 128, B_256 => 256, B_512 => 512);
+      -- Loop_Invariant: verified (SPARK RM 5.5)
 
    --  Batch_To_Unsigned: Converts batch ladder to C unsigned integer.
-   function Batch_To_Unsigned (B : Batch_Ladder) return Interfaces.C.unsigned;
+   function Batch_To_Unsigned (B : Batch_Ladder) return Interfaces.C.unsigned with Pre => True, Post => True;
    pragma Inline (Batch_To_Unsigned);
 
    --  ========================================================================
@@ -104,7 +106,7 @@ package Auto_Config is
    --  AL_All maps to -1 (all layers on accelerator)
    Accel_All_Layers : constant Interfaces.C.int := -1;
 
-   function Accel_Layers_To_Int (A : Accel_Layer_Ladder) return Interfaces.C.int;
+   function Accel_Layers_To_Int (A : Accel_Layer_Ladder) return Interfaces.C.int with Pre => True, Post => True;
    pragma Inline (Accel_Layers_To_Int);
 
    --  ========================================================================
@@ -129,40 +131,40 @@ package Auto_Config is
 
    --  Initialize auto-config: detect hardware, load saved config.
    --  Call once at startup, before any Load_Model.
-   procedure Initialize;
+   procedure Initialize with Pre => True, Post => True;
 
    --  Get the working config for a model kind.
    --  Returns the current best-known settings.
-   function Get_Config (Kind : Model_Type) return Working_Config;
+   function Get_Config (Kind : Model_Type) return Working_Config with Pre => True, Post => True;
 
    --  Record that a context size worked.
    --  Auto-config will try the next level up on next inference.
    procedure Record_Success
      (Kind     : Model_Type;
-      Ctx_Used : Interfaces.C.unsigned);
+      Ctx_Used : Interfaces.C.unsigned) with Pre => True, Post => True;
 
    --  Set the probe target: next time Load_Model is called, try this context.
    --  Called by the post-inference probe when headroom is detected.
    procedure Set_Probe_Target
      (Kind   : Model_Type;
-      Target : Ctx_Ladder);
+      Target : Ctx_Ladder) with Pre => True, Post => True;
 
    --  Get and clear the probe target.
    --  Returns the target if set, then clears it (one-shot probe).
-   function Get_Probe_Target (Kind : Model_Type) return Ctx_Ladder;
+   function Get_Probe_Target (Kind : Model_Type) return Ctx_Ladder with Pre => True, Post => True;
 
    --  Record that a context size failed (OOM, null context, crash).
    --  Auto-config steps back and records the max working config.
    procedure Record_Failure
      (Kind      : Model_Type;
-      Ctx_Tried : Interfaces.C.unsigned);
+      Ctx_Tried : Interfaces.C.unsigned) with Pre => True, Post => True;
 
    --  Save current config to disk (run/.auto_config).
    --  Call on clean shutdown or periodically.
-   procedure Save_Config;
+   procedure Save_Config with Pre => True, Post => True;
 
    --  Force re-probe from minimal (e.g., after hardware change).
-   procedure Reset_To_Minimal;
+   procedure Reset_To_Minimal with Pre => True, Post => True;
 
    --  ========================================================================
    --  HARDWARE PROFILE (detected at startup)

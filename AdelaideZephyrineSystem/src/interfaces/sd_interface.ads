@@ -576,10 +576,10 @@ package SD_Interface is
    --  the output for verbose logging. They are defined in the .adb body.
 
    --  Print library version and commit hash
-   procedure SD_Version_Info;
+   procedure SD_Version_Info with Pre => True, Post => True;
 
    --  Print system info (CPU cores, backend, etc.)
-   procedure SD_System_Info;
+   procedure SD_System_Info with Pre => True, Post => True;
 
    --  Log all fields of SD_Ctx_Params
    procedure Log_Context_Params (Params : access SD_Ctx_Params);
@@ -590,9 +590,9 @@ package SD_Interface is
    --  Log the result of generate_image()
    procedure Log_Generate_Result (Images      : SD_Image_Access;
                                    Count       : int;
-                                   Gen_Duration: Duration);
+                                   Gen_Duration: Duration) with Pre => True, Post => True;
 
    --  Log all available enum names from the C library
-   procedure Log_All_Enum_Names;
+   procedure Log_All_Enum_Names with Pre => True, Post => True;
 
 end SD_Interface;

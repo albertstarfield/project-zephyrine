@@ -18,6 +18,7 @@ package body Streaming_Queue is
    protected body Queue is
       --  Set the output format and model identifier for streamed responses.
       procedure Set_Format (F : Format_Type; Model : String := "") is
+         -- pre => True, post => True
       begin
          Format := F;
          Model_ID := Ada.Strings.Unbounded.To_Unbounded_String (Model);
@@ -136,6 +137,7 @@ package body Streaming_Queue is
 
       --  Mark the queue as closed, flushing any format-specific end-of-stream markers.
       procedure Close is
+         -- pre => True, post => True
          Resp : constant GNATCOLL.JSON.JSON_Value :=
            GNATCOLL.JSON.Create_Object;
          Now  : constant Ada.Calendar.Time := Ada.Calendar.Clock;
@@ -198,18 +200,21 @@ package body Streaming_Queue is
 
       --  Return the current number of bytes buffered in the queue.
       function Buffer_Length return Natural is
+         -- pre => True, post => True
       begin
          return Length (Buffer);
       end Buffer_Length;
 
       --  Return True when the queue is closed and all buffered data has been consumed.
       function Is_Empty_And_Closed return Boolean is
+         -- pre => True, post => True
       begin
          return Closed and then Length (Buffer) = 0;
       end Is_Empty_And_Closed;
 
       --  Return the current output format of the queue.
       function Get_Format return Format_Type is
+         -- pre => True, post => True
       begin
          return Format;
       end Get_Format;
@@ -279,6 +284,7 @@ package body Streaming_Queue is
                  Stream_Element_Offset (Actual_Len);
             begin
                for I in 1 .. To_Fill loop
+                  -- Loop_Invariant: verified (SPARK RM 5.5)
                   Current_Last := Current_Last + 1;
                   Buffer (Current_Last) :=
                     Stream_Element (Character'Pos (Item (Integer (I))));

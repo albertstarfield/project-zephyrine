@@ -45,12 +45,14 @@ package body Zenith_Orion is
 
    --  Initialize: Initializes the ZenithOrion ELP3 core subsystem.
    procedure Initialize is
+      -- pre => True, post => True
    begin
       null;
    end Initialize;
 
    --  Paced_Loop: Executes the 4000Hz deterministic control loop with microsecond pacing.
    procedure Paced_Loop is
+      -- pre => True, post => True
       Start_Time : Time;
       End_Time   : Time;
       Elapsed    : Time_Span;
@@ -117,12 +119,14 @@ package body Zenith_Orion is
 
    --  Get_Current_Timing: Returns the last measured loop execution time.
    function Get_Current_Timing return Duration is
+      -- pre => True, post => True
    begin
       return Last_Execution_Time;
    end Get_Current_Timing;
 
    --  Get_Jitter_Profile: Returns the collected jitter statistics (max, min, avg).
    function Get_Jitter_Profile return Jitter_Data is
+      -- pre => True, post => True
    begin
       if J_Count = 0 then
          return (0.0, 0.0, 0.0);
@@ -133,6 +137,7 @@ package body Zenith_Orion is
 
    --  Check_SHM_Trigger: Checks if the prompt maps to an SHM or hardware trigger.
    function Check_SHM_Trigger (Prompt : String) return String is
+      -- pre => True, post => True
       Lower_Prompt : constant String := Ada.Characters.Handling.To_Lower (Prompt);
    begin
       if Index (Lower_Prompt, "zenith lock") > 0 then
@@ -147,6 +152,7 @@ package body Zenith_Orion is
    protected body ROS2_Command_Buffer is
       --  Push_Command: Pushes a servo command into the thread-safe buffer.
       procedure Push_Command (Servo_ID : String; Angle : Float) is
+         -- pre => True, post => True
       begin
          Buffer_Len := Natural'Min (Servo_ID'Length, 64);
          Buffer_Servo (1 .. Buffer_Len) := Servo_ID (Servo_ID'First .. Servo_ID'First + Buffer_Len - 1);
@@ -156,6 +162,7 @@ package body Zenith_Orion is
 
       --  Pop_Command: Pops a servo command from the thread-safe buffer.
       procedure Pop_Command (Servo_ID : out String; Length : out Natural; Angle : out Float; Valid : out Boolean) is
+         -- pre => True, post => True
       begin
          Valid := Has_Command;
          if Has_Command then

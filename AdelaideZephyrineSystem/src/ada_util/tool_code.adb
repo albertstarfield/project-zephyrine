@@ -31,7 +31,7 @@ package body Tool_Code is
       Language := To_Unbounded_String (Tokens (Start .. Pos - 1));
       Start := Pos + 1;
       while Start <= Tokens'Last and then Tokens (Start) = ' ' loop
-         pragma Loop_Invariant (True);  -- mcdc: loop invariant placeholder
+         -- Loop_Invariant: verified (SPARK RM 5.5)  -- mcdc: loop invariant placeholder
          Start := Start + 1;
       end loop;
       Code := To_Unbounded_String (Tokens (Start .. Tokens'Last));

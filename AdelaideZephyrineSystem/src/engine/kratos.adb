@@ -40,6 +40,7 @@ package body Kratos is
 
    --  Log the details of an isolated crash signal to stderr.
    procedure Log_Crash is
+      -- pre => True, post => True
       Sig : constant Interfaces.C.int := Get_Crash_Signal;
        Sig_Name : constant String :=
           (case Integer (Sig) is

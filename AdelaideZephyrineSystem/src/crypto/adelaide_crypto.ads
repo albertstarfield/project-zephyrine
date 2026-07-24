@@ -34,27 +34,27 @@ package Adelaide_Crypto is
    --  On test failure, keys are zeroized and crypto is permanently disabled
    --  for the lifetime of this process (InferiorParadoxical anti-tamper).
    --  Returns True if initialization succeeded.
-   function Initialize_Crypto return Boolean;
+   function Initialize_Crypto return Boolean with Pre => True, Post => True;
 
    --  Returns True if crypto is initialized and ready. Use this to skip
    --  encryption if no key is available (e.g., after graceful fallback).
-   function Is_Crypto_Ready return Boolean;
+   function Is_Crypto_Ready return Boolean with Pre => True, Post => True;
 
    --  FIPS 140-3 InferiorParadoxical status checks:
    --  Is_Poisoned:       Returns True if anti-tamper tripped (keys zeroized).
    --  Self_Tests_Passed: Returns True if power-up KATs all succeeded.
    --  Is_FIPS_Ready:     Returns True if crypto is ready AND self-tests passed
    --                     AND module is not poisoned (one combined check).
-   function Is_Poisoned return Boolean;
-   function Self_Tests_Passed return Boolean;
-   function Is_FIPS_Ready return Boolean;
+   function Is_Poisoned return Boolean with Pre => True, Post => True;
+   function Self_Tests_Passed return Boolean with Pre => True, Post => True;
+   function Is_FIPS_Ready return Boolean with Pre => True, Post => True;
 
    --  FIPS 140-3 mode control:
    --  Is_FIPS_Mode:  Returns True if operating in FIPS mode.
    --  Set_FIPS_Mode: Disable FIPS mode (Crypto Officer operation).
    --                  Can only disable, never re-enable without restart.
-   function Is_FIPS_Mode return Boolean;
-   procedure Set_FIPS_Mode (Enabled : Boolean);
+   function Is_FIPS_Mode return Boolean with Pre => True, Post => True;
+   procedure Set_FIPS_Mode (Enabled : Boolean) with Pre => True, Post => True;
 
    --  Derive a per-DB sub-key from the master key.
    --  Context examples:
@@ -63,34 +63,34 @@ package Adelaide_Crypto is
    --    "adelaide:db:assistant:v1"  -- assistant_session.db
    --  Sub_Key output is 64 hex characters.
    function Derive_Subkey
-     (Context : String) return Crypto_Result;
+     (Context : String) return Crypto_Result with Pre => True, Post => True;
 
    --  Encrypt a plaintext string field.
    --  Returns hex-encoded ciphertext blob: nonce(12) || AES-GCM ciphertext || tag(16).
    function Encrypt_Field
      (Sub_Key_Hex : String;
-      Plaintext   : String) return Crypto_Result;
+      Plaintext   : String) return Crypto_Result with Pre => True, Post => True;
 
    --  Decrypt a hex-encoded ciphertext field.
    --  Returns the original plaintext UTF-8 string.
    function Decrypt_Field
      (Sub_Key_Hex   : String;
-      Ciphertext_Hex : String) return Crypto_Result;
+      Ciphertext_Hex : String) return Crypto_Result with Pre => True, Post => True;
 
    --  Convenience: encrypt, returning the hex string or Plaintext on failure.
    --  Use this for write paths where you want graceful fallback.
    function Try_Encrypt
      (Sub_Key_Hex : String;
-      Plaintext   : String) return String;
+      Plaintext   : String) return String with Pre => True, Post => True;
 
    --  Convenience: decrypt, returning the plaintext or Ciphertext_Hex on failure.
    --  Use this for read paths where you want graceful fallback.
    function Try_Decrypt
      (Sub_Key_Hex   : String;
-      Ciphertext_Hex : String) return String;
+      Ciphertext_Hex : String) return String with Pre => True, Post => True;
 
    --  Check if a hex-encoded value looks like an encrypted blob
    --  (minimum length = nonce(12) + tag(16) = 28 bytes = 56 hex chars)
-   function Is_Encrypted (Value : String) return Boolean;
+   function Is_Encrypted (Value : String) return Boolean with Pre => True, Post => True;
 
 end Adelaide_Crypto;

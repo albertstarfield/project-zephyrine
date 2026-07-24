@@ -15,6 +15,7 @@ package body Adelaide_Trace is
    --  Initialize
    --  ------------------------------------------------------------------------
    procedure Initialize is
+      -- pre => True, post => True
       use GNAT.OS_Lib;
       Env_Val  : GNAT.OS_Lib.String_Access;
       Env_Flag : GNAT.OS_Lib.String_Access;
@@ -40,6 +41,7 @@ package body Adelaide_Trace is
    --  Uptime
    --  ------------------------------------------------------------------------
    function Uptime return Natural is
+      -- pre => True, post => True
    begin
       return Natural ( Ada.Calendar."-" (Ada.Calendar.Clock, Start_Time) );
    end Uptime;
@@ -48,6 +50,7 @@ package body Adelaide_Trace is
    --  Trace_Print (two-argument form)
    --  ------------------------------------------------------------------------
    procedure Trace_Print (Toolcall : String; Message : String := "") is
+      -- pre => True, post => True
    begin
       if not Trace_Enabled then
          return;

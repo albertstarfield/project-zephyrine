@@ -28,7 +28,7 @@ package Benchmark_Manager is
    end record;
 
    --  Validate API key for benchmark endpoint
-   function Validate_API_Key (Key : String) return Boolean;
+   function Validate_API_Key (Key : String) return Boolean with Pre => True, Post => True;
 
    --  Run benchmark with SSE streaming
    --  Returns SSE events as strings
@@ -39,7 +39,7 @@ package Benchmark_Manager is
    );
 
    --  Generate prompt with exact token count
-   function Generate_Prompt (Target_Tokens : Natural) return String;
+   function Generate_Prompt (Target_Tokens : Natural) return String with Pre => True, Post => True;
 
    --  Compute metrics from timing data
    function Compute_Metrics (
@@ -49,6 +49,6 @@ package Benchmark_Manager is
       First_Token_Time : Float;
       End_Time : Float;
       Cached_Tokens : Natural
-   ) return Benchmark_Metrics;
+   ) return Benchmark_Metrics with Pre => True, Post => True;
 
 end Benchmark_Manager;

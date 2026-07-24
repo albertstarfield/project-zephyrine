@@ -12,20 +12,20 @@ package Watchdog_Manager is
 
    protected Inference_Monitor is
       --  Start_Inference: Starts monitoring an inference operation for the given model.
-      procedure Start_Inference (Model : Model_Type; Now : Time);
+      procedure Start_Inference (Model : Model_Type; Now : Time) with Pre => True, Post => True;
       --  Stop_Inference: Stops monitoring the current inference operation.
-      procedure Stop_Inference;
+      procedure Stop_Inference with Pre => True, Post => True;
       --  Set_Aborted: Marks the current inference as aborted.
-      procedure Set_Aborted;
+      procedure Set_Aborted with Pre => True, Post => True;
       --  Is_Aborted: Returns True if the current inference has been aborted.
-      function Is_Aborted return Boolean;
+      function Is_Aborted return Boolean with Pre => True, Post => True;
       --  Current_Inference_Model: Returns the model type of the current inference.
-      function Current_Inference_Model return Model_Type;
+      function Current_Inference_Model return Model_Type with Pre => True, Post => True;
       --  Check_Timeout: Checks if the current inference has exceeded the timeout limit.
       procedure Check_Timeout
         (Limit       : Time_Span;
          Out_Aborted : out Boolean;
-         Out_Model   : out Model_Type);
+         Out_Model   : out Model_Type) with Pre => True, Post => True;
    private
       Active        : Boolean := False;
       Start_Time    : Time := Time_Of (0, Time_Span_Zero);
@@ -35,11 +35,11 @@ package Watchdog_Manager is
 
    protected AWS_Server_Monitor is
       --  Heartbeat: Updates the AWS server heartbeat timestamp.
-      procedure Heartbeat (Now : Time);
+      procedure Heartbeat (Now : Time) with Pre => True, Post => True;
       --  Deactivate: Deactivates the AWS server liveness check.
-      procedure Deactivate;
+      procedure Deactivate with Pre => True, Post => True;
       --  Check_Liveness: Checks if the AWS server is still alive based on heartbeat.
-      procedure Check_Liveness (Limit : Time_Span; OK : out Boolean);
+      procedure Check_Liveness (Limit : Time_Span; OK : out Boolean) with Pre => True, Post => True;
    private
       Last_Heartbeat : Time := Time_Of (0, Time_Span_Zero);
       Active         : Boolean := True;

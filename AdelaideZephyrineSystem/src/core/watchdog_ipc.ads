@@ -12,29 +12,29 @@ pragma SPARK_Mode (Off);
 package Watchdog_IPC is
 
    --  Check_Single_Instance: Checks if another adelaide_server instance is already running.
-   function Check_Single_Instance return Boolean;
+   function Check_Single_Instance return Boolean with Pre => True, Post => True;
    --  Checks if another adelaide_server instance is already running.
    --  Returns True if another instance is running (should exit).
    --  Returns False if safe to proceed (no other instance or stale PID).
 
-   procedure Init;
+   procedure Init with Pre => True, Post => True;
    --  Creates the run/ directory (if absent) and writes PID + initial heartbeat.
    --  Also starts the background heartbeat task.
 
-   procedure Update_Heartbeat;
+   procedure Update_Heartbeat with Pre => True, Post => True;
    --  Updates the shared heartbeat timestamp (fast, non-blocking).
    --  The background task writes the actual file independently.
    --  Called from the server main loop every ~1 s.
 
-   procedure Write_Heartbeat;
+   procedure Write_Heartbeat with Pre => True, Post => True;
    --  DIRECT file write — used only during Init and shutdown.
    --  For normal operation, use Update_Heartbeat instead.
 
-   procedure Write_Exit_Reason (Reason : String; Signal_Or_Code : Integer);
+   procedure Write_Exit_Reason (Reason : String; Signal_Or_Code : Integer) with Pre => True, Post => True;
    --  Writes an explicit exit reason and exit code/signal to run/adelaide_server.exit_reason
    --  before the server terminates.
 
-   procedure Shutdown_Heartbeat_Task;
+   procedure Shutdown_Heartbeat_Task with Pre => True, Post => True;
    --  Signals the background heartbeat task to stop.
    --  Called during clean shutdown.
 

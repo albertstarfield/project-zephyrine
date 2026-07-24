@@ -13,6 +13,7 @@ package body Kokoro_Interface is
    --  Returns the generated WAV audio data as a stream element array, or an empty
    --  array if synthesis fails or the output file is not produced.
    function Synthesize_Speech (Text : String) return Ada.Streams.Stream_Element_Array is
+      -- pre => True, post => True
       File_Name : constant String := "kokoro_temp.wav";
       
       Success : Boolean;

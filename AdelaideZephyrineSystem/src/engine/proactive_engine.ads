@@ -36,41 +36,41 @@ package Proactive_Engine is
    type Handless_Mode_State is (Off, Activating, Active);
 
    --  Initialize the proactive engine
-   procedure Initialize;
+   procedure Initialize with Pre => True, Post => True;
 
    --  Activate handless mode (assistant can now initiate)
    --  On first activation, Adelaide greets the user.
-   procedure Activate_Handless_Mode;
+   procedure Activate_Handless_Mode with Pre => True, Post => True;
 
    --  Deactivate handless mode
-   procedure Deactivate_Handless_Mode;
+   procedure Deactivate_Handless_Mode with Pre => True, Post => True;
 
    --  Check if handless mode is active
-   function Is_Handless_Mode_Active return Boolean;
+   function Is_Handless_Mode_Active return Boolean with Pre => True, Post => True;
 
    --  Trigger a proactive question based on acoustic dynamics
    --  Called when ambient sound changes significantly
-   procedure Trigger_Acoustic_Question;
+   procedure Trigger_Acoustic_Question with Pre => True, Post => True;
 
    --  Schedule a proactive question at a specific time
-   procedure Schedule_Question (At_Time : Time; Topic : String);
+   procedure Schedule_Question (At_Time : Time; Topic : String) with Pre => True, Post => True;
 
    --  Schedule a repeating proactive question (e.g., every hour)
-   procedure Schedule_Repeating_Question (Interval : Duration; Topic : String);
+   procedure Schedule_Repeating_Question (Interval : Duration; Topic : String) with Pre => True, Post => True;
 
    --  Tick: check and fire any pending proactive questions
    --  Called from the main loop or a dedicated task
-   procedure Tick;
+   procedure Tick with Pre => True, Post => True;
 
    --  Get the last proactive question asked (for logging)
-   function Get_Last_Question return String;
+   function Get_Last_Question return String with Pre => True, Post => True;
 
    --  Get the last proactive answer given (for logging)
-   function Get_Last_Answer return String;
+   function Get_Last_Answer return String with Pre => True, Post => True;
 
    --  Audio queue for Handless STS proactive injection
-   procedure Queue_Audio (PCM : String);
-   function Has_Pending_Audio return Boolean;
-   function Pop_Pending_Audio return String;
+   procedure Queue_Audio (PCM : String) with Pre => True, Post => True;
+   function Has_Pending_Audio return Boolean with Pre => True, Post => True;
+   function Pop_Pending_Audio return String with Pre => True, Post => True;
 
 end Proactive_Engine;

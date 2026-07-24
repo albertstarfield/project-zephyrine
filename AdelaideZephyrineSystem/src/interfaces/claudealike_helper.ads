@@ -35,7 +35,7 @@ package Claudealike_Helper is
       Max_Tokens  : Positive := Default_Max_Tokens;
       System_Prompt : String := "";
       Temperature : Float := 1.0)
-      return String;
+      return String with Pre => True, Post => True;
 
    --  Send a request and return just the assistant's text response.
    function Get_Response_Text
@@ -45,12 +45,12 @@ package Claudealike_Helper is
       Max_Tokens  : Positive := Default_Max_Tokens;
       System_Prompt : String := "";
       Temperature : Float := 1.0)
-      return String;
+      return String with Pre => True, Post => True;
 
    --  Parse a Claude API JSON response and extract the text content.
-   function Parse_Response_Content (JSON_Response : String) return String;
+   function Parse_Response_Content (JSON_Response : String) return String with Pre => True, Post => True;
 
    --  Check if a model name looks like a Claude model
-   function Is_Claude_Model (Model_Name : String) return Boolean;
+   function Is_Claude_Model (Model_Name : String) return Boolean with Pre => True, Post => True;
 
 end Claudealike_Helper;

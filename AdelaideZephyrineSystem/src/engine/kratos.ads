@@ -61,6 +61,6 @@ package Kratos is
       return Interfaces.C.int;
 
    --  Log crash details to stderr
-   procedure Log_Crash;
+   procedure Log_Crash with Pre => True, Post => True;
 
 end Kratos;

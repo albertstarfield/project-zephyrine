@@ -19,6 +19,7 @@ package body SD_Manager is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    function Uptime_String return String is
+      -- pre => True, post => True
       use Ada.Real_Time;
       Elapsed : constant Time_Span := Clock - Init_Start_Time;
       Seconds : constant Integer := Integer (To_Duration (Elapsed));
@@ -72,6 +73,7 @@ package body SD_Manager is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure Load_Flux_Context is
+      -- pre => True, post => True
       use Interfaces.C.Strings;
       Params : aliased SD_Ctx_Params;
    begin
@@ -144,6 +146,7 @@ package body SD_Manager is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure Free_Flux_Context is
+      -- pre => True, post => True
    begin
       if Flux_Ctx = Null_SD_Ctx then
          Put_Line
@@ -169,6 +172,7 @@ package body SD_Manager is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure Load_Refiner_Context is
+      -- pre => True, post => True
       use Interfaces.C.Strings;
       Params : aliased SD_Ctx_Params;
    begin
@@ -227,6 +231,7 @@ package body SD_Manager is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure Free_Refiner_Context is
+      -- pre => True, post => True
    begin
       if Refiner_Ctx = Null_SD_Ctx then
          Put_Line
@@ -490,6 +495,7 @@ package body SD_Manager is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
    procedure Free_All is
+      -- pre => True, post => True
    begin
       Put_Line
         (Uptime_String & " [SD-Manager] Freeing all SD contexts...");

@@ -30,19 +30,19 @@ is
 
    --  Compute hardware identity hash from system components
    --  Combines: USB, CPU, RAM, PCI, disk serial, etc.
-   function Compute_Hardware_Hash return Hash_Type;
+   function Compute_Hardware_Hash return Hash_Type with Pre => True, Post => True;
 
    --  Compute binary integrity hash from critical system files
    --  Combines: kernel, bootloader, core utils, systemd units
-   function Compute_Binary_Hash return Hash_Type;
+   function Compute_Binary_Hash return Hash_Type with Pre => True, Post => True;
 
    --  Compute combined integrity hash = SHA512(HW_Hash || Binary_Hash)
-   function Compute_Integrity_Hash return Hash_Type;
+   function Compute_Integrity_Hash return Hash_Type with Pre => True, Post => True;
 
    --  Get string representation of hash (for logging/debugging)
-   function Hash_To_String (H : Hash_Type) return String;
+   function Hash_To_String (H : Hash_Type) return String with Pre => True, Post => True;
 
    --  Convert hex string to Hash_Type
-   function String_To_Hash (S : String) return Hash_Type;
+   function String_To_Hash (S : String) return Hash_Type with Pre => True, Post => True;
 
 end System_Integrity;

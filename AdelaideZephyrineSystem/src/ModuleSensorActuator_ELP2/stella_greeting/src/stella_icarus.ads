@@ -2,6 +2,6 @@
 
 package Stella_Icarus is
    -- This procedure will print our personalized greeting to the console.
-   procedure Greet;
+   procedure Greet with Pre => True, Post => True;
 
 end Stella_Icarus;

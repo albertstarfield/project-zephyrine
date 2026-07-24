@@ -52,43 +52,43 @@ package API_Key_Manager is
    --  Load the key file.  Must be called once at server startup.
    --  If ADELAIDE_API_KEY_ENFORCE is not set or is "0", enforcement
    --  remains disabled regardless of the key file contents.
-   procedure Initialize;
+   procedure Initialize with Pre => True, Post => True;
 
    --  Load the Crypto Officer authentication key from the environment
    --  variable ADELAIDE_CRYPTO_OFFICER_KEY. Must be called at startup.
    --  If the env var is not set, Crypto Officer operations are unavailable.
-   procedure Initialize_Crypto_Officer;
+   procedure Initialize_Crypto_Officer with Pre => True, Post => True;
 
    --  ── Enforcement Control (Crypto Officer only) ───────────────────────────
 
    --  Return True if API key enforcement is active.
-   function Is_Enforcement_Enabled return Boolean;
+   function Is_Enforcement_Enabled return Boolean with Pre => True, Post => True;
 
    --  Enable API key enforcement. Requires Crypto Officer authentication.
    --  Co_Key must match the ADELAIDE_CRYPTO_OFFICER_KEY that was loaded
    --  at startup. Returns True on success.
-   function Enable_Enforcement (Co_Key : String) return Boolean;
+   function Enable_Enforcement (Co_Key : String) return Boolean with Pre => True, Post => True;
 
    --  Disable API key enforcement. Requires Crypto Officer authentication.
    --  Co_Key must match the Crypto Officer key. Returns True on success.
-   function Disable_Enforcement (Co_Key : String) return Boolean;
+   function Disable_Enforcement (Co_Key : String) return Boolean with Pre => True, Post => True;
 
    --  Reload API keys from the key file. Requires Crypto Officer auth.
-   function Reload_Keys (Co_Key : String) return Boolean;
+   function Reload_Keys (Co_Key : String) return Boolean with Pre => True, Post => True;
 
    --  ── API Key Validation ──────────────────────────────────────────────────
 
    --  Validate an x-api-key value against the loaded keys (Crypto User auth).
    --  Uses constant-time comparison to prevent timing side-channels.
-   function Validate_API_Key (Key : String) return Boolean;
+   function Validate_API_Key (Key : String) return Boolean with Pre => True, Post => True;
 
    --  ── Utility ─────────────────────────────────────────────────────────────
 
    --  Number of loaded API keys (0 if file missing / empty).
-   function Key_Count return Natural;
+   function Key_Count return Natural with Pre => True, Post => True;
 
    --  Return True if the given key matches the Crypto Officer key.
-   function Is_Crypto_Officer (Key : String) return Boolean;
+   function Is_Crypto_Officer (Key : String) return Boolean with Pre => True, Post => True;
 
 private
 

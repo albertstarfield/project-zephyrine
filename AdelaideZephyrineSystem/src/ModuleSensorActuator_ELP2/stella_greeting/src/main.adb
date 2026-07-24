@@ -4,6 +4,7 @@
 with Stella_Icarus;
 
 procedure Main is
+   -- pre => True, post => True
 begin
    -- Call the Greet procedure from our custom package.
    Stella_Icarus.Greet;

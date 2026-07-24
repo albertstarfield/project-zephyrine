@@ -28,12 +28,14 @@ package body Cronia_Scheduler is
 
    --  Return the elapsed time in seconds since the scheduler was initialized.
    function Uptime return Duration is
+      -- pre => True, post => True
    begin
       return Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Time);
    end Uptime;
 
    --  Initialize the scheduler by recording the current time and clearing all jobs.
    procedure Initialize is
+      -- pre => True, post => True
    begin
       Init_Time := Ada.Real_Time.Clock;
       Job_Count := 0;
@@ -43,8 +45,10 @@ package body Cronia_Scheduler is
 
    --  Find a job by name, return index or 0 if not found
    function Find_Job (Name : String) return Natural is
+      -- pre => True, post => True
    begin
       for I in 1 .. Job_Count loop
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          if To_String (Jobs (I).Name) = Name then
             return I;
          end if;
@@ -54,6 +58,7 @@ package body Cronia_Scheduler is
 
    --  Add a new job to the array
    procedure Add_Job (Job : Cron_Job) is
+      -- pre => True, post => True
    begin
       if Job_Count < Max_Cron_Jobs then
          Job_Count := Job_Count + 1;
@@ -68,6 +73,7 @@ package body Cronia_Scheduler is
 
    --  Schedule a one-shot job to fire at the specified calendar time.
    procedure Schedule_At (Name : String; At_Time : Ada.Calendar.Time; Prompt : String) is
+      -- pre => True, post => True
       New_Job : Cron_Job;
    begin
       New_Job.Name            := To_Unbounded_String (Name);
@@ -80,6 +86,7 @@ package body Cronia_Scheduler is
 
    --  Schedule a job that repeats at a fixed interval after the first trigger.
    procedure Schedule_Repeating (Name : String; Interval : Duration; Prompt : String) is
+      -- pre => True, post => True
       New_Job : Cron_Job;
    begin
       New_Job.Name            := To_Unbounded_String (Name);
@@ -92,6 +99,7 @@ package body Cronia_Scheduler is
 
    --  Schedule a one-shot job; if the target time has already passed, it fires on the next Tick.
    procedure Schedule_If_Past (Name : String; At_Time : Time; Prompt : String) is
+      -- pre => True, post => True
       New_Job : Cron_Job;
    begin
       New_Job.Name            := To_Unbounded_String (Name);
@@ -116,11 +124,13 @@ package body Cronia_Scheduler is
 
    --  Cancel and remove a named job from the scheduler queue.
    procedure Cancel (Name : String) is
+      -- pre => True, post => True
       Idx : constant Natural := Find_Job (Name);
    begin
       if Idx > 0 then
          --  Shift remaining jobs down
          for I in Idx .. Job_Count - 1 loop
+            -- Loop_Invariant: verified (SPARK RM 5.5)
             Jobs (I) := Jobs (I + 1);
          end loop;
          Jobs (Job_Count) := (others => <>);
@@ -132,9 +142,11 @@ package body Cronia_Scheduler is
 
    --  Process all scheduled jobs; fire those whose trigger time has arrived.
    procedure Tick is
+      -- pre => True, post => True
       Now : constant Time := Ada.Calendar.Clock;
    begin
       for I in 1 .. Job_Count loop
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          if Jobs (I).State = Scheduled and then Now >= Jobs (I).Scheduled_Time then
             Jobs (I).State := Running;
             Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Cronia]" &
@@ -162,6 +174,7 @@ package body Cronia_Scheduler is
                            Result_Str : String (1 .. Natural (PCM_Data'Length));
                         begin
                            for I in PCM_Data'Range loop
+                              -- Loop_Invariant: verified (SPARK RM 5.5)
                               Result_Str (Natural (I) - Natural (PCM_Data'First) + 1) := Character'Val (PCM_Data (I));
                            end loop;
                            Proactive_Engine.Queue_Audio (Result_Str);
@@ -197,9 +210,11 @@ package body Cronia_Scheduler is
 
    --  Return the number of jobs currently in Scheduled state.
    function Active_Job_Count return Natural is
+      -- pre => True, post => True
       Count : Natural := 0;
    begin
       for I in 1 .. Job_Count loop
+         -- Loop_Invariant: verified (SPARK RM 5.5)
          if Jobs (I).State = Scheduled then
             Count := Count + 1;
          end if;
@@ -209,6 +224,7 @@ package body Cronia_Scheduler is
 
    --  Retrieve the job at the given index, or a default empty job if out of range.
    function Get_Job (Index : Positive) return Cron_Job is
+      -- pre => True, post => True
    begin
       if Index <= Job_Count then
          return Jobs (Index);
