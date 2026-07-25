@@ -1,3 +1,15 @@
+pragma SPARK_Mode (Off);
+--  external_dep: GNATCOLL.JSON (no SPARK contracts)
+--
+--  ELP2 AVIONICS DAEMON — HUD / DISPLAY ONLY
+--  This unit renders instrument data for the Head-Up Display.
+--  Flight control logic lives in ELP3 (Zenith_Orion) at 4000Hz.
+--  ELP2 must NEVER send control actuator commands; it only reads
+--  telemetry from ELP3 via shared memory / ROS2 command buffer.
+--
+--  Priority: ELP2 (display rendering, non-safety-critical)
+--  Control authority: NONE — see ELP3 Zenith_Orion for actuation.
+
 with Ada.Text_IO;
 with Ada.Strings.Unbounded;
 with Ada.Calendar;

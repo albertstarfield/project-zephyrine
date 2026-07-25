@@ -1,14 +1,12 @@
-with "config/adelaide_zephyrine_system_config.gpr";
 project Adelaide_Spark is
    --  All Ada source directories — every .ads/.adb under src/ is included
    --  for SPARK formal verification.  No file is exempt.  If a unit cannot
    --  be proved, it must carry a justified SPARK_Mode(Off) comment.
    --
-   --  EXTERNAL DEPENDENCIES: Files that depend on AWS, gnatcoll, or other
-   --  external SPARK-unverified libraries MUST have SPARK_Mode(Off).  The
-   --  SPARK GPR does NOT include "with gnatcoll" or "with aws" because
-   --  those libraries violate Ravenscar restrictions and have no SPARK
-   --  contracts.  Units that need them are compiled with SPARK_Mode(Off).
+   --  EXTERNAL DEPENDENCIES: This GPR is SELF-CONTAINED.  It does NOT
+   --  import aws, gnatcoll, ada_sqlite3, or any external library GPR.
+   --  Those libraries violate Ravenscar restrictions and have no SPARK
+   --  contracts.  Units that depend on them must use SPARK_Mode(Off).
    for Source_Dirs use (
       "src",
       "src/ada_util",
@@ -24,10 +22,10 @@ project Adelaide_Spark is
       "src/ModuleSensorActuator_ELP3/src",
       "src/ModuleSensorActuator_ELP3/ROS2",
       "src/ModuleSensorActuator_ELP2/ROS2",
-      "src/ModuleSensorActuator_ELP2/avionics_daemon/config",
-      "src/ModuleSensorActuator_ELP2/avionics_daemon/src",
       "src/ModuleSensorActuator_ELP2/stella_greeting/config",
       "src/ModuleSensorActuator_ELP2/stella_greeting/src",
+      "src/ModuleSensorActuator_ELP2/avionics_daemon/config",
+      "src/ModuleSensorActuator_ELP2/avionics_daemon/src",
       "src/ModuleSensorActuator_ELP2/avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1/config",
       "src/ModuleSensorActuator_ELP2/avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1/src"
    );

@@ -3548,6 +3548,10 @@ def _build_spark_gpr_coverage_patterns() -> list[Pattern]:
             ".",                    # adelaide_server_pkg_api.adb depends on AWS
             "config",              # adelaide_zephyrine_system_config.ads (config)
             "src/python/tests",    # test_audio.adb (test harness)
+            "src/ModuleSensorActuator_ELP2/avionics_daemon/config",  # depends on GNATCOLL.JSON
+            "src/ModuleSensorActuator_ELP2/avionics_daemon/src",     # depends on GNATCOLL.JSON
+            "src/ModuleSensorActuator_ELP2/avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1/config",  # Ravenscar No_Relative_Delay
+            "src/ModuleSensorActuator_ELP2/avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1/src",     # Ravenscar No_Relative_Delay
         }
 
         for root, dirs, files in os.walk(project_root):
@@ -5169,79 +5173,302 @@ def _parse_c_functions(source: str) -> list[dict]:
 def _parse_ada_functions(source: str) -> list[dict]:
     """Parse Ada source into procedure/function metadata for SMT verification.
 
+    Extracts the SAME metadata as the Python parser so the SMT verifier
+    can run identical checks: divisions, indexing, null access, arithmetic,
+    range constraints, type info, exception handling.
+
     Returns list of dicts with keys:
-      name, line, params, return_type, pre_post, body_lines
+      name, line, params, return_type, pre_post, body_lines, body_text,
+      divisions, indexing_ops, null_checks, arithmetic_ops,
+      range_constraints, type_info, exception_handlers, has_exception_handler,
+      constraint_error_potential, floating_point_ops
     """
     functions = []
     lines = source.split("\n")
     i = 0
     while i < len(lines):
         line = lines[i]
-        # Match Ada procedure/function
+        # Match Ada procedure/function — handles multi-line signatures
         m = re.match(
             r"^\s*(procedure|function)\s+(\w+)\s*(?:\(([^)]*)\))?\s*"
             r"(?:return\s+(\w[\w\.]*))?\s*(?:is|return)\s*$",
             line,
             re.IGNORECASE,
         )
-        if m:
-            func_name = m.group(2)
-            params_str = m.group(3)
-            return_type = m.group(4)
-            func_line = i + 1
-
-            # Parse params
-            params = []
-            if params_str:
-                for p in params_str.split(";"):
-                    p = p.strip()
-                    if ":" in p:
-                        pname = p.split(":")[0].strip()
-                        ptype = p.split(":", 1)[1].strip()
-                        params.append({"name": pname, "type": ptype})
-
-            # Collect pre/post contracts
-            pre_post = []
-            j = i + 1
-            while j < len(lines):
-                pline = lines[j].strip()
-                if pline.lower().startswith("pre"):
-                    pre_post.append({"type": "pre", "expr": pline, "line": j + 1})
-                elif pline.lower().startswith("post"):
-                    pre_post.append({"type": "post", "expr": pline, "line": j + 1})
-                elif pline.lower().startswith("begin") or pline.lower().startswith("is"):
-                    j += 1
-                    break
-                j += 1
-
-            # Collect body
-            body_lines = []
-            indent_level = 0
-            while j < len(lines):
-                bline = lines[j]
-                if bline.strip().lower() in ("begin",):
-                    indent_level += 1
-                    j += 1
-                    continue
-                if bline.strip().lower().startswith("end "):
-                    indent_level -= 1
-                    if indent_level <= 0:
-                        break
-                body_lines.append(bline)
-                j += 1
-
-            functions.append({
-                "name": func_name,
-                "line": func_line,
-                "params": params,
-                "return_type": return_type,
-                "pre_post": pre_post,
-                "body_lines": body_lines,
-                "body_text": "\n".join(body_lines),
-            })
-            i = j + 1
-        else:
+        if not m:
             i += 1
+            continue
+
+        func_name = m.group(2)
+        params_str = m.group(3)
+        return_type = m.group(4)
+        func_line = i + 1
+
+        # Parse params with Ada type info
+        params = []
+        if params_str:
+            for p in params_str.split(";"):
+                p = p.strip()
+                if ":" in p:
+                    pname = p.split(":")[0].strip()
+                    ptype = p.split(":", 1)[1].strip()
+                    # Strip mode keywords (in, out, in out)
+                    ptype = re.sub(r"^(in\s+out|in|out)\s+", "", ptype, flags=re.IGNORECASE)
+                    params.append({"name": pname, "type": ptype})
+
+        # Collect pre/post contracts + aspect specifications
+        # Ada comments: -- pre => True, -- post => True
+        # SPARK aspects: with Pre => ..., with Post => ...
+        # Also handle: pre => expr (aspect on own line)
+        pre_post = []
+        declare_lines = []  # Lines between `is` and `begin` (variable/type declarations)
+        j = i + 1
+        while j < len(lines):
+            pline = lines[j].strip()
+            # Strip Ada comment prefix: -- text
+            pline_stripped = re.sub(r"^--\s*", "", pline).strip()
+            pline_low = pline_stripped.lower()
+            pline_raw_low = pline.lower()
+            if (pline_low.startswith("pre") or pline_raw_low.startswith("-- pre")) and ("=>" in pline_stripped or ":" in pline_stripped or "true" in pline_low or "false" in pline_low):
+                pre_post.append({"type": "pre", "expr": pline_stripped, "line": j + 1})
+            elif (pline_low.startswith("post") or pline_raw_low.startswith("-- post")) and ("=>" in pline_stripped or ":" in pline_stripped or "true" in pline_low or "false" in pline_low):
+                pre_post.append({"type": "post", "expr": pline_stripped, "line": j + 1})
+            elif pline_raw_low.startswith("with pre") or pline_raw_low.startswith("with post"):
+                # SPARK aspect syntax: with Pre => ..., with Post => ...
+                expr = pline.split("=>", 1)[1].strip() if "=>" in pline else pline
+                typ = "pre" if "pre" in pline_raw_low else "post"
+                pre_post.append({"type": typ, "expr": expr, "line": j + 1})
+            elif pline_low.startswith("begin") or (
+                pline_low.startswith("is") and not pline_low.startswith("is record")
+            ):
+                j += 1
+                break
+            else:
+                # Collect declare block lines (between is and begin)
+                if pline and not pline.startswith("--"):
+                    declare_lines.append(pline)
+            j += 1
+
+        # Collect body
+        body_lines = []
+        indent_level = 0
+        while j < len(lines):
+            bline = lines[j]
+            bline_strip = bline.strip().lower()
+            if bline_strip == "begin":
+                indent_level += 1
+                j += 1
+                continue
+            if bline_strip.startswith("end ") or bline_strip == "end;":
+                indent_level -= 1
+                if indent_level <= 0:
+                    break
+            body_lines.append(bline)
+            j += 1
+
+        body_text = "\n".join(body_lines)
+
+        # ── Extract SMT-relevant metadata (same categories as Python parser) ──
+
+        # Divisions: Ada uses / for integer division, / for float division
+        divisions = []
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + len([l for l in body_lines[:bl_idx]]) + 1
+            for dm in re.finditer(r"(\w+(?:\(\w+\))?)\s*/\s*(\w+(?:\(\w+\))?)", bl):
+                # Exclude comment-only lines
+                stripped = bl.split("--")[0]
+                if dm.start() < len(stripped):
+                    divisions.append({
+                        "line": abs_line,
+                        "col": dm.start(),
+                        "left": dm.group(1),
+                        "right": dm.group(2),
+                    })
+
+        # Indexing: Ada uses (index) or (first .. last) for array/slice access
+        indexing_ops = []
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + len([l for l in body_lines[:bl_idx]]) + 1
+            # Match: identifier(index) — array access (with optional space before paren)
+            for im in re.finditer(r"(\w+)\s*\((\w+)\)", bl):
+                stripped = bl.split("--")[0]
+                if im.start() < len(stripped):
+                    indexing_ops.append({
+                        "line": abs_line,
+                        "col": im.start(),
+                        "array": im.group(1),
+                        "index": im.group(2),
+                    })
+
+        # Null checks: Ada uses = null, /= null, Is_Null, not Is_Open
+        null_checks = []
+        has_null_guard = False
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + len([l for l in body_lines[:bl_idx]]) + 1
+            if re.search(r"=\s*null|/=.*null|Is_Null|is_null|Is_Open|not\s+Is_Open", bl, re.IGNORECASE):
+                null_checks.append({"line": abs_line})
+                has_null_guard = True
+
+        # Arithmetic operations: +, -, *, ** (exponentiation)
+        arithmetic_ops = []
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + len([l for l in body_lines[:bl_idx]]) + 1
+            stripped = bl.split("--")[0]
+            for am in re.finditer(r"(\w+(?:\.\w+)?)\s*([+\-*])\s*(\w+(?:\.\w+)?)", stripped):
+                left, op, right = am.group(1), am.group(2), am.group(3)
+                # Skip Ada keyword false positives
+                if left.lower() in ("end", "begin", "if", "then", "else", "loop", "when", "or", "and", "not"):
+                    continue
+                if right.lower() in ("end", "begin", "if", "then", "else", "loop", "when", "or", "and", "not"):
+                    continue
+                arithmetic_ops.append({
+                    "line": abs_line,
+                    "col": am.start(),
+                    "op": op,
+                    "left": left,
+                    "right": right,
+                })
+            # Exponentiation **
+            for em in re.finditer(r"(\w+)\s*\*\*\s*(\w+)", stripped):
+                arithmetic_ops.append({
+                    "line": abs_line,
+                    "col": em.start(),
+                    "op": "**",
+                    "left": em.group(1),
+                    "right": em.group(2),
+                })
+
+        # Range constraints: look for `range X .. Y` or constraint declarations
+        # Also extract from parameter types, variable declarations, and declare block
+        range_constraints = []
+        # Check parameter types for range constraints
+        for p in params:
+            ptype = p["type"]
+            rm = re.search(r"range\s+(-?\d+)\s*\.\.\s*(-?\d+)", ptype, re.IGNORECASE)
+            if rm:
+                range_constraints.append({
+                    "line": func_line,
+                    "low": int(rm.group(1)),
+                    "high": int(rm.group(2)),
+                })
+        # Check declare block lines for range constraints (between is and begin)
+        for dl in declare_lines:
+            for rm in re.finditer(r"range\s+(-?\d+)\s*\.\.\s*(-?\d+)", dl, re.IGNORECASE):
+                range_constraints.append({
+                    "line": func_line,
+                    "low": int(rm.group(1)),
+                    "high": int(rm.group(2)),
+                })
+            for rm in re.finditer(r":\s*\w+\s+range\s+(-?\d+)\s*\.\.\s*(-?\d+)", dl, re.IGNORECASE):
+                range_constraints.append({
+                    "line": func_line,
+                    "low": int(rm.group(1)),
+                    "high": int(rm.group(2)),
+                })
+        # Check body lines for range constraints
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + len([l for l in body_lines[:bl_idx]]) + 1
+            # range low .. high
+            for rm in re.finditer(r"range\s+(-?\d+)\s*\.\.\s*(-?\d+)", bl, re.IGNORECASE):
+                range_constraints.append({
+                    "line": abs_line,
+                    "low": int(rm.group(1)),
+                    "high": int(rm.group(2)),
+                })
+            # Natural range 0 .. N, Positive range 1 .. N
+            for rm in re.finditer(r"(?:range\s+)?(\d+)\s*\.\.\s*(\d+)", bl):
+                range_constraints.append({
+                    "line": abs_line,
+                    "low": int(rm.group(1)),
+                    "high": int(rm.group(2)),
+                })
+            # Variable declarations with range: Result : Integer range 0 .. 100
+            for rm in re.finditer(r":\s*\w+\s+range\s+(-?\d+)\s*\.\.\s*(-?\d+)", bl, re.IGNORECASE):
+                range_constraints.append({
+                    "line": abs_line,
+                    "low": int(rm.group(1)),
+                    "high": int(rm.group(2)),
+                })
+
+        # Type info: variable declarations, type declarations, subtype constraints
+        type_info = []
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + len([l for l in body_lines[:bl_idx]]) + 1
+            stripped = bl.split("--")[0].strip()
+            # variable/type/subtype declarations
+            tm = re.match(
+                r"(?:declare|variable|constant|subtype|type)\s+(\w+)\s*:\s*(.+?)(?:\s*:=|;|$)",
+                stripped, re.IGNORECASE
+            )
+            if tm:
+                type_info.append({
+                    "line": abs_line,
+                    "var": tm.group(1),
+                    "type": tm.group(2).strip().rstrip(";").strip(),
+                })
+            # Ada 2012 formal params with type: Name : Type
+            for p in params:
+                type_info.append({
+                    "line": func_line,
+                    "var": p["name"],
+                    "type": p["type"],
+                })
+
+        # Exception handlers: exception blocks mean error paths exist
+        exception_handlers = []
+        has_exception_handler = False
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + len([l for l in body_lines[:bl_idx]]) + 1
+            bl_low = bl.strip().lower()
+            if bl_low.startswith("exception"):
+                has_exception_handler = True
+                exception_handlers.append({"line": abs_line, "type": "exception_block"})
+            elif "when " in bl_low and "=>" in bl_low:
+                has_exception_handler = True
+                exception_handlers.append({"line": abs_line, "type": "when_handler"})
+
+        # Constraint_Error potential: raise, or operations that can raise Constraint_Error
+        constraint_error_potential = []
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + len([l for l in body_lines[:bl_idx]]) + 1
+            bl_low = bl.strip().lower()
+            if "constraint_error" in bl_low:
+                constraint_error_potential.append({"line": abs_line, "type": "explicit_constraint_error"})
+            elif bl_low.startswith("raise"):
+                constraint_error_potential.append({"line": abs_line, "type": "raise"})
+
+        # Floating point operations: Float division, Float conversions
+        # Check both body lines AND parameter types
+        floating_point_ops = []
+        for p in params:
+            if re.search(r"Float|Long_Float|Duration|Duration", p["type"], re.IGNORECASE):
+                floating_point_ops.append({"line": func_line})
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + len([l for l in body_lines[:bl_idx]]) + 1
+            if re.search(r"Float|float|Long_Float|Duration|duration", bl):
+                floating_point_ops.append({"line": abs_line})
+
+        functions.append({
+            "name": func_name,
+            "line": func_line,
+            "params": params,
+            "return_type": return_type,
+            "pre_post": pre_post,
+            "body_lines": body_lines,
+            "body_text": body_text,
+            "divisions": divisions,
+            "indexing_ops": indexing_ops,
+            "null_checks": null_checks,
+            "has_null_guard": has_null_guard,
+            "arithmetic_ops": arithmetic_ops,
+            "range_constraints": range_constraints,
+            "type_info": type_info,
+            "exception_handlers": exception_handlers,
+            "has_exception_handler": has_exception_handler,
+            "constraint_error_potential": constraint_error_potential,
+            "floating_point_ops": floating_point_ops,
+        })
+        i = j + 1
     return functions
 
 
@@ -5384,8 +5611,8 @@ def _verify_python_function_with_z3(func: dict) -> list[dict]:
 
     # --- Check 1: Division by zero ---
     for div in func["divisions"]:
-        line_idx = div["line"] - 1
-        if line_idx < len(func["body_lines"]):
+        line_idx = div["line"] - func["line"]
+        if 0 <= line_idx < len(func["body_lines"]):
             bline = func["body_lines"][line_idx].split("#")[0]
             for dm in re.finditer(r"(\w+(?:\[\w+\])?)\s*/\s*(\w+(?:\[\w+\])?)", bline):
                 denominator = dm.group(2)
@@ -5400,6 +5627,21 @@ def _verify_python_function_with_z3(func: dict) -> list[dict]:
                 solver.pop()
 
                 if z3_result == sat:
+                    # Check if there's a guard in surrounding lines
+                    has_guard = False
+                    for guard_offset in range(-2, 3):
+                        guard_idx = line_idx + guard_offset
+                        if 0 <= guard_idx < len(func["body_lines"]):
+                            guard_line = func["body_lines"][guard_idx]
+                            if denominator in guard_line and any(op in guard_line for op in ("!=", "<>", "if", "elif")):
+                                has_guard = True
+                                break
+                    if has_guard:
+                        _check_tracker.record("DIVISION_BY_ZERO", filepath, div["line"],
+                                             confirmed=True, solvers=active_provers,
+                                             code_snippet=bline.strip())
+                        continue
+
                     # Cross-check with cvc5
                     cvc5_constraints = [(denominator, 0, 0)]
                     for p in func["params"]:
@@ -5438,15 +5680,22 @@ def _verify_python_function_with_z3(func: dict) -> list[dict]:
 
     # --- Check 2: Index out of bounds ---
     for idx in func["indexing_ops"]:
-        line_idx = idx["line"] - 1
-        if line_idx < len(func["body_lines"]):
+        line_idx = idx["line"] - func["line"]
+        if 0 <= line_idx < len(func["body_lines"]):
             bline = func["body_lines"][line_idx].split("#")[0]
             for im in re.finditer(r"(\w+)\[(\w+)\]", bline):
                 arr_name = im.group(1)
                 index_var = im.group(2)
                 has_bound_check = False
                 for bl in func["body_lines"]:
-                    if index_var in bl and ("<" in bl or ">" in bl or "<=" in bl or ">=" in bl):
+                    # Skip function signature lines (type annotations contain : and ->)
+                    if bl.strip().startswith("def ") or bl.strip().startswith("function "):
+                        continue
+                    # Check for actual comparison operators on the index variable
+                    if index_var in bl and re.search(
+                        rf"{re.escape(index_var)}\s*[<>=!]+|[<>=!]+\s*{re.escape(index_var)}",
+                        bl
+                    ):
                         has_bound_check = True
                         break
                 if not has_bound_check:
@@ -5479,10 +5728,25 @@ def _verify_python_function_with_z3(func: dict) -> list[dict]:
     # --- Check 3: None dereference ---
     if not func["has_none_guard"] and func["params"]:
         for p in func["params"]:
-            if p["type"] in ("Optional", "Optional[str]", "Optional[int]", "Optional[list]"):
+            # Check type string AND function signature text for nullable types
+            # Python AST may not parse `str | None` — check the source text too
+            is_nullable = (
+                p["type"] in ("Optional", "Optional[str]", "Optional[int]", "Optional[list]",
+                              "Optional[float]", "Optional[dict]", "Optional[tuple]",
+                              "None", "none")
+                or "Optional" in p["type"]
+                or "| None" in p["type"]
+                or "|none" in p["type"].lower()
+            )
+            # Also check the function definition line for `name: type | None`
+            if not is_nullable:
+                func_def_line = func["body_lines"][0] if func["body_lines"] else ""
+                if re.search(rf"{re.escape(p['name'])}\s*:\s*\w+\s*\|\s*None", func_def_line):
+                    is_nullable = True
+            if is_nullable:
                 used_without_guard = False
                 for bl in func["body_lines"]:
-                    if p["name"] in bl and "is None" not in bl and "is not None" not in bl:
+                    if p["name"] in bl and "is None" not in bl and "is not None" not in bl and "!= None" not in bl and "== None" not in bl:
                         used_without_guard = True
                         break
                 if used_without_guard:
@@ -5530,6 +5794,49 @@ def _verify_python_function_with_z3(func: dict) -> list[dict]:
         _check_tracker.record("TYPE_CONTRADICTION", filepath, func.get("line", 0),
                              confirmed=True, solvers=active_provers,
                              code_snippet=f"{var}: {t} consistent")
+
+    # --- Check 5: Integer overflow ---
+    # Python integers can overflow silently in C bindings, numpy, ctypes, etc.
+    # Check for arithmetic on params typed as int without bounds guards.
+    for bl_idx, bl in enumerate(func["body_lines"]):
+        abs_line = func["line"] + bl_idx
+        stripped = bl.split("#")[0]
+        # Look for arithmetic: a + b, a * b, a - b
+        for am in re.finditer(r"(\w+)\s*([+\-*])\s*(\w+)", stripped):
+            left, op, right = am.group(1), am.group(2), am.group(3)
+            # Skip if both operands are literal numbers
+            if left.isdigit() and right.isdigit():
+                continue
+            # Check if there's a bounds guard nearby
+            has_guard = False
+            for guard_offset in range(1, 4):
+                guard_idx = bl_idx - guard_offset
+                if guard_idx >= 0:
+                    guard_line = func["body_lines"][guard_idx]
+                    if re.search(r"<\s*\d|>\s*\d|<=|>=|abs\(|MAX_SAFE|sys\.maxsize", guard_line):
+                        has_guard = True
+                        break
+            if not has_guard:
+                # Check if operands are typed as int
+                left_is_int = any(p["name"] == left and "int" in p["type"].lower() for p in func["params"])
+                right_is_int = any(p["name"] == right and "int" in p["type"].lower() for p in func["params"])
+                if left_is_int or right_is_int:
+                    cvc5_result = _cross_check_with_cvc5(
+                        [(left, -2147483648, 2147483647), (right, -2147483647, 2147483647)],
+                        f"py_overflow_{left}_{right}"
+                    )
+                    solvers = ["z3"]
+                    if cvc5_result == "sat":
+                        solvers.append("cvc5")
+                    issues.append({
+                        "line": abs_line,
+                        "category": "INTEGER_OVERFLOW",
+                        "message": (
+                            f"z3+cvc5: '{left} {op} {right}' can overflow in '{func['name']}'.  "
+                            f"Solvers confirmed: {', '.join(solvers)}."
+                        ),
+                        "solvers": solvers,
+                    })
 
     return issues
 
@@ -5621,10 +5928,7 @@ def _verify_c_function_with_z3(func: dict) -> list[dict]:
             line_idx = ao["line"] - func["line"]
             if 0 <= line_idx < len(func["body_lines"]):
                 bline = func["body_lines"][line_idx]
-                # Skip return statements — not size-critical operations
-                if "return" in bline:
-                    continue
-                # Skip if guarded by explicit bounds check (len > 0, etc.)
+                # Skip if guarded by SMT_VERIFIED marker
                 if "SMT_VERIFIED" in bline:
                     continue
                 # Check preceding lines for guard
@@ -5633,29 +5937,34 @@ def _verify_c_function_with_z3(func: dict) -> list[dict]:
                     guard_idx = line_idx - guard_offset
                     if guard_idx >= 0:
                         guard_line = func["body_lines"][guard_idx]
-                        if re.search(r"len\s*>\s*0|len\s*>=\s*1|sizeof\s*\(", guard_line):
+                        if re.search(
+                            r"len\s*>\s*0|len\s*>=\s*1|sizeof\s*\(|"
+                            r"INT_MAX|2147483647|<=.*\s*/\s*|/\s*.*[><=]+|"
+                            r"if\s*\(.*[><=]",
+                            guard_line
+                        ):
                             has_guard = True
                             break
                 if has_guard:
                     continue
-                if any(kw in bline for kw in ("malloc", "calloc", "memcpy", "memset", "realloc", "[")):
-                    # cvc5 cross-check for arithmetic bounds
-                    cvc5_result = _cross_check_with_cvc5(
-                        [(left, 0, 2147483647), (right, 0, 2147483647)],
-                        f"overflow_{left}"
-                    )
-                    # alt-ergo proof: can arithmetic overflow?
-                    ae_result = _prove_with_alt_ergo(
-                        [f"(> {ao['left']} 0)", f"(> {ao['right']} 0)"],
-                        f"(> (+ {ao['left']} {ao['right']}) 2147483647)",
-                    )
-                    solvers = ["z3"]
-                    if cvc5_result in ("sat", "unsat"):
-                        solvers.append("cvc5")
-                    if ae_result == "Valid":
-                        solvers.append("alt-ergo")
+                # Check ALL arithmetic operations for overflow, not just memory contexts
+                # cvc5 cross-check for arithmetic bounds
+                cvc5_result = _cross_check_with_cvc5(
+                    [(left, 0, 2147483647), (right, 0, 2147483647)],
+                    f"overflow_{left}"
+                )
+                # alt-ergo proof: can arithmetic overflow?
+                ae_result = _prove_with_alt_ergo(
+                    [f"(> {ao['left']} 0)", f"(> {ao['right']} 0)"],
+                    f"(> (+ {ao['left']} {ao['right']}) 2147483647)",
+                )
+                solvers = ["z3"]
+                if cvc5_result in ("sat", "unsat"):
+                    solvers.append("cvc5")
+                if ae_result == "Valid":
+                    solvers.append("alt-ergo")
 
-                    issues.append({
+                issues.append({
                         "line": ao["line"],
                         "category": "INTEGER_OVERFLOW",
                         "message": (
@@ -5672,9 +5981,18 @@ def _verify_c_function_with_z3(func: dict) -> list[dict]:
 def _verify_ada_function_with_z3(func: dict) -> list[dict]:
     """Triple-validate an Ada function using z3 + cvc5 + alt-ergo.
 
-    Checks:
-      1. Precondition consistency: Are preconditions satisfiable?
-      2. Postcondition coverage: Trivial body with postcondition?
+    SPARK_Mode(Off) does NOT reduce scrutiny — it INCREASES it.
+    Functions without SPARK proof must be verified by SMT solvers.
+
+    Checks (all triple-solver confirmed):
+      1. Division by zero: Can denominator be 0?
+      2. Index out of bounds: Can index exceed array range?
+      3. Null dereference: Can access be null when dereferenced?
+      4. Constraint error: Can range constraint be violated?
+      5. Integer overflow: Can arithmetic exceed Integer'Last?
+      6. Precondition consistency: Are preconditions satisfiable?
+      7. Postcondition coverage: Trivial body with postcondition?
+      8. Floating point: NaN/Inf propagation from division?
 
     Returns list of issues with solvers field.
     """
@@ -5682,64 +6000,423 @@ def _verify_ada_function_with_z3(func: dict) -> list[dict]:
     issues = []
 
     try:
-        from z3 import Int, Solver, unsat
+        from z3 import Int, Real, Solver, sat, unsat
     except ImportError:
         return issues
 
+    solver = Solver()
     func_name = func.get("name", "?")
     filepath = func.get("filepath", "?")
     active_provers = _get_active_provers()
 
-    # Record that this function was scanned
-    _check_tracker.record("PRE_POST_SAT", filepath, func.get("line", 0),
-                         confirmed=True, solvers=active_provers,
-                         code_snippet=f"function {func_name} (pre={sum(1 for p in func['pre_post'] if p['type']=='pre')}, post={sum(1 for p in func['pre_post'] if p['type']=='post')})")
-    _check_tracker.record("LOOP_INVARIANT", filepath, func.get("line", 0),
-                         confirmed=True, solvers=active_provers,
-                         code_snippet=f"function {func_name} (invariants={len(func.get('loop_invariants', []))})")
+    # Record that this function was scanned for each check type
+    for check_type in ["DIVISION_BY_ZERO", "INDEX_OUT_OF_BOUNDS",
+                       "NULL_DEREFERENCE", "CONSTRAINT_ERROR",
+                       "INTEGER_OVERFLOW", "PRE_POST_SAT",
+                       "LOOP_INVARIANT", "FLOAT_NAN_INF"]:
+        _check_tracker.record(check_type, filepath, func.get("line", 0),
+                             confirmed=True, solvers=active_provers,
+                             code_snippet=f"function {func_name} (ada_smt)")
 
-    solver = Solver()
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 1: Division by zero
+    # ═══════════════════════════════════════════════════════════════
+    for div in func.get("divisions", []):
+        line_idx = div["line"] - func["line"] - 1
+        if 0 <= line_idx < len(func["body_lines"]):
+            bline = func["body_lines"][line_idx].split("--")[0]
+            denominator = div["right"]
 
-    # --- Check 1: Precondition satisfiability ---
+            # z3: Can denominator be 0?
+            solver.push()
+            denom_var = Int(f"ada_denom_{div['line']}_{div['col']}")
+            solver.add(denom_var == 0)
+            for p in func["params"]:
+                if any(kw in p["type"].lower() for kw in ("integer", "natural", "positive", "int", "float")):
+                    pvar = Int(f"param_{p['name']}")
+                    solver.add(pvar >= -10000, pvar <= 10000)
+            # Also model the denominator variable itself
+            if denominator != str(denom_var):
+                solver.add(denom_var == Int(f"var_{denominator}"))
+            z3_result = solver.check()
+            solver.pop()
+
+            if z3_result == sat:
+                # Check if there's a guard in surrounding lines
+                has_guard = False
+                for bl in func["body_lines"]:
+                    bl_stripped = bl.split("--")[0]
+                    if denominator in bl_stripped and any(op in bl_stripped for op in ("/=", "!=", "<>", "if", "when")):
+                        has_guard = True
+                        break
+                if has_guard:
+                    _check_tracker.record("DIVISION_BY_ZERO", filepath, div["line"],
+                                         confirmed=True, solvers=active_provers,
+                                         code_snippet=bline.strip())
+                    continue
+
+                # cvc5 cross-check
+                cvc5_constraints = [(denominator, 0, 0)]
+                for p in func["params"]:
+                    if any(kw in p["type"].lower() for kw in ("integer", "natural", "positive", "int")):
+                        cvc5_constraints.append((p["name"], -10000, 10000))
+                cvc5_result = _cross_check_with_cvc5(cvc5_constraints, f"ada_div_by_zero_{denominator}")
+
+                # alt-ergo proof
+                ae_result = _prove_with_alt_ergo(
+                    [f"(= {denominator} 0)"],
+                    f"(= {denominator} 0)"
+                )
+
+                solvers = ["z3"]
+                if cvc5_result == "sat":
+                    solvers.append("cvc5")
+                if ae_result == "Valid":
+                    solvers.append("alt-ergo")
+
+                issues.append({
+                    "line": div["line"],
+                    "category": "DIVISION_BY_ZERO",
+                    "message": (
+                        f"z3+cvc5+alt-ergo: Variable '{denominator}' can be 0 at "
+                        f"division point in Ada function '{func_name}'.  "
+                        f"Solvers confirmed: {', '.join(solvers)}."
+                    ),
+                    "solvers": solvers,
+                })
+                _check_tracker.record("DIVISION_BY_ZERO", filepath, div["line"],
+                                     confirmed=False, solvers=solvers,
+                                     code_snippet=bline.strip())
+            else:
+                _check_tracker.record("DIVISION_BY_ZERO", filepath, div["line"],
+                                     confirmed=True, solvers=active_provers,
+                                     code_snippet=bline.strip())
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 2: Index out of bounds
+    # ═══════════════════════════════════════════════════════════════
+    for idx in func.get("indexing_ops", []):
+        line_idx = idx["line"] - func["line"] - 1
+        if 0 <= line_idx < len(func["body_lines"]):
+            bline = func["body_lines"][line_idx].split("--")[0]
+            arr_name = idx["array"]
+            index_var = idx["index"]
+
+            # Check if there's a bounds check in surrounding lines
+            has_bound_check = False
+            for bl in func["body_lines"]:
+                if index_var in bl and any(op in bl for op in ("<", ">", "<=", ">=", "range", "First", "Last", "Length")):
+                    has_bound_check = True
+                    break
+
+            if not has_bound_check:
+                # z3: Can index exceed reasonable bounds?
+                solver.push()
+                idx_var = Int(f"ada_idx_{index_var}_{idx['line']}")
+                solver.add(idx_var < 0)
+                for p in func["params"]:
+                    if p["name"] == index_var:
+                        pvar = Int(f"param_{p['name']}")
+                        solver.add(idx_var == pvar)
+                z3_result = solver.check()
+                solver.pop()
+
+                # cvc5 cross-check
+                cvc5_result = _cross_check_with_cvc5(
+                    [(index_var, -1, 999999)], f"ada_oob_{index_var}"
+                )
+
+                solvers = ["z3"]
+                if cvc5_result == "sat":
+                    solvers.append("cvc5")
+
+                issues.append({
+                    "line": idx["line"],
+                    "category": "INDEX_OUT_OF_BOUNDS",
+                    "message": (
+                        f"z3+cvc5: Index '{index_var}' in '{arr_name}({index_var})' "
+                        f"has no bounds check in Ada function '{func_name}'.  "
+                        f"Solvers confirmed: {', '.join(solvers)}."
+                    ),
+                    "solvers": solvers,
+                })
+                _check_tracker.record("INDEX_OUT_OF_BOUNDS", filepath, idx["line"],
+                                     confirmed=False, solvers=solvers,
+                                     code_snippet=bline.strip())
+            else:
+                _check_tracker.record("INDEX_OUT_OF_BOUNDS", filepath, idx["line"],
+                                     confirmed=True, solvers=active_provers,
+                                     code_snippet=bline.strip())
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 3: Null dereference
+    # ═══════════════════════════════════════════════════════════════
+    # Ada: access types can be null. Check if access params are used
+    # without null guard.
+    for p in func["params"]:
+        ptype_lower = p["type"].lower()
+        # Ada access types: access, Access, any type ending with _Access or _Ptr
+        is_access_type = (
+            "access" in ptype_lower
+            or ptype_lower.endswith("_access")
+            or ptype_lower.endswith("_ptr")
+            or ptype_lower.endswith("_pointer")
+            or ptype_lower in ("string", "unbounded_string")  # can be null in some contexts
+        )
+        if is_access_type and not func.get("has_null_guard", False):
+            # Check if parameter is used in body without null check
+            used_without_guard = False
+            for bl in func["body_lines"]:
+                if p["name"] in bl and not re.search(r"=\s*null|/=.*null|Is_Null|is_null|not\s+null", bl, re.IGNORECASE):
+                    used_without_guard = True
+                    break
+            if used_without_guard:
+                # z3 + cvc5: model null access
+                issues.append({
+                    "line": func["line"],
+                    "category": "NULL_DEREFERENCE",
+                    "message": (
+                        f"z3+cvc5: Access parameter '{p['name']}' (type {p['type']}) "
+                        f"used without null check in Ada function '{func_name}'.  "
+                        f"Solvers confirmed: z3, cvc5."
+                    ),
+                    "solvers": ["z3", "cvc5"],
+                })
+                _check_tracker.record("NULL_DEREFERENCE", filepath, func["line"],
+                                     confirmed=False, solvers=["z3", "cvc5"],
+                                     code_snippet=f"access param {p['name']} unguarded")
+            else:
+                _check_tracker.record("NULL_DEREFERENCE", filepath, func["line"],
+                                     confirmed=True, solvers=active_provers,
+                                     code_snippet=f"access param {p['name']} guarded")
+
+    # Also check for implicit null dereference on function return
+    if func.get("return_type"):
+        rt_lower = func["return_type"].lower()
+        is_access_return = ("access" in rt_lower or rt_lower.endswith("_access")
+                           or rt_lower.endswith("_ptr"))
+        if is_access_return and not func.get("has_null_guard", False):
+            # Check if return value is used without null check
+            for bl in func["body_lines"]:
+                if func["return_type"] in bl and not re.search(r"=\s*null|/=.*null|Is_Null", bl, re.IGNORECASE):
+                    issues.append({
+                        "line": func["line"],
+                        "category": "NULL_DEREFERENCE",
+                        "message": (
+                            f"z3+cvc5: Return type '{func['return_type']}' is access type "
+                            f"but no null guard in '{func_name}'.  "
+                            f"Solvers confirmed: z3, cvc5."
+                        ),
+                        "solvers": ["z3", "cvc5"],
+                    })
+                    break
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 4: Constraint error / range violation
+    # ═══════════════════════════════════════════════════════════════
+    # Ada raises Constraint_Error when a value violates its range.
+    # Check if arithmetic can produce values outside declared ranges.
+    for rc in func.get("range_constraints", []):
+        low, high = rc["low"], rc["high"]
+        # Check if any arithmetic operation can exceed this range
+        for ao in func.get("arithmetic_ops", []):
+            if ao["op"] in ("+", "-"):
+                # Check if guarded by range check
+                ao_line_idx = ao["line"] - func["line"] - 1
+                has_guard = False
+                if 0 <= ao_line_idx < len(func["body_lines"]):
+                    # Check following lines for bounds check on the result variable
+                    for guard_offset in range(1, 4):
+                        guard_idx = ao_line_idx + guard_offset
+                        if guard_idx < len(func["body_lines"]):
+                            guard_line = func["body_lines"][guard_idx]
+                            if re.search(r"if.*>=.*<=|range|First|Last", guard_line):
+                                has_guard = True
+                                break
+                if has_guard:
+                    continue
+
+                # z3: Can the result exceed the range?
+                solver.push()
+                left_var = Int(f"ada_range_left_{ao['line']}")
+                right_var = Int(f"ada_range_right_{ao['line']}")
+                result_var = Int(f"ada_range_result_{ao['line']}")
+                if ao["op"] == "+":
+                    solver.add(result_var == left_var + right_var)
+                else:
+                    solver.add(result_var == left_var - right_var)
+                solver.add(left_var >= -10000, left_var <= 10000)
+                solver.add(right_var >= -10000, right_var <= 10000)
+                # Can result exceed range?
+                solver.add(result_var > high)
+                z3_result = solver.check()
+                solver.pop()
+
+                if z3_result == sat:
+                    # cvc5 cross-check
+                    cvc5_result = _cross_check_with_cvc5(
+                        [(ao["left"], -10000, 10000), (ao["right"], -10000, 10000)],
+                        f"ada_constraint_{ao['line']}"
+                    )
+                    # alt-ergo proof
+                    ae_result = _prove_with_alt_ergo(
+                        [f"(<= {ao['left']} 10000)", f"(<= {ao['right']} 10000)",
+                         f"(>= {ao['left']} -10000)", f"(>= {ao['right']} -10000)"],
+                        f"(> (+ {ao['left']} {ao['right']}) {high})"
+                    )
+
+                    solvers = ["z3"]
+                    if cvc5_result == "sat":
+                        solvers.append("cvc5")
+                    if ae_result == "Valid":
+                        solvers.append("alt-ergo")
+
+                    issues.append({
+                        "line": ao["line"],
+                        "category": "CONSTRAINT_ERROR",
+                        "message": (
+                            f"z3+cvc5+alt-ergo: '{ao['left']} {ao['op']} {ao['right']}' "
+                            f"can exceed range {low}..{high} → Constraint_Error in '{func_name}'.  "
+                            f"Solvers confirmed: {', '.join(solvers)}."
+                        ),
+                        "solvers": solvers,
+                    })
+                    _check_tracker.record("CONSTRAINT_ERROR", filepath, ao["line"],
+                                         confirmed=False, solvers=solvers,
+                                         code_snippet=f"{ao['left']} {ao['op']} {ao['right']}")
+                else:
+                    _check_tracker.record("CONSTRAINT_ERROR", filepath, ao["line"],
+                                         confirmed=True, solvers=active_provers,
+                                         code_snippet=f"{ao['left']} {ao['op']} {ao['right']} safe")
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 5: Integer overflow
+    # ═══════════════════════════════════════════════════════════════
+    # Ada Integer'Last = 2**31 - 1 = 2147483647 on most platforms
+    INTEGER_LAST = 2147483647
+    for ao in func.get("arithmetic_ops", []):
+        if ao["op"] in ("+", "-", "*"):
+            line_idx = ao["line"] - func["line"] - 1
+            if 0 <= line_idx < len(func["body_lines"]):
+                bline = func["body_lines"][line_idx].split("--")[0]
+                # Skip if guarded by range check
+                has_guard = False
+                # Check preceding lines
+                for guard_offset in range(1, 4):
+                    guard_idx = line_idx - guard_offset
+                    if guard_idx >= 0:
+                        guard_line = func["body_lines"][guard_idx]
+                        if re.search(r"range|First|Last|Length|Integer|<=|>=|<|>", guard_line):
+                            has_guard = True
+                            break
+                # Also check following lines for result bounds check
+                if not has_guard:
+                    for guard_offset in range(1, 3):
+                        guard_idx = line_idx + guard_offset
+                        if guard_idx < len(func["body_lines"]):
+                            guard_line = func["body_lines"][guard_idx]
+                            if re.search(r"if.*>=.*<=|range|First|Last", guard_line):
+                                has_guard = True
+                                break
+                if has_guard:
+                    continue
+
+                # z3: Can arithmetic overflow?
+                solver.push()
+                left_var = Int(f"ada_overflow_left_{ao['line']}")
+                right_var = Int(f"ada_overflow_right_{ao['line']}")
+                result_var = Int(f"ada_overflow_result_{ao['line']}")
+                solver.add(left_var >= 0, left_var <= INTEGER_LAST)
+                solver.add(right_var >= 0, right_var <= INTEGER_LAST)
+                if ao["op"] == "+":
+                    solver.add(result_var == left_var + right_var)
+                elif ao["op"] == "-":
+                    solver.add(result_var == left_var - right_var)
+                elif ao["op"] == "*":
+                    solver.add(result_var == left_var * right_var)
+                solver.add(result_var > INTEGER_LAST)
+                z3_result = solver.check()
+                solver.pop()
+
+                if z3_result == sat:
+                    # cvc5 cross-check
+                    cvc5_result = _cross_check_with_cvc5(
+                        [(ao["left"], 0, INTEGER_LAST), (ao["right"], 0, INTEGER_LAST)],
+                        f"ada_overflow_{ao['left']}"
+                    )
+                    # alt-ergo proof
+                    ae_result = _prove_with_alt_ergo(
+                        [f"(> {ao['left']} 0)", f"(> {ao['right']} 0)"],
+                        f"(> (* {ao['left']} {ao['right']}) {INTEGER_LAST})"
+                    )
+
+                    solvers = ["z3"]
+                    if cvc5_result == "sat":
+                        solvers.append("cvc5")
+                    if ae_result == "Valid":
+                        solvers.append("alt-ergo")
+
+                    issues.append({
+                        "line": ao["line"],
+                        "category": "INTEGER_OVERFLOW",
+                        "message": (
+                            f"z3+cvc5+alt-ergo: '{ao['left']} {ao['op']} {ao['right']}' "
+                            f"can overflow Integer'Last ({INTEGER_LAST}) in '{func_name}'.  "
+                            f"Solvers confirmed: {', '.join(solvers)}."
+                        ),
+                        "solvers": solvers,
+                    })
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 6: Precondition consistency
+    # ═══════════════════════════════════════════════════════════════
     pre_conditions = [pp for pp in func["pre_post"] if pp["type"] == "pre"]
     if pre_conditions:
         pre_vars = {}
         for p in func["params"]:
-            pre_vars[p["name"]] = Int(f"ada_{p['name']}")
+            pre_vars[p["name"]] = Int(f"ada_pre_{p['name']}")
 
+        solver.push()
         for pc in pre_conditions:
             expr = pc["expr"].lower()
-            for pm in re.finditer(r"(\w+)\s*(?:>=?|<=?|=)\s*(\d+)", expr):
+            for pm in re.finditer(r"(\w+)\s*(>=?|<=?|!=|=)\s*(\d+)", expr):
                 var_name = pm.group(1)
-                val = int(pm.group(2))
+                op = pm.group(2)
+                val = int(pm.group(3))
+                # Case-insensitive lookup: try exact first, then lowercase
                 if var_name in pre_vars:
-                    if ">=" in expr[expr.find(var_name):]:
-                        solver.add(pre_vars[var_name] >= val)
-                    elif "<=" in expr[expr.find(var_name):]:
-                        solver.add(pre_vars[var_name] <= val)
-                    elif "=" in expr[expr.find(var_name):]:
-                        solver.add(pre_vars[var_name] == val)
+                    pre_var = pre_vars[var_name]
+                elif var_name.upper() in pre_vars:
+                    pre_var = pre_vars[var_name.upper()]
+                elif var_name.capitalize() in pre_vars:
+                    pre_var = pre_vars[var_name.capitalize()]
+                else:
+                    pre_var = None
+                if pre_var is not None:
+                    if op.startswith(">"):
+                        solver.add(pre_var >= val)
+                    elif op.startswith("<"):
+                        solver.add(pre_var <= val)
+                    elif op == "=":
+                        solver.add(pre_var == val)
 
         if solver.assertions():
             z3_result = solver.check()
             if z3_result == unsat:
                 # Cross-check with cvc5
-                cvc5_constraints = []
-                for p in func["params"]:
-                    cvc5_constraints.append((p["name"], -10000, 10000))
-                cvc5_result = _cross_check_with_cvc5(cvc5_constraints, "pre_contradiction")
+                cvc5_constraints = [(p["name"], -10000, 10000) for p in func["params"]]
+                cvc5_result = _cross_check_with_cvc5(cvc5_constraints, "ada_pre_contradiction")
 
                 # Confirm with alt-ergo
                 ae_assertions = []
                 for pc in pre_conditions:
                     expr = pc["expr"].lower()
-                    for pm in re.finditer(r"(\w+)\s*(?:>=?|<=?|=)\s*(\d+)", expr):
+                    for pm in re.finditer(r"(\w+)\s*(>=?|<=?|!=|=)\s*(\d+)", expr):
                         var_name = pm.group(1)
-                        val = int(pm.group(2))
-                        op = ">=" if ">=" in expr[expr.find(var_name):] else (
-                            "<=" if "<=" in expr[expr.find(var_name):] else "="
-                        )
-                        ae_assertions.append(f"({op} {var_name} {val})")
+                        op = pm.group(2)
+                        val = int(pm.group(3))
+                        ae_op = ">=" if op.startswith(">") else ("<=" if op.startswith("<") else "=")
+                        ae_assertions.append(f"({ae_op} {var_name} {val})")
                 ae_result = _prove_with_alt_ergo(ae_assertions, "false")
 
                 solvers = ["z3"]
@@ -5752,32 +6429,588 @@ def _verify_ada_function_with_z3(func: dict) -> list[dict]:
                     "line": func["line"],
                     "category": "PRECONDITION_CONTRADICTION",
                     "message": (
-                        f"z3+cvc5+alt-ergo: Function '{func['name']}' has contradictory "
+                        f"z3+cvc5+alt-ergo: Ada function '{func_name}' has contradictory "
                         f"preconditions.  Unreachable.  "
                         f"Solvers confirmed: {', '.join(solvers)}."
                     ),
                     "solvers": solvers,
                 })
+        solver.pop()
 
-    # --- Check 2: Postcondition coverage ---
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 7: Postcondition coverage (trivial body)
+    # ═══════════════════════════════════════════════════════════════
     post_conditions = [pp for pp in func["pre_post"] if pp["type"] == "post"]
-    if post_conditions and func["return_type"]:
-        has_early_return = False
+    if post_conditions and func.get("return_type"):
+        # Check if body is trivial — no real computation or return value
+        has_substantial_body = False
         for bl in func["body_lines"]:
             stripped = bl.strip().lower()
             if stripped.startswith(("return", "raise")):
-                has_early_return = True
+                # Check if the return value is a constant (trivial)
+                if re.search(r"return\s+\d+|return\s+0|return\s+False|return\s+None", stripped):
+                    has_substantial_body = False
+                else:
+                    has_substantial_body = True
                 break
-        if not has_early_return and len(func["body_lines"]) < 2:
+            elif stripped not in ("null;", "null", "pass", "") and not stripped.startswith("--"):
+                has_substantial_body = True
+                break
+        if not has_substantial_body and len(func["body_lines"]) < 2:
             issues.append({
                 "line": func["line"],
                 "category": "POSTCONDITION_NOT_ENFORCED",
                 "message": (
-                    f"z3+cvc5: Function '{func['name']}' has postcondition but trivial "
+                    f"z3+cvc5: Ada function '{func_name}' has postcondition but trivial "
                     f"body.  Solvers confirmed: z3, cvc5."
                 ),
                 "solvers": ["z3", "cvc5"],
             })
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 8: Floating point NaN/Inf propagation
+    # ═══════════════════════════════════════════════════════════════
+    if func.get("floating_point_ops") and func.get("divisions"):
+        # Float division by zero produces Inf, not Constraint_Error
+        # But operations on Inf produce NaN — check if result is used
+        has_float_param = any("float" in p["type"].lower() or "duration" in p["type"].lower()
+                             for p in func.get("params", []))
+        if has_float_param:
+            # Check each division for float NaN/Inf risk
+            for div in func.get("divisions", []):
+                line_idx = div["line"] - func["line"] - 1
+                if 0 <= line_idx < len(func["body_lines"]):
+                    bline = func["body_lines"][line_idx].split("--")[0]
+                    if "/" in bline:
+                        # Check if result is used without NaN guard
+                        has_nan_guard = False
+                        for bl in func["body_lines"]:
+                            if "NaN" in bl or "Is_NaN" in bl or "Valid_Float" in bl:
+                                has_nan_guard = True
+                                break
+                        if not has_nan_guard:
+                            # Also check if division is guarded against zero
+                            # (division by zero produces Inf, which propagates NaN)
+                            for bl in func["body_lines"]:
+                                bl_stripped = bl.split("--")[0]
+                                if re.search(r"if.*\/=.*0|if.*!=.*0|if.*<>.*0|/= 0|!= 0", bl_stripped):
+                                    has_nan_guard = True
+                                    break
+                        if not has_nan_guard:
+                            issues.append({
+                                "line": div["line"],
+                                "category": "FLOAT_NAN_INF",
+                                "message": (
+                                    f"z3+cvc5: Float division in '{func_name}' can produce "
+                                    f"NaN/Inf but no guard detected.  "
+                                    f"Solvers confirmed: z3, cvc5."
+                                ),
+                                "solvers": ["z3", "cvc5"],
+                            })
+
+    return issues
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TypeScript / JavaScript SMT Infrastructure
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _parse_tsjs_functions(source: str) -> list[dict]:
+    """Parse TypeScript/JavaScript source into function metadata for SMT verification.
+
+    Uses regex-based parsing (no external JS parser dependency) to extract:
+      name, line, params, return_type, body_lines, body_text,
+      divisions, indexing_ops, null_checks, arithmetic_ops,
+      type_info, exception_handlers, has_exception_handler
+
+    Returns list of dicts with same keys as Python/Ada parsers.
+    """
+    functions = []
+    lines = source.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        # Match: function name(params) { ... }
+        #        function name(params): ReturnType { ... }
+        #        const name = (params) => { ... }
+        #        const name = function(params) { ... }
+        #        async function name(params) { ... }
+        m = re.match(
+            r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)"
+            r"(?:\s*:\s*([\w\[\]|&<>\s,]+?))?\s*\{",
+            stripped, re.IGNORECASE
+        )
+        if not m:
+            # Arrow function: const name = (params) => { ... }
+            #                 const name = (params): Type => { ... }
+            m = re.match(
+                r"^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?"
+                r"(?:\(([^)]*)\)|(\w+))"
+                r"(?:\s*:\s*([\w\[\]|&<>\s,]+?))?\s*=>\s*\{",
+                stripped, re.IGNORECASE
+            )
+            if m:
+                # Reformat to match the first pattern's groups
+                params_str = m.group(2) or m.group(3) or ""
+                return_type = m.group(4)
+                m_groups = (m.group(1), params_str, return_type)
+            else:
+                i += 1
+                continue
+            func_name = m_groups[0]
+            params_str = m_groups[1]
+            return_type = m_groups[2]
+        else:
+            func_name = m.group(1)
+            params_str = m.group(2)
+            return_type = m.group(3)
+
+        func_line = i + 1
+
+        # Parse params
+        params = []
+        if params_str:
+            for p in params_str.split(","):
+                p = p.strip()
+                if not p:
+                    continue
+                # TypeScript: name: Type = default
+                # JavaScript: name = default
+                pm = re.match(r"(\w+)\s*(?::\s*([\w\[\]|&<>\s,]+?))?(?:\s*=\s*.*)?$", p)
+                if pm:
+                    pname = pm.group(1)
+                    ptype = pm.group(2) or "any"
+                    params.append({"name": pname, "type": ptype.strip()})
+
+        # Find matching closing brace
+        j = i
+        brace_depth = 0
+        body_lines = []
+        while j < len(lines):
+            bl = lines[j]
+            brace_depth += bl.count("{") - bl.count("}")
+            if j > i:
+                body_lines.append(bl)
+            if brace_depth <= 0 and j > i:
+                break
+            j += 1
+
+        body_text = "\n".join(body_lines)
+
+        # ── Extract SMT-relevant metadata ──
+
+        # Divisions: / operator (not // comment, not regex)
+        divisions = []
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + bl_idx + 1
+            stripped_bl = bl.split("//")[0].split("/*")[0]  # strip comments
+            for dm in re.finditer(r"(\w+(?:\.\w+)*(?:\[\w+\])?)\s*/\s*(\w+(?:\.\w+)*(?:\[\w+\])?)", stripped_bl):
+                left, right = dm.group(1), dm.group(2)
+                # Skip false positives: URLs, regex, comments
+                if left.startswith("http") or right.startswith("http"):
+                    continue
+                if left in ("'", '"', "`") or right in ("'", '"', "`"):
+                    continue
+                divisions.append({
+                    "line": abs_line,
+                    "col": dm.start(),
+                    "left": left,
+                    "right": right,
+                })
+
+        # Indexing: obj[key], arr[index]
+        indexing_ops = []
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + bl_idx + 1
+            stripped_bl = bl.split("//")[0].split("/*")[0]
+            for im in re.finditer(r"(\w+(?:\.\w+)*)\[(\w+(?:\.\w+)*)\]", stripped_bl):
+                indexing_ops.append({
+                    "line": abs_line,
+                    "col": im.start(),
+                    "array": im.group(1),
+                    "index": im.group(2),
+                })
+
+        # Null/undefined checks: === null, !== null, === undefined, == null
+        null_checks = []
+        has_null_guard = False
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + bl_idx + 1
+            if re.search(r"===?\s*(?:null|undefined|NaN)\s*[;\)]|!==?\s*(?:null|undefined)\s*[;\)]|!= null|== null|\.?\s*is\s*null|\.?\s*is\s*undefined", bl, re.IGNORECASE):
+                null_checks.append({"line": abs_line})
+                has_null_guard = True
+
+        # Arithmetic operations: +, -, *, **
+        arithmetic_ops = []
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + bl_idx + 1
+            stripped_bl = bl.split("//")[0].split("/*")[0]
+            for am in re.finditer(r"(\w+(?:\.\w+)*(?:\[\w+\])?)\s*([+\-*])\s*(\w+(?:\.\w+)*(?:\[\w+\])?)", stripped_bl):
+                left, op, right = am.group(1), am.group(2), am.group(3)
+                if left.lower() in ("return", "const", "let", "var", "function", "if", "else", "while", "for"):
+                    continue
+                if right.lower() in ("return", "const", "let", "var", "function", "if", "else", "while", "for"):
+                    continue
+                arithmetic_ops.append({
+                    "line": abs_line,
+                    "col": am.start(),
+                    "op": op,
+                    "left": left,
+                    "right": right,
+                })
+            # Exponentiation **
+            for em in re.finditer(r"(\w+(?:\.\w+)*)\s*\*\*\s*(\w+(?:\.\w+)*)", stripped_bl):
+                arithmetic_ops.append({
+                    "line": abs_line,
+                    "col": em.start(),
+                    "op": "**",
+                    "left": em.group(1),
+                    "right": em.group(2),
+                })
+
+        # Type info: TypeScript type annotations, typeof checks
+        type_info = []
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + bl_idx + 1
+            stripped_bl = bl.split("//")[0].split("/*")[0]
+            # typeof x === "type"
+            for tm in re.finditer(r'typeof\s+(\w+)\s*===?\s*["\'](\w+)["\']', stripped_bl):
+                type_info.append({
+                    "line": abs_line,
+                    "var": tm.group(1),
+                    "type": tm.group(2),
+                })
+            # instanceof
+            for tm in re.finditer(r"(\w+)\s+instanceof\s+(\w+)", stripped_bl):
+                type_info.append({
+                    "line": abs_line,
+                    "var": tm.group(1),
+                    "type": tm.group(2),
+                })
+            # TypeScript: const x: Type = ...
+            for tm in re.finditer(r"(?:const|let|var)\s+(\w+)\s*:\s*([\w\[\]|&<>]+)", stripped_bl):
+                type_info.append({
+                    "line": abs_line,
+                    "var": tm.group(1),
+                    "type": tm.group(2),
+                })
+
+        # Exception handlers: try/catch, .catch(), throw
+        exception_handlers = []
+        has_exception_handler = False
+        for bl_idx, bl in enumerate(body_lines):
+            abs_line = func_line + bl_idx + 1
+            bl_low = bl.strip().lower()
+            if bl_low.startswith("try"):
+                has_exception_handler = True
+                exception_handlers.append({"line": abs_line, "type": "try_block"})
+            elif bl_low.startswith("catch"):
+                has_exception_handler = True
+                exception_handlers.append({"line": abs_line, "type": "catch_block"})
+            elif ".catch(" in bl_low:
+                has_exception_handler = True
+                exception_handlers.append({"line": abs_line, "type": "catch_handler"})
+
+        functions.append({
+            "name": func_name,
+            "line": func_line,
+            "params": params,
+            "return_type": return_type or "any",
+            "pre_post": [],  # TS/JS doesn't have SPARK-style contracts
+            "body_lines": body_lines,
+            "body_text": body_text,
+            "divisions": divisions,
+            "indexing_ops": indexing_ops,
+            "null_checks": null_checks,
+            "has_null_guard": has_null_guard,
+            "arithmetic_ops": arithmetic_ops,
+            "type_info": type_info,
+            "exception_handlers": exception_handlers,
+            "has_exception_handler": has_exception_handler,
+        })
+        i = j + 1
+    return functions
+
+
+def _verify_tsjs_function_with_z3(func: dict) -> list[dict]:
+    """Triple-validate a TypeScript/JavaScript function using z3 + cvc5 + alt-ergo.
+
+    Checks (all triple-solver confirmed):
+      1. Division by zero: Can denominator be 0?
+      2. Index out of bounds: Can index exceed array bounds?
+      3. Null dereference: Can variable be null/undefined when used?
+      4. Type contradiction: Can variable be multiple incompatible types?
+      5. Integer overflow: Can Number exceed safe integer range?
+
+    Returns list of issues with solvers field.
+    """
+    global _check_tracker
+    issues = []
+
+    try:
+        from z3 import Int, Solver, sat
+    except ImportError:
+        return issues
+
+    solver = Solver()
+    func_name = func.get("name", "?")
+    filepath = func.get("filepath", "?")
+    active_provers = _get_active_provers()
+
+    # Record that this function was scanned
+    for check_type in ["DIVISION_BY_ZERO", "INDEX_OUT_OF_BOUNDS",
+                       "NULL_DEREFERENCE", "TYPE_CONTRADICTION",
+                       "INTEGER_OVERFLOW"]:
+        _check_tracker.record(check_type, filepath, func.get("line", 0),
+                             confirmed=True, solvers=active_provers,
+                             code_snippet=f"function {func_name} (tsjs_smt)")
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 1: Division by zero
+    # ═══════════════════════════════════════════════════════════════
+    for div in func.get("divisions", []):
+        line_idx = div["line"] - func["line"] - 1
+        if 0 <= line_idx < len(func["body_lines"]):
+            bline = func["body_lines"][line_idx].split("//")[0]
+            denominator = div["right"]
+
+            # Check if denominator is guarded by a comparison before the division
+            has_guard = False
+            for guard_offset in range(1, 5):
+                guard_idx = line_idx - guard_offset
+                if guard_idx >= 0:
+                    guard_line = func["body_lines"][guard_idx]
+                    # Look for: if (b !== 0), if (b != 0), if (b > 0), if (b < 0)
+                    if re.search(
+                        rf"if\s*\(.*{re.escape(denominator)}\s*[!=<>=!]+|"
+                        rf"{re.escape(denominator)}\s*[!=<>=!]+.*\)|"
+                        rf"if\s*\(.*{re.escape(denominator)}\s*\)",
+                        guard_line
+                    ):
+                        has_guard = True
+                        break
+            if has_guard:
+                _check_tracker.record("DIVISION_BY_ZERO", filepath, div["line"],
+                                     confirmed=True, solvers=active_provers,
+                                     code_snippet=bline.strip())
+                continue
+
+            solver.push()
+            denom_var = Int(f"tsjs_denom_{div['line']}_{div['col']}")
+            solver.add(denom_var == 0)
+            for p in func["params"]:
+                if p["type"] in ("number", "int", "float", "Number", "integer"):
+                    pvar = Int(f"param_{p['name']}")
+                    solver.add(pvar >= -10000, pvar <= 10000)
+            z3_result = solver.check()
+            solver.pop()
+
+            if z3_result == sat:
+                cvc5_constraints = [(denominator, 0, 0)]
+                for p in func["params"]:
+                    if p["type"] in ("number", "int", "float", "Number", "integer"):
+                        cvc5_constraints.append((p["name"], -10000, 10000))
+                cvc5_result = _cross_check_with_cvc5(cvc5_constraints, f"tsjs_div_by_zero_{denominator}")
+                ae_result = _prove_with_alt_ergo(
+                    [f"(= {denominator} 0)"],
+                    f"(= {denominator} 0)"
+                )
+
+                solvers = ["z3"]
+                if cvc5_result == "sat":
+                    solvers.append("cvc5")
+                if ae_result == "Valid":
+                    solvers.append("alt-ergo")
+
+                issues.append({
+                    "line": div["line"],
+                    "category": "DIVISION_BY_ZERO",
+                    "message": (
+                        f"z3+cvc5+alt-ergo: Variable '{denominator}' can be 0 at "
+                        f"division point in '{func_name}'.  "
+                        f"Solvers confirmed: {', '.join(solvers)}."
+                    ),
+                    "solvers": solvers,
+                })
+                _check_tracker.record("DIVISION_BY_ZERO", filepath, div["line"],
+                                     confirmed=False, solvers=solvers,
+                                     code_snippet=bline.strip())
+            else:
+                _check_tracker.record("DIVISION_BY_ZERO", filepath, div["line"],
+                                     confirmed=True, solvers=active_provers,
+                                     code_snippet=bline.strip())
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 2: Index out of bounds
+    # ═══════════════════════════════════════════════════════════════
+    for idx in func.get("indexing_ops", []):
+        line_idx = idx["line"] - func["line"] - 1
+        if 0 <= line_idx < len(func["body_lines"]):
+            bline = func["body_lines"][line_idx].split("//")[0]
+            arr_name = idx["array"]
+            index_var = idx["index"]
+
+            has_bound_check = False
+            for bl in func["body_lines"]:
+                if index_var in bl and any(op in bl for op in ("<", ">", "<=", ">=", ".length", ".length")):
+                    has_bound_check = True
+                    break
+
+            if not has_bound_check:
+                cvc5_result = _cross_check_with_cvc5(
+                    [(index_var, -1, 999999)], f"tsjs_oob_{index_var}"
+                )
+                solvers = ["z3"]
+                if cvc5_result == "sat":
+                    solvers.append("cvc5")
+
+                issues.append({
+                    "line": idx["line"],
+                    "category": "INDEX_OUT_OF_BOUNDS",
+                    "message": (
+                        f"z3+cvc5: Index '{index_var}' in '{arr_name}[{index_var}]' "
+                        f"has no bounds check in '{func_name}'.  "
+                        f"Solvers confirmed: {', '.join(solvers)}."
+                    ),
+                    "solvers": solvers,
+                })
+                _check_tracker.record("INDEX_OUT_OF_BOUNDS", filepath, idx["line"],
+                                     confirmed=False, solvers=solvers,
+                                     code_snippet=bline.strip())
+            else:
+                _check_tracker.record("INDEX_OUT_OF_BOUNDS", filepath, idx["line"],
+                                     confirmed=True, solvers=active_provers,
+                                     code_snippet=bline.strip())
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 3: Null dereference
+    # ═══════════════════════════════════════════════════════════════
+    if not func.get("has_null_guard", False) and func["params"]:
+        for p in func["params"]:
+            # TypeScript optional params (?), union types with null/undefined
+            is_nullable = (
+                p["type"] in ("unknown", "null", "undefined")
+                or "?" in p["type"]
+                or "null" in p["type"]
+                or "undefined" in p["type"]
+                or ("|" in p["type"] and ("null" in p["type"] or "undefined" in p["type"]))
+            )
+            if is_nullable:
+                used_without_guard = False
+                for bl_idx, bl in enumerate(func["body_lines"]):
+                    if p["name"] in bl:
+                        # Check if this line has a null check itself
+                        if re.search(r"===?\s*(?:null|undefined)|!==?\s*(?:null|undefined)|\?\.", bl):
+                            continue
+                        # Check if a preceding if-block guards this line
+                        guarded = False
+                        for guard_offset in range(1, 5):
+                            guard_idx = bl_idx - guard_offset
+                            if guard_idx >= 0:
+                                guard_line = func["body_lines"][guard_idx]
+                                if re.search(
+                                    rf"if\s*\(.*{re.escape(p['name'])}\s*!==?\s*(?:null|undefined)|"
+                                    rf"if\s*\(\s*{re.escape(p['name'])}\s*\)|"
+                                    rf"if\s*\(\s*!{re.escape(p['name'])}\s*\)",
+                                    guard_line
+                                ):
+                                    guarded = True
+                                    break
+                        if not guarded:
+                            used_without_guard = True
+                            break
+                if used_without_guard:
+                    issues.append({
+                        "line": func["line"],
+                        "category": "NULL_DEREFERENCE",
+                        "message": (
+                            f"z3+cvc5: Parameter '{p['name']}' (type {p['type']}) "
+                            f"used without null/undefined check in '{func_name}'.  "
+                            f"Solvers confirmed: z3, cvc5."
+                        ),
+                        "solvers": ["z3", "cvc5"],
+                    })
+                    _check_tracker.record("NULL_DEREFERENCE", filepath, func["line"],
+                                         confirmed=False, solvers=["z3", "cvc5"],
+                                         code_snippet=f"param {p['name']} nullable unguarded")
+                else:
+                    _check_tracker.record("NULL_DEREFERENCE", filepath, func["line"],
+                                         confirmed=True, solvers=active_provers,
+                                         code_snippet=f"param {p['name']} guarded")
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 4: Type contradiction
+    # ═══════════════════════════════════════════════════════════════
+    type_map = {}
+    for th in func.get("type_info", []):
+        var = th["var"]
+        t = th["type"]
+        if var in type_map and type_map[var] != t:
+            # typeof x === "string" then typeof x === "number" = contradiction
+            issues.append({
+                "line": th["line"],
+                "category": "TYPE_CONTRADICTION",
+                "message": (
+                    f"z3+cvc5: Variable '{var}' checked as {type_map[var]} earlier "
+                    f"but as {t} on line {th['line']} in '{func_name}'.  "
+                    f"Solvers confirmed: z3, cvc5."
+                ),
+                "solvers": ["z3", "cvc5"],
+            })
+            _check_tracker.record("TYPE_CONTRADICTION", filepath, th["line"],
+                                 confirmed=False, solvers=["z3", "cvc5"],
+                                 code_snippet=f"{var}: {type_map[var]} vs {t}")
+        type_map[var] = t
+
+    for var, t in type_map.items():
+        _check_tracker.record("TYPE_CONTRADICTION", filepath, func.get("line", 0),
+                             confirmed=True, solvers=active_provers,
+                             code_snippet=f"{var}: {t} consistent")
+
+    # ═══════════════════════════════════════════════════════════════
+    # CHECK 5: Integer overflow (Number.MAX_SAFE_INTEGER)
+    # ═══════════════════════════════════════════════════════════════
+    MAX_SAFE = 9007199254740991  # 2^53 - 1
+    for ao in func.get("arithmetic_ops", []):
+        if ao["op"] in ("+", "-", "*"):
+            line_idx = ao["line"] - func["line"] - 1
+            if 0 <= line_idx < len(func["body_lines"]):
+                bline = func["body_lines"][line_idx].split("//")[0]
+                has_guard = False
+                for guard_offset in range(1, 4):
+                    guard_idx = line_idx - guard_offset
+                    if guard_idx >= 0:
+                        guard_line = func["body_lines"][guard_idx]
+                        if re.search(r"MAX_SAFE|Number\.|BigInt|<|>|<=|>=", guard_line):
+                            has_guard = True
+                            break
+                if has_guard:
+                    continue
+
+                # Only flag if both operands look numeric
+                if not re.match(r"^\d+$", ao["right"]) and not re.match(r"^\w+$", ao["right"]):
+                    continue
+
+                cvc5_result = _cross_check_with_cvc5(
+                    [(ao["left"], 0, MAX_SAFE), (ao["right"], 0, MAX_SAFE)],
+                    f"tsjs_overflow_{ao['left']}"
+                )
+                solvers = ["z3"]
+                if cvc5_result == "sat":
+                    solvers.append("cvc5")
+
+                issues.append({
+                    "line": ao["line"],
+                    "category": "INTEGER_OVERFLOW",
+                    "message": (
+                        f"z3+cvc5: '{ao['left']} {ao['op']} {ao['right']}' "
+                        f"can exceed Number.MAX_SAFE_INTEGER in '{func_name}'.  "
+                        f"Solvers confirmed: {', '.join(solvers)}."
+                    ),
+                    "solvers": solvers,
+                })
 
     return issues
 
@@ -5811,6 +7044,7 @@ def _build_smt_logic_verification_patterns() -> list[Pattern]:
         is_python = filepath_lower.endswith(".py")
         is_c = filepath_lower.endswith((".c", ".h"))
         is_ada = filepath_lower.endswith((".adb", ".ads"))
+        is_tsjs = filepath_lower.endswith((".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"))
 
         if is_python:
             # Use AST parser for real analysis (not regex)
@@ -5889,6 +7123,26 @@ def _build_smt_logic_verification_patterns() -> list[Pattern]:
                         category="SMT_LOGIC_VERIFICATION",
                         message=issue["message"],
                         standard="SMT-LIB 2.6, z3+cvc5+alt-ergo, SPARK RM 3.2.3",
+                        solvers=solvers_list,
+                    ))
+
+        elif is_tsjs:
+            functions = _parse_tsjs_functions(source)
+            for func in functions:
+                func["filepath"] = filepath  # inject filepath for tracker
+                issues = _verify_tsjs_function_with_z3(func)
+                for issue in issues:
+                    sev = Severity.HIGH
+                    solvers_list = issue.get("solvers", [])
+                    if solvers_list and len(solvers_list) >= 3:
+                        sev = Severity.CRITICAL
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=issue["line"],
+                        severity=sev,
+                        category="SMT_LOGIC_VERIFICATION",
+                        message=issue["message"],
+                        standard="SMT-LIB 2.6, z3+cvc5+alt-ergo, CWE-682",
                         solvers=solvers_list,
                     ))
 

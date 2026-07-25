@@ -1,3 +1,17 @@
+pragma SPARK_Mode (Off);
+-- c_binding: C++ FFI bridge (Socket_IO, MCU_Protocol) — no SPARK contracts
+--  Ravenscar: also uses `delay` (relative) — violates No_Relative_Delay
+--
+--  ELP2 FMC BRIDGE — SENSOR DATA ACQUISITION ONLY
+--  This unit bridges Ada ↔ C++ MCU hardware for sensor reads.
+--  Control actuation (servo/propeller commands) is performed by
+--  ELP3 Zenith_Orion at 4000Hz with deterministic pacing.
+--  This bridge sends sensor telemetry UP to ELP3; it does NOT
+--  independently drive actuators outside the ELP3 control loop.
+--
+--  Priority: ELP2 (sensor I/O, non-safety-critical)
+--  Control authority: NONE — relay only, ELP3 owns actuation.
+
 with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Real_Time;
