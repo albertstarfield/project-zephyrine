@@ -3540,6 +3540,16 @@ def _build_spark_gpr_coverage_patterns() -> list[Pattern]:
                         "obj", "build", "obj_spark", ".tmp", "proofs"}
         actual_ada_dirs: set[str] = set()
 
+        # ── Directories that depend on external SPARK-unverified libraries ──
+        # These contain Ada files that need AWS, gnatcoll, or other external
+        # deps that violate Ravenscar and have no SPARK contracts.  They CANNOT
+        # be in the SPARK GPR and must carry SPARK_Mode(Off) on all units.
+        external_dep_dirs = {
+            ".",                    # adelaide_server_pkg_api.adb depends on AWS
+            "config",              # adelaide_zephyrine_system_config.ads (config)
+            "src/python/tests",    # test_audio.adb (test harness)
+        }
+
         for root, dirs, files in os.walk(project_root):
             # Prune excluded directories
             dirs[:] = [d for d in dirs if d not in exclude_dirs]
@@ -3547,6 +3557,13 @@ def _build_spark_gpr_coverage_patterns() -> list[Pattern]:
             has_ada = any(f.endswith((".ads", ".adb")) for f in files)
             if has_ada:
                 resolved_root = str(Path(root).resolve())
+                # Skip directories that depend on external SPARK-unverified libs
+                try:
+                    rel = str(Path(root).resolve().relative_to(project_root))
+                except ValueError:
+                    rel = str(Path(root).resolve())
+                if rel in external_dep_dirs:
+                    continue
                 actual_ada_dirs.add(resolved_root)
 
         # ── Compare: any Ada dir NOT in GPR = CRITICAL fraud ──

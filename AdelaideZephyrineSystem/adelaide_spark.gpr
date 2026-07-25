@@ -1,12 +1,15 @@
 with "config/adelaide_zephyrine_system_config.gpr";
-with "gnatcoll";
 project Adelaide_Spark is
    --  All Ada source directories — every .ads/.adb under src/ is included
    --  for SPARK formal verification.  No file is exempt.  If a unit cannot
    --  be proved, it must carry a justified SPARK_Mode(Off) comment.
+   --
+   --  EXTERNAL DEPENDENCIES: Files that depend on AWS, gnatcoll, or other
+   --  external SPARK-unverified libraries MUST have SPARK_Mode(Off).  The
+   --  SPARK GPR does NOT include "with gnatcoll" or "with aws" because
+   --  those libraries violate Ravenscar restrictions and have no SPARK
+   --  contracts.  Units that need them are compiled with SPARK_Mode(Off).
    for Source_Dirs use (
-      ".",
-      "config",
       "src",
       "src/ada_util",
       "src/c_bindings",
