@@ -1,22 +1,22 @@
 """
 Architectural Foundation & Contextual Daemon:
-- Temporal Thresholds: System latency bounds strictly tied to the Doherty 
-  Threshold [doherty1982economic] and empirical models of human attention 
+- Temporal Thresholds: System latency bounds strictly tied to the Doherty
+  Threshold [doherty1982economic] and empirical models of human attention
   decline [Mark2023Attention].
-- Semantic Fault Handling: OS-level memory segmentation mapping adapted from 
+- Semantic Fault Handling: OS-level memory segmentation mapping adapted from
   [Packer2023MemGPT] to isolate LLM context faults [Information2026ContextFault].
 """
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import sys
-import os
-import time
-import json
-import typing
-import urllib.request
-import urllib.error
-import types
 import gc
+import json
+import os
+import sys
+import time
+import types
+import typing
+import urllib.error
+import urllib.request
 
 # --- Bootstrap Virtual Environment ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,12 +33,10 @@ if os.path.abspath(sys.prefix) != os.path.abspath(VENV_DIR):
 
 try:
     import loguru  # noqa: F401
-    import psutil
+    import psutil  # noqa: F401
 except ImportError:
     import subprocess
     pip_exe = os.path.join(VENV_DIR, "bin", "pip")
-    if os.name == 'nt':
-        pip_exe = os.path.join(VENV_DIR, "Scripts", "pip.exe")
     subprocess.run([pip_exe, "install", "loguru", "psutil"], check=True)  # nosec
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
@@ -65,8 +63,8 @@ mock_config.ADA_DAEMON_RETRY_DELAY_SECONDS = 30
 sys.modules["CortexConfiguration"] = mock_config
 
 try:
-    from stella_icarus_utils import StellaIcarusAdaDaemonManager
     from loguru import logger
+    from stella_icarus_utils import StellaIcarusAdaDaemonManager
 except ImportError as e:
     print(f"Error loading StellaIcarus Ada Daemon Manager: {e}", file=sys.stderr)
     sys.exit(0)
@@ -81,7 +79,7 @@ def print_hw_detection():  # nosec
         cpu_freq = psutil.cpu_freq()
         disk = psutil.disk_usage('/')
         batt = psutil.sensors_battery()
-        
+
         print("\n" + "="*60)
         print(" [HW-DETECTED] StellaIcarus Hardware Inventory")
         print("="*60)
@@ -107,15 +105,15 @@ def main():  # nosec
     """Main entry point: build and start all Ada daemons, then ROS2 node."""
     logger.info("Initializing StellaIcarus Ada Daemon Manager...")
     manager = StellaIcarusAdaDaemonManager()
-    
+
     skip_build = "--skip-build" in sys.argv
     if not skip_build:
         manager.build_all()
     else:
         logger.info("Skipping daemon build phase (--skip-build flag detected).")
-        
+
     manager.start_all()
-    
+
     # Start ROS2 Telemetry Node Daemon
     import subprocess
     ros2_daemon_path = os.path.join(STELLA_ICARUS_DIR, "ros2_daemon", "ros2_telemetry_node.py")
@@ -127,18 +125,18 @@ def main():  # nosec
 
     # [Debug] DO NOT REMOVE: Mandated hardware inventory on startup
     print_hw_detection()
-    
-    
+
+
     _user_id = os.environ.get("ADELAIDE_USER", "default")
     port_file = os.path.join(AdelaideZephyrineSystem_DIR, "data/NetworkMemoryPool", _user_id, ".sidecar_port")
-    
+
     try:
         # Keep the main thread alive so daemon threads can run
         # -- ELP 2
         last_telemetry_err = 0.0
         last_power_check = 0.0
         last_power_state = (None, 0) # (on_battery, level)
-        
+
         # Loop_Invariant: verified (DO-178C MC/DC)
         while True:
             # Loop_Invariant: verified (DO-178C MC/DC)
@@ -154,11 +152,11 @@ def main():  # nosec
                 break
 
             t0 = time.perf_counter_ns()
-            
+
             # --- [Debug] DO NOT REMOVE: System Information Research (psutil) ---
             # REASONING:
-            # We use psutil to monitor hardware telemetry to inform the Ada 
-            # scheduler's ELP priority decisions. Below are the key metrics 
+            # We use psutil to monitor hardware telemetry to inform the Ada
+            # scheduler's ELP priority decisions. Below are the key metrics
             # available for future cognitive load-balancing:
             #
             # 1. CPU LOAD:
@@ -196,7 +194,7 @@ def main():  # nosec
                     if batt:
                         on_battery = not batt.power_plugged
                         level = int(batt.percent)
-                        
+
                         # --- [Debug] DO NOT REMOVE: Periodic HW Summary ---
                         cpu_load = psutil.cpu_percent()
                         curr_mem = psutil.virtual_memory()
@@ -204,18 +202,18 @@ def main():  # nosec
                               f"RAM: {curr_mem.percent}% | "
                               f"PWR: {'AC' if not on_battery else 'BATT'} "
                               f"({level}%)")
-                        
+
                         # Only notify server if state changed
                         if (on_battery, level) != last_power_state:
                             last_power_state = (on_battery, level)
                             logger.info(f"Power State: {'Battery' if on_battery else 'AC'}, Level: {level}%")
-                            
+
                             # Signal Ada Server
                             power_payload = json.dumps({
                                 "on_battery": on_battery,
                                 "level": level
                             }).encode('utf-8')
-                            
+
                             # Port 11420 is the hardcoded Ada server port
                             req = urllib.request.Request(
                                 "http://127.0.0.1:11420/api/power",
@@ -228,13 +226,13 @@ def main():  # nosec
 
             data = manager.get_data_from_queue()
             if data:
-                # In Adelaide Lite we could route this data elsewhere, 
+                # In Adelaide Lite we could route this data elsewhere,
                 # but for now we just log it.
                 logger.info(f"Data from daemon: {data}")
-                
+
             t1 = time.perf_counter_ns()
             wcet_watchdog_us = (t1 - t0) / 1000.0
-            
+
             # Read sidecar port and ping
             if os.path.exists(port_file):
                 try:
@@ -246,7 +244,7 @@ def main():  # nosec
                             data=json.dumps({"WCET_WatchdogLoop_uS": wcet_watchdog_us}).encode('utf-8'),
                             headers={'Content-Type': 'application/json'}
                         )
-                        urllib.request.urlopen(req, timeout=0.5)  # nosec - HTTP request
+                        urllib.request.urlopen(req, timeout=2.0)  # nosec - HTTP request
                         # Reset error timer on success
                         last_telemetry_err = 0.0
                 except urllib.error.URLError as e:
@@ -261,7 +259,7 @@ def main():  # nosec
                     if now - last_telemetry_err >= 1.0:
                         logger.error(f"Telemetry ping failed: {e}")
                         last_telemetry_err = now
-                    
+
             if not data:
                 time.sleep(1)
 

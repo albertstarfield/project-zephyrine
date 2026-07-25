@@ -3,6 +3,8 @@ project Adelaide_Spark is
    --  for SPARK formal verification.  No file is exempt.  If a unit cannot
    --  be proved, it must carry a justified SPARK_Mode(Off) comment.
    for Source_Dirs use (
+      ".",
+      "config",
       "src",
       "src/ada_util",
       "src/c_bindings",
@@ -13,11 +15,15 @@ project Adelaide_Spark is
       "src/managers",
       "src/NonDeterministicGenerativeModelManager",
       "src/utils",
+      "src/python/tests",
       "src/ModuleSensorActuator_ELP3/src",
       "src/ModuleSensorActuator_ELP3/ROS2",
       "src/ModuleSensorActuator_ELP2/ROS2",
+      "src/ModuleSensorActuator_ELP2/avionics_daemon/config",
       "src/ModuleSensorActuator_ELP2/avionics_daemon/src",
+      "src/ModuleSensorActuator_ELP2/stella_greeting/config",
       "src/ModuleSensorActuator_ELP2/stella_greeting/src",
+      "src/ModuleSensorActuator_ELP2/avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1/config",
       "src/ModuleSensorActuator_ELP2/avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1/src"
    );
    for Object_Dir use "obj/spark";
