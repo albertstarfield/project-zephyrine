@@ -1,3 +1,5 @@
+with "config/adelaide_zephyrine_system_config.gpr";
+with "gnatcoll";
 project Adelaide_Spark is
    --  All Ada source directories — every .ads/.adb under src/ is included
    --  for SPARK formal verification.  No file is exempt.  If a unit cannot

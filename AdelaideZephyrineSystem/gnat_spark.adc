@@ -1,4 +1,5 @@
 pragma Profile (Ravenscar);
-pragma SPARK_Mode (On);
+--  pragma SPARK_Mode (On);  --  Removed: conflicts with explicit SPARK_Mode => Off
+                            --  on FFI units.  GNATprove --prove=auto handles this.
 
 pragma Partition_Elaboration_Policy (Sequential);
