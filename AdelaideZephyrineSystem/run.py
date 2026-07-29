@@ -2545,10 +2545,72 @@ def bootstrap_px4():  # nosec
         print(f"\n{GRN}[ok]{RST} PX4-Autopilot is already cloned and compiled.")
 
 
-def verify_environment(build_px4=False):
+def bootstrap_cfs():
+    """Clone NASA cFS (core Flight System), initialize submodules, and build natively."""
+    vendor_dir = os.path.join(BASE_DIR, "vendor")
+    cfs_dir = os.path.join(vendor_dir, "cFS")
+    if not os.path.exists(cfs_dir):
+        print(f"\n{BOLD}{WHT}[*] Cloning NASA cFS into vendor/...{RST}")
+        try:
+            subprocess.check_call(
+                [
+                    "git",
+                    "clone",
+                    "https://github.com/nasa/cFS.git",
+                    cfs_dir,
+                ],
+                cwd=vendor_dir,
+            )
+        except Exception as e:
+            print(f"  {RED}[!!] Failed to clone cFS: {e}{RST}")
+            return
+
+    # Initialize and update cFS submodules (cfe, osal, psp, apps/*)
+    print(f"\n{BOLD}{WHT}[*] Initializing cFS submodules...{RST}")
+    try:
+        subprocess.check_call(
+            ["git", "submodule", "update", "--init", "--recursive"],
+            cwd=cfs_dir,
+        )
+        print(f"  {GRN}[ok]{RST} cFS submodules initialized.")
+    except Exception as e:
+        print(f"  {RED}[!!] Failed to initialize cFS submodules: {e}{RST}")
+        return
+
+    # Build cFS natively (SIMULATION=native)
+    cfs_build_dir = os.path.join(cfs_dir, "build")
+    cfs_binary = os.path.join(cfs_build_dir, "core-cpu1")
+    if not os.path.exists(cfs_binary):
+        print(f"\n{BOLD}{WHT}[*] Building cFS (SIMULATION=native)...{RST}")
+        print(f"  {CYN}[~] This may take a few minutes on first build.{RST}")
+        try:
+            # CMake prep
+            os.makedirs(cfs_build_dir, exist_ok=True)
+            subprocess.check_call(
+                ["cmake", "-DSIMULATION=native", ".."],
+                cwd=cfs_build_dir,
+            )
+            # Build all targets
+            subprocess.check_call(
+                ["make", "-j", str(os.cpu_count() or 4)],
+                cwd=cfs_build_dir,
+            )
+            print(f"  {GRN}[ok]{RST} cFS built successfully.")
+        except Exception as e:
+            print(f"  {RED}[!!] Failed to build cFS: {e}{RST}")
+            return
+    else:
+        print(f"\n{GRN}[ok]{RST} cFS is already cloned and built.")
+
+    print(f"\n{GRN}[ok]{RST} NASA cFS ready.")
+
+
+def verify_environment(build_px4=False, build_cfs=False):
     """Check for all required tools and libraries before proceeding."""
     if build_px4:
         bootstrap_px4()
+    if build_cfs:
+        bootstrap_cfs()
 
     if platform.system() == "Darwin":
         bootstrap_ros2_mac()
@@ -2679,6 +2741,7 @@ def show_help():  # nosec
     {GRN}--host{RST} {CYN}HOST{RST}                     Bind address (default: 0.0.0.0, env: ADLAIDE_SERVER_HOST)
     {GRN}--port{RST} {CYN}PORT{RST}                     Bind port (default: 11420, env: ADLAIDE_SERVER_PORT)
     {GRN}--build-px4{RST}                     Clone and compile PX4-Autopilot for simulation tools
+    {GRN}--build-cfs{RST}                     Clone NASA cFS and initialize submodules
     {GRN}--test-build-integrity-check{RST}    Build only, verify integrity, then exit
     {GRN}--show-key{RST}                      Show the current AES-256 master key, then exit
     {GRN}--enforce-api-key{RST}               Enable x-api-key validation on the Ada server
@@ -2750,6 +2813,15 @@ def show_help():  # nosec
 
     {DIM}PX4 module location:{RST}
       {DIM}  vendor/PX4-Autopilot/  (cloned on first --build-px4){RST}
+
+  {BOLD}{WHT}NASA cFS INTEGRATION{RST}
+    {DIM}Clone NASA core Flight System:{RST}
+      {CYN}./run.sh --build-cfs{RST}
+      {DIM}→ Clones nasa/cFS and initializes all submodules (cfe, osal, psp, apps){RST}
+      {DIM}→ Used for flight software integration and avionics stack{RST}
+
+    {DIM}cFS module location:{RST}
+      {DIM}  vendor/cFS/  (cloned on first --build-cfs){RST}
 
     {DIM}To modify actuator hooks (ELP2):{RST}
       {DIM}  1. Edit src/ModuleSensorActuator_ELP2/fmc_servo_manual_hook_test.py{RST}
@@ -3966,7 +4038,7 @@ def real_main():  # nosec
     # PX4 is critical and auto-clones/compiles if missing
     if _setup_gui:
         _setup_gui._update_bar(pct=15, step_text=("[TEST-BUILD] Verify environment prerequisites" if "--test-build-integrity-check" in sys.argv else "code step 0x0003"), pulse=True)  # Verify environment prerequisites
-    verify_environment(build_px4=True)
+    verify_environment(build_px4=True, build_cfs="--build-cfs" in sys.argv)
 
     print(f"[*] Setting up Adelaide-Lite environment in {BASE_DIR}...")
 

@@ -5,6 +5,7 @@ with Ada.Characters.Handling;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Text_IO; use Ada.Text_IO;
 with AnsiAda;
+with CFS_Telemetry;
 
 package body Zenith_Orion is
 
@@ -47,6 +48,9 @@ package body Zenith_Orion is
    procedure Initialize is
       -- pre => True, post => True
    begin
+      --  Initialize cFS telemetry subsystem for ELP3
+      CFS_Telemetry.Initialize;
+      CFS_Telemetry.Send_Info ("ZenithOrion ELP3 initialized at 4000Hz");
       null;
    end Initialize;
 
@@ -82,6 +86,11 @@ package body Zenith_Orion is
                          " | Padding: " & Duration'Image (To_Duration (Delay_Time) * 1_000_000.0) & " us" &
                          " | Util:" & Integer'Image (Integer (Utilization)) & "%" &
                          " | Total Cadence: 250.00 us (4000Hz)");
+               --  Send cFS telemetry with ELP3 timing data
+               CFS_Telemetry.Send_Housekeeping
+                 (CPU_Pct => Utilization,
+                  Mem_Pct => 0.0,
+                  Uptime => To_Duration (Clock - Start_Time));
             end;
             Last_Print := Clock;
          end if;

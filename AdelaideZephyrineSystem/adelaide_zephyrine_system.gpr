@@ -137,7 +137,15 @@ project AdelaideZephyrineSystem is
             for Default_Switches ("C") use
               ("-isysroot", external ("SDKROOT", "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"),
                 "-mmacosx-version-min=15.0",
-                "-I/opt/homebrew/opt/openssl@3.6/include");
+                "-I/opt/homebrew/opt/openssl@3.6/include",
+                --  [NASA-cFS] cFE core API headers
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/core_api/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/core_api/config",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/sb/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/es/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/evs/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/msg/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/osal/src/os/inc");
          when "linux" =>
             for Default_Switches ("Ada") use
               AdelaideZephyrineSystem_Config.Ada_Compiler_Switches &
@@ -149,7 +157,15 @@ project AdelaideZephyrineSystem is
                 "-std=c++17", "-march=native");
             for Default_Switches ("C") use
               ("-march=native",
-                "-I/opt/homebrew/opt/openssl@3.6/include");
+                "-I/opt/homebrew/opt/openssl@3.6/include",
+                --  [NASA-cFS] cFE core API headers
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/core_api/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/core_api/config",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/sb/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/es/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/evs/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/cfe/modules/msg/fsw/inc",
+                "-I" & project'Project_Dir & "vendor/cFS/osal/src/os/inc");
          when others =>
             for Default_Switches ("Ada") use
               AdelaideZephyrineSystem_Config.Ada_Compiler_Switches &
@@ -175,6 +191,9 @@ project AdelaideZephyrineSystem is
                             project'Project_Dir & "vendor/llama.cpp/build/tools/mtmd/libmtmd.a",
          --  [STABLE-DIFFUSION] Link stable-diffusion.cpp for image generation
                             project'Project_Dir & "vendor/stable-diffusion.cpp/build/libstable-diffusion.a",
+         --  [NASA-cFS] Link cFS core libraries (Software Bus, Event Service, Executive Service)
+                            project'Project_Dir & "vendor/cFS/build/core-api/libcore-api.a",
+                            project'Project_Dir & "vendor/cFS/build/cfe-core/libcfe-core.a",
                             "-lsqlite3",
                             "-lc++",
                             "-L" & project'Project_Dir & "vendor/ros_env/lib",

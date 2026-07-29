@@ -72,5 +72,8 @@ package Tool_Manager is
    -- function: Execute_Package — package manager (brew, apt)
    function Execute_Package (Params : String) return Tool_Result
      with Pre => True, Post => True;
+   -- function: Execute_CFS_Tool — NASA cFS flight software (telemetry, health, commands)
+   function Execute_CFS_Tool (Params : String) return Tool_Result
+     with Pre => True, Post => True;
 
 end Tool_Manager;

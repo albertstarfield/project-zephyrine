@@ -31,6 +31,9 @@ with Tool_Review;
 with Tool_Hook;
 with Tool_Package;
 
+--  NASA cFS flight software integration
+with CFS_Tool_Bridge;
+
 package body Tool_Manager is
 
    --  ------------------------------------------------------------------------
@@ -139,6 +142,12 @@ package body Tool_Manager is
 
       elsif Name = "ros2" or else Name = "actuator" then
          return Execute_ROS2_Tool (Params);
+
+      --  =====================================================================
+      --  NASA cFS FLIGHT SOFTWARE: telemetry, health, commands
+      --  =====================================================================
+      elsif Name = "cfs" or else Name = "cfe" or else Name = "flight_software" then
+         return CFS_Tool_Bridge.Execute_CFS_Tool (Params);
 
       --  =====================================================================
       --  REMAINING PYTHON TOOLS: web_search, local_search, security, build

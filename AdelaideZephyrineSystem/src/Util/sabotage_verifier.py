@@ -3689,6 +3689,11 @@ THIRD_PARTY_EXCLUSION_LIST = [
         "Ada_SQLite3 is a C-binding FFI wrapper; SPARK cannot prove C interop",
         "Sabotage verifier scans all source files regardless of SPARK_Mode status",
     ),
+    (
+        "cFS",
+        "NASA cFS is a C framework; Ada bindings use Interfaces.C FFI; SPARK cannot prove C interop",
+        "Sabotage verifier scans all source files regardless of SPARK_Mode status",
+    ),
 ]
 
 # Units that use third-party deps and MUST have SPARK_Mode(Off).
@@ -3701,6 +3706,11 @@ THIRD_PARTY_DEPENDENT_UNITS = {
     "multimodal_content_parser": ["gnatcoll"],
     "lsh_hash":              ["gnatcoll"],
     "database_manager":      ["gnatcoll", "ada_sqlite3"],
+    "cfe_ffi_bindings":      ["cFS"],
+    "cfs_health_monitor":    ["cFS"],
+    "cfs_telemetry":         ["cFS"],
+    "cfs_command_router":    ["cFS"],
+    "cfs_tool_bridge":       ["cFS"],
 }
 
 
@@ -8231,10 +8241,12 @@ def _build_composition_balance_patterns() -> list[Pattern]:
         # Use git ls-files to get the file list, then exclude vendored dirs
         # GitHub marks vendor/ as vendored (gray) — not counted as project code
         import subprocess
-        # Vendor + test/eval dirs excluded from LANGUAGE BYTE COUNTING only
+        # Vendor + generated dirs excluded from LANGUAGE BYTE COUNTING only
         # (SMT checks still scan these files — this is composition analysis, not security)
+        # NOTE: tests/, scripts/, python/, eval/ are PROJECT SOURCE — not excluded.
+        # GitHub counts them. Excluding them inflates Ada's share artificially.
         vendor_dirs = {"vendor", "node_modules", "alirevenv", "venv", ".venv", ".cache", "data", "build", "obj", "bin",
-                       "tests", "test", "eval", "evals", "__pycache__", "scripts", "python"}
+                       "__pycache__"}
         try:
             result = subprocess.run(
                 ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
