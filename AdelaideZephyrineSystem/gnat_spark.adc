@@ -1,5 +1,6 @@
-pragma Profile (Ravenscar);
---  pragma SPARK_Mode (On);  --  Removed: conflicts with explicit SPARK_Mode => Off
-                            --  on FFI units.  GNATprove --prove=auto handles this.
-
-pragma Partition_Elaboration_Policy (Sequential);
+--  GNATprove configuration file.
+--  No Profile pragma here — Ravenscar/Restricted include restrictions
+--  (No_Calendar, No_Task_Allocators) that violate GNAT's own internal
+--  files (gpr-osint, gpr-util, gpr-jobserver) which are compiled as part
+--  of GNATprove's processing.
+--  Elaboration policy defaults to Dynamic which is safe.

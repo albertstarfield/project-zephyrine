@@ -1,5 +1,5 @@
 pragma SPARK_Mode (Off);
--- c_binding: SQLite3 FFI
+-- third-party: ada_sqlite3 (C-binding FFI — no SPARK contracts) + gnatcoll (GNATCOLL.JSON)
 with AnsiAda;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada_Sqlite3; use Ada_Sqlite3;

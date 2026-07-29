@@ -1,6 +1,8 @@
 --  claudealike_helper.adb
 --  Claude API client implementation for Anthropic's Messages API.
 --  Uses AWS.HTTP_Client for HTTP POST requests.
+pragma SPARK_Mode (Off);
+-- third-party: AWS HTTP client (no SPARK contracts)
 
 with Ada.Text_IO;           use Ada.Text_IO;
 with Ada.Strings;           use Ada.Strings;

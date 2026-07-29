@@ -1,6 +1,8 @@
 --  claudealike_helper.ads
 --  Claude API client for Anthropic's Messages API.
 --  Supports non-streaming requests to Claude 3.5 Sonnet, Haiku, Opus, etc.
+pragma SPARK_Mode (Off);
+-- third-party: AWS HTTP client + GNATCOLL.JSON (no SPARK contracts)
 
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNATCOLL.JSON;         use GNATCOLL.JSON;

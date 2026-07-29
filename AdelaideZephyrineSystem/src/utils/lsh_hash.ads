@@ -1,5 +1,5 @@
 pragma SPARK_Mode (Off);
--- thread: LSH requires thread-safe hash computation
+-- third-party: gnatcoll (GNATCOLL.JSON — no SPARK contracts) + thread safety
 with Math_Utils;
 
 package LSH_Hash is

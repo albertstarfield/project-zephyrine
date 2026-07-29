@@ -319,17 +319,17 @@ def run_all_tests():
         test_passed = len(false_negatives) == 0 and len(false_positives) == 0
 
         if test_passed:
-            print(f"  [+] PASS")
+            print("  [+] PASS")
             print(f"      Violations found: {sorted(found_categories)}")
             passed += 1
         else:
-            print(f"  [-] FAIL")
+            print("  [-] FAIL")
             if false_negatives:
-                print(f"      FALSE NEGATIVES (missed violations):")
+                print("      FALSE NEGATIVES (missed violations):")
                 for cat in sorted(false_negatives):
                     print(f"        - {cat}: Expected but NOT found by verifier")
             if false_positives:
-                print(f"      FALSE POSITIVES (false alarms):")
+                print("      FALSE POSITIVES (false alarms):")
                 for cat in sorted(false_positives):
                     print(f"        - {cat}: Found but should NOT be flagged")
             print(f"      Actual violations found: {sorted(found_categories)}")
@@ -337,7 +337,7 @@ def run_all_tests():
 
         # Print details of violations found
         if violations:
-            print(f"      Violation details:")
+            print("      Violation details:")
             for v in violations:
                 solvers_str = ",".join(v.get("solvers", []))
                 print(f"        L{v['line']}: [{v['category']}] solvers={solvers_str}")

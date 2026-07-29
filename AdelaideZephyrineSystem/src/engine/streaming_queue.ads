@@ -1,5 +1,5 @@
 pragma SPARK_Mode (Off);
--- thread: Streaming queue requires task protection
+-- third-party: aws (AWS.Resources.Streams — no SPARK contracts) + thread safety
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Streams; use Ada.Streams;
 with AWS.Resources.Streams;

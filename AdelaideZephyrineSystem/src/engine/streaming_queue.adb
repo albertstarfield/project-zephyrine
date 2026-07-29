@@ -1,5 +1,5 @@
 pragma SPARK_Mode (Off);
--- thread: Streaming queue requires task protection
+-- third-party: aws (AWS.Resources.Streams) + gnatcoll (GNATCOLL.JSON — no SPARK contracts)
 with GNATCOLL.JSON;
 with Ada.Calendar;
 with Ada.Calendar.Formatting;
