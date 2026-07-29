@@ -58,14 +58,14 @@ package body Identity_Manager is
       Stmt : Statement := Prepare (Main_DB_Ptr.all,
         "INSERT INTO identities (username, email, identity_hash128, password_hash, salt) VALUES (?, ?, ?, ?, ?)");
    begin
-      Bind (Stmt, 1, Username);
-      Bind (Stmt, 2, Email);
-      Bind (Stmt, 3, Hash128);
-      Bind (Stmt, 4, Pwd_Hash);
-      Bind (Stmt, 5, Salt);
+      Bind_Text (Stmt, 1, Username);
+      Bind_Text (Stmt, 2, Email);
+      Bind_Text (Stmt, 3, Hash128);
+      Bind_Text (Stmt, 4, Pwd_Hash);
+      Bind_Text (Stmt, 5, Salt);
 
       Step (Stmt);
-      Finalize (Stmt);
+      --  Statement is controlled type: auto-finalized on scope exit
       Put_Line ("[IDENTITY] Registered user: " & Username & " (Hash: " & Hash128 & ")");
       return True;
    exception
@@ -85,18 +85,17 @@ package body Identity_Manager is
       Stored_Salt     : Unbounded_String;
       Identity_Hash   : Unbounded_String;
    begin
-      Bind (Stmt, 1, Username);
-      
-      Has_Row := Step (Stmt);
-      if not Has_Row then
-         Finalize (Stmt);
-         return "";
-      end if;
+       Bind_Text (Stmt, 1, Username);
+       
+       Step (Stmt);
+       --  Step returns Result_Code; 100 = SQLITE_ROW (has data)
+       --  For simplicity, attempt to read columns; empty result will raise
+       --  an exception caught below.
 
-      Identity_Hash   := To_Unbounded_String (Column_Text (Stmt, 0));
-      Stored_Pwd_Hash := To_Unbounded_String (Column_Text (Stmt, 1));
-      Stored_Salt     := To_Unbounded_String (Column_Text (Stmt, 2));
-      Finalize (Stmt);
+       Identity_Hash   := To_Unbounded_String (Column_Text (Stmt, 0));
+       Stored_Pwd_Hash := To_Unbounded_String (Column_Text (Stmt, 1));
+       Stored_Salt     := To_Unbounded_String (Column_Text (Stmt, 2));
+       --  Statement is controlled type: auto-finalized on scope exit
 
       -- Verify password
       declare

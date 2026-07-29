@@ -22,14 +22,14 @@ def process_file(filepath):
 
     # Need to add "with AnsiAda;" if we do replacements
     has_changes = False
-    
+
     # We want to replace Put_Line ("[Prefix] ...") with Put_Line (AnsiAda.Foreground (Color) & "[Prefix]" & AnsiAda.Reset & " ...")
     # There are variations like Put_Line ("[Prefix] " & ...)
     for prefix, color in PREFIX_COLORS.items():
         # Match `Put_Line ("[Prefix] `
         # Or `Put_Line ("[Prefix]"`
         pattern = r'(Put_Line\s*\(\s*")(' + re.escape(prefix) + r')(\s*[^"]*")'
-        
+
         def repl(m):
             nonlocal has_changes
             has_changes = True
@@ -42,7 +42,7 @@ def process_file(filepath):
             return 'Put_Line (' + color + ' & "' + m.group(2) + '" & AnsiAda.Reset & "' + m.group(3)
 
         content = re.sub(pattern, repl, content)
-        
+
         pattern2 = r'(Put_Line\s*\(\s*")(' + re.escape(prefix) + r')("\s*&)'
         def repl2(m):
             nonlocal has_changes
@@ -54,12 +54,12 @@ def process_file(filepath):
         if "with AnsiAda;" not in content:
             # find first with
             content = re.sub(r'^(with\s+[A-Za-z0-9_.]+;)', r'with AnsiAda;\n\1', content, count=1, flags=re.MULTILINE)
-        
+
         with open(filepath, 'w') as f:
             f.write(content)
         print(f"Updated {filepath}")
 
 for root, _, files in os.walk("src"):
     for file in files:
-        if file.endswith(".adb") or file.endswith(".ads"):
+        if file.endswith((".adb", ".ads")):
             process_file(os.path.join(root, file))

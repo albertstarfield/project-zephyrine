@@ -15,10 +15,11 @@ Commands:
 DO NOT REMOVE, OR YOU WILL BE KILLED
 """
 
-import sys
-import os
 import glob
+import os
 import shutil
+import sys
+
 from trace_utils import init_trace, trace_print
 
 
@@ -150,7 +151,7 @@ def main():  # nosec
                 print(f"OK: Removed file {path}")
             else:
                 print(f"ERROR: Not found: {path}")
-        except (OSError, IOError) as e:
+        except OSError as e:
             print(f"ERROR: Could not remove {path}: {e}")
 
     else:

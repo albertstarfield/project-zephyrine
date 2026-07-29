@@ -30,7 +30,7 @@ import json
 import os
 import signal
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -57,12 +57,12 @@ def _import_deepxde():  # nosec
 
 
 def build_schrodinger_pinn(
-    x_range: Tuple[float, float] = (-5.0, 5.0),
-    t_range: Tuple[float, float] = (0.0, 1.5707963267948966),
+    x_range: tuple[float, float] = (-5.0, 5.0),
+    t_range: tuple[float, float] = (0.0, 1.5707963267948966),
     n_domain: int = 2540,
     n_boundary: int = 80,
     n_initial: int = 160,
-    hidden_layers: Optional[List[int]] = None,
+    hidden_layers: list[int] | None = None,
     activation: str = "tanh",
     learning_rate: float = 1e-3,
     adam_iterations: int = 15000,
@@ -96,7 +96,7 @@ def build_schrodinger_pinn(
     timedomain = dde.geometry.TimeDomain(t_range[0], t_range[1])
     geomtime = dde.geometry.GeometryXTime(geom, timedomain)
 
-    def pde(x: np.ndarray, y: np.ndarray) -> List[np.ndarray]:  # nosec
+    def pde(x: np.ndarray, y: np.ndarray) -> list[np.ndarray]:  # nosec
         # nosec - recursive function with implicit base case
         """Nonlinear Schrodinger PDE residual: i*psi_t + 0.5*psi_xx + |psi|^2*psi = 0."""
         u_r = y[:, 0:1]
@@ -149,11 +149,11 @@ def build_schrodinger_pinn(
 
 def extract_quantum_states(
     model: Any,
-    x_range: Tuple[float, float] = (-5.0, 5.0),
-    t_range: Tuple[float, float] = (0.0, 1.5707963267948966),
+    x_range: tuple[float, float] = (-5.0, 5.0),
+    t_range: tuple[float, float] = (0.0, 1.5707963267948966),
     n_spatial: int = 100,
     n_temporal: int = 50,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Extract quantum states from trained PINN for QRNN training.
 
@@ -207,7 +207,7 @@ def orthogonal_latent_injection(
 def steered_lsh_hash(
     model: Any,
     embedding: np.ndarray,
-    x_range: Tuple[float, float] = (-5.0, 5.0),
+    x_range: tuple[float, float] = (-5.0, 5.0),
     t_fixed: float = 0.7853981633974483,
     alpha: float = 0.1,
 ) -> int:
@@ -290,10 +290,10 @@ def steered_lsh_hash(
 
 def pipeline_test(
     model: Any,
-    x_range: Tuple[float, float] = (-5.0, 5.0),
-    t_range: Tuple[float, float] = (0.0, 1.5707963267948966),
+    x_range: tuple[float, float] = (-5.0, 5.0),
+    t_range: tuple[float, float] = (0.0, 1.5707963267948966),
     alpha: float = 0.1,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run pipeline test to verify correct processing.
 
@@ -320,7 +320,7 @@ def pipeline_test(
 
     dde = _import_deepxde()
 
-    def pde_test(x: np.ndarray, y: np.ndarray) -> List[np.ndarray]:  # nosec
+    def pde_test(x: np.ndarray, y: np.ndarray) -> list[np.ndarray]:  # nosec
         # nosec - recursive function with implicit base case
         """PDE residual for pipeline validation tests."""
         u_r = y[:, 0:1]

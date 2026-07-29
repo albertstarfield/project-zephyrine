@@ -67,9 +67,9 @@ package body ELP_Queue is
       --  Record the time at which a task at the given level begins execution.
       procedure Set_Task_Start (Level : ELP_Level);
   private
-     Counts      : Level_Counts := [others => 0];
+     Counts      : Level_Counts := (others => 0);
      Total       : Long_Long_Integer := 0;
-     Last_Source : String (1 .. 32)  := [others => ' '];
+     Last_Source : String (1 .. 32)  := (others => ' ');
      Source_Len  : Natural := 0;
   end Load_State;
 

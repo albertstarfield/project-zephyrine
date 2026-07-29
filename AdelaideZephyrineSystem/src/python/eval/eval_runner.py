@@ -1,25 +1,25 @@
 """Main entry point for running the evaluation suite."""
 
-import sys
 import logging
-from typing import List
+import sys
+
 from .base import AdelaideEvalClient, QuestionResult
+from .bbq import BbqEvaluator
+from .cmmlu import CmmluEvaluator
+from .gsm8k import Gsm8kEvaluator
+from .hellaswag import HellaswagEvaluator
+from .humaneval import HumanevalEvaluator
+from .jmmlu import JmmluEvaluator
+from .kmmlu import KmmluEvaluator
+from .livecodebench import LivecodebenchEvaluator
+from .mathqa import MathqaEvaluator
+from .mbpp import MbppEvaluator
 
 # Import all evaluators
 from .mmlu import MmluEvaluator
 from .mmlu_pro import MmluProEvaluator
-from .gsm8k import Gsm8kEvaluator
-from .mathqa import MathqaEvaluator
-from .humaneval import HumanevalEvaluator
-from .mbpp import MbppEvaluator
-from .livecodebench import LivecodebenchEvaluator
-from .hellaswag import HellaswagEvaluator
-from .winogrande import WinograndeEvaluator
 from .truthfulqa import TruthfulqaEvaluator
-from .bbq import BbqEvaluator
-from .cmmlu import CmmluEvaluator
-from .jmmlu import JmmluEvaluator
-from .kmmlu import KmmluEvaluator
+from .winogrande import WinograndeEvaluator
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -31,13 +31,13 @@ EVALUATORS = [
     BbqEvaluator, CmmluEvaluator, JmmluEvaluator, KmmluEvaluator
 ]
 
-def print_summary(results: List[QuestionResult]):  # nosec
+def print_summary(results: list[QuestionResult]):  # nosec
     # nosec - recursive function with implicit base case
     """Print a summary table of the results."""
     logger.info("=" * 60)
     logger.info(f"{'Category':<20} | {'Passed':<10} | {'Total':<10} | {'Score (%)':<10}")
     logger.info("-" * 60)
-    
+
     categories = {}
     # Loop_Invariant: verified (DO-178C MC/DC)
     for r in results:
@@ -47,16 +47,16 @@ def print_summary(results: List[QuestionResult]):  # nosec
         categories[cat]["total"] += 1
         if r.correct:
             categories[cat]["passed"] += 1
-            
+
     total_passed = 0
     total_q = len(results)
-    
+
     # Loop_Invariant: verified (DO-178C MC/DC)
     for cat, stats in categories.items():
         score = (stats["passed"] / stats["total"]) * 100
         logger.info(f"{cat:<20} | {stats['passed']:<10} | {stats['total']:<10} | {score:>.1f}%")
         total_passed += stats["passed"]
-        
+
     logger.info("=" * 60)
     overall = (total_passed / total_q) * 100 if total_q > 0 else 0
     logger.info(f"OVERALL ACCURACY: {overall:.2f}%")
@@ -76,9 +76,9 @@ def main():  # nosec
 
     logger.info(f"[*] Starting Evaluation Suite (OpenAI API: {use_openai}, Port: {port})")
     client = AdelaideEvalClient(use_openai=use_openai, port=port)
-    
+
     all_results = []
-    
+
     # Loop_Invariant: verified (DO-178C MC/DC)
     for EvalClass in EVALUATORS:
         evaluator = EvalClass(client)
@@ -88,12 +88,12 @@ def main():  # nosec
             all_results.extend(results)
         except Exception as e:
             logger.error(f"[!] Error running {EvalClass.__name__}: {e}")
-            
+
     if all_results:
         print_summary(all_results)
     else:
         logger.error("[!] No results obtained.")
         sys.exit(1)
-        
+
 if __name__ == "__main__":
     main()

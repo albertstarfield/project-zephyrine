@@ -13,7 +13,7 @@ with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;
 with Ada.Strings.Unbounded;
-with Ada.Processes;
+with GNAT.OS_Lib;
 with Ada.Directories;
 with Trace_Utils;
 
@@ -30,11 +30,16 @@ procedure Hook_Tool is
    function Run_Hook (Script : in String) return Boolean is
       -- pre => True, post => True  -- assertion: contracts verified
       Cmd : constant String := "python3 " & Script;
+      Success : Boolean;
+      Args : GNAT.OS_Lib.Argument_List (1 .. 2);
    begin
       begin
-         Ada.Processes.Command_Line(
-           Command_Line => Cmd,
-           Output       => True);
+         Args (1) := new String'("-c");
+         Args (2) := new String'(Cmd);
+         GNAT.OS_Lib.Spawn(
+            Program_Name => "/bin/sh",
+            Args         => Args,
+            Success      => Success);
          return True;
       exception
          when others =>

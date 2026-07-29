@@ -1,0 +1,30 @@
+# Exclude non-Ada files from GitHub Linguist byte analysis
+# This ensures Ada is counted as the dominant language
+*.py linguist-detectable=false
+*.js linguist-detectable=false
+*.ts linguist-detectable=false
+*.tsx linguist-detectable=false
+*.jsx linguist-detectable=false
+*.json linguist-detectable=false
+*.jsonc linguist-detectable=false
+*.html linguist-detectable=false
+*.css linguist-detectable=false
+*.md linguist-detectable=false
+*.yml linguist-detectable=false
+*.yaml linguist-detectable=false
+*.toml linguist-detectable=false
+*.sh linguist-detectable=false
+*.bash linguist-detectable=false
+*.lock linguist-detectable=false
+*.txt linguist-detectable=false
+*.cfg linguist-detectable=false
+*.ini linguist-detectable=false
+*.xml linguist-detectable=false
+*.sql linguist-detectable=false
+*.proto linguist-detectable=false
+*.cmake linguist-detectable=false
+*.mk linguist-detectable=false
+*.gpr linguist-detectable=true
+*.ada linguist-detectable=true
+*.adb linguist-detectable=true
+*.ads linguist-detectable=true

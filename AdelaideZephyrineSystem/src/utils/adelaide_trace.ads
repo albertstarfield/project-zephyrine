@@ -11,7 +11,7 @@ pragma SPARK_Mode (Off);
 --    4. Prefix configured via ADELAIDE_TOOL_TRACE_PREFIX env var.
 --  ============================================================================
 
-with Ada.Calendar;          use Ada.Calendar;
+with Ada.Real_Time;          use Ada.Real_Time;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
 package Adelaide_Trace is
@@ -34,7 +34,7 @@ package Adelaide_Trace is
                            Detail   : String := "") with Pre => True, Post => True;
 
 private
-   Start_Time  : Ada.Calendar.Time;
+   Start_Time  : Ada.Real_Time.Time;
    Trace_Prefix : Unbounded_String := To_Unbounded_String ("[ADA]");
    Trace_Enabled : Boolean := True;
 

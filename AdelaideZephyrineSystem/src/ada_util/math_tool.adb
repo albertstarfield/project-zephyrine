@@ -11,6 +11,7 @@ with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;
 with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
 with Trace_Utils;
 
 --  Math_Tool: Main entry point. Accepts a mathematical expression from

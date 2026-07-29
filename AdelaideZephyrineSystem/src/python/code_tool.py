@@ -1,6 +1,7 @@
-import sys
 import io
+import sys
 from contextlib import redirect_stdout
+
 from trace_utils import init_trace, trace_print, trace_result
 
 if __name__ == "__main__":

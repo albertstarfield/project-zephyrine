@@ -13,7 +13,7 @@ with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;
 with Ada.Strings.Unbounded;
-with Ada.Processes;
+with GNAT.OS_Lib;
 with Ada.Environment_Variables;
 with Trace_Utils;
 
@@ -25,32 +25,35 @@ procedure Package_Tool is
    use Ada.Strings.Unbounded;
 
    --  Detect_Package_Manager: Return "apt" for Linux, "brew" for macOS.
-   function Detect_Package_Manager return Unbounded_String is
+   function Detect_Package_Manager return String is
       -- pre => True, post => True  -- assertion: contracts verified
       Sys : constant String :=
         (if Ada.Environment_Variables.Exists("OS") then
             Ada.Environment_Variables.Value("OS")
          else "linux");
    begin
-      --  Simplified detection: check common package managers
       if Sys = "linux" or Sys = "Linux" then
-         --  Would check for apt, yum, pacman, etc.
-         return To_Unbounded_String("apt");
+         return "apt";
       elsif Sys = "darwin" or Sys = "Darwin" then
-         return To_Unbounded_String("brew");
+         return "brew";
       else
-         return To_Unbounded_String("unknown");
+         return "unknown";
       end if;
    end Detect_Package_Manager;
 
    --  Run_Cmd: Execute a shell command via subprocess and return output.
    function Run_Cmd (Cmd : in String) return String is
       -- pre => True, post => True  -- assertion: contracts verified
+      Success : Boolean;
+      Args : GNAT.OS_Lib.Argument_List (1 .. 2);
    begin
       begin
-         Ada.Processes.Command_Line(
-           Command_Line => Cmd,
-           Output       => True);
+         Args (1) := new String'("-c");
+         Args (2) := new String'(Cmd);
+         GNAT.OS_Lib.Spawn(
+            Program_Name => "/bin/sh",
+            Args         => Args,
+            Success      => Success);
          return "";
       exception
          when others =>
@@ -61,7 +64,7 @@ procedure Package_Tool is
    --  Install_Package: Detect package manager and install the named package.
    function Install_Package (Pkg : in String) return String is
       -- pre => True, post => True  -- assertion: contracts verified
-      PM : constant String := To_Unbounded_String(Detect_Package_Manager);
+      PM : constant String := Detect_Package_Manager;
    begin
       Trace_Utils.Trace_Print("package", "detect", PM);
       Trace_Utils.Trace_Print("package", "install", Pkg);
@@ -100,7 +103,7 @@ begin
 
       if Cmd = "detect" then
          declare
-            PM : constant String := To_Unbounded_String(Detect_Package_Manager);
+            PM : constant String := Detect_Package_Manager;
          begin
             Put_Line("Package manager: " & PM);
             Trace_Utils.Trace_Result("package", PM /= "unknown",
@@ -125,7 +128,7 @@ begin
 
       elsif Cmd = "update" then
          declare
-            PM : constant String := To_Unbounded_String(Detect_Package_Manager);
+            PM : constant String := Detect_Package_Manager;
          begin
             if PM = "apt" then
                Put_Line(Run_Cmd("sudo apt-get update"));
@@ -140,7 +143,7 @@ begin
             Ada.Command_Line.Set_Exit_Status(1);
          else
             declare
-               PM : constant String := To_Unbounded_String(Detect_Package_Manager);
+      PM : constant String := Detect_Package_Manager;
             begin
                if PM = "apt" then
                   Put_Line(Run_Cmd("apt-cache search " & To_String(Args)));
@@ -152,7 +155,7 @@ begin
 
       elsif Cmd = "list" then
          declare
-            PM : constant String := To_Unbounded_String(Detect_Package_Manager);
+            PM : constant String := Detect_Package_Manager;
          begin
             if PM = "apt" then
                Put_Line(Run_Cmd("dpkg --list"));

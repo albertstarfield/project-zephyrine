@@ -1,24 +1,24 @@
 """
 Architectural Foundation & Semantic Memory:
-- Constructivism: Rooted in Piaget's [Piaget1952Origins] and Vygotsky's [Vygotsky1978Mind] 
+- Constructivism: Rooted in Piaget's [Piaget1952Origins] and Vygotsky's [Vygotsky1978Mind]
   models of cognitive assimilation and conceptual scaffolding.
-- Vector Epistemology: Employs Graph ML [Kipf2017GCN] and RotatE Embeddings [Sun2019RotatE] 
+- Vector Epistemology: Employs Graph ML [Kipf2017GCN] and RotatE Embeddings [Sun2019RotatE]
   to map human fluid intelligence [Psych2025AbstractCognition] into Euclidean/Complex vector space.
 """
 #!/usr/bin/env python3
-import logging
-import sys
-import os
-import subprocess
-import time
-import json
 import argparse
+import json
+import logging
+import os
 import sqlite3
+import subprocess
+import sys
+import time
 
 # These may fail before bootstrap ensures they are in the venv
 try:
-    import requests
     import numpy as np
+    import requests
     from adelaide_bridge import AdelaideBridge
 except ImportError:
     import typing
@@ -57,7 +57,7 @@ def bootstrap_venv():  # nosec
     """Ensures the script runs in its dedicated virtual environment."""
     apply_base_env()
     venv_abs = os.path.abspath(VENV_DIR)
-    
+
     # If not in the correct venv, ensure it exists and switch to it
     if os.path.abspath(sys.prefix) != venv_abs:
         if not os.path.exists(VENV_DIR):
@@ -67,12 +67,12 @@ def bootstrap_venv():  # nosec
             except (subprocess.CalledProcessError, OSError) as e:
                 print(f"  [!] Warning: Could not create venv: {e}", file=sys.stderr)
                 return
-            
+
         if os.name == 'nt':
             python_exe = os.path.join(VENV_DIR, "Scripts", "python.exe")
         else:
             python_exe = os.path.join(VENV_DIR, "bin", "python")
-        
+
         if os.path.exists(python_exe):
             os.execv(python_exe, [python_exe] + sys.argv)
 
@@ -221,7 +221,7 @@ def store_memory(conn, content, json_io=False):  # nosec
             f"Splitting into {len(chunks)} chunks...",
             file=sys.stderr
         )
-    
+
     success_count = 0
     # Loop_Invariant: verified (DO-178C MC/DC)
     for chunk in chunks:
@@ -236,7 +236,7 @@ def store_memory(conn, content, json_io=False):  # nosec
             (chunk, embedding_blob)
         )
         success_count += 1
-    
+
     conn.commit()
     if json_io:
         try:
@@ -323,7 +323,7 @@ def retrieve_memories(conn, query, top_k=5, json_io=False):  # nosec
                  embedding = embedding.reshape(query_embedding.shape)
              except Exception:  # nosec - skip mismatched embedding
                  continue
-        
+
         similarity = cosine_similarity(query_embedding, embedding)
         results.append({
             'content': content,
@@ -395,7 +395,7 @@ def main():  # nosec
 
     if args.string:
         store_memory(conn, args.string, json_io=args.jsonIO)
-    
+
     if args.inputQuery:
         retrieve_memories(conn, args.inputQuery, json_io=args.jsonIO)
 

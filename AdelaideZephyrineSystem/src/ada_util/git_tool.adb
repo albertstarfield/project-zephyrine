@@ -3,7 +3,7 @@
 
 --  SPARK_Mode(off)
 --  Justification: Standalone CLI procedure. Executes external processes
---  via Ada.Processes.Command_Line (system git), accesses command-line
+--  via GNAT.OS_Lib.Spawn (/bin/sh -c "git ..."), accesses command-line
 --  arguments via Ada.Command_Line, writes output via Ada.Text_IO.
 --  External subprocess interaction cannot be expressed in SPARK.
 
@@ -11,7 +11,7 @@ with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;
 with Ada.Strings.Unbounded;
-with Ada.Processes;
+with GNAT.OS_Lib;
 with Trace_Utils;
 
 --  Git_Tool: Main entry point. Dispatches git commands (status, diff,
@@ -24,12 +24,17 @@ procedure Git_Tool is
    --  Run_Git: Execute a git command via subprocess and return output.
    function Run_Git (Args : in String) return String is
       -- pre => True, post => True  -- assertion: contracts verified
-      Cmd : constant String := "git " & Args;
+      Cmd    : constant String := "git " & Args;
+      Spawn_Args : GNAT.OS_Lib.Argument_List (1 .. 2);
+      Success : Boolean;
    begin
       begin
-         Ada.Processes.Command_Line(
-           Command_Line => Cmd,
-           Output       => True);
+         Spawn_Args (1) := new String'("-c");
+         Spawn_Args (2) := new String'(Cmd);
+         GNAT.OS_Lib.Spawn(
+            Program_Name => "/bin/sh",
+            Args         => Spawn_Args,
+            Success      => Success);
          return "";
       exception
          when others =>

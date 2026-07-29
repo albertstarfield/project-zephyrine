@@ -6,7 +6,7 @@ import platform
 import re
 import subprocess
 import sys
-from typing import Optional, Match
+from re import Match
 
 # ==========================================
 # CONFIGURATION & GLOBAL STATE
@@ -31,9 +31,9 @@ extern "C" {
             case 0: *res = a + b; break;
             case 1: *res = a - b; break;
             case 2: *res = a * b; break;
-            case 3: 
-                if (b == 0.0) *err = 1; 
-                else *res = a / b; 
+            case 3:
+                if (b == 0.0) *err = 1;
+                else *res = a / b;
                 break;
             default: *err = 2;
         }
@@ -57,9 +57,9 @@ def _setup_cpp():
 
         # Load
         lib = ctypes.CDLL(lib_path)
-        lib.fast_calc.argtypes = [ctypes.c_double, ctypes.c_int, ctypes.c_double, 
+        lib.fast_calc.argtypes = [ctypes.c_double, ctypes.c_int, ctypes.c_double,
                                   ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_int)]
-        
+
         if lib.health() == 777:
             _C_LIB = lib
             _ENGINE_MODE = "CPP_O3"
@@ -76,7 +76,7 @@ def _setup_numba():
     global _NUMBA_FUNC, _ENGINE_MODE
     try:
         from numba import njit
-        
+
         # We define this inside to ensure Numba is available
         @njit(cache=True, fastmath=True)
         def jit_calc(a, op, b):
@@ -95,7 +95,7 @@ def _setup_numba():
 
         # Warmup compilation
         jit_calc(1.0, 0, 1.0)
-        
+
         _NUMBA_FUNC = jit_calc
         _ENGINE_MODE = "NUMBA_JIT"
         print("✅ StellaMath: Numba Engine Active (Tier 2)", file=sys.stderr)
@@ -110,9 +110,8 @@ def _setup_numba():
 # INITIALIZATION SEQUENCE
 # ==========================================
 # Try C++ first. If fails, try Numba. If fails, stay Python.
-if not _setup_cpp():
-    if not _setup_numba():
-        print("⚠️ StellaMath: Using Pure Python (Tier 3)", file=sys.stderr)
+if not _setup_cpp() and not _setup_numba():
+    print("⚠️ StellaMath: Using Pure Python (Tier 3)", file=sys.stderr)
 
 
 # ==========================================
@@ -141,8 +140,8 @@ PATTERN = re.compile(
     r".*?"  # Eat prefix (e.g. "Hey Zephy, ")
     r"(?P<n1>-?\d+(?:\.\d+)?)"
     r"\s*"
-    r"(?P<op>" 
-        r"[\+\-\*\/xX]" 
+    r"(?P<op>"
+        r"[\+\-\*\/xX]"
         r"|"
         r"(?:plus|add|added\s+to|minus|subtract|subtracted\s+by|times|multiplied\s+by|divided\s+by)"
     r")"
@@ -154,13 +153,13 @@ PATTERN = re.compile(
 # ==========================================
 # HANDLER
 # ==========================================
-def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str]:
+def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
     # 1. Parse & Normalize
     try:
         n1 = float(match.group("n1"))
         n2 = float(match.group("n2"))
         raw_op = match.group("op").strip().lower()
-        
+
         # Map everything to Integers [0,1,2,3] for C++/Numba compatibility
         op_code = -1
         if raw_op in ['+', 'plus', 'add', 'added to']:
@@ -171,7 +170,7 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
             op_code = 2
         elif raw_op in ['/', 'divided by']:
             op_code = 3
-        
+
         if op_code == -1:
             return None # Regex shouldn't allow this, but safety first
 
@@ -181,16 +180,16 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
     # 2. Execute based on Mode
     res = 0.0
     err = 0
-    
+
     if _ENGINE_MODE == "CPP_O3":
         c_res = ctypes.c_double()
         c_err = ctypes.c_int()
         _C_LIB.fast_calc(n1, op_code, n2, ctypes.byref(c_res), ctypes.byref(c_err))
         res, err = c_res.value, c_err.value
-        
+
     elif _ENGINE_MODE == "NUMBA_JIT":
         res, err = _NUMBA_FUNC(n1, op_code, n2)
-        
+
     else: # Python
         res, err = _calc_python(n1, op_code, n2)
 
@@ -199,10 +198,10 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
         return "I can't divide by zero."
     if err == 2:
         return "Unknown calculation error."
-    
+
     # Clean output (5.0 -> 5)
     final_val = int(res) if res.is_integer() else res
-    
+
     # We return the simple prefix you requested
     return f"This is what I get or the result of my calculation: {final_val}"
 

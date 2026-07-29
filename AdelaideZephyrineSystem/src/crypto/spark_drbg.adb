@@ -20,8 +20,8 @@ is
    procedure Update (Provided_Data : Seed_Type)
      with Global => (In_Out => State)
    is
-      Temp  : Seed_Type := [others => 0];
-      Block : Block_Type := [others => 0];
+      Temp  : Seed_Type := (others => 0);
+      Block : Block_Type := (others => 0);
       Ret   : int;
    begin
       for I in 0 .. 2 loop
@@ -66,8 +66,8 @@ is
          return;
       end if;
       
-      State.Key := [others => 0];
-      State.V := [others => 0];
+      State.Key := (others => 0);
+      State.V := (others => 0);
       
       Update (Entropy);
       
@@ -149,7 +149,7 @@ is
          Generated := Generated + To_Copy;
       end loop;
       
-      Update ([others => 0]);
+      Update ((others => 0));
       State.Reseed_Counter := State.Reseed_Counter + 1;
       Success := True;
    end Generate;
@@ -158,9 +158,9 @@ is
    procedure Clear is
       -- pre => True, post => True
    begin
-      State := (Key => [others => 0], 
-                V => [others => 0], 
-                Last_Block => [others => 0],
+      State := (Key => (others => 0), 
+                V => (others => 0), 
+                Last_Block => (others => 0),
                 Reseed_Counter => 0,
                 Initialized => False,
                 Last_Valid => False);

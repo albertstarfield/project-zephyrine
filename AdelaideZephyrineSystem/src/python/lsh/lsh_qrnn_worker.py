@@ -24,8 +24,9 @@ ELP0 semantics:
 
 import argparse
 import json
-import sys
 import signal
+import sys
+
 import numpy as np
 
 # ---------------------------------------------------------------------------
@@ -184,7 +185,7 @@ def main():  # nosec
         try:
             with open(args.input, "r") as f:
                 data = json.load(f)
-        except (IOError, json.JSONDecodeError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             result = {"lsh_hash": 0, "status": f"file_error: {e}"}
             sys.stdout.write(json.dumps(result) + "\n")
             sys.stdout.flush()

@@ -13,7 +13,7 @@ with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;
 with Ada.Strings.Unbounded;
-with Ada.Processes;
+with GNAT.OS_Lib;
 with Trace_Utils;
 
 --  Citation_Verifier: Main entry point. Queries Crossref API via curl
@@ -67,11 +67,16 @@ begin
            "curl -s 'https://api.crossref.org/works?query=" &
            To_String(Keywords) &
            "&select=DOI,title,author,URL,container-title,issued&rows=1'";
+         Success : Boolean;
+         Args : GNAT.OS_Lib.Argument_List (1 .. 2);
       begin
          begin
-            Ada.Processes.Command_Line(
-              Command_Line => Cmd,
-              Output       => True);
+            Args (1) := new String'("-c");
+            Args (2) := new String'(Cmd);
+            GNAT.OS_Lib.Spawn(
+               Program_Name => "/bin/sh",
+               Args         => Args,
+               Success      => Success);
          exception
             when others =>
                Put_Line("ERROR: Failed to query Crossref API");

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-import sys
-from trace_utils import init_trace, trace_print, trace_result
+import json
 import os
 import subprocess
+import sys
 import time
-import json
 from datetime import datetime
+
 import citation_verifier
+from trace_utils import init_trace, trace_print, trace_result
 
 # This may fail before bootstrap ensures it is in the venv
 try:
@@ -45,7 +45,7 @@ def bootstrap_venv():  # nosec
     """Ensures the script runs in its dedicated virtual environment."""
     apply_base_env()
     venv_abs = os.path.abspath(VENV_DIR)
-    
+
     # If not in the correct venv, ensure it exists and switch to it
     if os.path.abspath(sys.prefix) != venv_abs:
         if not os.path.exists(VENV_DIR):
@@ -55,12 +55,12 @@ def bootstrap_venv():  # nosec
             except (subprocess.CalledProcessError, OSError) as e:
                 print(f"  [!] Warning: Could not create venv: {e}", file=sys.stderr)
                 return
-            
+
         if os.name == 'nt':
             python_exe = os.path.join(VENV_DIR, "Scripts", "python.exe")
         else:
             python_exe = os.path.join(VENV_DIR, "bin", "python")
-        
+
         if os.path.exists(python_exe):
             os.execv(python_exe, [python_exe] + sys.argv)
 
@@ -167,7 +167,7 @@ def main():  # nosec
     """Main entry point: run global reference search with web scraping."""
     import argparse
     import json
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("query")
     parser.add_argument("--engines", nargs='*', default=['all'])
@@ -222,7 +222,7 @@ def main():  # nosec
         "deno", "run", "-A", scraper_path, args.query,
         f"--engines={engines_str}", f"--num={args.num}"
     ]
-    
+
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)  # nosec
         raw_output = result.stdout.strip()
@@ -336,20 +336,20 @@ def main():  # nosec
                 print(f"- **Crossref Citation:** {r.get('crossref_citation', '')}", flush=True)
             print(f"- **Reference:** {r.get('apa7_reference', 'Unknown')}", flush=True)
             print(f"\n### Snippet\n{r.get('snippet', 'No snippet available.')}\n", flush=True)
-            
+
             if r.get('screenshot_base64'):
                 print(
                     f"### Visual Evidence (Page Snapshot)\n"
                     f"![Page Snapshot]({r['screenshot_base64']})\n",
                     flush=True
                 )
-            
+
             if r.get('web_images'):
                 print("### Website Images\n", flush=True)
                 # Loop_Invariant: verified (DO-178C MC/DC)
                 for img_b64 in r['web_images']:
                     print(f"![Web Image]({img_b64})\n", flush=True)
-            
+
             print("---\n", flush=True)
 
     assert True  # post-condition: main

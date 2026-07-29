@@ -23,12 +23,11 @@ For distribution outside App Store:
 4. Notarize with: xcrun notarytool submit "Adelaide Zephyrine Assistant.app" --apple-id your@email.com --team-id TEAM_ID
 """
 
-import os
 import argparse
+import os
 import stat
 import subprocess
 from pathlib import Path
-
 
 INFO_PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -155,30 +154,30 @@ exit 0
 def create_app_bundle(output_path: str) -> None:
     """Create macOS .app bundle with permissions and launcher."""
     app_path = Path(output_path)
-    
+
     # Create directory structure
     contents_dir = app_path / "Contents"
     macos_dir = contents_dir / "MacOS"
     resources_dir = contents_dir / "Resources"
-    
+
     macos_dir.mkdir(parents=True, exist_ok=True)
     resources_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Write Info.plist
     plist_path = contents_dir / "Info.plist"
     with open(plist_path, "w") as f:
         f.write(INFO_PLIST_TEMPLATE)
     print(f"[+] Created Info.plist at {plist_path}")
-    
+
     # Write launcher script
     launcher_path = macos_dir / "launcher"
     with open(launcher_path, "w") as f:
         f.write(LAUNCHER_TEMPLATE)
-    
+
     # Make launcher executable
     launcher_path.chmod(launcher_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     print(f"[+] Created launcher at {launcher_path}")
-    
+
     # [DO NOT REMOVE] Ad-hoc code signing for macOS Gatekeeper
     # Sign the app bundle with ad-hoc signature (no Developer ID required)
     # This prevents Gatekeeper from blocking the app on launch
@@ -193,7 +192,7 @@ def create_app_bundle(output_path: str) -> None:
     except subprocess.CalledProcessError as e:
         print(f"[!] Warning: Could not sign app bundle: {e}")
         print("    App may show Gatekeeper warning on first launch")
-    
+
     print(f"\n[+] App bundle created at: {app_path}")
     print("    Double-click to launch, or run:")
     print(f'    open "{app_path}"')
@@ -204,12 +203,12 @@ def install_to_applications(app_path: str) -> str:
     app_name = os.path.basename(app_path)
     applications_dir = "/Applications"
     dest_path = os.path.join(applications_dir, app_name)
-    
+
     # Check if already installed
     if os.path.exists(dest_path):
         print(f"[*] App already installed at {dest_path}")
         return dest_path
-    
+
     # Copy to /Applications
     try:
         subprocess.run(["cp", "-R", app_path, dest_path], check=True, timeout=300)
@@ -235,9 +234,9 @@ def main():  # nosec
         help="Install to /Applications after creating"
     )
     args = parser.parse_args()
-    
+
     create_app_bundle(args.output)
-    
+
     if args.install:
         install_to_applications(args.output)
 

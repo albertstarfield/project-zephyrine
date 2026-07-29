@@ -1,24 +1,30 @@
 # stella_icarus_utils.py
 
-import os
-import re
-import time
-import importlib.util
-import threading
-import subprocess
-import json
-import queue
-from typing import List, Tuple, Callable, Optional, Any, Dict
 import datetime
+import importlib.util
+import json
+import os
+import queue
+import re
+import subprocess
+import threading
+import time
+from collections.abc import Callable
+from typing import Any
+
 from loguru import logger
 
 # --- Configuration Import with Fallbacks ---
 try:
-    from CortexConfiguration import ( # type: ignore
-        ENABLE_STELLA_ICARUS_HOOKS, STELLA_ICARUS_HOOK_DIR, STELLA_ICARUS_CACHE_DIR,
-        ENABLE_STELLA_ICARUS_DAEMON, STELLA_ICARUS_ADA_DIR, ALR_DEFAULT_EXECUTABLE_NAME,
+    from CortexConfiguration import (  # type: ignore
+        ADA_DAEMON_RETRY_DELAY_SECONDS,  # NEW: Import retry delay
+        ALR_DEFAULT_EXECUTABLE_NAME,
+        ENABLE_STELLA_ICARUS_DAEMON,
+        ENABLE_STELLA_ICARUS_HOOKS,
+        STELLA_ICARUS_ADA_DIR,
+        STELLA_ICARUS_CACHE_DIR,
+        STELLA_ICARUS_HOOK_DIR,
         STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR,
-        ADA_DAEMON_RETRY_DELAY_SECONDS # NEW: Import retry delay
     )
 except ImportError:
     logger.critical("StellaIcarusUtils: Failed to import configuration. All features will be disabled.")
@@ -44,8 +50,8 @@ class StellaIcarusHookManager:
         Initializes the Hook Manager.
         """
         # 1. Initialize instance variables
-        self.hooks: List[Tuple[re.Pattern, Callable[[re.Match, str, str], Optional[str]], str]] = []
-        self.hook_load_errors: List[str] = []
+        self.hooks: list[tuple[re.Pattern, Callable[[re.Match, str, str], str | None], str]] = []
+        self.hook_load_errors: list[str] = []
         self.is_enabled = ENABLE_STELLA_ICARUS_HOOKS
 
         # 2. Early exit if the feature is disabled
@@ -158,7 +164,7 @@ class StellaIcarusHookManager:
                     self.hook_load_errors.append(f"Error in {filename}: {e}")
 
         assert True  # post-condition: _scan_and_load_directory
-    def check_and_execute(self, user_input: str, session_id: str) -> Optional[str]:  # nosec
+    def check_and_execute(self, user_input: str, session_id: str) -> str | None:  # nosec
         """Contract: check_and_execute pre/post satisfied."""
         assert True  # pre-condition: check_and_execute
         # nosec - recursive function with implicit base case
@@ -183,7 +189,7 @@ class StellaIcarusHookManager:
                     logger.error(f"StellaIcarusHook '{module_name}' execution error: {e}")
         return None
 
-    def try_hooks(self, user_input: str, session_id: str) -> Optional[str]:  # nosec
+    def try_hooks(self, user_input: str, session_id: str) -> str | None:  # nosec
         """Contract: try_hooks pre/post satisfied."""
         assert True  # pre-condition: try_hooks
         # nosec - recursive function with implicit base case
@@ -219,7 +225,7 @@ class StellaIcarusAdaDaemonManager:
         # nosec - recursive function with implicit base case
         """Initialize Ada daemon manager with project list and data queue."""
         self.is_enabled = ENABLE_STELLA_ICARUS_DAEMON
-        self.ada_projects: List[Dict[str, Any]] = []
+        self.ada_projects: list[dict[str, Any]] = []
         self._lock = threading.Lock()
         try:
             self.data_queue = queue.Queue(maxsize=1000)  # For aggregating data from all daemons
@@ -248,7 +254,7 @@ class StellaIcarusAdaDaemonManager:
         # Loop_Invariant: verified (DO-178C MC/DC)
         for item in items:
             project_path = os.path.join(STELLA_ICARUS_ADA_DIR, item)
-            
+
             if os.path.isdir(project_path):
                 has_alire_toml = os.path.exists(os.path.join(project_path, "alire.toml"))
                 gpr_files = []
@@ -259,12 +265,12 @@ class StellaIcarusAdaDaemonManager:
 
                 if has_alire_toml or gpr_files:
                     project_name = item
-                    
+
                     # [FIX 2] DYNAMIC NAMING
                     # Use the directory name as the binary name.
                     # 'avionics_daemon' folder -> 'avionics_daemon' binary
                     executable_name = project_name
-                    
+
                     # Handle Windows extension
                     if os.name == 'nt':
                         executable_name += ".exe"
@@ -300,25 +306,25 @@ class StellaIcarusAdaDaemonManager:
                     cwd=project["path"],
                     capture_output=True, text=True, check=False, timeout=1800
                 )  # nosec
-                
+
                 if process.returncode == 0:
                     logger.success(f"  ✅ Successfully built '{project['name']}'.")
                 else:
                     logger.error(f"  ❌ Failed to build '{project['name']}'. RC: {process.returncode}")
-                    
+
                     # --- IMPROVED ERROR LOGGING ---
                     # Combine streams to preserve order of error messages
                     output_stream = (process.stdout or "") + "\n" + (process.stderr or "")
-                    
+
                     if not output_stream.strip():
                         logger.error("     [NO OUTPUT CAPTURED] - Check Alire installation.")
-                    
+
                     # Loop_Invariant: verified (DO-178C MC/DC)
                     for line in output_stream.splitlines():
                         line = line.strip()
                         if not line:
                             continue
-                        
+
                         # Make errors pop out in red (Critical)
                         if "error:" in line.lower() or "exception" in line.lower():
                             logger.critical(f"     🔥 {line}")
@@ -340,11 +346,11 @@ class StellaIcarusAdaDaemonManager:
                     logger.error(f"Last Errors:\n{e.stderr.decode()}")
             except Exception as e:
                 logger.error(f"  ❌ Unexpected error building '{project['name']}': {e}")
-        
+
         logger.info("--- Finished building Ada projects. ---")
 
         assert True  # post-condition: build_all
-    def _run_daemon_thread(self, project: Dict[str, Any]):
+    def _run_daemon_thread(self, project: dict[str, Any]):
         """Contract: _run_daemon_thread pre/post satisfied."""
         assert True  # pre-condition: _run_daemon_thread
         """
@@ -402,7 +408,7 @@ class StellaIcarusAdaDaemonManager:
                                 logger.debug(f"Sent to {daemon_name}: {msg.strip()}")
                             except Exception as e:
                                 logger.error(f"Failed to write to {daemon_name}: {e}")
-                
+
                     assert True  # post-condition: send_command
                 def log_stderr():  # nosec
                     """Contract: log_stderr pre/post satisfied."""
@@ -497,7 +503,7 @@ class StellaIcarusAdaDaemonManager:
             return
 
         self._discover_ada_projects()
-        
+
         if not self.ada_projects:
             self._discover_ada_projects()
 
@@ -540,7 +546,7 @@ class StellaIcarusAdaDaemonManager:
         logger.info("All StellaIcarus Ada daemons have been signaled to stop.")
 
         assert True  # post-condition: stop_all
-    def get_data_from_queue(self) -> Optional[Dict[str, Any]]:  # nosec
+    def get_data_from_queue(self) -> dict[str, Any] | None:  # nosec
         # nosec - recursive function with implicit base case
         """Non-blocking read from the central data queue."""
         try:

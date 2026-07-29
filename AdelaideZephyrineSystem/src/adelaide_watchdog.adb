@@ -455,7 +455,7 @@ procedure Adelaide_Watchdog is
    --  Port is read from environment variable ADLAIDE_SERVER_PORT.
 
    Endpoints : constant array (1 .. 10) of access constant String :=
-     [new String'("/api/version"),
+     (new String'("/api/version"),
       new String'("/api/tags"),
       new String'("/api/power"),
       new String'("/v1/models"),
@@ -464,7 +464,7 @@ procedure Adelaide_Watchdog is
       new String'("/v1/audio/speech"),
       new String'("/v1/audio/transcriptions"),
       new String'("/api/telemetry"),
-      new String'("/api/ps")];
+      new String'("/api/ps"));
 
    --  Port/Host resolution: args > env vars > defaults
    function Get_Port return String is

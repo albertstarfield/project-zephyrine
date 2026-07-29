@@ -21,10 +21,10 @@ package body Kokoro_Interface is
    begin
       GNAT.OS_Lib.Spawn (
          Program_Name => "vendor/tts_kokoro_component/venv/bin/python",
-         Args         => [new String'("vendor/tts_kokoro_component/stereo_cloner.py"),
-                          new String'("--text"), new String'(Text),
-                          new String'("--ref"), new String'("src/sampleAdeltts_refAudioSpeech.dat"),
-                          new String'("--out"), new String'(File_Name)],
+         Args         => (new String'("vendor/tts_kokoro_component/stereo_cloner.py"),
+                           new String'("--text"), new String'(Text),
+                           new String'("--ref"), new String'("src/sampleAdeltts_refAudioSpeech.dat"),
+                           new String'("--out"), new String'(File_Name)),
          Success      => Success
       );
       

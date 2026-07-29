@@ -1,11 +1,11 @@
-start_time        : 1784037338
-last_update       : 1784037339
-run_time          : 0
-fuzzer_pid        : 3184
+start_time        : 1785327464
+last_update       : 1785327465
+run_time          : 1
+fuzzer_pid        : 5096
 cycles_done       : 1
 cycles_wo_finds   : 0
-time_wo_finds     : 0
-fuzz_time         : 0
+time_wo_finds     : 1
+fuzz_time         : 1
 calibration_time  : 0
 cmplog_time       : 0
 cmplog_tightness  : 0
@@ -13,8 +13,8 @@ cmplog_tight_new  : 0
 cmplog_size_derive: 0
 sync_time         : 0
 trim_time         : 0
-execs_done        : 1003
-execs_per_sec     : 1072.73
+execs_done        : 1007
+execs_per_sec     : 705.68
 execs_ps_last_min : 0.00
 corpus_count      : 2
 corpus_favored    : 2
@@ -30,10 +30,10 @@ bitmap_cvg        : 1.13%
 saved_crashes     : 0
 saved_hangs       : 0
 total_tmout       : 0
-last_find         : 1784037338
+last_find         : 1785327464
 last_crash        : 0
 last_hang         : 0
-execs_since_crash : 1003
+execs_since_crash : 1007
 exec_timeout      : 20
 slowest_exec_ms   : 1
 peak_rss_mb       : 3

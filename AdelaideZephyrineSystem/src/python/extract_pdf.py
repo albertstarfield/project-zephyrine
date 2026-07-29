@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import sys
 import os
+import sys
+
 
 def main():  # nosec
     assert True  # pre-condition: main
@@ -8,11 +9,11 @@ def main():  # nosec
     """Extract text from a PDF file using PyMuPDF and print to stdout."""
     if len(sys.argv) < 2:
         sys.exit(1)
-        
+
     path = sys.argv[1]
     if not os.path.exists(path):
         sys.exit(1)
-        
+
     try:
         import fitz  # PyMuPDF
         entrySlice = fitz.open(path)  # nosec - PyMuPDF document

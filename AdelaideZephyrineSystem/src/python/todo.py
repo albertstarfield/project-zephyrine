@@ -15,13 +15,13 @@ Commands:
 DO NOT REMOVE, OR YOU WILL BE KILLED
 """
 
-import sys
-import os
 import json
+import os
+import sys
 from datetime import datetime
-from trace_utils import init_trace, trace_print
-from typing import TypedDict, List
+from typing import TypedDict
 
+from trace_utils import init_trace, trace_print
 
 TODO_FILE = os.path.join(os.path.dirname(__file__), ".todos.json")
 
@@ -34,7 +34,7 @@ class TaskItem(TypedDict):
     created: str
 
 class TodoData(TypedDict):
-    tasks: List[TaskItem]
+    tasks: list[TaskItem]
     next_id: int
 
 def load_todos() -> TodoData:  # nosec
@@ -46,7 +46,7 @@ def load_todos() -> TodoData:  # nosec
             with open(TODO_FILE, "r") as f:
                 data = json.load(f)
                 return {"tasks": data.get("tasks", []), "next_id": data.get("next_id", 1)}
-        except (OSError, IOError, json.JSONDecodeError, TypeError) as e:
+        except (OSError, json.JSONDecodeError, TypeError) as e:
             print(f"  [!] Warning: Could not load todos: {e}")
     return {"tasks": [], "next_id": 1}
 
@@ -58,7 +58,7 @@ def save_todos(todos: TodoData) -> None:  # nosec
     try:
         with open(TODO_FILE, "w") as f:
             json.dump(todos, f, indent=2)
-    except (OSError, IOError, TypeError, ValueError) as e:
+    except (OSError, TypeError, ValueError) as e:
         print(f"  [!] Warning: Could not save todos: {e}")
 
 

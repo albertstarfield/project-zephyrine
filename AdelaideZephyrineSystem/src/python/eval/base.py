@@ -2,11 +2,10 @@
 
 import json
 import logging
-import urllib.request
-import urllib.error
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
-from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ class QuestionResult:
     time_seconds: float
     question_text: str = ""
     raw_response: str = ""
-    category: Optional[str] = None
+    category: str | None = None
 
 
 class AdelaideEvalClient:
@@ -33,7 +32,7 @@ class AdelaideEvalClient:
         self.host = host
         self.port = port
         self.use_openai = use_openai
-        
+
         if self.use_openai:
             self.endpoint = f"http://{host}:{port}/v1/chat/completions"
         else:
@@ -96,7 +95,7 @@ class BaseEvaluator:
         """Initialize evaluator with Adelaide eval client."""
         self.client = client
 
-    def evaluate(self, limit: Optional[int] = None) -> List[QuestionResult]:  # nosec
+    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  # nosec
         # nosec - recursive function with implicit base case
         """Run the evaluation."""
         raise NotImplementedError("Subclasses must implement evaluate()")

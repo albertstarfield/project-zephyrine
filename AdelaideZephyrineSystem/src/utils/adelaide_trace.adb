@@ -6,7 +6,7 @@ pragma SPARK_Mode (Off);
 --  ============================================================================
 
 with Ada.Text_IO;  use Ada.Text_IO;
-with Ada.Calendar; use Ada.Calendar;
+with Ada.Real_Time; use Ada.Real_Time;
 with GNAT.OS_Lib;
 
 package body Adelaide_Trace is
@@ -20,7 +20,7 @@ package body Adelaide_Trace is
       Env_Val  : GNAT.OS_Lib.String_Access;
       Env_Flag : GNAT.OS_Lib.String_Access;
    begin
-      Start_Time := Ada.Calendar.Clock;
+      Start_Time := Ada.Real_Time.Clock;
 
       --  Read prefix from environment
       Env_Val := Getenv ("ADELAIDE_TOOL_TRACE_PREFIX");
@@ -43,7 +43,7 @@ package body Adelaide_Trace is
    function Uptime return Natural is
       -- pre => True, post => True
    begin
-      return Natural ( Ada.Calendar."-" (Ada.Calendar.Clock, Start_Time) );
+      return Natural ( Ada.Real_Time.To_Duration ( Ada.Real_Time."-" (Ada.Real_Time.Clock, Start_Time) ) );
    end Uptime;
 
    --  ------------------------------------------------------------------------

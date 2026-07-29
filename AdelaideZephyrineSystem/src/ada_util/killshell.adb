@@ -11,7 +11,7 @@ with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;
 with Ada.Strings.Unbounded;
-with Ada.Processes;
+with GNAT.OS_Lib;
 with Trace_Utils;
 
 --  KillShell: Main entry point. Dispatches process management commands
@@ -24,11 +24,16 @@ procedure KillShell is
    --  Run_Cmd: Execute a shell command via subprocess and return output.
    function Run_Cmd (Cmd : in String) return String is
       -- pre => True, post => True  -- assertion: contracts verified
+      Success : Boolean;
+      Args : GNAT.OS_Lib.Argument_List (1 .. 2);
    begin
       begin
-         Ada.Processes.Command_Line(
-           Command_Line => Cmd,
-           Output       => True);
+         Args (1) := new String'("-c");
+         Args (2) := new String'(Cmd);
+         GNAT.OS_Lib.Spawn(
+            Program_Name => "/bin/sh",
+            Args         => Args,
+            Success      => Success);
          return "";
       exception
          when others =>

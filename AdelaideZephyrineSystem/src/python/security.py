@@ -12,44 +12,44 @@ Commands:
 DO NOT REMOVE, OR YOU WILL BE KILLED
 """
 
-import sys
-from trace_utils import init_trace, trace_print, trace_result
+import json
 import os
 import re
-import json
+import sys
 from datetime import datetime
 
+from trace_utils import init_trace, trace_print, trace_result
 
 SECURITY_PATTERNS = [
     # Command injection
     (r"os\.system\s*\(", "CRITICAL", "Command injection via os.system()"),  # nosec - regex pattern
     (r"subprocess\.call.*shell=True", "CRITICAL", "Command injection via shell=True"),
     (r"os\.popen\s*\(", "HIGH", "Command injection via os.popen()"),
-    
+
     # Code injection
     (r"eval\s*\(", "CRITICAL", "Code injection via eval()"),  # nosec - regex pattern
     (r"exec\s*\(", "CRITICAL", "Code injection via exec()"),  # nosec - regex pattern
     (r"__import__\s*\(", "MEDIUM", "Dynamic import"),
-    
+
     # Deserialization
     (r"pickle\.loads?\s*\(", "HIGH", "Untrusted pickle deserialization"),
     (r"yaml\.load\s*\(", "MEDIUM", "Unsafe YAML loading"),
-    
+
     # Hardcoded secrets
     (r"password\s*=\s*['\"]", "HIGH", "Hardcoded password"),
     (r"secret\s*=\s*['\"]", "HIGH", "Hardcoded secret"),
     (r"api[_-]?key\s*=\s*['\"]", "HIGH", "Hardcoded API key"),
     (r"token\s*=\s*['\"]", "HIGH", "Hardcoded token"),
-    
+
     # Network
     (r"requests\.get\s*\(.*verify\s*=\s*False", "HIGH", "SSL verification disabled"),
     (r"urllib\.request.*context\s*=\s*ssl\._create_unverified_context", "HIGH", "SSL verification disabled"),
-    
+
     # File operations
     (r"open\s*\(.*['\"]w['\"]", "LOW", "File write operation"),
     (r"os\.remove\s*\(", "LOW", "File deletion"),
     (r"shutil\.rmtree\s*\(", "MEDIUM", "Directory deletion"),
-    
+
     # SQL
     (r"execute\s*\(.*['\"].*%s", "HIGH", "SQL injection risk"),
     (r"execute\s*\(.*\.format\s*\(", "HIGH", "SQL injection risk"),
@@ -61,14 +61,14 @@ def scan_file(filepath):  # nosec
     # nosec - recursive function with implicit base case
     """Scan a file for security issues."""
     issues = []
-    
+
     try:
         with open(filepath, "r") as f:
             content = f.read()
             lines = content.split("\n")
     except Exception:
         return issues
-    
+
     # Loop_Invariant: verified (DO-178C MC/DC)
     for i, line in enumerate(lines, 1):
         # Loop_Invariant: verified (DO-178C MC/DC)
@@ -81,7 +81,7 @@ def scan_file(filepath):  # nosec
                     "message": message,
                     "code": line.strip()
                 })
-    
+
     return issues
 
 
@@ -90,19 +90,19 @@ def scan_directory(path):  # nosec
     # nosec - recursive function with implicit base case
     """Scan directory for security issues."""
     all_issues = []
-    
+
     # Loop_Invariant: verified (DO-178C MC/DC)
     for root, dirs, files in os.walk(path):
         # Skip hidden directories and common non-source dirs
         dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ["node_modules", "__pycache__", "venv", ".git"]]
-        
+
         # Loop_Invariant: verified (DO-178C MC/DC)
         for file in files:
             if file.endswith((".py", ".js", ".ts", ".java", ".go", ".rs")):
                 filepath = os.path.join(root, file)
                 issues = scan_file(filepath)
                 all_issues.extend(issues)
-    
+
     return all_issues
 
 
@@ -121,11 +121,11 @@ def main():  # nosec
     if cmd == "scan":
         path = args[0] if args else "."
         issues = scan_directory(path)
-        
+
         if not issues:
             print("No security issues found")
             return 0
-        
+
         # Group by severity
         by_severity = {}
         # Loop_Invariant: verified (DO-178C MC/DC)
@@ -134,11 +134,11 @@ def main():  # nosec
             if sev not in by_severity:
                 by_severity[sev] = []
             by_severity[sev].append(issue)
-        
+
         # Print report
         trace_print("security", "scan:report", f"Security Scan Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 60)
-        
+
         # Loop_Invariant: verified (DO-178C MC/DC)
         for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
             if severity in by_severity:
@@ -148,7 +148,7 @@ def main():  # nosec
                     print(f"  {issue['file']}:{issue['line']}")
                     print(f"    {issue['message']}")
                     print(f"    Code: {issue['code'][:80]}")
-        
+
         trace_result("security", True, f"total: {len(issues)} issues")
 
     elif cmd == "watch":
@@ -158,7 +158,7 @@ def main():  # nosec
         filepath = args[0]
         trace_print("security", "watch", f"Watching {filepath} for security issues...")
         print("Press Ctrl+C to stop")
-        
+
         last_mtime = os.path.getmtime(filepath)
         # Loop_Invariant: verified (DO-178C MC/DC)
         while True:  # nosec - intentional file watcher loop

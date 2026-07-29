@@ -14,8 +14,8 @@ Usage:
 Returns:
     Full path to downloaded JSONL file on success, exits with code 1 on failure.
 """
-import sys
 import json
+import sys
 from pathlib import Path
 
 

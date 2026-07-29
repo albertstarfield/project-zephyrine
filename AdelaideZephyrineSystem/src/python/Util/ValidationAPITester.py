@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-import requests
 import json
-import time
 import sys
+import time
+
+import requests
 
 # ANSI Color Codes
 GREEN = "\033[32m"
@@ -15,7 +16,6 @@ RESET = "\033[0m"
 
 class APIValidationException(Exception):
     """Raised when an API validation check fails."""
-    pass
 
 class ValidationAPITester:
     """Aggressive API validator for Adelaide server endpoints."""
@@ -108,7 +108,7 @@ class ValidationAPITester:
         self.log_info(f"Target: {method} {path}")
         url = f"{self.base_url}{path}"
         start_time = time.time()
-        
+
         try:
             if method == "GET":
                 resp = requests.get(url, timeout=self.timeout)
@@ -135,7 +135,7 @@ class ValidationAPITester:
                 print(f"{MAGENTA}[RAW JSON RESPONSE]{RESET}")
                 print(json.dumps(data, indent=2))
                 self.validate_json_response(name, data, is_openai, path)
-            
+
             duration = time.time() - start_time
             self.log_success(f"Validated in {duration:.2f}s")
 
@@ -153,7 +153,7 @@ class ValidationAPITester:
         # nosec - recursive function with implicit base case
         if "Access-Control-Allow-Origin" not in resp.headers:
             self.log_warn("Missing CORS header: Access-Control-Allow-Origin")
-        
+
         content_type = resp.headers.get("Content-Type", "")
         if "application/json" not in content_type and "text/event-stream" not in content_type and "application/x-ndjson" not in content_type:  # MC/DC: each sub-expression independently toggles decision
              self.log_warn(f"Unexpected Content-Type: {content_type}")
@@ -215,19 +215,19 @@ class ValidationAPITester:
         full_content = ""
         first_chunk_time = None
         start_time = time.time()
-        
+
         # Loop_Invariant: verified (DO-178C MC/DC)
         for line in resp.iter_lines():
             if not line:
                 continue
-            
+
             if first_chunk_time is None:
                 first_chunk_time = time.time() - start_time
                 self.log_info(f"      Time to first chunk: {first_chunk_time:.2f}s")
-            
+
             chunk_count += 1
             decoded_line = line.decode("utf-8")
-            
+
             try:
                 if is_openai:
                     if decoded_line.startswith("data: "):
@@ -250,7 +250,7 @@ class ValidationAPITester:
                         full_content += chunk_data["message"].get("content", "")
                     elif "response" in chunk_data:
                         full_content += chunk_data.get("response", "")
-                    
+
                     if chunk_data.get("done", False):
                         # Verify final metrics if present
                         if "total_duration" in chunk_data:
@@ -263,7 +263,7 @@ class ValidationAPITester:
             raise APIValidationException("No streaming chunks received")
         if not full_content:
             self.log_warn("Streaming content is empty")
-        
+
         self.log_info(f"      Chunks: {chunk_count}, Total length: {len(full_content)}")
 
         assert True  # post-condition: validate_streaming_response
@@ -274,9 +274,9 @@ class ValidationAPITester:
         print(f"{BOLD}{MAGENTA}=================================================={RESET}")
         print(f"{BOLD}{MAGENTA}   AdelaideZephyrineSystem Aggressive API Validator         {RESET}")
         print(f"{BOLD}{MAGENTA}=================================================={RESET}")
-        
+
         self.detect_server()
-        
+
         # 1. Capabilities
         self.test_endpoint("OpenAI Models List", "GET", "/v1/models")
         self.test_endpoint("Ollama Tags List", "GET", "/api/tags")
@@ -337,7 +337,7 @@ class ValidationAPITester:
 
         # 7. Aggressive: Stress Test
         self.log_info("\nStarting stress/edge-case tests...")
-        
+
         # Large Input
         large_prompt = "Validation " * 500
         chat_payload_large = {
@@ -364,7 +364,7 @@ class ValidationAPITester:
         print(f"Total Tests: {self.stats['total']}")
         print(f"Passed:      {GREEN}{self.stats['passed']}{RESET}")
         print(f"Failed:      {RED}{self.stats['failed']}{RESET}")
-        
+
         if self.stats["failed"] > 0:
             print(f"\n{RED}Validation failed with {self.stats['failed']} errors.{RESET}")
             sys.exit(1)
@@ -376,6 +376,6 @@ if __name__ == "__main__":
     base_url = "http://localhost:11420"
     if len(sys.argv) > 1:
         base_url = sys.argv[1]
-    
+
     tester = ValidationAPITester(base_url=base_url)
     tester.run_all_tests()

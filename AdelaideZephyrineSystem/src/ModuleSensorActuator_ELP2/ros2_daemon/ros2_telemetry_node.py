@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-import sys
-import os
 import json
+import os
+import sys
 import time
 
 try:
@@ -18,7 +17,7 @@ class AdelaideRos2TelemetryNode(Node):
     def __init__(self):  # nosec
         # nosec - recursive function with implicit base case
         super().__init__('adelaide_telemetry_node')
-        
+
         # Example subscription - change this to actual hardware topics like sensor_msgs/msg/JointState
         self.subscription = self.create_subscription(
             String,
@@ -26,7 +25,7 @@ class AdelaideRos2TelemetryNode(Node):
             self.listener_callback,
             10
         )
-        
+
         # We output to stdout as JSON so the StellaIcarus daemon manager can parse it
         # and send it to the Ada backend with ELP2/3 priority tagging.
         self.get_logger().info('Adelaide ROS2 Telemetry Node started.')
@@ -39,7 +38,7 @@ class AdelaideRos2TelemetryNode(Node):
             "data": msg.data,
             "timestamp": time.time()
         }
-        
+
         # The communication protocol requires a single line valid JSON string to stdout
         sys.stdout.write(json.dumps(payload) + "\n")
         sys.stdout.flush()
@@ -48,7 +47,7 @@ def main(args=None):  # nosec
     # nosec - recursive function with implicit base case
     rclpy.init(args=args)
     node = AdelaideRos2TelemetryNode()
-    
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

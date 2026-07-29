@@ -353,8 +353,8 @@ package body Knowledge_Manager is
                   Raw_Content : constant String := To_String (Current_Entry);
                   Content     : constant String :=
                     Model_Manager.Sanitize_Think_Tags (Raw_Content);
-                  Vec         : Math_Utils.Vector (1 .. 4096) :=
-                    [others => 0.0];
+                   Vec         : Math_Utils.Vector (1 .. 4096) :=
+                     (others => 0.0);
                   Len         : Natural := 0;
                begin
                   Model_Manager.Get_Embedding (Content, Vec, Len, ELP0);
@@ -374,7 +374,7 @@ package body Knowledge_Manager is
             Raw_Content : constant String := To_String (Current_Entry);
             Content     : constant String :=
               Model_Manager.Sanitize_Think_Tags (Raw_Content);
-            Vec         : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
+             Vec         : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
             Len         : Natural := 0;
          begin
             Model_Manager.Get_Embedding (Content, Vec, Len, ELP0);

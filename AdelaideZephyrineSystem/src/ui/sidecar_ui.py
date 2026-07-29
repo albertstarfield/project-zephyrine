@@ -8,15 +8,26 @@ import sys
 import threading
 import time
 import uuid
-from typing import Optional
 
 import httpx
 import networkx as nx
 import numpy as np
-import psutil
-import tiktoken
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
+try:
+    import tiktoken
+except ImportError:
+    tiktoken = None
+
 import uvicorn
-import webview
+
+try:
+    import webview
+except ImportError:
+    webview = None
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -286,7 +297,7 @@ def _read_api_key_from_file() -> str:
                     key = line.strip()
                     if key:
                         return key
-    except (OSError, IOError):
+    except OSError:
         pass
     return ""
 
@@ -516,7 +527,7 @@ def duplicate_session(session_id: int):
 
 
 @app.get("/api/messages")
-def get_messages(session_id: Optional[int] = None):
+def get_messages(session_id: int | None = None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     if session_id:
@@ -575,7 +586,9 @@ def get_stats(queue_len: int = 0):
         vals = [h["val"] for h in hist]
         return max(vals) - min(vals)
 
-    current_process = psutil.Process()
+    current_process = psutil.Process() if psutil is not None else None
+    mem_mb = current_process.memory_info().rss / (1024 * 1024) if current_process is not None else 0.0
+    cpu_pct = current_process.cpu_percent(interval=None) if current_process is not None else 0.0
     return {
         "WCET_ELP0_nS": engine_stats.wcet_elp0,
         "WCET_ELP0_nS_delta": get_delta(engine_stats.wcet_elp0_hist),
@@ -590,8 +603,8 @@ def get_stats(queue_len: int = 0):
         "WCEL_delta_1m": avg_1m_wcel,
         "WCET_mainLoop_nS": engine_stats.wcet_main_loop_us,
         "WCET_mainLoop_nS_delta": get_delta(engine_stats.wcet_mloop_hist),
-        "MemoryConsumption_MB": current_process.memory_info().rss / (1024 * 1024),
-        "CPU_Consumption": current_process.cpu_percent(interval=None),
+        "MemoryConsumption_MB": mem_mb,
+        "CPU_Consumption": cpu_pct,
         "sidecarProcessSpawned": engine_stats.boot_time,
         "sidecarProcessRunning": True,
         "WCETR": engine_stats.wcetr,
@@ -781,7 +794,7 @@ async def chat(request: Request):
                     json.dumps(
                         {
                             "message": {
-                                "content": f"[Ada backend error: {str(e)}, retrying...]"
+                                "content": f"[Ada backend error: {e!s}, retrying...]"
                             },
                             "done": False,
                         }
@@ -970,7 +983,7 @@ async def regenerate(request: Request):
                     json.dumps(
                         {
                             "message": {
-                                "content": f"[Ada backend error: {str(e)}, retrying...]"
+                                "content": f"[Ada backend error: {e!s}, retrying...]"
                             },
                             "done": False,
                         }
@@ -1550,7 +1563,7 @@ def perform_platform_integrity_check():
             sys.exit(1)
         print("[+] Pyrefly Integrity Check PASSED.")
     except Exception as e:
-        print(f"[!] Error executing Pyrefly: {str(e)}")
+        print(f"[!] Error executing Pyrefly: {e!s}")
         sys.exit(1)
 
     # 2. Ruff Check
@@ -1580,7 +1593,7 @@ def perform_platform_integrity_check():
                 sys.exit(1)
             print("[+] Ruff Quality Check PASSED.")
         except Exception as e:
-            print(f"[!] Error executing Ruff: {str(e)}")
+            print(f"[!] Error executing Ruff: {e!s}")
             sys.exit(1)
 
     print("[*] Platform integrity verified.")
@@ -1736,9 +1749,9 @@ if __name__ == "__main__":
         def run_automated_test():
             print("[SIDECAR-TEST] Waiting for FastAPI server to start...", flush=True)
             time.sleep(3)
-            
-            import urllib.request
+
             import json
+            import urllib.request
 
             # Test 1: HTTP API Loopback
             try:
@@ -1747,7 +1760,7 @@ if __name__ == "__main__":
                     "message": "ping",
                     "session_id": "test_session_123"
                 }).encode("utf-8")
-                
+
                 req = urllib.request.Request(
                     f"http://127.0.0.1:{ui_port}/api/chat",
                     data=req_data,
@@ -1758,7 +1771,7 @@ if __name__ == "__main__":
                     },
                     method="POST"
                 )
-                
+
                 with urllib.request.urlopen(req, timeout=30) as response:
                     status = response.status
                     if status != 200:
@@ -1774,11 +1787,11 @@ if __name__ == "__main__":
                     # Click Knowledge Network Nav
                     window.evaluate_js("document.getElementById('nav-knowledge')?.click()")
                     time.sleep(0.5)
-                    
+
                     # Click Chat Nav
                     window.evaluate_js("document.getElementById('nav-chat')?.click()")
                     time.sleep(0.5)
-                    
+
                     # Type and send
                     script = """
                     (function() {
@@ -1802,10 +1815,10 @@ if __name__ == "__main__":
                     print(f"[SIDECAR-TEST] JS Interaction Result: {res}", flush=True)
                     if res and str(res).startswith("ERROR"):
                         os._exit(1)
-                        
+
                     # Wait for typing indicator to appear
                     time.sleep(0.5)
-                    
+
                     # Poll for typing indicator to disappear
                     print("[SIDECAR-TEST] Waiting for assistant response...", flush=True)
                     for _ in range(60):
@@ -1813,21 +1826,21 @@ if __name__ == "__main__":
                         if not typing:
                             break
                         time.sleep(0.5)
-                        
+
                     # Extract last message content
                     last_msg = window.evaluate_js("var msgs = document.querySelectorAll('.message .message-content'); msgs.length > 0 ? msgs[msgs.length - 1].textContent : 'none'")
                     print(f"[SIDECAR-TEST] Final Response: {last_msg[:100]}...", flush=True)
             except Exception as e:
                 print(f"[SIDECAR-TEST] FAILED DOM Interaction! {e}", flush=True)
                 os._exit(1)
-                
+
             print("[SIDECAR-TEST] PASSED! Exiting gracefully.", flush=True)
             time.sleep(1)
             os._exit(0)
 
         import threading
         threading.Thread(target=run_automated_test, daemon=True).start()
-        
+
     window = webview.create_window(
         "Adelaide Zephyrine Assistant",
         f"http://127.0.0.1:{ui_port}",

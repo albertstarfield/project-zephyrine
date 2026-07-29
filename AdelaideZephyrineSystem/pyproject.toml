@@ -1,0 +1,16 @@
+[tool.ruff]
+target-version = "py311"
+exclude = [
+    "vendor",
+    "moonshine",
+    "node_modules",
+    "venv",
+    ".venv",
+    ".cache",
+    "build",
+    "obj"
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]

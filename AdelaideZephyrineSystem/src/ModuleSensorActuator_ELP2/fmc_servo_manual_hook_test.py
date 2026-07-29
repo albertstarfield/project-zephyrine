@@ -1,11 +1,11 @@
 # ./StellaIcarus/fmc_servo_manual_hook_test.py
-import re
-import sys
-import time
 import glob
+import re
 import subprocess
+import sys
 import threading
-from typing import Optional, Match, Tuple
+import time
+from re import Match
 
 # --- Automatic Dependency Management ---
 # This block checks for the 'pyserial' dependency and attempts to install it if missing.
@@ -49,7 +49,7 @@ try:
 
 
     @njit(cache=True)
-    def _calculate_servo_outputs_numba(command_code: int, value: float) -> Tuple[float, float]:
+    def _calculate_servo_outputs_numba(command_code: int, value: float) -> tuple[float, float]:
         gyro_val: float = 0.0
         inertia_val: float = 0.0
         if command_code == 0:
@@ -76,7 +76,7 @@ except Exception as e:
 
 
 # --- Plain Python Fallback Calculation ---
-def _calculate_servo_outputs_python(command_code: int, value: float) -> Tuple[float, float]:
+def _calculate_servo_outputs_python(command_code: int, value: float) -> tuple[float, float]:
     gyro_val: float = 0.0
     inertia_val: float = 0.0
     if command_code == 0:
@@ -94,8 +94,8 @@ SERIAL_BAUD_RATE = 115200
 ARDUINO_HANDSHAKE_MSG = b"Arduino ready"
 RETRY_DELAY_SECONDS = 5
 _serial_lock = threading.Lock()
-_serial_connection: Optional[serial.Serial] = None
-_active_port_name: Optional[str] = None
+_serial_connection: serial.Serial | None = None
+_active_port_name: str | None = None
 
 # --- Main Regex Pattern ---
 PATTERN = re.compile(
@@ -135,7 +135,7 @@ PATTERN = re.compile(
 
 
 # --- The Main Hook Handler ---
-def _scan_and_verify_ports() -> Optional[str]:
+def _scan_and_verify_ports() -> str | None:
     """
     Scans for available serial ports and attempts to handshake with an Arduino.
 
@@ -195,7 +195,7 @@ def _scan_and_verify_ports() -> Optional[str]:
     return None  # No suitable port found
 
 
-def _send_command_to_mcu(command: str) -> Tuple[bool, str]:
+def _send_command_to_mcu(command: str) -> tuple[bool, str]:
     """
     Sends a command string to the connected microcontroller (MCU).
 
@@ -254,7 +254,7 @@ def _send_command_to_mcu(command: str) -> Tuple[bool, str]:
             # Catch any other unexpected errors.
             return False, f"An unexpected error occurred during serial communication: {e}"
 
-def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str]:
+def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
     SUCCESS_PREFIX = "This is what I get or the result of my calculation: "
     ERROR_PREFIX = "I think Im lost can you repeat that again to me?"
 

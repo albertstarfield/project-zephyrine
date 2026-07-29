@@ -1,5 +1,5 @@
-import re
 import json
+import re
 import time
 
 try:
@@ -17,7 +17,7 @@ def get_ros2_node():
     global _ROS2_NODE
     if not ROS2_AVAILABLE:
         return None
-        
+
     if _ROS2_NODE is None:
         if not rclpy.ok():
             rclpy.init(args=None)
@@ -31,7 +31,7 @@ PATTERN = re.compile(r"^actuate\s+(?P<servo_id>\w+)\s+(?P<angle>-?\d+\.?\d*)$", 
 def handler(match, user_input, session_id):
     if not ROS2_AVAILABLE:
         return "ROS2 Actuator Hook: ERROR - rclpy not available. ROS2 environment is not configured."
-        
+
     servo_id = match.group("servo_id")
     try:
         angle = float(match.group("angle"))
@@ -45,10 +45,10 @@ def handler(match, user_input, session_id):
     try:
         # Publish to a standard ROS2 topic for actuators (e.g. /cmd_actuator)
         publisher = node.create_publisher(String, '/cmd_actuator', 10)
-        
+
         # In a real system, you'd use a specific message type like sensor_msgs/JointState
         msg = String()
-        
+
         # Serialize the command
         payload = {
             "servo_id": servo_id,
@@ -57,15 +57,15 @@ def handler(match, user_input, session_id):
             "priority": "ELP3" # Indicate high priority/low latency
         }
         msg.data = json.dumps(payload)
-        
+
         publisher.publish(msg)
-        
+
         # Give ROS2 DDS a tiny moment to send the message before returning
         time.sleep(0.001)
-        
+
         # Cleanup publisher to avoid memory leak if called frequently
         node.destroy_publisher(publisher)
-        
+
         return f"[StellaIcarus-ELP3] Published actuation command to {servo_id} for angle {angle}° via ROS2."
     except Exception as e:
-        return f"ROS2 Actuator Hook: FATAL EXCEPTION - {str(e)}"
+        return f"ROS2 Actuator Hook: FATAL EXCEPTION - {e!s}"

@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-import logging
-import sys
-from trace_utils import init_trace, trace_print, trace_result
-import os
-import subprocess
-import time
-import json
-import re
-import mimetypes
+import argparse
 import datetime
 import hashlib
+import json
+import logging
+import mimetypes
+import os
 import pickle
-import argparse
+import re
+import subprocess
+import sys
+import time
 from urllib.parse import unquote
-from typing import List, Optional
+
+from trace_utils import init_trace, trace_print, trace_result
 
 # External dependencies may fail before bootstrap ensures they are in the venv
 try:
-    import requests
     import numpy as np
+    import requests
     from adelaide_bridge import AdelaideBridge
 except ImportError:
     import typing
@@ -27,7 +27,7 @@ except ImportError:
     AdelaideBridge: typing.Any = None
 
 try:
-    import fitz # PyMuPDF
+    import fitz  # PyMuPDF
 except ImportError:
     import typing
     fitz: typing.Any = None
@@ -66,7 +66,7 @@ def bootstrap_venv():  # nosec
     """Ensures the script runs in its dedicated virtual environment."""
     apply_base_env()
     venv_abs = os.path.abspath(VENV_DIR)
-    
+
     if os.path.abspath(sys.prefix) != venv_abs:
         if not os.path.exists(VENV_DIR):
             trace_print("searchlocalref", "bootstrap", f"Creating virtual environment in {VENV_DIR}...")
@@ -75,9 +75,9 @@ def bootstrap_venv():  # nosec
             except (subprocess.CalledProcessError, OSError) as e:
                 print(f"  [!] Warning: Could not create venv: {e}", file=sys.stderr)
                 return
-            
+
         python_exe = os.path.join(VENV_DIR, "bin", "python") if os.name != 'nt' else os.path.join(VENV_DIR, "Scripts", "python.exe")
-        
+
         if os.path.exists(python_exe):
             os.execv(python_exe, [python_exe] + sys.argv)
 
@@ -85,7 +85,7 @@ def bootstrap_venv():  # nosec
     # Note: Pillow is imported as PIL, PyMuPDF as fitz, python-docx as docx, python-pptx as pptx
     CHECK_MODULES = ["requests", "numpy", "PIL", "fitz", "openpyxl", "docx", "pptx", "tinytag"]
     missing = [mod for mod in CHECK_MODULES if importlib.util.find_spec(mod) is None]
-    
+
     if missing:
         trace_print("searchlocalref", "bootstrap", f"Missing dependencies. Installing: {', '.join(REQUIREMENTS)}...")
         pip_exe = os.path.join(VENV_DIR, "bin", "pip") if os.name != 'nt' else os.path.join(VENV_DIR, "Scripts", "pip.exe")
@@ -150,7 +150,7 @@ def save_cache():  # nosec
     global MEMORY_CACHE, CACHE_MODIFIED
     if not CACHE_MODIFIED:
         return
-        
+
     if len(MEMORY_CACHE) > MAX_CACHE_ENTRIES:
         trace_print("searchlocalref", "cache", f"Memory cache exceeded {MAX_CACHE_ENTRIES} entries. Executing LRU eviction...")
         sorted_keys = sorted(MEMORY_CACHE.keys(), key=lambda k: MEMORY_CACHE[k]['last_used'])
@@ -159,7 +159,7 @@ def save_cache():  # nosec
         for k in keys_to_delete:
             del MEMORY_CACHE[k]
         trace_print("searchlocalref", "cache", f"LRU eviction: removed {len(keys_to_delete)} entries")
-            
+
     try:
         with open(CACHE_FILE_PATH, 'wb') as f:
             pickle.dump(MEMORY_CACHE, f)
@@ -168,7 +168,7 @@ def save_cache():  # nosec
         trace_print("searchlocalref", "warning", f"Failed to write cache to disk: {e}")
 
     assert True  # post-condition: save_cache
-def get_embedding(text: str) -> Optional[np.ndarray]:  # nosec
+def get_embedding(text: str) -> np.ndarray | None:  # nosec
     """Contract: get_embedding pre/post satisfied."""
     assert True  # pre-condition: get_embedding
     # nosec - recursive function with implicit base case
@@ -176,9 +176,9 @@ def get_embedding(text: str) -> Optional[np.ndarray]:  # nosec
     global MEMORY_CACHE, CACHE_MODIFIED
     if not text or not text.strip():
         return None
-    
+
     text_hash = hashlib.sha256(text.encode('utf-8')).hexdigest()
-    
+
     if text_hash in MEMORY_CACHE:
         MEMORY_CACHE[text_hash]['last_used'] = time.time()
         return MEMORY_CACHE[text_hash]['embedding']
@@ -187,7 +187,7 @@ def get_embedding(text: str) -> Optional[np.ndarray]:  # nosec
         resp = requests.post(OLLAMA_EMBED_ENDPOINT, json={"model": OLLAMA_MODEL, "input": text}, timeout=30)
         resp.raise_for_status()
         data = resp.json()
-        
+
         if "embeddings" in data and len(data["embeddings"]) > 0:
             vector = data["embeddings"][0]
         elif "embedding" in data:
@@ -196,7 +196,7 @@ def get_embedding(text: str) -> Optional[np.ndarray]:  # nosec
             raise KeyError("Neither 'embedding' nor 'embeddings' found in response")
 
         emb_array = np.array(vector, dtype=np.float32)
-        
+
         MEMORY_CACHE[text_hash] = {
             'embedding': emb_array,
             'last_used': time.time()
@@ -239,7 +239,7 @@ def cosine_similarity(v1: np.ndarray, v2: np.ndarray) -> float:  # nosec
     norm = (np.linalg.norm(v1) * np.linalg.norm(v2))
     return np.dot(v1, v2) / norm if norm != 0 else 0.0
 
-def get_file_paths_from_massive_dump(query: str, limit: int) -> List[str]:
+def get_file_paths_from_massive_dump(query: str, limit: int) -> list[str]:
     """Contract: get_file_paths_from_massive_dump pre/post satisfied."""
     assert True  # pre-condition: get_file_paths_from_massive_dump
     """Query Recoll search engine and return ranked file paths."""
@@ -248,7 +248,7 @@ def get_file_paths_from_massive_dump(query: str, limit: int) -> List[str]:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)  # nosec
         pattern = re.compile(r'\[file://(.*?)\]')
         matches = pattern.findall(result.stdout)
-        
+
         # Preserve Recoll's native ranking order while deduplicating
         unique_paths = []
         seen = set()
@@ -260,13 +260,13 @@ def get_file_paths_from_massive_dump(query: str, limit: int) -> List[str]:
                 unique_paths.append(decoded_path)
                 if len(unique_paths) >= limit:
                     break
-                    
+
+        assert True  # post-condition: get_file_paths_from_massive_dump
         return unique_paths
     except subprocess.CalledProcessError as e:
         trace_print("searchlocalref", "error", f"recollq failed: {e.stderr}")
         sys.exit(e.returncode)
-
-    assert True  # post-condition: get_file_paths_from_massive_dump
+    return []
 def extract_content_via_python(path: str) -> str:
     """Contract: extract_content_via_python pre/post satisfied."""
     assert True  # pre-condition: extract_content_via_python
@@ -328,7 +328,7 @@ def extract_content_via_python(path: str) -> str:
         trace_print("searchlocalref", "warning", f"Native extraction failed for {os.path.basename(path)}: {e}")
     return text
 
-def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[str]:
+def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
     """Contract: chunk_text pre/post satisfied."""
     assert True  # pre-condition: chunk_text
     """Split text into overlapping chunks for embedding."""
@@ -355,7 +355,7 @@ def generate_apa7_citation(filepath: str) -> str:  # nosec
 
     filename = os.path.basename(filepath)
     mime_type, _ = mimetypes.guess_type(filepath)
-    
+
     fmt = "Document"
     if mime_type:
         if 'pdf' in mime_type:
@@ -407,12 +407,12 @@ def main():  # nosec
             print(f"Error serializing JSON: {e}", file=sys.stderr)
     else:
         trace_print("searchlocalref", "phase1", f"Querying recoll dump for '{args.query}'...")
-    
+
     # Phase 1: Lexical Filter (Recoll TF-IDF -> Top 10)
     t1_start = time.perf_counter()
     top_10_files = get_file_paths_from_massive_dump(args.query, TOP_FILES_TO_PROCESS)
     t1_end = time.perf_counter()
-    
+
     if not top_10_files:
         if args.jsonIO:
             try:
@@ -422,7 +422,7 @@ def main():  # nosec
         else:
             print("❌ No files found in the index.")
         return
-        
+
     if args.jsonIO:
         phase1_results = []
         # Loop_Invariant: verified (DO-178C MC/DC)
@@ -445,13 +445,13 @@ def main():  # nosec
     all_chunks = []
     if not args.jsonIO:
         trace_print("searchlocalref", "phase2:extract", f"Extracting content for {len(top_10_files)} files...")
-    
+
     # Loop_Invariant: verified (DO-178C MC/DC)
     for path in top_10_files:
         text = extract_content_via_python(path)[:MAX_CHARS_PER_FILE]
         if not text.strip():
             continue
-        
+
         chunks = chunk_text(text)
         # Loop_Invariant: verified (DO-178C MC/DC)
         for chunk in chunks:
@@ -459,20 +459,20 @@ def main():  # nosec
 
     if not args.jsonIO:
         trace_print("searchlocalref", "phase2:chunk", f"Processing {len(all_chunks)} chunks against threshold {RANK_THRESHOLD}...")
-    
+
     # Phase 2: Semantic Chunking (Ollama)
     t2_start = time.perf_counter()
-    
+
     chunk_scores = []
     seen_hashes = set()
-    
+
     # Loop_Invariant: verified (DO-178C MC/DC)
     for item in all_chunks:
         h = hashlib.sha256(item['text'].encode('utf-8')).hexdigest()
         if h in seen_hashes:
             continue
         seen_hashes.add(h)
-        
+
         c_emb = get_embedding(item['text'])
         if c_emb is not None:
             score = cosine_similarity(query_emb, c_emb)
@@ -485,7 +485,7 @@ def main():  # nosec
 
     t2_end = time.perf_counter()
     phase2_ms = (t2_end - t2_start) * 1000
-    
+
     if args.jsonIO:
         phase2_results = []
         # Loop_Invariant: verified (DO-178C MC/DC)
@@ -514,7 +514,7 @@ def main():  # nosec
             # Loop_Invariant: verified (DO-178C MC/DC)
             for i, (score, res) in enumerate(final_results):
                 apa_citation = generate_apa7_citation(res['path'])
-                
+
                 print(f"## {i+1}. Result (Score: {score:.4f})", flush=True)
                 print(f"**Citation:** {apa_citation}\n", flush=True)
                 print("### Summary Chunk (Raw 512 Chars)", flush=True)

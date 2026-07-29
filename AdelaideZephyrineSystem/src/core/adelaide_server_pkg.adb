@@ -116,9 +116,9 @@ package body Adelaide_Server_Pkg is
    Handless_WCET : Float := 0.0;
    Handless_Vision_Context : Unbounded_String := To_Unbounded_String ("");
 
-   Trigger_Emb_Cache : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
+   Trigger_Emb_Cache : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
    Trigger_Len_Cache : Natural := 0;
-   Neg_Emb_Cache     : Math_Utils.Vector (1 .. 4096) := [others => 0.0];
+   Neg_Emb_Cache     : Math_Utils.Vector (1 .. 4096) := (others => 0.0);
    Neg_Len_Cache     : Natural := 0;
 
    task Handless_Status_Logger is
@@ -201,7 +201,9 @@ package body Adelaide_Server_Pkg is
    procedure Register (ID : String; Q : Streaming_Queue.Queue_Access) is
       -- pre => True, post => True
    begin
-      Active_Sessions.Include (ID, Q);
+      if Q /= null then
+         Active_Sessions.Include (ID, Q);
+      end if;
    end Register;
 
    --  Unregister: Removes a streaming queue session by ID.
@@ -725,29 +727,28 @@ package body Adelaide_Server_Pkg is
 
          --  Standard chatbot list: these get Adelaide Mode (full personality pipeline)
          --  even if their UA might partially match external agents
-         Is_Standard_Chatbot : Boolean := False;
-         Matched_Chatbot : Unbounded_String := To_Unbounded_String ("(none)");
          declare
-              Standard_Chatbots : constant array (1 .. 10) of String (1 .. 12) :=
-                ("msty        ", "OpenWebUI   ", "Chatbox     ", "Palchat     ",
-                 "OpenCat     ", "Enlighten   ", "Aiko        ", "MindMac     ",
-                 "curl        ", "Zephyr      ");
-            Current_Score_2 : Float;
+          Is_Standard_Chatbot : Boolean := False;
+          Matched_Chatbot : Unbounded_String := To_Unbounded_String ("(none)");
+               Standard_Chatbots : constant array (1 .. 10) of String (1 .. 12) :=
+                 ("msty        ", "OpenWebUI   ", "Chatbox     ", "Palchat     ",
+                  "OpenCat     ", "Enlighten   ", "Aiko        ", "MindMac     ",
+                  "curl        ", "Zephyr      ");
+             Current_Score_2 : Float;
          begin
-            for Bot of Standard_Chatbots loop
-               -- Loop_Invariant: verified (SPARK RM 5.5)
-               begin
-                  Current_Score_2 := Fuzzy_Match.Match (UA, Trim (Bot, Ada.Strings.Right));
-                   if Current_Score_2 >= 0.5 then
-                      Is_Standard_Chatbot := True;
-                      Matched_Chatbot := To_Unbounded_String (Trim (Bot, Ada.Strings.Right));
-                      exit;
-                   end if;
-               exception
-                  when others => null;
-               end;
-            end loop;
-         end;
+             for Bot of Standard_Chatbots loop
+                -- Loop_Invariant: verified (SPARK RM 5.5)
+                begin
+                   Current_Score_2 := Fuzzy_Match.Match (UA, Trim (Bot, Ada.Strings.Right));
+                    if Current_Score_2 >= 0.5 then
+                       Is_Standard_Chatbot := True;
+                       Matched_Chatbot := To_Unbounded_String (Trim (Bot, Ada.Strings.Right));
+                       exit;
+                    end if;
+                exception
+                   when others => null;
+                end;
+             end loop;
 
            --  External Agent detection: Is_Standard_Chatbot is the sole
            --  decision-maker. Known chatbots (>= 50% match) get chat mode.
@@ -755,21 +756,22 @@ package body Adelaide_Server_Pkg is
            --  for clean, minimal-overhead output. External agent matching
            --  scores are for logging only.
            Is_External_Agent := not Is_Standard_Chatbot;
-        declare
-          Score_Pct : constant Integer := Integer (Match_Score * 100.0);
-          Category  : constant String :=
-            (if Is_External_Agent then "external-agent"
-             elsif Is_Standard_Chatbot then "chatbot"
-             else "unknown");
-          Matched   : constant String :=
-            (if Is_Standard_Chatbot then To_String (Matched_Chatbot)
-             else To_String (Best_Match_Name));
-        begin
-          Ada.Text_IO.Put_Line ("[API] Request: " & URI &
-                                " | UA: " & UA &
-                                " | Confidence: " & Integer'Image (Score_Pct) & "%" &
-                                " | Category: " & Category &
-                                " | Matched: " & Matched);
+         declare
+           Score_Pct : constant Integer := Integer (Match_Score * 100.0);
+           Category  : constant String :=
+             (if Is_External_Agent then "external-agent"
+              elsif Is_Standard_Chatbot then "chatbot"
+              else "unknown");
+           Matched   : constant String :=
+             (if Is_Standard_Chatbot then To_String (Matched_Chatbot)
+              else To_String (Best_Match_Name));
+         begin
+           Ada.Text_IO.Put_Line ("[API] Request: " & URI &
+                                 " | UA: " & UA &
+                                 " | Confidence: " & Integer'Image (Score_Pct) & "%" &
+                                 " | Category: " & Category &
+                                 " | Matched: " & Matched);
+         end;
         end;
        declare
          Method : constant String := AWS.Status.Method (Request);

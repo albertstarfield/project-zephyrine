@@ -1,9 +1,9 @@
 # ./StellaIcarus/basic_matrix_math_hook.py
+import ast
 import re
 import sys
 import time
-import ast
-from typing import Optional, Match
+from re import Match
 
 # --- ACCELERATION ENGINE SETUP ---
 # Detects the most powerful available hardware backend.
@@ -14,7 +14,7 @@ _ENGINE_NAME = "Python/CPU (Basic)"
 try:
     import torch
     _TORCH_AVAILABLE = True
-    
+
     if torch.cuda.is_available():
         _DEVICE = "cuda" # Covers NVIDIA CUDA and often AMD ROCm if pytorch-rocm is installed
         _ENGINE_NAME = f"GPU (CUDA/ROCm) - {torch.cuda.get_device_name(0)}"
@@ -39,25 +39,25 @@ except ImportError:
 PATTERN = re.compile(
     r"(?is)"
     r".*?" # Pre-noise
-    
+
     # Matrix A: Capture logical nested brackets [[1,2],[3,4]]
     # We use a greedy match for the content inside, but bounded by outer brackets.
     r"(?P<mat1>\[\s*\[.*?\]\s*\])"
-    
+
     r"\s*"
-    
+
     # Operator (Optional, defaults to MatMul if missing but space exists)
     r"(?P<op>"
         r"[\+\-\*@xX]" # @ is the python matrix mult operator
         r"|"
         r"(?:plus|add|minus|subtract|times|multiplied\s+by|dot|matmul)"
     r")?"
-    
+
     r"\s*"
-    
+
     # Matrix B
     r"(?P<mat2>\[\s*\[.*?\]\s*\])"
-    
+
     r".*" # Post-noise
 )
 
@@ -74,17 +74,17 @@ def _format_tensor(tensor) -> str:
     """Formats the result tensor into a readable string."""
     # Convert back to python list for clean formatting
     lst = tensor.tolist()
-    
+
     # If it's huge, truncate it for the chat window
     if len(lst) > 10 or len(lst[0]) > 10:
         return f"Result Matrix shape: {tensor.shape} (Too large to display fully)"
-    
+
     # Format nicely
     rows = [str(row) for row in lst]
     return "[\n  " + ",\n  ".join(rows) + "\n]"
 
 # --- MAIN HANDLER ---
-def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str]:
+def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
     if not _TORCH_AVAILABLE:
         return "I need my PyTorch upgrades to perform matrix calculations."
 
@@ -95,14 +95,14 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
         # 1. Parse Inputs
         mat1_list = _parse_matrix_string(match.group("mat1"))
         mat2_list = _parse_matrix_string(match.group("mat2"))
-        
+
         if mat1_list is None or mat2_list is None:
             return f"{ERROR_PREFIX} I couldn't parse the matrix structure. Use format [[1,2],[3,4]]."
 
         # 2. Determine Operator
         raw_op = (match.group("op") or "matmul").strip().lower()
         op_type = "matmul" # Default
-        
+
         if raw_op in ['+', 'plus', 'add']:
             op_type = "add"
         elif raw_op in ['-', 'minus', 'subtract']:
@@ -128,7 +128,7 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
 
         # 5. Execute Operation
         start_t = time.perf_counter()
-        
+
         res = None
         if op_type == "add":
             res = t1 + t2
@@ -138,45 +138,45 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
             res = t1 * t2
         elif op_type == "matmul":
             res = torch.matmul(t1, t2)
-            
+
         # Synchronize if GPU to get accurate timing (for internal logging)
         if use_device != "cpu":
             torch.cuda.synchronize() if use_device == "cuda" else None
-            
+
         end_t = time.perf_counter()
-        
+
         # Move back to CPU for formatting
         if use_device != "cpu":
             res = res.cpu()
 
         # 6. Format Output
         output_str = _format_tensor(res)
-        
+
         # Optional: Add compute info footer
         footer = f"\n(Computed on {use_device.upper()} in {(end_t - start_t)*1000:.4f}ms)"
-        
+
         return f"{SUCCESS_PREFIX}{output_str}{footer}"
 
     except RuntimeError as e:
         # PyTorch throws meaningful errors (e.g. dimension mismatch)
-        return f"{ERROR_PREFIX} {str(e)}"
+        return f"{ERROR_PREFIX} {e!s}"
     except Exception as e:
         return f"{ERROR_PREFIX} Unexpected error: {e}"
 
 # --- SELF TEST ---
 if __name__ == "__main__":
     print("--- Matrix Hook Self-Test ---")
-    
+
     # 2x2 Matrix Multiplication
-    inp1 = "Calculate [[1, 2], [3, 4]] times [[2, 0], [1, 2]]" 
+    inp1 = "Calculate [[1, 2], [3, 4]] times [[2, 0], [1, 2]]"
     # Logic: 1*2+2*1=4, 1*0+2*2=4, 3*2+4*1=10, 3*0+4*2=8 -> [[4,4],[10,8]]
-    # Note: Regex matches "times" -> elementwise mul in code logic above, 
+    # Note: Regex matches "times" -> elementwise mul in code logic above,
     # let's test strict MatMul syntax usually implies 'dot' or implicit in linear algebra context
     # but strictly user might mean elementwise.
-    
+
     # Test MatMul specific
     inp2 = "MatMul [[1, 2], [3, 4]] @ [[2, 0], [1, 2]]"
-    
+
     m = PATTERN.match(inp2)
     if m:
         print(handler(m, inp2, "test"))

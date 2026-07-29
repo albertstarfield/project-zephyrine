@@ -120,16 +120,16 @@ package body Accuracy_Benchmark_Manager is
       --  Call curl to hit the API
       GNAT.OS_Lib.Spawn (
          Program_Name => "curl",
-         Args => [new String'("-s"),
-                  new String'("-X"),
-                  new String'("POST"),
-                  new String'("http://127.0.0.1:11420/v1/chat/completions"),
-                  new String'("-H"),
-                  new String'("Content-Type: application/json"),
-                  new String'("-d"),
-                  new String'(Request_Body),
-                  new String'("-o"),
-                  new String'(Output_File)],
+         Args => (new String'("-s"),
+                   new String'("-X"),
+                   new String'("POST"),
+                   new String'("http://127.0.0.1:11420/v1/chat/completions"),
+                   new String'("-H"),
+                   new String'("Content-Type: application/json"),
+                   new String'("-d"),
+                   new String'(Request_Body),
+                   new String'("-o"),
+                   new String'(Output_File)),
          Success => Success
       );
 

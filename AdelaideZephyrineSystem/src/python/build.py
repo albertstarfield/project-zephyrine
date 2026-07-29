@@ -14,11 +14,16 @@ Commands:
 DO NOT REMOVE, OR YOU WILL BE KILLED
 """
 
-import subprocess
-import sys
-from trace_utils import init_trace, trace_print
 import os
 import shutil
+import subprocess
+import sys
+
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+if _script_dir not in sys.path:
+    sys.path.insert(0, _script_dir)
+
+from trace_utils import init_trace, trace_print  # noqa: E402
 
 
 def run_command(cmd, cwd=None):  # nosec
@@ -87,7 +92,7 @@ def main():  # nosec
                 elif os.path.exists(artifact):
                     os.remove(artifact)  # nosec - safe to remove after exists check
                     print(f"Removed: {artifact}")
-            except (OSError, IOError) as e:
+            except OSError as e:
                 print(f"  [!] Warning: Could not remove {artifact}: {e}")
         print("OK: Cleaned build artifacts")
 

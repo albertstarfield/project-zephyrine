@@ -25,9 +25,9 @@ is
       Last_Valid     : Boolean;
    end record;
 
-   State : State_Type := (Key => [others => 0], 
-                          V => [others => 0], 
-                          Last_Block => [others => 0],
+   State : State_Type := (Key => (others => 0), 
+                          V => (others => 0), 
+                          Last_Block => (others => 0),
                           Reseed_Counter => 0,
                           Initialized => False,
                           Last_Valid => False);

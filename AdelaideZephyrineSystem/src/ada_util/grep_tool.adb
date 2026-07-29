@@ -12,7 +12,7 @@ with Ada.Text_IO;
 with Ada.Command_Line;
 with Ada.Strings;
 with Ada.Strings.Unbounded;
-with Ada.Processes;
+with GNAT.OS_Lib;
 with Trace_Utils;
 
 --  Grep_Tool: Main entry point. Dispatches grep commands (search, regex,
@@ -30,32 +30,23 @@ procedure Grep_Tool is
                       Files_Only    : Boolean := False)
      return String
    is
-      Cmd : Unbounded_String := "grep -r";
+      Success : Boolean;
+      Args : GNAT.OS_Lib.Argument_List (1 .. 2);
+      Flags : constant String :=
+        (if Ignore_Case then " -i" else "")
+        & (if Count_Mode then " -c" else "")
+        & (if Files_Only then " -l" else "");
    begin
-      if Ignore_Case then
-         Append(Cmd, " -i");
-      end if;
-
-      if Count_Mode then
-         Append(Cmd, " -c");
-      end if;
-
-      if Files_Only then
-         Append(Cmd, " -l");
-      end if;
-
-      Append(Cmd, " " & Pattern & " " & Path);
-
-      --  Execute command via shell
-      begin
-         Ada.Processes.Command_Line(
-           Command_Line => To_String(Cmd),
-           Output       => True);
-         return "";
-      exception
-         when others =>
-            return "ERROR: Grep failed";
-      end;
+      Args (1) := new String'("-c");
+      Args (2) := new String'("grep -r" & Flags & " " & Pattern & " " & Path);
+      GNAT.OS_Lib.Spawn(
+         Program_Name => "/bin/sh",
+         Args         => Args,
+         Success      => Success);
+      return "";
+   exception
+      when others =>
+         return "ERROR: Grep failed";
    end Run_Grep;
 
 begin

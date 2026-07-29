@@ -1,12 +1,12 @@
 # trickshot_stellaicarus_benchmark_simplearitmatic.py
 import ctypes
+import hashlib
 import os
 import platform
 import re
 import subprocess
 import sys
-import hashlib
-from typing import Optional, Match
+from re import Match
 
 # ======================================================================================
 #  STELLA ICARUS "TRICKSHOT" ARCHITECTURE
@@ -31,11 +31,11 @@ cpp_source_code = """
 extern "C" {
     // We export this function to be callable by Python (ctypes)
     double run_trickshot_benchmark(int iterations) {
-        
+
         // 1. Setup Random Data
         std::vector<long long> data_a(iterations);
         std::vector<long long> data_b(iterations);
-        
+
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<long long> distrib(1000, 9999999);
@@ -46,8 +46,8 @@ extern "C" {
         }
 
         // 2. The Benchmark
-        volatile long long result = 0; 
-        
+        volatile long long result = 0;
+
         auto start = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < iterations; ++i) {
@@ -60,10 +60,10 @@ extern "C" {
         // We cast directly to picoseconds here to keep the raw unit logic inside C++
         auto total_ps = std::chrono::duration_cast<std::chrono::picoseconds>(end - start).count();
         double avg_ps = (double)total_ps / iterations;
-        
+
         return avg_ps;
     }
-    
+
     int trickshot_ping() { return 999; }
 }
 """
@@ -75,11 +75,11 @@ _IS_OPTIMIZED = False
 def _compile_and_load():
     """Compiles the C++ code into a shared object and loads it."""
     global _TRICKSHOT_LIB, _IS_OPTIMIZED
-    
+
     # --- FIX: Anchor paths to this script's directory ---
     # This ensures .cpp and .so go into ./StellaIcarus/ regardless of where you run python from.
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    
+
     lib_path = os.path.join(script_dir, LIB_NAME)
     src_path = os.path.join(script_dir, SOURCE_FILE)
 
@@ -91,7 +91,7 @@ def _compile_and_load():
 
     # 1. Calculate the hash of the CURRENT embedded C++ code
     current_hash = hashlib.md5(cpp_source_code.encode("utf-8")).hexdigest()
-    
+
     # 2. Check if we need to compile
     # Compile if: Lib missing OR Hash file missing OR Hash mismatch
     needs_compile = False
@@ -111,21 +111,21 @@ def _compile_and_load():
     if needs_compile:
         try:
             print("[*] Trickshot: Compiling optimized core...", file=sys.stderr)
-            
+
             # Write source file
             with open(src_path, "w") as f:
                 f.write(cpp_source_code)
-            
+
             # -O3: Maximum Optimization
             # -march=native: Use AVX/AVX2/AVX512 instructions specific to THIS CPU
             cmd = ["g++", "-O3", "-shared", "-fPIC", "-march=native", src_path, "-o", lib_path]
-            
+
             subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
+
             # SAVE THE NEW HASH on success
             with open(hash_path, "w") as f:
                 f.write(current_hash)
-                
+
             print("[+] Trickshot: Compilation successful.", file=sys.stderr)
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("[-] Trickshot: Compilation failed (g++ missing?).", file=sys.stderr)
@@ -134,11 +134,11 @@ def _compile_and_load():
     # 2. Load Library
     try:
         lib = ctypes.CDLL(lib_path)
-        
+
         # Define argument/return types
         lib.run_trickshot_benchmark.argtypes = [ctypes.c_int]
         lib.run_trickshot_benchmark.restype = ctypes.c_double # Returns avg_ns
-        
+
         if lib.trickshot_ping() == 999:
             _TRICKSHOT_LIB = lib
             _IS_OPTIMIZED = True
@@ -158,7 +158,7 @@ PATTERN = re.compile(
 
 
 # --- HANDLER (The Logic) ---
-def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str]:
+def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
     """
     Executes the C++ benchmark, converts to picoseconds, and appends its own source code.
     """
@@ -166,7 +166,7 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
         return "Trickshot engine unavailable (Compilation failed). Cannot run benchmark."
 
     iterations = 1_000_000 # 1 Million ops
-    
+
     # 1. Call the C++ function (returns nanoseconds)
     avg_ps = _TRICKSHOT_LIB.run_trickshot_benchmark(iterations)
 
@@ -177,14 +177,14 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
             self_source_code = f.read()
     except Exception as e:
         self_source_code = f"Could not read source code: {e}"
-    
+
     # 4. Format the response
     response = (
         f"Hello this is Zephy, and this is Trickshot, it is an architecture of StellaIcarus Determenistic Hook with O3 dynamic optimization, THIS IS NOT A MODEL RESPONSE! but semi canned determenistic response based on phrase hooks regex! "
         f"and dynamic recompilation at startup (AOT), this is the example of the {iterations} simple arithmatics execution, \n"
         f"This is your response time required running with StellaIcarus Trickshot:\n\n"
         # UPDATED LINE BELOW:
-        f"**{avg_ps:.4f} picoseconds per Internal calculation operation.**\n" 
+        f"**{avg_ps:.4f} picoseconds per Internal calculation operation.**\n"
         f"We do not need to use the AI hype to answer this determenistic and simple question."
         f"\n\n This architecture might be pushing the CPU to it's physics limit or how much clock cycle is available for the response than Operation per Clock"
         f"\n Better be balance!\n Because we also need efficiency on parallel for the Model LM one."
@@ -195,7 +195,7 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
         f"```\n"
         f"Thank you and have an absolutely wonderful day 🤗!"
     )
-    
+
     return response
 
 
@@ -203,17 +203,17 @@ def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str
 if __name__ == "__main__":
     print("\n--- Simulating User Input ---")
     user_query = "Please run the trickshot benchmark for me."
-    
+
     # 1. Check Regex
     match = PATTERN.match(user_query)
-    
+
     if match:
         print(f"User Input: '{user_query}'")
         print("Hook Triggered. Executing C++ Kernel...")
-        
+
         # 2. Run Handler
         result = handler(match, user_query, "simulated_session")
-        
+
         print("\n--- AI Response ---")
         print(result)
     else:

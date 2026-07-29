@@ -11,6 +11,7 @@ with Ada.Text_IO;
 with Ada.Directories;
 with Ada.Command_Line;
 with Ada.Strings;
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Trace_Utils;
 
@@ -73,7 +74,7 @@ procedure File_Edit is
    end Do_Write;
 
    --  Do_Edit: Find and replace the first occurrence of Old with New in file.
-   procedure Do_Edit (Path, Old, New : in String) is
+   procedure Do_Edit (Path, Old, New_Text : in String) is
       -- pre => True, post => True  -- assertion: contracts verified
    begin
       Trace_Utils.Trace_Print("file_edit", "edit", "file: " & Path);
@@ -108,7 +109,7 @@ procedure File_Edit is
                   Result : Unbounded_String :=
                     To_Unbounded_String(Content_Str(1 .. Pos - 1));
                begin
-                  Append(Result, New);
+                  Append(Result, New_Text);
                   Append(Result, Content_Str(Pos + Old'Length .. Content_Str'Length));
 
                   Create(File, Out_File, Path);
