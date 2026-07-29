@@ -209,64 +209,15 @@ ros2 topic list
 ros2 topic echo /stellaicarus/telemetry
 ```
 
-### NASA cFS Integration
+### core Flight System (cFS)
 
-Zephy integrates with NASA's core Flight System (cFS) for flight software infrastructure — telemetry aggregation, command routing, health monitoring, and data storage.
+Zephy integrates with core Flight System (cFS) for flight software infrastructure — telemetry aggregation, command routing, health monitoring, and data storage. cFS handles the telemetry layer, PX4 handles flight control, and ROS2 handles actuators and robotics payloads.
 
-**cFS Components:**
-- **cFE** — Core Flight Executive (Software Bus, Event Service, Time Service)
-- **OSAL** — OS Abstraction Layer (portable POSIX/VxWorks/RTEMS API)
-- **PSP** — Platform Support Package (hardware abstraction)
-- **Apps** — CI_LAB (command ingest), TO_LAB (telemetry output), HS (health/safety), FM (file manager)
-
-**Architecture:**
-```
-┌──────────────────────────────────────────────────────┐
-│                    ZEPHY (GNC Layer)                  │
-│         Cognitive ELP0/ELP1 → Tool Bridge             │
-│         Deterministic ELP2/ELP3 → cFS Telemetry       │
-└────────────────────┬─────────────────┬───────────────┘
-                     │                 │
-              Ada FFI (Interfaces.C)   │
-                     │                 │
-                     ▼                 ▼
-              ┌─────────────┐  ┌─────────────────┐
-              │  cFS cFE    │  │     PX4         │
-              │  (Software  │  │  (Flight        │
-              │   Bus, TLM) │  │   Controller)   │
-              └─────────────┘  └─────────────────┘
-                     │
-                     ▼
-              ┌─────────────────────────────────────┐
-              │         cFS Apps                     │
-              │  CI_LAB │ TO_LAB │ HS │ FM │ DS     │
-              └─────────────────────────────────────┘
-```
-
-**Tool Call Interface (ELP0/ELP1):**
 ```bash
-# cFS tool calls via the LLM cognitive layer
-cfs status              # Overall cFS system status
-cfs telemetry hk        # Send housekeeping telemetry
-cfs health              # Check system health
-cfs command gnc <data>  # Route command through Software Bus
-cfs info                # cFS version and configuration
-```
-
-**cFS Setup:**
-```bash
-# 1. Clone and build cFS natively
 ./run.sh --build-cfs
-
-# 2. cFS is now available as a tool for the LLM
-# The ELP0/ELP1 cognitive layer can query telemetry, health, and commands
 ```
 
-**Integration Points:**
-- **ELP3 (ZenithOrion)** — Sends periodic housekeeping telemetry through cFS Software Bus
-- **ELP0/ELP1 (Cognitive)** — Routes commands through cFS Command Ingest (CI_LAB)
-- **Health Monitor** — Wraps cFS HS app for system health tracking
-- **Telemetry Aggregator** — Wraps cFS TO_LAB for structured telemetry output
+**Full documentation:** [`documentation/cfs_manual_building_for_zephy.md`](documentation/cfs_manual_building_for_zephy.md)
 
 ### Testing Workflow
 
