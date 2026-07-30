@@ -16,6 +16,8 @@
 <p align="center"><i>Heya! I'm Adelaide Zephyrine Charlotte, but you can call me Zephy or ZepZep. I hope you have an absolute wonderful day and night. I'm your GNC companion that lives inside your flying machine!</i></p>
 
 <p align="center"><h5>In Self-learning and Self-improvement We Trust</h5></p>
+
+> **Note:** Project Zephyrine is **not** Zephyr RTOS. Zephyr is a real-time operating system by the Linux Foundation. Zephyrine is an adaptive GNC framework that *uses* Zephyr (and other RTOSes) as deployment targets. Different projects, different goals.
 <hr>
 
 [![Hippocratic License HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV](https://img.shields.io/static/v1?label=Hippocratic%20License&message=HL3-BDS-BOD-LAW-MEDIA-MIL-SOC-SUP-SV&labelColor=5e2751&color=bc8c3d)](https://firstdonoharm.dev/version/3/0/bds-bod-law-media-mil-soc-sup-sv.html)
@@ -116,11 +118,37 @@ cd vendor/PX4-Autopilot && make px4_sitl gz_x500  # Start PX4
 
 Zephy integrates with core Flight System (cFS) for flight software infrastructure — telemetry aggregation, command routing, health monitoring, and data storage. cFS handles the telemetry layer, PX4 handles flight control, and ROS2 handles actuators and robotics payloads.
 
+cFS is message-based — everything talks through the Software Bus. A simulator bridge app receives telemetry from PX4/X-Plane via MAVLink/UDP, publishes it onto the Software Bus, and routes commands back. This enables full mission simulation — takeoff, waypoints, landing — with cFS logging, monitoring, and storing data while the simulator runs flight physics.
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
+│  Simulator   │────►│  Simulator Bridge │────►│  cFS cFE    │
+│  (PX4/X-Plane)│     │  (new app)        │     │  Software   │
+└─────────────┘     └──────────────────┘     │  Bus        │
+                                              └──────┬──────┘
+                                                     │
+                                              ┌──────┴──────┐
+                                              │  cFS Apps    │
+                                              │  HS │ TO │ DS│
+                                              └─────────────┘
+```
+
 ```bash
 ./run.sh --build-cfs
 ```
 
 **Full documentation:** [`documentation/cfs_manual_building_for_zephy.md`](documentation/cfs_manual_building_for_zephy.md)
+
+### Zephyr RTOS
+
+Zephyr is the target RTOS for deployment — PX4 runs on Zephyr, Zephyr provides drivers, networking, and threading for embedded hardware. For development, `native_posix` runs the full stack on macOS/Linux without hardware.
+
+```bash
+./run.sh --build-zephyr      # Build Zephyr + PX4 for native_posix
+./run.sh --build-zephyr --board stm32f4_disco  # Cross-compile for STM32
+```
+
+**Full documentation:** [`documentation/zephyr_os_integration.md`](documentation/zephyr_os_integration.md)
 
 ### Testing Workflow
 
