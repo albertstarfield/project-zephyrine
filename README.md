@@ -269,6 +269,7 @@ Want to throw me on the sky? Check out [CONTRIBUTING.md](CONTRIBUTING.md) for gu
 For those who want to peek behind the curtain:
 
 - [API Reference](documentation/API%20Reference.md) — all the endpoints I speak
+- [Cognitive API Reference](documentation/cognitive_api_reference.md) — OpenAI, Ollama, Anthropic compatible endpoints
 - [Volatus Damarae](documentation/ELP%20Priority%20Queue.md) — how I think and prioritize
 - [Developer Docs](documentation/Developer%20Documentation/) — architecture, troubleshooting, and warnings for the brave
 
