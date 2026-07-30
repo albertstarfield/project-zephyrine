@@ -54,9 +54,9 @@
 - [ ] Implementing Multi-stage Decomposition Append Response ELP1.
 - [ ] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Ada code using alire.
 - [ ] Building Zephy Spell Moral Compass. ELP0 Vector building
-- [ ] Hardened runtime self data Parity correction against Intense radiation corruption using par2 and memory integrity operational check
-- [ ] I/O Swappable state for Tensor State for other Models for TTS and STT and Stable Diffusion?
-- [ ] Paper Referencing Listing to prepare publication
+- [x] Hardened runtime self data Parity correction against Intense radiation corruption using par2 and memory integrity operational check (implemented via alternative approach)
+- [x] I/O Swappable state for Tensor State for other Models for TTS and STT and Stable Diffusion
+- [x] Paper Referencing Listing to prepare publication
 - [ ] Redraw Zephy by Hand instead of AI generated.
 - [ ] cFS Simulator Bridge app — connect PX4/X-Plane telemetry to cFS Software Bus for mission simulation.
 - [ ] seL4 OSAL for cFS — write threading, semaphores, file I/O abstraction layer.
