@@ -41,6 +41,13 @@
 - [x] Initial Flight Interface
 - [x] I/O Swappable KV Shared Cache/State (LLM/VLM Qwen2.5) (for more serialized faster loading model swapping)
 - [x] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Python code.
+- [x] core Flight System (cFS) integration — telemetry aggregation, command routing, health monitoring, data storage.
+- [x] Zephyr RTOS support — native_posix simulation, cross-compilation for ARM/RISC-V targets.
+- [x] seL4 future path — formally verified microkernel for high-assurance flight (OSAL port needed).
+- [x] Cognitive API reference — OpenAI v1, Ollama, Anthropic compatible endpoints documented.
+- [x] Sabotage verifier SMT integration — z3, cvc5, alt-ergo for formal verification of Ada, Python, C, TypeScript.
+- [x] Self-verification test harness — 8 tests proving sabotage verifier logic is sound.
+- [x] cFS tool bridge — LLM-callable interface for cFS (status, telemetry, health, command, info).
 
 
 #### High Priority
@@ -51,6 +58,8 @@
 - [ ] I/O Swappable state for Tensor State for other Models for TTS and STT and Stable Diffusion?
 - [ ] Paper Referencing Listing to prepare publication
 - [ ] Redraw Zephy by Hand instead of AI generated.
+- [ ] cFS Simulator Bridge app — connect PX4/X-Plane telemetry to cFS Software Bus for mission simulation.
+- [ ] seL4 OSAL for cFS — write threading, semaphores, file I/O abstraction layer.
 
 #### Low Priority
 - [/] Implementing Native Windows Support. (Partially implemented via Conda; requires further testing/scripting).
