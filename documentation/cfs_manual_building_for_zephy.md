@@ -53,6 +53,27 @@ cFS is the **flight software infrastructure** — it handles telemetry aggregati
 | **ROS2** | Actuator/sensor middleware (servos, gimbal, LiDAR) | DDS |
 | **Zephy** | Cognitive GNC layer (learning, adaptation) | Ada FFI |
 
+### RTOS Compatibility
+
+cFS is RTOS-agnostic through its OS Abstraction Layer (OSAL). It runs on any OS that provides threading, semaphores, and file I/O.
+
+| RTOS | cFS Status | Formal Verification | Use Case |
+|------|-----------|---------------------|----------|
+| **VxWorks** | Production (NASA) | DO-178C certified | Flight-proven spacecraft |
+| **RTEMS** | Production | No | Real-time embedded |
+| **FreeRTOS** | Available | No | Low-resource MCUs |
+| **Linux** | Native | No | Ground simulation, SITL |
+| **Zephyr** | Available | No | Modern embedded, PX4 native |
+| **seL4** | Needs OSAL port | Yes (mathematical proof) | High-assurance flight |
+| **NuttX** | Available | No | POSIX-like, PX4 current |
+
+**seL4** is the most promising for formal verification — it's a mathematically proven correct microkernel. cFS + seL4 would give a formally verified OS + formally verified flight software stack. Writing a cFS OSAL for seL4 is required (threading, semaphores, file I/O).
+
+**Path to seL4:**
+1. Write cFS OSAL for seL4
+2. Port cFS apps to seL4 environment
+3. Validate with Ada/SPARK core via POSIX API
+
 ---
 
 ## Quick Start
