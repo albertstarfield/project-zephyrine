@@ -59,7 +59,7 @@ cFS is RTOS-agnostic through its OS Abstraction Layer (OSAL). It runs on any OS 
 
 | RTOS | cFS Status | Formal Verification | Use Case |
 |------|-----------|---------------------|----------|
-| **VxWorks** | Production (NASA) | DO-178C certified | Flight-proven spacecraft |
+| **VxWorks** | Production (Wind River) | DO-178C certified | Flight-proven spacecraft |
 | **RTEMS** | Production | No | Real-time embedded |
 | **FreeRTOS** | Available | No | Low-resource MCUs |
 | **Linux** | Native | No | Ground simulation, SITL |

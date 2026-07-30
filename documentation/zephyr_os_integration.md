@@ -164,7 +164,7 @@ Priority 6 (lowest):   Background tasks, idle
 |------|---------------------|-------------|----------|
 | **Zephyr** | No | Available | Development, simulation, deployment |
 | **seL4** | Yes (mathematical proof) | Needs OSAL port | High-assurance flight |
-| **VxWorks** | DO-178C certified | Production (NASA) | Flight-proven spacecraft |
+| **VxWorks** | DO-178C certified | Production (Wind River) | Flight-proven spacecraft |
 | **RTEMS** | No | Production | Real-time embedded |
 | **FreeRTOS** | No | Available | Low-resource MCUs |
 | **NuttX** | No | Available | POSIX-like, PX4 current |
