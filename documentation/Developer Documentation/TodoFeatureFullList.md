@@ -48,21 +48,22 @@
 - [x] Sabotage verifier SMT integration — z3, cvc5, alt-ergo for formal verification of Ada, Python, C, TypeScript.
 - [x] Self-verification test harness — 8 tests proving sabotage verifier logic is sound.
 - [x] cFS tool bridge — LLM-callable interface for cFS (status, telemetry, health, command, info).
-
-
-#### High Priority
-- [ ] Implementing Multi-stage Decomposition Append Response ELP1.
-- [ ] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Ada code using alire.
-- [ ] Building Zephy Spell Moral Compass. ELP0 Vector building
+- [x] Implementing Multi-stage Decomposition Append Response ELP1. (Axiom Based)
+- [x] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Ada code using alire.
+- [x] Building Zephy Spell Moral Compass. ELP0 Vector building
 - [x] Hardened runtime self data Parity correction against Intense radiation corruption using par2 and memory integrity operational check (implemented via alternative approach)
 - [x] I/O Swappable state for Tensor State for other Models for TTS and STT and Stable Diffusion
 - [x] Paper Referencing Listing to prepare publication
-- [ ] Redraw Zephy by Hand instead of AI generated.
+- [x] Redraw Zephy by Hand instead of AI generated.
+
+
+#### High Priority
+
 - [ ] cFS Simulator Bridge app — connect PX4/X-Plane telemetry to cFS Software Bus for mission simulation.
 - [ ] seL4 OSAL for cFS — write threading, semaphores, file I/O abstraction layer.
 
 #### Low Priority
-- [/] Implementing Native Windows Support. (Partially implemented via Conda; requires further testing/scripting).
+
 - [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
 - [ ] Multi format communication Real-time communication and collaboration (Audio, Video, Actuator)
 - [ ] Adding Docker Support
@@ -71,6 +72,7 @@
 
 
 #### Cancelled
+- [ ] ~~Implementing Native Windows Support. (Partially implemented via Conda; requires further testing/scripting)~~
 - [ ] ~~Electron/v8 Memory Workaround~~ (Obsolete; project no longer uses Electron. Now, uses the mix of python, Golang, Ada, and nodejs for legacy soon deprecated).
 - [ ] ~~Mobile static-version precompiled.~~ Will not be implemented (Cancelled)
 - [ ] ~~Less-Weeb Graphic mode as default due to request of the industry~~ (Rejected; aesthetic is a core feature)
