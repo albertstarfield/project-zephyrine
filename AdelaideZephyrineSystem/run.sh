@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+# macOS OpenMP fix: PyTorch and numpy BLAS both load libomp.dylib — they clash
+export KMP_DUPLICATE_LIB_OK=TRUE
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}/src/python:${PYTHONPATH:-}"
 
