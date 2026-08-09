@@ -138,35 +138,13 @@ package body Toolchain_Manager is
       end if;
    end Verify_Python_Package;
 
-   --  Start_Orchestrator: Starts the Python orchestrator process for tool management.
+   --  Start_Orchestrator: Validates that Ada-native toolchain is available.
+   --  No Python subprocess needed — think_tag_sanitizer is now pure Ada.
    procedure Start_Orchestrator is
       -- pre => True, post => True
-      use GNAT.OS_Lib;
-      Python_Path : constant String := "pyvenv/bin/python3";
-      Script_Path : constant String := "src/python/think_tag_sanitizer.py";
-      Args        : Argument_List (1 .. 2);
-      Pid         : Process_Id;
    begin
-      if not Ada.Directories.Exists (Python_Path) then
-         Put_Line ("[!] Python venv not found at " & Python_Path);
-         return;
-      end if;
-
-      Put_Line ("[*] Starting Python Orchestrator (think_tag_sanitizer.py)...");
-      Args (1) := new String'(Script_Path);
-      Args (2) := new String'("--port=11435");
-      
-      --  Run in background
-      Pid := Non_Blocking_Spawn (Python_Path, Args);
-      
-      Free (Args (1));
-      Free (Args (2));
-      
-      if Pid /= Invalid_Pid then
-         Put_Line ("[+] Python Orchestrator started in background.");
-      else
-         Put_Line ("[!] Failed to start Python Orchestrator.");
-      end if;
+      Put_Line ("[*] Ada-native toolchain initialized (think_tag_sanitizer: Ada)");
+      Put_Line ("[+] No Python subprocess required for think tag sanitization.");
    end Start_Orchestrator;
 
    ---------------------

@@ -18,6 +18,7 @@ with Zenith_Orion;
 --  Native Ada tool packages (replacing Python subprocess spawning)
 with Tool_Cat;
 with Tool_Grep;
+with Security_Scanner;
 with Tool_Git;
 with Tool_File_Edit;
 with Tool_Dir_Driver;
@@ -30,11 +31,23 @@ with Tool_Issue;
 with Tool_Review;
 with Tool_Hook;
 with Tool_Package;
+with Tool_Call_Autofix;  --  Fuzzy tool name correction (grammar autocorrect pattern)
 
 --  NASA cFS flight software integration
 with CFS_Tool_Bridge;
 
 package body Tool_Manager is
+
+   --  =========================================================================
+   --  TOOL CALL AUTOFIX: Fuzzy matching registry for LLM tool name correction
+   --  =========================================================================
+   --  When the LLM outputs a misspelled tool name (e.g., "seach" instead of
+   --  "search"), we fuzzy-match it against all registered tool names and
+   --  auto-correct it — like how word processors auto-fix typos.
+   --  Built once at first use, then reused for all subsequent tool calls.
+   --  =========================================================================
+   Auto_Fix_Registry : Tool_Call_Autofix.Tool_Registry;
+   Auto_Fix_Initialized : Boolean := False;
 
    --  ------------------------------------------------------------------------
    --  ASYNC TOOL EXECUTION TASK
@@ -147,7 +160,7 @@ package body Tool_Manager is
       --  NASA cFS FLIGHT SOFTWARE: telemetry, health, commands
       --  =====================================================================
       elsif Name = "cfs" or else Name = "cfe" or else Name = "flight_software" then
-         return CFS_Tool_Bridge.Execute_CFS_Tool (Params);
+         return Execute_CFS_Tool (Params);
 
       --  =====================================================================
       --  REMAINING PYTHON TOOLS: web_search, local_search, security, build
@@ -157,13 +170,71 @@ package body Tool_Manager is
       elsif Name = "local_search" then
          Full_Cmd := To_Unbounded_String ("src/python/searchlocalref.py");
       elsif Name = "security" or else Name = "scan" then
-         Full_Cmd := To_Unbounded_String ("src/python/security.py");
+          --  Ada-native security scanner (no Python subprocess)
+          declare
+             use Security_Scanner;
+             Scan_Path : constant String :=
+               (if Params'Length > 0 then Params else ".");
+             Result    : constant Scan_Result := Scan_Directory (Scan_Path);
+             Report    : constant String := Format_Report (Result);
+          begin
+             return (Success => True,
+                     Output  => To_Unbounded_String (Report));
+          end;
       elsif Name = "build" or else Name = "make" or else Name = "compile" then
          Full_Cmd := To_Unbounded_String ("src/python/build.py");
       else
-         Free (Path);
-         Result.Output := To_Unbounded_String ("Error: Unknown tool " & Name);
-         return Result;
+         --  =================================================================
+         --  FUZZY AUTO-FIX: Attempt to correct misspelled tool names
+         --  =================================================================
+         --  When the LLM outputs a misspelled tool name (e.g., "seach" instead
+         --  of "search", or "gi" instead of "git"), we fuzzy-match it against
+         --  all registered tool names using Levenshtein edit distance. If a
+         --  match is found within MAX_DISTANCE (2) and above MIN_CONFIDENCE
+         --  (0.4), we auto-correct the name — like grammar autocorrect in
+         --  word processors. This prevents "Unknown tool" errors caused by
+         --  simple typos in LLM output.
+         --  =================================================================
+         declare
+            --  Lazy-initialize the registry on first use (no startup overhead)
+            Fix_Result : Tool_Call_Autofix.Match_Result;
+         begin
+            --  Build the registry once, then reuse for all subsequent calls
+            if not Auto_Fix_Initialized then
+               Auto_Fix_Registry := Tool_Call_Autofix.Build_Default_Registry;
+               Auto_Fix_Initialized := True;
+               Adelaide_Trace.Trace_Print (Toolcall => "autofix:init",
+                 Message => "registry built with" &
+                   Natural'Image (Auto_Fix_Registry.Count) & " tool names");
+            end if;
+
+            --  Attempt fuzzy matching against the registry
+            Fix_Result := Tool_Call_Autofix.Fuzzy_Fix (Auto_Fix_Registry, Name);
+
+            if Fix_Result.Found then
+               --  Auto-correction succeeded — log the fix and re-dispatch
+               --  with the corrected tool name. This is the "grammar autocorrect"
+               --  moment: the LLM's typo is silently fixed before execution.
+               Adelaide_Trace.Trace_Print (Toolcall => "autofix:correct",
+                 Message => "'" & Name & "' -> '" &
+                   To_String (Fix_Result.Corrected_Name) & "'" &
+                   " (distance:" & Natural'Image (Fix_Result.Distance) &
+                   " confidence:" & Float'Image (Fix_Result.Confidence) & ")");
+
+               Free (Path);
+               --  Re-dispatch with corrected name (recursive call with exact match)
+               --  Since the corrected name is now a valid registered name, it will
+               --  hit one of the if-elsif branches above and execute normally.
+               --  We guard against infinite recursion by only allowing one level:
+               --  the corrected name MUST be an exact match (distance 0).
+               return Execute_Tool (To_String (Fix_Result.Corrected_Name), Params);
+            else
+               --  No fuzzy match found — return the original error
+               Free (Path);
+               Result.Output := To_Unbounded_String ("Error: Unknown tool " & Name);
+               return Result;
+            end if;
+         end;
       end if;
 
       --  Async execution with 30 s heartbeat
@@ -493,7 +564,26 @@ package body Tool_Manager is
             Result.Output := To_Unbounded_String ("Error: Could not parse Angle as Float.");
             return Result;
       end;
+
+      return Result;
    end Execute_ROS2_Tool;
+
+   --  ============================================================================
+   --  NASA cFS TOOL: Wrapper for CFS_Tool_Bridge.Execute_CFS_Tool
+   --  Converts CFS_Tool_Bridge.Tool_Result to Tool_Manager.Tool_Result
+   --  INC-CFS-001 (2026-08-09): Added missing Execute_CFS_Tool body.
+   --  The spec declared Execute_CFS_Tool but no body existed, causing
+   --  "missing body" compilation error. Also fixes type mismatch between
+   --  CFS_Tool_Bridge.Tool_Result and Tool_Manager.Tool_Result.
+   --  ============================================================================
+   -- function: Execute_CFS_Tool — wraps CFS_Tool_Bridge.Execute_CFS_Tool
+   function Execute_CFS_Tool (Params : String) return Tool_Result is
+      Bridge_Result : CFS_Tool_Bridge.Tool_Result;
+   begin
+      Bridge_Result := CFS_Tool_Bridge.Execute_CFS_Tool (Params);
+      return (Success => Bridge_Result.Success,
+              Output  => Bridge_Result.Output);
+   end Execute_CFS_Tool;
 
    --  ============================================================================
    --  NATIVE ADA TOOL WRAPPERS

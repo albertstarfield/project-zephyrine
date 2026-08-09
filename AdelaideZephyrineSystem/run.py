@@ -136,7 +136,7 @@ MSG_READY = "READY"
 
 # ── Hardware-Bound Key Derivation Handler ─────────────────────────────────
 def handle_stdio_key_exchange(proc):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """
     Handle stdio-based key exchange with Ada server.
 
@@ -158,7 +158,7 @@ def handle_stdio_key_exchange(proc):  # nosec
 
 
 def _term_print(msg):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Print to terminal directly (bypasses KISS stdout redirect)."""
     import sys
 
@@ -170,7 +170,7 @@ def _term_print(msg):  # nosec
 _global_tk_root = None
 
 def _get_tk_root():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Return the shared Tk root window, creating it if necessary."""
     global _global_tk_root
     import tkinter as tk
@@ -223,7 +223,7 @@ def _password_entropy(password):
 
 
 def _wipe_string(s):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Best-effort wipe of a string from Python heap memory.
 
     Python strings are immutable — we cannot overwrite them in place.
@@ -247,7 +247,7 @@ def _wipe_string(s):  # nosec
 
 
 def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Show a tkinter dialog that prompts the user for text input and returns the entered string or None."""
     import tkinter as tk
     import tkinter.simpledialog as sd
@@ -319,7 +319,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
 
         def on_ok(_event=None):  # nosec
             # Read directly from Entry widget — StringVar binding is unreliable on macOS
-            # nosec - recursive function with implicit base case
+            # nosec
             """Handle OK button click by reading the entry value and closing the dialog."""
             val = name_entry.get()
             if not IS_KISS:
@@ -328,7 +328,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
             dialog.destroy()
 
         def on_cancel():  # nosec
-            # nosec - recursive function with implicit base case
+            # nosec
             """Handle Cancel button click by setting result to None and closing the dialog."""
             if not IS_KISS:
                 print("[DEBUG] on_cancel fired")
@@ -385,7 +385,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
         return result
 
 def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Show a tkinter progress dialog with an animated bar, step text, and time-based ETA. Returns the dialog object for updates."""
     import tkinter as tk
 
@@ -453,7 +453,7 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
     start_time = time.time()
 
     def update_bar(pct=None, eta_text="", step_text="", pulse=False):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         """Update the progress bar percentage, ETA label, and step text in the dialog."""
         try:
             if not dialog.winfo_exists():
@@ -487,15 +487,15 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
     dialog._root_ref = root
 
     def _start_pulse():  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         """Start an animated pulse effect on the progress bar (no-op placeholder)."""
 
     def _stop_pulse():  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         pass
 
     def _mark_done(eta_path):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         elapsed = time.time() - start_time
         # Average with previous if it exists, otherwise just save elapsed
         new_eta = (total_eta + elapsed) / 2.0 if total_eta != 300.0 else elapsed
@@ -512,7 +512,7 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
 
 
 def _tk_progress_done(dialog):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Close the progress dialog and withdraw the root tk window."""
     try:
         if hasattr(dialog, '_stop_pulse'):
@@ -529,7 +529,7 @@ def _tk_progress_done(dialog):  # nosec
 
 def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nosec
 
-    # nosec - recursive function with implicit base case
+    # nosec
     """Show a tkinter password dialog and return the entered string or None."""
     import tkinter as tk
 
@@ -672,7 +672,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
     cancel_btn.pack(side="left", padx=6)
 
     def on_ok(_event=None):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         pw = pw_var.get()
         if confirm:
             pw2 = confirm_var.get()
@@ -686,7 +686,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
         dialog.destroy()
 
     def on_cancel():  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         result[0] = None
         dialog.destroy()
 
@@ -696,7 +696,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
 
     if not confirm:
         def on_reset():  # nosec
-            # nosec - recursive function with implicit base case
+            # nosec
             import tkinter.messagebox as mb
             ans = mb.askyesno(
                 "Reset Data",
@@ -743,7 +743,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
 
     # Live entropy update on password creation
     def on_pw_changed(*_args):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         if not confirm or entropy_label is None:
             return
         pw = pw_var.get()
@@ -771,7 +771,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
 
 
 def prompt_kiss_password(is_first_boot=False, is_recovery=False):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """
     KISS mode password prompt (phone-like setup).
 
@@ -972,7 +972,7 @@ def _tk_info_dialog(title, message, countdown=60):
         timer_id[0] = dialog.after(1000, _countdown_tick)
 
     def _on_ok():  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         """Handle OK button click by cancelling the countdown timer and closing the dialog."""
         print("[DEBUG] _tk_info_dialog _on_ok clicked or Enter pressed.")
         if timer_id[0] is not None:
@@ -1008,7 +1008,7 @@ def _tk_info_dialog(title, message, countdown=60):
 # ── InferiorParadoxical UUID — TPM / Secure Enclave Storage ──────────────
 
 def _ip_tpm_store(uuid_str):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Store InferiorParadoxical UUID in TPM2 NVRAM (Linux)."""
     import os
     import subprocess
@@ -1064,7 +1064,7 @@ def _ip_tpm_read():
 
 
 def _ip_sep_store(uuid_str):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Store InferiorParadoxical UUID in macOS Keychain (SEP-backed)."""
     import subprocess
     try:
@@ -1212,7 +1212,7 @@ def _get_inferior_paradoxical_uuid():
 # ── InferiorParadoxical Signature — static identity in TPM/SEP ──────────
 
 def _ip_signature_store(sig_hash):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Store static InferiorParadoxical signature in TPM2 NVRAM (Linux)."""
     import os
     import subprocess
@@ -1267,7 +1267,7 @@ def _ip_signature_tpm_read():
 
 
 def _ip_signature_sep_store(sig_hash):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Store static InferiorParadoxical signature in macOS Keychain (SEP)."""
     import subprocess
     try:
@@ -1292,7 +1292,7 @@ def _ip_signature_sep_store(sig_hash):  # nosec
 
 
 def _ip_signature_sep_read():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Read static InferiorParadoxical signature from macOS Keychain (SEP)."""
     import subprocess
     try:
@@ -1412,7 +1412,7 @@ def _get_ip_signature():
 
 # ── Program Hash ─────────────────────────────────────────────────────────
 def compute_program_hash():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """
     SHA-512 hash of the compiled binary — detects recompilation.
 
@@ -1719,7 +1719,7 @@ def compute_integrity_hash():
 
 
 def _try_c_derive_master_key(integrity_hash, user_secret):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """
     Try to derive master key using the C library (adl_crypto).
     Returns the master key hex string on success, None if C lib unavailable.
@@ -1755,7 +1755,7 @@ def _try_c_derive_master_key(integrity_hash, user_secret):  # nosec
 
 
 def _try_c_derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Attempt to derive the master key using the C library's secure stdin reader."""
     try:
         import ctypes
@@ -1810,7 +1810,7 @@ def _try_c_derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
 
 
 def derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """
     Reads password securely via C termios, derives key, and zeroizes buffer in C.
     Falls back to Python getpass if C module is unavailable.
@@ -1828,7 +1828,7 @@ def derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
 
 
 def derive_master_key(integrity_hash, user_secret):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """
     Derive master key from integrity hash and user secret.
     master_key = HKDF-SHA512(salt=integrity_hash, ikm=user_secret,
@@ -1964,13 +1964,13 @@ class _TeeWriter:
     """Write to an original stream AND append to a log file simultaneously."""
 
     def __init__(self, original, log_file):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         """Initialize TeeWriter with the original stream and a log file to tee output to."""
         self._orig = original
         self._log = log_file
 
     def write(self, data):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         """Write data to both the original stream and the log file."""
         self._orig.write(data)
         try:
@@ -1980,7 +1980,7 @@ class _TeeWriter:
             print(f"Warning: Swallowed exception - {e}")
 
     def flush(self):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         """Flush both the original stream and the log file."""
         self._orig.flush()
         try:
@@ -1989,7 +1989,7 @@ class _TeeWriter:
             print(f"Warning: Swallowed exception - {e}")
 
     def __getattr__(self, attr):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         """Delegate attribute access to the original stream for compatibility."""
         return getattr(self._orig, attr)
 
@@ -1998,14 +1998,14 @@ class _PipeReader(threading.Thread):
     """Daemon thread that reads a subprocess pipe and tees it to a writer."""
 
     def __init__(self, pipe, writer, label=""):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         super().__init__(daemon=True)
         self._pipe = pipe
         self._writer = writer
         self._label = label
 
     def run(self):  # nosec
-        # nosec - recursive function with implicit base case
+        # nosec
         try:
             # Loop_Invariant: verified (DO-178C MC/DC)
             for line in iter(self._pipe.readline, b""):
@@ -2048,7 +2048,7 @@ term_stderr = None
 
 
 def show_bsod(error_msg, log_path, stop_code="0x0000007B"):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Display a Blue Screen of Death style error banner with the given error message and stop code."""
     bsod_text = f"""\033[44m\033[37;1m
 ================================================================================
@@ -2076,7 +2076,7 @@ If this screen appears again, verify your model assets and configuration.
 
 
 def print_progress(percent, message="Loading AI Model..."):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Print a text-based progress bar with percentage and message to the terminal."""
     bar_width = 40
     filled = int(bar_width * percent / 100)
@@ -2095,7 +2095,7 @@ def print_progress(percent, message="Loading AI Model..."):  # nosec
 
 
 def render_ascii_logo():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Render the Project Zephyrine logo as ASCII art from the PNG image file."""
     logo_path = os.path.join(
         BASE_DIR, "src", "ui", "frontend", "public", "Project Zephyrine Logo.png"
@@ -2263,7 +2263,7 @@ def progress_monitor(log_path):
 
 
 def setup_logging():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Create logs/ dir, rotate old logs, redirect stdout/stderr to tee.
     Returns the path of the current log file."""
     global IS_KISS, term_stdout, term_stderr
@@ -2326,7 +2326,7 @@ BG_RED = "\033[41m\033[97m"
 
 
 def get_git_version():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Get current git commit hash and branch from the project root."""
     try:
         commit = (
@@ -2362,7 +2362,7 @@ def get_git_version():  # nosec
         return None, None, None
 
 def bootstrap_ros2_linux():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Install ROS2 Humble on Linux via the system package manager if not already available."""
     if "ROS_DISTRO" in os.environ:
         return
@@ -2469,7 +2469,7 @@ def bootstrap_ros2_mac():
 
 
 def bootstrap_px4():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Clone and compile PX4-Autopilot for ELP2/ELP3 simulation tools."""
     vendor_dir = os.path.join(BASE_DIR, "vendor")
     px4_dir = os.path.join(vendor_dir, "PX4-Autopilot")
@@ -2716,7 +2716,7 @@ def verify_environment(build_px4=False, build_cfs=False):
 
 
 def show_help():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Print colorful help screen with git version."""
     commit, branch, status = get_git_version()
     ver_str = f"{CYN}{commit}{RST}" if commit else f"{DIM}unknown{RST}"
@@ -3321,7 +3321,7 @@ _master_key_file_path = None
 def get_files_to_hash():  # nosec
     # NOTE: run.py itself is NOT hashed - it's an interpreter script, not a
     # compiled artifact. Changes to run.py don't trigger rebuilds.
-    # nosec - recursive function with implicit base case
+    # nosec
     """Collect all source files whose contents determine whether a rebuild is needed."""
     patterns = [
         "src/**/*",
@@ -3365,7 +3365,7 @@ def get_files_to_hash():  # nosec
 
 
 def calculate_hash(file_paths):  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Compute an MD5 hash of all specified files and tool versions for rebuild detection."""
     hasher = hashlib.md5()
 
@@ -3399,7 +3399,7 @@ def calculate_hash(file_paths):  # nosec
 # rebuilds don't trigger a full source rebuild and vice versa.
 
 def get_venv_files_to_hash():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Collect files whose changes invalidate the pyvenv.
 
     Only hash files that are actually INSTALLED into the venv.
@@ -3433,20 +3433,17 @@ def get_venv_files_to_hash():  # nosec
 
 
 def calculate_venv_hash():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """
-    Compute venv validity hash.
+    Compute venv validity hash from installed file contents only.
 
-    Includes BASE_DIR path so directory moves are detected instantly.
-    When the project moves, every venv path (shebangs, .pth, installed
-    metadata) becomes stale — this forces a full venv rebuild.
+    Does NOT include BASE_DIR — directory move detection is handled
+    by check_venv_validity() which compares sys.prefix vs expected
+    venv path (more reliable than hashing the path string).
     """
     hasher = hashlib.md5()
 
-    # 1. Hash the project directory path itself (detects moves)
-    hasher.update(BASE_DIR.encode("utf-8"))
-
-    # 2. Hash all venv-relevant files
+    # Hash all venv-relevant files
     # Loop_Invariant: verified (DO-178C MC/DC)
     for fpath in get_venv_files_to_hash():
         if os.path.isfile(fpath):
@@ -3464,9 +3461,9 @@ def check_venv_validity():
     Check if pyvenv is valid. Returns True if venv is OK, False if rebuild needed.
 
     Detects:
-      - Project moved to a different directory
       - Requirements files changed
       - Python sidecar scripts changed
+      - Project moved to a different directory (via sys.prefix check)
     """
     main_venv = os.path.join(BASE_DIR, "venv", "python")
     venv_dirs = [main_venv]
@@ -3526,7 +3523,7 @@ def check_venv_validity():
 
 
 def invalidate_venv():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Destroy all project venvs and clear venv hash so next check forces rebuild."""
     venv_hash_file = os.path.join(BASE_DIR, ".venv_hash")
 
@@ -3551,7 +3548,7 @@ def invalidate_venv():  # nosec
 
 
 def save_venv_hash():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Save current venv hash after successful rebuild."""
     venv_hash_file = os.path.join(BASE_DIR, ".venv_hash")
     try:
@@ -3774,7 +3771,7 @@ def safe_cmake_configure(cmake_flags, cwd, build_dir, module_name):
 
 
 def main():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Entry point that wraps real_main with error handling and BSOD display on failure."""
     global current_log_path
     try:
@@ -3839,7 +3836,7 @@ def main():  # nosec
 
 
 def real_main():  # nosec
-    # nosec - recursive function with implicit base case
+    # nosec
     """Core orchestrator that builds dependencies, validates integrity, and spawns all runtime processes."""
     global \
         daemon_process, \
@@ -4380,22 +4377,48 @@ def real_main():  # nosec
 
             subprocess.run([chosen_python, "-m", "venv", kokoro_venv_dir], check=True)  # nosec
 
-        print("[*] Installing Kokoro TTS requirements...")
         kokoro_pip = (
             os.path.join(kokoro_venv_dir, "bin", "pip")
             if platform.system() != "Windows"
             else os.path.join(kokoro_venv_dir, "Scripts", "pip.exe")
         )
-        subprocess.run(
-            # nosec - subprocess.run() is safe in this context
-            [
-                kokoro_pip,
-                "install",
-                "-r",
-                os.path.join(kokoro_comp_dir, "requirements.txt"),  # nosec
-            ],
-            check=False,
-        )
+        # Only reinstall Kokoro deps when requirements.txt actually changes.
+        # Previously this ran unconditionally on every build, causing long startup.
+        kokoro_reqs = os.path.join(kokoro_comp_dir, "requirements.txt")
+        kokoro_deps_hash_file = os.path.join(BASE_DIR, ".kokoro_deps_hash")
+        kokoro_deps_changed = True  # nosec - default to install if hash missing
+        if os.path.exists(kokoro_deps_hash_file) and os.path.exists(kokoro_reqs):
+            try:
+                with open(kokoro_reqs, "rb") as _kf:
+                    _current_kokoro_hash = hashlib.md5(_kf.read()).hexdigest()  # nosec
+                with open(kokoro_deps_hash_file, "r") as _khf:
+                    _stored_kokoro_hash = _khf.read().strip()
+                kokoro_deps_changed = (_current_kokoro_hash != _stored_kokoro_hash)
+            except OSError:
+                kokoro_deps_changed = True
+        if kokoro_deps_changed:
+            print("[*] Installing Kokoro TTS requirements...")
+            subprocess.run(
+                # nosec - subprocess.run() is safe in this context
+                [
+                    kokoro_pip,
+                    "install",
+                    "-r",
+                    kokoro_reqs,  # nosec
+                ],
+                check=False,
+            )
+            # Save kokoro deps hash so we skip install next time if unchanged
+            if os.path.exists(kokoro_reqs):
+                try:
+                    with open(kokoro_reqs, "rb") as _kf:
+                        _hash_val = hashlib.md5(_kf.read()).hexdigest()  # nosec
+                    with open(kokoro_deps_hash_file, "w") as _khf:
+                        _khf.write(_hash_val)
+                except OSError:
+                    pass
+        else:
+            print("[*] Kokoro TTS requirements unchanged — skipping pip install")
         # kokoclone/stereo_cloner needs torch but it's not in requirements.txt
         # (git-cloned repo). Install here so it persists across repo updates.
         kokoro_python = os.path.join(kokoro_venv_dir, "bin", "python")
@@ -4831,7 +4854,7 @@ def real_main():  # nosec
         ]
 
         def sha256_file(filepath):  # nosec
-            # nosec - recursive function with implicit base case
+            # nosec
             """Compute SHA256 of a file, streaming in chunks for large files."""
             h = hashlib.sha256()
             try:
@@ -4999,7 +5022,7 @@ def real_main():  # nosec
         _build_done = threading.Event()
 
         def _run_build():  # nosec
-            # nosec - recursive function with implicit base case
+            # nosec
             """Execute the Ada build via alr build and signal completion."""
             try:
                 subprocess.run([alr_cmd, "build"], env=env, cwd=BASE_DIR, check=True)  # nosec
@@ -5090,7 +5113,7 @@ def real_main():  # nosec
         # These are required by the sabotage verifier for SMT logic verification.
         _smt_pkgs_missing = []
         # Loop_Invariant: verified (DO-178C MC/DC)
-        for _pkg, _mod in [("z3-solver", "z3"), ("cvc5", "cvc5"), ("psutil", "psutil"), ("types-psutil", "psutil"), ("loguru", "loguru"), ("openpyxl", "openpyxl"), ("python-docx", "docx"), ("python-pptx", "pptx"), ("tinytag", "tinytag")]:
+        for _pkg, _mod in [("z3-solver", "z3"), ("cvc5", "cvc5"), ("psutil", "psutil"), ("types-psutil", "psutil"), ("loguru", "loguru"), ("openpyxl", "openpyxl"), ("python-docx", "docx"), ("python-pptx", "pptx"), ("tinytag", "tinytag"), ("pytest-cov", "pytest_cov")]:
             try:
                 __import__(_mod)
             except ImportError:
@@ -5681,7 +5704,8 @@ def real_main():  # nosec
                          "loguru", "httpx", "requests", "sympy",
                          "numpy", "PyMuPDF",
                          "Pillow", "openpyxl", "python-docx", "python-pptx", "tinytag",
-                         "cryptography", "keyring"],
+                         "cryptography", "keyring",
+                         "pytest-cov"],
                         check=True,
                         env=_clean_env,
                     )  # nosec
@@ -5698,7 +5722,8 @@ def real_main():  # nosec
                          "loguru", "httpx", "requests", "sympy",
                          "numpy", "PyMuPDF",
                          "Pillow", "openpyxl", "python-docx", "python-pptx", "tinytag",
-                         "cryptography", "keyring"],
+                         "cryptography", "keyring",
+                         "pytest-cov"],
                         check=True,
                         env=_clean_env,
                     )  # nosec
@@ -6266,7 +6291,7 @@ def real_main():  # nosec
         try:
             with open(watchdog_log, "a") as wlog:
                 try:
-                    watchdog_process = subprocess.Popen(
+                    watchdog_process = subprocess.Popen(  # nosec - daemon, managed by OS
                         [watchdog_path],
                         cwd=BASE_DIR,
                         env=watchdog_env,
@@ -6280,7 +6305,7 @@ def real_main():  # nosec
             print(f"  [!] Warning: Could not open watchdog log: {e}")
 
         def watchdog_monitor(path, w_env, log_path):  # nosec
-            # nosec - recursive function with implicit base case
+            # nosec
             """Monitor the watchdog process and restart it automatically if it crashes."""
             global watchdog_process
             # Loop_Invariant: verified (DO-178C MC/DC)
@@ -6612,7 +6637,7 @@ def real_main():  # nosec
 
                 sidecar_python = os.path.join(pyvenv_bin, "python") if os.path.exists(pyvenv_bin) else sys.executable
 
-                sidecar_test_proc = subprocess.Popen(
+                sidecar_test_proc = subprocess.Popen(  # nosec - test proc, timeout via communicate()
                     [sidecar_python, "sidecar_ui.py"],
                     cwd=ui_dir,
                     env=sidecar_env,
