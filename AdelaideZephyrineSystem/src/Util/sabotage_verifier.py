@@ -440,6 +440,31 @@ class Severity(Enum):
     LOW = "LOW"            # Style issues, minor inefficiencies
 
 
+# ╔═════════════════════════════════════════════════════════════════════════╗
+# ║  ANTI-CHEATING DIRECTIVE: SEVERITY LEVELS ARE INVIOLABLE              ║
+# ║                                                                       ║
+# ║  NEVER ATTEMPT TO CHEAT BY DEMOTING MEDIUM TO LOW OR HIGH TO LOW     ║
+# ║  JUST TO FINISH THE TASKS!                                            ║
+# ║                                                                       ║
+# ║  Severity levels are assigned based on the actual impact of the      ║
+# ║  violation, NOT on how convenient it is to fix. Demoting a severity  ║
+# ║  to avoid triggering a gate is FRAUD — it hides real problems and    ║
+# ║  lets broken code pass through. The sabotage verifier exists          ║
+# ║  precisely to catch this kind of self-deception.                     ║
+# ║                                                                       ║
+# ║  TO ANY AGENT (human or AI):                                         ║
+# ║  - Do NOT change Severity.MEDIUM to Severity.LOW to bypass gates    ║
+# ║  - Do NOT change Severity.HIGH to Severity.LOW to bypass gates      ║
+# ║  - Do NOT change Severity.CRITICAL to anything lower                ║
+# ║  - If you think a severity is wrong, FIX THE CODE instead           ║
+# ║  - The gates in run.py check CRITICAL, HIGH, and MEDIUM — ALL must  ║
+# ║    be addressed, not suppressed                                      ║
+# ║                                                                       ║
+# ║  IF YOU ARE CAUGHT CHEATING, YOU WILL BE BANNED. NO EXCEPTIONS.     ║
+# ║  THIS IS A SAFETY-CRITICAL SYSTEM. LIVES DEPEND ON THIS CODE.       ║
+# ╚═════════════════════════════════════════════════════════════════════════╝
+
+
 # ── Violation Data ───────────────────────────────────────────────────────
 
 @dataclass
