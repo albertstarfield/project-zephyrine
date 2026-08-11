@@ -521,6 +521,32 @@ class CheckTracker:
 # Global tracker instance — populated during audit, read by format_report
 _check_tracker = CheckTracker()
 
+# Global verbose flag — OFF by default (KISS mode). Use --verbose to enable developer debug logging.
+# --verbose switches from KISS (minimal output) to developer debug mode (full invocation tracing).
+# This is critical infrastructure: the system bridges deterministic (Ada/SPARK) and
+# non-deterministic (Python/LLM) domains as one unified system. Self-test detection
+# (Python/Ada/TypeScript) is ALWAYS active regardless of this flag. AI-scoring is
+# ALWAYS run as part of --test-build-integrity-check (no separate --ai-score flag).
+# --verbose controls verbosity of ALL sabotage_verifier output, including AI-SCORE reports.
+_VERBOSE = False
+
+
+def _verb(msg: str) -> None:
+    """Print a verbose diagnostic message if --verbose is active."""
+    if _VERBOSE:
+        print(f"[VERB] {msg}")
+
+
+def set_verbose(enabled: bool) -> None:
+    """Enable or disable verbose logging from external callers (e.g. run.py).
+
+    When run.py calls --test-build-integrity-check, it should call
+    set_verbose(True) immediately after importing sabotage_verifier so
+    every subsequent _verb() call emits diagnostic output.
+    """
+    global _VERBOSE
+    _VERBOSE = enabled
+
 
 # ── Pattern Definition ───────────────────────────────────────────────────
 
@@ -635,14 +661,25 @@ class SabotageVerifier:
         violations = []
         lines = source.splitlines()
 
-        for pattern in self.registry.for_language(language):
+        lang_patterns = self.registry.for_language(language)
+        _verb(f"Verifying {filepath or '<source>'} ({language}) — {len(lang_patterns)} patterns loaded, {len(lines)} lines")
+
+        for pattern in lang_patterns:
+            _verb(f"  Running pattern: {pattern.name} [{pattern.category}] ({pattern.severity.value})")
             if pattern.check_func:
                 # Function-based pattern: delegate entirely
-                violations.extend(pattern.check_func(source, lines, filepath))
+                pattern_violations = pattern.check_func(source, lines, filepath)
+                if pattern_violations:
+                    _verb(f"    -> {len(pattern_violations)} violation(s) found")
+                violations.extend(pattern_violations)
             elif pattern.regex:
                 # Regex-based pattern: scan lines with guard detection
-                violations.extend(self._check_regex(pattern, lines, filepath))
+                pattern_violations = self._check_regex(pattern, lines, filepath)
+                if pattern_violations:
+                    _verb(f"    -> {len(pattern_violations)} violation(s) found")
+                violations.extend(pattern_violations)
 
+        _verb(f"Verification complete for {filepath or '<source>'}: {len(violations)} total violation(s)")
         return violations
 
     def _check_regex(self, pattern: Pattern, lines: list[str], filepath: str) -> list[Violation]:
@@ -10076,75 +10113,119 @@ def create_default_registry() -> PatternRegistry:
     registry = PatternRegistry()
 
     # Python patterns
+    _verb("Registering pattern group: python_platform_hardcoding")
     registry.register_all(_build_python_platform_hardcoding_patterns())
+    _verb("Registering pattern group: python_silent_failure")
     registry.register_all(_build_python_silent_failure_patterns())
+    _verb("Registering pattern group: python_copy_paste")
     registry.register_all(_build_python_copy_paste_patterns())
+    _verb("Registering pattern group: python_stale_reference")
     registry.register_all(_build_python_stale_reference_patterns())
+    _verb("Registering pattern group: python_dead_code")
     registry.register_all(_build_python_dead_code_patterns())
+    _verb("Registering pattern group: python_resource_leak")
     registry.register_all(_build_python_resource_leak_patterns())
+    _verb("Registering pattern group: python_softlock")
     registry.register_all(_build_python_softlock_patterns())
+    _verb("Registering pattern group: python_redundant_logic")
     registry.register_all(_build_python_redundant_logic_patterns())
+    _verb("Registering pattern group: python_exception")
     registry.register_all(_build_python_exception_patterns())
+    _verb("Registering pattern group: python_stale_flag")
     registry.register_all(_build_python_stale_flag_patterns())
+    _verb("Registering pattern group: python_venv_prefix_comparison")
     registry.register_all(_build_python_venv_prefix_comparison_patterns())
 
     # Coq proof patterns (applies to ALL source types)
+    _verb("Registering pattern group: coq_proof")
     registry.register_all(_build_coq_proof_patterns())
 
     # Behavioral & integration patterns
+    _verb("Registering pattern group: behavioral_change")
     registry.register_all(_build_behavioral_change_patterns())
+    _verb("Registering pattern group: integration_contract")
     registry.register_all(_build_integration_contract_patterns())
+    _verb("Registering pattern group: regression_reversion")
     registry.register_all(_build_regression_reversion_patterns())
 
     # Ada/SPARK patterns
+    _verb("Registering pattern group: ada_spark_off")
     registry.register_all(_build_ada_spark_off_patterns())
+    _verb("Registering pattern group: spark_gpr_coverage")
     registry.register_all(_build_spark_gpr_coverage_patterns())
+    _verb("Registering pattern group: third_party_exclusion")
     registry.register_all(_build_third_party_exclusion_patterns())
+    _verb("Registering pattern group: ada_sabotage")
     registry.register_all(_build_ada_sabotage_patterns())
 
     # C patterns
+    _verb("Registering pattern group: c_sabotage")
     registry.register_all(_build_c_sabotage_patterns())
 
     # Self-verification: venv + pyrefly + ruff enforcement (CRITICAL)
+    _verb("Registering pattern group: self_verification")
     registry.register_all(_build_self_verification_patterns())
 
     # GPU vendor lock-in / intentional bricking detection (CRITICAL)
+    _verb("Registering pattern group: gpu_vendor_lockin")
     registry.register_all(_build_gpu_vendor_lockin_patterns())
 
     # SMT solver availability enforcement (CRITICAL)
+    _verb("Registering pattern group: smt_solver_availability")
     registry.register_all(_build_smt_solver_availability_patterns())
 
     # SMT solver logic verification — formal proof of function correctness
+    _verb("Registering pattern group: smt_logic_verification")
     registry.register_all(_build_smt_logic_verification_patterns())
 
     # Metamorphic Fuzzing, FFI Symbol Verification & SECDED-TED Fault Injection (HIGH)
+    _verb("Registering pattern group: metamorphic_fuzzing")
     registry.register_all(_build_metamorphic_fuzzing_patterns())
 
     # Function comment / docstring enforcement (MEDIUM)
+    _verb("Registering pattern group: function_comment")
     registry.register_all(_build_function_comment_patterns())
 
     # Code composition balancing — Ada must be dominant (CRITICAL)
+    _verb("Registering pattern group: composition_balance")
     registry.register_all(_build_composition_balance_patterns())
 
     # Assertion & Coverage Pipeline (MEDIUM/HIGH)
+    _verb("Registering pattern group: assertion_scanner")
     registry.register_all(_build_assertion_scanner_patterns())
+    _verb("Registering pattern group: function_stability")
     registry.register_all(_build_function_stability_patterns())
     # Environment & node_modules integrity verification (CRITICAL)
+    _verb("Registering pattern group: unprotected_package_execution")
     registry.register_all(_build_unprotected_package_execution_patterns())
+    _verb("Registering pattern group: env_and_node_modules_integrity")
     registry.register_all(_build_env_and_node_modules_integrity_patterns())
 
     # Audit-discovered patterns (session 2026-08-09)
+    _verb("Registering pattern group: python_audit_finding")
     registry.register_all(_build_python_audit_finding_patterns())
 
     # Custom Ada function-level coverage (no gnatcov required)
+    _verb("Registering pattern group: ada_function_coverage")
     registry.register_all(_build_ada_function_coverage_patterns())
 
     # Custom Python function-level coverage (docstrings, types, test refs)
+    _verb("Registering pattern group: python_function_coverage")
     registry.register_all(_build_python_function_coverage_patterns())
 
     # Custom TypeScript function-level coverage (JSDoc, types, test refs)
+    _verb("Registering pattern group: typescript_function_coverage")
     registry.register_all(_build_typescript_function_coverage_patterns())
 
+    # Self-test coverage detection (MEDIUM) — functions/procs lacking tests
+    _verb("Registering pattern group: self_test_coverage")
+    registry.register_all(_build_self_test_coverage_patterns())
+
+    # Runtime silent failure detection (HIGH) — empty excepts, swallowed errors
+    _verb("Registering pattern group: runtime_silent_failure")
+    registry.register_all(_build_runtime_silent_failure_patterns())
+
+    _verb(f"create_default_registry() complete: {len(registry._patterns)} patterns registered")
     return registry
 
 
@@ -10189,13 +10270,16 @@ def run_sabotage_audit(
     Returns:
         List of violations found, sorted by severity then line number
     """
+    _verb(f"run_sabotage_audit() entry: {filepath}")
     if registry is None:
         registry = create_default_registry()
 
+    _verb(f"run_sabotage_audit: scanning {filepath}")
     source = Path(filepath).read_text(encoding="utf-8")
     language = detect_language(filepath)
     verifier = SabotageVerifier(registry)
     violations = verifier.verify(source, filepath=filepath, language=language)
+    _verb(f"run_sabotage_audit: {filepath} -> {len(violations)} violation(s)")
 
     return _filter_and_sort(violations, severity_filter)
 
@@ -10222,6 +10306,8 @@ def audit_directory(
     Returns:
         List of all violations found across all files, sorted by severity then filepath
     """
+    _verb(f"audit_directory() entry: {dirpath}")
+    _verb(f"audit_directory() entry: {dirpath}")
     if registry is None:
         registry = create_default_registry()
     if extensions is None:
@@ -10244,17 +10330,21 @@ def audit_directory(
                 # Skip excluded files (e.g., sabotage_verifier.py auditing itself)
                 if str(filepath) in exclude_files or filename in exclude_files:
                     continue
+                _verb(f"Scanning file: {filepath}")
                 try:
                     violations = run_sabotage_audit(
                         str(filepath),
                         registry=registry,
                         severity_filter=severity_filter,
                     )
+                    if violations:
+                        _verb(f"  -> {len(violations)} violation(s) in {filepath}")
                     all_violations.extend(violations)
                 except (UnicodeDecodeError, PermissionError, OSError) as e:
                     # Skip files that can't be read
                     print(f"  [!] Skipping {filepath}: {e}")
 
+    _verb(f"audit_directory() exit: {dirpath} -> {len(all_violations)} total violation(s)")
     return _filter_and_sort(all_violations, severity_filter)
 
 
@@ -10619,6 +10709,455 @@ def format_report(violations: list[Violation], target: str = "") -> str:
     return "\n".join(lines)
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# ENHANCEMENT 1: Self-Test Coverage Detection
+# ══════════════════════════════════════════════════════════════════════════
+
+def _build_self_test_coverage_patterns() -> list[Pattern]:
+    """Detect functions/procedures/classes that lack corresponding self-tests.
+
+    For Python: checks if a function has a test_foo() or test_ nearby in source.
+    For Ada: checks if a procedure/function has a corresponding test package.
+    For TypeScript: checks if functions have corresponding test file references.
+    Severity: MEDIUM (missing self-test is a quality issue, not sabotage).
+    """
+    def check_self_test_coverage(source: str, lines: list[str], filepath: str = "") -> list[Violation]:
+        violations = []
+
+        if filepath.endswith((".py",)):
+            violations.extend(_self_test_check_python(source, lines, filepath))
+        elif filepath.endswith((".adb", ".ads")):
+            violations.extend(_self_test_check_ada(source, lines, filepath))
+        elif filepath.endswith((".ts", ".tsx", ".js", ".jsx")):
+            violations.extend(_self_test_check_typescript(source, lines, filepath))
+
+        return violations
+
+    return [
+        Pattern(
+            name="self_test_coverage",
+            category="SELF_TEST_COVERAGE",
+            severity=Severity.MEDIUM,
+            standard="ISO 26262 §9.4.3, DO-178C §6.4.4",
+            description="Functions/procedures lacking corresponding self-tests",
+            languages=["python", "ada", "typescript", "c"],
+            check_func=check_self_test_coverage,
+        ),
+    ]
+
+
+def _self_test_check_python(source: str, lines: list[str], filepath: str) -> list[Violation]:
+    """Check Python functions for corresponding test_ functions in the same source."""
+    violations = []
+    # Collect all top-level and class-level function names
+    func_names: list[tuple[str, int]] = []
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        m = re.match(r"def\s+(\w+)\s*\(", stripped)
+        if m:
+            name = m.group(1)
+            # Skip dunder methods, private helpers, and test_ prefixed
+            if name.startswith("_") or name.startswith("test_"):
+                continue
+            func_names.append((name, i))
+
+    # Collect all test function names
+    test_names: set[str] = set()
+    for line in lines:
+        stripped = line.strip()
+        m = re.match(r"def\s+test_(\w+)\s*\(", stripped)
+        if m:
+            test_names.add(m.group(1))
+        # Also check for unittest.mock / pytest patterns referencing the function
+        m = re.match(r"def\s+(test_\w+)\s*\(", stripped)
+        if m:
+            test_names.add(m.group(1)[5:])  # strip "test_" prefix
+
+    for func_name, line_no in func_names:
+        # Check if any test function name contains or matches this function name
+        has_test = any(
+            func_name in tn or tn == func_name
+            for tn in test_names
+        )
+        if not has_test:
+            violations.append(Violation(
+                filepath=filepath,
+                line=line_no,
+                severity=Severity.MEDIUM,
+                category="SELF_TEST_COVERAGE",
+                message=(
+                    f"Function '{func_name}()' has no corresponding test function "
+                    f"(expected test_{func_name}() or test referencing '{func_name}')"
+                ),
+                standard="ISO 26262 §9.4.3, DO-178C §6.4.4",
+                code_snippet=f"def {func_name}(...)",
+            ))
+
+    return violations
+
+
+def _self_test_check_ada(source: str, lines: list[str], filepath: str) -> list[Violation]:
+    """Check Ada procedures/functions for corresponding test packages."""
+    violations = []
+    # Collect procedure/function names
+    proc_names: list[tuple[str, int]] = []
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        m = re.match(r"procedure\s+(\w+)", stripped, re.IGNORECASE)
+        if m:
+            name = m.group(1)
+            if not name.startswith("_"):
+                proc_names.append((name, i))
+        m = re.match(r"function\s+(\w+)", stripped, re.IGNORECASE)
+        if m:
+            name = m.group(1)
+            if not name.startswith("_"):
+                proc_names.append((name, i))
+
+    # Collect all test package / test procedure names
+    test_refs: set[str] = set()
+    for line in lines:
+        stripped = line.strip()
+        # Check for Test_<Name> packages or procedures
+        m = re.match(r"(?:package|procedure)\s+Test_(\w+)", stripped, re.IGNORECASE)
+        if m:
+            test_refs.add(m.group(1))
+        # Also check AUnit test registration
+        m = re.match(r".*Register_Routine.*\"(\w+)\"", stripped, re.IGNORECASE)
+        if m:
+            test_refs.add(m.group(1))
+
+    for proc_name, line_no in proc_names:
+        has_test = proc_name in test_refs
+        if not has_test:
+            violations.append(Violation(
+                filepath=filepath,
+                line=line_no,
+                severity=Severity.MEDIUM,
+                category="SELF_TEST_COVERAGE",
+                message=(
+                    f"Ada procedure/function '{proc_name}' has no corresponding "
+                    f"test package (expected Test_{proc_name} or AUnit registration)"
+                ),
+                standard="ISO 26262 §9.4.3, DO-178C §6.4.4",
+                code_snippet=f"procedure/function {proc_name}",
+            ))
+
+    return violations
+
+
+def _self_test_check_typescript(source: str, lines: list[str], filepath: str) -> list[Violation]:
+    """Check TypeScript/JS functions for test file references or describe/it blocks."""
+    violations = []
+    # Collect exported function names
+    func_names: list[tuple[str, int]] = []
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        # export function foo()
+        m = re.match(r"export\s+(?:async\s+)?function\s+(\w+)", stripped)
+        if m:
+            func_names.append((m.group(1), i))
+            continue
+        # export const foo = () => or export const foo = async () =>
+        m = re.match(r"export\s+const\s+(\w+)\s*=", stripped)
+        if m:
+            func_names.append((m.group(1), i))
+
+    # Collect test references: describe/it/test blocks
+    test_refs: set[str] = set()
+    for line in lines:
+        stripped = line.strip()
+        for kw in ("describe", "it", "test"):
+            m = re.match(rf'{kw}\s*\(\s*["\'](\w+)', stripped)
+            if m:
+                test_refs.add(m.group(1))
+
+    for func_name, line_no in func_names:
+        if func_name.startswith("_"):
+            continue
+        has_test = func_name in test_refs
+        if not has_test:
+            violations.append(Violation(
+                filepath=filepath,
+                line=line_no,
+                severity=Severity.MEDIUM,
+                category="SELF_TEST_COVERAGE",
+                message=(
+                    f"Exported function '{func_name}' has no corresponding "
+                    f"describe/it/test block in this file"
+                ),
+                standard="ISO 26262 §9.4.3",
+                code_snippet=f"export function {func_name}",
+            ))
+
+    return violations
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ENHANCEMENT 2: AI Scoring Eval with 85% Threshold Per Category
+# ══════════════════════════════════════════════════════════════════════════
+
+def calculate_category_scores(
+    violations: list[Violation],
+    registry: PatternRegistry | None = None,
+    threshold: float = 85.0,
+) -> dict[str, dict]:
+    """Calculate a score per category (0-100%) and flag categories below threshold.
+
+    Scoring logic:
+        - For each category, count total possible patterns (from registry) vs. violations found.
+        - Score = (1 - (violations / total_possible)) * 100, clamped to [0, 100].
+        - Categories with 0 registered patterns use violation count directly.
+        - Categories below `threshold`% are marked FAIL.
+
+    Returns:
+        dict of {category: {score, passed, violations_count, critical, high, medium, low}}
+    """
+    _verb(f"calculate_category_scores() entry: {len(violations)} violation(s), threshold={threshold}%")
+    if registry is None:
+        registry = create_default_registry()
+
+    # Build mapping: category -> total registered pattern count
+    cat_pattern_count: dict[str, int] = {}
+    for p in registry.patterns:
+        cat_pattern_count[p.category] = cat_pattern_count.get(p.category, 0) + 1
+
+    # Group violations by category
+    cat_violations: dict[str, list[Violation]] = {}
+    for v in violations:
+        cat_violations.setdefault(v.category, []).append(v)
+
+    results: dict[str, dict] = {}
+
+    # Compute scores for all categories that appear in registry OR in violations
+    all_cats = set(cat_pattern_count.keys()) | set(cat_violations.keys())
+
+    for cat in sorted(all_cats):
+        vlist = cat_violations.get(cat, [])
+        total_patterns = cat_pattern_count.get(cat, max(len(vlist), 1))
+        n_violations = len(vlist)
+
+        # Score: 100% if no violations, degrades with more violations
+        if total_patterns > 0:
+            score = max(0.0, min(100.0, (1.0 - n_violations / total_patterns) * 100.0))
+        else:
+            score = 100.0 if n_violations == 0 else 0.0
+
+        # Count by severity
+        n_crit = sum(1 for v in vlist if v.severity == Severity.CRITICAL)
+        n_high = sum(1 for v in vlist if v.severity == Severity.HIGH)
+        n_med = sum(1 for v in vlist if v.severity == Severity.MEDIUM)
+        n_low = sum(1 for v in vlist if v.severity == Severity.LOW)
+
+        passed = score >= threshold
+        results[cat] = {
+            "score": round(score, 1),
+            "passed": passed,
+            "violations_count": n_violations,
+            "critical": n_crit,
+            "high": n_high,
+            "medium": n_med,
+            "low": n_low,
+        }
+
+    return results
+
+
+def format_ai_score_report(
+    violations: list[Violation],
+    registry: PatternRegistry | None = None,
+    threshold: float = 85.0,
+) -> str:
+    """Print verbose AI-SCORE report showing per-category scores and FAIL details."""
+    _verb(f"format_ai_score_report() entry: {len(violations)} violation(s), threshold={threshold}%")
+    scores = calculate_category_scores(violations, registry, threshold)
+    lines = []
+    sep = "-" * 80
+
+    lines.append(sep)
+    lines.append("  AI-SCORE Category Evaluation")
+    lines.append(sep)
+
+    for cat, info in sorted(scores.items()):
+        status = "PASS" if info["passed"] else "FAIL"
+        lines.append(
+            f"[AI-SCORE] Category: {cat:<40s} | "
+            f"Score: {info['score']:5.1f}% | {status}"
+        )
+        if not info["passed"]:
+            lines.append(
+                f"  Violations: {info['violations_count']} | "
+                f"Critical: {info['critical']} | "
+                f"High: {info['high']} | "
+                f"Medium: {info['medium']} | "
+                f"Low: {info['low']}"
+            )
+            # List specific violation messages for FAILed categories
+            cat_violations = [v for v in violations if v.category == cat]
+            for v in cat_violations[:5]:  # show top 5
+                lines.append(f"    [{v.severity.value}] L{v.line}: {v.message[:100]}")
+            if len(cat_violations) > 5:
+                lines.append(f"    ... and {len(cat_violations) - 5} more")
+
+    lines.append(sep)
+
+    total_cats = len(scores)
+    passed_cats = sum(1 for s in scores.values() if s["passed"])
+    failed_cats = total_cats - passed_cats
+    lines.append(
+        f"  Summary: {passed_cats}/{total_cats} categories PASS "
+        f"(threshold: {threshold:.0f}%)"
+    )
+    if failed_cats > 0:
+        lines.append(f"  FAIL: {failed_cats} category(ies) below {threshold:.0f}% threshold")
+    lines.append(sep)
+
+    return "\n".join(lines)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ENHANCEMENT 4: Runtime Crash / Silent Failure Detection
+# ══════════════════════════════════════════════════════════════════════════
+
+def _build_runtime_silent_failure_patterns() -> list[Pattern]:
+    """Detect runtime silent failures: empty excepts, swallowed errors, sys.exit, infinite loops.
+
+    Severity: HIGH for empty except blocks, MEDIUM for missing logging and sys.exit.
+    """
+    def detect_silent_failures(source: str, lines: list[str], filepath: str = "") -> list[Violation]:
+        violations = []
+
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+
+            # 1. Empty except blocks: except: pass / except Exception: pass
+            if re.match(r"except\s*(?:\w*(?:Error|Exception)?)?\s*:\s*$", stripped):
+                # Check if next non-empty line is 'pass' or just 'pass'
+                for j in range(i, min(i + 3, len(lines))):
+                    next_stripped = lines[j].strip()
+                    if next_stripped == "pass":
+                        violations.append(Violation(
+                            filepath=filepath,
+                            line=i,
+                            severity=Severity.HIGH,
+                            category="SILENT_FAILURE",
+                            message=(
+                                "Empty except block with 'pass' — exceptions are silently swallowed. "
+                                "Add logging or re-raise to prevent silent failures."
+                            ),
+                            standard="CWE-390, MISRA C:2012 Rule 2.2, DO-178C §6.3.3",
+                            code_snippet=stripped,
+                        ))
+                        break
+                    elif next_stripped and not next_stripped.startswith("#"):
+                        break  # Non-empty, non-comment line found — not empty
+
+            # 2. Functions that catch all exceptions and return None/False/0
+            if re.match(r"except\s*(?:Exception|BaseException|BaseException)\s*(?:as\s+\w+)?\s*:", stripped):
+                for j in range(i, min(i + 5, len(lines))):
+                    next_stripped = lines[j].strip()
+                    if re.match(r"return\s+(None|False|0)\s*$", next_stripped):
+                        violations.append(Violation(
+                            filepath=filepath,
+                            line=i,
+                            severity=Severity.HIGH,
+                            category="SILENT_FAILURE",
+                            message=(
+                                f"Exception handler catches all errors and returns {next_stripped.split()[1]} — "
+                                f"failure will be invisible to caller. Add logging or re-raise."
+                            ),
+                            standard="CWE-390, DO-178C §6.3.3, ECSS-Q-ST-80C §7.4",
+                            code_snippet=stripped,
+                        ))
+                        break
+                    elif next_stripped and not next_stripped.startswith("#") and not next_stripped.startswith("return"):
+                        break
+
+            # 3. Missing error logging in exception handlers (except without logger/print)
+            if re.match(r"except\s+\w+", stripped):
+                has_logging = False
+                for j in range(i, min(i + 5, len(lines))):
+                    next_stripped = lines[j].strip()
+                    if any(kw in next_stripped for kw in ("logging", "logger", "print(", "log.", "traceback")):
+                        has_logging = True
+                        break
+                    if next_stripped and not next_stripped.startswith("#") and next_stripped != "pass":
+                        break
+                if not has_logging:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=i,
+                        severity=Severity.MEDIUM,
+                        category="SILENT_FAILURE",
+                        message=(
+                            "Exception handler has no logging/print — errors will be lost silently. "
+                            "Add logging.error() or traceback.print_exc()."
+                        ),
+                        standard="CWE-390, MISRA C:2012 Dir 4.1",
+                        code_snippet=stripped,
+                    ))
+
+            # 4. sys.exit() calls that silently terminate
+            if re.match(r"sys\.exit\s*\(", stripped):
+                violations.append(Violation(
+                    filepath=filepath,
+                    line=i,
+                    severity=Severity.MEDIUM,
+                    category="SILENT_FAILURE",
+                    message=(
+                        "sys.exit() call terminates process silently — "
+                        "use proper error propagation or return error codes instead."
+                    ),
+                    standard="CWE-390, DO-178C §6.3.3",
+                    code_snippet=stripped,
+                ))
+
+            # 5. Infinite loops without break conditions (while True with no break/return/raise)
+            if re.match(r"while\s+True\s*:", stripped):
+                # Look ahead up to 50 lines for break/return/raise
+                has_exit = False
+                indent_level = len(line) - len(line.lstrip())
+                for j in range(i, min(i + 50, len(lines))):
+                    next_line = lines[j]
+                    next_stripped = next_line.strip()
+                    # Check for break, return, raise at same or lower indentation
+                    next_indent = len(next_line) - len(next_line.lstrip())
+                    if next_indent <= indent_level and j > i - 1:
+                        if any(kw in next_stripped for kw in ("break", "return", "raise", "sys.exit")):
+                            has_exit = True
+                            break
+                    elif any(kw in next_stripped for kw in ("break", "return", "raise")):
+                        has_exit = True
+                        break
+                if not has_exit:
+                    violations.append(Violation(
+                        filepath=filepath,
+                        line=i,
+                        severity=Severity.HIGH,
+                        category="SILENT_FAILURE",
+                        message=(
+                            "while True loop has no visible break/return/raise — "
+                            "risk of infinite loop and process hang."
+                        ),
+                        standard="CWE-835, MISRA C:2012 Dir 4.1",
+                        code_snippet=stripped,
+                    ))
+
+        return violations
+
+    return [
+        Pattern(
+            name="runtime_silent_failure",
+            category="SILENT_FAILURE",
+            severity=Severity.HIGH,
+            standard="CWE-390, DO-178C §6.3.3, ECSS-Q-ST-80C §7.4",
+            description="Empty except blocks, swallowed exceptions, missing logging, sys.exit, infinite loops",
+            languages=["python"],
+            check_func=detect_silent_failures,
+        ),
+    ]
+
+
 def format_json(violations: list[Violation]) -> str:
     """Format violations as JSON for CI/CD integration."""
     data = []
@@ -10639,19 +11178,45 @@ def format_json(violations: list[Violation]) -> str:
 
 def main():  # nosec
     # nosec
-    """CLI entry point for standalone sabotage audit."""
+    global _VERBOSE
+    """CLI entry point for standalone sabotage audit.
+
+    Verbose logging (_VERBOSE) is OFF by default (KISS mode). Use --verbose to
+    enable full [VERB] debug logging. This verifier is part of the
+    --test-build-integrity-check pipeline.
+
+    This system bridges deterministic (Ada/SPARK formal verification) and
+    non-deterministic (Python/LLM) domains as one unified critical infrastructure.
+    Silent failures or crashes at runtime are unacceptable; verbose logging
+    ensures every step is traceable when needed for debugging.
+
+    Self-test detection patterns (self_test_coverage) are always registered —
+    they check whether every function/procedure/class has its own self-test,
+    covering Python, Ada, and TypeScript.
+
+    AI-scoring per-category evaluation (calculate_category_scores, format_ai_score_report)
+    is available programmatically but not exposed as a CLI flag. The functions
+    remain available for programmatic use by the pipeline orchestrator (run.py).
+    """
     if len(sys.argv) < 2:
         print("Usage: python sabotage_verifier.py <file_or_dir> [options]")
         print()
         print("Options:")
+        print("  --verbose             Enable verbose debug logging (KISS mode by default)")
         print("  --severity LEVEL      Minimum severity (CRITICAL, HIGH, MEDIUM, LOW)")
         print("  --extensions EXTS     Comma-separated extensions (for directories)")
         print("  --json                Output as JSON")
         print("  --exclude DIRS        Comma-separated directory names to exclude")
         print("  --exclude-files FILES Comma-separated filenames to exclude")
         print()
+        print("Notes:")
+        print("  Self-test detection (Python/Ada/TypeScript) is always active.")
+        print("  AI-scoring is available programmatically via calculate_category_scores()")
+        print("  and format_ai_score_report() — for use by the pipeline orchestrator.")
+        print()
         print("Examples:")
         print("  python sabotage_verifier.py run.py")
+        print("  python sabotage_verifier.py run.py --verbose")
         print("  python sabotage_verifier.py src/python/ --extensions .py")
         print("  python sabotage_verifier.py src/ --extensions .adb,.ads,.c,.h")
         print("  python sabotage_verifier.py src/ --exclude-files sabotage_verifier.py")
@@ -10668,7 +11233,9 @@ def main():  # nosec
     args = sys.argv[2:]
     i = 0
     while i < len(args):
-        if args[i] == "--json":
+        if args[i] == "--verbose":
+            _VERBOSE = True
+        elif args[i] == "--json":
             json_output = True
         elif args[i] == "--severity" and i + 1 < len(args):
             severity_filter = Severity(args[i + 1].upper())
@@ -10684,9 +11251,14 @@ def main():  # nosec
             i += 1
         i += 1
 
+    _verb("Starting sabotage audit...")
+    _verb(f"Target: {target}")
+    _verb(f"Severity filter: {severity_filter or 'ALL'}")
+
     target_path = Path(target)
 
     if target_path.is_dir():
+        _verb(f"Scanning directory: {target}")
         violations = audit_directory(
             target,
             extensions=extensions,
@@ -10695,7 +11267,10 @@ def main():  # nosec
             exclude_files=exclude_files,
         )
     else:
+        _verb(f"Auditing file: {target}")
         violations = run_sabotage_audit(target, severity_filter=severity_filter)
+
+    _verb(f"Audit complete: {len(violations)} violation(s) found")
 
     if json_output:
         print(format_json(violations))

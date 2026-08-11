@@ -1,5 +1,6 @@
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
+with System;
 
 --  Native C bindings for NASA cFE Software Bus
 --  Wraps the cFE core API for Ada access (pipe management, subscribe, send/receive)
@@ -62,7 +63,7 @@ package CFE_FFI_Bindings is
    --  Transmit a message (IsOrigination = true for new messages)
    function CFE_SB_TransmitMsg
      (MsgPtr        : System.Address;
-      IsOrigination : Interfaces.C.bool)
+      IsOrigination : Interfaces.C.int)
       return CFE_Status_t;
    pragma Import (C, CFE_SB_TransmitMsg, "CFE_SB_TransmitMsg");
 

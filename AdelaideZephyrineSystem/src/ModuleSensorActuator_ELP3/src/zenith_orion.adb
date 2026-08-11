@@ -50,7 +50,7 @@ package body Zenith_Orion is
    begin
       --  Initialize cFS telemetry subsystem for ELP3
       CFS_Telemetry.Initialize;
-      CFS_Telemetry.Send_Info ("ZenithOrion ELP3 initialized at 4000Hz");
+      Put_Line ("[ZenithOrion-ELP3] Initialized at 4000Hz");
       null;
    end Initialize;
 

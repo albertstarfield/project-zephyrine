@@ -8,7 +8,7 @@ package CFS_Command_Router is
 
    --  Command record
    type Command is record
-      Cmd_Type    : Cmd_Type := Custom;
+      Cmd_Kind    : Cmd_Type := Custom;
       Cmd_Data    : String (1 .. 256);
       Cmd_Len     : Natural := 0;
       Source      : String (1 .. 32);
@@ -23,7 +23,7 @@ package CFS_Command_Router is
      with Pre => Cmd.Cmd_Len > 0;
 
    --  Register a command handler for a specific command type
-   procedure Register_Handler (Cmd_Type : Cmd_Type; Handler_Name : String)
+   procedure Register_Handler (Cmd_Kind : Cmd_Type; Handler_Name : String)
      with Pre => Handler_Name'Length > 0;
 
    --  Get command statistics

@@ -133,7 +133,7 @@ package body CFS_Tool_Bridge is
             declare
                Cmd : CFS_Command_Router.Command;
             begin
-               Cmd.Cmd_Type := Cmd_T;
+               Cmd.Cmd_Kind := Cmd_T;
                Cmd.Cmd_Len := Cmd_Data'Length;
                Cmd.Cmd_Data (1 .. Cmd_Data'Length) := Cmd_Data;
                CFS_Command_Router.Route_Command (Cmd);

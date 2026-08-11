@@ -1,11 +1,11 @@
-start_time        : 1785327464
-last_update       : 1785327465
-run_time          : 1
-fuzzer_pid        : 5096
-cycles_done       : 1
-cycles_wo_finds   : 0
-time_wo_finds     : 1
-fuzz_time         : 1
+start_time        : 1786405050
+last_update       : 1786405053
+run_time          : 2
+fuzzer_pid        : 83136
+cycles_done       : 2
+cycles_wo_finds   : 1
+time_wo_finds     : 2
+fuzz_time         : 2
 calibration_time  : 0
 cmplog_time       : 0
 cmplog_tightness  : 0
@@ -13,8 +13,8 @@ cmplog_tight_new  : 0
 cmplog_size_derive: 0
 sync_time         : 0
 trim_time         : 0
-execs_done        : 1007
-execs_per_sec     : 705.68
+execs_done        : 1002
+execs_per_sec     : 419.42
 execs_ps_last_min : 0.00
 corpus_count      : 2
 corpus_favored    : 2
@@ -30,23 +30,23 @@ bitmap_cvg        : 1.13%
 saved_crashes     : 0
 saved_hangs       : 0
 total_tmout       : 0
-last_find         : 1785327464
+last_find         : 1786405050
 last_crash        : 0
 last_hang         : 0
-execs_since_crash : 1007
+execs_since_crash : 1002
 exec_timeout      : 20
-slowest_exec_ms   : 1
+slowest_exec_ms   : 3
 peak_rss_mb       : 3
 cpu_affinity      : -1
 edges_found       : 7
 total_edges       : 622
 var_byte_count    : 0
-havoc_expansion   : 0
+havoc_expansion   : 1
 auto_dict_entries : 0
 testcache_size    : 65
 testcache_count   : 2
 testcache_evict   : 0
-afl_banner        : /Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/tests/fuzz/fuzz_crypto
+afl_banner        : ...eZephyrineSystem/tests/fuzz/fuzz_crypto
 afl_version       : ++5.02c
 target_mode       : shmem_testcase deferred 
 command_line      : /opt/homebrew/Cellar/afl++/5.02c/libexec/afl-fuzz -i /Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/tests/fuzz/corpus -o /Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/tests/fuzz/output -E 1000 -- /Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/tests/fuzz/fuzz_crypto

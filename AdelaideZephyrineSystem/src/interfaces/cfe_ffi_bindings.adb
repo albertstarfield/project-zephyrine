@@ -5,8 +5,8 @@ package body CFE_FFI_Bindings is
 
    --  Internal state
    Initialized  : Boolean := False;
-   Command_Pipe : CFE_SB_PipeId_t := 0;
-   Telemetry_Pipe : CFE_SB_PipeId_t := 0;
+   Command_Pipe   : aliased CFE_SB_PipeId_t := 0;
+   Telemetry_Pipe : aliased CFE_SB_PipeId_t := 0;
 
    --  ──────────────────────────────────────────────────────────────────────
    --  CFE_Initialize: Set up the Software Bus interface

@@ -124,22 +124,22 @@ package body Claudealike_Helper is
       Put_Line ("[Claude] Processing locally via Hybrid_Generate");
       Put_Line ("[Claude] Model: " & Model);
 
-      --  Build ChatML prompt
+      --  Build prompt using OpenAI Harmony format (<|start|>, <|message|>, <|end|>, <|channel|>)
       if System_Prompt'Length > 0 then
-         Append (Prompt, "im_start" & "system" & ASCII.LF &
-                 System_Prompt & "im_end" & ASCII.LF);
+         Append (Prompt, "<|start|>developer<|message|>" &
+                 System_Prompt & "<|end|>" & ASCII.LF);
       end if;
       for I in Messages'Range loop
          -- Loop_Invariant: verified (SPARK RM 5.5)
          if Messages (I).Role = User then
-            Append (Prompt, "im_start" & "user" & ASCII.LF &
-                    To_String (Messages (I).Content) & "im_end" & ASCII.LF);
+            Append (Prompt, "<|start|>user<|message|>" &
+                    To_String (Messages (I).Content) & "<|end|>" & ASCII.LF);
          else
-            Append (Prompt, "im_start" & "assistant" & ASCII.LF &
-                    To_String (Messages (I).Content) & "im_end" & ASCII.LF);
+            Append (Prompt, "<|start|>assistant<|channel|>final<|message|>" &
+                    To_String (Messages (I).Content) & "<|end|>" & ASCII.LF);
          end if;
       end loop;
-      Append (Prompt, "im_start" & "assistant" & ASCII.LF);
+      Append (Prompt, "<|start|>assistant<|channel|>final<|message|>");
 
       --  Call local model
       Model_Manager.Hybrid_Generate (Prompt => To_String (Prompt), Result => Result);

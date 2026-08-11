@@ -1556,16 +1556,24 @@ package body Adelaide_Server_Pkg is
                                        pragma Unreferenced (Has_Ollama_Img);
                                     begin
                                        --  Extract text content into prompt
-                                       Append (Prompt, "<|im_start|>" & Role & ASCII.LF &
-                                               Content & "<|im_end|>" & ASCII.LF);
+                                       if Role = "system" then
+                                          Append (Prompt, "<|start|>developer<|message|>" &
+                                                  Content & "<|end|>" & ASCII.LF);
+                                       elsif Role = "assistant" then
+                                          Append (Prompt, "<|start|>assistant<|channel|>final<|message|>" &
+                                                  Content & "<|end|>" & ASCII.LF);
+                                       else
+                                          Append (Prompt, "<|start|>" & Role & "<|message|>" &
+                                                  Content & "<|end|>" & ASCII.LF);
+                                       end if;
                                        --  Extract and encode images (OpenAI format)
                                        Has_OpenAI_Img := Extract_And_Encode_Images (M);
                                        --  Extract and encode images (Ollama format)
                                        Has_Ollama_Img := Extract_Ollama_Images (M);
                                     end;
                                  end loop;
-                                 Append (Prompt, "<|im_start|>assistant" & ASCII.LF);
-                                 --  We've manually joined with ChatML tags, so use Raw mode.
+                                 Append (Prompt, "<|start|>assistant<|channel|>final<|message|>");
+                                 --  We've manually joined with OpenAI Harmony format tags, so use Raw mode.
                                  Is_Raw_Prompt := True;
                               exception
                                  when others => null;
@@ -2058,7 +2066,7 @@ package body Adelaide_Server_Pkg is
                end if;
 
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
-               --  Convert Claude messages to ChatML and call LOCAL model (Snowball-Enaga)
+               --  Convert Claude messages to OpenAI Harmony format and call LOCAL model (Snowball-Enaga)
                --  Returns response in Claude Messages API format.
                if Msg_Count > 0 then
                   declare
@@ -2068,10 +2076,10 @@ package body Adelaide_Server_Pkg is
                      Is_Agentic  : Boolean := False;
                      Is_Raw      : Boolean := True;
                   begin
-                     --  Build ChatML prompt from Claude messages
+                     --  Build OpenAI Harmony format prompt (<|start|>, <|message|>, <|end|>, <|channel|>) from Claude messages
                      if Length (System_Prompt) > 0 then
-                        Append (Prompt, "im_start" & "system" & ASCII.LF &
-                                To_String (System_Prompt) & "im_end" & ASCII.LF);
+                        Append (Prompt, "<|start|>developer<|message|>" &
+                                To_String (System_Prompt) & "<|end|>" & ASCII.LF);
                      end if;
                      for I in 1 .. Msg_Count loop
                         -- Loop_Invariant: verified (SPARK RM 5.5)
@@ -2079,15 +2087,15 @@ package body Adelaide_Server_Pkg is
                            M : constant Claudealike_Helper.Claude_Message := Claude_Messages (I);
                         begin
                            if M.Role = Claudealike_Helper.User then
-                              Append (Prompt, "im_start" & "user" & ASCII.LF &
-                                      To_String (M.Content) & "im_end" & ASCII.LF);
+                              Append (Prompt, "<|start|>user<|message|>" &
+                                      To_String (M.Content) & "<|end|>" & ASCII.LF);
                            else
-                              Append (Prompt, "im_start" & "assistant" & ASCII.LF &
-                                      To_String (M.Content) & "im_end" & ASCII.LF);
+                              Append (Prompt, "<|start|>assistant<|channel|>final<|message|>" &
+                                      To_String (M.Content) & "<|end|>" & ASCII.LF);
                            end if;
                         end;
                      end loop;
-                     Append (Prompt, "im_start" & "assistant" & ASCII.LF);
+                     Append (Prompt, "<|start|>assistant<|channel|>final<|message|>");
 
                      --  Call local Snowball-Enaga model via Hybrid_Generate
                      Model_Manager.Hybrid_Generate

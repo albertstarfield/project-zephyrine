@@ -25,15 +25,15 @@ package body CFS_Command_Router is
       --  TODO: Route to appropriate handler based on Cmd_Type
       --  For now, log the command
       Put_Line ("[CFS-CI] CMD#" & Natural'Image (Command_Count) &
-                " Type=" & Cmd_Type'Image (Cmd.Cmd_Type) &
+                " Type=" & Cmd_Type'Image (Cmd.Cmd_Kind) &
                 " Len=" & Natural'Image (Cmd.Cmd_Len));
    end Route_Command;
 
-   procedure Register_Handler (Cmd_Type : Cmd_Type; Handler_Name : String) is
+   procedure Register_Handler (Cmd_Kind : Cmd_Type; Handler_Name : String) is
    begin
       --  TODO: Store handler mapping in internal table
       Put_Line ("[CFS-CI] Registered handler: " & Handler_Name &
-                " for " & Cmd_Type'Image (Cmd_Type));
+                 " for " & Cmd_Type'Image (Cmd_Kind));
    end Register_Handler;
 
    function Get_Command_Count return Natural is
