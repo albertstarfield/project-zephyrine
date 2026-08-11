@@ -29,7 +29,10 @@ project Adelaide_Spark is
       "src/utils",
       "src/ModuleSensorActuator_ELP3/src",
       "src/ModuleSensorActuator_ELP3/ROS2",
-      "src/ModuleSensorActuator_ELP2/ROS2"
+      "src/ModuleSensorActuator_ELP2/ROS2",
+      "config",
+      "src/ui",
+      "tests/sabotage_verifier"
       --  Excluded from GNATprove (external deps / naming conflicts):
       --  src/python/tests                    — depends on supertonic_interface (missing)
       --  src/ModuleSensorActuator_ELP2/stella_greeting/{config,src}  — duplicate Stella_Icarus pkg

@@ -118,7 +118,8 @@ def ensure_ollama_running():  # nosec
         try:
             requests.get(f"{OLLAMA_BASE_URL}", timeout=2)
             return True
-        except Exception:
+        except Exception as e:
+            trace_print("searchglobalref", "warning", f"Ollama connection failed: {e}")
             return False
 
 def get_embedding(text: str):  # nosec
@@ -141,7 +142,8 @@ def get_embedding(text: str):  # nosec
         elif "embedding" in data:
             return np.array(data["embedding"])
         return None
-    except Exception:
+    except Exception as e:
+        trace_print("searchglobalref", "warning", f"Failed to get embedding: {e}")
         return None
 
 def store_in_memory(content, ollama_external=None):  # nosec
@@ -200,7 +202,8 @@ def main():  # nosec
             s.connect(("8.8.8.8", 53))
             s.close()
             return True
-        except Exception:
+        except Exception as e:
+            trace_print("searchglobalref", "warning", f"Internet connection check failed: {e}")
             return False
 
     if not check_internet_connection():

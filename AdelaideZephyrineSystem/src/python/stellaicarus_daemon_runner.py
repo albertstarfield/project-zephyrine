@@ -48,9 +48,6 @@ sys.path.insert(0, STELLA_ICARUS_DIR) # for any internal imports
 
 # Mock configuration
 
-# Global Performance Tuning: Disable Garbage Collection
-gc.disable()
-
 mock_config: typing.Any = types.ModuleType("CortexConfiguration")
 mock_config.ENABLE_STELLA_ICARUS_HOOKS = True
 mock_config.STELLA_ICARUS_HOOK_DIR = STELLA_ICARUS_DIR
@@ -119,7 +116,7 @@ def main():  # nosec
     ros2_daemon_path = os.path.join(STELLA_ICARUS_DIR, "ros2_daemon", "ros2_telemetry_node.py")
     if os.path.exists(ros2_daemon_path):
         logger.info(f"Starting ROS2 Telemetry Daemon: {ros2_daemon_path}")
-        ros2_proc = subprocess.Popen([sys.executable, ros2_daemon_path], stdout=sys.stdout, stderr=sys.stderr)
+        ros2_proc = subprocess.Popen([sys.executable, ros2_daemon_path], stdout=sys.stdout, stderr=sys.stderr)  # timeout: long-running daemon process
     else:
         ros2_proc = None
 

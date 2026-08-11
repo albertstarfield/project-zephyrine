@@ -1085,7 +1085,8 @@ def _ip_sep_store(uuid_str):  # nosec
             import keyring
             keyring.set_password("AdelaideZephyrineSystem", "inferior_paradoxical", uuid_str)
             return True
-        except Exception:
+        except Exception as e:
+            print(f"Warning: keyring store failed: {e}")
             return False
 
 
@@ -1242,7 +1243,8 @@ def _ip_signature_store(sig_hash):  # nosec
         )  # nosec
         os.unlink(tmp)
         return True
-    except Exception:
+    except Exception as e:
+        print(f"Warning: TPM signature store failed: {e}")
         try:
             os.unlink(tmp)
         except Exception as e:
@@ -1281,13 +1283,15 @@ def _ip_signature_sep_store(sig_hash):  # nosec
             capture_output=True, timeout=5, check=True,
         )  # nosec
         return True
-    except Exception:
+    except Exception as e:
+        print(f"Warning: security add-generic-password failed: {e}")
         try:
             import keyring
             keyring.set_password("AdelaideZephyrineSystem",
                                  "inferior_paradoxical_signature", sig_hash)
             return True
-        except Exception:
+        except Exception as ex:
+            print(f"Warning: keyring signature store failed: {ex}")
             return False
 
 
@@ -1499,7 +1503,8 @@ def _load_cached_username(ip_key):  # nosec
         if not encrypted_blob:
             return None
         return decrypt_field(ip_key, encrypted_blob)
-    except Exception:
+    except Exception as e:
+        print(f"Warning: loading cached username failed: {e}")
         return None
 
 
@@ -2038,8 +2043,8 @@ def _rotate_logs():
         try:
             os.remove(path)
             total -= sz
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"Warning: unable to remove old log {path}: {e}")
 
 
 IS_KISS = False
@@ -4424,8 +4429,8 @@ def real_main():  # nosec
                             _hash_val = hashlib.md5(_kf.read()).hexdigest()  # nosec
                         with open(kokoro_deps_hash_file, "w") as _khf:
                             _khf.write(_hash_val)
-                    except OSError:
-                        pass
+                    except OSError as e:
+                        print(f"Warning: failed to save kokoro deps hash: {e}")
             else:
                 print("[*] Kokoro TTS requirements unchanged — skipping pip install")
             # kokoclone/stereo_cloner needs torch but it's not in requirements.txt
@@ -5271,7 +5276,7 @@ def real_main():  # nosec
             for v in sabotage_violations:
                 _symbol = "✗" if v.severity == _SabotageSeverity.CRITICAL else "△" if v.severity == _SabotageSeverity.HIGH else "·"
                 _relpath = os.path.relpath(v.filepath, BASE_DIR) if v.filepath else "run.py"
-                print(f"  {_symbol} [{v.severity.value}] {_relpath}:{v.line}: {v.category} — {v.message[:80]}...")
+                print(f"  {_symbol} [{v.severity.value}] {_relpath}:{v.line}: {v.category} — {v.message}")
 
             # PROOF_MISSING is FRAUD — block build
             if proof_missing:
@@ -5333,7 +5338,8 @@ def real_main():  # nosec
                 raise RuntimeError(
                     f"MEDIUM_SEVERITY: {len(sabotage_medium)} MEDIUM violations\n"
                     f"  Files: {', '.join(sorted(_med_files)[:10])}{'...' if len(_med_files) > 10 else ''}\n"
-                    f"  MEDIUM severity violations are NOT acceptable.\n"
+                    f"  POLICY MANDATE: MEDIUM severity violations are strictly NOT allowed to exist.\n"
+                    f"  They block the build gate completely with zero exceptions.\n"
                     f"  Fix these before proceeding to formal verification stages.\n"
                     f"  DO NOT CHEAT. DO NOT BYPASS. NOT EVEN AS AN AGENT."
                 )
@@ -5431,8 +5437,8 @@ def real_main():  # nosec
                                 try:
                                     os.remove(os.path.join(root, fname))
                                     _ali_cleaned += 1
-                                except OSError:
-                                    pass
+                                except OSError as e:
+                                    print(f"Warning: failed to remove .ali file: {e}")
         if _ali_cleaned:
             print(f"[*] Cleaned {_ali_cleaned} stale .ali files from Alire cache for GNATprove.")
 
@@ -5684,8 +5690,8 @@ def real_main():  # nosec
                                 f_full = os.path.join(r_dir, f_item)
                                 try:
                                     os.chmod(f_full, 0o755)
-                                except OSError:
-                                    pass
+                                except OSError as e:
+                                    print(f"Warning: chmod on {f_full} failed: {e}")
                 subprocess.run([npm_cmd, "run", "build"], cwd=frontend_dir, check=True)  # nosec
             except subprocess.CalledProcessError:
                 raise RuntimeError(

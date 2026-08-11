@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-import gc
 import os
 import subprocess
 import sys
 import types
 import typing
-
-# Global Performance Tuning: Disable Garbage Collection
-gc.disable()
 
 # --- Bootstrap Virtual Environment ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

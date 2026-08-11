@@ -1,5 +1,6 @@
 pragma SPARK_Mode (Off);
 --  c_binding: NASA cFE Command Ingest (CI_LAB) integration
+--  third-party: cFS (no SPARK contracts)
 --  Wraps cFS CI_LAB for Adelaide command routing
 package CFS_Command_Router is
 

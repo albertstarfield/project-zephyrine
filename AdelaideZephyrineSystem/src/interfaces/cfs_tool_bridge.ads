@@ -1,5 +1,6 @@
 pragma SPARK_Mode (Off);
---  cFS Tool Bridge — ELP0/ELP1 (LLM cognitive layer) → cFS Software Bus
+--  c_binding: NASA cFE Tool Bridge — ELP0/ELP1 (LLM cognitive layer) → cFS Software Bus
+--  third-party: cFS (no SPARK contracts)
 --  Provides tool-call bindings so the LLM can:
 --   - Query telemetry (cfs_tlm)
 --   - Send commands (cfs_cmd)

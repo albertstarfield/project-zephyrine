@@ -1,3 +1,5 @@
+pragma SPARK_Mode (Off);
+--  c_binding: NASA cFE Software Bus (SB) integration
 with Ada.Text_IO; use Ada.Text_IO;
 with System;
 

@@ -1,10 +1,6 @@
-import gc
 import os
 import subprocess
 import sys
-
-# Global Performance Tuning: Disable Garbage Collection
-gc.disable()
 
 
 class AdelaideBridge:

@@ -97,7 +97,7 @@ class TestAdelaideCore(unittest.TestCase):
         try:
             p = subprocess.Popen(
                 [binary_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-            )
+            )  # timeout: test process managed by communicate(timeout=30)
         except (subprocess.SubprocessError, OSError) as e:
             self.fail(f"Could not start binary {binary_path}: {e}")
             return

@@ -5,26 +5,24 @@ Detects known sabotage patterns across Python, Ada/SPARK, and C source files.
 This is the internal critic that prevents wasting hours on GNATprove and AFL++
 when the source itself has crash-on-launch bugs.
 
+WARNING / MANDATE:
+------------------
+DO NOT EXECUTE THIS DIRECTLY BUT RATHER EXECUTE IT FROM ./run.sh --test-build-integrity-check
+OR YOU WILL STUCK FOREVER!
+
 Architecture:
 - PatternRegistry: Adaptive, extensible pattern database
 - SabotageVerifier: Core engine that runs registered patterns against source
 - Language-specific checkers: Python, Ada/SPARK, C
 - Multi-file audit: Scan entire directories for sabotage patterns
-- CLI interface: --verify-sabotage flag for standalone execution
 
 Usage:
+    # Recommended:
+    ./run.sh --test-build-integrity-check
+
     # From run.py (integrated into build pipeline):
     from src.Util.sabotage_verifier import run_sabotage_audit, audit_directory
     violations = run_sabotage_audit("run.py")
-    violations = audit_directory("src/python/", extensions=[".py"])
-    violations = audit_directory("src/", extensions=[".adb", ".ads"])
-
-    # Standalone:
-    python src/Util/sabotage_verifier.py run.py
-    python src/Util/sabotage_verifier.py run.py --severity CRITICAL
-    python src/Util/sabotage_verifier.py src/python/ --extensions .py
-    python src/Util/sabotage_verifier.py src/ --extensions .adb,.ads,.c
-    python src/Util/sabotage_verifier.py run.py --json
 """
 
 # ╔═════════════════════════════════════════════════════════════════════════╗
@@ -10395,7 +10393,7 @@ def calculate_mal_score(violations: list[Violation]) -> tuple[str, str, str]:
     elif n_crit == 0 and n_high == 0 and n_med == 0:
         return ("MAL-SS", "Sick Skills", f"{n_low} LOW violation(s) — almost SSS but we had to look away")
     elif n_crit == 0 and n_high == 0:
-        return ("MAL-S", "Savage", f"{n_med} MEDIUM violation(s) — build blocked. Some suppressions we don't talk about")
+        return ("MAL-S", "Savage", f"{n_med} MEDIUM violation(s) — GATE BLOCKED. MEDIUM violations are strictly NOT allowed to exist!")
     elif n_crit == 0:
         return ("MAL-A", "Apocalyptic", f"{n_high} HIGH violation(s) — build blocked. No grace, no elegance.")
     elif n_crit <= 2:
@@ -10492,11 +10490,13 @@ def format_static_pattern_summary(violations: list[Violation], registry: Pattern
         )
 
     lines.append(sep)
-    status_summary = "ALL CHECKS PASSED" if (tot_crit == 0 and tot_high == 0 and tot_med == 0) else f"{tot_violations} VIOLATION(S) DETECTED"
+    status_summary = "ALL CHECKS PASSED" if (tot_crit == 0 and tot_high == 0 and tot_med == 0) else f"{tot_violations} VIOLATION(S) DETECTED — GATE BLOCKED"
     lines.append(
         f"  Total Static Violations: {tot_violations} "
         f"(Critical: {tot_crit}, High: {tot_high}, Medium: {tot_med}, Low: {tot_low}) — Status: {status_summary}"
     )
+    if tot_crit > 0 or tot_high > 0 or tot_med > 0:
+        lines.append("  [!] POLICY NOTICE: CRITICAL, HIGH, and MEDIUM severity violations are strictly NOT allowed to exist and block the build gate.")
     lines.append(sep)
     return "\n".join(lines)
 
@@ -11179,6 +11179,7 @@ def format_json(violations: list[Violation]) -> str:
 def main():  # nosec
     # nosec
     global _VERBOSE
+    print("[!] WARNING: DO NOT EXECUTE THIS DIRECTLY BUT RATHER EXECUTE IT FROM ./run.sh --test-build-integrity-check OR YOU WILL STUCK FOREVER!")
     """CLI entry point for standalone sabotage audit.
 
     Verbose logging (_VERBOSE) is OFF by default (KISS mode). Use --verbose to

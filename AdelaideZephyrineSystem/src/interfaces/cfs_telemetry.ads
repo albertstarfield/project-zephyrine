@@ -1,5 +1,6 @@
 pragma SPARK_Mode (Off);
 --  c_binding: NASA cFE Telemetry Output (TO_LAB) integration
+--  third-party: cFS (no SPARK contracts)
 --  Wraps cFS TO_LAB for Adelaide telemetry aggregation
 package CFS_Telemetry is
 

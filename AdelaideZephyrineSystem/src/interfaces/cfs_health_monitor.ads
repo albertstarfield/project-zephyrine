@@ -1,5 +1,6 @@
 pragma SPARK_Mode (Off);
 --  c_binding: NASA cFE Health & Safety (HS) app integration
+--  third-party: cFS (no SPARK contracts)
 --  Wraps cFS HS app for Adelaide health monitoring
 package CFS_Health_Monitor is
 

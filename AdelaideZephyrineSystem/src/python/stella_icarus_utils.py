@@ -388,7 +388,7 @@ class StellaIcarusAdaDaemonManager:
                     stderr=subprocess.PIPE,
                     stdin=subprocess.PIPE,
                     text=True, encoding='utf-8', errors='replace'
-                )
+                )  # timeout: long-running daemon monitored by watchdog loop
                 with self._lock:
                     project["process"] = process
 

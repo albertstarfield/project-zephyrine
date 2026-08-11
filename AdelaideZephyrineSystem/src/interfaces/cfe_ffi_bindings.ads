@@ -1,3 +1,5 @@
+pragma SPARK_Mode (Off);
+--  c_binding: NASA cFE Software Bus (SB) integration
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
