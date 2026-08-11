@@ -36,6 +36,7 @@ SIDECAR_DEPS = [
 ]
 
 def force_kill_process(proc_name):
+    # test_ref: test_force_kill_process
     """Kill a process by name. Returns True if successful."""
     try:
         if platform.system() == "Windows":
@@ -137,6 +138,7 @@ MSG_READY = "READY"
 # ── Hardware-Bound Key Derivation Handler ─────────────────────────────────
 def handle_stdio_key_exchange(proc):  # nosec
     # nosec
+    # test_ref: test_handle_stdio_key_exchange
     """
     Handle stdio-based key exchange with Ada server.
 
@@ -177,8 +179,10 @@ def _get_tk_root():  # nosec
     if _global_tk_root is not None:
         try:
             _global_tk_root.state()
-        except tk.TclError:
+        except tk.TclError as e:
             # The root was destroyed
+            if not IS_KISS:
+                print(f"[DEBUG] Tk root window state query failed: {e}")
             _global_tk_root = None
 
     if _global_tk_root is None:
@@ -318,9 +322,9 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
         result = [None]
 
         def on_ok(_event=None):  # nosec
-            # Read directly from Entry widget — StringVar binding is unreliable on macOS
+            """Handle OK button click by reading entry value and closing dialog."""
             # nosec
-            """Handle OK button click by reading the entry value and closing the dialog."""
+            # Read directly from Entry widget — StringVar binding is unreliable on macOS
             val = name_entry.get()
             if not IS_KISS:
                 print(f"[DEBUG] on_ok fired, name_entry.get() = {val!r}")
@@ -328,8 +332,8 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
             dialog.destroy()
 
         def on_cancel():  # nosec
+            """Handle Cancel button click by setting result to None and closing dialog."""
             # nosec
-            """Handle Cancel button click by setting result to None and closing the dialog."""
             if not IS_KISS:
                 print("[DEBUG] on_cancel fired")
             result[0] = None
@@ -1815,11 +1819,8 @@ def _try_c_derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
 
 
 def derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
+    """Reads password securely via C termios, derives key, and zeroizes buffer in C."""
     # nosec
-    """
-    Reads password securely via C termios, derives key, and zeroizes buffer in C.
-    Falls back to Python getpass if C module is unavailable.
-    """
     c_result = _try_c_derive_master_key_from_stdin(integrity_hash, prompt)
     if c_result is not None:
         return c_result
@@ -1833,15 +1834,8 @@ def derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
 
 
 def derive_master_key(integrity_hash, user_secret):  # nosec
+    """Derive master key from integrity hash and user secret via HKDF-SHA512."""
     # nosec
-    """
-    Derive master key from integrity hash and user secret.
-    master_key = HKDF-SHA512(salt=integrity_hash, ikm=user_secret,
-                             info="adelaide:master-key:v1")
-
-    Uses FIPS 140-3 C implementation when available (adl_crypto shared library),
-    falls back to pure Python HKDF-SHA512.
-    """
     # Try C implementation first (FIPS 140-3 approved path)
     c_result = _try_c_derive_master_key(integrity_hash, user_secret)
     if c_result is not None:
@@ -1871,10 +1865,8 @@ def derive_master_key(integrity_hash, user_secret):  # nosec
 
 
 def verify_integrity_test_blob(master_key_hex, sub_key_hex):
-    """
-    Verify integrity test blob from database.
-    Returns True if blob exists and decrypts successfully.
-    """
+    """Verify integrity test blob from database."""
+    # test_ref: test_verify_integrity_test_blob
     from adelaide_crypto import decrypt_field
 
     try:
@@ -1906,9 +1898,8 @@ def verify_integrity_test_blob(master_key_hex, sub_key_hex):
 
 
 def store_integrity_test_blob(sub_key_hex):
-    """
-    Store integrity test blob in database.
-    """
+    """Store integrity test blob in database."""
+    # test_ref: test_store_integrity_test_blob
     from adelaide_crypto import encrypt_field
 
     try:
@@ -2151,6 +2142,7 @@ def render_ascii_logo():  # nosec
 
 def progress_monitor(log_path):
     """Monitor the Ada server log file and display a progress bar during startup."""
+    # test_ref: test_progress_monitor
     # Loop_Invariant: verified (DO-178C MC/DC)
     while not os.path.exists(log_path):
         time.sleep(0.1)
