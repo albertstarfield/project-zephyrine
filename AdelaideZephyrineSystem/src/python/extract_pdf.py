@@ -43,7 +43,10 @@ def extract_images(doc, max_pages=MAX_IMAGE_PAGES):
     output_dir = os.path.join(
         tempfile.gettempdir(), f"pdf_extract_{uuid.uuid4().hex[:12]}"
     )
-    os.makedirs(output_dir, exist_ok=True)
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+    except OSError as e:
+        raise RuntimeError(f"Failed to create output directory {output_dir}: {e}") from e
 
     image_paths = []
     total_available = len(doc)

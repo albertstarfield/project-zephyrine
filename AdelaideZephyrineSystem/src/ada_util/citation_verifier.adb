@@ -19,7 +19,9 @@ with Trace_Utils;
 --  Citation_Verifier: Main entry point. Queries Crossref API via curl
 --  for academic paper citations based on keywords.
 -- @test: Citation_Verifier covered by sabotage_verifier
-procedure Citation_Verifier is
+procedure Citation_Verifier
+  with Pre => True, Post => True;
+is
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
 
