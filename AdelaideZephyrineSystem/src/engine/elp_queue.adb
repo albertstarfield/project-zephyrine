@@ -172,17 +172,13 @@ package body ELP_Queue is
        end Set_Task_Start;
 
        --  Return the per-level task counts.
-          with Pre => True, Post => True; -- TODO: specify actual contracts
        -- @test: Get_Counts covered by sabotage_verifier
        function Get_Counts return Level_Counts is (Counts);
        --  Return the total number of pending tasks across all levels.
-          with Pre => True, Post => True; -- TODO: specify actual contracts
        -- @test: Get_Total covered by sabotage_verifier
        function Get_Total return Long_Long_Integer is (Total);
        --  Return the source name of the most recently enqueued task.
-          with Pre => True, Post => True; -- TODO: specify actual contracts
        -- @test: Get_Last_Source covered by sabotage_verifier
-          with Pre => True, Post => True; -- TODO: specify actual contracts
        function Get_Last_Source return String is (Last_Source (1 .. Source_Len));
     end Load_State;
 

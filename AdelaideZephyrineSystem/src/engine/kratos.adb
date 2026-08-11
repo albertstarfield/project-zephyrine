@@ -11,12 +11,9 @@ package body Kratos is
      (Context : System.Address; -- FFI: System.Address required for C binding
       Batch   : System.Address) -- FFI: System.Address required for C binding
       return Interfaces.C.int
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
    --  Raw FFI binding to the llama.cpp llama_decode function.
-         with Pre => True, Post => True; -- TODO: specify actual contracts
       -- @test: Llama_Decode_Bare covered by sabotage_verifier
-         with Pre => True, Post => True; -- TODO: specify actual contracts
       function Llama_Decode_Bare
         (Ctx   : System.Address; -- FFI: System.Address required for C binding
          Batch : System.Address) -- FFI: System.Address required for C binding

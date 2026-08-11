@@ -37,12 +37,10 @@ package body Watchdog_Manager is
       end Set_Aborted;
 
       --  Is_Aborted: Returns True if the current inference has been aborted.
-         with Pre => True, Post => True; -- TODO: specify actual contracts
       -- @test: Is_Aborted covered by sabotage_verifier
       function Is_Aborted return Boolean is (Aborted);
 
       --  Current_Inference_Model: Returns the model type of the current inference.
-         with Pre => True, Post => True; -- TODO: specify actual contracts
       -- @test: Current_Inference_Model covered by sabotage_verifier
       function Current_Inference_Model return Model_Type is (Current_Model);
 
@@ -52,7 +50,6 @@ package body Watchdog_Manager is
         (Limit       : Time_Span;
          Out_Aborted : out Boolean;
          Out_Model   : out Model_Type)
-         with Pre => True, Post => True; -- TODO: specify actual contracts
       is
          --  [VITAL-DO-NOT-REMOVE] Mandated by user.
          pragma Annotate

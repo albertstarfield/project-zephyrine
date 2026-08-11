@@ -64,7 +64,6 @@ package body Trace_Utils is
      (Toolcall : in String;
       Step     : in String := "";
       Message  : in String := "")
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       use Ada.Text_IO;
       use Ada.Strings.Unbounded;

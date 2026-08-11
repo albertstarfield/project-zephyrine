@@ -41,7 +41,6 @@ package body MCU_Protocol is
    -- Checksum is the sum of all bytes modulo 256
    -- @test: Calculate_Checksum covered by sabotage_verifier
    function Calculate_Checksum (Data : Ada.Streams.Stream_Element_Array) 
-                                 with Pre => True, Post => True; -- TODO: specify actual contracts
                               return Ada.Streams.Stream_Element is
       Sum : Ada.Streams.Stream_Element := 0;
    begin
@@ -74,7 +73,6 @@ package body MCU_Protocol is
    ---------------------
    -- @test: Encode_Control covered by sabotage_verifier
    function Encode_Control (Values : Control_Values) 
-                             with Pre => True, Post => True; -- TODO: specify actual contracts
                           return Ada.Streams.Stream_Element_Array is
       Buffer : Ada.Streams.Stream_Element_Array (0 .. 6);
    begin

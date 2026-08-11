@@ -281,7 +281,6 @@ package body Adelaide_Server_Pkg is
      (Content : String;
       Status  : AWS.Messages.Status_Code := AWS.Messages.S200;
       C_Type  : String := "application/json") return AWS.Response.Data
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       Resp : AWS.Response.Data := AWS.Response.Build (C_Type, Content);
    begin
@@ -699,7 +698,6 @@ package body Adelaide_Server_Pkg is
      -- @test: Dispatch covered by sabotage_verifier
      function Dispatch
        (Request : AWS.Status.Data) return AWS.Response.Data
-        with Pre => True, Post => True; -- TODO: specify actual contracts
      is
           --  UserAgent=FuzzyMatch: Behavioural patch for external agent detection.
           --  External agent apps (OpenCode, OpenWebUI, etc.) send structured

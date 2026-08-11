@@ -21,9 +21,7 @@ package body Accuracy_Benchmark_Manager is
    --  [DO NOT REMOVE] Load bundled benchmark dataset from local JSONL file.
    --  Following the OMLX pattern: datasets are pre-bundled in run/benchmark_data/
    --  as JSONL files. No runtime downloading needed — files ship with the code.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Download_Dataset covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Download_Dataset (
       Repo_Id : String;
       Subset  : String;

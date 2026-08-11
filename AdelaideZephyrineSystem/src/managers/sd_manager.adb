@@ -33,9 +33,7 @@ package body SD_Manager is
    --  ============================================================================
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Initialize covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Initialize
      (Flux_Diffusion : String;
       Flux_Clip_L    : String;
@@ -268,7 +266,6 @@ package body SD_Manager is
    --    Stage 1: FLUX sparse → Stage 2: SD refinement
 
    --  FFI to C helper for PNG+Base64 encoding
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: SD_Image_To_Base64_PNG covered by sabotage_verifier
    function SD_Image_To_Base64_PNG
      (Image_Data : System.Address; -- FFI: System.Address required for C binding
@@ -278,15 +275,12 @@ package body SD_Manager is
    pragma Import (C, SD_Image_To_Base64_PNG, "sd_image_to_base64_png");
 
    --  SD_Free_String: C FFI binding to free a string allocated by the SD library.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: SD_Free_String covered by sabotage_verifier
    procedure SD_Free_String (Str : Interfaces.C.Strings.chars_ptr);
    pragma Import (C, SD_Free_String, "sd_free_string");
 
    --  Generate_Two_Stage: Generates an image using a two-stage Flux pipeline.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Generate_Two_Stage covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Generate_Two_Stage
      (Prompt         : String;
       Width          : Integer := 1024;

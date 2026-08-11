@@ -19,9 +19,7 @@ package body Think_Tag_Sanitizer is
    Close_Tag : constant String := "</think>";
 
    --  Trim leading and trailing whitespace from an Unbounded_String.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Trim_Both covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Trim_Both (S : Unbounded_String) return Unbounded_String is
       Str : constant String := To_String (S);
       First : Positive := Str'First;
@@ -49,7 +47,6 @@ package body Think_Tag_Sanitizer is
      (Text           : Unbounded_String;
       Remove_Content : Boolean := True)
       return Unbounded_String
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       Source : constant String := To_String (Text);
       Result : Unbounded_String := Null_Unbounded_String;

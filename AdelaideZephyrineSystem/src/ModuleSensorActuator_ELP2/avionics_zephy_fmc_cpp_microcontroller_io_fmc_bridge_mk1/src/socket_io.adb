@@ -14,7 +14,6 @@ package body Socket_IO is
    SOCK_NONBLOCK  : constant Interfaces.C.int := 2048;
    
    -- C function bindings
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: socket covered by sabotage_verifier
    function socket (domain : Interfaces.C.int; 
                     kind : Interfaces.C.int; 
@@ -22,7 +21,6 @@ package body Socket_IO is
    pragma Import (C, socket, "socket");
    
    --  bind: C FFI binding to bind a socket to an address.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: bind covered by sabotage_verifier
    function bind (socket_fd : Interfaces.C.int;
                   addr : System.Address; -- FFI: System.Address required for C binding
@@ -30,14 +28,12 @@ package body Socket_IO is
    pragma Import (C, bind, "bind");
    
    --  listen: C FFI binding to mark socket as passive (listening).
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: listen covered by sabotage_verifier
    function listen (socket_fd : Interfaces.C.int; 
                     backlog : Interfaces.C.int) return Interfaces.C.int;
    pragma Import (C, listen, "listen");
    
    -- RENAMED to avoid conflict with Ada keyword 'accept'
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: c_accept covered by sabotage_verifier
    function c_accept (socket_fd : Interfaces.C.int;
                       addr : System.Address; -- FFI: System.Address required for C binding
@@ -45,7 +41,6 @@ package body Socket_IO is
    pragma Import (C, c_accept, "accept");
    
    --  connect: C FFI binding to connect to a remote socket address.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: connect covered by sabotage_verifier
    function connect (socket_fd : Interfaces.C.int;
                      addr : System.Address; -- FFI: System.Address required for C binding
@@ -53,15 +48,12 @@ package body Socket_IO is
    pragma Import (C, connect, "connect");
    
    --  close: C FFI binding to close a file descriptor.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: close covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function close (fd : Interfaces.C.int) return Interfaces.C.int;
    pragma Import (C, close, "close");
    
    --  write: C FFI binding to write data to a file descriptor.
    -- @test: write covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function write (fd : Interfaces.C.int;
                    buf : System.Address; -- FFI: System.Address required for C binding
                    count : Interfaces.C.size_t) return Interfaces.C.long;

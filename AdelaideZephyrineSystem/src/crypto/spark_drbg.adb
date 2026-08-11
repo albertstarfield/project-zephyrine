@@ -23,7 +23,6 @@ is
    -- @test: Update covered by sabotage_verifier
    procedure Update (Provided_Data : Seed_Type)
      with Global => (In_Out => State)
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       Temp  : Seed_Type := (others => 0);
       Block : Block_Type := (others => 0);

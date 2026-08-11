@@ -24,9 +24,7 @@ package body Tool_Call_Autofix is
    -- This is the classic Wagner-Fischer algorithm with space optimization.
    -- Reference: Wagner & Fischer (1974), "The String-to-String Correction Problem"
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Levenshtein covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Levenshtein (Left, Right : String) return Natural is
       M : constant Natural := Left'Length;
       N : constant Natural := Right'Length;
@@ -125,9 +123,7 @@ package body Tool_Call_Autofix is
    --  This is simpler and more portable than Ada.Strings.Handling.To_Lower
    --  because it doesn't depend on locale settings.
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: To_Lower_Case covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function To_Lower_Case (S : String) return String is
       Result : String (S'Range);
    begin
@@ -155,9 +151,7 @@ package body Tool_Call_Autofix is
    --    - One empty: returns 0.0 (completely different)
    --    - Same length, one edit: returns (N-1)/N ≈ 0.83 for N=6
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Match_Quality covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Match_Quality (Left, Right : String) return Float is
       Max_Len : constant Natural := Integer'Max (Left'Length, Right'Length);
       Dist    : constant Natural := Levenshtein (Left, Right);
@@ -177,7 +171,6 @@ package body Tool_Call_Autofix is
 
    -- @test: Register_Tool covered by sabotage_verifier
    procedure Register_Tool (Registry : in out Tool_Registry;
-                               with Pre => True, Post => True; -- TODO: specify actual contracts
                             Name     : String) is
    begin
       if Registry.Count < MAX_KNOWN_TOOLS then
@@ -198,9 +191,7 @@ package body Tool_Call_Autofix is
    --  IMPORTANT: When adding new tools to tool_manager.adb, add their names
    --  here too! The registry must stay in sync with Execute_Tool's if-chain.
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Build_Default_Registry covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Build_Default_Registry return Tool_Registry is
       R : Tool_Registry;
    begin
@@ -358,7 +349,6 @@ package body Tool_Call_Autofix is
    function Fuzzy_Fix (Registry : Tool_Registry;
                        Input    : String)
      return Match_Result
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       --  Normalize input to lowercase for case-insensitive matching
       --  The LLM might output "Git" or "GIT" instead of "git"

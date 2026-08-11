@@ -14,16 +14,13 @@ package body Watchdog_IPC is
    Exit_File : constant String := Run_Dir & "/adelaide_server.exit_reason";
 
    --  Get_PID: C FFI binding to get the current process ID.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Get_PID covered by sabotage_verifier
    function Get_PID return Integer;
    pragma Import (C, Get_PID, "getpid");
 
    --  kill(pid, 0) checks if a process exists without sending a signal.
    --  Returns 0 if process exists, -1 if not (ESRCH).
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Kill covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Kill (PID : Integer; Sig : Integer) return Integer;
    pragma Import (C, Kill, "kill");
 

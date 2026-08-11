@@ -40,15 +40,12 @@ package body Adelaide_Crypto is
    function Adl_Crypto_Init_Wrapper return int;
    pragma Import (C, Adl_Crypto_Init_Wrapper, "adl_crypto_init_wrapper");
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    --  Adl_Master_Key_Available: C FFI binding to check if master key is available.
    -- @test: Adl_Master_Key_Available covered by sabotage_verifier
    function Adl_Master_Key_Available return int;
    pragma Import (C, Adl_Master_Key_Available, "adl_master_key_available");
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    --  Adl_Is_Poisoned: C FFI binding to check if crypto is poisoned.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Adl_Is_Poisoned covered by sabotage_verifier
    function Adl_Is_Poisoned return int;
    pragma Import (C, Adl_Is_Poisoned, "adl_is_poisoned");
@@ -58,28 +55,23 @@ package body Adelaide_Crypto is
    function Adl_Self_Tests_Passed return int;
    pragma Import (C, Adl_Self_Tests_Passed, "adl_self_tests_passed");
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    --  Adl_Is_FIPS_Mode: C FFI binding to check if FIPS mode is enabled.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Adl_Is_FIPS_Mode covered by sabotage_verifier
    function Adl_Is_FIPS_Mode return int;
    pragma Import (C, Adl_Is_FIPS_Mode, "adl_is_fips_mode");
 
    --  Adl_Set_FIPS_Mode: C FFI binding to enable or disable FIPS mode.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Adl_Set_FIPS_Mode covered by sabotage_verifier
    procedure Adl_Set_FIPS_Mode (Mode : int);
    pragma Import (C, Adl_Set_FIPS_Mode, "adl_set_fips_mode");
 
    --  These return malloc'd strings (chars_ptr). Must be freed with Adl_Free_Cstr.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Adl_Derive_Subkey_Cstr covered by sabotage_verifier
    function Adl_Derive_Subkey_Cstr
      (Context : chars_ptr) return chars_ptr;
    pragma Import (C, Adl_Derive_Subkey_Cstr, "adl_derive_subkey_cstr");
 
    --  Adl_Encrypt_Field_Cstr: C FFI binding to encrypt a field with AES-GCM.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Adl_Encrypt_Field_Cstr covered by sabotage_verifier
    function Adl_Encrypt_Field_Cstr
      (Sub_Key  : chars_ptr;
@@ -87,7 +79,6 @@ package body Adelaide_Crypto is
    pragma Import (C, Adl_Encrypt_Field_Cstr, "adl_encrypt_field_cstr");
 
    --  Adl_Decrypt_Field_Cstr: C FFI binding to decrypt a field with AES-GCM.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Adl_Decrypt_Field_Cstr covered by sabotage_verifier
    function Adl_Decrypt_Field_Cstr
      (Sub_Key       : chars_ptr;
@@ -95,7 +86,6 @@ package body Adelaide_Crypto is
    pragma Import (C, Adl_Decrypt_Field_Cstr, "adl_decrypt_field_cstr");
 
    --  Adl_Free_Cstr: C FFI binding to free a C string allocated by malloc.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Adl_Free_Cstr covered by sabotage_verifier
    procedure Adl_Free_Cstr (Ptr : chars_ptr);
    pragma Import (C, Adl_Free_Cstr, "adl_free_cstr");
@@ -116,7 +106,6 @@ package body Adelaide_Crypto is
    function Call_C_String
      (Fn         : C_String_Func;
       Arg1       : String) return Crypto_Result
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       C_Arg1 : chars_ptr := New_String (Arg1);
       C_Res  : chars_ptr;
@@ -285,7 +274,6 @@ package body Adelaide_Crypto is
    function Encrypt_Field
      (Sub_Key_Hex : String;
       Plaintext   : String) return Crypto_Result
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
    begin
       if not Crypto_Initialized then
@@ -323,7 +311,6 @@ package body Adelaide_Crypto is
    function Try_Encrypt
      (Sub_Key_Hex : String;
       Plaintext   : String) return String
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       Res : constant Crypto_Result := Encrypt_Field (Sub_Key_Hex, Plaintext);
    begin

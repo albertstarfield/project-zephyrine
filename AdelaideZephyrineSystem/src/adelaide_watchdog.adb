@@ -46,11 +46,9 @@ procedure Adelaide_Watchdog is
 
    --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
    -- @test: Install_Shutdown_Handlers covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Install_Shutdown_Handlers;
    pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
    -- @test: Is_Shutdown_Requested covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Is_Shutdown_Requested return Interfaces.C.int;
    pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
    --  Last_Signal_Received: C FFI binding returning the last signal received by the process.

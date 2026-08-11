@@ -118,9 +118,7 @@ package body Security_Scanner is
    );
 
    --  Check if a filename ends with one of the source extensions.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Is_Source_File covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Is_Source_File (Name : String) return Boolean is
    begin
          -- Loop_Invariant: loop body maintains program invariant
@@ -140,9 +138,7 @@ package body Security_Scanner is
    end Is_Source_File;
 
    --  Check if a directory name should be skipped.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Should_Skip_Dir covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Should_Skip_Dir (Name : String) return Boolean is
    begin
       --  Skip hidden directories (starting with '.')
@@ -159,9 +155,7 @@ package body Security_Scanner is
    end Should_Skip_Dir;
 
    --  Manual ASCII To_Lower (avoids Ada.Strings.Handling dependency).
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: To_Lower_Char covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function To_Lower_Char (C : Character) return Character is
    begin
       if C in 'A' .. 'Z' then
@@ -170,10 +164,8 @@ package body Security_Scanner is
       return C;
    end To_Lower_Char;
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: To_Lower_Str covered by sabotage_verifier
    -- Function To_Lower_Str: TODO document purpose and behavior
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function To_Lower_Str (S : String) return String is
       Result : String := S;
    begin
@@ -191,7 +183,6 @@ package body Security_Scanner is
      (Haystack : String;
       Needle   : String)
       return Boolean
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       H : constant String := To_Lower_Str (Haystack);
        N : constant String := To_Lower_Str (Needle);
@@ -203,9 +194,7 @@ package body Security_Scanner is
    --  Scan_File: Scan a single file for security issues.
    --  Axiom: DO-178C MC/DC — loop invariants verified for line iteration.
    --  =====================================================================
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Scan_File covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Scan_File (Filepath : String) return Scan_Result is
       F      : File_Type;
       Result : Scan_Result;
@@ -261,9 +250,7 @@ package body Security_Scanner is
    --  Scan_Directory: Recursively scan a directory tree.
    --  Axiom: ISO/IEC 8652:2012 RM A.16 (Directory traversal).
    --  =====================================================================
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Scan_Directory covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Scan_Directory (Path : String) return Scan_Result is
       Result : Scan_Result;
       Search : Search_Type;
@@ -342,9 +329,7 @@ package body Security_Scanner is
    --  =====================================================================
    --  Format_Report: Human-readable report output.
    --  =====================================================================
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Format_Report covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Format_Report (Result : Scan_Result) return String is
       R : Unbounded_String;
       Now : constant Time := Clock;
@@ -401,9 +386,7 @@ package body Security_Scanner is
    --  =====================================================================
    --  Format_JSON: JSON report output (matches Python json.dumps format).
    --  =====================================================================
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Format_JSON covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Format_JSON (Result : Scan_Result) return String is
       R : Unbounded_String;
       Now : constant Time := Clock;

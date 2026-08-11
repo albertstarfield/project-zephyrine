@@ -584,9 +584,7 @@ package body Tool_Manager is
    --  CFS_Tool_Bridge.Tool_Result and Tool_Manager.Tool_Result.
    --  ============================================================================
    -- function: Execute_CFS_Tool — wraps CFS_Tool_Bridge.Execute_CFS_Tool
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Execute_CFS_Tool covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Execute_CFS_Tool (Params : String) return Tool_Result is
       Bridge_Result : CFS_Tool_Bridge.Tool_Result;
    begin

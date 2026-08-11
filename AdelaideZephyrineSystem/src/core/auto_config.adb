@@ -621,7 +621,6 @@ package body Auto_Config is
    procedure Record_Success
      (Kind     : Model_Type;
       Ctx_Used : Interfaces.C.unsigned)
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       C : Working_Config := Current_Config (Kind);
    begin
@@ -703,7 +702,6 @@ package body Auto_Config is
    procedure Record_Failure
      (Kind      : Model_Type;
       Ctx_Tried : Interfaces.C.unsigned)
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       C : Working_Config := Current_Config (Kind);
    begin

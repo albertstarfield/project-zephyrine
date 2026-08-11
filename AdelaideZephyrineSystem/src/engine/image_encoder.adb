@@ -48,7 +48,6 @@ package body Image_Encoder is
      (Nx         : unsigned;
       Ny         : unsigned;
       Pixel_Data : System.Address) return Boolean -- FFI: System.Address required for C binding
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       Mtmd_Ctx : Mtmd_Context;
       Bitmap   : Mtmd_Bitmap;
@@ -325,9 +324,7 @@ package body Image_Encoder is
 
    --  Get the embedding data from the last encoded image
    --  Returns a pointer to the float array containing the embeddings
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Get_Last_Image_Embeddings covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Get_Last_Image_Embeddings return System.Address is -- FFI: System.Address required for C binding
    begin
       return Last_Image.Embeddings;

@@ -18,9 +18,7 @@ is
    --  These functions are implemented in adl_crypto.c
 
    --  HKDF_SHA512: C FFI binding for HKDF-SHA512 key derivation.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: HKDF_SHA512 covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function HKDF_SHA512
      (Salt      : System.Address; -- FFI: System.Address required for C binding
       Salt_Len  : Interfaces.C.size_t;

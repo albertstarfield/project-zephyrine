@@ -11,7 +11,6 @@ package body Zenith_Manager is
       -- @test: Update covered by sabotage_verifier
       procedure Update
         (Timing : Duration; Jitter_Max : Duration; Jitter_Avg : Duration)
-         with Pre => True, Post => True; -- TODO: specify actual contracts
       is
       begin
          Current_Timing := Timing;

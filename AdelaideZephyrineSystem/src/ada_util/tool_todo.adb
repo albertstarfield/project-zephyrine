@@ -36,9 +36,7 @@ package body Tool_Todo is
    end record;
 
    --  Load todos from .todos.json file.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Load_Todos covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Load_Todos return Todo_List is
       Result : Todo_List;
    begin
@@ -89,9 +87,7 @@ package body Tool_Todo is
    end Load_Todos;
 
    --  Save todos to .todos.json file.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Save_Todos covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Save_Todos (List : Todo_List) is
       Arr : JSON_Array;
    begin
@@ -120,9 +116,7 @@ package body Tool_Todo is
    end Save_Todos;
 
    --  Find next available ID.
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Next_Id covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Next_Id (List : Todo_List) return Natural is
       Max_Id : Natural := 0;
    begin
@@ -137,9 +131,7 @@ package body Tool_Todo is
    end Next_Id;
 
    --  Manual ASCII To_Lower (avoids Ada.Strings.Handling dependency).
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: To_Lower_Char covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function To_Lower_Char (C : Character) return Character is
    begin
       if C in 'A' .. 'Z' then
@@ -148,10 +140,8 @@ package body Tool_Todo is
       return C;
    end To_Lower_Char;
 
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: To_Lower_Str covered by sabotage_verifier
    -- Function To_Lower_Str: TODO document purpose and behavior
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function To_Lower_Str (S : String) return String is
       Result : String := S;
    begin
@@ -169,7 +159,6 @@ package body Tool_Todo is
      (Haystack : String;
       Needle   : String)
       return Boolean
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       H : constant String := To_Lower_Str (Haystack);
        N : constant String := To_Lower_Str (Needle);
@@ -178,9 +167,7 @@ package body Tool_Todo is
    end Contains_Case_Insensitive;
 
    --  Execute_Todo
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    -- @test: Execute_Todo covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
    function Execute_Todo (Params : String) return String is
       Tokens : constant String := Trim (Params, Both);
       Start  : Natural := Tokens'First;

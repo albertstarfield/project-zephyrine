@@ -112,11 +112,9 @@ procedure Adelaide_Server is
    -- pre => True, post => True
 
     --  Get_Port: Returns the server port from command-line args or environment.
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     -- @test: Get_Port covered by sabotage_verifier
     function Get_Port return Natural;
     --  Get_Host: Returns the server host from command-line args or environment.
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     -- @test: Get_Host covered by sabotage_verifier
     function Get_Host return String;
     --  Get_SSL_Cert_Path: Returns the SSL certificate file path.
@@ -125,28 +123,21 @@ procedure Adelaide_Server is
     --  Get_SSL_Key_Path: Returns the SSL private key file path.
     -- @test: Get_SSL_Key_Path covered by sabotage_verifier
     function Get_SSL_Key_Path return String;
-       with Pre => True, Post => True; -- TODO: specify actual contracts
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     --  Use_HTTPS: Returns True if HTTPS is enabled via command-line or environment.
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     -- @test: Use_HTTPS covered by sabotage_verifier
     function Use_HTTPS return Boolean;
     --  Get_Sidecar_Port: Returns the sidecar UI port from command-line or environment.
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     -- @test: Get_Sidecar_Port covered by sabotage_verifier
     function Get_Sidecar_Port return Natural;
 
     --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM/SIGQUIT)
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     -- @test: Install_Shutdown_Handlers covered by sabotage_verifier
     procedure Install_Shutdown_Handlers;
     pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     -- @test: Is_Shutdown_Requested covered by sabotage_verifier
     function Is_Shutdown_Requested return Interfaces.C.int;
     pragma Import (C, Is_Shutdown_Requested, "is_shutdown_requested");
     --  Last_Signal_Received: C FFI binding returning the last signal received by the process.
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     -- @test: Last_Signal_Received covered by sabotage_verifier
     function Last_Signal_Received return Interfaces.C.int;
     pragma Import (C, Last_Signal_Received, "last_signal_received");
@@ -157,7 +148,6 @@ procedure Adelaide_Server is
     procedure C_Exit (Status : Interfaces.C.int);
     pragma Import (C, C_Exit, "_exit");
 
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  C import to force unbuffered stdout/stderr.  When run.py launches this
     --  server via subprocess.Popen(), stdout becomes a pipe (not a terminal).
@@ -165,7 +155,6 @@ procedure Adelaide_Server is
     --  output sits in the C buffer and is never flushed.  The server runs fine
     --  but is completely invisible — no banner, no init logs, no API responses.
     --  Call these as the VERY FIRST thing in main(), before any Put_Line.
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     -- @test: Force_Stdout_Unbuffered covered by sabotage_verifier
     procedure Force_Stdout_Unbuffered;
     pragma Import (C, Force_Stdout_Unbuffered, "force_stdout_unbuffered");
@@ -173,7 +162,6 @@ procedure Adelaide_Server is
     procedure Force_Stderr_Unbuffered;
     pragma Import (C, Force_Stderr_Unbuffered, "force_stderr_unbuffered");
 
-       with Pre => True, Post => True; -- TODO: specify actual contracts
     --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     --  ==================================================================
     --  INIT PHASE EPOCH CLOCK

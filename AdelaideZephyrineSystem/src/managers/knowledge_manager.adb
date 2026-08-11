@@ -191,9 +191,7 @@ package body Knowledge_Manager is
     function Get_Home_Directory return String is
        -- pre => True, post => True
        use Interfaces.C.Strings;
-          with Pre => True, Post => True; -- TODO: specify actual contracts
        -- @test: Get_Env covered by sabotage_verifier
-          with Pre => True, Post => True; -- TODO: specify actual contracts
        function Get_Env (Name : chars_ptr) return chars_ptr;
        pragma Import (C, Get_Env, "getenv");
 

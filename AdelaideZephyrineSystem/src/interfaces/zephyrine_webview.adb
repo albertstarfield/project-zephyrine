@@ -80,7 +80,6 @@ package body Zephyrine_WebView is
    -- Procedure Resize: TODO document purpose and behavior
    procedure Resize (Handle : WebView_Handle;
                       Width  : Positive;
-                         with Pre => True, Post => True; -- TODO: specify actual contracts
                       Height : Positive) is
    begin
       if Handle = null or else not Handle.Is_Initialized then
@@ -106,7 +105,6 @@ package body Zephyrine_WebView is
    -- @test: Navigate covered by sabotage_verifier
    -- Procedure Navigate: TODO document purpose and behavior
    procedure Navigate (Handle : WebView_Handle;
-                          with Pre => True, Post => True; -- TODO: specify actual contracts
                        URL    : String) is
    begin
       if Handle = null or else not Handle.Is_Initialized then
@@ -118,7 +116,6 @@ package body Zephyrine_WebView is
    -- @test: Execute_JavaScript covered by sabotage_verifier
    -- Procedure Execute_JavaScript: TODO document purpose and behavior
    procedure Execute_JavaScript (Handle : WebView_Handle;
-                                    with Pre => True, Post => True; -- TODO: specify actual contracts
                                  Script : String) is
       pragma Unreferenced (Handle);
       pragma Unreferenced (Script);
@@ -161,7 +158,6 @@ package body Zephyrine_WebView is
    -- @test: Set_Opacity covered by sabotage_verifier
    -- Procedure Set_Opacity: TODO document purpose and behavior
    procedure Set_Opacity (Handle  : WebView_Handle;
-                             with Pre => True, Post => True; -- TODO: specify actual contracts
                           Opacity : Float) is
    begin
       if Handle = null or else not Handle.Is_Initialized then
@@ -173,7 +169,6 @@ package body Zephyrine_WebView is
    -- @test: Fade_In covered by sabotage_verifier
    -- Procedure Fade_In: TODO document purpose and behavior
    procedure Fade_In (Handle   : WebView_Handle;
-                         with Pre => True, Post => True; -- TODO: specify actual contracts
                       Duration : Float := 1.0) is
       pragma Unreferenced (Handle);
       pragma Unreferenced (Duration);
