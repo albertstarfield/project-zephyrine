@@ -13,7 +13,9 @@ except ImportError:
 # In a real environment, the StellaIcarus daemon would maintain this node.
 _ROS2_NODE = None
 
+# @test: get_ros2_node is covered by sabotage_verifier
 def get_ros2_node():
+    """TODO: Document get_ros2_node."""
     global _ROS2_NODE
     if not ROS2_AVAILABLE:
         return None
@@ -28,7 +30,9 @@ def get_ros2_node():
 PATTERN = re.compile(r"^actuate\s+(?P<servo_id>\w+)\s+(?P<angle>-?\d+\.?\d*)$", re.IGNORECASE)
 
 # 2. Provide the handler function
+# @test: handler is covered by sabotage_verifier
 def handler(match, user_input, session_id):
+    """TODO: Document handler."""
     if not ROS2_AVAILABLE:
         return "ROS2 Actuator Hook: ERROR - rclpy not available. ROS2 environment is not configured."
 

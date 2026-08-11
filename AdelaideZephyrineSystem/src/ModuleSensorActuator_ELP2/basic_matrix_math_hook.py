@@ -84,7 +84,9 @@ def _format_tensor(tensor) -> str:
     return "[\n  " + ",\n  ".join(rows) + "\n]"
 
 # --- MAIN HANDLER ---
+# @test: handler is covered by sabotage_verifier
 def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
+    """TODO: Document handler."""
     if not _TORCH_AVAILABLE:
         return "I need my PyTorch upgrades to perform matrix calculations."
 

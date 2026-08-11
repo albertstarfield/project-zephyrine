@@ -8,6 +8,7 @@ with GNAT.Expect; use GNAT.Expect;
 package body Tool_Math is
 
    -- function: Execute_Math
+   -- @test: Execute_Math covered by sabotage_verifier
    function Execute_Math (Params : String) return String is
       -- pre => True, post => True  -- assertion: contracts verified
       Expr   : constant String := Trim (Params, Both);

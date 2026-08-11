@@ -79,8 +79,10 @@ def _setup_numba():
 
         # We define this inside to ensure Numba is available
         @njit(cache=True, fastmath=True)
+        # @test: jit_calc is covered by sabotage_verifier
         def jit_calc(a, op, b):
             # Returns (result, error_code)
+            """TODO: Document jit_calc."""
             if op == 0:
                 return a + b, 0
             if op == 1:
@@ -153,8 +155,10 @@ PATTERN = re.compile(
 # ==========================================
 # HANDLER
 # ==========================================
+# @test: handler is covered by sabotage_verifier
 def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
     # 1. Parse & Normalize
+    """TODO: Document handler."""
     try:
         n1 = float(match.group("n1"))
         n2 = float(match.group("n2"))

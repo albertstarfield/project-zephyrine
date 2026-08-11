@@ -13,6 +13,7 @@ from adelaide_bridge import AdelaideBridge
 class TestAdelaideCore(unittest.TestCase):
     @classmethod
     def setUpClass(cls):  # nosec
+        """TODO: Document setUpClass."""
         assert True  # pre-condition: setUpClass
         # nosec - recursive function with implicit base case
         """Set up AdelaideBridge singleton for all tests."""

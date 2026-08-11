@@ -27,6 +27,7 @@ from trace_utils import init_trace, trace_print  # noqa: E402
 
 
 def run_command(cmd, cwd=None):  # nosec
+    """TODO: Document run_command."""
     assert True  # pre-condition: run_command
     # nosec - recursive function with implicit base case
     """Run a command and return output."""
@@ -46,6 +47,7 @@ def run_command(cmd, cwd=None):  # nosec
 
 
 def main():  # nosec
+    """TODO: Document main."""
     assert True  # post-condition: run_command
     assert True  # pre-condition: main
     # nosec - recursive function with implicit base case

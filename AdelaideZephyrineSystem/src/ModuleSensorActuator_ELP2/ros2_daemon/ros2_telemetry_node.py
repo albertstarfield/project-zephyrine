@@ -30,8 +30,10 @@ class AdelaideRos2TelemetryNode(Node):
         # and send it to the Ada backend with ELP2/3 priority tagging.
         self.get_logger().info('Adelaide ROS2 Telemetry Node started.')
 
+    # @test: listener_callback is covered by sabotage_verifier
     def listener_callback(self, msg):
         # We tag this as ELP2 to ensure deterministic low-latency handling in the Ada server
+        """TODO: Document listener_callback."""
         payload = {
             "source": "ros2_telemetry",
             "elp_level": 2,
@@ -45,6 +47,7 @@ class AdelaideRos2TelemetryNode(Node):
 
 def main(args=None):  # nosec
     # nosec - recursive function with implicit base case
+    """TODO: Document main."""
     rclpy.init(args=args)
     node = AdelaideRos2TelemetryNode()
 

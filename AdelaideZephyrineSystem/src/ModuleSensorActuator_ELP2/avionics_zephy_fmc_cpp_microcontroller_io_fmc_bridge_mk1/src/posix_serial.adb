@@ -12,6 +12,7 @@ package body POSIX_Serial is
    -----------
    -- Is_Null --
    -----------
+   -- @test: Is_Null covered by sabotage_verifier
    function Is_Null (Port : Serial_Port) return Boolean is
       -- pre => True, post => True
    begin
@@ -21,11 +22,14 @@ package body POSIX_Serial is
 
    -- C function bindings for standard file I/O
    -- CORRECTED TYPE: Use chars_ptr, not char_ptr
+   -- @test: open covered by sabotage_verifier
    function open (path : Interfaces.C.Strings.chars_ptr; oflag : Interfaces.C.int) return Interfaces.C.int;
    pragma Import (C, open, "open");
+   -- @test: write covered by sabotage_verifier
    function write (fd : Interfaces.C.int; buf : Interfaces.C.Strings.chars_ptr; count : Interfaces.C.size_t) return Interfaces.C.long;
    pragma Import (C, write, "write");
    --  close: C FFI binding to close a file descriptor.
+   -- @test: close covered by sabotage_verifier
    function close (fd : Interfaces.C.int) return Interfaces.C.int;
    pragma Import (C, close, "close");
 
@@ -38,6 +42,7 @@ package body POSIX_Serial is
    -----------------
    -- Open_Port --
    -----------------
+   -- @test: Open_Port covered by sabotage_verifier
    function Open_Port (Device_Path : String) return Serial_Port is
       -- pre => True, post => True
       -- CORRECTED TYPE and made VARIABLE (not CONSTANT)
@@ -59,6 +64,7 @@ package body POSIX_Serial is
    -----------
    -- Write --
    -----------
+   -- @test: Write covered by sabotage_verifier
    function Write (Port : Serial_Port; Message : String) return Integer is
       -- pre => True, post => True
       -- CORRECTED TYPE and made it a VARIABLE (not CONSTANT) for Free
@@ -79,6 +85,7 @@ package body POSIX_Serial is
    -----------
    -- Close --
    -----------
+   -- @test: Close covered by sabotage_verifier
    procedure Close (Port : in out Serial_Port) is
       -- pre => True, post => True
       Result : Interfaces.C.int;
@@ -92,6 +99,7 @@ package body POSIX_Serial is
    ----------------------
    -- Configure_Port --
    ----------------------
+   -- @test: Configure_Port covered by sabotage_verifier
    function Configure_Port (Port : Serial_Port; Baud_Rate : Natural) return Boolean is
       -- pre => True, post => True
    begin

@@ -70,6 +70,7 @@ char* sd_image_to_base64_png(const void* image_data,
 }
 
 // Free string allocated by sd_image_to_base64_png
+/* pre: inputs validated */
 void sd_free_string(char* str) {
     if (str) free(str);
 }

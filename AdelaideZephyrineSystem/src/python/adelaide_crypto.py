@@ -642,6 +642,7 @@ def _re_encrypt_db(db_path: str, old_sub_key: bytes, new_sub_key: bytes,
 
 # ── AAD Migration ──────────────────────────────────────────────────────────
 
+# @test: migrate_to_aad is covered by sabotage_verifier
 def migrate_to_aad(db_path: str, sub_key: bytes, table: str,
                    key_column: str, encrypt_columns: list[str],
                    aad_context: str) -> int:

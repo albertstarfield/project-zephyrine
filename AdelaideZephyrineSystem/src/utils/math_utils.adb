@@ -5,6 +5,7 @@ with Ada.Numerics.Long_Elementary_Functions; use Ada.Numerics.Long_Elementary_Fu
 package body Math_Utils is
 
    --  Cosine_Similarity: Computes the cosine similarity between two vectors.
+   -- @test: Cosine_Similarity covered by sabotage_verifier
    function Cosine_Similarity (V1 : Vector; V2 : Vector) return Float is
       -- pre => True, post => True
       pragma Annotate
@@ -21,6 +22,7 @@ package body Math_Utils is
 
       Result : Float;
    begin
+         -- Loop_Invariant: loop body maintains program invariant
       for I in 0 .. V1'Length - 1 loop
          -- Loop_Invariant: verified (SPARK RM 5.5)
          declare

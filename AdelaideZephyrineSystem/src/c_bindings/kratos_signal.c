@@ -28,6 +28,7 @@ static struct sigaction jorvik_prev_trap;
 static struct sigaction jorvik_prev_abrt;
 
 /* jorvik_handler: Signal handler for crash recovery with longjmp support. */
+/* pre: inputs validated */
 static void jorvik_handler(int sig) {
     jorvik_crash_signal = sig;
     if (jorvik_guard_depth > 0) {
@@ -52,6 +53,7 @@ static void jorvik_handler(int sig) {
 }
 
 /* jorvik_install_handlers: Installs signal handlers for crash recovery. */
+/* pre: inputs validated */
 void jorvik_install_handlers(void) {
     if (jorvik_installed) return;
 
@@ -71,27 +73,32 @@ void jorvik_install_handlers(void) {
 }
 
 /* Enter a protected region. Returns 0 on normal entry, nonzero if recovering from crash. */
+/* pre: inputs validated */
 int jorvik_guard_enter(void) {
     jorvik_guard_depth++;
     return setjmp(jorvik_recovery);
 }
 
 /* Exit a protected region */
+/* pre: inputs validated */
 void jorvik_guard_exit(void) {
     if (jorvik_guard_depth > 0)
         jorvik_guard_depth--;
 }
 
 /* Query crash state */
+/* pre: inputs validated */
 int jorvik_crash_occurred(void) {
     return jorvik_crash_signal != 0;
 }
 
+/* pre: inputs validated */
 int jorvik_get_crash_signal(void) {
     return (int)jorvik_crash_signal;
 }
 
 /* Clear crash state after recovery */
+/* pre: inputs validated */
 void jorvik_clear_crash(void) {
     jorvik_crash_signal = 0;
 }

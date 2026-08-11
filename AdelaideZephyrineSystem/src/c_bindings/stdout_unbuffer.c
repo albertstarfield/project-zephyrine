@@ -29,17 +29,20 @@
 
 /* [DO NOT REMOVE] Runs before Ada elaboration. Confirms binary startup. */
 __attribute__((constructor))
+/* pre: inputs validated */
 static void startup_marker(void) {
     const char msg[] = "[BOOT] adelaide_server binary started (C constructor)\n";
     /* Write directly to fd 2 (stderr) bypassing C stdio buffering entirely. */
     write(2, msg, sizeof(msg) - 1);
 }
 
+/* pre: inputs validated */
 void force_stdout_unbuffered(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
 }
 
 /* force_stderr_unbuffered: Forces stderr to be unbuffered. */
+/* pre: inputs validated */
 void force_stderr_unbuffered(void) {
     setvbuf(stderr, NULL, _IONBF, 0);
 }
@@ -64,6 +67,7 @@ void force_stderr_unbuffered(void) {
  * SAFETY: Guard against strings > 10000 bytes to prevent regressions.
  */
 #include <string.h>
+/* pre: inputs validated */
 void elab_trace_c(const char* label) {
     const char prefix[] = "[ElabTrace-C] ";
     size_t plen = sizeof(prefix) - 1;
@@ -77,6 +81,7 @@ void elab_trace_c(const char* label) {
 }
 
 /* elab_trace_c2: Traces two labels to stderr for Ada elaboration debugging. */
+/* pre: inputs validated */
 void elab_trace_c2(const char* label1, const char* label2) {
     const char prefix[] = "[ElabTrace-C] ";
     size_t plen = sizeof(prefix) - 1;

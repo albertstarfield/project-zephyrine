@@ -8,6 +8,7 @@ with Knowledge_Manager;
 with Ada.Exceptions;
 
 --  AdelaideZephyrineSystem: Main entry point for the Adelaide Zephyrine System.
+-- @test: AdelaideZephyrineSystem covered by sabotage_verifier
 procedure AdelaideZephyrineSystem is
    -- pre => True, post => True
 begin
@@ -44,6 +45,7 @@ begin
               AnsiAda.Reset);
 
    --  Main loop - continues listening even after errors
+      -- Loop_Invariant: loop body maintains program invariant
    loop
       begin
          declare

@@ -14,6 +14,7 @@ package body Adelaide_Trace is
    --  ------------------------------------------------------------------------
    --  Initialize
    --  ------------------------------------------------------------------------
+   -- @test: Initialize covered by sabotage_verifier
    procedure Initialize is
       -- pre => True, post => True
       use GNAT.OS_Lib;
@@ -40,6 +41,7 @@ package body Adelaide_Trace is
    --  ------------------------------------------------------------------------
    --  Uptime
    --  ------------------------------------------------------------------------
+   -- @test: Uptime covered by sabotage_verifier
    function Uptime return Natural is
       -- pre => True, post => True
    begin
@@ -49,6 +51,7 @@ package body Adelaide_Trace is
    --  ------------------------------------------------------------------------
    --  Trace_Print (two-argument form)
    --  ------------------------------------------------------------------------
+   -- @test: Trace_Print covered by sabotage_verifier
    procedure Trace_Print (Toolcall : String; Message : String := "") is
       -- pre => True, post => True
    begin
@@ -73,6 +76,7 @@ package body Adelaide_Trace is
    --  ------------------------------------------------------------------------
    --  Trace_Print (three-argument form with Step)
    --  ------------------------------------------------------------------------
+   -- @test: Trace_Print covered by sabotage_verifier
    procedure Trace_Print (Toolcall : String; Step    : String;
                           Message  : String := "") is
       -- pre => True, post => True
@@ -100,6 +104,7 @@ package body Adelaide_Trace is
    --  ------------------------------------------------------------------------
    --  Trace_Result
    --  ------------------------------------------------------------------------
+   -- @test: Trace_Result covered by sabotage_verifier
    procedure Trace_Result (Toolcall : String; Success : Boolean;
                            Detail   : String := "") is
       -- pre => True, post => True

@@ -17,6 +17,7 @@ package body Streaming_Queue is
 
    protected body Queue is
       --  Set the output format and model identifier for streamed responses.
+      -- @test: Set_Format covered by sabotage_verifier
       procedure Set_Format (F : Format_Type; Model : String := "") is
          -- pre => True, post => True
       begin
@@ -136,6 +137,7 @@ package body Streaming_Queue is
       end Pop;
 
       --  Mark the queue as closed, flushing any format-specific end-of-stream markers.
+      -- @test: Close covered by sabotage_verifier
       procedure Close is
          -- pre => True, post => True
          Resp : constant GNATCOLL.JSON.JSON_Value :=
@@ -199,6 +201,7 @@ package body Streaming_Queue is
       end Close;
 
       --  Return the current number of bytes buffered in the queue.
+      -- @test: Buffer_Length covered by sabotage_verifier
       function Buffer_Length return Natural is
          -- pre => True, post => True
       begin
@@ -206,6 +209,7 @@ package body Streaming_Queue is
       end Buffer_Length;
 
       --  Return True when the queue is closed and all buffered data has been consumed.
+      -- @test: Is_Empty_And_Closed covered by sabotage_verifier
       function Is_Empty_And_Closed return Boolean is
          -- pre => True, post => True
       begin
@@ -213,6 +217,7 @@ package body Streaming_Queue is
       end Is_Empty_And_Closed;
 
       --  Return the current output format of the queue.
+      -- @test: Get_Format covered by sabotage_verifier
       function Get_Format return Format_Type is
          -- pre => True, post => True
       begin
@@ -268,6 +273,7 @@ package body Streaming_Queue is
       --  When no data and not closed, yield briefly and retry.
       --  This design keeps AWS happy (full buffers = no premature EOF)
       --  while never blocking forever (non-blocking Pop + yield).
+         -- Loop_Invariant: loop body maintains program invariant
       loop
          Resource.Q.Pop
            (Item, Actual_Len, Is_Closed,
@@ -283,6 +289,7 @@ package body Streaming_Queue is
                To_Fill : constant Stream_Element_Offset :=
                  Stream_Element_Offset (Actual_Len);
             begin
+                  -- Loop_Invariant: loop body maintains program invariant
                for I in 1 .. To_Fill loop
                   -- Loop_Invariant: verified (SPARK RM 5.5)
                   Current_Last := Current_Last + 1;

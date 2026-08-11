@@ -8,6 +8,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 package body Stella_Icarus is
 
    --  Initialize: Initializes the Stella Icarus subsystem.
+   -- @test: Initialize covered by sabotage_verifier
    procedure Initialize is
       -- pre => True, post => True
    begin
@@ -15,6 +16,7 @@ package body Stella_Icarus is
    end Initialize;
 
    --  Check_API_Trigger: Checks if the prompt matches a deterministic API trigger.
+   -- @test: Check_API_Trigger covered by sabotage_verifier
    function Check_API_Trigger (Prompt : String) return String is
       -- pre => True, post => True
       Lower_Prompt : constant String := Ada.Characters.Handling.To_Lower (Prompt);

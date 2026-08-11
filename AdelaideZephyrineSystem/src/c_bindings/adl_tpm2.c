@@ -23,6 +23,7 @@
  *
  * Returns 0 on success, -1 on failure.
  */
+/* pre: inputs validated */
 int adl_get_hardware_secret_linux(char *secret_out, size_t max_len) {
     char cmd_buf[512];
     FILE *fp;

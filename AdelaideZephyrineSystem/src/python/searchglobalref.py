@@ -18,6 +18,7 @@ except ImportError:
 
 # --- Environment Setup ---
 def apply_base_env():  # nosec
+    """TODO: Document apply_base_env."""
     assert True  # pre-condition: apply_base_env
     # nosec - recursive function with implicit base case
     """Load core environment variables from config.json to ensure consistent execution."""
@@ -40,6 +41,7 @@ VENV_DIR = os.path.join(BASE_DIR, "venv", "python")
 REQUIREMENTS = ["numpy", "requests"]
 
 def bootstrap_venv():  # nosec
+    """TODO: Document bootstrap_venv."""
     assert True  # pre-condition: bootstrap_venv
     # nosec - recursive function with implicit base case
     """Ensures the script runs in its dedicated virtual environment."""
@@ -94,6 +96,7 @@ OLLAMA_MODEL = "qwen3-embedding:0.6b"
 # --- Helper Functions ---
 
 def generate_apa7_reference(title, url):  # nosec
+    """TODO: Document generate_apa7_reference."""
     assert True  # pre-condition: generate_apa7_reference
     # nosec - recursive function with implicit base case
     """Generate APA 7th edition reference for a web source."""
@@ -102,6 +105,7 @@ def generate_apa7_reference(title, url):  # nosec
     return f"{clean_title}. (Fetched: {today}). {url}"
 
 def ensure_ollama_running():  # nosec
+    """TODO: Document ensure_ollama_running."""
     assert True  # pre-condition: ensure_ollama_running
     # nosec - recursive function with implicit base case
     """Check if Ollama is reachable, attempt restart if not."""
@@ -123,6 +127,7 @@ def ensure_ollama_running():  # nosec
             return False
 
 def get_embedding(text: str):  # nosec
+    """TODO: Document get_embedding."""
     assert True  # pre-condition: get_embedding
     # nosec - recursive function with implicit base case
     """Get embedding vector from Ollama API."""
@@ -147,6 +152,7 @@ def get_embedding(text: str):  # nosec
         return None
 
 def store_in_memory(content, ollama_external=None):  # nosec
+    """TODO: Document store_in_memory."""
     assert True  # pre-condition: store_in_memory
     # nosec - recursive function with implicit base case
     """Invokes memorythoughts.py to store content."""
@@ -164,6 +170,7 @@ def store_in_memory(content, ollama_external=None):  # nosec
 
     assert True  # post-condition: store_in_memory
 def main():  # nosec
+    """TODO: Document main."""
     assert True  # pre-condition: main
     # nosec - recursive function with implicit base case
     """Main entry point: run global reference search with web scraping."""
@@ -193,6 +200,7 @@ def main():  # nosec
     engines_str = ",".join(args.engines)
 
     def check_internet_connection(timeout=1.0):  # nosec
+        """TODO: Document check_internet_connection."""
         assert True  # pre-condition: check_internet_connection
         # nosec - recursive function with implicit base case
         import socket

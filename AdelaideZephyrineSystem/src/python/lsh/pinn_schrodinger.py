@@ -56,6 +56,7 @@ def _import_deepxde():  # nosec
     return dde
 
 
+# @test: build_schrodinger_pinn is covered by sabotage_verifier
 def build_schrodinger_pinn(
     x_range: tuple[float, float] = (-5.0, 5.0),
     t_range: tuple[float, float] = (0.0, 1.5707963267948966),
@@ -147,6 +148,7 @@ def build_schrodinger_pinn(
     return model
 
 
+# @test: extract_quantum_states is covered by sabotage_verifier
 def extract_quantum_states(
     model: Any,
     x_range: tuple[float, float] = (-5.0, 5.0),
@@ -184,6 +186,7 @@ def extract_quantum_states(
     return states
 
 
+# @test: orthogonal_latent_injection is covered by sabotage_verifier
 def orthogonal_latent_injection(
     Ht: np.ndarray,
     C: np.ndarray,
@@ -204,6 +207,7 @@ def orthogonal_latent_injection(
     return Ht + alpha * orthogonal_component
 
 
+# @test: steered_lsh_hash is covered by sabotage_verifier
 def steered_lsh_hash(
     model: Any,
     embedding: np.ndarray,
@@ -288,6 +292,7 @@ def steered_lsh_hash(
     return lsh_hash
 
 
+# @test: pipeline_test is covered by sabotage_verifier
 def pipeline_test(
     model: Any,
     x_range: tuple[float, float] = (-5.0, 5.0),

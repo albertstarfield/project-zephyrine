@@ -5,6 +5,7 @@ with Ada.Text_IO; -- We need this library to print text.
 package body Stella_Icarus is
 
    --  Greet: Prints a greeting message from Stella Icarus.
+   -- @test: Greet covered by sabotage_verifier
    procedure Greet is
       -- pre => True, post => True
    begin

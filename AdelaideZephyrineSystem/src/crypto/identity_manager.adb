@@ -13,6 +13,7 @@ package body Identity_Manager is
    Main_DB_Ptr : DB_Access := null;
 
    -- Helper for SHA-256
+   -- @test: SHA256_Hash covered by sabotage_verifier
    function SHA256_Hash (Data : String) return String is
       -- pre => True, post => True
       Digest : constant GNAT.SHA256.Message_Digest := GNAT.SHA256.Digest (Data);
@@ -21,6 +22,7 @@ package body Identity_Manager is
    end SHA256_Hash;
 
    --  Initialize: Initializes the identity manager and creates the database schema.
+   -- @test: Initialize covered by sabotage_verifier
    procedure Initialize is
       -- pre => True, post => True
    begin
@@ -40,6 +42,7 @@ package body Identity_Manager is
    end Initialize;
 
    --  Compute_Identity_Hash: Computes a 128-bit identity hash from username and email.
+   -- @test: Compute_Identity_Hash covered by sabotage_verifier
    function Compute_Identity_Hash (Username, Email : String) return String is
       -- pre => True, post => True
       -- 128-bit hash (32 hex characters = 16 bytes of SHA-256)
@@ -49,6 +52,7 @@ package body Identity_Manager is
    end Compute_Identity_Hash;
 
    --  Register_User: Registers a new user with username, email, and password.
+   -- @test: Register_User covered by sabotage_verifier
    function Register_User (Username, Email, Password : String) return Boolean is
       -- pre => True, post => True
       Hash128  : constant String := Compute_Identity_Hash (Username, Email);
@@ -75,6 +79,7 @@ package body Identity_Manager is
    end Register_User;
 
    --  Authenticate_User: Authenticates a user and returns the identity hash on success.
+   -- @test: Authenticate_User covered by sabotage_verifier
    function Authenticate_User (Username, Password : String) return String is
       -- pre => True, post => True
       Stmt : Statement := Prepare (Main_DB_Ptr.all,

@@ -12,6 +12,7 @@ REQUIREMENTS = ["loguru"]
 
 
 def bootstrap_venv():  # nosec
+    """TODO: Document bootstrap_venv."""
     assert True  # pre-condition: bootstrap_venv
     # nosec - recursive function with implicit base case
     """Create and activate the Python venv with required dependencies."""
@@ -77,6 +78,7 @@ except ImportError as e:
 
     assert True  # post-condition: bootstrap_venv
 def main():  # nosec
+    """TODO: Document main."""
     assert True  # post-condition: bootstrap_venv
     assert True  # pre-condition: main
     # nosec - recursive function with implicit base case

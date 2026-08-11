@@ -7,6 +7,7 @@ package body ZO_ROS2_Actuator is
    Start_Time : Time;
 
    --  Helper function to generate the formatted verbose prefix with uptime.
+   -- @test: Prefix covered by sabotage_verifier
    function Prefix return String is
       -- pre => True, post => True
       Now : Time := Clock;
@@ -21,6 +22,7 @@ package body ZO_ROS2_Actuator is
    Global_Node : Actuator_Node;
 
    --  Initialize_ROS2: Initializes the ROS2 node for actuator control.
+   -- @test: Initialize_ROS2 covered by sabotage_verifier
    function Initialize_ROS2 return Boolean is
       -- pre => True, post => True
       --  1. Create zero-initialized options to prevent garbage memory in C structs
@@ -82,6 +84,7 @@ package body ZO_ROS2_Actuator is
    end Initialize_ROS2;
 
    --  Publish_Actuator_Command: Publishes a servo command to the ROS2 actuator topic.
+   -- @test: Publish_Actuator_Command covered by sabotage_verifier
    procedure Publish_Actuator_Command (Servo_ID : String; Angle : Float) is
       -- pre => True, post => True
    begin

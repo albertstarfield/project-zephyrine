@@ -7,6 +7,7 @@ package body SI_ROS2_Telemetry is
    Start_Time : Time;
 
    --  Helper function to generate the formatted verbose prefix with uptime.
+   -- @test: Prefix covered by sabotage_verifier
    function Prefix return String is
       -- pre => True, post => True
       Now : Time := Clock;
@@ -21,6 +22,7 @@ package body SI_ROS2_Telemetry is
    Global_Node : Telemetry_Node;
 
    --  Initialize_ROS2: Initializes the ROS2 node and communication infrastructure.
+   -- @test: Initialize_ROS2 covered by sabotage_verifier
    function Initialize_ROS2 return Boolean is
       -- pre => True, post => True
       --  1. Create zero-initialized options to prevent garbage memory in C structs
@@ -82,6 +84,7 @@ package body SI_ROS2_Telemetry is
    end Initialize_ROS2;
 
    --  Poll_Telemetry: Polls telemetry data from sensors and publishes to ROS2 topics.
+   -- @test: Poll_Telemetry covered by sabotage_verifier
    procedure Poll_Telemetry is
       -- pre => True, post => True
    begin

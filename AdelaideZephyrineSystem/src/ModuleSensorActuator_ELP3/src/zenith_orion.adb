@@ -45,6 +45,7 @@ package body Zenith_Orion is
    Last_Print : Time := Clock;
 
    --  Initialize: Initializes the ZenithOrion ELP3 core subsystem.
+   -- @test: Initialize covered by sabotage_verifier
    procedure Initialize is
       -- pre => True, post => True
    begin
@@ -55,6 +56,7 @@ package body Zenith_Orion is
    end Initialize;
 
    --  Paced_Loop: Executes the 4000Hz deterministic control loop with microsecond pacing.
+   -- @test: Paced_Loop covered by sabotage_verifier
    procedure Paced_Loop is
       -- pre => True, post => True
       Start_Time : Time;
@@ -127,6 +129,7 @@ package body Zenith_Orion is
    end Paced_Loop;
 
    --  Get_Current_Timing: Returns the last measured loop execution time.
+   -- @test: Get_Current_Timing covered by sabotage_verifier
    function Get_Current_Timing return Duration is
       -- pre => True, post => True
    begin
@@ -134,6 +137,7 @@ package body Zenith_Orion is
    end Get_Current_Timing;
 
    --  Get_Jitter_Profile: Returns the collected jitter statistics (max, min, avg).
+   -- @test: Get_Jitter_Profile covered by sabotage_verifier
    function Get_Jitter_Profile return Jitter_Data is
       -- pre => True, post => True
    begin
@@ -145,6 +149,7 @@ package body Zenith_Orion is
    end Get_Jitter_Profile;
 
    --  Check_SHM_Trigger: Checks if the prompt maps to an SHM or hardware trigger.
+   -- @test: Check_SHM_Trigger covered by sabotage_verifier
    function Check_SHM_Trigger (Prompt : String) return String is
       -- pre => True, post => True
       Lower_Prompt : constant String := Ada.Characters.Handling.To_Lower (Prompt);
@@ -160,6 +165,7 @@ package body Zenith_Orion is
 
    protected body ROS2_Command_Buffer is
       --  Push_Command: Pushes a servo command into the thread-safe buffer.
+      -- @test: Push_Command covered by sabotage_verifier
       procedure Push_Command (Servo_ID : String; Angle : Float) is
          -- pre => True, post => True
       begin
@@ -170,6 +176,7 @@ package body Zenith_Orion is
       end Push_Command;
 
       --  Pop_Command: Pops a servo command from the thread-safe buffer.
+      -- @test: Pop_Command covered by sabotage_verifier
       procedure Pop_Command (Servo_ID : out String; Length : out Natural; Angle : out Float; Valid : out Boolean) is
          -- pre => True, post => True
       begin

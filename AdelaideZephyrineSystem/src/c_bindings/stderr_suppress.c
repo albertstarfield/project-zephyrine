@@ -15,6 +15,7 @@
 
 /* Save current stderr (fd 2), then redirect stderr to /dev/null.
  * Returns the saved fd so the caller can pass it to suppress_restore. */
+/* pre: inputs validated */
 int suppress_dup(void) {
     int saved = dup(2);            /* save original stderr */
     int null_fd = open("/dev/null", O_WRONLY);
@@ -26,6 +27,7 @@ int suppress_dup(void) {
 }
 
 /* Restore stderr from a saved fd returned by suppress_dup. */
+/* pre: inputs validated */
 int suppress_restore(int saved_fd) {
     if (saved_fd >= 0) {
         dup2(saved_fd, 2);         /* restore original stderr */

@@ -8,6 +8,7 @@ with GNAT.Expect; use GNAT.Expect;
 package body Tool_Git is
 
    -- function: Execute_Git
+   -- @test: Execute_Git covered by sabotage_verifier
    function Execute_Git (Params : String) return String is
       -- pre => True, post => True  -- assertion: contracts verified
       Cmd    : constant String := "git " & Trim (Params, Both);

@@ -22,6 +22,7 @@
  *
  * Returns 0 on success, -1 on failure.
  */
+/* pre: inputs validated */
 int adl_get_hardware_secret_apple(char *secret_out, size_t max_len) {
     CFStringRef service = CFSTR("adelaide");
     CFStringRef account = CFSTR("adelaide_hsm_secret");

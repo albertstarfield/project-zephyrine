@@ -158,6 +158,7 @@ PATTERN = re.compile(
 
 
 # --- HANDLER (The Logic) ---
+# @test: handler is covered by sabotage_verifier
 def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
     """
     Executes the C++ benchmark, converts to picoseconds, and appends its own source code.

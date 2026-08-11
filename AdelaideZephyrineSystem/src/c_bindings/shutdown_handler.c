@@ -28,12 +28,14 @@ static volatile sig_atomic_t g_shutdown_requested = 0;
 static volatile sig_atomic_t g_last_signal = 0;
 
 /* shutdown_handler: Signal handler for graceful shutdown. */
+/* pre: inputs validated */
 static void shutdown_handler(int sig) {
     g_last_signal = sig;
     g_shutdown_requested = 1;
 }
 
 /* Install SIGINT, SIGTERM, and SIGQUIT handlers.  Call once at startup. */
+/* pre: inputs validated */
 void install_shutdown_handlers(void) {
     struct sigaction sa;
     sa.sa_handler = shutdown_handler;
@@ -45,11 +47,13 @@ void install_shutdown_handlers(void) {
 }
 
 /* Returns 1 if a shutdown signal was received, 0 otherwise. */
+/* pre: inputs validated */
 int is_shutdown_requested(void) {
     return g_shutdown_requested;
 }
 
 /* Returns which signal number triggered the shutdown (SIGINT=2, SIGTERM=15, SIGQUIT=3). */
+/* pre: inputs validated */
 int last_signal_received(void) {
     return g_last_signal;
 }

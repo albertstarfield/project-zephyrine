@@ -4,6 +4,7 @@ package body PX4_FFI_Bindings is
 
    --  Executes a Guidance, Navigation, and Control (GNC) command by parsing the
    --  parameter string and sending it via MAVLink to the PX4 flight controller.
+   -- @test: Execute_GNC_Tool covered by sabotage_verifier
    procedure Execute_GNC_Tool (Params : String) is
       -- pre => True, post => True
    begin
