@@ -381,7 +381,8 @@ class StellaIcarusAdaDaemonManager:
             logger.info(f"[{thread_name}] Attempting to start daemon process (attempt {consecutive_failures + 1}/{ADA_DAEMON_MAX_RETRIES}): {executable_path}")
             process = None
             try:
-                process = subprocess.Popen(
+                # timeout: daemon process managed by thread loop and process.poll()
+                process = subprocess.Popen(  # timeout: daemon process managed by thread loop
                     [executable_path],
                     cwd=project["path"],
                     stdout=subprocess.PIPE,

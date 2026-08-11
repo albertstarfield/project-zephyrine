@@ -1,5 +1,6 @@
 pragma SPARK_Mode (Off);
 --  c_binding: NASA cFE Telemetry Output (TO_LAB) integration
+--  third-party: cFS (no SPARK contracts)
 with Ada.Text_IO; use Ada.Text_IO;
 
 package body CFS_Telemetry is

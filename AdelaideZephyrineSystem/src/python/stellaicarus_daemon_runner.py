@@ -8,7 +8,6 @@ Architectural Foundation & Contextual Daemon:
 """
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import gc
 import json
 import os
 import sys

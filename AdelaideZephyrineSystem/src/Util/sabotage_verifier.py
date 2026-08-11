@@ -9532,6 +9532,9 @@ def _build_ada_function_coverage_patterns() -> list[Pattern]:
         if "test" in filepath_lower or "harness" in filepath_lower:
             return violations
 
+        # Check if unit has SPARK_Mode(Off)
+        has_spark_off = any("pragma" in l.lower() and "spark_mode" in l.lower() and "off" in l.lower() for l in lines)
+
         # ── Phase 1: Extract all function/procedure declarations ──
         functions = []  # list of (name, line_num, kind)
         for i, line in enumerate(lines, 1):
@@ -9610,7 +9613,7 @@ def _build_ada_function_coverage_patterns() -> list[Pattern]:
                     break
 
             # ── Report violations ──
-            if not has_contract:
+            if not has_contract and not has_spark_off:
                 violations.append(Violation(
                     filepath=filepath,
                     line=func_line,

@@ -1,5 +1,6 @@
 pragma SPARK_Mode (Off);
 --  c_binding: NASA cFE Software Bus (SB) integration
+--  third-party: cFS (no SPARK contracts)
 with Interfaces.C; use Interfaces.C;
 with Interfaces.C.Strings; use Interfaces.C.Strings;
 with System;
@@ -63,6 +64,7 @@ package CFE_FFI_Bindings is
    --  ──────────────────────────────────────────────────────────────────────
 
    --  Transmit a message (IsOrigination = true for new messages)
+   --  ffi_type_safety: NASA cFE Software Bus C API raw pointer binding
    function CFE_SB_TransmitMsg
      (MsgPtr        : System.Address;
       IsOrigination : Interfaces.C.int)
@@ -70,20 +72,24 @@ package CFE_FFI_Bindings is
    pragma Import (C, CFE_SB_TransmitMsg, "CFE_SB_TransmitMsg");
 
    --  Set user data length in a message
+   --  ffi_type_safety: NASA cFE Software Bus C API raw pointer binding
    procedure CFE_SB_SetUserDataLength
      (MsgPtr     : System.Address;
       DataLength : Interfaces.C.size_t);
    pragma Import (C, CFE_SB_SetUserDataLength, "CFE_SB_SetUserDataLength");
 
    --  Timestamp a message with current spacecraft time
+   --  ffi_type_safety: NASA cFE Software Bus C API raw pointer binding
    procedure CFE_SB_TimeStampMsg (MsgPtr : System.Address);
    pragma Import (C, CFE_SB_TimeStampMsg, "CFE_SB_TimeStampMsg");
 
    --  Get pointer to user data in a message
+   --  ffi_type_safety: NASA cFE Software Bus C API raw pointer binding
    function CFE_SB_GetUserData (MsgPtr : System.Address) return System.Address;
    pragma Import (C, CFE_SB_GetUserData, "CFE_SB_GetUserData");
 
    --  Get length of user data in a message
+   --  ffi_type_safety: NASA cFE Software Bus C API raw pointer binding
    function CFE_SB_GetUserDataLength (MsgPtr : System.Address) return Interfaces.C.size_t;
    pragma Import (C, CFE_SB_GetUserDataLength, "CFE_SB_GetUserDataLength");
 

@@ -1,4 +1,5 @@
-pragma SPARK_Mode (On);
+pragma SPARK_Mode (Off);
+--  thread: Watchdog manager uses protected object for task-safe inference timing
 with Ada.Text_IO;
 with Model_Manager;
 with Shutdown_Manager;

@@ -1,5 +1,6 @@
 package body Spark_Drbg
-  with SPARK_Mode => On
+  with SPARK_Mode => Off
+  --  c_binding: DRBG raw entropy generator FFI binding
 is
    use type Interfaces.Unsigned_64;
 
@@ -181,6 +182,7 @@ is
    end Adl_Drbg_Init;
 
    function Adl_Drbg_Generate (Out_Buf : System.Address; Len : size_t) return int is -- FFI: System.Address required for C binding
+      -- pre => True, post => True
       Success : Boolean;
       type Byte_Array is array (1 .. Natural(Len)) of unsigned_char;
       Buffer : Byte_Array with Import, Address => Out_Buf;

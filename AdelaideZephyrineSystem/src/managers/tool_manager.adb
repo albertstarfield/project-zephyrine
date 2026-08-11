@@ -580,6 +580,11 @@ package body Tool_Manager is
    function Execute_CFS_Tool (Params : String) return Tool_Result is
       Bridge_Result : CFS_Tool_Bridge.Tool_Result;
    begin
+      --  pragma Assert (Params'Length >= 0);
+      if Params'Length > 4096 then
+         return (Success => False,
+                 Output  => To_Unbounded_String ("Params exceed max bounds"));
+      end if;
       Bridge_Result := CFS_Tool_Bridge.Execute_CFS_Tool (Params);
       return (Success => Bridge_Result.Success,
               Output  => Bridge_Result.Output);

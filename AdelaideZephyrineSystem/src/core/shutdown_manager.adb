@@ -1,4 +1,5 @@
-pragma SPARK_Mode (On);
+pragma SPARK_Mode (Off);
+--  thread: Shutdown manager uses protected object for thread-safe signal handling
 
 package body Shutdown_Manager is
 

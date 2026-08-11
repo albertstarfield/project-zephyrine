@@ -5,6 +5,9 @@
 -- See tool_call_autofix.ads for full design documentation.
 -- ============================================================================
 
+pragma SPARK_Mode (Off);
+--  third-party: gnatcoll (string searching and JSON parsing — no SPARK contracts)
+
 package body Tool_Call_Autofix is
 
    -- =========================================================================
