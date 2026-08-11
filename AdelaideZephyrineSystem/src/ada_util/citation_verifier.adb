@@ -1,12 +1,12 @@
 -- File: citation_verifier.adb
 -- Citation Verifier - Query Crossref API for paper citations.
--- Note: HTTP requests require external library. Simplified version.
+-- Captures curl output and returns structured JSON.
 
 --  SPARK_Mode(off)
 --  Justification: Standalone CLI procedure. Executes external processes
---  via Ada.Processes.Command_Line (curl HTTP requests), accesses
---  command-line arguments via Ada.Command_Line, writes output via
---  Ada.Text_IO. External subprocess and network interaction cannot be
+--  via GNAT.OS_Lib.Spawn (curl HTTP requests), accesses command-line
+--  arguments via Ada.Command_Line, writes output via Ada.Text_IO.
+--  External subprocess, network interaction, and file I/O cannot be
 --  expressed in SPARK.
 
 with Ada.Text_IO;
@@ -19,15 +19,17 @@ with Trace_Utils;
 --  Citation_Verifier: Main entry point. Queries Crossref API via curl
 --  for academic paper citations based on keywords.
 procedure Citation_Verifier is
-   -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
+
+   --  Temp file for capturing curl output
+   Temp_File_Name : constant String := "/tmp/citation_verifier_output.json";
 
 begin
    Trace_Utils.Init_Trace;
 
    if Ada.Command_Line.Argument_Count < 1 then
-      Put_Line("Usage: citation_verifier --keywords <query>");
+      Put_Line("Usage: citation_verifier --keywords <query> [--json]");
       Put_Line("Note: Requires curl for HTTP requests.");
       Ada.Command_Line.Set_Exit_Status(1);
       return;
@@ -61,12 +63,13 @@ begin
       Trace_Utils.Trace_Print("citation", "query",
         To_String(Keywords));
 
-      --  Use curl to query Crossref API
+      --  Use curl to query Crossref API and capture output to temp file
       declare
          Cmd : constant String :=
            "curl -s 'https://api.crossref.org/works?query=" &
            To_String(Keywords) &
-           "&select=DOI,title,author,URL,container-title,issued&rows=1'";
+           "&select=DOI,title,author,URL,container-title,issued&rows=1' > " &
+           Temp_File_Name & " 2>/dev/null";
          Success : Boolean;
          Args : GNAT.OS_Lib.Argument_List (1 .. 2);
       begin
@@ -80,7 +83,43 @@ begin
          exception
             when others =>
                Put_Line("ERROR: Failed to query Crossref API");
+               Ada.Command_Line.Set_Exit_Status(1);
+               return;
          end;
+
+         --  Read curl output from temp file
+         if Ada.Text_IO.Exists(Temp_File_Name) then
+            declare
+               File : Ada.Text_IO.File_Type;
+               Response : Unbounded_String := Null_Unbounded_String;
+            begin
+               Ada.Text_IO.Open(File, Ada.Text_IO.In_File, Temp_File_Name);
+               while not Ada.Text_IO.End_Of_File(File) loop
+                  declare
+                     Line : constant String := Ada.Text_IO.Get_Line(File);
+                  begin
+                     Response := Response & Line;
+                  end;
+               end loop;
+               Ada.Text_IO.Close(File);
+
+               --  Output the raw JSON response
+               if Length(Response) > 0 then
+                  Put_Line(To_String(Response));
+               else
+                  Put_Line("{}");
+               end if;
+            exception
+               when others =>
+                  Put_Line("ERROR: Failed to read curl response");
+                  Ada.Command_Line.Set_Exit_Status(1);
+            end;
+
+            --  Clean up temp file
+            Ada.Text_IO.Delete_File(Temp_File_Name);
+         else
+            Put_Line("{}");
+         end if;
       end;
    end;
 end Citation_Verifier;

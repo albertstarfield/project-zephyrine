@@ -32,6 +32,13 @@ except ImportError:
     import typing
     fitz: typing.Any = None
 
+# Wire extract_pdf.py into pipeline for text + image extraction (VLM injection)
+try:
+    from extract_pdf import extract_text as pdf_extract_text, extract_images as pdf_extract_images
+except ImportError:
+    pdf_extract_text = None
+    pdf_extract_images = None
+
 # --- Environment Setup ---
 def apply_base_env():  # nosec
     """Contract: apply_base_env pre/post satisfied."""
@@ -279,10 +286,15 @@ def extract_content_via_python(path: str) -> str:
 
     try:
         if ext == '.pdf' and fitz:
+            # Wired: extract_pdf.py provides text + image extraction (VLM injection)
             entrySlice = fitz.open(path)  # nosec - PyMuPDF document
-            # Loop_Invariant: verified (DO-178C MC/DC)
-            for page in entrySlice:
-                text += f"{page.get_text()}\n"
+            if pdf_extract_text is not None:
+                text += pdf_extract_text(entrySlice)
+            else:
+                # Loop_Invariant: verified (DO-178C MC/DC)
+                for page in entrySlice:
+                    text += f"{page.get_text()}\n"
+            entrySlice.close()
         elif ext in ['.xlsx', '.xls']:
             import openpyxl
             wb = openpyxl.load_workbook(path, data_only=True)
