@@ -92,6 +92,8 @@ with "config/adelaide_zephyrine_system_config.gpr";
 with "aws";
 with "gnatcoll";
 with "ada_sqlite3";
+with "opengl";
+with "opengl-glfw";
 project AdelaideZephyrineSystem is
 
    for Languages use ("Ada", "C", "C++");

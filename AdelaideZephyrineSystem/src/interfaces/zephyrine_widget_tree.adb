@@ -19,8 +19,6 @@ pragma SPARK_Mode (Off);
 -- ============================================================================
 
 with Ada.Text_IO;
-with GLESv2_Binding;   use GLESv2_Binding;
-with EGL_Binding;       use EGL_Binding;
 with Adelaide_Trace;
 
 package body Zephyrine_Widget_Tree is
@@ -560,18 +558,62 @@ package body Zephyrine_Widget_Tree is
    end Compute_Layout;
 
    -- =========================================================================
-   -- RENDERING — OpenGL ES 2.0 draw calls
+   -- RENDERING — OpenGL ES 2.0 draw calls via OpenGLAda
    -- =========================================================================
+   --
+   -- AXIOMS AND CITATIONS:
+   --   - OpenGLAda (flyx/OpenGLAda) v0.9.0: Thick Ada binding for OpenGL
+   --     Source: https://github.com/flyx/OpenGLAda
+   --     Provides type-safe GL objects (Shader, Program, Buffer) with
+   --     reference counting and automatic resource management.
+   --   - OpenGL ES 2.0 §3.5-3.6: Shader compilation and program linking
+   --   - OpenGL ES 2.0 §3.8: Drawing primitives (glDrawArrays)
+   --   - OpenGL ES Shading Language 1.00 §4.1.9: gl_Position output
+   --
+   -- IMPLEMENTATION NOTES:
+   --   - Uses OpenGLAda's typed GL objects instead of raw GLuint handles
+   --   - GL.Objects.Shaders.Shader for vertex/fragment shaders
+   --   - GL.Objects.Programs.Program for linked shader programs
+   --   - GL.Objects.Buffers.Buffer for vertex buffer objects (VBOs)
+   --   - GLSL ES 1.00 shaders for ES 2.0 compatibility
+   --   - Orthographic projection maps pixel coords to clip space
+   --
+
+   with GL;
+   with GL.Types;
+   with GL.Types.Singles;
+   with GL.Objects;
+   with GL.Objects.Shaders;
+   with GL.Objects.Programs;
+   with GL.Objects.Buffers;
+   with GL.Attributes;
+   with GL.Uniforms;
+   with GL.Toggles;
+   with GL.Blending;
+   with GL.Buffers;
+   with GL.Drawing;
+
+   use GL;
+   use GL.Types;
+   use GL.Types.Singles;
+   use GL.Objects;
+   use GL.Objects.Shaders;
+   use GL.Objects.Programs;
+   use GL.Objects.Buffers;
+   use GL.Attributes;
+   use GL.Uniforms;
+   use GL.Toggles;
+   use GL.Blending;
 
    --  Internal state for the renderer (shader programs, VBOs, etc.)
    --  Initialized once at startup, reused for all draw calls.
+   --  Uses OpenGLAda's reference-counted GL objects for automatic cleanup.
    type Render_State is record
       Initialized      : Boolean := False;
-      Rect_Program     : GLuint := 0;  -- Shader program for solid-color quads
-      Text_Program     : GLuint := 0;  -- Shader program for text (future)
-      Rect_VAO         : GLuint := 0;  -- Vertex array for unit quad
-      Rect_VBO         : GLuint := 0;  -- Vertex buffer for unit quad
-      Proj_Matrix      : array (1 .. 16) of Float := (others => 0.0);
+      Rect_Program     : GL.Objects.Programs.Program;  -- Shader program for solid-color quads
+      Text_Program     : GL.Objects.Programs.Program;  -- Shader program for text (future)
+      Rect_VBO         : GL.Objects.Buffers.Buffer;    -- Vertex buffer for unit quad
+      Proj_Matrix      : GL.Types.Singles.Matrix4 := (others => (others => 0.0));
    end record;
 
    --  Global render state (initialized on first render)
@@ -579,15 +621,14 @@ package body Zephyrine_Widget_Tree is
 
    --  Unit quad vertices: position (x,y) + color (r,g,b,a)
    --  This is a 1x1 quad that gets scaled via uniform matrix.
-   Unit_Quad_Data : array (1 .. 24) of Float := (
-      -- pos.x, pos.y, color.r, color.g, color.b, color.a
-      0.0, 0.0,  1.0, 1.0, 1.0, 1.0,  -- bottom-left
+   --  6 vertices × 4 floats = 24 floats total.
+   Unit_Quad_Data : constant GL.Types.Singles.Vector24 :=
+     (0.0, 0.0,  1.0, 1.0, 1.0, 1.0,  -- bottom-left
       1.0, 0.0,  1.0, 1.0, 1.0, 1.0,  -- bottom-right
       0.0, 1.0,  1.0, 1.0, 1.0, 1.0,  -- top-left
       1.0, 0.0,  1.0, 1.0, 1.0, 1.0,  -- bottom-right
       1.0, 1.0,  1.0, 1.0, 1.0, 1.0,  -- top-right
-      0.0, 1.0,  1.0, 1.0, 1.0, 1.0   -- top-left
-   );
+      0.0, 1.0,  1.0, 1.0, 1.0, 1.0); -- top-left
 
    --  GLSL ES 1.00 vertex shader for solid-color quads.
    --  Citation: OpenGL ES Shading Language 1.00 §4.1.9 (gl_Position)
@@ -614,87 +655,73 @@ package body Zephyrine_Widget_Tree is
      "}" & ASCII.LF;
 
    --  Helper: Compile a shader and check for errors.
-   function Compile_Shader_Checked (Source   : String;
-                                    Shader_Type : GLenum)
-      return GLuint
+   --  Uses OpenGLAda's Shader type with Initialize_Id + Set_Source + Compile.
+   --  Citation: OpenGLAda API — GL.Objects.Shaders
+   function Compile_Shader_Checked (Source       : String;
+                                     Shader_Kind  : Shader_Type)
+      return GL.Objects.Shaders.Shader
    is
-      Shader   : GLuint;
-      Success  : GLint;
-      Log_Len  : GLsizei;
-      Source_Ptr : aliased Interfaces.C.Strings.chars_ptr :=
-        Interfaces.C.Strings.New_String (Source);
-      Sources  : array (1 .. 1) of System.Address :=
-        (1 => System.Address (Interfaces.C.Strings.Value (Source_Ptr)'Address));
-      Source_Len : aliased GLint := GLint (Source'Length);
+      Shader : GL.Objects.Shaders.Shader (Kind => Shader_Kind);
    begin
-      Shader := Create_Shader (Shader_Type);
-      Shader_Source (Shader, 1, Sources (1)'Access, Source_Len'Access);
-      Compile_Shader (Shader);
+      Shader.Initialize_Id;
+      Shader.Set_Source (Source);
+      Shader.Compile;
 
-      Get_Shaderiv (Shader, GL_COMPILE_STATUS, Success'Access);
-      if Success = 0 then
-         Get_Shaderiv (Shader, GL_INFO_LOG_LENGTH, Log_Len'Access);
-         if Log_Len > 0 then
-            declare
-               Log_Buf : String (1 .. Integer (Log_Len));
-               Log_Out : aliased GLsizei;
-            begin
-               Get_Shader_Info_Log (Shader, Log_Len, Log_Out'Access,
-                 Log_Buf (Log_Buf'First)'Access);
+      if not Shader.Compile_Status then
+         declare
+            Log : constant String := Shader.Info_Log;
+         begin
+            if Log'Length > 0 then
                Adelaide_Trace.Trace_Print (
                  Toolcall => "renderer:compile_shader",
-                 Message => "SHADER ERROR: " & Log_Buf (1 .. Integer (Log_Out)));
-            end;
-         end if;
-         Delete_Shader (Shader);
-         return 0;
+                 Message => "SHADER ERROR: " & Log);
+            end if;
+         end;
+         Shader.Clear;
+         return Shader;  -- Caller checks Compile_Status
       end if;
 
-      Interfaces.C.Strings.Free (Source_Ptr);
       return Shader;
    end Compile_Shader_Checked;
 
    --  Helper: Link a shader program.
-   function Link_Program_Checked (Vert_Shader, Frag_Shader : GLuint)
-      return GLuint
+   --  Uses OpenGLAda's Program type with Initialize_Id + Attach + Link.
+   --  Citation: OpenGLAda API — GL.Objects.Programs
+   function Link_Program_Checked (Vert_Shader, Frag_Shader : GL.Objects.Shaders.Shader)
+      return GL.Objects.Programs.Program
    is
-      Program_Id : GLuint;
-      Success    : GLint;
-      Log_Len    : GLsizei;
+      Prog : GL.Objects.Programs.Program;
    begin
-      Program_Id := Create_Program;
-      Attach_Shader (Program_Id, Vert_Shader);
-      Attach_Shader (Program_Id, Frag_Shader);
-      Link_Program (Program_Id);
+      Prog.Initialize_Id;
+      Prog.Attach (Vert_Shader);
+      Prog.Attach (Frag_Shader);
+      Prog.Link;
 
-      Get_Programiv (Program_Id, GL_LINK_STATUS, Success'Access);
-      if Success = 0 then
-         Get_Programiv (Program_Id, GL_INFO_LOG_LENGTH, Log_Len'Access);
-         if Log_Len > 0 then
-            declare
-               Log_Buf : String (1 .. Integer (Log_Len));
-               Log_Out : aliased GLsizei;
-            begin
-               Get_Program_Info_Log (Program_Id, Log_Len, Log_Out'Access,
-                 Log_Buf (Log_Buf'First)'Access);
+      if not Prog.Link_Status then
+         declare
+            Log : constant String := Prog.Info_Log;
+         begin
+            if Log'Length > 0 then
                Adelaide_Trace.Trace_Print (
                  Toolcall => "renderer:link_program",
-                 Message => "LINK ERROR: " & Log_Buf (1 .. Integer (Log_Out)));
-            end;
-         end if;
-         Delete_Program (Program_Id);
-         return 0;
+                 Message => "LINK ERROR: " & Log);
+            end if;
+         end;
+         Prog.Clear;
       end if;
 
-      return Program_Id;
+      return Prog;
    end Link_Program_Checked;
 
    --  Initialize the renderer: compile shaders, create VBOs.
+   --  Uses OpenGLAda's typed API for all GL operations.
+   --  Citation: OpenGLAda API — GL.Objects.Shaders, GL.Objects.Programs,
+   --            GL.Objects.Buffers, GL.Toggles, GL.Blending
    procedure Init_Renderer (Width, Height : Float) is
-      Vert_Shader : GLuint;
-      Frag_Shader : GLuint;
-      Loc_Pos     : GLint;
-      Loc_Color   : GLint;
+      Vert_Shader : GL.Objects.Shaders.Shader
+        (Kind => GL.Objects.Shaders.Vertex_Shader);
+      Frag_Shader : GL.Objects.Shaders.Shader
+        (Kind => GL.Objects.Shaders.Fragment_Shader);
    begin
       if G_Render_State.Initialized then
          return;
@@ -702,122 +729,132 @@ package body Zephyrine_Widget_Tree is
 
       Adelaide_Trace.Trace_Print (
         Toolcall => "renderer:init",
-        Message => "Initializing OpenGL ES 2.0 renderer");
+        Message => "Initializing OpenGL ES 2.0 renderer via OpenGLAda");
 
       -- Enable blending for transparency
-      Enable (GL_BLEND);
-      Blend_Func (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      -- Citation: OpenGL ES 2.0 §3.7.7 — glBlendFunc
+      GL.Toggles.Enable (GL.Toggles.Blend);
+      GL.Blending.Set_Blend_Func (GL.Blending.Src_Alpha, GL.Blending.One_Minus_Src_Alpha);
 
-      -- Compile shaders
-      Vert_Shader := Compile_Shader_Checked (Quad_Vertex_Shader, GL_VERTEX_SHADER);
-      Frag_Shader := Compile_Shader_Checked (Quad_Fragment_Shader, GL_FRAGMENT_SHADER);
+      -- Compile shaders using OpenGLAda's typed Shader objects
+      Vert_Shader := Compile_Shader_Checked (Quad_Vertex_Shader,
+        GL.Objects.Shaders.Vertex_Shader);
+      Frag_Shader := Compile_Shader_Checked (Quad_Fragment_Shader,
+        GL.Objects.Shaders.Fragment_Shader);
 
-      if Vert_Shader = 0 or else Frag_Shader = 0 then
+      if not Vert_Shader.Compile_Status or else not Frag_Shader.Compile_Status then
          Adelaide_Trace.Trace_Print (
            Toolcall => "renderer:init",
            Message => "ERROR: Shader compilation failed");
          return;
       end if;
 
-      -- Link program
+      -- Link program using OpenGLAda's typed Program object
       G_Render_State.Rect_Program := Link_Program_Checked (Vert_Shader, Frag_Shader);
-      Delete_Shader (Vert_Shader);
-      Delete_Shader (Frag_Shader);
 
-      if G_Render_State.Rect_Program = 0 then
+      -- Shaders can be cleared after linking (program retains them)
+      Vert_Shader.Clear;
+      Frag_Shader.Clear;
+
+      if not G_Render_State.Rect_Program.Initialized then
          Adelaide_Trace.Trace_Print (
            Toolcall => "renderer:init",
            Message => "ERROR: Program linking failed");
          return;
       end if;
 
-      -- Create VBO for unit quad
-      Gen_Buffers (1, G_Render_State.Rect_VBO'Access);
-      Bind_Buffer (GL_STATIC_DRAW, G_Render_State.Rect_VBO);
-      Buffer_Data (GL_STATIC_DRAW,
-                   Interfaces.C.long (Unit_Quad_Data'Size / 8),
-                   Unit_Quad_Data (Unit_Quad_Data'First)'Address,
-                   GL_STATIC_DRAW);
+      -- Create VBO for unit quad using OpenGLAda's Buffer type
+      G_Render_State.Rect_VBO.Initialize_Id;
+      GL.Objects.Buffers.Bind (GL.Objects.Buffers.Array_Buffer,
+                               G_Render_State.Rect_VBO);
+      GL.Objects.Buffers.Allocate (GL.Objects.Buffers.Array_Buffer,
+                                   Unit_Quad_Data'Size / 8,
+                                   GL.Objects.Buffers.Static_Draw);
 
       -- Set up orthographic projection matrix
       -- Maps [0,Width] x [0,Height] to [-1,1] x [-1,1]
-      G_Render_State.Proj_Matrix := (others => 0.0);
-      G_Render_State.Proj_Matrix (1)  := 2.0 / Width;   -- Scale X
-      G_Render_State.Proj_Matrix (6)  := -2.0 / Height;  -- Scale Y (flip Y)
-      G_Render_State.Proj_Matrix (11) := -1.0;           -- Z depth
-      G_Render_State.Proj_Matrix (13) := -1.0;           -- Translate X to center
-      G_Render_State.Proj_Matrix (14) := 1.0;            -- Translate Y to center
-      G_Render_State.Proj_Matrix (16) := 1.0;            -- W homogeneous
+      -- Citation: OpenGL ES 2.0 §4.1.9 — orthographic projection
+      G_Render_State.Proj_Matrix := (others => (others => 0.0));
+      G_Render_State.Proj_Matrix (1, 1) := Single (2.0 / Width);   -- Scale X
+      G_Render_State.Proj_Matrix (2, 2) := Single (-2.0 / Height); -- Scale Y (flip Y)
+      G_Render_State.Proj_Matrix (3, 3) := -1.0;                   -- Z depth
+      G_Render_State.Proj_Matrix (4, 1) := -1.0;                   -- Translate X to center
+      G_Render_State.Proj_Matrix (4, 2) := 1.0;                    -- Translate Y to center
+      G_Render_State.Proj_Matrix (4, 4) := 1.0;                    -- W homogeneous
 
       G_Render_State.Initialized := True;
 
       Adelaide_Trace.Trace_Print (
         Toolcall => "renderer:init",
-        Message => "Renderer initialized successfully");
+        Message => "Renderer initialized successfully via OpenGLAda");
    end Init_Renderer;
 
    --  Draw a filled rectangle at (X, Y) with given Width, Height, and Color.
+   --  Uses OpenGLAda's typed uniform/attribute API.
+   --  Citation: OpenGL ES 2.0 §3.5 — glUniform, §3.6 — glVertexAttribPointer
    procedure Draw_Filled_Rect (X, Y, W, H : Float;
                                R, G, B, A : Float)
    is
-      Loc_Proj    : GLint;
-      Loc_Model   : GLint;
-      Loc_Pos     : GLint;
-      Loc_Color   : GLint;
-      Model_Matrix : array (1 .. 16) of Float := (others => 0.0);
+      Loc_Proj    : GL.Objects.Programs.Uniforms.Uniform;
+      Loc_Model   : GL.Objects.Programs.Uniforms.Uniform;
+      Loc_Pos     : GL.Objects.Programs.Attributes.Attribute;
+      Loc_Color   : GL.Objects.Programs.Attributes.Attribute;
+      Model_Matrix : GL.Types.Singles.Matrix4 := (others => (others => 0.0));
    begin
-      if G_Render_State.Rect_Program = 0 then
+      if not G_Render_State.Rect_Program.Initialized then
          return;
       end if;
 
-      Use_Program (G_Render_State.Rect_Program);
+      G_Render_State.Rect_Program.Use_Program;
 
       -- Model matrix: scale and translate the unit quad
-      Model_Matrix (1)  := W;   -- Scale X
-      Model_Matrix (6)  := H;   -- Scale Y
-      Model_Matrix (11) := 1.0; -- Scale Z
-      Model_Matrix (13) := X;   -- Translate X
-      Model_Matrix (14) := Y;   -- Translate Y
-      Model_Matrix (16) := 1.0; -- W
+      Model_Matrix (1, 1) := Single (W);   -- Scale X
+      Model_Matrix (2, 2) := Single (H);   -- Scale Y
+      Model_Matrix (3, 3) := 1.0;          -- Scale Z
+      Model_Matrix (4, 1) := Single (X);   -- Translate X
+      Model_Matrix (4, 2) := Single (Y);   -- Translate Y
+      Model_Matrix (4, 4) := 1.0;          -- W
+
+      -- Get uniform and attribute locations
+      Loc_Proj  := G_Render_State.Rect_Program.Uniform_Location ("u_Projection");
+      Loc_Model := G_Render_State.Rect_Program.Uniform_Location ("u_Model");
+      Loc_Pos   := G_Render_State.Rect_Program.Attrib_Location ("a_Position");
+      Loc_Color := G_Render_State.Rect_Program.Attrib_Location ("a_Color");
 
       -- Set uniforms
-      Loc_Proj := Get_Uniform_Location (G_Render_State.Rect_Program,
-        Interfaces.C.Strings.New_String ("u_Projection"));
-      Loc_Model := Get_Uniform_Location (G_Render_State.Rect_Program,
-        Interfaces.C.Strings.New_String ("u_Model"));
-      Loc_Pos := Get_Attribute_Location (G_Render_State.Rect_Program,
-        Interfaces.C.Strings.New_String ("a_Position"));
-      Loc_Color := Get_Attribute_Location (G_Render_State.Rect_Program,
-        Interfaces.C.Strings.New_String ("a_Color"));
-
-      Uniform_Matrix4fv (Loc_Proj, 1, GL_FALSE, G_Render_State.Proj_Matrix'Access);
-      Uniform_Matrix4fv (Loc_Model, 1, GL_FALSE, Model_Matrix'Access);
+      GL.Uniforms.Set_Single (Loc_Proj, G_Render_State.Proj_Matrix);
+      GL.Uniforms.Set_Single (Loc_Model, Model_Matrix);
 
       -- Set vertex color via uniform (overrides vertex attribute)
-      Uniform4f (Get_Uniform_Location (G_Render_State.Rect_Program,
-        Interfaces.C.Strings.New_String ("u_Color")), R, G, B, A);
+      GL.Uniforms.Set_Single (
+        G_Render_State.Rect_Program.Uniform_Location ("u_Color"),
+        Single (R), Single (G), Single (B), Single (A));
 
       -- Bind VBO and set vertex attributes
-      Bind_Buffer (GL_ARRAY_BUFFER, G_Render_State.Rect_VBO);
-      Enable_Vertex_Attribute_Array (Loc_Pos);
-      Enable_Vertex_Attribute_Array (Loc_Color);
-      Vertex_Attribute_Pointer (Loc_Pos, 2, GL_FLOAT, GL_FALSE,
+      GL.Objects.Buffers.Bind (GL.Objects.Buffers.Array_Buffer,
+                               G_Render_State.Rect_VBO);
+      GL.Attributes.Enable_Vertex_Attrib_Array (Loc_Pos);
+      GL.Attributes.Enable_Vertex_Attrib_Array (Loc_Color);
+      GL.Attributes.Set_Vertex_Attrib_Pointer (
+        Loc_Pos, 2, GL.Types.Single_Type, False,
         6 * 4,  -- stride: 6 floats * 4 bytes
-        GLvoid (System.Null_Address));  -- offset 0
-      Vertex_Attribute_Pointer (Loc_Color, 4, GL_FLOAT, GL_FALSE,
-        6 * 4,
-        GLvoid (System'To_Address (8)));  -- offset: 2 floats * 4 bytes
+        0);     -- offset 0
+      GL.Attributes.Set_Vertex_Attrib_Pointer (
+        Loc_Color, 4, GL.Types.Single_Type, False,
+        6 * 4,  -- stride: 6 floats * 4 bytes
+        8);     -- offset: 2 floats * 4 bytes
 
-      -- Draw the quad (2 triangles)
-      Draw_Arrays (GL_TRIANGLES, 0, 6);
+      -- Draw the quad (2 triangles, 6 vertices)
+      GL.Drawing.Draw_Arrays (GL.Types.Triangles, 0, 6);
 
       -- Cleanup
-      Disable_Vertex_Attribute_Array (Loc_Pos);
-      Disable_Vertex_Attribute_Array (Loc_Color);
-      Use_Program (0);
+      GL.Attributes.Disable_Vertex_Attrib_Array (Loc_Pos);
+      GL.Attributes.Disable_Vertex_Attrib_Array (Loc_Color);
+      GL.Objects.Programs.Program'(G_Render_State.Rect_Program).Use_Program;
    end Draw_Filled_Rect;
 
-   --  Render a single widget and its children.
+   --  Render a single widget and its children (depth-first traversal).
+   --  For each visible widget: draw background, draw border, recurse children.
    procedure Render_Widget (Tree : Widget_Tree; W_Id : Widget_ID) is
       W : Widget renames Tree.Widgets (W_Id);
    begin
@@ -851,6 +888,9 @@ package body Zephyrine_Widget_Tree is
       end;
    end Render_Widget;
 
+   --  Render the entire widget tree.
+   --  Clears the screen, then renders from root widget depth-first.
+   --  Citation: OpenGL ES 2.0 §4.2 — glClear, glClearColor
    procedure Render_Tree (Tree : Widget_Tree) is
    begin
       -- Initialize renderer on first call
@@ -858,11 +898,11 @@ package body Zephyrine_Widget_Tree is
          Init_Renderer (1200.0, 800.0);
       end if;
 
-      -- Clear the screen
-      Clear_Color (0.043, 0.047, 0.055, 1.0);  -- #0b0c0e
-      Clear (GL_COLOR_BUFFER_BIT);
+      -- Clear the screen with background color (#0b0c0e)
+      GL.Buffers.Set_Color_Clear_Value ((0.043, 0.047, 0.055, 1.0));
+      GL.Buffers.Clear (GL.Buffers.Color => True);
 
-      -- Render from root
+      -- Render from root widget
       Render_Widget (Tree, Tree.Root_ID);
    end Render_Tree;
 
