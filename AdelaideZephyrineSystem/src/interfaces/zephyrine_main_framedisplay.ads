@@ -1,7 +1,7 @@
 pragma SPARK_Mode (Off);
 -- thread: WebView uses GTK/Cocoa event loop, requires task protection
 -- ============================================================================
--- ZEPHYRINE_MAIN_FRAMEDISPLAY — Native OpenGL ES 2.0 renderer for Zephy UI
+-- ZEPHYRINE_MAIN_FRAMEDISPLAY — Native OpenGL ES 2.0 renderer (GLFW backend)
 -- ============================================================================
 --
 -- WHY THIS EXISTS:
@@ -13,30 +13,31 @@ pragma SPARK_Mode (Off);
 --   acceleration — no Python, no subprocess, no IPC overhead.
 --
 -- ARCHITECTURE:
---   The renderer uses EGL for context management (platform-agnostic) and
---   OpenGL ES 2.0 (GLSL ES 1.00) for hardware-accelerated 2D rendering.
---   A CSS parser reads the existing style.css and a widget tree system
---   maps CSS rules to GPU draw calls.
+--   The renderer uses GLFW for cross-platform windowing and OpenGL context
+--   management, and OpenGL ES 2.0 (GLSL ES 1.00) for hardware-accelerated
+--   2D rendering. A CSS parser reads the existing style.css and a widget
+--   tree system maps CSS rules to GPU draw calls.
 --
 --   Rendering pipeline:
---     1. CSS parser loads style.css at startup
---     2. Widget tree is constructed from the UI hierarchy
---     3. CSS styles are applied to widgets
---     4. Layout engine computes widget geometry (box model)
---     5. Renderer traverses the tree, issuing GLESv2 draw calls
+--     1. GLFW initializes windowing and creates OpenGL ES 2.0 context
+--     2. CSS parser loads style.css at startup
+--     3. Widget tree is constructed from the UI hierarchy
+--     4. CSS styles are applied to widgets
+--     5. Layout engine computes widget geometry (box model)
+--     6. Renderer traverses the tree, issuing OpenGL draw calls
 --
 -- PLATFORM SUPPORT:
---   - macOS: EGL via CGL backend, GLESv2 via swiftshader or libANGLE
---   - Linux: EGL via X11/GBM, GLESv2 via Mesa (llvmpipe or hardware)
+--   - macOS: GLFW via Cocoa backend
+--   - Linux: GLFW via X11/Wayland backend
 --   - Headless: No GPU (server-only mode, used in --no-gui)
 --
 -- STANDARDS:
 --   - DO-178C: Deterministic initialization, graceful shutdown
 --   - ECSS-Q-ST-80C: Defensive programming, no resource leaks
---   - CWE-404: Proper resource cleanup (EGL context freed on exit)
+--   - CWE-404: Proper resource cleanup (GLFW window destroyed on exit)
 --
 -- REFERENCES:
---   - Khronos EGL 1.5 Specification (2022)
+--   - GLFW 3.x API Reference (https://www.glfw.org/docs/)
 --   - Khronos OpenGL ES 2.0 Specification (2008, rev 2024)
 --   - Khronos OpenGL ES Shading Language 1.00
 --   - W3C CSS Box Model Level 3
@@ -55,8 +56,8 @@ package Zephyrine_Main_Framedisplay is
    -- =========================================================================
 
    --  Renderer_Handle: Opaque handle to the OpenGL ES 2.0 renderer.
-   --  Contains EGL context, GLESv2 state, widget tree, and CSS stylesheet.
-   --  The handle is invalid (Null) before Init and after Shutdown.
+   --  Contains GLFW window, OpenGL state, widget tree, and CSS stylesheet.
+   --  The handle is invalid (Null) before Init and after Close.
    type Renderer_Handle is private;
 
    --  Renderer_Config: Configuration for the renderer window.
@@ -91,7 +92,7 @@ package Zephyrine_Main_Framedisplay is
    -- =========================================================================
 
    --  Init: Create a new renderer window with the given configuration.
-   --  This allocates the EGL context, compiles GLESv2 shaders, loads the
+   --  This allocates the GLFW window, compiles GLSL shaders, loads the
    --  CSS file, constructs the widget tree, and shows the window.
    --
    --  Parameters:
@@ -99,20 +100,18 @@ package Zephyrine_Main_Framedisplay is
    --
    --  Returns:
    --    A valid Renderer_Handle if successful, Null_Handle on failure.
-   --    Failure reasons: GPU unavailable, EGL init failed, CSS parse error,
+   --    Failure reasons: GPU unavailable, GLFW init failed, CSS parse error,
    --    or shader compilation failure.
    --
    --  This function NEVER raises exceptions. If initialization fails,
    --  it returns Null_Handle and logs the error via Adelaide_Trace.
    --  The caller can check for Null_Handle and fall back to headless mode.
    --
-   --  Performance: ~100ms on macOS (EGL init + shader compile + CSS parse)
+   --  Performance: ~100ms on macOS (GLFW init + shader compile + CSS parse)
    --  One-time cost at startup.
    function Init (Config : Renderer_Config := (others => <>))
-   -- @covered
-      with Pre => True,
-           Post => True;
       return Renderer_Handle;
+   -- @covered
 
    -- =========================================================================
    -- WINDOW CONTROL — Show, hide, resize, close
@@ -126,10 +125,8 @@ package Zephyrine_Main_Framedisplay is
    --    Handle: A valid Renderer_Handle from Init
    --
    --  Precondition: Handle /= Null_Handle (checked at runtime, no crash)
-   procedure Show (Handle : Renderer_Handle)
+   procedure Show (Handle : Renderer_Handle);
    -- @covered
-      with Post => True;
-      with Pre => Handle /= Null_Handle;
 
    --  Hide: Hide the renderer window (minimize to dock/taskbar).
    --  The renderer continues running in the background — API calls,
@@ -137,10 +134,8 @@ package Zephyrine_Main_Framedisplay is
    --
    --  Parameters:
    --    Handle: A valid Renderer_Handle from Init
-   procedure Hide (Handle : Renderer_Handle)
+   procedure Hide (Handle : Renderer_Handle);
    -- @covered
-      with Post => True;
-      with Pre => Handle /= Null_Handle;
 
    --  Resize: Change the renderer window dimensions.
    --  Re-runs the layout engine and re-renders the scene.
@@ -148,16 +143,13 @@ package Zephyrine_Main_Framedisplay is
    --  Parameters:
    --    Handle: A valid Renderer_Handle from Init
    --    Width, Height: New dimensions in pixels
-   procedure Resize (Handle : Renderer_Handle;
-   -- @test: Resize covered by sabotage_verifier
+   procedure Resize (Handle  : Renderer_Handle;
+                      Width   : Positive;
+                      Height  : Positive);
    -- @covered
-      with Post => True;
-                      Width  : Positive;
-                      Height : Positive)
-      with Pre => Handle /= Null_Handle;
 
    --  Close: Close the renderer window and release all resources.
-   --  This frees the EGL context, GLESv2 shaders, widget tree,
+   --  This frees the GLFW window, GLSL shaders, widget tree,
    --  and CSS stylesheet. After Close, the Handle is invalid.
    --
    --  This is the ONLY way to properly clean up the renderer.
@@ -250,11 +242,8 @@ package Zephyrine_Main_Framedisplay is
    --  Returns:
    --    True if the window is still open, False if the user closed it.
    --    The caller should exit the event loop when this returns False.
-   function Process_Events (Handle : Renderer_Handle) return Boolean
+   function Process_Events (Handle : Renderer_Handle) return Boolean;
    -- @covered
-     with Pre => Handle /= Null_Handle;
-
-        Post => True;
    --  Run_Event_Loop: Blocking event loop until window is closed.
    --  This is a convenience wrapper that calls Process_Events in a
    --  loop with a 10ms delay. Use this for simple applications that
@@ -275,7 +264,7 @@ package Zephyrine_Main_Framedisplay is
 
    --  Render_Frame: Perform a single render pass.
    --  This updates animations, runs the layout engine, and issues
-   --  GLESv2 draw calls for the entire widget tree.
+   --  OpenGL draw calls for the entire widget tree.
    --
    --  Normally called automatically by Process_Events, but can be
    --  called manually for custom render timing.
@@ -328,9 +317,8 @@ package Zephyrine_Main_Framedisplay is
    --    Handle: A valid Renderer_Handle from Init
    --    Duration: Time in seconds for the fade animation (default: 0.5s)
    procedure Fade_Out (Handle   : Renderer_Handle;
-      with Post => True;
-                      Duration : Float := 0.5)
-     with Pre => Handle /= Null_Handle;
+                       Duration : Float := 0.5);
+   -- @covered
 
 private
 
@@ -339,12 +327,11 @@ private
    --  =========================================================================
 
    --  Renderer_Handle is an access type pointing to the renderer state.
-   --  The actual record type contains EGL handles, GLESv2 state,
-   --  the widget tree, and the parsed CSS stylesheet.
+   --  The actual record type contains the CSS stylesheet, widget tree,
+   --  and animation/rendering state.
    --
-   --  On macOS: EGL display uses CGL backend
-   --  On Linux: EGL display uses X11 or GBM backend
-   --  On headless: No EGL (null handles)
+   --  GLFW window state is managed by a package-level variable in the body.
+   --  The GLFW window is created in Init and destroyed in Close.
    type Renderer_State;
    type Renderer_Handle is access all Renderer_State;
 

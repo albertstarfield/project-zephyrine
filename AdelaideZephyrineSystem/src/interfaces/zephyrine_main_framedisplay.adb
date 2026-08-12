@@ -1,22 +1,39 @@
 pragma SPARK_Mode (Off);
 -- thread: WebView uses GTK/Cocoa event loop, requires task protection
 -- ============================================================================
--- ZEPHYRINE_MAIN_FRAMEDISPLAY — Native OpenGL ES 2.0 renderer implementation
+-- ZEPHYRINE_MAIN_FRAMEDISPLAY — Native OpenGL ES 2.0 renderer (GLFW backend)
 -- ============================================================================
 --
 -- AXIOMS AND CITATIONS:
---   - EGL 1.5 Specification §3.2: Display lifecycle (Get → Initialize → Use → Terminate)
+--   - GLFW 3.x API: Window creation, context management, event polling
 --   - OpenGL ES 2.0 §3.5-3.6: Shader compilation and program linking
 --   - OpenGL ES 2.0 §3.8: Drawing primitives (glDrawArrays)
---   - W3C CSS Box Model Level 3: Content → Padding → Border → Margin
+--   - W3C CSS Box Model Level 3: Content -> Padding -> Border -> Margin
 --   - CSS Flexbox Level 1 §5.1: Main axis layout algorithm
 --
 -- IMPLEMENTATION NOTES:
---   - Uses EGL for cross-platform context management (no X11/Cocoa directly)
---   - GLESv2 for 2D rendering: solid-color quads with alpha blending
+--   - Uses GLFW for cross-platform windowing and OpenGL context management
+--   - OpenGL ES 2.0 (GLSL ES 1.00) for 2D rendering: solid-color quads with alpha
 --   - CSS parser reads the existing style.css at startup
 --   - Widget tree maps HTML elements to GPU draw calls
 --   - Layout engine computes box model geometry (simplified flexbox)
+--
+-- PLATFORM SUPPORT:
+--   - macOS: GLFW via Cocoa backend
+--   - Linux: GLFW via X11/Wayland backend
+--   - Headless: No GPU (server-only mode, used in --no-gui)
+--
+-- STANDARDS:
+--   - DO-178C: Deterministic initialization, graceful shutdown
+--   - ECSS-Q-ST-80C: Defensive programming, no resource leaks
+--   - CWE-404: Proper resource cleanup (GLFW window destroyed on exit)
+--
+-- REFERENCES:
+--   - GLFW 3.x API Reference (https://www.glfw.org/docs/)
+--   - Khronos OpenGL ES 2.0 Specification (2008, rev 2024)
+--   - Khronos OpenGL ES Shading Language 1.00
+--   - W3C CSS Box Model Level 3
+--   - W3C CSS Flexbox Level 1
 --
 -- ============================================================================
 
@@ -24,10 +41,13 @@ with Ada.Text_IO;            use Ada.Text_IO;
 with Ada.Calendar;           use Ada.Calendar;
 with Ada.Real_Time;          use Ada.Real_Time;
 with Interfaces.C;
-with Interfaces.C.Strings;
-with System;
-with EGL_Binding;            use EGL_Binding;
-with GLESv2_Binding;         use GLESv2_Binding;
+with Glfw;
+with Glfw.Windows;
+with Glfw.Windows.Context;
+with Glfw.Windows.Hints;
+with Glfw.Input;
+with GL.Window;
+with GL.Types;
 with Zephyrine_CSS_Parser;   use Zephyrine_CSS_Parser;
 with Zephyrine_Widget_Tree;  use Zephyrine_Widget_Tree;
 with Adelaide_Trace;
@@ -35,38 +55,25 @@ with Adelaide_Trace;
 package body Zephyrine_Main_Framedisplay is
 
    -- =========================================================================
+   -- PACKAGE-LEVEL STATE — GLFW window (single-window application)
+   -- =========================================================================
+
+   --  Main_Window: The GLFW window handle.
+   --  Stored as a package-level variable because GLFW Window is a controlled
+   --  type (derives from Ada.Finalization.Controlled) and cannot be stored
+   --  in a plain record. The window is created in Init and destroyed in Close.
+   Main_Window : Glfw.Windows.Window;
+
+   -- =========================================================================
    -- PRIVATE TYPES — Renderer state (defined in body for encapsulation)
    -- =========================================================================
 
-   --  EGL_Handles: Platform-specific EGL resource handles.
-   --  These are opaque pointers managed by the EGL driver.
-   type EGL_Handles is record
-      Display     : EGL_Binding.EGL_Display := Null_EGL_Display;
-      Config      : EGL_Binding.EGL_Config := Null_EGL_Config;
-      Context     : EGL_Binding.EGL_Context := Null_EGL_Context;
-      Surface     : EGL_Binding.EGL_Surface := Null_EGL_Surface;
-      Initialized : Boolean := False;
-   end record;
-
-   --  Window_State: Platform windowing state (native window pointer).
-   type Window_State is record
-      Native_Window : System.Address := System.Null_Address;
-      Width         : Natural := 0;
-      Height        : Natural := 0;
-   end record;
-
    --  Renderer_State: Complete renderer state.
-   --  Contains EGL context, window state, CSS stylesheet, widget tree,
-   --  and animation/rendering state.
+   --  Contains CSS stylesheet, widget tree, and animation/rendering state.
+   --  GLFW window state is managed by the package-level Main_Window variable.
    type Renderer_State is record
       --  Configuration
       Config        : Renderer_Config;
-
-      --  EGL resources
-      EGL           : EGL_Handles;
-
-      --  Window
-      Window        : Window_State;
 
       --  Parsed CSS stylesheet
       Stylesheet    : CSS_Stylesheet;
@@ -92,12 +99,10 @@ package body Zephyrine_Main_Framedisplay is
       return Renderer_Handle
    is
       Handle : Renderer_Handle;
-      Major, Minor : aliased Interfaces.Integer_32;
-      Success : EGL_Boolean;
    begin
       Adelaide_Trace.Trace_Print (
         Toolcall => "framedisplay:init",
-        Message => "Initializing OpenGL ES 2.0 renderer: " &
+        Message => "Initializing OpenGL ES 2.0 renderer (GLFW backend): " &
           To_String (Config.Title) & " " &
           Natural'Image (Config.Width) & "x" &
           Natural'Image (Config.Height));
@@ -105,127 +110,69 @@ package body Zephyrine_Main_Framedisplay is
       -- Allocate renderer state
       Handle := new Renderer_State;
       Handle.Config := Config;
-      Handle.Window.Width := Config.Width;
-      Handle.Window.Height := Config.Height;
 
-      --  Initialize EGL display
-      --  Citation: EGL 1.5 §3.2 "eglGetDisplay returns the display
-      --  associated with a native display. EGL_DEFAULT_DISPLAY yields
-      --  the platform's default display."
-      Handle.EGL.Display := Get_Display (EGL_Binding.EGL_Native_Display_Type (System.Null_Address));
-
-      if Handle.EGL.Display = Null_EGL_Display then
-         Adelaide_Trace.Trace_Print (
-           Toolcall => "framedisplay:init",
-           Message => "ERROR: eglGetDisplay failed — no GPU available");
-         Free (Handle);
-         return Null_Handle;
-      end if;
-
-      --  Initialize EGL
-      --  Citation: EGL 1.5 §3.2 "eglInitialize initializes the EGL
-      --  display connection."
-      Success := Initialize (Handle.EGL.Display, Major'Access, Minor'Access);
-      if Success = EGL_False then
-         declare
-            Err : constant EGL_Int := Get_Error;
-         begin
+      --  Initialize GLFW
+      --  Citation: GLFW 3.x "glfwInit initializes the GLFW library.
+      --  Before library can be used, this function must be called."
+      --  Note: GLFW.Init also calls GL.Init per OpenGLAda convention.
+      begin
+         Glfw.Init;
+      exception
+         when others =>
             Adelaide_Trace.Trace_Print (
               Toolcall => "framedisplay:init",
-              Message => "ERROR: eglInitialize failed, error=" &
-                EGL_Int'Image (Err));
-         end;
-         Free (Handle);
-         return Null_Handle;
-      end if;
+              Message => "ERROR: Glfw.Init failed — no GPU or windowing system available");
+            Free (Handle);
+            return Null_Handle;
+      end;
 
       Adelaide_Trace.Trace_Print (
         Toolcall => "framedisplay:init",
-        Message => "EGL initialized: version " &
-          Interfaces.Integer_32'Image (Major) & "." &
-          Interfaces.Integer_32'Image (Minor));
+        Message => "GLFW initialized");
 
-      --  Choose EGL configuration for OpenGL ES 2.0 rendering
-      --  Citation: EGL 1.5 §3.4 "eglChooseConfig returns configurations
-      --  that match the specified attributes."
-      declare
-         Config_Attribs : array (1 .. 17) of EGL_Int := (
-            EGL_RED_SIZE,     8,
-            EGL_GREEN_SIZE,   8,
-            EGL_BLUE_SIZE,    8,
-            EGL_ALPHA_SIZE,   8,
-            EGL_DEPTH_SIZE,   24,
-            EGL_STENCIL_SIZE, 8,
-            EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-            EGL_NONE
-         );
-         Num_Configs : aliased EGL_Int := 0;
+      --  Set window hints for OpenGL ES 2.0
+      --  Citation: GLFW 3.x "Window hints must be set before window creation.
+      --  They control the framebuffer format, API version, and behavior."
+      Glfw.Windows.Hints.Reset_To_Defaults;
+      Glfw.Windows.Hints.Set_Client_API (Glfw.Windows.Context.OpenGL_ES);
+      Glfw.Windows.Hints.Set_Minimum_OpenGL_Version (2, 0);
+      Glfw.Windows.Hints.Set_Color_Bits (8, 8, 8, 8);   -- RGBA
+      Glfw.Windows.Hints.Set_Depth_Bits (24);             -- Depth buffer
+      Glfw.Windows.Hints.Set_Stencil_Bits (8);            -- Stencil buffer
+      Glfw.Windows.Hints.Set_Doublebuffer (True);         -- Double buffering
+      Glfw.Windows.Hints.Set_Resizable (True);            -- Allow resize
+
+      if Config.Transparent_Background then
+         Glfw.Windows.Hints.Set_Transparent_Framebuffer (True);
+      end if;
+
+      --  Create the GLFW window
+      --  Citation: GLFW 3.x "glfwCreateWindow creates a window with the
+      --  given parameters and its associated OpenGL context."
       begin
-         Success := Choose_Config (
-            Handle.EGL.Display,
-            Config_Attribs (Config_Attribs'First)'Access,
-            Handle.EGL.Config'Access,
-            1,
-            Num_Configs'Access);
-
-         if Success = EGL_False or else Num_Configs = 0 then
+         Main_Window.Init (
+            Width  => Glfw.Size (Config.Width),
+            Height => Glfw.Size (Config.Height),
+            Title  => To_String (Config.Title));
+      exception
+         when others =>
             Adelaide_Trace.Trace_Print (
               Toolcall => "framedisplay:init",
-              Message => "ERROR: eglChooseConfig failed — no matching config");
-            Terminate (Handle.EGL.Display);
+              Message => "ERROR: Glfw.Windows.Init failed — window creation failed");
+            Glfw.Shutdown;
             Free (Handle);
             return Null_Handle;
-         end if;
       end;
 
-      --  Create EGL context for OpenGL ES 2.0
-      --  Citation: EGL 1.5 §3.7.1 "eglCreateContext creates a new EGL
-      --  rendering context... bound to a particular API version."
-      declare
-         Context_Attribs : array (1 .. 5) of EGL_Int := (
-            EGL_CONTEXT_MAJOR_VERSION, 2,
-            EGL_CONTEXT_MINOR_VERSION, 0,
-            EGL_NONE
-         );
-      begin
-         Handle.EGL.Context := Create_Context (
-            Handle.EGL.Display,
-            Handle.EGL.Config,
-            Null_EGL_Context,
-            Context_Attribs (Context_Attribs'First)'Access);
+      --  Make the OpenGL context current
+      --  Citation: GLFW 3.x "glfwMakeContextCurrent makes the OpenGL context
+      --  of the specified window current on the calling thread."
+      Glfw.Windows.Context.Make_Current (Main_Window'Access);
+      Main_Window.Show;
 
-         if Handle.EGL.Context = Null_EGL_Context then
-            declare
-               Err : constant EGL_Int := Get_Error;
-            begin
-               Adelaide_Trace.Trace_Print (
-                 Toolcall => "framedisplay:init",
-                 Message => "ERROR: eglCreateContext failed, error=" &
-                   EGL_Int'Image (Err));
-            end;
-            Terminate (Handle.EGL.Display);
-            Free (Handle);
-            return Null_Handle;
-         end if;
-      end;
-
-      --  NOTE: Window surface creation (eglCreateWindowSurface) requires
-      --  a platform-native window handle (NSWindow* on macOS, Window on X11).
-      --  In a real implementation, this would be created via platform-specific
-      --  code. For now, we create a pbuffer surface for headless rendering,
-      --  or skip surface creation if the platform doesn't support it.
-      --
-      --  Citation: EGL 1.5 §3.10.1 "eglCreateWindowSurface creates a new
-      --  EGL window surface... bound to a native window."
-      --
-      --  TODO: Implement platform-specific window creation:
-      --  - macOS: NSWindow + CALayer (via Cocoa bindings)
-      --  - Linux: XCreateWindow + EGLNativeWindowType
-      --  For now, log and continue with headless rendering.
       Adelaide_Trace.Trace_Print (
         Toolcall => "framedisplay:init",
-        Message => "NOTE: Surface creation deferred to platform layer");
+        Message => "GLFW window created and context made current");
 
       --  Load CSS stylesheet
       declare
@@ -248,7 +195,7 @@ package body Zephyrine_Main_Framedisplay is
 
       --  Construct initial widget tree for the Zephyrine UI
       --  This maps the HTML structure from the existing frontend:
-      --    #app → #sidebar + #main-area
+      --    #app -> #sidebar + #main-area
       --    #sidebar: .sidebar-top + .sidebar-bottom
       --    #main-area: #empty-state | #chat-container
       declare
@@ -335,6 +282,7 @@ package body Zephyrine_Main_Framedisplay is
                       Float (Config.Height));
 
       Handle.Is_Initialized := True;
+      Handle.Is_Visible := True;
       Handle.Last_Frame_Time := Ada.Real_Time.Clock;
 
       Adelaide_Trace.Trace_Print (
@@ -356,6 +304,7 @@ package body Zephyrine_Main_Framedisplay is
          return;
       end if;
       Handle.Is_Visible := True;
+      Main_Window.Show;
       Adelaide_Trace.Trace_Print (
         Toolcall => "framedisplay:show",
         Message => "Window shown");
@@ -367,6 +316,7 @@ package body Zephyrine_Main_Framedisplay is
          return;
       end if;
       Handle.Is_Visible := False;
+      Main_Window.Hide;
       Adelaide_Trace.Trace_Print (
         Toolcall => "framedisplay:hide",
         Message => "Window hidden");
@@ -379,8 +329,11 @@ package body Zephyrine_Main_Framedisplay is
       if Handle = null or else not Handle.Is_Initialized then
          return;
       end if;
-      Handle.Window.Width := Width;
-      Handle.Window.Height := Height;
+      Handle.Config.Width := Width;
+      Handle.Config.Height := Height;
+
+      -- Resize GLFW window
+      Main_Window.Set_Size (Glfw.Size (Width), Glfw.Size (Height));
 
       -- Re-run layout with new dimensions
       Compute_Layout (Handle.Tree, Float (Width), Float (Height));
@@ -401,25 +354,18 @@ package body Zephyrine_Main_Framedisplay is
         Toolcall => "framedisplay:close",
         Message => "Shutting down renderer");
 
-      --  Cleanup EGL resources
-      --  Citation: EGL 1.5 §3.2 "eglTerminate releases resources
-      --  associated with an EGL display connection."
-      if Handle.EGL.Context /= Null_EGL_Context then
-         Destroy_Context (Handle.EGL.Display, Handle.EGL.Context);
-         Handle.EGL.Context := Null_EGL_Context;
-      end if;
+      --  Destroy the GLFW window
+      --  Citation: GLFW 3.x "glfwDestroyWindow destroys the specified window
+      --  and its associated context."
+      Main_Window.Destroy;
 
-      if Handle.EGL.Surface /= Null_EGL_Surface then
-         Destroy_Surface (Handle.EGL.Display, Handle.EGL.Surface);
-         Handle.EGL.Surface := Null_EGL_Surface;
-      end if;
-
-      if Handle.EGL.Display /= Null_EGL_Display then
-         Terminate (Handle.EGL.Display);
-         Handle.EGL.Display := Null_EGL_Display;
-      end if;
+      --  Terminate GLFW
+      --  Citation: GLFW 3.x "glfwTerminate destroys all remaining windows,
+      --  frees callbacks, and restores any modified system settings."
+      Glfw.Shutdown;
 
       Handle.Is_Initialized := False;
+      Handle.Is_Visible := False;
       Free (Handle);
    end Close;
 
@@ -445,8 +391,8 @@ package body Zephyrine_Main_Framedisplay is
             Apply_CSS_Stylesheet (Handle.Tree, Handle.Stylesheet);
             -- Re-compute layout
             Compute_Layout (Handle.Tree,
-                            Float (Handle.Window.Width),
-                            Float (Handle.Window.Height));
+                            Float (Handle.Config.Width),
+                            Float (Handle.Config.Height));
             Adelaide_Trace.Trace_Print (
               Toolcall => "framedisplay:load_css",
               Message => "CSS reloaded: " &
@@ -608,6 +554,24 @@ package body Zephyrine_Main_Framedisplay is
          Handle.Last_Frame_Time := Now;
       end;
 
+      --  Check for window size changes (GLFW polling)
+      --  If the user resizes the window, update layout
+      declare
+         Current_Width  : Glfw.Size;
+         Current_Height : Glfw.Size;
+      begin
+         Main_Window.Get_Size (Current_Width, Current_Height);
+         if Natural (Current_Width) /= Handle.Config.Width or
+            Natural (Current_Height) /= Handle.Config.Height
+         then
+            Handle.Config.Width := Natural (Current_Width);
+            Handle.Config.Height := Natural (Current_Height);
+            Compute_Layout (Handle.Tree,
+                            Float (Handle.Config.Width),
+                            Float (Handle.Config.Height));
+         end if;
+      end;
+
       --  Update animations
       Update_Animations (Handle.Tree, Handle.Delta_Time);
 
@@ -616,12 +580,15 @@ package body Zephyrine_Main_Framedisplay is
          Render_Frame (Handle);
       end if;
 
-      --  NOTE: In a full implementation, this would also poll for
-      --  platform window events (Cocoa NSEvent, X11 XNextEvent, etc.)
-      --  and translate them to Input_Events for Process_Input.
-      --
-      --  For now, return True (window still open).
-      return True;
+      --  Poll GLFW events (keyboard, mouse, window close, etc.)
+      --  Citation: GLFW 3.x "glfwPollEvents processes all pending events.
+      --  This function must be called regularly to process events."
+      Glfw.Input.Poll_Events;
+
+      --  Return False if window should close
+      --  Citation: GLFW 3.x "glfwWindowShouldClose returns true if the
+      --  user has attempted to close the window."
+      return not Main_Window.Should_Close;
    end Process_Events;
 
    procedure Run_Event_Loop (Handle : Renderer_Handle) is
@@ -636,7 +603,7 @@ package body Zephyrine_Main_Framedisplay is
 
       while Process_Events (Handle) loop
          -- Sleep 10ms between frames to avoid busy-waiting
-         -- 16.67ms = 60fps, 10ms ≈ 100fps (sufficient for UI)
+         -- 16.67ms = 60fps, 10ms ~ 100fps (sufficient for UI)
          delay 0.01;
       end loop;
 
@@ -655,30 +622,26 @@ package body Zephyrine_Main_Framedisplay is
          return;
       end if;
 
-      --  Make the EGL context current
-      --  Citation: EGL 1.5 §3.9 "eglMakeCurrent binds an EGL context to
-      --  draw and read surfaces for the current thread."
-      if Handle.EGL.Context /= Null_EGL_Context then
-         Make_Current (Handle.EGL.Display,
-                       Handle.EGL.Surface,
-                       Handle.EGL.Surface,
-                       Handle.EGL.Context);
-      end if;
+      --  Make the GLFW OpenGL context current
+      --  Citation: GLFW 3.x "glfwMakeContextCurrent makes the OpenGL context
+      --  of the specified window current on the calling thread."
+      Glfw.Windows.Context.Make_Current (Main_Window'Access);
 
       --  Set viewport
-      Viewport (0, 0,
-                GLsizei (Handle.Window.Width),
-                GLsizei (Handle.Window.Height));
+      --  Citation: OpenGL ES 2.0 §2.12.1 "glViewport sets the viewport
+      --  rectangle, which defines the transformation from normalized device
+      --  coordinates to window coordinates."
+      GL.Window.Set_Viewport (0, 0,
+                              GL.Types.Int (Handle.Config.Width),
+                              GL.Types.Size (Handle.Config.Height));
 
-      --  Render the widget tree (this issues all GLESv2 draw calls)
+      --  Render the widget tree (this issues all OpenGL draw calls)
       Render_Tree (Handle.Tree);
 
-      --  Swap buffers
-      --  Citation: EGL 1.5 §3.10.1 "eglSwapBuffers posts the back buffer
-      --  contents to the native window."
-      if Handle.EGL.Surface /= Null_EGL_Surface then
-         Swap_Buffers (Handle.EGL.Display, Handle.EGL.Surface);
-      end if;
+      --  Swap front and back buffers
+      --  Citation: GLFW 3.x "glfwSwapBuffers swaps the front and back
+      --  buffers of the specified window."
+      Glfw.Windows.Context.Swap_Buffers (Main_Window'Access);
    end Render_Frame;
 
    -- =========================================================================

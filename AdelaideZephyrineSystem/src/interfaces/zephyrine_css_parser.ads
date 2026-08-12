@@ -176,46 +176,56 @@ package Zephyrine_CSS_Parser is
       Specificity : Natural := 0;          -- CSS specificity (0,0,0,0)
    end record;
 
-   --  CSS_Property_Entry: A single property: value pair within a rule.
-   type CSS_Property_Entry is record
-      Property    : CSS_Property_Kind;
-      Value       : CSS_Value;
-      Raw_Name    : Unbounded_String;   -- Original property name (e.g. "background-color")
-      Raw_Value   : Unbounded_String;   -- Original value text (e.g. "rgba(10,20,15,0.25)")
-   end record;
+    --  CSS_Property_Entry: A single property: value pair within a rule.
+    type CSS_Property_Entry is record
+       Property    : CSS_Property_Kind;
+       Value       : CSS_Value;
+       Raw_Name    : Unbounded_String;   -- Original property name (e.g. "background-color")
+       Raw_Value   : Unbounded_String;   -- Original value text (e.g. "rgba(10,20,15,0.25)")
+    end record;
 
-   --  CSS_Rule: A selector with its associated properties.
-   type CSS_Rule is record
-      Selector     : CSS_Selector;
-      Properties   : array (1 .. Max_Properties) of CSS_Property_Entry;
-      Prop_Count   : Natural := 0;  -- Number of valid properties in this rule
-   end record;
+    --  Named array types for record components (Ada requires named types)
+    type CSS_Property_Entry_Array is array (1 .. Max_Properties) of CSS_Property_Entry;
+    type CSS_Property_Entry_Array_8 is array (1 .. 8) of CSS_Property_Entry;
 
-   --  CSS_Keyframe_Step: A single step within @keyframes.
-   type CSS_Keyframe_Step is record
-      Percent    : Natural := 0;        -- 0, 50, 100, etc.
-      Properties : array (1 .. 8) of CSS_Property_Entry;
-      Prop_Count : Natural := 0;
-   end record;
+    --  CSS_Rule: A selector with its associated properties.
+    type CSS_Rule is record
+       Selector     : CSS_Selector;
+       Properties   : CSS_Property_Entry_Array;
+       Prop_Count   : Natural := 0;  -- Number of valid properties in this rule
+    end record;
 
-   --  CSS_Keyframe: A complete @keyframes definition.
-   type CSS_Keyframe is record
-      Name     : Unbounded_String;       -- e.g. "pulseOrb", "twinkle"
-      Steps    : array (1 .. Max_Steps) of CSS_Keyframe_Step;
-      Step_Count : Natural := 0;
-   end record;
+    --  CSS_Keyframe_Step: A single step within @keyframes.
+    type CSS_Keyframe_Step is record
+       Percent    : Natural := 0;        -- 0, 50, 100, etc.
+       Properties : CSS_Property_Entry_Array_8;
+       Prop_Count : Natural := 0;
+    end record;
 
-   -- =========================================================================
-   -- TYPES — The parsed stylesheet
-   -- =========================================================================
+    --  Named array types for higher-level containers
+    type CSS_Keyframe_Step_Array is array (1 .. Max_Steps) of CSS_Keyframe_Step;
 
-   --  CSS_Stylesheet: Complete parsed representation of style.css.
-   type CSS_Stylesheet is record
-      Rules     : array (1 .. Max_Rules) of CSS_Rule;
-      Rule_Count : Natural := 0;
+    --  CSS_Keyframe: A complete @keyframes definition.
+    type CSS_Keyframe is record
+       Name     : Unbounded_String;       -- e.g. "pulseOrb", "twinkle"
+       Steps    : CSS_Keyframe_Step_Array;
+       Step_Count : Natural := 0;
+    end record;
 
-      Keyframes : array (1 .. Max_Keyframes) of CSS_Keyframe;
-      Keyframe_Count : Natural := 0;
+    -- =========================================================================
+    -- TYPES — The parsed stylesheet
+    -- =========================================================================
+
+    type CSS_Rule_Array is array (1 .. Max_Rules) of CSS_Rule;
+    type CSS_Keyframe_Array is array (1 .. Max_Keyframes) of CSS_Keyframe;
+
+    --  CSS_Stylesheet: Complete parsed representation of style.css.
+    type CSS_Stylesheet is record
+       Rules     : CSS_Rule_Array;
+       Rule_Count : Natural := 0;
+
+       Keyframes : CSS_Keyframe_Array;
+       Keyframe_Count : Natural := 0;
 
       --  Root font size for rem calculations (default 16px)
       Root_Font_Size : Float := 16.0;

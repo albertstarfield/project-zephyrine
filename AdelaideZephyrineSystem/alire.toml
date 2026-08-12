@@ -78,7 +78,7 @@ ada_sqlite3 = "^0.1.1"
 ansiada = "^1.1.0"
 
 # -- OpenGL Ada Bindings (GLFW windowing + GL rendering + image loading) --
-# Citation: OpenGLAda (flyx/OpenGLAda) — thick Ada binding for OpenGL + GLFW
+# Citation: OpenGLAda (flyx/OpenGLAda) - thick Ada binding for OpenGL + GLFW
 # Provides type-safe GL objects, shader/program management, texture loading,
 # and cross-platform windowing via GLFW.
 # AXIOM: OpenGL ES 2.0 context requested via GLFW hints for embedded targets.

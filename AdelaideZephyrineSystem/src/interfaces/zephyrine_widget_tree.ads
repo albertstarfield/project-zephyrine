@@ -64,6 +64,9 @@ package Zephyrine_Widget_Tree is
    Max_Widget_ID_Length : constant := 64;
    type Widget_ID is new Positive range 1 .. Max_Widgets;
 
+   --  Named array type for widget children (Ada requires named types in records)
+   type Widget_ID_Array is array (1 .. Max_Children) of Widget_ID;
+
    --  Widget_Class: CSS class name(s) for a widget.
    --  Maps to HTML class attributes (.nav-item, .bubble, etc.)
    Max_Class_Length : constant := 128;
@@ -213,7 +216,7 @@ package Zephyrine_Widget_Tree is
 
       --  Tree structure
       Parent    : Widget_ID := 0;  -- 0 = root (no parent)
-      Children  : array (1 .. Max_Children) of Widget_ID;
+       Children  : Widget_ID_Array;
       Child_Count : Natural := 0;
 
       --  Layout
@@ -248,15 +251,18 @@ package Zephyrine_Widget_Tree is
 
       --  Callback (for buttons)
       On_Click       : Natural := 0;  -- Callback ID (0 = none)
-   end record;
+    end record;
 
-   -- =========================================================================
-   -- TYPES — The complete widget tree
-   -- =========================================================================
+    --  Named array type for widget tree storage
+    type Widget_Array is array (1 .. Max_Widgets) of Widget;
 
-   --  Widget_Tree: The entire UI widget hierarchy.
-   type Widget_Tree is record
-      Widgets    : array (1 .. Max_Widgets) of Widget;
+    -- =========================================================================
+    -- TYPES — The complete widget tree
+    -- =========================================================================
+
+    --  Widget_Tree: The entire UI widget hierarchy.
+    type Widget_Tree is record
+      Widgets    : Widget_Array;
       Widget_Count : Natural := 0;
       Root_ID    : Widget_ID := 1;  -- The root widget
    end record;
