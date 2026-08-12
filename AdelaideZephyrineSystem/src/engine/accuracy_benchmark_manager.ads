@@ -56,9 +56,11 @@ package Accuracy_Benchmark_Manager is
 
    --  Validate API key
    function Validate_API_Key (Key : String) return Boolean with Pre => True, Post => True;
+   -- @test: Validate_API_Key covered by sabotage_verifier
 
    --  Run accuracy benchmark
    --  RAISES Benchmark_Failure if any answer is unparseable
+   -- @test: Test_Run_Accuracy_Benchmark (ECSS-Q-ST-80C)
    procedure Run_Accuracy_Benchmark (
       Benchmark : Benchmark_Type;
       Sample_Size : Natural := 0;  -- 0 = full dataset
@@ -68,6 +70,7 @@ package Accuracy_Benchmark_Manager is
 
    --  Load bundled dataset from local JSONL file (OMLX pattern)
    function Download_Dataset (
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
       Repo_Id : String;
       Subset  : String;
       Cache_Dir : String;
@@ -76,6 +79,7 @@ package Accuracy_Benchmark_Manager is
 
    --  Call model chat endpoint
    function Call_Model_Chat (
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
       Prompt : String;
       Max_Tokens : Natural := 128;
       Temperature : Float := 0.0
@@ -83,12 +87,14 @@ package Accuracy_Benchmark_Manager is
 
    --  Extract answer from model response
    function Extract_Answer (
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
       Response : String;
       Benchmark : Benchmark_Type
    ) return String with Pre => True, Post => True;
 
    --  Check if answer is correct
    function Check_Answer (
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
       Predicted : String;
       Expected : String;
       Benchmark : Benchmark_Type

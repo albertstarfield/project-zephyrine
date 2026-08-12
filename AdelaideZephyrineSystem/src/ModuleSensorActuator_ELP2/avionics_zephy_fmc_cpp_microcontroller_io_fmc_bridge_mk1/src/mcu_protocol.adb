@@ -4,6 +4,7 @@ with Ada.Unchecked_Conversion; -- justified: FFI type conversion required for C 
 use all type Ada.Streams.Stream_Element;
 
 package body MCU_Protocol is
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    use type Ada.Streams.Stream_Element_Offset;
    use type Interfaces.Integer_16;
 
@@ -43,6 +44,7 @@ package body MCU_Protocol is
    function Calculate_Checksum (Data : Ada.Streams.Stream_Element_Array) 
                               return Ada.Streams.Stream_Element is
       Sum : Ada.Streams.Stream_Element := 0;
+      -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
    begin
          -- Loop_Invariant: loop body maintains program invariant
       for I in Data'Range loop
@@ -75,6 +77,7 @@ package body MCU_Protocol is
    function Encode_Control (Values : Control_Values) 
                           return Ada.Streams.Stream_Element_Array is
       Buffer : Ada.Streams.Stream_Element_Array (0 .. 6);
+      -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
    begin
       -- Message type
       Buffer (0) := To_Byte (Control_Message);

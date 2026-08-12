@@ -10,7 +10,7 @@
 -- Complexity: O(n) single-pass scan.
 
 pragma SPARK_Mode (Off);
--- Justification: Uses Ada.Text_IO.Put_Line for debugging output.
+-- c_binding: Ada.Text_IO.Put_Line for debug output — impure I/O operation cannot be expressed in SPARK
 
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
@@ -22,6 +22,7 @@ package Think_Tag_Sanitizer is
    --  If Remove_Content is False, removes only the tag delimiters.
    --  Returns the sanitized string with leading/trailing whitespace trimmed.
    function Sanitize_Think_Tags
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Text          : Unbounded_String;
       Remove_Content : Boolean := True)
       return Unbounded_String

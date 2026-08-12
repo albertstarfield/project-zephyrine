@@ -43,6 +43,7 @@ extern "C" {
 """
 
 def _setup_cpp():
+    """TODO: Document _setup_cpp."""
     global _C_LIB, _ENGINE_MODE
     try:
         lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), LIB_NAME))
@@ -66,12 +67,15 @@ def _setup_cpp():
             print("✅ StellaMath: C++ Engine Active (Tier 1)", file=sys.stderr)
             return True
     except Exception:
+        traceback.print_exc()  # CWE-390: no silent failure
+        logging.error('Exception caught: %%s', e)  # CWE-390
         return False
     return False
 
 # ==========================================
 # TIER 2: NUMBA JIT (The "Speedster")
 # ==========================================
+    """TODO: Document _setup_numba."""
 def _setup_numba():
     global _NUMBA_FUNC, _ENGINE_MODE
     try:
@@ -103,7 +107,7 @@ def _setup_numba():
         print("✅ StellaMath: Numba Engine Active (Tier 2)", file=sys.stderr)
         return True
     except ImportError:
-        pass
+        import logging; logging.warning("Exception swallowed: %s", e)
     except Exception as e:
         print(f"⚠️ StellaMath: Numba failed ({e})", file=sys.stderr)
     return False
@@ -118,6 +122,7 @@ if not _setup_cpp() and not _setup_numba():
 
 # ==========================================
 # TIER 3: PURE PYTHON (The Fallback)
+    """TODO: Document _calc_python."""
 # ==========================================
 def _calc_python(a, op, b):
     # 0=Add, 1=Sub, 2=Mul, 3=Div

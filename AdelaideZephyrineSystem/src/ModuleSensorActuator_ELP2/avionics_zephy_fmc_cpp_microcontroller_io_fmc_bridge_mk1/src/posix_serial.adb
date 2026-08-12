@@ -9,6 +9,7 @@ with Interfaces; -- Add this for bitwise operations
 -- for opening, configuring, and writing to the serial port.
 package body POSIX_Serial is
 
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    -----------
    -- Is_Null --
    -----------
@@ -108,6 +109,7 @@ package body POSIX_Serial is
    end Configure_Port;
 
    -- PROVIDE THE BODY for the explicit "=" function declared in the spec
+   -- @test: posix_serial_equality_test
    function "=" (Left, Right : Serial_Port) return Boolean is
       -- pre => True, post => True
    begin

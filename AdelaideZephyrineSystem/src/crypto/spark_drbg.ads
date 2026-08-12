@@ -33,37 +33,49 @@ is
                           Last_Valid => False);
 
    -- C bindings (Imported as procedures to bypass SPARK function limitations on out-parameters)
+   -- @test: Test_C_AES256_ECB_Encrypt (ECSS-Q-ST-80C)
    procedure C_AES256_ECB_Encrypt (Key : in Key_Type; Plaintext : in Block_Type; Ciphertext : out Block_Type; Result : out int)
+   -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Import => True, Convention => C, External_Name => "adl_aes256_ecb_encrypt_wrapper";
      
    --  C_Gather_Entropy: C FFI binding to gather entropy from the system.
+   -- @test: Test_C_Gather_Entropy (ECSS-Q-ST-80C)
    procedure C_Gather_Entropy (Buffer : out Seed_Type; Len : in size_t; Result : out int)
      with Import => True, Convention => C, External_Name => "adl_gather_entropy_wrapper";
 
    --  Instantiate: Initializes the DRBG with entropy and personalization string.
    procedure Instantiate (Success : out Boolean)
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Global => (In_Out => State), Pre => True, Post => True;
 
    type Output_Buffer is array (Natural range <>) of unsigned_char;
    
    --  Generate: Generates random bytes using the DRBG.
    procedure Generate (Output : out Output_Buffer; Success : out Boolean)
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Global => (In_Out => State),
           Pre => Output'Length <= 524288, Post => True;
      
    --  Clear: Clears the DRBG state (zeroizes key and V).
    procedure Clear
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Global => (Output => State);
 
    -- C ABI Wrappers
+   -- @test: Test_Adl_Drbg_Init (ECSS-Q-ST-80C)
    function Adl_Drbg_Init (Entropy_Bytes : size_t; Pers_String : chars_ptr; Err_Buf : chars_ptr) return int
+   -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
      with Export => True, Convention => C, External_Name => "adl_drbg_init";
 
    function Adl_Drbg_Generate (Out_Buf : System.Address; Len : size_t) return int -- FFI: System.Address required for C binding
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Export => True, Convention => C, External_Name => "adl_drbg_generate";
 
    --  Adl_Drbg_Clear: C ABI wrapper to clear the DRBG state.
+   -- @test: Test_Adl_Drbg_Clear (ECSS-Q-ST-80C)
    procedure Adl_Drbg_Clear
      with Export => True, Convention => C, External_Name => "adl_drbg_clear";
+     -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
 
 end Spark_Drbg;

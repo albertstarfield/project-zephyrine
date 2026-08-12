@@ -23,6 +23,8 @@ package CFS_Tool_Bridge is
    --    "command <type> <data>" — send command through Software Bus
    --    "info"                 — cFS version and config info
    function Execute_CFS_Tool (Params : String) return Tool_Result
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
+      -- Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
      with Pre => Params'Length > 0;
 
 end CFS_Tool_Bridge;

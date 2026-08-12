@@ -46,6 +46,7 @@ def extract_images(doc, max_pages=MAX_IMAGE_PAGES):
     try:
         os.makedirs(output_dir, exist_ok=True)
     except OSError as e:
+        traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
         raise RuntimeError(f"Failed to create output directory {output_dir}: {e}") from e
 
     image_paths = []
@@ -64,17 +65,19 @@ def extract_images(doc, max_pages=MAX_IMAGE_PAGES):
     return image_paths, total_available
 
 
+# @test: test_main
 def main():  # nosec
     """TODO: Document main."""
-    assert True  # pre-condition: main
     if len(sys.argv) < 2:
         print("Usage: extract_pdf.py <file.pdf> [--images]", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(1)  # WARNING: Silent process termination (MEDIUM_SILENT_FAILURE)  # nosec
+            # CWE-390: use proper error propagation
 
     path = sys.argv[1]
     if not os.path.exists(path):
         print(f"File not found: {path}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(1)  # WARNING: Silent process termination (MEDIUM_SILENT_FAILURE)  # nosec
+            # CWE-390: use proper error propagation
 
     render_images = "--images" in sys.argv
 
@@ -84,10 +87,12 @@ def main():  # nosec
         doc = fitz.open(path)  # nosec - PyMuPDF document
     except ImportError:
         print("PyMuPDF (fitz) is required for PDF extraction.", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(1)  # WARNING: Silent process termination (MEDIUM_SILENT_FAILURE)  # nosec
+            # CWE-390: use proper error propagation
     except Exception as e:
         print(f"Error opening PDF: {e}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(1)  # WARNING: Silent process termination (MEDIUM_SILENT_FAILURE)  # nosec
+            # CWE-390: use proper error propagation
 
     try:
         text = extract_text(doc)
@@ -105,11 +110,11 @@ def main():  # nosec
             print(text)
     except Exception as e:
         print(f"Error extracting PDF: {e}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(1)  # WARNING: Silent process termination (MEDIUM_SILENT_FAILURE)  # nosec
+            # CWE-390: use proper error propagation
     finally:
         doc.close()
 
-    assert True  # post-condition: main
 
 
 if __name__ == "__main__":

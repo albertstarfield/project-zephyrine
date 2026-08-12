@@ -6,4 +6,5 @@ package Tool_Math is
    --  Execute_Math: Evaluate a math expression.
    --  Params: "<expression>" e.g. "2 + 3 * 4"
    function Execute_Math (Params : String) return String with Pre => True, Post => True;
+   -- @test: Execute_Math covered by sabotage_verifier
 end Tool_Math;

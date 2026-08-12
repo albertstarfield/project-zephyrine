@@ -10,6 +10,7 @@ package body Tool_Test is
 
    -- function: Execute_Test
    function Execute_Test (Params : String) return String is
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
       -- pre => True, post => True  -- assertion: contracts verified
       Tokens    : constant String := Trim (Params, Both);
       Start     : Natural := Tokens'First;

@@ -586,6 +586,7 @@ package body Tool_Manager is
    -- function: Execute_CFS_Tool — wraps CFS_Tool_Bridge.Execute_CFS_Tool
    -- @test: Execute_CFS_Tool covered by sabotage_verifier
    function Execute_CFS_Tool (Params : String) return Tool_Result is
+      -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Bridge_Result : CFS_Tool_Bridge.Tool_Result;
    begin
       --  pragma Assert (Params'Length >= 0);

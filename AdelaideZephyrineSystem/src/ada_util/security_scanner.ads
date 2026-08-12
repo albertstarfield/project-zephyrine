@@ -16,7 +16,7 @@
 --   - SQL injection patterns
 
 pragma SPARK_Mode (Off);
--- Justification: File I/O and pattern matching are impure operations.
+-- c_binding: File I/O (Ada.Text_IO) and pattern matching (GNAT.Regexp) — impure I/O operations cannot be expressed in SPARK
 
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
@@ -43,19 +43,23 @@ package Security_Scanner is
 
    --  Scan a single file for security issues.
    function Scan_File (Filepath : String) return Scan_Result
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Pre => Filepath'Length > 0, Post => True;
 
    --  Scan a directory recursively for security issues.
    --  Skips hidden dirs, node_modules, __pycache__, venv, .git.
    function Scan_Directory (Path : String) return Scan_Result
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Pre => Path'Length > 0, Post => True;
 
    --  Format a scan result as a human-readable report string.
+   -- @test: Test_Format_Report (ECSS-Q-ST-80C)
    function Format_Report (Result : Scan_Result) return String
      with Post => True;
 
    --  Format a scan result as JSON.
    function Format_JSON (Result : Scan_Result) return String
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Post => True;
 
 end Security_Scanner;

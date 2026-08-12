@@ -29,9 +29,11 @@ package Benchmark_Manager is
 
    --  Validate API key for benchmark endpoint
    function Validate_API_Key (Key : String) return Boolean with Pre => True, Post => True;
+   -- @test: Validate_API_Key covered by sabotage_verifier
 
    --  Run benchmark with SSE streaming
    --  Returns SSE events as strings
+   -- @test: Test_Run_Benchmark (ECSS-Q-ST-80C)
    procedure Run_Benchmark (
       Config : Benchmark_Config;
       On_Progress : access procedure (Event : String);
@@ -40,8 +42,10 @@ package Benchmark_Manager is
 
    --  Generate prompt with exact token count
    function Generate_Prompt (Target_Tokens : Natural) return String with Pre => True, Post => True;
+   -- @test: Generate_Prompt covered by sabotage_verifier
 
    --  Compute metrics from timing data
+   -- @test: Test_Compute_Metrics (ECSS-Q-ST-80C)
    function Compute_Metrics (
       Prompt_Tokens : Natural;
       Completion_Tokens : Natural;

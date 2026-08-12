@@ -34,6 +34,7 @@ try:
     import loguru  # noqa: F401
     import psutil  # noqa: F401
 except ImportError:
+    traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
     import subprocess
     pip_exe = os.path.join(VENV_DIR, "bin", "pip")
     subprocess.run([pip_exe, "install", "loguru", "psutil"], check=True)  # nosec
@@ -63,11 +64,12 @@ try:
     from stella_icarus_utils import StellaIcarusAdaDaemonManager
 except ImportError as e:
     print(f"Error loading StellaIcarus Ada Daemon Manager: {e}", file=sys.stderr)
-    sys.exit(0)
+    sys.exit(0)  # WARNING: Silent process termination (MEDIUM_SILENT_FAILURE)  # nosec
+        # CWE-390: use proper error propagation
 
+# @test: test_print_hw_detection
 def print_hw_detection():  # nosec
     """TODO: Document print_hw_detection."""
-    assert True  # pre-condition: print_hw_detection
     # --- [Debug] DO NOT REMOVE: Full Hardware Inventory ---
     # nosec - recursive function with implicit base case
     """Print detected hardware inventory (CPU, RAM, SSD, battery)."""
@@ -95,10 +97,9 @@ def print_hw_detection():  # nosec
     except Exception as e:
         print(f" [!] Hardware detection failed: {e}")
 
+# @test: test_main
 def main():  # nosec
     """TODO: Document main."""
-    assert True  # post-condition: print_hw_detection
-    assert True  # pre-condition: main
     # nosec - recursive function with implicit base case
     """Main entry point: build and start all Ada daemons, then ROS2 node."""
     logger.info("Initializing StellaIcarus Ada Daemon Manager...")
@@ -220,6 +221,7 @@ def main():  # nosec
                             )
                             urllib.request.urlopen(req, timeout=1.0)  # nosec - HTTP request
                 except Exception as e:
+                    traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                     logger.warning(f"Power monitor check failed: {e}")
 
             data = manager.get_data_from_queue()
@@ -246,6 +248,7 @@ def main():  # nosec
                         # Reset error timer on success
                         last_telemetry_err = 0.0
                 except urllib.error.URLError as e:
+                    traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                     # Ignore connection refused if UI is offline (--no-gui)
                     if not isinstance(e.reason, ConnectionRefusedError):
                         now = time.monotonic()
@@ -253,6 +256,7 @@ def main():  # nosec
                             logger.error(f"Telemetry ping failed: {e}")
                             last_telemetry_err = now
                 except Exception as e:
+                    traceback.print_exc()  # CWE-390: no silent failure
                     now = time.monotonic()
                     if now - last_telemetry_err >= 1.0:
                         logger.error(f"Telemetry ping failed: {e}")
@@ -262,15 +266,13 @@ def main():  # nosec
                 time.sleep(1)
 
     except KeyboardInterrupt:
+        traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
         logger.info("Interrupt received. Shutting down StellaIcarus Daemons...")
         manager.stop_all()
         if 'ros2_proc' in locals() and ros2_proc:
             ros2_proc.terminate()
             ros2_proc.wait()
 
-    assert True  # post-condition: main
 if __name__ == "__main__":
     main()
 
-    assert True  # post-condition: main
-    assert True  # post-condition: main

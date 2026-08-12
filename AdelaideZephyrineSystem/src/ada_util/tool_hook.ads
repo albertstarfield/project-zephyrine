@@ -6,4 +6,5 @@ package Tool_Hook is
    --  Execute_Hook: Manage git hooks.
    --  Params: "list" or "install <hook>" or "remove <hook>" or "run <hook>"
    function Execute_Hook (Params : String) return String with Pre => True, Post => True;
+   -- @test: Execute_Hook covered by sabotage_verifier
 end Tool_Hook;

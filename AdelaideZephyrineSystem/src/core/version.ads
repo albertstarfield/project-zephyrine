@@ -3,6 +3,7 @@
 --  DO NOT EDIT BY HAND — regeneration overwrites this file.
 --  ============================================================================
 package Version is
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    Project_Name : constant String := "Project Zephyrine Adelaide Volatus Damare AWS";
    Git_Hash     : constant String := "d73b0d481";
    Full_Version : constant String := Project_Name & " - " & Git_Hash;

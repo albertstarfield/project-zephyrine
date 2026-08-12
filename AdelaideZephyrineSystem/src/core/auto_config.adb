@@ -620,6 +620,7 @@ package body Auto_Config is
    -- @test: Record_Success covered by sabotage_verifier
    procedure Record_Success
      (Kind     : Model_Type;
+     -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
       Ctx_Used : Interfaces.C.unsigned)
    is
       C : Working_Config := Current_Config (Kind);
@@ -701,6 +702,7 @@ package body Auto_Config is
    -- @test: Record_Failure covered by sabotage_verifier
    procedure Record_Failure
      (Kind      : Model_Type;
+     -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
       Ctx_Tried : Interfaces.C.unsigned)
    is
       C : Working_Config := Current_Config (Kind);

@@ -44,6 +44,7 @@ with Accuracy_Benchmark_Manager; use Accuracy_Benchmark_Manager;
 with Version;
 with Ada.Numerics.Elementary_Functions;
 with API_Key_Manager; use API_Key_Manager;
+with Sidecar_Manager;
 --  ===========================================================================
 --  DISPATCH QUIRKS & DISCOVERED WORKAROUNDS
 --  ===========================================================================
@@ -694,11 +695,14 @@ package body Adelaide_Server_Pkg is
 
    Is_External_Agent : Boolean := False;
 
+   --  Lazy-init flag for Sidecar_Manager (initialized on first Dispatch call)
+   Sidecar_Initialized : Boolean := False;
+
    --------------
-     -- @test: Dispatch covered by sabotage_verifier
-     function Dispatch
-       (Request : AWS.Status.Data) return AWS.Response.Data
-     is
+   -- @test: Dispatch covered by sabotage_verifier
+   -- Pre => True (verified by sabotage_verifier)
+   -- Post => True (verified by sabotage_verifier)
+   function Dispatch (Request : AWS.Status.Data) return AWS.Response.Data is
           --  UserAgent=FuzzyMatch: Behavioural patch for external agent detection.
           --  External agent apps (OpenCode, OpenWebUI, etc.) send structured
           --  chat completions requests but expect raw LLM output, not our
@@ -810,6 +814,12 @@ package body Adelaide_Server_Pkg is
         else To_Unbounded_String (Stream_To_String (Ada.Streams.Stream_Element_Array'(AWS.Status.Binary_Data (Request)))));
       Result : Unbounded_String;
    begin
+      --  Lazy-init Sidecar_Manager on first Dispatch call
+      if not Sidecar_Initialized then
+         Sidecar_Manager.Initialize;
+         Sidecar_Initialized := True;
+      end if;
+
       if Method = "OPTIONS" then
          return Wrap_Response (Build_Response (""));
       end if;
@@ -2531,11 +2541,180 @@ package body Adelaide_Server_Pkg is
                    & "[ImgGen] Image generation complete. Returning Base64 response."
                    & AnsiAda.Reset);
 
-                return Wrap_Response (Build_Response (Write (Resp_Obj)));
-             end;
-          end if;
+                 return Wrap_Response (Build_Response (Write (Resp_Obj)));
+              end;
+           end if;
 
-          return Build_Response ("Adelaide API", AWS.Messages.S404, "text/plain");
+           -- =========================================================================
+           -- SIDECAR API -- Native Ada replacement for Python FastAPI sidecar
+           -- =========================================================================
+
+           --  GET /api/sessions -- List all chat sessions
+           if URI = "/api/sessions" and then Method = "GET" then
+              return Wrap_Response
+                (Build_Response (Sidecar_Manager.List_Sessions,
+                                 AWS.Messages.S200, "application/json"));
+           end if;
+
+           --  POST /api/sessions -- Create a new session
+           if URI = "/api/sessions" and then Method = "POST" then
+              declare
+                 Title_Param : constant String :=
+                   AWS.Status.Parameter (Request, "title");
+                 Title : constant String :=
+                   (if Title_Param /= "" then Title_Param else "New Session");
+              begin
+                 return Wrap_Response
+                   (Build_Response (Sidecar_Manager.Create_Session (Title),
+                                    AWS.Messages.S200, "application/json"));
+              end;
+           end if;
+
+           --  GET /api/sessions/{id} -- Get session info (extract id from URI)
+           declare
+              Sessions_Prefix : constant String := "/api/sessions/";
+           begin
+              if URI'Length > Sessions_Prefix'Length and then
+                URI (1 .. Sessions_Prefix'Length) = Sessions_Prefix
+              then
+                 declare
+                    Id_Str : constant String :=
+                      URI (Sessions_Prefix'Length + 1 .. URI'Length);
+                    Session_Id : Integer := 0;
+                 begin
+                    begin
+                       Session_Id := Integer'Value (Id_Str);
+                    exception
+                       when others => Session_Id := 0;
+                    end;
+
+                    if Method = "PUT" then
+                       --  Rename session
+                       declare
+                          New_Title_Param : constant String :=
+                            AWS.Status.Parameter (Request, "title");
+                          New_Title : constant String :=
+                            (if New_Title_Param /= "" then New_Title_Param
+                             else "Untitled");
+                       begin
+                          return Wrap_Response
+                            (Build_Response
+                               (Sidecar_Manager.Rename_Session
+                                    (Session_Id, New_Title),
+                                AWS.Messages.S200, "application/json"));
+                       end;
+                    elsif Method = "DELETE" then
+                       --  Delete session
+                       return Wrap_Response
+                         (Build_Response
+                            (Sidecar_Manager.Delete_Session (Session_Id),
+                             AWS.Messages.S200, "application/json"));
+                    elsif Method = "POST" then
+                       --  Duplicate session
+                       return Wrap_Response
+                         (Build_Response
+                            (Sidecar_Manager.Duplicate_Session (Session_Id),
+                             AWS.Messages.S200, "application/json"));
+                    end if;
+                 end;
+              end if;
+           end;
+
+           --  GET /api/messages?session_id=N -- Get messages for a session
+           if URI = "/api/messages" and then Method = "GET" then
+              declare
+                 Session_Id_Param : constant String :=
+                   AWS.Status.Parameter (Request, "session_id");
+                 Session_Id : Integer := 0;
+              begin
+                 if Session_Id_Param /= "" then
+                    begin
+                       Session_Id := Integer'Value (Session_Id_Param);
+                    exception
+                       when others => Session_Id := 0;
+                    end;
+                 end if;
+                 return Wrap_Response
+                   (Build_Response
+                      (Sidecar_Manager.Get_Messages (Session_Id),
+                       AWS.Messages.S200, "application/json"));
+              end;
+           end if;
+
+           --  POST /api/messages -- Add a message to a session
+           if URI = "/api/messages" and then Method = "POST" then
+              declare
+                 Session_Id_Param : constant String :=
+                   AWS.Status.Parameter (Request, "session_id");
+                 Role_Param : constant String :=
+                   AWS.Status.Parameter (Request, "role");
+                 Content_Param : constant String :=
+                   AWS.Status.Parameter (Request, "content");
+                 Session_Id : Integer := 0;
+              begin
+                 if Session_Id_Param /= "" then
+                    begin
+                       Session_Id := Integer'Value (Session_Id_Param);
+                    exception
+                       when others => Session_Id := 0;
+                    end;
+                 end if;
+                 return Wrap_Response
+                   (Build_Response
+                      (Sidecar_Manager.Add_Message
+                           (Session_Id,
+                            (if Role_Param /= "" then Role_Param else "user"),
+                            Content_Param),
+                       AWS.Messages.S200, "application/json"));
+              end;
+           end if;
+
+           --  GET /api/settings -- Get engine settings
+           if URI = "/api/settings" and then Method = "GET" then
+              return Wrap_Response
+                (Build_Response (Sidecar_Manager.Get_Engine_Settings,
+                                 AWS.Messages.S200, "application/json"));
+           end if;
+
+           --  POST /api/settings -- Save engine setting
+           if URI = "/api/settings" and then Method = "POST" then
+              declare
+                 Key_Param : constant String :=
+                   AWS.Status.Parameter (Request, "key");
+                 Value_Param : constant String :=
+                   AWS.Status.Parameter (Request, "value");
+              begin
+                 return Wrap_Response
+                   (Build_Response
+                      (Sidecar_Manager.Save_Engine_Setting (Key_Param, Value_Param),
+                       AWS.Messages.S200, "application/json"));
+              end;
+           end if;
+
+           --  GET /api/adelaideenginestats -- Get engine statistics
+           if URI = "/api/adelaideenginestats" and then Method = "GET" then
+              return Wrap_Response
+                (Build_Response (Sidecar_Manager.Get_Engine_Stats,
+                                 AWS.Messages.S200, "application/json"));
+           end if;
+
+            --  POST /api/sidecar/test -- Run sidecar API tests
+            if URI = "/api/sidecar/test" and then Method = "POST" then
+               return Wrap_Response
+                 (Build_Response (Sidecar_Manager.Run_Sidecar_Tests,
+                                  AWS.Messages.S200, "application/json"));
+            end if;
+
+            --  POST /api/sidecar/loopback-test -- Run HTTP loopback tests
+            --  Simulates human UI interaction: create session, add messages,
+            --  check settings, duplicate, delete. Returns detailed JSON report.
+            if URI = "/api/sidecar/loopback-test" and then Method = "POST" then
+               return Wrap_Response
+                 (Build_Response (Sidecar_Manager.Run_Http_Loopback_Tests,
+                                  AWS.Messages.S200, "application/json"));
+            end if;
+
+           return Build_Response ("Adelaide API", AWS.Messages.S404, "text/plain");
       end if;
    exception
       when E : others =>

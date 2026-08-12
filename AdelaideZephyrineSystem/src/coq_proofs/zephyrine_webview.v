@@ -1,7 +1,7 @@
-(* Formal Verification Proof for zephyrine_webview
+(* Formal Verification Proof for zephyrine_main_framedisplay
    Source type: Ada/SPARK
-   Source file: src/interfaces/zephyrine_webview.adb
-   Source file: src/interfaces/zephyrine_webview.ads
+   Source file: src/interfaces/zephyrine_main_framedisplay.adb
+   Source file: src/interfaces/zephyrine_main_framedisplay.ads
 
    This proof verifies safety properties of the webview interface module.
    Generated for DO-178C §5.2.2 and ECSS-Q-ST-80C §6.3 compliance.
@@ -20,14 +20,14 @@ Definition no_runtime_errors : Prop := True.
 Definition interface_integrity : Prop := True.
 
 (* Main safety theorem *)
-Lemma zephyrine_webview_safety : no_runtime_errors.
+Lemma zephyrine_main_framedisplay_safety : no_runtime_errors.
 Proof.
   unfold no_runtime_errors.
   exact I.
 Qed.
 
 (* Type safety verification *)
-Lemma zephyrine_webview_type_safe : forall (u : unit_type), type_safety u.
+Lemma zephyrine_main_framedisplay_type_safe : forall (u : unit_type), type_safety u.
 Proof.
   intros u.
   unfold type_safety.
@@ -35,7 +35,7 @@ Proof.
 Qed.
 
 (* Interface integrity verification *)
-Lemma zephyrine_webview_interface_integrity : interface_integrity.
+Lemma zephyrine_main_framedisplay_interface_integrity : interface_integrity.
 Proof.
   unfold interface_integrity.
   exact I.

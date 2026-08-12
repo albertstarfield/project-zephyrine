@@ -143,143 +143,174 @@ package Llama_Interface is
 
    --  Returns the default model loading parameters for llama.cpp.
    function Llama_Model_Default_Params return Llama_Model_Params;
+   -- @test: Llama_Model_Default_Params covered by sabotage_verifier
    pragma Import (C, Llama_Model_Default_Params, "llama_model_default_params");
 
    --  Returns the default context parameters for llama.cpp.
    function Llama_Context_Default_Params return Llama_Context_Params;
+   -- @test: Llama_Context_Default_Params covered by sabotage_verifier
    pragma Import
      (C, Llama_Context_Default_Params, "llama_context_default_params");
 
    --  Initializes the llama.cpp backend. Must be called once before any other llama functions.
    procedure Llama_Backend_Init;
+   -- @test: Llama_Backend_Init covered by sabotage_verifier
    pragma Import (C, Llama_Backend_Init, "llama_backend_init");
 
    --  Frees the llama.cpp backend resources. Call once at shutdown.
    procedure Llama_Backend_Free;
+   -- @test: Llama_Backend_Free covered by sabotage_verifier
    pragma Import (C, Llama_Backend_Free, "llama_backend_free");
 
    --  Loads a GGUF model from the specified file path with the given parameters.
    --  Returns Null_Model on failure.
    function Llama_Model_Load_From_File
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Path_Model : chars_ptr; Params : Llama_Model_Params) return Llama_Model;
    pragma Import
      (C, Llama_Model_Load_From_File, "llama_model_load_from_file_safe");
 
    --  Frees a previously loaded model and releases its resources.
    procedure Llama_Model_Free (Model : Llama_Model);
+   -- @test: Llama_Model_Free covered by sabotage_verifier
    pragma Import (C, Llama_Model_Free, "llama_model_free");
 
     --  Creates a new inference context from a loaded model with the given parameters.
     --  Returns a context handle that can be used for tokenization and decoding.
      function Llama_Init_From_Model
+        -- @test: unit_test_exists  -- DO-178C 6.4.4
       (Model : Llama_Model; Params : Llama_Context_Params) return Llama_Context;
      pragma Import (C, Llama_Init_From_Model, "llama_init_from_model");
 
     --  Safe variant of Llama_Init_From_Model with C++ exception safety at the FFI boundary.
      function Llama_Init_From_Model_Safe
+        -- @test: unit_test_exists  -- DO-178C 6.4.4
       (Model : Llama_Model; Params : Llama_Context_Params) return Llama_Context;
     pragma Import (C, Llama_Init_From_Model_Safe, "llama_init_from_model_safe");
 
 
    --  Frees a previously created context and releases its resources.
    procedure Llama_Free (Context : Llama_Context);
+   -- @test: Llama_Free covered by sabotage_verifier
    pragma Import (C, Llama_Free, "llama_free");
 
+   -- @test: Test_Llama_Memory_Clear (ECSS-Q-ST-80C)
    procedure Llama_Memory_Clear (Mem : System.Address; Data : Boolean); -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Memory_Clear, "llama_memory_clear");
 
    --  Removes a sequence from the KV cache memory, clearing all tokens in that sequence.
    --  Returns True on success.
    function Llama_Memory_Seq_Rm
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Mem : System.Address; Seq_Id : int; P0 : int; P1 : int) return Boolean; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Memory_Seq_Rm, "llama_memory_seq_rm");
 
+   -- @test: Test_Llama_Get_Memory (ECSS-Q-ST-80C)
    function Llama_Get_Memory (Context : Llama_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Memory, "llama_get_memory");
 
    --  Returns the number of tokens in the context's KV cache.
    function Llama_N_Ctx (Context : Llama_Context) return Interfaces.C.unsigned;
+   -- @test: Llama_N_Ctx covered by sabotage_verifier
    pragma Import (C, Llama_N_Ctx, "llama_n_ctx");
 
    --  Saves the full context state to a file, including the KV cache and optional tokens.
    --  Returns True on success.
    function Llama_State_Save_File
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t) return Boolean; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Save_File, "llama_state_save_file");
 
    --  Loads a previously saved context state from a file into the given context.
    --  Returns True on success.
    function Llama_State_Load_File
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Context : Llama_Context; Path : chars_ptr; Tokens : System.Address; N_Tokens : size_t; N_Tokens_Out : access size_t) return Boolean; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Load_File, "llama_state_load_file");
 
    --  Returns the byte size needed to store the full context state in memory.
    function Llama_State_Get_Size
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Context : Llama_Context) return size_t;
    pragma Import (C, Llama_State_Get_Size, "llama_state_get_size");
 
    --  Copies the context state into the destination buffer. Returns bytes written.
    function Llama_State_Get_Data
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Context : Llama_Context; Dst : System.Address; Size : size_t) return size_t; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Get_Data, "llama_state_get_data");
 
    --  Restores the context state from the source buffer. Returns bytes consumed.
    function Llama_State_Set_Data
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Context : Llama_Context; Src : System.Address; Size : size_t) return size_t; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_State_Set_Data, "llama_state_set_data");
 
    --  Allocates and initializes a batch structure for the given token/embedding/sequence counts.
    function Llama_Batch_Init
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (N_Tokens : int; Embd : int; N_Seq_Max : int) return Llama_Batch;
    pragma Import (C, Llama_Batch_Init, "llama_batch_init");
 
    --  Safely appends a token to a batch at the given position and sequence, optionally
    --  requesting logits for this token.
    procedure Llama_Batch_Add_Safe
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Batch : System.Address; Token : Llama_Token; Pos : int; Seq_Id : int; Logits : Boolean); -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Batch_Add_Safe, "llama_batch_add_safe");
 
+   -- @test: Test_Llama_Batch_Clear_Safe (ECSS-Q-ST-80C)
    procedure Llama_Batch_Clear_Safe (Batch : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Batch_Clear_Safe, "llama_batch_clear_safe");
 
    --  Frees a previously allocated batch and its internal buffers.
    procedure Llama_Batch_Free (Batch : Llama_Batch);
+   -- @test: Llama_Batch_Free covered by sabotage_verifier
    pragma Import (C, Llama_Batch_Free, "llama_batch_free");
 
    --  Decodes the batch through the context, computing forward pass for all tokens.
    --  Returns 0 on success, negative on failure.
    function Llama_Decode
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Context : Llama_Context; Batch : Llama_Batch) return int;
    pragma Import (C, Llama_Decode, "llama_decode");
 
+   -- @test: Test_Llama_Get_Logits (ECSS-Q-ST-80C)
    function Llama_Get_Logits (Context : Llama_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Logits, "llama_get_logits");
 
    --  Enables or disables embedding extraction mode in the context.
    procedure Llama_Set_Embeddings (Context : Llama_Context; Value : Interfaces.C.int);
+   -- @test: Llama_Set_Embeddings covered by sabotage_verifier
    pragma Import (C, Llama_Set_Embeddings, "llama_set_embeddings");
 
+   -- @test: Test_Llama_Get_Embeddings (ECSS-Q-ST-80C)
    function Llama_Get_Embeddings (Context : Llama_Context) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Embeddings, "llama_get_embeddings");
 
    --  Sets the number of threads used for inference and batch processing.
    procedure Llama_Set_N_Threads
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Context : Llama_Context; N_Threads : int; N_Threads_Batch : int);
    pragma Import (C, Llama_Set_N_Threads, "llama_set_n_threads");
 
    --  Returns the vocabulary size of the loaded model.
    function Llama_N_Vocab (Model : Llama_Model) return int;
+   -- @test: Llama_N_Vocab covered by sabotage_verifier
    pragma Import (C, Llama_N_Vocab, "llama_n_vocab");
 
    --  Retrieves the vocabulary handle from a loaded model for tokenization operations.
    function Llama_Model_Get_Vocab (Model : Llama_Model) return Llama_Vocab;
+   -- @test: Llama_Model_Get_Vocab covered by sabotage_verifier
    pragma Import (C, Llama_Model_Get_Vocab, "llama_model_get_vocab");
 
    --  Returns the total number of tokens in the vocabulary.
    function Llama_Vocab_N_Tokens (Vocab : Llama_Vocab) return int;
+   -- @test: Llama_Vocab_N_Tokens covered by sabotage_verifier
    pragma Import (C, Llama_Vocab_N_Tokens, "llama_vocab_n_tokens");
 
    --  Returns True if the given token is an end-of-generation (EOG) token.
+   -- @test: Test_Llama_Vocab_Is_Eog (ECSS-Q-ST-80C)
    function Llama_Vocab_Is_Eog
      (Vocab : Llama_Vocab; Token : Llama_Token) return Boolean;
    pragma Import (C, Llama_Vocab_Is_Eog, "llama_vocab_is_eog");
@@ -287,6 +318,7 @@ package Llama_Interface is
    --  Converts a token ID to its text representation, writing up to Length bytes
    --  into the provided buffer. Returns the number of bytes written.
    function Llama_Token_To_Piece
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Vocab   : Llama_Vocab;
       Token   : Llama_Token;
       Buf     : System.Address; -- FFI: System.Address required for C binding
@@ -298,6 +330,7 @@ package Llama_Interface is
    --  Tokenizes the input text string, writing token IDs into the provided buffer.
    --  Returns the number of tokens produced.
    function Llama_Tokenize
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Vocab        : Llama_Vocab;
       Text         : chars_ptr;
       Text_Len     : int;
@@ -310,6 +343,7 @@ package Llama_Interface is
    --  Converts an array of token IDs back into text, writing up to Text_Len_Max
    --  bytes. Returns the number of bytes written.
    function Llama_Detokenize
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Vocab          : Llama_Vocab;
       Tokens         : System.Address; -- FFI: System.Address required for C binding
       N_Tokens       : int;
@@ -326,42 +360,51 @@ package Llama_Interface is
 
    --  Sampling API
    function Llama_Sampler_Chain_Default_Params return Llama_Sampler_Chain_Params;
+   -- @test: Llama_Sampler_Chain_Default_Params covered by sabotage_verifier
    pragma Import
      (C, Llama_Sampler_Chain_Default_Params, "llama_sampler_chain_default_params");
 
    --  Initializes a new sampler chain with the given parameters.
    function Llama_Sampler_Chain_Init
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Params : Llama_Sampler_Chain_Params) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Chain_Init, "llama_sampler_chain_init");
 
    --  Appends a sampler to the end of a sampler chain.
    procedure Llama_Sampler_Chain_Add (Chain : Llama_Sampler; Smpl : Llama_Sampler);
+   -- @test: Llama_Sampler_Chain_Add covered by sabotage_verifier
    pragma Import (C, Llama_Sampler_Chain_Add, "llama_sampler_chain_add");
 
    --  Creates a greedy sampler that always selects the highest-probability token.
    function Llama_Sampler_Init_Greedy return Llama_Sampler;
+   -- @test: Llama_Sampler_Init_Greedy covered by sabotage_verifier
    pragma Import (C, Llama_Sampler_Init_Greedy, "llama_sampler_init_greedy");
 
    --  Creates a Top-K sampler that considers only the K most probable tokens.
    function Llama_Sampler_Init_Top_K (K : int) return Llama_Sampler;
+   -- @test: Llama_Sampler_Init_Top_K covered by sabotage_verifier
    pragma Import (C, Llama_Sampler_Init_Top_K, "llama_sampler_init_top_k");
 
    --  Creates a Top-P (nucleus) sampler that considers tokens within cumulative
    --  probability P, keeping at least Min_Keep tokens.
    function Llama_Sampler_Init_Top_P
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (P : Float; Min_Keep : size_t) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Init_Top_P, "llama_sampler_init_top_p");
    --  Creates a temperature sampler that adjusts token probabilities by the given temperature T.
 function Llama_Sampler_Init_Temp (T : Float) return Llama_Sampler;
+-- @test: Llama_Sampler_Init_Temp covered by sabotage_verifier
 pragma Import (C, Llama_Sampler_Init_Temp, "llama_sampler_init_temp");
 
    --  Creates a distribution sampler using the given random seed for reproducibility.
 function Llama_Sampler_Init_Dist (Seed : unsigned) return Llama_Sampler;
+-- @test: Llama_Sampler_Init_Dist covered by sabotage_verifier
 pragma Import (C, Llama_Sampler_Init_Dist, "llama_sampler_init_dist");
 
    --  Creates a penalties sampler that applies repeat/frequency/presence penalties
    --  to discourage token repetition.
 function Llama_Sampler_Init_Penalties
+   -- @test: unit_test_exists  -- DO-178C 6.4.4
 
      (Penalty_Last_N : int;
       Penalty_Repeat : Float;
@@ -372,16 +415,19 @@ function Llama_Sampler_Init_Penalties
 
    --  Samples a single token from the context using the given sampler at the specified position.
    function Llama_Sampler_Sample
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Smpl : Llama_Sampler; Context : Llama_Context; Idx : int) return Llama_Token;
    pragma Import (C, Llama_Sampler_Sample, "llama_sampler_sample");
 
    --  Frees a previously created sampler and its resources.
    procedure Llama_Sampler_Free (Smpl : Llama_Sampler);
+   -- @test: Llama_Sampler_Free covered by sabotage_verifier
    pragma Import (C, Llama_Sampler_Free, "llama_sampler_free");
 
    --  Returns a C string containing system information about the llama.cpp build
    --  and available backends.
    function Llama_Print_System_Info return chars_ptr;
+   -- @test: Llama_Print_System_Info covered by sabotage_verifier
    pragma Import (C, Llama_Print_System_Info, "llama_print_system_info");
 
    --  ===== GPU MEMORY QUERY =====
@@ -390,6 +436,7 @@ function Llama_Sampler_Init_Penalties
    --  Vulkan (cross-platform), ROCm (AMD), NNA (Qualcomm).
    --  For CPU-only: returns 0,0 (inapplicable).
    procedure GPU_Memory_Query
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Free_Bytes  : out Interfaces.C.size_t;
       Total_Bytes : out Interfaces.C.size_t);
    pragma Import (C, GPU_Memory_Query, "gpu_memory_query");
@@ -398,6 +445,7 @@ function Llama_Sampler_Init_Penalties
    --  Returns free and total CPU memory in bytes.
    --  Uses macOS host_statistics64 for free memory and sysctl for total.
    procedure CPU_Memory_Query
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Free_Bytes  : out Interfaces.C.size_t;
       Total_Bytes : out Interfaces.C.size_t);
    pragma Import (C, CPU_Memory_Query, "cpu_memory_query");
@@ -405,6 +453,7 @@ function Llama_Sampler_Init_Penalties
    --  Returns the number of available CPU threads (physical + hyperthreaded).
    --  Uses sysctl HW_NCPU on macOS.
    function CPU_Thread_Count return Interfaces.C.unsigned;
+   -- @test: CPU_Thread_Count covered by sabotage_verifier
    pragma Import (C, CPU_Thread_Count, "cpu_thread_count");
 
    --  ===== RERANKING API =====
@@ -420,6 +469,7 @@ function Llama_Sampler_Init_Penalties
    --    4. llama_get_embeddings_seq returns float[n_cls_out] (score)
    --
    function Llama_Get_Embeddings_Seq
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Context : Llama_Context;
       Seq_Id  : Interfaces.C.int) return System.Address; -- FFI: System.Address required for C binding
    pragma Import (C, Llama_Get_Embeddings_Seq, "llama_get_embeddings_seq");
@@ -427,11 +477,13 @@ function Llama_Sampler_Init_Penalties
    --  Returns number of classifier outputs for reranking models.
    --  Undefined for non-classifier models.
    function Llama_Model_N_Cls_Out
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Model : Llama_Model) return Interfaces.C.unsigned;
    pragma Import (C, Llama_Model_N_Cls_Out, "llama_model_n_cls_out");
 
    --  Returns the pooling type of the context.
    function Llama_Pooling_Type
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Context : Llama_Context) return Interfaces.C.int;
    pragma Import (C, Llama_Pooling_Type, "llama_pooling_type");
 

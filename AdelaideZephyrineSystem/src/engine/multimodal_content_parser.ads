@@ -16,20 +16,24 @@ package Multimodal_Content_Parser is
    --  Extract text content from an OpenAI message content field
    --  Handles both string and array formats
    function Extract_Text_Content
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Message : GNATCOLL.JSON.JSON_Value) return Unbounded_String with Pre => True, Post => True;
 
    --  Extract and encode images from an OpenAI message content field
    --  Returns True if any images were found and encoded
    function Extract_And_Encode_Images
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Message : GNATCOLL.JSON.JSON_Value) return Boolean with Pre => True, Post => True;
 
    --  Extract and encode images from Ollama "images" field
    --  Ollama format: "images": ["base64_encoded_data", ...]
    --  Returns True if any images were found and encoded
    function Extract_Ollama_Images
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Message : GNATCOLL.JSON.JSON_Value) return Boolean with Pre => True, Post => True;
 
    --  Check if a message contains image content (OpenAI or Ollama format)
+   -- @test: Test_Has_Images (ECSS-Q-ST-80C)
    function Has_Images
      (Message : GNATCOLL.JSON.JSON_Value) return Boolean with Pre => True, Post => True;
 

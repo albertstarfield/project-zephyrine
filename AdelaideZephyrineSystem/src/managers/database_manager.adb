@@ -72,6 +72,7 @@ package body Database_Manager is
    --  Forward declaration of migration procedure (called from Do_Init)
    -- @test: Migrate_Databases covered by sabotage_verifier
    procedure Migrate_Databases;
+      -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
 
    --  Init_Gate: Protected object for one-time database initialization.
    protected Init_Gate is

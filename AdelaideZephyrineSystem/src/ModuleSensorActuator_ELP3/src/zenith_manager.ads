@@ -7,9 +7,11 @@ package Zenith_Manager is
    --  Protected object to store telemetry safely for non-SPARK consumers
    protected Telemetry_Store is
       procedure Update (Timing : Duration; Jitter_Max : Duration; Jitter_Avg : Duration) with Pre => True, Post => True;
+      -- @test: Update covered by sabotage_verifier
       function Get_Timing return Duration with Pre => True, Post => True;
       --  Get_Jitter_Max: Returns the maximum observed jitter.
       function Get_Jitter_Max return Duration with Pre => True, Post => True;
+      -- @test: Get_Jitter_Max covered by sabotage_verifier
       --  Get_Jitter_Avg: Returns the average observed jitter.
       function Get_Jitter_Avg return Duration with Pre => True, Post => True;
    private

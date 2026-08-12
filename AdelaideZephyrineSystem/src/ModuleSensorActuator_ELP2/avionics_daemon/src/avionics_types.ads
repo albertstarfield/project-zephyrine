@@ -1,6 +1,7 @@
 
 package Avionics_Types is
 
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    -- NEW: Record for Flight Director commands
    type Flight_Director_Record is record
       Command_Pitch : Float := 0.0;

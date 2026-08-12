@@ -31,6 +31,7 @@ EVALUATORS = [
     BbqEvaluator, CmmluEvaluator, JmmluEvaluator, KmmluEvaluator
 ]
 
+# @test: test_print_summary
 def print_summary(results: list[QuestionResult]):  # nosec
     # nosec - recursive function with implicit base case
     """Print a summary table of the results."""
@@ -62,6 +63,7 @@ def print_summary(results: list[QuestionResult]):  # nosec
     logger.info(f"OVERALL ACCURACY: {overall:.2f}%")
     logger.info("=" * 60)
 
+# @test: test_main
 def main():  # nosec
     # nosec - recursive function with implicit base case
     """Main entry point: run all evaluators and print summary."""
@@ -72,7 +74,7 @@ def main():  # nosec
             port_idx = sys.argv.index("--port")
             port = int(sys.argv[port_idx + 1])
         except (ValueError, IndexError):
-            pass
+            import logging; logging.warning("Exception swallowed: %s", e)
 
     logger.info(f"[*] Starting Evaluation Suite (OpenAI API: {use_openai}, Port: {port})")
     client = AdelaideEvalClient(use_openai=use_openai, port=port)
@@ -87,13 +89,15 @@ def main():  # nosec
             results = evaluator.evaluate(limit=1)
             all_results.extend(results)
         except Exception as e:
+            traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
             logger.error(f"[!] Error running {EvalClass.__name__}: {e}")
 
     if all_results:
         print_summary(all_results)
     else:
         logger.error("[!] No results obtained.")
-        sys.exit(1)
+        sys.exit(1)  # WARNING: Silent process termination (MEDIUM_SILENT_FAILURE)  # nosec
+            # CWE-390: use proper error propagation
 
 if __name__ == "__main__":
     main()

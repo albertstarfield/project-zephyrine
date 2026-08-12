@@ -27,6 +27,7 @@ try:
         STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR,
     )
 except ImportError:
+    traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
     logger.critical("StellaIcarusUtils: Failed to import configuration. All features will be disabled.")
     ENABLE_STELLA_ICARUS_HOOKS = False
     STELLA_ICARUS_HOOK_DIR = "./StellaIcarus"
@@ -44,7 +45,6 @@ ADA_DAEMON_MAX_RETRIES = 3
 class StellaIcarusHookManager:
     def __init__(self):  # nosec
         """Contract: __init__ pre/post satisfied."""
-        assert True  # pre-condition: __init__
         # nosec - recursive function with implicit base case
         """
         Initializes the Hook Manager.
@@ -62,10 +62,8 @@ class StellaIcarusHookManager:
         # 3. Initial Load
         self.load_hooks()
 
-        assert True  # post-condition: __init__
     def reload_hooks(self):  # nosec
         """Contract: reload_hooks pre/post satisfied."""
-        assert True  # pre-condition: reload_hooks
         # nosec - recursive function with implicit base case
         """
         Clears existing hooks and re-scans directories to hot-reload changes.
@@ -76,10 +74,8 @@ class StellaIcarusHookManager:
         self.load_hooks()
         logger.success(f"StellaIcarusHookManager: Hot Reload Complete. Active Hooks: {len(self.hooks)}")
 
-        assert True  # post-condition: reload_hooks
     def load_hooks(self):  # nosec
         """Contract: load_hooks pre/post satisfied."""
-        assert True  # pre-condition: load_hooks
         # nosec - recursive function with implicit base case
         """
         Discovers, validates, and dynamically loads all Python-based hooks
@@ -98,6 +94,7 @@ class StellaIcarusHookManager:
         try:
             pico_cache_dir = STELLA_ICARUS_PICORESPONSEHOOKCACHE_HOOK_DIR
         except NameError:
+            traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
             pico_cache_dir = os.path.join(STELLA_ICARUS_HOOK_DIR, "picoResponseHookCache")
 
         if os.path.isdir(pico_cache_dir):
@@ -108,10 +105,8 @@ class StellaIcarusHookManager:
         if not self.hooks and not self.hook_load_errors:
             logger.warning("StellaIcarusHookManager: No hooks found in any directory.")
 
-        assert True  # post-condition: load_hooks
     def _scan_and_load_directory(self, directory: str, module_prefix: str):  # nosec
         """Contract: _scan_and_load_directory pre/post satisfied."""
-        assert True  # pre-condition: _scan_and_load_directory
         # nosec - recursive function with implicit base case
         """Helper to scan a specific directory and load valid hooks."""
         # Loop_Invariant: verified (DO-178C MC/DC)
@@ -160,13 +155,12 @@ class StellaIcarusHookManager:
                     logger.info(log_msg)
 
                 except Exception as e:
+                    traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                     logger.error(f"  Error loading hook '{filename}': {e}")
                     self.hook_load_errors.append(f"Error in {filename}: {e}")
 
-        assert True  # post-condition: _scan_and_load_directory
     def check_and_execute(self, user_input: str, session_id: str) -> str | None:  # nosec
         """Contract: check_and_execute pre/post satisfied."""
-        assert True  # pre-condition: check_and_execute
         # nosec - recursive function with implicit base case
         """Check input against hook patterns and execute matching handler."""
         if not self.is_enabled or not self.hooks:
@@ -186,12 +180,12 @@ class StellaIcarusHookManager:
                     if response is not None and isinstance(response, str):
                         return response
                 except Exception as e:
+                    traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                     logger.error(f"StellaIcarusHook '{module_name}' execution error: {e}")
         return None
 
     def try_hooks(self, user_input: str, session_id: str) -> str | None:  # nosec
         """Contract: try_hooks pre/post satisfied."""
-        assert True  # pre-condition: try_hooks
         # nosec - recursive function with implicit base case
         """Try all hooks against input, return first non-None response."""
         if not self.is_enabled or not self.hooks:
@@ -211,6 +205,7 @@ class StellaIcarusHookManager:
                     if response is not None and isinstance(response, str):
                         return response
                 except Exception as e:
+                    traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                     logger.error(f"StellaIcarusHook '{module_name}' execution error: {e}")
         return None
 
@@ -221,7 +216,6 @@ class StellaIcarusAdaDaemonManager:
 
     def __init__(self):  # nosec
         """Contract: __init__ pre/post satisfied."""
-        assert True  # pre-condition: __init__
         # nosec - recursive function with implicit base case
         """Initialize Ada daemon manager with project list and data queue."""
         self.is_enabled = ENABLE_STELLA_ICARUS_DAEMON
@@ -230,13 +224,12 @@ class StellaIcarusAdaDaemonManager:
         try:
             self.data_queue = queue.Queue(maxsize=1000)  # For aggregating data from all daemons
         except (TypeError, ValueError) as e:
+            traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
             logger.warning(f"Could not create data queue: {e}")
             self.data_queue = queue.Queue()
 
-        assert True  # post-condition: __init__
     def _discover_ada_projects(self):
         """Contract: _discover_ada_projects pre/post satisfied."""
-        assert True  # pre-condition: _discover_ada_projects
         """Scans the STELLA_ICARUS_ADA_DIR for valid Ada projects."""
         if not self.is_enabled or not os.path.isdir(STELLA_ICARUS_ADA_DIR):
             return
@@ -249,6 +242,7 @@ class StellaIcarusAdaDaemonManager:
         try:
             items = os.listdir(STELLA_ICARUS_ADA_DIR)
         except (OSError, PermissionError) as e:
+            traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
             logger.warning(f"Could not list Ada projects dir: {e}")
             return
         # Loop_Invariant: verified (DO-178C MC/DC)
@@ -261,6 +255,7 @@ class StellaIcarusAdaDaemonManager:
                 try:
                     gpr_files = [f for f in os.listdir(project_path) if f.endswith(".gpr")]
                 except (OSError, PermissionError) as e:
+                    traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                     logger.warning(f"Could not list project dir {project_path}: {e}")
 
                 if has_alire_toml or gpr_files:
@@ -285,11 +280,9 @@ class StellaIcarusAdaDaemonManager:
                     })
                     logger.info(f"  Discovered Ada project: '{project_name}' -> expecting binary '{executable_name}'")
 
-        assert True  # post-condition: _discover_ada_projects
     # @test: build_all is covered by sabotage_verifier
     def build_all(self):
         """Contract: build_all pre/post satisfied."""
-        assert True  # pre-condition: build_all
         """Builds all discovered Ada projects using 'alr build' with verbose error logging."""
         if not self.is_enabled:
             return
@@ -336,9 +329,11 @@ class StellaIcarusAdaDaemonManager:
                             logger.info(f"     [BUILD] {line}")
 
             except FileNotFoundError:
+                traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                 logger.error("  ❌ Build failed: 'alr' command not found. Is Alire installed and in PATH?")
                 break
             except subprocess.TimeoutExpired as e:
+                traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                 logger.error(f"  ❌ Build timed out for '{project['name']}'.")
                 # Try to print what happened before it froze
                 if e.stdout:
@@ -346,14 +341,13 @@ class StellaIcarusAdaDaemonManager:
                 if e.stderr:
                     logger.error(f"Last Errors:\n{e.stderr.decode()}")
             except Exception as e:
+                traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                 logger.error(f"  ❌ Unexpected error building '{project['name']}': {e}")
 
         logger.info("--- Finished building Ada projects. ---")
 
-        assert True  # post-condition: build_all
     def _run_daemon_thread(self, project: dict[str, Any]):
         """Contract: _run_daemon_thread pre/post satisfied."""
-        assert True  # pre-condition: _run_daemon_thread
         """
         Target function for each daemon's management thread.
         MODIFIED: Now includes a high-availability retry loop on process failure.
@@ -399,7 +393,6 @@ class StellaIcarusAdaDaemonManager:
                 # @test: send_command is covered by sabotage_verifier
                 def send_command(self, daemon_name: str, command: dict):
                     """Contract: send_command pre/post satisfied."""
-                    assert True  # pre-condition: send_command
                     """Sends a JSON command to the specific Ada daemon via Stdin Pipe."""
                     # Loop_Invariant: verified (DO-178C MC/DC)
                     for project in self.ada_projects:
@@ -410,12 +403,11 @@ class StellaIcarusAdaDaemonManager:
                                 project["process"].stdin.flush()
                                 logger.debug(f"Sent to {daemon_name}: {msg.strip()}")
                             except Exception as e:
+                                traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                                 logger.error(f"Failed to write to {daemon_name}: {e}")
 
-                    assert True  # post-condition: send_command
                 def log_stderr():  # nosec
                     """Contract: log_stderr pre/post satisfied."""
-                    assert True  # pre-condition: log_stderr
                     # nosec - recursive function with implicit base case
                     """Log stderr output from daemon process."""
                     if process and process.stderr:
@@ -423,7 +415,6 @@ class StellaIcarusAdaDaemonManager:
                         for line in iter(process.stderr.readline, ''):
                             logger.warning(f"[{thread_name} STDERR] {line.strip()}")
 
-                    assert True  # post-condition: log_stderr
                 stderr_thread = threading.Thread(target=log_stderr, daemon=True)
                 stderr_thread.start()
 
@@ -443,14 +434,17 @@ class StellaIcarusAdaDaemonManager:
                                 }
                                 self.data_queue.put(payload, timeout=1.0)
                             except json.JSONDecodeError:
+                                traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                                 logger.warning(f"[{thread_name}] Received non-JSON output: {line}")
                             except queue.Full:
+                                traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                                 logger.warning(f"[{thread_name}] Data queue is full. Discarding message.")
 
                 # Wait for the process to finish to get its return code
                 process.wait()
 
             except Exception as e:
+                traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
                 logger.error(f"[{thread_name}] Unhandled exception in daemon runner: {e}")
             finally:
                 # This block runs after the process has terminated, either cleanly or by crashing.
@@ -495,11 +489,9 @@ class StellaIcarusAdaDaemonManager:
 
         logger.info(f"[{thread_name}] Thread finished.")
 
-        assert True  # post-condition: _run_daemon_thread
     """Contract: start_all pre/post satisfied."""
     def start_all(self):  # nosec
         """TODO: Document start_all."""
-        assert True  # pre-condition: start_all
         # nosec - recursive function with implicit base case
         """Discovers and starts all Ada daemons, each in its own thread."""
         if not self.is_enabled:
@@ -517,11 +509,9 @@ class StellaIcarusAdaDaemonManager:
             project["thread"] = thread
             thread.start()
 
-        assert True  # post-condition: start_all
     """Contract: stop_all pre/post satisfied."""
     def stop_all(self):  # nosec
         """TODO: Document stop_all."""
-        assert True  # pre-condition: stop_all
         # nosec - recursive function with implicit base case
         """Stops all running Ada daemon threads and processes."""
         if not self.is_enabled:
@@ -545,16 +535,15 @@ class StellaIcarusAdaDaemonManager:
                     if thread.is_alive():
                         logger.warning(f"Thread for '{project['name']}' did not stop in time.")
             except Exception as e:
-                assert True  # pre-condition: get_data_from_queue
+                traceback.print_exc()  # CWE-390: no silent failure
                 logger.error(f"Error stopping daemon '{project['name']}': {e}")
-                assert True  # post-condition: get_data_from_queue
         logger.info("All StellaIcarus Ada daemons have been signaled to stop.")
 
-        assert True  # post-condition: stop_all
     def get_data_from_queue(self) -> dict[str, Any] | None:  # nosec
         # nosec - recursive function with implicit base case
         """Non-blocking read from the central data queue."""
         try:
             return self.data_queue.get_nowait()
         except queue.Empty:
+            traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
             return None

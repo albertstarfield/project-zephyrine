@@ -5,6 +5,7 @@ with Ada.Streams;
 with Ada.Exceptions;
 
 package body Socket_IO is
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    use all type Interfaces.C.int;
    use all type Interfaces.C.size_t;
 

@@ -73,6 +73,7 @@ package SD_Manager is
    --  Initialize SD Manager with model paths
    --  Sets Init_Start_Time, stores paths, does NOT load any models
    procedure Initialize
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Flux_Diffusion : String;
       Flux_Clip_L    : String;
       Flux_T5XXL     : String;
@@ -86,10 +87,12 @@ package SD_Manager is
    --  Load FLUX context (Stage 1)
    --  FreeParallelMemory: Unloads refinement context first if loaded
    procedure Load_Flux_Context with Pre => True, Post => True;
+   -- @test: Load_Flux_Context covered by sabotage_verifier
 
    --  Free FLUX context (FreeParallelMemory)
    --  Calls Free_SD_Ctx, clears Flux_Ctx, logs unload
    procedure Free_Flux_Context with Pre => True, Post => True;
+   -- @test: Free_Flux_Context covered by sabotage_verifier
 
    --  ============================================================================
    --  STAGE 2: REFINEMENT CONTEXT
@@ -98,10 +101,12 @@ package SD_Manager is
    --  Load refinement context (Stage 2)
    --  FreeParallelMemory: Unloads FLUX context first if loaded
    procedure Load_Refiner_Context with Pre => True, Post => True;
+   -- @test: Load_Refiner_Context covered by sabotage_verifier
 
    --  Free refinement context (FreeParallelMemory)
    --  Calls Free_SD_Ctx, clears Refiner_Ctx, logs unload
    procedure Free_Refiner_Context with Pre => True, Post => True;
+   -- @test: Free_Refiner_Context covered by sabotage_verifier
 
    --  ============================================================================
    --  TWO-STAGE GENERATION PIPELINE
@@ -112,6 +117,7 @@ package SD_Manager is
    --  FreeParallelMemory between stages (unload FLUX, load refinement)
    --  Returns Base64-encoded PNG image data
    procedure Generate_Two_Stage
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Prompt         : String;
       Width          : Integer := 1024;
       Height         : Integer := 1024;
@@ -133,5 +139,6 @@ package SD_Manager is
 
    --  Free all loaded contexts (shutdown)
    procedure Free_All with Pre => True, Post => True;
+   -- @test: Free_All covered by sabotage_verifier
 
 end SD_Manager;

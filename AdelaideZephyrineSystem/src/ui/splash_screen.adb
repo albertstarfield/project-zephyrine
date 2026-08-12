@@ -33,7 +33,7 @@ pragma SPARK_Mode (Off);
 --
 -- ============================================================================
 
-with Zephyrine_WebView; use Zephyrine_WebView;
+with Zephyrine_Main_Framedisplay; use Zephyrine_Main_Framedisplay;
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Calendar; use Ada.Calendar;
 with Adelaide_Trace;

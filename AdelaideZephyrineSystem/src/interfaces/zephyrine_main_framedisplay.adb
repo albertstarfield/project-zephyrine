@@ -1,7 +1,7 @@
 pragma SPARK_Mode (Off);
 -- thread: WebView uses GTK/Cocoa event loop, requires task protection
 -- ============================================================================
--- ZEPHYRINE_WEBVIEW — Native Ada WebView implementation (stub platform)
+-- ZEPHYRINE_MAIN_FRAMEDISPLAY — Native Ada WebView implementation (stub platform)
 -- ============================================================================
 -- Stub implementation for platforms without native WebView support.
 -- On macOS/Linux, replace with Cocoa/GTK bindings for real functionality.
@@ -11,7 +11,7 @@ with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Calendar; use Ada.Calendar;
 with Adelaide_Trace;
 
-package body Zephyrine_WebView is
+package body Zephyrine_Main_Framedisplay is
 
    type WebView_State is record
       Is_Initialized   : Boolean := False;
@@ -181,11 +181,11 @@ package body Zephyrine_WebView is
    procedure Fade_Out (Handle   : WebView_Handle;
       with Pre => True,
            Post => True;
-                       Duration : Float := 0.5) is
+                      Duration : Float := 0.5) is
       pragma Unreferenced (Handle);
       pragma Unreferenced (Duration);
    begin
       null;
    end Fade_Out;
 
-end Zephyrine_WebView;
+end Zephyrine_Main_Framedisplay;

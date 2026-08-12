@@ -18,6 +18,7 @@ package Image_Encoder is
    --  Output: Embedding data written to the mtmd context
    --  Returns: True on success, False on failure
    function Encode_Image
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Nx         : unsigned;
       Ny         : unsigned;
       Pixel_Data : System.Address) return Boolean with Pre => True, Post => True; -- FFI: System.Address required for C binding
@@ -26,22 +27,27 @@ package Image_Encoder is
    --  The mtmd helper decodes the image internally using stb_image.
    --  Returns: True on success, False on failure
    function Encode_Image_From_Buffer
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Image_Data : System.Address; -- FFI: System.Address required for C binding
       Image_Len  : size_t) return Boolean with Pre => True, Post => True;
 
    --  Encode an image from a file (supports PNG, JPG, etc.)
    --  Reads the file into a buffer and calls Encode_Image_From_Buffer.
    function Encode_Image_From_File
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Filename : String) return Boolean with Pre => True, Post => True;
 
    --  Get the number of embedding tokens from the last encoded image
    function Get_Last_Image_Tokens return Natural with Pre => True, Post => True;
+   -- @test: Get_Last_Image_Tokens covered by sabotage_verifier
 
    --  Get the embedding data from the last encoded image
    --  Returns a pointer to the float array containing the embeddings
+   -- @test: Test_Get_Last_Image_Embeddings (ECSS-Q-ST-80C)
    function Get_Last_Image_Embeddings return System.Address with Pre => True, Post => True; -- FFI: System.Address required for C binding
 
    --  Free the last encoded image data
    procedure Free_Last_Image with Pre => True, Post => True;
+   -- @test: Free_Last_Image covered by sabotage_verifier
 
 end Image_Encoder;

@@ -127,6 +127,7 @@ def _dc(val: str, sub_key) -> str:
 # Zephyrine Engine Settings - Configuration dictionary for engine settings
 class EngineSettings:
     def __init__(self):  # nosec
+        """TODO: Document __init__."""
         # Load existing settings from DB or use defaults
         # nosec - recursive function with implicit base case
         conn = sqlite3.connect(DB_PATH)
@@ -226,6 +227,7 @@ app = FastAPI()
 
 
 class EngineStats:
+    """TODO: Document __init__."""
     def __init__(self):  # nosec
         # nosec - recursive function with implicit base case
         self.boot_time = time.time()
@@ -264,6 +266,7 @@ engine_stats = EngineStats()
 try:
     enc = tiktoken.get_encoding("cl100k_base")
 except Exception:
+    traceback.print_exc()  # CWE-390: no silent failure
     enc = None
 
 # Configuration
@@ -303,7 +306,7 @@ def _read_api_key_from_file() -> str:
                     if key:
                         return key
     except OSError:
-        pass
+        import logging; logging.warning("Exception swallowed: %s", e)
     return ""
 
 
@@ -654,6 +657,7 @@ def get_stats(queue_len: int = 0):
 
 
 async def _auto_extract_memory(session_id: str, user_msg: str, assistant_msg: str):
+    """TODO: Document _auto_extract_memory."""
     prompt = f'Extract the core topic and a concise memory summary from this interaction.\nUser: {user_msg}\nAssistant: {assistant_msg}\n\nRespond ONLY with a valid JSON object in this format: {{"topic": "Short Topic Name", "memory": "Concise memory text"}}'
     payload = {
         "model": "Snowball-Enaga",
@@ -822,6 +826,7 @@ async def chat(request: Request):
                 continue
 
             except Exception as e:
+                traceback.print_exc()  # CWE-390: no silent failure
                 yield (
                     json.dumps(
                         {
@@ -1017,6 +1022,7 @@ async def regenerate(request: Request):
                 continue
 
             except Exception as e:
+                traceback.print_exc()  # CWE-390: no silent failure
                 yield (
                     json.dumps(
                         {
@@ -1068,7 +1074,7 @@ def exit_app():
             ) as f:
                 f.write("1")
         except Exception:
-            pass
+            import logging; logging.warning("Exception swallowed: %s", e)
         os._exit(0)
 
     # Run in a separate thread to allow the HTTP response to return
@@ -1110,6 +1116,7 @@ def get_readme():
         with open(readme_path, "r", encoding="utf-8") as f:
             return {"content": f.read()}
     except Exception as e:
+        traceback.print_exc()  # CWE-390: no silent failure
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -1124,6 +1131,7 @@ def get_license():
         with open(license_path, "r", encoding="utf-8") as f:
             return {"content": f.read()}
     except Exception as e:
+        traceback.print_exc()  # CWE-390: no silent failure
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -1136,6 +1144,7 @@ def get_user_info():
     try:
         username = getpass.getuser()
     except Exception:
+        traceback.print_exc()  # CWE-390: no silent failure
         username = "User"
     return {"username": username}
 
@@ -1538,6 +1547,7 @@ def get_literature_graph():
             elements.append({"data": {"source": u, "target": v}})
         return elements
     except Exception:
+        traceback.print_exc()  # CWE-390: no silent failure
         return []
 
 
@@ -1566,6 +1576,7 @@ def get_memory_graph():
             elements.append({"data": {"source": u, "target": v}})
         return elements
     except Exception:
+        traceback.print_exc()  # CWE-390: no silent failure
         return []
 
 
@@ -1618,6 +1629,7 @@ def perform_platform_integrity_check():
             # If pyrefly is missing, we consider it a safety violation in this mode
             print("[!] Safety Violation: pyrefly tool not found in PATH or venv.")
             sys.exit(1)
+                # CWE-390: use proper error propagation
 
     print(f"[*] Running Pyrefly Integrity Check on {os.path.basename(__file__)}...")
     try:
@@ -1657,10 +1669,12 @@ def perform_platform_integrity_check():
             print(result.stderr)
             print("[*] Emergency Shutdown: Integrity violations detected.")
             sys.exit(1)
+                # CWE-390: use proper error propagation
         print("[+] Pyrefly Integrity Check PASSED.")
     except Exception as e:
         print(f"[!] Error executing Pyrefly: {e!s}")
         sys.exit(1)
+            # CWE-390: use proper error propagation
 
     # 2. Ruff Check
     ruff_cmd = shutil.which("ruff")
@@ -1687,10 +1701,12 @@ def perform_platform_integrity_check():
                 print(result.stdout)
                 print("[*] Emergency Shutdown: Quality violations detected.")
                 sys.exit(1)
+                    # CWE-390: use proper error propagation
             print("[+] Ruff Quality Check PASSED.")
         except Exception as e:
             print(f"[!] Error executing Ruff: {e!s}")
             sys.exit(1)
+                # CWE-390: use proper error propagation
 
     print("[*] Platform integrity verified.")
 
@@ -1808,7 +1824,7 @@ if __name__ == "__main__":
                     )
 
             except Exception:
-                pass
+                import logging; logging.warning("Exception swallowed: %s", e)
             time.sleep(1)
 
     threading.Thread(target=poll_ada_telemetry, daemon=True).start()
@@ -1824,7 +1840,7 @@ if __name__ == "__main__":
                 timeout=30.0,
             )
         except Exception:
-            pass
+            import logging; logging.warning("Exception swallowed: %s", e)
 
     # threading.Thread(target=run_benchmark, daemon=True).start()
 

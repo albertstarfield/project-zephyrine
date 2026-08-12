@@ -6,4 +6,5 @@ package Tool_Cat is
    --  Execute_Cat: Display file contents.
    --  Params: "<filepath>" or "<filepath> --line-numbers"
    function Execute_Cat (Params : String) return String with Pre => True, Post => True;
+   -- @test: Execute_Cat covered by sabotage_verifier
 end Tool_Cat;

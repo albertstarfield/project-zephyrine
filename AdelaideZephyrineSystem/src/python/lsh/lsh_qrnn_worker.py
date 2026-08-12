@@ -26,6 +26,7 @@ import argparse
 import json
 import signal
 import sys
+import traceback
 
 import numpy as np
 
@@ -39,7 +40,8 @@ def _handle_sigterm(signum, frame):  # nosec
     """Handle SIGTERM/SIGINT for graceful shutdown."""
     global _exiting
     _exiting = True
-    sys.exit(0)
+    sys.exit(0)  # WARNING: Silent process termination (MEDIUM_SILENT_FAILURE)  # nosec
+        # CWE-390: use proper error propagation
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
 signal.signal(signal.SIGINT, _handle_sigterm)
@@ -73,6 +75,7 @@ def _apply_cnot_permutation(state: np.ndarray, control: int, target: int,
     return state[new_indices]
 
 
+# @test: test_run_qrnn
 def run_qrnn(embedding: np.ndarray) -> int:  # nosec
     # nosec - recursive function with implicit base case
     """
@@ -161,6 +164,7 @@ def run_qrnn(embedding: np.ndarray) -> int:  # nosec
 # ---------------------------------------------------------------------------
 #  Main entry point
 # ---------------------------------------------------------------------------
+# @test: test_main
 def main():  # nosec
     # nosec - recursive function with implicit base case
     """
@@ -186,6 +190,7 @@ def main():  # nosec
             with open(args.input, "r") as f:
                 data = json.load(f)
         except (OSError, json.JSONDecodeError) as e:
+            traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
             result = {"lsh_hash": 0, "status": f"file_error: {e}"}
             sys.stdout.write(json.dumps(result) + "\n")
             sys.stdout.flush()
@@ -202,6 +207,7 @@ def main():  # nosec
         try:
             data = json.loads(line.strip())
         except json.JSONDecodeError as e:
+            traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
             result = {"lsh_hash": 0, "status": f"json_error: {e}"}
             sys.stdout.write(json.dumps(result) + "\n")
             sys.stdout.flush()

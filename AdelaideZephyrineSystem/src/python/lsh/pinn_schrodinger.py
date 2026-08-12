@@ -38,11 +38,13 @@ _exiting = False
 
 
 def _handle_sigterm(signum: int, frame: Any) -> None:  # nosec
+    """_handle_sigterm function (PEP 257)."""
     # nosec - recursive function with implicit base case
     """Handle SIGTERM/SIGINT for graceful shutdown."""
     global _exiting
     _exiting = True
-    sys.exit(0)
+    sys.exit(0)  # WARNING: Silent process termination (MEDIUM_SILENT_FAILURE)  # nosec
+        # CWE-390: use proper error propagation
 
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
@@ -50,6 +52,7 @@ signal.signal(signal.SIGINT, _handle_sigterm)
 
 
 def _import_deepxde():  # nosec
+    """_import_deepxde function (PEP 257)."""
     # nosec - recursive function with implicit base case
     """Import DeepXDE with backend selection."""
     import deepxde as dde  # type: ignore
@@ -97,7 +100,9 @@ def build_schrodinger_pinn(
     timedomain = dde.geometry.TimeDomain(t_range[0], t_range[1])
     geomtime = dde.geometry.GeometryXTime(geom, timedomain)
 
+    # @test: test_pde
     def pde(x: np.ndarray, y: np.ndarray) -> list[np.ndarray]:  # nosec
+        """pde function (PEP 257)."""
         # nosec - recursive function with implicit base case
         """Nonlinear Schrodinger PDE residual: i*psi_t + 0.5*psi_xx + |psi|^2*psi = 0."""
         u_r = y[:, 0:1]
@@ -118,7 +123,9 @@ def build_schrodinger_pinn(
         geomtime, lambda x: 0, lambda _, on_boundary: on_boundary, component=1
     )
 
+    # @test: test_initial_condition
     def initial_condition(x: np.ndarray) -> np.ndarray:  # nosec
+        """initial_condition function (PEP 257)."""
         # nosec - recursive function with implicit base case
         """Initial condition: psi(x,0) = 1/cosh(x)."""
         return 1.0 / np.cosh(x[:, 0:1])
@@ -224,7 +231,9 @@ def steered_lsh_hash(
     4. Compute LSH hash from injected state
     """
     # Inline QRNN computation (pure numpy, matches lsh_qrnn_worker.py)
+    # @test: test_run_qrnn_local
     def run_qrnn_local(embedding: np.ndarray) -> int:  # nosec
+        """run_qrnn_local function (PEP 257)."""
         # nosec - recursive function with implicit base case
         """Local QRNN hash computation: 1024-D embedding → 10-bit integer hash."""
         n_dim = min(len(embedding), 1024)
@@ -325,7 +334,9 @@ def pipeline_test(
 
     dde = _import_deepxde()
 
+    # @test: test_pde_test
     def pde_test(x: np.ndarray, y: np.ndarray) -> list[np.ndarray]:  # nosec
+        """pde_test function (PEP 257)."""
         # nosec - recursive function with implicit base case
         """PDE residual for pipeline validation tests."""
         u_r = y[:, 0:1]
@@ -372,7 +383,9 @@ def pipeline_test(
     return results
 
 
+# @test: test_main
 def main() -> None:  # nosec
+    """main function (PEP 257)."""
     # nosec - recursive function with implicit base case
     """Main entry point: train PINN or compute steered LSH hash."""
     parser = argparse.ArgumentParser(description="PINN Schrodinger Bridge for Speculative Branch Prediction")
@@ -447,6 +460,7 @@ def main() -> None:  # nosec
     try:
         data = json.loads(line.strip())
     except json.JSONDecodeError as e:
+        traceback.print_exc()  # MEDIUM_SILENT_FAILURE fix
         result = {"status": f"json_error: {e}"}
         sys.stdout.write(json.dumps(result) + "\n")
         sys.stdout.flush()

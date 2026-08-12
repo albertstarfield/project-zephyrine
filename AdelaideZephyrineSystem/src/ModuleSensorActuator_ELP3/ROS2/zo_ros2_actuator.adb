@@ -3,6 +3,7 @@ with System;
 
 package body ZO_ROS2_Actuator is
 
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    --  Store the exact time the node system was initialized to calculate uptime.
    Start_Time : Time;
 

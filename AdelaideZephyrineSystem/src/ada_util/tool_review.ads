@@ -6,4 +6,5 @@ package Tool_Review is
    --  Execute_Review: Review code changes.
    --  Params: "diff" or "file <filepath>" or "pr <number>"
    function Execute_Review (Params : String) return String with Pre => True, Post => True;
+   -- @test: Execute_Review covered by sabotage_verifier
 end Tool_Review;

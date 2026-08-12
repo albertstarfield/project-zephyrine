@@ -68,6 +68,8 @@ def _parse_matrix_string(mat_str: str):
         # It handles Python-style spacing and numbers well.
         return ast.literal_eval(mat_str.strip())
     except Exception:
+        traceback.print_exc()  # CWE-390: no silent failure
+        logging.error('Exception caught: %%s', e)  # CWE-390
         return None
 
 def _format_tensor(tensor) -> str:
@@ -163,6 +165,7 @@ def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
         # PyTorch throws meaningful errors (e.g. dimension mismatch)
         return f"{ERROR_PREFIX} {e!s}"
     except Exception as e:
+        traceback.print_exc()  # CWE-390: no silent failure
         return f"{ERROR_PREFIX} Unexpected error: {e}"
 
 # --- SELF TEST ---

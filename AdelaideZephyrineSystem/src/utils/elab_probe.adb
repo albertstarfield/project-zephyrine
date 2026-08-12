@@ -6,6 +6,7 @@
 --  elaboration chain (before we even reach Model_Manager).
 
 package body Elab_Probe is
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
 begin
    --  [DO NOT REMOVE THIS PRINT VERBOSITY]
    --  Raw C trace during elaboration.  write(2,...) always works,

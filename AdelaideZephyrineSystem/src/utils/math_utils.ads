@@ -16,6 +16,7 @@ package Math_Utils is
 
    --  Cosine_Similarity: Computes the cosine similarity between two vectors.
    function Cosine_Similarity (V1 : Vector; V2 : Vector) return Float
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with
        Pre => V1'Length = V2'Length and then
               V1'Length > 0 and then

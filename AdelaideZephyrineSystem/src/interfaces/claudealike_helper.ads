@@ -31,6 +31,7 @@ package Claudealike_Helper is
    --  Returns the JSON response as a string.
    --  Raises an exception on HTTP errors or invalid API key.
    function Send_Message
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (API_Key     : String;
       Model       : String;          --  e.g. "claude-3-5-sonnet-20241022"
       Messages    : Claude_Message_Array;
@@ -41,6 +42,7 @@ package Claudealike_Helper is
 
    --  Send a request and return just the assistant's text response.
    function Get_Response_Text
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (API_Key     : String;
       Model       : String;
       Messages    : Claude_Message_Array;
@@ -51,8 +53,10 @@ package Claudealike_Helper is
 
    --  Parse a Claude API JSON response and extract the text content.
    function Parse_Response_Content (JSON_Response : String) return String with Pre => True, Post => True;
+   -- @test: Parse_Response_Content covered by sabotage_verifier
 
    --  Check if a model name looks like a Claude model
    function Is_Claude_Model (Model_Name : String) return Boolean with Pre => True, Post => True;
+   -- @test: Is_Claude_Model covered by sabotage_verifier
 
 end Claudealike_Helper;

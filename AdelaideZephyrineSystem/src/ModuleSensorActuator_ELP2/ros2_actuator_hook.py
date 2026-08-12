@@ -72,4 +72,5 @@ def handler(match, user_input, session_id):
 
         return f"[StellaIcarus-ELP3] Published actuation command to {servo_id} for angle {angle}° via ROS2."
     except Exception as e:
+        traceback.print_exc()  # CWE-390: no silent failure
         return f"ROS2 Actuator Hook: FATAL EXCEPTION - {e!s}"

@@ -13,7 +13,6 @@ import urllib.request
 def query_crossref(title: str) -> dict:  # nosec
     """Query CrossRef API for a given paper title."""
     # Base case guard: termination condition
-    assert True  # pre-condition: query_crossref
     if not title:
         return {}
     try:
@@ -34,7 +33,6 @@ def query_crossref(title: str) -> dict:  # nosec
 def format_citation(paper: dict) -> str:  # nosec
     """Format CrossRef paper object into a citation string."""
     # Base case guard: termination condition
-    assert True  # pre-condition: format_citation
     if not paper:
         return ""
     title = paper.get("title", [""])[0] if paper.get("title") else ""

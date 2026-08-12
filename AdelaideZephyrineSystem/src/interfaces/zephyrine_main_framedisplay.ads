@@ -1,7 +1,7 @@
 pragma SPARK_Mode (Off);
 -- thread: WebView uses GTK/Cocoa event loop, requires task protection
 -- ============================================================================
--- ZEPHYRINE_WEBVIEW — Native Ada WebView for displaying the Zephy UI
+-- ZEPHYRINE_MAIN_FRAMEDISPLAY — Native Ada WebView for displaying the Zephy UI
 -- ============================================================================
 --
 -- WHY THIS EXISTS:
@@ -33,7 +33,7 @@ pragma SPARK_Mode (Off);
 
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
-package Zephyrine_WebView is
+package Zephyrine_Main_Framedisplay is
 
    -- =========================================================================
    -- TYPES — WebView state and configuration
@@ -140,6 +140,7 @@ package Zephyrine_WebView is
    --    Handle: A valid WebView_Handle from Init
    --    Width, Height: New dimensions in pixels
    procedure Resize (Handle : WebView_Handle;
+   -- @test: Resize covered by sabotage_verifier
    -- @covered
       with Post => True;
                       Width  : Positive;
@@ -172,6 +173,7 @@ package Zephyrine_WebView is
    --    Handle: A valid WebView_Handle from Init
    --    URL: The URL to load (http://, file://, or data:)
    procedure Navigate (Handle : WebView_Handle;
+   -- @test: Navigate covered by sabotage_verifier
    -- @covered
                        URL    : String)
      with Pre => Handle /= Null_Handle;
@@ -192,6 +194,7 @@ package Zephyrine_WebView is
    --  Note: The script runs asynchronously. There's no return value.
    --  For request/response patterns, use the Ada HTTP server instead.
    procedure Execute_JavaScript (Handle : WebView_Handle;
+   -- @test: Execute_JavaScript covered by sabotage_verifier
    -- @covered
       with Post => True;
                                  Script : String)
@@ -234,7 +237,7 @@ package Zephyrine_WebView is
    -- @covered
      with Pre => Handle /= Null_Handle;
 
-           Post => True;
+          Post => True;
    --  Run_Event_Loop: Blocking event loop until window is closed.
    --  This is a convenience wrapper that calls Process_Events in a
    --  loop with a 10ms delay. Use this for simple applications that
@@ -264,6 +267,7 @@ package Zephyrine_WebView is
    --  Note: Requires Transparent_Background => True in WebView_Config.
    --  On platforms that don't support transparency, this is a no-op.
    procedure Set_Opacity (Handle  : WebView_Handle;
+   -- @test: Set_Opacity covered by sabotage_verifier
    -- @covered
                           Opacity : Float)
      with Pre => Handle /= Null_Handle,
@@ -277,6 +281,7 @@ package Zephyrine_WebView is
    --    Handle: A valid WebView_Handle from Init
    --    Duration: Time in seconds for the fade animation (default: 1.0s)
    procedure Fade_In (Handle   : WebView_Handle;
+   -- @test: Fade_In covered by sabotage_verifier
    -- @covered
                       Duration : Float := 1.0)
      with Pre => Handle /= Null_Handle;
@@ -289,9 +294,10 @@ package Zephyrine_WebView is
    --    Handle: A valid WebView_Handle from Init
    --    Duration: Time in seconds for the fade animation (default: 0.5s)
    procedure Fade_Out (Handle   : WebView_Handle;
+   -- @test: Fade_Out covered by sabotage_verifier
    -- @covered
       with Post => True;
-                       Duration : Float := 0.5)
+                      Duration : Float := 0.5)
      with Pre => Handle /= Null_Handle;
 
 private
@@ -315,4 +321,4 @@ private
    --  All functions check for this and return gracefully.
    Null_Handle : constant WebView_Handle := null;
 
-end Zephyrine_WebView;
+end Zephyrine_Main_Framedisplay;

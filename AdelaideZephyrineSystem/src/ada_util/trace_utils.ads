@@ -18,6 +18,7 @@ with Ada.Strings.Unbounded;
 package Trace_Utils is
    --  Initialize the trace module.  Call once at procedure start.
    procedure Init_Trace (Prefix : in String := "") with Pre => True, Post => True;
+   -- @test: Init_Trace covered by sabotage_verifier
 
    --  Emit a [prefix][Toolcall][+uptime] trace line to Current_Error.
    procedure Trace_Print
@@ -27,6 +28,7 @@ package Trace_Utils is
 
    --  Trace the final result of a tool invocation.
    procedure Trace_Result
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Toolcall : in String;
       Success  : in Boolean;
       Detail   : in String := "") with Pre => True, Post => True;

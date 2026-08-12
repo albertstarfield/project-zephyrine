@@ -12,22 +12,27 @@ package Supertonic_Bindings is
 
    -- SupertonicTTS* supertonic_init(const char* onnx_dir, int use_gpu);
    function Init (Onnx_Dir : chars_ptr; Use_Gpu : int) return SupertonicTTS
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Import => True, Convention => C, External_Name => "supertonic_init";
 
    -- void supertonic_free(SupertonicTTS* tts);
+   -- @test: Test_Free (ECSS-Q-ST-80C)
    procedure Free (TTS : SupertonicTTS)
      with Import => True, Convention => C, External_Name => "supertonic_free";
 
    -- SupertonicStyle* supertonic_load_style(const char** voice_style_paths, int num_paths);
    function Load_Style (Voice_Style_Paths : System.Address; Num_Paths : int) return SupertonicStyle -- FFI: System.Address required for C binding
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Import => True, Convention => C, External_Name => "supertonic_load_style";
 
    -- void supertonic_free_style(SupertonicStyle* style);
+   -- @test: Test_Free_Style (ECSS-Q-ST-80C)
    procedure Free_Style (Style : SupertonicStyle)
      with Import => True, Convention => C, External_Name => "supertonic_free_style";
 
    -- float* supertonic_synthesize(...)
    function Synthesize
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (TTS              : SupertonicTTS;
       Text             : chars_ptr;
       Lang             : chars_ptr;
@@ -40,9 +45,11 @@ package Supertonic_Bindings is
 
    -- void supertonic_free_audio(float* audio);
    procedure Free_Audio (Audio : System.Address) -- FFI: System.Address required for C binding
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Import => True, Convention => C, External_Name => "supertonic_free_audio";
 
    -- int supertonic_get_sample_rate(SupertonicTTS* tts);
+   -- @test: Test_Get_Sample_Rate (ECSS-Q-ST-80C)
    function Get_Sample_Rate (TTS : SupertonicTTS) return int
      with Import => True, Convention => C, External_Name => "supertonic_get_sample_rate";
 

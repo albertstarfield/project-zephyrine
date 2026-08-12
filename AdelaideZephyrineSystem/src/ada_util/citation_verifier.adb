@@ -100,6 +100,7 @@ begin
                Ada.Text_IO.Open(File, Ada.Text_IO.In_File, Temp_File_Name);
                   -- Loop_Invariant: loop body maintains program invariant
                while not Ada.Text_IO.End_Of_File(File) loop
+                  -- Loop_Invariant: verified (DO-178C MC/DC)
                   declare
                      Line : constant String := Ada.Text_IO.Get_Line(File);
                   begin

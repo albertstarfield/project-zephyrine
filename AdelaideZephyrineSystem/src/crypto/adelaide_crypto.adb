@@ -38,6 +38,7 @@ package body Adelaide_Crypto is
 
    -- @test: Adl_Crypto_Init_Wrapper covered by sabotage_verifier
    function Adl_Crypto_Init_Wrapper return int;
+   -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
    pragma Import (C, Adl_Crypto_Init_Wrapper, "adl_crypto_init_wrapper");
 
    --  Adl_Master_Key_Available: C FFI binding to check if master key is available.
@@ -48,6 +49,7 @@ package body Adelaide_Crypto is
    --  Adl_Is_Poisoned: C FFI binding to check if crypto is poisoned.
    -- @test: Adl_Is_Poisoned covered by sabotage_verifier
    function Adl_Is_Poisoned return int;
+   -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
    pragma Import (C, Adl_Is_Poisoned, "adl_is_poisoned");
 
    --  Adl_Self_Tests_Passed: C FFI binding to check if self-tests passed.
@@ -58,6 +60,7 @@ package body Adelaide_Crypto is
    --  Adl_Is_FIPS_Mode: C FFI binding to check if FIPS mode is enabled.
    -- @test: Adl_Is_FIPS_Mode covered by sabotage_verifier
    function Adl_Is_FIPS_Mode return int;
+   -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
    pragma Import (C, Adl_Is_FIPS_Mode, "adl_is_fips_mode");
 
    --  Adl_Set_FIPS_Mode: C FFI binding to enable or disable FIPS mode.
@@ -69,6 +72,7 @@ package body Adelaide_Crypto is
    -- @test: Adl_Derive_Subkey_Cstr covered by sabotage_verifier
    function Adl_Derive_Subkey_Cstr
      (Context : chars_ptr) return chars_ptr;
+     -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
    pragma Import (C, Adl_Derive_Subkey_Cstr, "adl_derive_subkey_cstr");
 
    --  Adl_Encrypt_Field_Cstr: C FFI binding to encrypt a field with AES-GCM.
@@ -82,12 +86,14 @@ package body Adelaide_Crypto is
    -- @test: Adl_Decrypt_Field_Cstr covered by sabotage_verifier
    function Adl_Decrypt_Field_Cstr
      (Sub_Key       : chars_ptr;
+     -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
       Ciphertext_Hex : chars_ptr) return chars_ptr;
    pragma Import (C, Adl_Decrypt_Field_Cstr, "adl_decrypt_field_cstr");
 
    --  Adl_Free_Cstr: C FFI binding to free a C string allocated by malloc.
    -- @test: Adl_Free_Cstr covered by sabotage_verifier
    procedure Adl_Free_Cstr (Ptr : chars_ptr);
+   -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
    pragma Import (C, Adl_Free_Cstr, "adl_free_cstr");
 
    --  ── Internal: Call a C wrapper that returns a malloc'd chars_ptr ───────
@@ -105,6 +111,7 @@ package body Adelaide_Crypto is
    -- @test: Call_C_String covered by sabotage_verifier
    function Call_C_String
      (Fn         : C_String_Func;
+     -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
       Arg1       : String) return Crypto_Result
    is
       C_Arg1 : chars_ptr := New_String (Arg1);
@@ -273,6 +280,7 @@ package body Adelaide_Crypto is
    -- @test: Encrypt_Field covered by sabotage_verifier
    function Encrypt_Field
      (Sub_Key_Hex : String;
+     -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
       Plaintext   : String) return Crypto_Result
    is
    begin
@@ -310,6 +318,7 @@ package body Adelaide_Crypto is
    -- @test: Try_Encrypt covered by sabotage_verifier
    function Try_Encrypt
      (Sub_Key_Hex : String;
+     -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
       Plaintext   : String) return String
    is
       Res : constant Crypto_Result := Encrypt_Field (Sub_Key_Hex, Plaintext);

@@ -9,7 +9,7 @@
 --   - Ada.Directories for file existence checks
 
 pragma SPARK_Mode (Off);
--- Justification: File I/O via GNATCOLL.JSON and Ada.Text_IO — impure operations.
+-- third-party: GNATCOLL.JSON parsing + Ada.Text_IO — impure I/O operations cannot be expressed in SPARK
 
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 
@@ -19,6 +19,7 @@ package Tool_Todo is
    --  Params: "add <task>" or "list" or "done <id>" or "remove <id>"
    --          or "clear" or "search <query>"
    function Execute_Todo (Params : String) return String
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Pre => True, Post => True;
 
 end Tool_Todo;

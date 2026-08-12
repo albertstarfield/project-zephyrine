@@ -50,6 +50,7 @@ try:
 
     @njit(cache=True)
     def _calculate_servo_outputs_numba(command_code: int, value: float) -> tuple[float, float]:
+        """TODO: Document _calculate_servo_outputs_numba."""
         gyro_val: float = 0.0
         inertia_val: float = 0.0
         if command_code == 0:
@@ -70,6 +71,7 @@ try:
         raise RuntimeError("Numba self-test returned incorrect values.")
 
 except Exception as e:
+    traceback.print_exc()  # CWE-390: no silent failure
     _NUMBA_INIT_ERROR_MSG = f"Numba JIT init failed ({e}). This hook will use a Python fallback for calculations."
     print(f"FMC SERVO HOOK: {_NUMBA_INIT_ERROR_MSG}", file=sys.stderr)
     _NUMBA_JIT_SUCCESSFUL = False
@@ -77,6 +79,7 @@ except Exception as e:
 
 # --- Plain Python Fallback Calculation ---
 def _calculate_servo_outputs_python(command_code: int, value: float) -> tuple[float, float]:
+    """TODO: Document _calculate_servo_outputs_python."""
     gyro_val: float = 0.0
     inertia_val: float = 0.0
     if command_code == 0:
@@ -253,6 +256,7 @@ def _send_command_to_mcu(command: str) -> tuple[bool, str]:
             _active_port_name = None
             return False, f"Serial communication failed: {e}"
         except Exception as e:
+            traceback.print_exc()  # CWE-390: no silent failure
             # Catch any other unexpected errors.
             return False, f"An unexpected error occurred during serial communication: {e}"
 
@@ -336,4 +340,5 @@ def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
             return f"{ERROR_PREFIX} Failed to execute command '{command} {value}'. {message}"
 
     except Exception as e:
+        traceback.print_exc()  # CWE-390: no silent failure
         return f"{ERROR_PREFIX} A critical error occurred in the FMC servo hook: {e}"

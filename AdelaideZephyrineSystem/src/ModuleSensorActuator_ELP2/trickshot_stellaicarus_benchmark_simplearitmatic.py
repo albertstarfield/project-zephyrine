@@ -105,6 +105,7 @@ def _compile_and_load():
                 needs_compile = True
                 print("[*] Trickshot: Source code changed. Recompiling...", file=sys.stderr)
         except Exception:
+            traceback.print_exc()  # CWE-390: no silent failure
             needs_compile = True
 
     # 3. Compilation Block
@@ -177,6 +178,7 @@ def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
         with open(__file__, 'r', encoding='utf-8') as f:
             self_source_code = f.read()
     except Exception as e:
+        traceback.print_exc()  # CWE-390: no silent failure
         self_source_code = f"Could not read source code: {e}"
 
     # 4. Format the response

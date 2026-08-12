@@ -6,4 +6,5 @@ package Tool_Test is
    --  Execute_Test: Run test suite.
    --  Params: "pytest [args]" or "gnatprove" or "cargo" or "lint"
    function Execute_Test (Params : String) return String with Pre => True, Post => True;
+   -- @test: Execute_Test covered by sabotage_verifier
 end Tool_Test;

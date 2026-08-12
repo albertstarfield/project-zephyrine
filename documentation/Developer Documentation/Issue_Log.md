@@ -166,3 +166,8 @@
 -   **Title:** Tune PWM for preempt halt hardblock.
 -   **Status:** Resolved
 -   **Description:** Adjusted the Pulse Width Modulation (PWM) parameters to optimize the timing and reliability of the preempt halt mechanism within the scheduler. This ensures that the system can effectively halt ELP0 background tasks to prioritize ELP1 high-priority requests, maintaining system responsiveness and operational priority.
+
+-   **ID:** UI-FEAT-008
+-   **Title:** Wire sidecar API into Ada server dispatch, rename webview to main_framedisplay, add loopback test automation
+-   **Status:** Resolved
+-   **Description:** Integrated Sidecar_Manager into adelaide_server_pkg.adb HTTP dispatch with lazy initialization (10+ routes: sessions CRUD, messages, settings, engine stats, sidecar tests, loopback tests). Renamed zephyrine_webview package to zephyrine_main_framedisplay across all Ada source files, splash_screen imports, and Coq proof lemmas. Added Run_Http_Loopback_Tests with 13 automated tests covering the full sidecar API surface, triggerable via POST /api/sidecar/loopback-test for --test-build-integrity-check mode.

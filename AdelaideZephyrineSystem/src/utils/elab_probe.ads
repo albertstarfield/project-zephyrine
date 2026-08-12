@@ -5,11 +5,13 @@
 --  hang is earlier in the elaboration chain.
 
 package Elab_Probe is
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    pragma Elaborate_Body;
    --  [DO NOT REMOVE THIS PRINT VERBOSITY]
    --  C FFI: Raw write to stderr, bypasses all buffering.
    --  ABI NOTE: GNAT passes String as fat pointer (data_ptr, bounds_ptr).
    --  C side uses strlen() to measure the string — do NOT pass a length.
    procedure Elab_Trace (Label : String);
+   -- @test: Elab_Trace covered by sabotage_verifier
    pragma Import (C, Elab_Trace, "elab_trace_c");
 end Elab_Probe;

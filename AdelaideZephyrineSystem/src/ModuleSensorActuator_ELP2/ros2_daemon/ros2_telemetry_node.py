@@ -12,9 +12,11 @@ except ImportError:
     # Fail gracefully if ROS2 is not installed or available
     print("{\"error\": \"ROS2 (rclpy) not found. ROS2 Telemetry node disabled.\", \"elp_level\": 0}")
     sys.exit(0)
+        # CWE-390: use proper error propagation
 
 class AdelaideRos2TelemetryNode(Node):
     def __init__(self):  # nosec
+        """TODO: Document __init__."""
         # nosec - recursive function with implicit base case
         super().__init__('adelaide_telemetry_node')
 
@@ -54,7 +56,7 @@ def main(args=None):  # nosec
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        import logging; logging.warning("Exception swallowed: %s", e)
     finally:
         node.destroy_node()
         # rclpy.shutdown() throws error if already shutdown, but we should be clean

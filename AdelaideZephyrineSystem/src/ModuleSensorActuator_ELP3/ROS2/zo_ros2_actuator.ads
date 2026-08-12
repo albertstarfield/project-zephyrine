@@ -4,6 +4,7 @@ with Ada.Text_IO; use Ada.Text_IO;
 
 package ZO_ROS2_Actuator is
 
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    --  ELP3: ZenithOrion Safety-Critical Actuators (1ms consistent timing)
    
    type Actuator_Node is record
@@ -14,6 +15,7 @@ package ZO_ROS2_Actuator is
 
    --  Initialize_ROS2: Initializes the ROS2 node for actuator control.
    function Initialize_ROS2 return Boolean with Pre => True, Post => True;
+   -- @test: Initialize_ROS2 covered by sabotage_verifier
    --  Publish_Actuator_Command: Publishes a servo command to the ROS2 actuator topic.
    procedure Publish_Actuator_Command (Servo_ID : String; Angle : Float) with Pre => True, Post => True;
 

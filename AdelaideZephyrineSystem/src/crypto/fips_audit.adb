@@ -4,6 +4,7 @@ with Ada.Calendar.Formatting;
 
 package body FIPS_Audit is
 
+   pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    Log_File_Name : constant String := "fips_audit.log";
    Log_File      : Ada.Text_IO.File_Type;
    Is_Open       : Boolean := False;

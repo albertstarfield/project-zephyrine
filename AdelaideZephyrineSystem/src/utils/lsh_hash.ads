@@ -13,6 +13,7 @@ package LSH_Hash is
    --    - The worker returned an error
    --    - ELP0 preemption was requested (caller should abort)
    function Compute
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Embedding : Math_Utils.Vector;
       Length    : Natural) return Integer with Pre => True, Post => True;
 
@@ -26,6 +27,7 @@ package LSH_Hash is
    --    - The PINN worker could not be spawned
    --    - The worker returned an error
    function Compute_Steered
+      -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Embedding : Math_Utils.Vector;
       Length    : Natural;
       Alpha     : Float := 0.1) return Integer with Pre => True, Post => True;
