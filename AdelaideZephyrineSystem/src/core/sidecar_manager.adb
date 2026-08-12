@@ -28,10 +28,10 @@ package body Sidecar_Manager is
    -- =========================================================================
 
    function Current_ISO_8601 return String is
-      Now   : constant Time := Clock;
-      Image : constant String := Image (Now, Time_Zone => 0);
+      Now        : constant Time := Clock;
+      Time_Image : constant String := Image (Now, Time_Zone => 0);
    begin
-      return Image;
+      return Time_Image;
    end Current_ISO_8601;
 
    procedure Exec_SQL (SQL : String) is
@@ -54,11 +54,10 @@ package body Sidecar_Manager is
       if Sidecar_DB_Ptr = null then
          return "";
       end if;
-      Prepare (Sidecar_DB_Ptr.all, SQL, Stmt);
-      if Step (Stmt) then
+      Stmt := Prepare (Sidecar_DB_Ptr.all, SQL);
+      if Step (Stmt) = OK then
          Result := To_Unbounded_String (Column_Text (Stmt, 0));
       end if;
-      Finalize (Stmt);
       return To_String (Result);
    exception
       when others =>
@@ -119,7 +118,11 @@ package body Sidecar_Manager is
                "FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE);");
 
       --  Populate default settings if empty
-      Query_Single_String ("SELECT COUNT(*) FROM zephyrine_settings");
+      declare
+         Dummy : constant String := Query_Single_String ("SELECT COUNT(*) FROM zephyrine_settings");
+      begin
+         null;
+      end;
 
       --  Check if settings exist
       declare
@@ -499,17 +502,17 @@ package body Sidecar_Manager is
    function Get_Engine_Stats return String is
       Result : JSON_Value := Create_Object;
    begin
-      Set_Field (Result, "WCET_Main_Loop_nS", Telemetry.WCET_Main_Loop_nS);
-      Set_Field (Result, "WCET_ELP0_nS", Telemetry.WCET_ELP0_nS);
-      Set_Field (Result, "WCET_ELP1_nS", Telemetry.WCET_ELP1_nS);
-      Set_Field (Result, "WCET_ELP2_nS", Telemetry.WCET_ELP2_nS);
-      Set_Field (Result, "WCET_ELP3_nS", Telemetry.WCET_ELP3_nS);
-      Set_Field (Result, "Jitter_Avg_nS", Telemetry.Jitter_Avg_nS);
-      Set_Field (Result, "Jitter_Max_nS", Telemetry.Jitter_Max_nS);
+      Set_Field (Result, "WCET_Main_Loop_nS", Integer (Telemetry.WCET_Main_Loop_nS));
+      Set_Field (Result, "WCET_ELP0_nS", Integer (Telemetry.WCET_ELP0_nS));
+      Set_Field (Result, "WCET_ELP1_nS", Integer (Telemetry.WCET_ELP1_nS));
+      Set_Field (Result, "WCET_ELP2_nS", Integer (Telemetry.WCET_ELP2_nS));
+      Set_Field (Result, "WCET_ELP3_nS", Integer (Telemetry.WCET_ELP3_nS));
+      Set_Field (Result, "Jitter_Avg_nS", Integer (Telemetry.Jitter_Avg_nS));
+      Set_Field (Result, "Jitter_Max_nS", Integer (Telemetry.Jitter_Max_nS));
       Set_Field (Result, "Context_Faults", Telemetry.Context_Faults);
       Set_Field (Result, "Virtual_Ctx_Len", Telemetry.Virtual_Ctx_Len);
       Set_Field (Result, "Boot_Time", Telemetry.Boot_Time);
-      Set_Field (Result, "Total_Tokens", Telemetry.Total_Tokens);
+      Set_Field (Result, "Total_Tokens", Integer (Telemetry.Total_Tokens));
       return Write (Result);
    end Get_Engine_Stats;
 
@@ -653,10 +656,10 @@ package body Sidecar_Manager is
          S : JSON_Value;
       begin
          S := Read (Stats_Result);
-         if Get (S, "WCET_Main_Loop_nS") /= 12345 then
+         if Get (S, "WCET_Main_Loop_nS") /= Create (12345) then
             return False;
          end if;
-         if Get (S, "Virtual_Ctx_Len") /= 32000 then
+         if Get (S, "Virtual_Ctx_Len") /= Create (32000) then
             return False;
          end if;
       end;

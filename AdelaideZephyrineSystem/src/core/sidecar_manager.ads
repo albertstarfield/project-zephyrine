@@ -24,8 +24,6 @@ pragma SPARK_Mode (Off);
 -- ============================================================================
 
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
-with Ada_Sqlite3;
-with GNATCOLL.JSON;
 
 package Sidecar_Manager is
 
@@ -224,8 +222,8 @@ package Sidecar_Manager is
 
 private
 
-   --  Database handle (null when not initialized)
-   Sidecar_DB : Ada_Sqlite3.Handle := Ada_Sqlite3.Null_Handle;
+   --  Database handle is managed in the body via Sidecar_DB_Ptr
+   --  (access all Ada_Sqlite3.Database, allocated on Initialize)
 
    --  Whether the sidecar database has been initialized
    Is_Initialized : Boolean := False;

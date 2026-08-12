@@ -1,12 +1,10 @@
 ---
 session: ses_01a8
-updated: 2026-08-12T01:53:15.535Z
+updated: 2026-08-12T09:59:12.673Z
 ---
 
-I need to update the .ads to match the .adb's actual API usage. The private section references `Ada_Sqlite3.Handle` but the .adb uses `Ada_Sqlite3.Database`. Also missing `Ada.Directories` import.<tool_call>
-<function=read>
-<parameter=filePath>/Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/src/core/sidecar_manager.ads</parameter>
-<parameter=offset>170</parameter>
-<parameter=limit>30</parameter>
+Now let me fix all remaining `Prepare` procedure-style calls in the body:<tool_call>
+<function=bash>
+<parameter=command>grep -n "Prepare (Sidecar_DB_Ptr" /Users/albertstarfield/Documents/misc/AdaptiveSystem/project-zephyrine/AdelaideZephyrineSystem/src/core/sidecar_manager.adb</parameter>
 </function>
 </tool_call>
