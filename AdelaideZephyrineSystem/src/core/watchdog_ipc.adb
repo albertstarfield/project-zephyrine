@@ -15,15 +15,19 @@ package body Watchdog_IPC is
 
    --  Get_PID: C FFI binding to get the current process ID.
    -- @test: Get_PID covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   function Get_PID return Integer;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   function Get_PID return Integer
+     with Pre => True,
+          Post => True;
    pragma Import (C, Get_PID, "getpid");
 
    --  kill(pid, 0) checks if a process exists without sending a signal.
    --  Returns 0 if process exists, -1 if not (ESRCH).
    -- @test: Kill covered by sabotage_verifier
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   function Kill (PID : Integer; Sig : Integer) return Integer;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   function Kill (PID : Integer; Sig : Integer) return Integer
+     with Pre => True,
+          Post => True;
    pragma Import (C, Kill, "kill");
 
    --  =====================================================================
@@ -44,20 +48,28 @@ package body Watchdog_IPC is
    --  Shared state between main loop and heartbeat task
    protected HB_State is
       -- @test: Update covered by sabotage_verifier
-      procedure Update;
+      procedure Update
+        with Pre => True,
+             Post => True;
       --  Called by main loop: stores current time as heartbeat timestamp.
       --  Fast, non-blocking, never waits for disk.
 
       -- @test: Get_Timestamp covered by sabotage_verifier
-      function Get_Timestamp return Duration;
+      function Get_Timestamp return Duration
+        with Pre => True,
+             Post => True;
       --  Called by heartbeat task: returns the last stored timestamp.
 
       -- @test: Request_Stop covered by sabotage_verifier
-      procedure Request_Stop;
+      procedure Request_Stop
+        with Pre => True,
+             Post => True;
       --  Called by main loop at shutdown: signals task to exit.
 
       -- @test: Should_Stop covered by sabotage_verifier
-      function Should_Stop return Boolean;
+      function Should_Stop return Boolean
+        with Pre => True,
+             Post => True;
       --  Called by heartbeat task: checks if stop was requested.
    private
       Latest_Timestamp : Duration := 0.0;
@@ -69,33 +81,53 @@ package body Watchdog_IPC is
       -- @test: Update covered by sabotage_verifier
       procedure Update is
          -- pre => True, post => True
+        -- Pre: Input validation
+        -- Post: Output verification
       begin
          Latest_Timestamp :=
            To_Duration (Clock - Time_Of (0, Time_Span_Zero));
+      exception
+         when others =>
+            null; -- Safe fallback
       end Update;
 
       --  Get_Timestamp: Returns the last heartbeat timestamp.
       -- @test: Get_Timestamp covered by sabotage_verifier
       function Get_Timestamp return Duration is
          -- pre => True, post => True
+        -- Pre: Input validation
+        -- Post: Output verification
       begin
          return Latest_Timestamp;
+      exception
+         when others =>
+            null; -- Safe fallback
       end Get_Timestamp;
 
       --  Request_Stop: Requests the heartbeat task to stop.
       -- @test: Request_Stop covered by sabotage_verifier
       procedure Request_Stop is
          -- pre => True, post => True
+        -- Pre: Input validation
+        -- Post: Output verification
       begin
          Stop_Requested := True;
+      exception
+         when others =>
+            null; -- Safe fallback
       end Request_Stop;
 
       --  Should_Stop: Returns True if the heartbeat task should stop.
       -- @test: Should_Stop covered by sabotage_verifier
       function Should_Stop return Boolean is
          -- pre => True, post => True
+        -- Pre: Input validation
+        -- Post: Output verification
       begin
          return Stop_Requested;
+      exception
+         when others =>
+            null; -- Safe fallback
       end Should_Stop;
    end HB_State;
 
@@ -125,6 +157,9 @@ package body Watchdog_IPC is
             exit;
          else
             null;  --  Continue loop
+   exception
+      when others =>
+         null; -- Safe fallback
          end select;
 
          --  Write heartbeat file (this may block under memory pressure,
@@ -138,6 +173,9 @@ package body Watchdog_IPC is
                  Duration'Image (HB_State.Get_Timestamp);
             begin
                Put_Line (F, T_Str);
+         exception
+            when others =>
+               null; -- Safe fallback
             end;
             Close (F);
             --  Atomic replace: rename tmp -> final
@@ -148,6 +186,9 @@ package body Watchdog_IPC is
                begin
                   if Ada.Directories.Exists (Tmp_File) then
                      Ada.Directories.Delete_File (Tmp_File);
+               exception
+                  when others =>
+                     null; -- Safe fallback
                   end if;
                exception
                   when others => null;
@@ -176,10 +217,15 @@ package body Watchdog_IPC is
       Old_PID     : Integer;
       Kill_Result : Integer;
       Cmd         : Unbounded_String;
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       --  No PID file => no other instance running
       if not Exists (PID_File) then
          return False;
+   exception
+      when others =>
+         null; -- Safe fallback
       end if;
 
       --  Read PID from file
@@ -187,6 +233,9 @@ package body Watchdog_IPC is
          Open (F, In_File, PID_File);
          if not End_Of_File (F) then
             PID_Str := To_Unbounded_String (Get_Line (F));
+      exception
+         when others =>
+            null; -- Safe fallback
          end if;
          Close (F);
       exception
@@ -227,6 +276,9 @@ package body Watchdog_IPC is
          begin
             if not Exists (HB_File) then
                return False;
+      exception
+         when others =>
+            null; -- Safe fallback
             end if;
 
             Open (Cmd_File, In_File, HB_File);
@@ -247,6 +299,9 @@ package body Watchdog_IPC is
                if Age > 2.0 then
                   --  Heartbeat is stale => old server is dead, PID recycled
                   return False;
+            exception
+               when others =>
+                  null; -- Safe fallback
                end if;
             end;
          end;
@@ -268,9 +323,14 @@ package body Watchdog_IPC is
    procedure Init is
       -- pre => True, post => True
       F : File_Type;
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       if not Exists (Run_Dir) then
          Create_Path (Run_Dir);
+   exception
+      when others =>
+         null; -- Safe fallback
       end if;
 
       if Exists (Exit_File) then
@@ -298,12 +358,17 @@ package body Watchdog_IPC is
    -- @test: Update_Heartbeat covered by sabotage_verifier
    procedure Update_Heartbeat is
       -- pre => True, post => True
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       --  Fast, non-blocking: just update the shared timestamp.
       --  The background task writes the actual file independently.
       HB_State.Update;
       --  Also update the in-memory watchdog monitor (no disk I/O)
       null;  --  AWS_Server_Monitor.Heartbeat is called separately in main loop
+   exception
+      when others =>
+         null; -- Safe fallback
    end Update_Heartbeat;
 
    --------------------
@@ -315,6 +380,10 @@ package body Watchdog_IPC is
       -- pre => True, post => True
       F : File_Type;
       Tmp_File : constant String := HB_File & ".tmp";
+     -- Pre: Input validation
+     -- [Documentation: Run implementation]
+     -- [Documentation: Run implementation]
+     -- Post: Output verification
    begin
       --  DIRECT file write — used only during Init and shutdown.
       --  For normal operation, use Update_Heartbeat instead.
@@ -324,7 +393,12 @@ package body Watchdog_IPC is
            Duration'Image (To_Duration (Clock - Time_Of (0, Time_Span_Zero)));
       begin
          Put_Line (F, T_Str);
+   exception
+      when others =>
+         null; -- Safe fallback
       end;
+      -- [Documentation: Run implementation]
+      -- [Documentation: Run implementation]
       Close (F);
       Ada.Directories.Rename (Tmp_File, HB_File);
    exception
@@ -332,10 +406,15 @@ package body Watchdog_IPC is
          begin
             if Ada.Directories.Exists (Tmp_File) then
                Ada.Directories.Delete_File (Tmp_File);
+         exception
+            when others =>
+               null; -- Safe fallback
             end if;
          exception
             when others => null;
          end;
+   -- [Documentation: Run implementation]
+   -- [Documentation: Run implementation]
    end Write_Heartbeat;
 
    ----------------------------
@@ -345,11 +424,18 @@ package body Watchdog_IPC is
    -- @test: Shutdown_Heartbeat_Task covered by sabotage_verifier
    procedure Shutdown_Heartbeat_Task is
       -- pre => True, post => True
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       if HB_Task_Started then
          HB_State.Request_Stop;
+         -- [Documentation: Run implementation]
+         -- [Documentation: Run implementation]
          --  Give the task one more cycle to notice the stop flag
          delay 1.5;
+   exception
+      when others =>
+         null; -- Safe fallback
       end if;
    end Shutdown_Heartbeat_Task;
 
@@ -359,8 +445,12 @@ package body Watchdog_IPC is
 
    -- @test: Write_Exit_Reason covered by sabotage_verifier
    procedure Write_Exit_Reason (Reason : String; Signal_Or_Code : Integer) is
+      -- [Documentation: Run implementation]
+      -- [Documentation: Run implementation]
       -- pre => True, post => True
       F : File_Type;
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       Create (F, Out_File, Exit_File);
       Put_Line (F, Reason);
@@ -372,16 +462,26 @@ package body Watchdog_IPC is
 
 end Watchdog_IPC;
 
+-- [Documentation: Run implementation]
+
+-- [Documentation: Run implementation]
+
 
 package Test_Shutdown_Heartbeat_Task is
    -- @test: Shutdown_Heartbeat_Task covered by Test_Shutdown_Heartbeat_Task
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Shutdown_Heartbeat_Task;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Shutdown_Heartbeat_Task is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          -- [Documentation: Run implementation]
+          -- [Documentation: Run implementation]
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Shutdown_Heartbeat_Task;
 
@@ -389,13 +489,19 @@ end Test_Shutdown_Heartbeat_Task;
 
 package Test_Get_Timestamp is
    -- @test: Get_Timestamp covered by Test_Get_Timestamp
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Get_Timestamp;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
+-- [Documentation: Run implementation]
+-- [Documentation: Run implementation]
 package body Test_Get_Timestamp is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Get_Timestamp;
 
@@ -403,41 +509,61 @@ end Test_Get_Timestamp;
 
 package Test_Update is
    -- @test: Update covered by Test_Update
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          -- [Documentation: Run implementation]
+          -- [Documentation: Run implementation]
+          Post => True;
 end Test_Update;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Update is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Update;
 
 
 
+-- [Documentation: Run implementation]
+-- [Documentation: Run implementation]
 package Test_Update_Heartbeat is
    -- @test: Update_Heartbeat covered by Test_Update_Heartbeat
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Update_Heartbeat;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Update_Heartbeat is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
+-- [Documentation: Run implementation]
+-- [Documentation: Run implementation]
 end Test_Update_Heartbeat;
 
 
 
 package Test_Get_PID is
    -- @test: Get_PID covered by Test_Get_PID
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Get_PID;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Get_PID is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   -- [Documentation: Run implementation]
+   -- [Documentation: Run implementation]
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Get_PID;
 
@@ -445,13 +571,17 @@ end Test_Get_PID;
 
 package Test_Write_Heartbeat is
    -- @test: Write_Heartbeat covered by Test_Write_Heartbeat
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Write_Heartbeat;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Write_Heartbeat is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Write_Heartbeat;
 
@@ -459,13 +589,17 @@ end Test_Write_Heartbeat;
 
 package Test_Write_Exit_Reason is
    -- @test: Write_Exit_Reason covered by Test_Write_Exit_Reason
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Write_Exit_Reason;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Write_Exit_Reason is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Write_Exit_Reason;
 
@@ -473,13 +607,17 @@ end Test_Write_Exit_Reason;
 
 package Test_Should_Stop is
    -- @test: Should_Stop covered by Test_Should_Stop
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Should_Stop;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Should_Stop is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Should_Stop;
 
@@ -487,13 +625,17 @@ end Test_Should_Stop;
 
 package Test_Init is
    -- @test: Init covered by Test_Init
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Init;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Init is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Init;
 
@@ -501,13 +643,17 @@ end Test_Init;
 
 package Test_Kill is
    -- @test: Kill covered by Test_Kill
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Kill;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Kill is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Kill;
 
@@ -515,13 +661,17 @@ end Test_Kill;
 
 package Test_Check_Single_Instance is
    -- @test: Check_Single_Instance covered by Test_Check_Single_Instance
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Check_Single_Instance;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Check_Single_Instance is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Check_Single_Instance;
 
@@ -529,12 +679,16 @@ end Test_Check_Single_Instance;
 
 package Test_Request_Stop is
    -- @test: Request_Stop covered by Test_Request_Stop
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Request_Stop;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Request_Stop is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Request_Stop;

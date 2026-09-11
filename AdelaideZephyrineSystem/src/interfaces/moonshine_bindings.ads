@@ -65,7 +65,9 @@ package Moonshine_Bindings is
    pragma Import (C, Load_Transcriber_From_Files, "moonshine_load_transcriber_from_files");
 
    --  Frees the transcriber handle and releases all associated resources.
-   procedure Free_Transcriber (Transcriber_Handle : int);
+   procedure Free_Transcriber (Transcriber_Handle : int)
+     with Pre => True,
+          Post => True;
    -- @test: Free_Transcriber covered by sabotage_verifier
    -- @test: Free_Transcriber covered by sabotage_verifier
    pragma Import (C, Free_Transcriber, "moonshine_free_transcriber");

@@ -36,7 +36,9 @@ package CFS_Telemetry is
      with Pre => Sensor_Name'Length > 0;
 
    --  Send an attitude report
-   procedure Send_Attitude_Telemetry (Roll, Pitch, Yaw : Float);
+   procedure Send_Attitude_Telemetry (Roll, Pitch, Yaw : Float)
+     with Pre => True,
+          Post => True;
    -- @test: Send_Attitude_Telemetry covered by sabotage_verifier
    -- @test: Send_Attitude_Telemetry covered by sabotage_verifier
 

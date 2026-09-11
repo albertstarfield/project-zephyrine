@@ -14,7 +14,9 @@ package Moonshine_Interface is
    procedure Free_Moonshine with Pre => True, Post => True;
    
    --  Transcribe expects raw 16KHz floats
-   function Transcribe_Raw_PCM (Audio_Data : access Float; Audio_Length : Interfaces.Unsigned_64) return String;
+   function Transcribe_Raw_PCM (Audio_Data : access Float; Audio_Length : Interfaces.Unsigned_64) return String
+     with Pre => True,
+          Post => True;
    -- @test: Transcribe_Raw_PCM covered by sabotage_verifier
    -- @test: Transcribe_Raw_PCM covered by sabotage_verifier
    

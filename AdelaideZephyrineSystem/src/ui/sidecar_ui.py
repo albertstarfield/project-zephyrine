@@ -644,6 +644,8 @@ def get_stats(queue_len: int = 0):
     }
 
 
+# [Documentation: _auto_extract_memory implementation]
+# [Documentation: _auto_extract_memory implementation]
 async def _auto_extract_memory(session_id: str, user_msg: str, assistant_msg: str):
     prompt = f'Extract the core topic and a concise memory summary from this interaction.\nUser: {user_msg}\nAssistant: {assistant_msg}\n\nRespond ONLY with a valid JSON object in this format: {{"topic": "Short Topic Name", "memory": "Concise memory text"}}'
     payload = {
@@ -1938,100 +1940,166 @@ if __name__ == "__main__":
     server_thread.join()
 
 
+# [Documentation: test_search_literature implementation]
+# [Documentation: test_search_literature implementation]
 def test_search_literature():    """Test stub for search_literature."""    pass
 
 
+# [Documentation: test_run_benchmark implementation]
+# [Documentation: test_run_benchmark implementation]
 def test_run_benchmark():    """Test stub for run_benchmark."""    pass
 
 
+# [Documentation: test_get_user_info implementation]
+# [Documentation: test_get_user_info implementation]
 def test_get_user_info():    """Test stub for get_user_info."""    pass
 
 
+# [Documentation: test_get_free_port implementation]
+# [Documentation: test_get_free_port implementation]
 def test_get_free_port():    """Test stub for get_free_port."""    pass
 
 
+# [Documentation: test_perform_platform_integrity_check implementation]
+# [Documentation: test_perform_platform_integrity_check implementation]
 def test_perform_platform_integrity_check():    """Test stub for perform_platform_integrity_check."""    pass
 
 
+# [Documentation: test_duplicate_session implementation]
+# [Documentation: test_duplicate_session implementation]
 def test_duplicate_session():    """Test stub for duplicate_session."""    pass
 
 
+# [Documentation: test_get_engine_settings implementation]
+# [Documentation: test_get_engine_settings implementation]
 def test_get_engine_settings():    """Test stub for get_engine_settings."""    pass
 
 
+# [Documentation: test_get_readme implementation]
+# [Documentation: test_get_readme implementation]
 def test_get_readme():    """Test stub for get_readme."""    pass
 
 
+# [Documentation: test_detach_webview implementation]
+# [Documentation: test_detach_webview implementation]
 def test_detach_webview():    """Test stub for detach_webview."""    pass
 
 
+# [Documentation: test_delete_session implementation]
+# [Documentation: test_delete_session implementation]
 def test_delete_session():    """Test stub for delete_session."""    pass
 
 
+# [Documentation: test_update_literature_graph implementation]
+# [Documentation: test_update_literature_graph implementation]
 def test_update_literature_graph():    """Test stub for update_literature_graph."""    pass
 
 
+# [Documentation: test_no_dist implementation]
+# [Documentation: test_no_dist implementation]
 def test_no_dist():    """Test stub for no_dist."""    pass
 
 
+# [Documentation: test_search_memory implementation]
+# [Documentation: test_search_memory implementation]
 def test_search_memory():    """Test stub for search_memory."""    pass
 
 
+# [Documentation: test_init_knowledge_db implementation]
+# [Documentation: test_init_knowledge_db implementation]
 def test_init_knowledge_db():    """Test stub for init_knowledge_db."""    pass
 
 
+# [Documentation: test_run_automated_test implementation]
+# [Documentation: test_run_automated_test implementation]
 def test_run_automated_test():    """Test stub for run_automated_test."""    pass
 
 
+# [Documentation: test_get_stats implementation]
+# [Documentation: test_get_stats implementation]
 def test_get_stats():    """Test stub for get_stats."""    pass
 
 
+# [Documentation: test_get_license implementation]
+# [Documentation: test_get_license implementation]
 def test_get_license():    """Test stub for get_license."""    pass
 
 
+# [Documentation: test_get_memory_graph implementation]
+# [Documentation: test_get_memory_graph implementation]
 def test_get_memory_graph():    """Test stub for get_memory_graph."""    pass
 
 
+# [Documentation: test_get_sessions implementation]
+# [Documentation: test_get_sessions implementation]
 def test_get_sessions():    """Test stub for get_sessions."""    pass
 
 
+# [Documentation: test_save_engine_setting implementation]
+# [Documentation: test_save_engine_setting implementation]
 def test_save_engine_setting():    """Test stub for save_engine_setting."""    pass
 
 
+# [Documentation: test_get_literature_graph implementation]
+# [Documentation: test_get_literature_graph implementation]
 def test_get_literature_graph():    """Test stub for get_literature_graph."""    pass
 
 
+# [Documentation: test_run_server implementation]
+# [Documentation: test_run_server implementation]
 def test_run_server():    """Test stub for run_server."""    pass
 
 
+# [Documentation: test_log_error implementation]
+# [Documentation: test_log_error implementation]
 def test_log_error():    """Test stub for log_error."""    pass
 
 
+# [Documentation: test_init_db implementation]
+# [Documentation: test_init_db implementation]
 def test_init_db():    """Test stub for init_db."""    pass
 
 
+# [Documentation: test_update_memory_graph implementation]
+# [Documentation: test_update_memory_graph implementation]
 def test_update_memory_graph():    """Test stub for update_memory_graph."""    pass
 
 
+# [Documentation: test_delete_engine_setting implementation]
+# [Documentation: test_delete_engine_setting implementation]
 def test_delete_engine_setting():    """Test stub for delete_engine_setting."""    pass
 
 
+# [Documentation: test_get_delta implementation]
+# [Documentation: test_get_delta implementation]
 def test_get_delta():    """Test stub for get_delta."""    pass
 
 
+# [Documentation: test_get_messages implementation]
+# [Documentation: test_get_messages implementation]
 def test_get_messages():    """Test stub for get_messages."""    pass
 
 
+# [Documentation: test_kill_process implementation]
+# [Documentation: test_kill_process implementation]
 def test_kill_process():    """Test stub for kill_process."""    pass
 
 
+# [Documentation: test_exit_app implementation]
+# [Documentation: test_exit_app implementation]
 def test_exit_app():    """Test stub for exit_app."""    pass
 
 
+# [Documentation: test_init_model implementation]
+# [Documentation: test_init_model implementation]
 def test_init_model():    """Test stub for init_model."""    pass
 
 
+# [Documentation: test_close_window_and_open_browser implementation]
+# [Documentation: test_close_window_and_open_browser implementation]
 def test_close_window_and_open_browser():    """Test stub for close_window_and_open_browser."""    pass
 
 
+# [Documentation: test_poll_ada_telemetry implementation]
+# [Documentation: test_poll_ada_telemetry implementation]
 def test_poll_ada_telemetry():    """Test stub for poll_ada_telemetry."""    pass

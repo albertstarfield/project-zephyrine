@@ -30,38 +30,50 @@ package Kratos is
 
    --  Install signal handlers (SIGSEGV, SIGBUS, SIGFPE, SIGTRAP, SIGABRT).
    --  Safe to call multiple times (idempotent).
-   procedure Install_Handlers;
+   procedure Install_Handlers
+     with Pre => True,
+          Post => True;
    -- @test: Install_Handlers covered by sabotage_verifier
    -- @test: Install_Handlers covered by sabotage_verifier
    pragma Import (C, Install_Handlers, "jorvik_install_handlers");
 
    --  Enter a protected region. Returns 0 on normal entry.
    --  Returns nonzero (the signal number) if recovering from a crash.
-   function Guard_Enter return Interfaces.C.int;
+   function Guard_Enter return Interfaces.C.int
+     with Pre => True,
+          Post => True;
    -- @test: Guard_Enter covered by sabotage_verifier
    -- @test: Guard_Enter covered by sabotage_verifier
    pragma Import (C, Guard_Enter, "jorvik_guard_enter");
 
    --  Exit a protected region. Must be called on the normal path.
-   procedure Guard_Exit;
+   procedure Guard_Exit
+     with Pre => True,
+          Post => True;
    -- @test: Guard_Exit covered by sabotage_verifier
    -- @test: Guard_Exit covered by sabotage_verifier
    pragma Import (C, Guard_Exit, "jorvik_guard_exit");
 
    --  Check if a crash occurred (nonzero = yes).
-   function Crash_Occurred return Interfaces.C.int;
+   function Crash_Occurred return Interfaces.C.int
+     with Pre => True,
+          Post => True;
    -- @test: Crash_Occurred covered by sabotage_verifier
    -- @test: Crash_Occurred covered by sabotage_verifier
    pragma Import (C, Crash_Occurred, "jorvik_crash_occurred");
 
    --  Get the signal number that caused the crash.
-   function Get_Crash_Signal return Interfaces.C.int;
+   function Get_Crash_Signal return Interfaces.C.int
+     with Pre => True,
+          Post => True;
    -- @test: Get_Crash_Signal covered by sabotage_verifier
    -- @test: Get_Crash_Signal covered by sabotage_verifier
    pragma Import (C, Get_Crash_Signal, "jorvik_get_crash_signal");
 
    --  Clear crash state after recovery.
-   procedure Clear_Crash;
+   procedure Clear_Crash
+     with Pre => True,
+          Post => True;
    -- @test: Clear_Crash covered by sabotage_verifier
    -- @test: Clear_Crash covered by sabotage_verifier
    pragma Import (C, Clear_Crash, "jorvik_clear_crash");

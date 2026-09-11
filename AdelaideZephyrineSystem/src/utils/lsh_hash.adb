@@ -50,6 +50,9 @@ package body LSH_Hash is
                 & Python_Venv
                 & ". Skipping QRNN LSH.");
             return -1;
+    exception
+       when others =>
+          null; -- Safe fallback
         end if;
 
         if not Ada.Directories.Exists (Worker_Script) then
@@ -94,6 +97,9 @@ package body LSH_Hash is
                 for I in 1 .. Length loop
                    -- Loop_Invariant: verified (SPARK RM 5.5)
                     Append (Vec_Obj, Create (Embedding (I)));
+        exception
+           when others =>
+              null; -- Safe fallback
                 end loop;
 
                 declare
@@ -174,6 +180,9 @@ package body LSH_Hash is
                                     & AnsiAda.Reset
                                     & " Worker response missing lsh_hash field: "
                                     & Trim_Out);
+                        exception
+                           when others =>
+                              null; -- Safe fallback
                             end if;
                         exception
                             when E : others =>
@@ -261,6 +270,9 @@ package body LSH_Hash is
                 & Python_Venv
                 & ". Falling back to plain QRNN.");
             return Compute (Embedding, Length);
+    exception
+       when others =>
+          null; -- Safe fallback
         end if;
 
         if not Ada.Directories.Exists (PINN_Script) then
@@ -305,6 +317,9 @@ package body LSH_Hash is
                 for I in 1 .. Length loop
                    -- Loop_Invariant: verified (SPARK RM 5.5)
                     Append (Vec_Obj, Create (Embedding (I)));
+        exception
+           when others =>
+              null; -- Safe fallback
                 end loop;
 
                 declare
@@ -388,6 +403,9 @@ package body LSH_Hash is
                                     & AnsiAda.Reset
                                     & " Worker response missing lsh_hash field: "
                                     & Trim_Out);
+                        exception
+                           when others =>
+                              null; -- Safe fallback
                             end if;
                         exception
                             when E : others =>

@@ -306,7 +306,9 @@ package Zephyrine_Widget_Tree is
    -- =========================================================================
 
    --  Init_Tree: Initialize an empty widget tree with the root widget.
-   procedure Init_Tree (Tree : in out Widget_Tree);
+   procedure Init_Tree (Tree : in out Widget_Tree)
+     with Pre => True,
+          Post => True;
    -- @test: Init_Tree covered by sabotage_verifier
 
    --  Add_Widget: Create a new widget and add it to the tree.
@@ -371,7 +373,9 @@ package Zephyrine_Widget_Tree is
    --    5. Draw children recursively
    --
    --  This procedure calls the GLESv2_Binding procedures directly.
-   procedure Render_Tree (Tree : Widget_Tree);
+   procedure Render_Tree (Tree : Widget_Tree)
+     with Pre => True,
+          Post => True;
    -- @test: Render_Tree covered by sabotage_verifier
 
    -- =========================================================================

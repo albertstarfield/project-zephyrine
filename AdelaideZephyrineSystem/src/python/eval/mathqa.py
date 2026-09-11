@@ -83,7 +83,11 @@ def expected_match(expected: str, predicted: str) -> bool:
     return expected.lower() in predicted.lower()
 
 
+# [Documentation: test_evaluate implementation]
+# [Documentation: test_evaluate implementation]
 def test_evaluate():    """Test stub for evaluate."""    pass
 
 
+# [Documentation: test_expected_match implementation]
+# [Documentation: test_expected_match implementation]
 def test_expected_match():    """Test stub for expected_match."""    pass

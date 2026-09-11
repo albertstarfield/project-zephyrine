@@ -56,13 +56,17 @@ package ROS2_RCL_Bindings is
    RCL_RET_OK : constant rcl_ret_t := 0;
 
     --  Returns the system default memory allocator for ROS2.
-    function rcutils_get_default_allocator return rcl_allocator_t;
+    function rcutils_get_default_allocator return rcl_allocator_t
+      with Pre => True,
+           Post => True;
     -- @test: rcutils_get_default_allocator covered by sabotage_verifier
     -- @test: rcutils_get_default_allocator covered by sabotage_verifier
    pragma Import (C, rcutils_get_default_allocator, "rcutils_get_default_allocator");
 
     --  Returns a zero-initialized RCL init options struct.
-    function rcl_get_zero_initialized_init_options return rcl_init_options_t;
+    function rcl_get_zero_initialized_init_options return rcl_init_options_t
+      with Pre => True,
+           Post => True;
     -- @test: rcl_get_zero_initialized_init_options covered by sabotage_verifier
     -- @test: rcl_get_zero_initialized_init_options covered by sabotage_verifier
    pragma Import (C, rcl_get_zero_initialized_init_options, "rcl_get_zero_initialized_init_options");
@@ -76,7 +80,9 @@ package ROS2_RCL_Bindings is
    pragma Import (C, rcl_init_options_init, "rcl_init_options_init");
 
     --  Returns a zero-initialized RCL context struct.
-    function rcl_get_zero_initialized_context return rcl_context_t;
+    function rcl_get_zero_initialized_context return rcl_context_t
+      with Pre => True,
+           Post => True;
     -- @test: rcl_get_zero_initialized_context covered by sabotage_verifier
     -- @test: rcl_get_zero_initialized_context covered by sabotage_verifier
    pragma Import (C, rcl_get_zero_initialized_context, "rcl_get_zero_initialized_context");
@@ -91,13 +97,17 @@ package ROS2_RCL_Bindings is
    pragma Import (C, rcl_init, "rcl_init");
 
     --  Returns a zero-initialized RCL node struct.
-    function rcl_get_zero_initialized_node return rcl_node_t;
+    function rcl_get_zero_initialized_node return rcl_node_t
+      with Pre => True,
+           Post => True;
     -- @test: rcl_get_zero_initialized_node covered by sabotage_verifier
     -- @test: rcl_get_zero_initialized_node covered by sabotage_verifier
    pragma Import (C, rcl_get_zero_initialized_node, "rcl_get_zero_initialized_node");
 
     --  Returns the default node options with standard configuration.
-    function rcl_node_get_default_options return rcl_node_options_t;
+    function rcl_node_get_default_options return rcl_node_options_t
+      with Pre => True,
+           Post => True;
     -- @test: rcl_node_get_default_options covered by sabotage_verifier
     -- @test: rcl_node_get_default_options covered by sabotage_verifier
    pragma Import (C, rcl_node_get_default_options, "rcl_node_get_default_options");

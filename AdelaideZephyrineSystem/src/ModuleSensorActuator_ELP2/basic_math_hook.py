@@ -42,6 +42,8 @@ extern "C" {
 }
 """
 
+# [Documentation: _setup_cpp implementation]
+# [Documentation: _setup_cpp implementation]
 def _setup_cpp():
     global _C_LIB, _ENGINE_MODE
     try:
@@ -215,7 +217,11 @@ if __name__ == "__main__":
     print(handler(PATTERN.match("Calculate 10 + 20."), "", ""))
 
 
+# [Documentation: test_jit_calc implementation]
+# [Documentation: test_jit_calc implementation]
 def test_jit_calc():    """Test stub for jit_calc."""    pass
 
 
+# [Documentation: test_handler implementation]
+# [Documentation: test_handler implementation]
 def test_handler():    """Test stub for handler."""    pass

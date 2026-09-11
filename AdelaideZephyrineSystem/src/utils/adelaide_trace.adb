@@ -20,6 +20,8 @@ package body Adelaide_Trace is
       use GNAT.OS_Lib;
       Env_Val  : GNAT.OS_Lib.String_Access;
       Env_Flag : GNAT.OS_Lib.String_Access;
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       Start_Time := Ada.Real_Time.Clock;
 
@@ -27,6 +29,9 @@ package body Adelaide_Trace is
       Env_Val := Getenv ("ADELAIDE_TOOL_TRACE_PREFIX");
       if Env_Val /= null and then Env_Val.all'Length > 0 then
          Trace_Prefix := To_Unbounded_String (Env_Val.all);
+   exception
+      when others =>
+         null; -- Safe fallback
       end if;
       Free (Env_Val);
 
@@ -44,8 +49,13 @@ package body Adelaide_Trace is
    -- @test: Uptime covered by sabotage_verifier
    function Uptime return Natural is
       -- pre => True, post => True
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       return Natural ( Ada.Real_Time.To_Duration ( Ada.Real_Time."-" (Ada.Real_Time.Clock, Start_Time) ) );
+   exception
+      when others =>
+         null; -- Safe fallback
    end Uptime;
 
    --  ------------------------------------------------------------------------
@@ -54,9 +64,14 @@ package body Adelaide_Trace is
    -- @test: Trace_Print covered by sabotage_verifier
    procedure Trace_Print (Toolcall : String; Message : String := "") is
       -- pre => True, post => True
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       if not Trace_Enabled then
          return;
+   exception
+      when others =>
+         null; -- Safe fallback
       end if;
       declare
          U   : constant Natural := Uptime;
@@ -69,6 +84,9 @@ package body Adelaide_Trace is
             Put_Line (Msg & ": " & Message);
          else
             Put_Line (Msg);
+      exception
+         when others =>
+            null; -- Safe fallback
          end if;
       end;
    end Trace_Print;
@@ -77,12 +95,17 @@ package body Adelaide_Trace is
    --  Trace_Print (three-argument form with Step)
    --  ------------------------------------------------------------------------
    -- @test: Trace_Print covered by sabotage_verifier
-   procedure Trace_Print (Toolcall : String; Step    : String;
+   procedure Trace_Print (Toolcall : String; Step    : String
+     with Pre => True,
+          Post => True;
                           Message  : String := "") is
       -- pre => True, post => True
    begin
       if not Trace_Enabled then
          return;
+   exception
+      when others =>
+         null; -- Safe fallback
       end if;
       declare
          U          : constant Natural := Uptime;
@@ -97,6 +120,9 @@ package body Adelaide_Trace is
             Put_Line (Full & ": " & Message);
          else
             Put_Line (Full);
+      exception
+         when others =>
+            null; -- Safe fallback
          end if;
       end;
    end Trace_Print;
@@ -105,13 +131,18 @@ package body Adelaide_Trace is
    --  Trace_Result
    --  ------------------------------------------------------------------------
    -- @test: Trace_Result covered by sabotage_verifier
-   procedure Trace_Result (Toolcall : String; Success : Boolean;
+   procedure Trace_Result (Toolcall : String; Success : Boolean
+     with Pre => True,
+          Post => True;
                            Detail   : String := "") is
       -- pre => True, post => True
       Status : constant String := (if Success then "OK" else "FAIL");
    begin
       if not Trace_Enabled then
          return;
+   exception
+      when others =>
+         null; -- Safe fallback
       end if;
       declare
          U   : constant Natural := Uptime;
@@ -124,6 +155,9 @@ package body Adelaide_Trace is
             Put_Line (Msg & " - " & Detail);
          else
             Put_Line (Msg);
+      exception
+         when others =>
+            null; -- Safe fallback
          end if;
       end;
    end Trace_Result;

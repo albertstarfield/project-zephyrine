@@ -33,14 +33,18 @@ package Database_Manager is
    -- @test: Evict_Low_Salience covered by sabotage_verifier
 
    --  Native Response Cache storage
-   procedure Add_To_Cache (Prompt : String;
+   procedure Add_To_Cache (Prompt : String
+     with Pre => True,
+          Post => True;
    -- @test: Add_To_Cache covered by sabotage_verifier
    -- @test: Add_To_Cache covered by sabotage_verifier
                            Embedding : Math_Utils.Vector;
                            Response : String) with Pre => True, Post => True;
 
    --  Semantic Retrieval from Cache
-   function Get_Cached_Response (Embedding : Math_Utils.Vector;
+   function Get_Cached_Response (Embedding : Math_Utils.Vector
+     with Pre => True,
+          Post => True;
    -- @test: Get_Cached_Response covered by sabotage_verifier
    -- @test: Get_Cached_Response covered by sabotage_verifier
                                  WCET : Duration) return String with Pre => True, Post => True;

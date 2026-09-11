@@ -49,6 +49,8 @@ try:
 
 
     @njit(cache=True)
+    # [Documentation: _calculate_servo_outputs_numba implementation]
+    # [Documentation: _calculate_servo_outputs_numba implementation]
     def _calculate_servo_outputs_numba(command_code: int, value: float) -> tuple[float, float]:
         gyro_val: float = 0.0
         inertia_val: float = 0.0
@@ -341,4 +343,6 @@ def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
         return f"{ERROR_PREFIX} A critical error occurred in the FMC servo hook: {e}"
 
 
+# [Documentation: test_handler implementation]
+# [Documentation: test_handler implementation]
 def test_handler():    """Test stub for handler."""    pass

@@ -101,7 +101,11 @@ class BaseEvaluator:
         raise NotImplementedError("Subclasses must implement evaluate()")
 
 
+# [Documentation: test_evaluate implementation]
+# [Documentation: test_evaluate implementation]
 def test_evaluate():    """Test stub for evaluate."""    pass
 
 
+# [Documentation: test_generate implementation]
+# [Documentation: test_generate implementation]
 def test_generate():    """Test stub for generate."""    pass

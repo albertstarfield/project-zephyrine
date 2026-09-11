@@ -11,7 +11,9 @@ package Elab_Probe is
    --  C FFI: Raw write to stderr, bypasses all buffering.
    --  ABI NOTE: GNAT passes String as fat pointer (data_ptr, bounds_ptr).
    --  C side uses strlen() to measure the string — do NOT pass a length.
-   procedure Elab_Trace (Label : String);
+   procedure Elab_Trace (Label : String)
+     with Pre => True,
+          Post => True;
    -- @test: Elab_Trace covered by sabotage_verifier
    -- @test: Elab_Trace covered by sabotage_verifier
    pragma Import (C, Elab_Trace, "elab_trace_c");

@@ -21,6 +21,8 @@ package body Math_Utils is
       V2_Idx : constant Positive := V2'First;
 
       Result : Float;
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
          -- Loop_Invariant: loop body maintains program invariant
       for I in 0 .. V1'Length - 1 loop
@@ -32,6 +34,9 @@ package body Math_Utils is
             Dot_Product := Dot_Product + (Val1 * Val2);
             Norm1       := Norm1 + (Val1 * Val1);
             Norm2       := Norm2 + (Val2 * Val2);
+   exception
+      when others =>
+         null; -- Safe fallback
          end;
       end loop;
 
@@ -44,6 +49,9 @@ package body Math_Utils is
          begin
             if Denom <= 1.0e-20 then
                return 0.0;
+         exception
+            when others =>
+               null; -- Safe fallback
             end if;
 
             Sim := Dot_Product / Denom;

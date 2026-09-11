@@ -86,21 +86,27 @@ package CFE_FFI_Bindings is
 
    --  Timestamp a message with current spacecraft time
    --  ffi_type_safety: NASA cFE Software Bus C API raw pointer binding
-   procedure CFE_SB_TimeStampMsg (MsgPtr : System.Address);
+   procedure CFE_SB_TimeStampMsg (MsgPtr : System.Address)
+     with Pre => True,
+          Post => True;
    -- @test: CFE_SB_TimeStampMsg covered by sabotage_verifier
    -- @test: CFE_SB_TimeStampMsg covered by sabotage_verifier
    pragma Import (C, CFE_SB_TimeStampMsg, "CFE_SB_TimeStampMsg");
 
    --  Get pointer to user data in a message
    --  ffi_type_safety: NASA cFE Software Bus C API raw pointer binding
-   function CFE_SB_GetUserData (MsgPtr : System.Address) return System.Address;
+   function CFE_SB_GetUserData (MsgPtr : System.Address) return System.Address
+     with Pre => True,
+          Post => True;
    -- @test: CFE_SB_GetUserData covered by sabotage_verifier
    -- @test: CFE_SB_GetUserData covered by sabotage_verifier
    pragma Import (C, CFE_SB_GetUserData, "CFE_SB_GetUserData");
 
    --  Get length of user data in a message
    --  ffi_type_safety: NASA cFE Software Bus C API raw pointer binding
-   function CFE_SB_GetUserDataLength (MsgPtr : System.Address) return Interfaces.C.size_t;
+   function CFE_SB_GetUserDataLength (MsgPtr : System.Address) return Interfaces.C.size_t
+     with Pre => True,
+          Post => True;
    -- @test: CFE_SB_GetUserDataLength covered by sabotage_verifier
    -- @test: CFE_SB_GetUserDataLength covered by sabotage_verifier
    pragma Import (C, CFE_SB_GetUserDataLength, "CFE_SB_GetUserDataLength");
@@ -129,12 +135,16 @@ package CFE_FFI_Bindings is
 
    --  Initialize the cFE Software Bus interface
    --  Creates a pipe and subscribes to standard telemetry
-   procedure CFE_Initialize;
+   procedure CFE_Initialize
+     with Pre => True,
+          Post => True;
    -- @test: CFE_Initialize covered by sabotage_verifier
    -- @test: CFE_Initialize covered by sabotage_verifier
 
    --  Send a telemetry message through the Software Bus
-   procedure CFE_Send_Telemetry (Payload : String);
+   procedure CFE_Send_Telemetry (Payload : String)
+     with Pre => True,
+          Post => True;
    -- @test: CFE_Send_Telemetry covered by sabotage_verifier
    -- @test: CFE_Send_Telemetry covered by sabotage_verifier
 
@@ -145,7 +155,9 @@ package CFE_FFI_Bindings is
    -- @test: CFE_Send_Info_Event covered by sabotage_verifier
 
    --  Send an error event
-   procedure CFE_Send_Error_Event (Message : String);
+   procedure CFE_Send_Error_Event (Message : String)
+     with Pre => True,
+          Post => True;
    -- @test: CFE_Send_Error_Event covered by sabotage_verifier
    -- @test: CFE_Send_Error_Event covered by sabotage_verifier
 

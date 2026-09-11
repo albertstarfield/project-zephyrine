@@ -223,4 +223,6 @@ if __name__ == "__main__":
         print("Regex did not match.")
 
 
+# [Documentation: test_handler implementation]
+# [Documentation: test_handler implementation]
 def test_handler():    """Test stub for handler."""    pass

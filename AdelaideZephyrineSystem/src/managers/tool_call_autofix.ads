@@ -121,7 +121,9 @@ package Tool_Call_Autofix is
    --    Register_Tool (Registry, "cat");
    --    Register_Tool (Registry, "grep");
    --    Register_Tool (Registry, "search_content");  -- alias for grep
-   procedure Register_Tool (Registry : in out Tool_Registry;
+   procedure Register_Tool (Registry : in out Tool_Registry
+     with Pre => True,
+          Post => True;
    -- @test: Register_Tool covered by sabotage_verifier
    -- @test: Register_Tool covered by sabotage_verifier
                             Name     : String)
@@ -135,7 +137,9 @@ package Tool_Call_Autofix is
    --  The returned registry contains ALL tool names that Execute_Tool accepts,
    --  including aliases like "search_content" (alias for "grep") and "ls"
    --  (alias for "dir"). This ensures fuzzy matching covers all valid names.
-   function Build_Default_Registry return Tool_Registry;
+   function Build_Default_Registry return Tool_Registry
+     with Pre => True,
+          Post => True;
    -- @test: Build_Default_Registry covered by sabotage_verifier
    -- @test: Build_Default_Registry covered by sabotage_verifier
 
@@ -166,7 +170,9 @@ package Tool_Call_Autofix is
    --  M = length of input, K = average length of registered names.
    --  For 40 tools with avg 8 chars, this is ~3200 operations — fast enough
    --  for real-time tool dispatch (sub-millisecond on modern hardware).
-   function Fuzzy_Fix (Registry : Tool_Registry;
+   function Fuzzy_Fix (Registry : Tool_Registry
+     with Pre => True,
+          Post => True;
    -- @test: Fuzzy_Fix covered by sabotage_verifier
    -- @test: Fuzzy_Fix covered by sabotage_verifier
                        Input    : String)

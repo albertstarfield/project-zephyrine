@@ -37,4 +37,6 @@ class KmmluEvaluator(BaseEvaluator):
         return results
 
 
+# [Documentation: test_evaluate implementation]
+# [Documentation: test_evaluate implementation]
 def test_evaluate():    """Test stub for evaluate."""    pass

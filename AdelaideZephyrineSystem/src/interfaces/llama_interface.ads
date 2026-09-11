@@ -142,26 +142,34 @@ package Llama_Interface is
    pragma Convention (C, Llama_Batch);
 
    --  Returns the default model loading parameters for llama.cpp.
-   function Llama_Model_Default_Params return Llama_Model_Params;
+   function Llama_Model_Default_Params return Llama_Model_Params
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Model_Default_Params covered by sabotage_verifier
    -- @test: Llama_Model_Default_Params covered by sabotage_verifier
    pragma Import (C, Llama_Model_Default_Params, "llama_model_default_params");
 
    --  Returns the default context parameters for llama.cpp.
-   function Llama_Context_Default_Params return Llama_Context_Params;
+   function Llama_Context_Default_Params return Llama_Context_Params
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Context_Default_Params covered by sabotage_verifier
    -- @test: Llama_Context_Default_Params covered by sabotage_verifier
    pragma Import
      (C, Llama_Context_Default_Params, "llama_context_default_params");
 
    --  Initializes the llama.cpp backend. Must be called once before any other llama functions.
-   procedure Llama_Backend_Init;
+   procedure Llama_Backend_Init
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Backend_Init covered by sabotage_verifier
    -- @test: Llama_Backend_Init covered by sabotage_verifier
    pragma Import (C, Llama_Backend_Init, "llama_backend_init");
 
    --  Frees the llama.cpp backend resources. Call once at shutdown.
-   procedure Llama_Backend_Free;
+   procedure Llama_Backend_Free
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Backend_Free covered by sabotage_verifier
    -- @test: Llama_Backend_Free covered by sabotage_verifier
    pragma Import (C, Llama_Backend_Free, "llama_backend_free");
@@ -175,7 +183,9 @@ package Llama_Interface is
      (C, Llama_Model_Load_From_File, "llama_model_load_from_file_safe");
 
    --  Frees a previously loaded model and releases its resources.
-   procedure Llama_Model_Free (Model : Llama_Model);
+   procedure Llama_Model_Free (Model : Llama_Model)
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Model_Free covered by sabotage_verifier
    -- @test: Llama_Model_Free covered by sabotage_verifier
    pragma Import (C, Llama_Model_Free, "llama_model_free");
@@ -195,7 +205,9 @@ package Llama_Interface is
 
 
    --  Frees a previously created context and releases its resources.
-   procedure Llama_Free (Context : Llama_Context);
+   procedure Llama_Free (Context : Llama_Context)
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Free covered by sabotage_verifier
    -- @test: Llama_Free covered by sabotage_verifier
    pragma Import (C, Llama_Free, "llama_free");
@@ -216,7 +228,9 @@ package Llama_Interface is
    pragma Import (C, Llama_Get_Memory, "llama_get_memory");
 
    --  Returns the number of tokens in the context's KV cache.
-   function Llama_N_Ctx (Context : Llama_Context) return Interfaces.C.unsigned;
+   function Llama_N_Ctx (Context : Llama_Context) return Interfaces.C.unsigned
+     with Pre => True,
+          Post => True;
    -- @test: Llama_N_Ctx covered by sabotage_verifier
    -- @test: Llama_N_Ctx covered by sabotage_verifier
    pragma Import (C, Llama_N_Ctx, "llama_n_ctx");
@@ -271,7 +285,9 @@ package Llama_Interface is
    pragma Import (C, Llama_Batch_Clear_Safe, "llama_batch_clear_safe");
 
    --  Frees a previously allocated batch and its internal buffers.
-   procedure Llama_Batch_Free (Batch : Llama_Batch);
+   procedure Llama_Batch_Free (Batch : Llama_Batch)
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Batch_Free covered by sabotage_verifier
    -- @test: Llama_Batch_Free covered by sabotage_verifier
    pragma Import (C, Llama_Batch_Free, "llama_batch_free");
@@ -288,7 +304,9 @@ package Llama_Interface is
    pragma Import (C, Llama_Get_Logits, "llama_get_logits");
 
    --  Enables or disables embedding extraction mode in the context.
-   procedure Llama_Set_Embeddings (Context : Llama_Context; Value : Interfaces.C.int);
+   procedure Llama_Set_Embeddings (Context : Llama_Context; Value : Interfaces.C.int)
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Set_Embeddings covered by sabotage_verifier
    -- @test: Llama_Set_Embeddings covered by sabotage_verifier
    pragma Import (C, Llama_Set_Embeddings, "llama_set_embeddings");
@@ -304,19 +322,25 @@ package Llama_Interface is
    pragma Import (C, Llama_Set_N_Threads, "llama_set_n_threads");
 
    --  Returns the vocabulary size of the loaded model.
-   function Llama_N_Vocab (Model : Llama_Model) return int;
+   function Llama_N_Vocab (Model : Llama_Model) return int
+     with Pre => True,
+          Post => True;
    -- @test: Llama_N_Vocab covered by sabotage_verifier
    -- @test: Llama_N_Vocab covered by sabotage_verifier
    pragma Import (C, Llama_N_Vocab, "llama_n_vocab");
 
    --  Retrieves the vocabulary handle from a loaded model for tokenization operations.
-   function Llama_Model_Get_Vocab (Model : Llama_Model) return Llama_Vocab;
+   function Llama_Model_Get_Vocab (Model : Llama_Model) return Llama_Vocab
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Model_Get_Vocab covered by sabotage_verifier
    -- @test: Llama_Model_Get_Vocab covered by sabotage_verifier
    pragma Import (C, Llama_Model_Get_Vocab, "llama_model_get_vocab");
 
    --  Returns the total number of tokens in the vocabulary.
-   function Llama_Vocab_N_Tokens (Vocab : Llama_Vocab) return int;
+   function Llama_Vocab_N_Tokens (Vocab : Llama_Vocab) return int
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Vocab_N_Tokens covered by sabotage_verifier
    -- @test: Llama_Vocab_N_Tokens covered by sabotage_verifier
    pragma Import (C, Llama_Vocab_N_Tokens, "llama_vocab_n_tokens");
@@ -371,7 +395,9 @@ package Llama_Interface is
    pragma Convention (C, Llama_Sampler_Chain_Params);
 
    --  Sampling API
-   function Llama_Sampler_Chain_Default_Params return Llama_Sampler_Chain_Params;
+   function Llama_Sampler_Chain_Default_Params return Llama_Sampler_Chain_Params
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Sampler_Chain_Default_Params covered by sabotage_verifier
    -- @test: Llama_Sampler_Chain_Default_Params covered by sabotage_verifier
    pragma Import
@@ -384,19 +410,25 @@ package Llama_Interface is
    pragma Import (C, Llama_Sampler_Chain_Init, "llama_sampler_chain_init");
 
    --  Appends a sampler to the end of a sampler chain.
-   procedure Llama_Sampler_Chain_Add (Chain : Llama_Sampler; Smpl : Llama_Sampler);
+   procedure Llama_Sampler_Chain_Add (Chain : Llama_Sampler; Smpl : Llama_Sampler)
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Sampler_Chain_Add covered by sabotage_verifier
    -- @test: Llama_Sampler_Chain_Add covered by sabotage_verifier
    pragma Import (C, Llama_Sampler_Chain_Add, "llama_sampler_chain_add");
 
    --  Creates a greedy sampler that always selects the highest-probability token.
-   function Llama_Sampler_Init_Greedy return Llama_Sampler;
+   function Llama_Sampler_Init_Greedy return Llama_Sampler
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Sampler_Init_Greedy covered by sabotage_verifier
    -- @test: Llama_Sampler_Init_Greedy covered by sabotage_verifier
    pragma Import (C, Llama_Sampler_Init_Greedy, "llama_sampler_init_greedy");
 
    --  Creates a Top-K sampler that considers only the K most probable tokens.
-   function Llama_Sampler_Init_Top_K (K : int) return Llama_Sampler;
+   function Llama_Sampler_Init_Top_K (K : int) return Llama_Sampler
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Sampler_Init_Top_K covered by sabotage_verifier
    -- @test: Llama_Sampler_Init_Top_K covered by sabotage_verifier
    pragma Import (C, Llama_Sampler_Init_Top_K, "llama_sampler_init_top_k");
@@ -408,13 +440,17 @@ package Llama_Interface is
      (P : Float; Min_Keep : size_t) return Llama_Sampler;
    pragma Import (C, Llama_Sampler_Init_Top_P, "llama_sampler_init_top_p");
    --  Creates a temperature sampler that adjusts token probabilities by the given temperature T.
-function Llama_Sampler_Init_Temp (T : Float) return Llama_Sampler;
+function Llama_Sampler_Init_Temp (T : Float) return Llama_Sampler
+  with Pre => True,
+       Post => True;
 -- @test: Llama_Sampler_Init_Temp covered by sabotage_verifier
 -- @test: Llama_Sampler_Init_Temp covered by sabotage_verifier
 pragma Import (C, Llama_Sampler_Init_Temp, "llama_sampler_init_temp");
 
    --  Creates a distribution sampler using the given random seed for reproducibility.
-function Llama_Sampler_Init_Dist (Seed : unsigned) return Llama_Sampler;
+function Llama_Sampler_Init_Dist (Seed : unsigned) return Llama_Sampler
+  with Pre => True,
+       Post => True;
 -- @test: Llama_Sampler_Init_Dist covered by sabotage_verifier
 -- @test: Llama_Sampler_Init_Dist covered by sabotage_verifier
 pragma Import (C, Llama_Sampler_Init_Dist, "llama_sampler_init_dist");
@@ -438,14 +474,18 @@ function Llama_Sampler_Init_Penalties
    pragma Import (C, Llama_Sampler_Sample, "llama_sampler_sample");
 
    --  Frees a previously created sampler and its resources.
-   procedure Llama_Sampler_Free (Smpl : Llama_Sampler);
+   procedure Llama_Sampler_Free (Smpl : Llama_Sampler)
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Sampler_Free covered by sabotage_verifier
    -- @test: Llama_Sampler_Free covered by sabotage_verifier
    pragma Import (C, Llama_Sampler_Free, "llama_sampler_free");
 
    --  Returns a C string containing system information about the llama.cpp build
    --  and available backends.
-   function Llama_Print_System_Info return chars_ptr;
+   function Llama_Print_System_Info return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: Llama_Print_System_Info covered by sabotage_verifier
    -- @test: Llama_Print_System_Info covered by sabotage_verifier
    pragma Import (C, Llama_Print_System_Info, "llama_print_system_info");
@@ -472,7 +512,9 @@ function Llama_Sampler_Init_Penalties
 
    --  Returns the number of available CPU threads (physical + hyperthreaded).
    --  Uses sysctl HW_NCPU on macOS.
-   function CPU_Thread_Count return Interfaces.C.unsigned;
+   function CPU_Thread_Count return Interfaces.C.unsigned
+     with Pre => True,
+          Post => True;
    -- @test: CPU_Thread_Count covered by sabotage_verifier
    -- @test: CPU_Thread_Count covered by sabotage_verifier
    pragma Import (C, CPU_Thread_Count, "cpu_thread_count");

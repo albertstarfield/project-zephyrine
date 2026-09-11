@@ -444,81 +444,107 @@ package SD_Interface is
    --  The string parameter is the exact symbol name in libstable_diffusion.a.
 
    --  --- Library info ---
-   function SD_Version return chars_ptr;
+   function SD_Version return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Version covered by sabotage_verifier
    -- @test: SD_Version covered by sabotage_verifier
    pragma Import (C, SD_Version, "sd_version");
 
    --  Returns the git commit hash of the stable-diffusion.cpp library build.
-   function SD_Commit return chars_ptr;
+   function SD_Commit return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Commit covered by sabotage_verifier
    -- @test: SD_Commit covered by sabotage_verifier
    pragma Import (C, SD_Commit, "sd_commit");
 
    --  Returns system information including CPU cores, backend type, and memory details.
-   function SD_Get_System_Info return chars_ptr;
+   function SD_Get_System_Info return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Get_System_Info covered by sabotage_verifier
    -- @test: SD_Get_System_Info covered by sabotage_verifier
    pragma Import (C, SD_Get_System_Info, "sd_get_system_info");
 
    --  Returns the number of physical CPU cores available on the system.
-   function SD_Get_Num_Physical_Cores return int;
+   function SD_Get_Num_Physical_Cores return int
+     with Pre => True,
+          Post => True;
    -- @test: SD_Get_Num_Physical_Cores covered by sabotage_verifier
    -- @test: SD_Get_Num_Physical_Cores covered by sabotage_verifier
    pragma Import (C, SD_Get_Num_Physical_Cores, "sd_get_num_physical_cores");
 
    --  --- Logging ---
-   procedure SD_Set_Log_Callback (Cb   : SD_Log_Cb_T;
+   procedure SD_Set_Log_Callback (Cb   : SD_Log_Cb_T
+     with Pre => True,
+          Post => True;
    -- @test: SD_Set_Log_Callback covered by sabotage_verifier
    -- @test: SD_Set_Log_Callback covered by sabotage_verifier
                                    Data : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, SD_Set_Log_Callback, "sd_set_log_callback");
 
    --  --- Progress ---
-   procedure SD_Set_Progress_Callback (Cb   : SD_Progress_Cb_T;
+   procedure SD_Set_Progress_Callback (Cb   : SD_Progress_Cb_T
+     with Pre => True,
+          Post => True;
    -- @test: SD_Set_Progress_Callback covered by sabotage_verifier
    -- @test: SD_Set_Progress_Callback covered by sabotage_verifier
                                         Data : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, SD_Set_Progress_Callback, "sd_set_progress_callback");
 
    --  --- Context lifecycle ---
-   function New_SD_Ctx (Params : access SD_Ctx_Params) return SD_Ctx;
+   function New_SD_Ctx (Params : access SD_Ctx_Params) return SD_Ctx
+     with Pre => True,
+          Post => True;
    -- @test: New_SD_Ctx covered by sabotage_verifier
    -- @test: New_SD_Ctx covered by sabotage_verifier
    pragma Import (C, New_SD_Ctx, "new_sd_ctx");
 
    --  Frees an SD context and releases all associated model resources and memory.
-   procedure Free_SD_Ctx (Ctx : SD_Ctx);
+   procedure Free_SD_Ctx (Ctx : SD_Ctx)
+     with Pre => True,
+          Post => True;
    -- @test: Free_SD_Ctx covered by sabotage_verifier
    -- @test: Free_SD_Ctx covered by sabotage_verifier
    pragma Import (C, Free_SD_Ctx, "free_sd_ctx");
 
    --  --- Context support queries ---
-   function SD_Ctx_Supports_Image_Generation (Ctx : SD_Ctx) return int;
+   function SD_Ctx_Supports_Image_Generation (Ctx : SD_Ctx) return int
+     with Pre => True,
+          Post => True;
    -- @test: SD_Ctx_Supports_Image_Generation covered by sabotage_verifier
    -- @test: SD_Ctx_Supports_Image_Generation covered by sabotage_verifier
    pragma Import (C, SD_Ctx_Supports_Image_Generation, "sd_ctx_supports_image_generation");
 
    --  Returns True (nonzero) if the context supports video generation.
-   function SD_Ctx_Supports_Video_Generation (Ctx : SD_Ctx) return int;
+   function SD_Ctx_Supports_Video_Generation (Ctx : SD_Ctx) return int
+     with Pre => True,
+          Post => True;
    -- @test: SD_Ctx_Supports_Video_Generation covered by sabotage_verifier
    -- @test: SD_Ctx_Supports_Video_Generation covered by sabotage_verifier
    pragma Import (C, SD_Ctx_Supports_Video_Generation, "sd_ctx_supports_video_generation");
 
    --  --- Parameter initialization ---
-   procedure SD_Ctx_Params_Init (Params : access SD_Ctx_Params);
+   procedure SD_Ctx_Params_Init (Params : access SD_Ctx_Params)
+     with Pre => True,
+          Post => True;
    -- @test: SD_Ctx_Params_Init covered by sabotage_verifier
    -- @test: SD_Ctx_Params_Init covered by sabotage_verifier
    pragma Import (C, SD_Ctx_Params_Init, "sd_ctx_params_init");
 
    --  Initializes an SD_Img_Gen_Params struct with default values.
-   procedure SD_Img_Gen_Params_Init (Params : access SD_Img_Gen_Params);
+   procedure SD_Img_Gen_Params_Init (Params : access SD_Img_Gen_Params)
+     with Pre => True,
+          Post => True;
    -- @test: SD_Img_Gen_Params_Init covered by sabotage_verifier
    -- @test: SD_Img_Gen_Params_Init covered by sabotage_verifier
    pragma Import (C, SD_Img_Gen_Params_Init, "sd_img_gen_params_init");
 
    --  Initializes an SD_Sample_Params struct with default values.
-   procedure SD_Sample_Params_Init (Params : access SD_Sample_Params);
+   procedure SD_Sample_Params_Init (Params : access SD_Sample_Params)
+     with Pre => True,
+          Post => True;
    -- @test: SD_Sample_Params_Init covered by sabotage_verifier
    -- @test: SD_Sample_Params_Init covered by sabotage_verifier
    pragma Import (C, SD_Sample_Params_Init, "sd_sample_params_init");
@@ -531,14 +557,18 @@ package SD_Interface is
    pragma Import (C, Generate_Image, "generate_image");
 
    --  --- Cancel generation ---
-   procedure SD_Cancel_Generation (Ctx  : SD_Ctx;
+   procedure SD_Cancel_Generation (Ctx  : SD_Ctx
+     with Pre => True,
+          Post => True;
    -- @test: SD_Cancel_Generation covered by sabotage_verifier
    -- @test: SD_Cancel_Generation covered by sabotage_verifier
                                     Mode : int);
    pragma Import (C, SD_Cancel_Generation, "sd_cancel_generation");
 
    --  --- Free results ---
-   procedure Free_SD_Images (Images : SD_Image_Access;
+   procedure Free_SD_Images (Images : SD_Image_Access
+     with Pre => True,
+          Post => True;
    -- @test: Free_SD_Images covered by sabotage_verifier
    -- @test: Free_SD_Images covered by sabotage_verifier
                              Count  : int);
@@ -561,62 +591,82 @@ package SD_Interface is
    pragma Import (C, Mz_Free, "mz_free");
 
    --  --- Enum name lookups (for verbose logging) ---
-   function SD_Type_Name (T : int) return chars_ptr;
+   function SD_Type_Name (T : int) return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Type_Name covered by sabotage_verifier
    -- @test: SD_Type_Name covered by sabotage_verifier
    pragma Import (C, SD_Type_Name, "sd_type_name");
 
    --  Returns the human-readable name for the given RNG type enumeration value.
-   function SD_RNG_Type_Name (T : int) return chars_ptr;
+   function SD_RNG_Type_Name (T : int) return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_RNG_Type_Name covered by sabotage_verifier
    -- @test: SD_RNG_Type_Name covered by sabotage_verifier
    pragma Import (C, SD_RNG_Type_Name, "sd_rng_type_name");
 
    --  Returns the human-readable name for the given sample method enumeration value.
-   function SD_Sample_Method_Name (M : int) return chars_ptr;
+   function SD_Sample_Method_Name (M : int) return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Sample_Method_Name covered by sabotage_verifier
    -- @test: SD_Sample_Method_Name covered by sabotage_verifier
    pragma Import (C, SD_Sample_Method_Name, "sd_sample_method_name");
 
    --  Returns the human-readable name for the given scheduler enumeration value.
-   function SD_Scheduler_Name (S : int) return chars_ptr;
+   function SD_Scheduler_Name (S : int) return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Scheduler_Name covered by sabotage_verifier
    -- @test: SD_Scheduler_Name covered by sabotage_verifier
    pragma Import (C, SD_Scheduler_Name, "sd_scheduler_name");
 
    --  Returns the human-readable name for the given prediction type enumeration value.
-   function SD_Prediction_Name (P : int) return chars_ptr;
+   function SD_Prediction_Name (P : int) return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Prediction_Name covered by sabotage_verifier
    -- @test: SD_Prediction_Name covered by sabotage_verifier
    pragma Import (C, SD_Prediction_Name, "sd_prediction_name");
 
    --  --- Default sample method/scheduler ---
-   function SD_Get_Default_Sample_Method (Ctx : SD_Ctx) return int;
+   function SD_Get_Default_Sample_Method (Ctx : SD_Ctx) return int
+     with Pre => True,
+          Post => True;
    -- @test: SD_Get_Default_Sample_Method covered by sabotage_verifier
    -- @test: SD_Get_Default_Sample_Method covered by sabotage_verifier
    pragma Import (C, SD_Get_Default_Sample_Method, "sd_get_default_sample_method");
 
    --  Returns the default scheduler for the given sample method in the context.
-   function SD_Get_Default_Scheduler (Ctx    : SD_Ctx;
+   function SD_Get_Default_Scheduler (Ctx    : SD_Ctx
+     with Pre => True,
+          Post => True;
    -- @test: SD_Get_Default_Scheduler covered by sabotage_verifier
    -- @test: SD_Get_Default_Scheduler covered by sabotage_verifier
                                        Method : int) return int;
    pragma Import (C, SD_Get_Default_Scheduler, "sd_get_default_scheduler");
 
    --  --- String conversion (for verbose logging) ---
-   function SD_Ctx_Params_To_Str (Params : access SD_Ctx_Params) return chars_ptr;
+   function SD_Ctx_Params_To_Str (Params : access SD_Ctx_Params) return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Ctx_Params_To_Str covered by sabotage_verifier
    -- @test: SD_Ctx_Params_To_Str covered by sabotage_verifier
    pragma Import (C, SD_Ctx_Params_To_Str, "sd_ctx_params_to_str");
 
    --  Converts the image generation parameters struct to a human-readable string.
-   function SD_Img_Gen_Params_To_Str (Params : access SD_Img_Gen_Params) return chars_ptr;
+   function SD_Img_Gen_Params_To_Str (Params : access SD_Img_Gen_Params) return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Img_Gen_Params_To_Str covered by sabotage_verifier
    -- @test: SD_Img_Gen_Params_To_Str covered by sabotage_verifier
    pragma Import (C, SD_Img_Gen_Params_To_Str, "sd_img_gen_params_to_str");
 
    --  Converts the sample parameters struct to a human-readable string.
-   function SD_Sample_Params_To_Str (Params : access SD_Sample_Params) return chars_ptr;
+   function SD_Sample_Params_To_Str (Params : access SD_Sample_Params) return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: SD_Sample_Params_To_Str covered by sabotage_verifier
    -- @test: SD_Sample_Params_To_Str covered by sabotage_verifier
    pragma Import (C, SD_Sample_Params_To_Str, "sd_sample_params_to_str");
@@ -639,17 +689,23 @@ package SD_Interface is
    -- @test: SD_System_Info covered by sabotage_verifier
 
    --  Log all fields of SD_Ctx_Params
-   procedure Log_Context_Params (Params : access SD_Ctx_Params);
+   procedure Log_Context_Params (Params : access SD_Ctx_Params)
+     with Pre => True,
+          Post => True;
    -- @test: Log_Context_Params covered by sabotage_verifier
    -- @test: Log_Context_Params covered by sabotage_verifier
 
    --  Log all fields of SD_Img_Gen_Params
-   procedure Log_Image_Gen_Params (Params : access SD_Img_Gen_Params);
+   procedure Log_Image_Gen_Params (Params : access SD_Img_Gen_Params)
+     with Pre => True,
+          Post => True;
    -- @test: Log_Image_Gen_Params covered by sabotage_verifier
    -- @test: Log_Image_Gen_Params covered by sabotage_verifier
 
    --  Log the result of generate_image()
-   procedure Log_Generate_Result (Images      : SD_Image_Access;
+   procedure Log_Generate_Result (Images      : SD_Image_Access
+     with Pre => True,
+          Post => True;
    -- @test: Log_Generate_Result covered by sabotage_verifier
    -- @test: Log_Generate_Result covered by sabotage_verifier
                                    Count       : int;

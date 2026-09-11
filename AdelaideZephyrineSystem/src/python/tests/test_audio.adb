@@ -53,5 +53,7 @@ package Test_Test_Audio is
 end Test_Test_Audio;
 
 package body Test_Test_Audio is
+   -- [Documentation: Run implementation]
+   -- [Documentation: Run implementation]
    procedure Run is begin null; end Run;
 end Test_Test_Audio;

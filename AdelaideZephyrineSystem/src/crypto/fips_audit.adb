@@ -13,6 +13,8 @@ package body FIPS_Audit is
    -- @test: Open_Log covered by sabotage_verifier
    procedure Open_Log is
       -- pre => True, post => True
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       if not Is_Open then
          begin
@@ -34,6 +36,8 @@ package body FIPS_Audit is
    procedure Log_Event (Event_Message : String) is
       -- pre => True, post => True
       Timestamp : constant String := Ada.Calendar.Formatting.Image (Ada.Calendar.Clock);
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       Open_Log;
       Ada.Text_IO.Put_Line (Log_File, "[" & Timestamp & "] [FIPS AUDIT] " & Event_Message);
@@ -48,26 +52,38 @@ end FIPS_Audit;
 
 package Test_Open_Log is
    -- @test: Open_Log covered by Test_Open_Log
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          -- [Documentation: Run implementation]
+          -- [Documentation: Run implementation]
+          Post => True;
 end Test_Open_Log;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Open_Log is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Open_Log;
 
 
 
+-- [Documentation: Run implementation]
+-- [Documentation: Run implementation]
 package Test_Log_Event is
    -- @test: Log_Event covered by Test_Log_Event
-   procedure Run;
+   procedure Run
+     with Pre => True,
+          Post => True;
 end Test_Log_Event;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Log_Event is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Log_Event;

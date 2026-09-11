@@ -125,7 +125,9 @@ package Zephyrine_Main_Framedisplay is
    --    Handle: A valid Renderer_Handle from Init
    --
    --  Precondition: Handle /= Null_Handle (checked at runtime, no crash)
-   procedure Show (Handle : Renderer_Handle);
+   procedure Show (Handle : Renderer_Handle)
+     with Pre => True,
+          Post => True;
    -- @test: Show covered by sabotage_verifier
    -- @covered
 
@@ -135,7 +137,9 @@ package Zephyrine_Main_Framedisplay is
    --
    --  Parameters:
    --    Handle: A valid Renderer_Handle from Init
-   procedure Hide (Handle : Renderer_Handle);
+   procedure Hide (Handle : Renderer_Handle)
+     with Pre => True,
+          Post => True;
    -- @test: Hide covered by sabotage_verifier
    -- @covered
 
@@ -145,7 +149,9 @@ package Zephyrine_Main_Framedisplay is
    --  Parameters:
    --    Handle: A valid Renderer_Handle from Init
    --    Width, Height: New dimensions in pixels
-   procedure Resize (Handle  : Renderer_Handle;
+   procedure Resize (Handle  : Renderer_Handle
+     with Pre => True,
+          Post => True;
    -- @test: Resize covered by sabotage_verifier
                       Width   : Positive;
                       Height  : Positive);
@@ -178,7 +184,9 @@ package Zephyrine_Main_Framedisplay is
    --
    --  Returns:
    --    True if parsing succeeded, False on error.
-   function Load_CSS (Handle    : Renderer_Handle;
+   function Load_CSS (Handle    : Renderer_Handle
+     with Pre => True,
+          Post => True;
    -- @test: Load_CSS covered by sabotage_verifier
                       File_Path : String)
       return Boolean
@@ -206,7 +214,9 @@ package Zephyrine_Main_Framedisplay is
    --    Handle: A valid Renderer_Handle from Init
    --    Widget_ID: The widget to update (e.g. "#greeting-title")
    --    Text: New text content
-   procedure Update_Widget_Text (Handle    : Renderer_Handle;
+   procedure Update_Widget_Text (Handle    : Renderer_Handle
+     with Pre => True,
+          Post => True;
    -- @test: Update_Widget_Text covered by sabotage_verifier
                                  Widget_ID : String;
                                  Text      : String)
@@ -222,7 +232,9 @@ package Zephyrine_Main_Framedisplay is
    --    "add_button:parent_id:text:callback_id" — Add a button
    --    "remove:widget_id" — Remove a widget
    --    "set_visible:widget_id:bool" — Show/hide a widget
-   procedure Execute_Command (Handle  : Renderer_Handle;
+   procedure Execute_Command (Handle  : Renderer_Handle
+     with Pre => True,
+          Post => True;
    -- @test: Execute_Command covered by sabotage_verifier
                               Command : String)
    -- @covered
@@ -248,7 +260,9 @@ package Zephyrine_Main_Framedisplay is
    --  Returns:
    --    True if the window is still open, False if the user closed it.
    --    The caller should exit the event loop when this returns False.
-   function Process_Events (Handle : Renderer_Handle) return Boolean;
+   function Process_Events (Handle : Renderer_Handle) return Boolean
+     with Pre => True,
+          Post => True;
    -- @test: Process_Events covered by sabotage_verifier
    -- @covered
    --  Run_Event_Loop: Blocking event loop until window is closed.
@@ -296,7 +310,9 @@ package Zephyrine_Main_Framedisplay is
    --
    --  Note: Requires Transparent_Background => True in Renderer_Config.
    --  On platforms that don't support transparency, this is a no-op.
-   procedure Set_Opacity (Handle  : Renderer_Handle;
+   procedure Set_Opacity (Handle  : Renderer_Handle
+     with Pre => True,
+          Post => True;
    -- @test: Set_Opacity covered by sabotage_verifier
    -- @test: Set_Opacity covered by sabotage_verifier
    -- @covered
@@ -311,7 +327,9 @@ package Zephyrine_Main_Framedisplay is
    --  Parameters:
    --    Handle: A valid Renderer_Handle from Init
    --    Duration: Time in seconds for the fade animation (default: 1.0s)
-   procedure Fade_In (Handle   : Renderer_Handle;
+   procedure Fade_In (Handle   : Renderer_Handle
+     with Pre => True,
+          Post => True;
    -- @test: Fade_In covered by sabotage_verifier
    -- @test: Fade_In covered by sabotage_verifier
    -- @covered
@@ -325,7 +343,9 @@ package Zephyrine_Main_Framedisplay is
    --  Parameters:
    --    Handle: A valid Renderer_Handle from Init
    --    Duration: Time in seconds for the fade animation (default: 0.5s)
-   procedure Fade_Out (Handle   : Renderer_Handle;
+   procedure Fade_Out (Handle   : Renderer_Handle
+     with Pre => True,
+          Post => True;
    -- @test: Fade_Out covered by sabotage_verifier
                        Duration : Float := 0.5);
    -- @covered

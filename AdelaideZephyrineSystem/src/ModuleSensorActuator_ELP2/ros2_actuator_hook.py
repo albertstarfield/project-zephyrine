@@ -74,7 +74,11 @@ def handler(match, user_input, session_id):
         return f"ROS2 Actuator Hook: FATAL EXCEPTION - {e!s}"
 
 
+# [Documentation: test_get_ros2_node implementation]
+# [Documentation: test_get_ros2_node implementation]
 def test_get_ros2_node():    """Test stub for get_ros2_node."""    pass
 
 
+# [Documentation: test_handler implementation]
+# [Documentation: test_handler implementation]
 def test_handler():    """Test stub for handler."""    pass

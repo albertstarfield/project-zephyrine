@@ -38,7 +38,9 @@ package Mtmd_Interface is
      (C, Mtmd_Init_From_File_Safe, "mtmd_init_from_file_safe");
 
    --  Free mtmd context
-   procedure Mtmd_Free_Safe (Ctx : Mtmd_Context);
+   procedure Mtmd_Free_Safe (Ctx : Mtmd_Context)
+     with Pre => True,
+          Post => True;
    -- @test: Mtmd_Free_Safe covered by sabotage_verifier
    -- @test: Mtmd_Free_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Free_Safe, "mtmd_free_safe");
@@ -53,32 +55,42 @@ package Mtmd_Interface is
    pragma Import (C, Mtmd_Bitmap_Init_Safe, "mtmd_bitmap_init_safe");
 
    --  Free bitmap
-   procedure Mtmd_Bitmap_Free_Safe (Bitmap : Mtmd_Bitmap);
+   procedure Mtmd_Bitmap_Free_Safe (Bitmap : Mtmd_Bitmap)
+     with Pre => True,
+          Post => True;
    -- @test: Mtmd_Bitmap_Free_Safe covered by sabotage_verifier
    -- @test: Mtmd_Bitmap_Free_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Bitmap_Free_Safe, "mtmd_bitmap_free_safe");
 
    --  Get bitmap dimensions
-   function Mtmd_Bitmap_Get_Nx_Safe (Bitmap : Mtmd_Bitmap) return unsigned;
+   function Mtmd_Bitmap_Get_Nx_Safe (Bitmap : Mtmd_Bitmap) return unsigned
+     with Pre => True,
+          Post => True;
    -- @test: Mtmd_Bitmap_Get_Nx_Safe covered by sabotage_verifier
    -- @test: Mtmd_Bitmap_Get_Nx_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Bitmap_Get_Nx_Safe, "mtmd_bitmap_get_nx_safe");
 
     --  Returns the height (Ny) of the bitmap in pixels.
-    function Mtmd_Bitmap_Get_Ny_Safe (Bitmap : Mtmd_Bitmap) return unsigned;
+    function Mtmd_Bitmap_Get_Ny_Safe (Bitmap : Mtmd_Bitmap) return unsigned
+      with Pre => True,
+           Post => True;
     -- @test: Mtmd_Bitmap_Get_Ny_Safe covered by sabotage_verifier
     -- @test: Mtmd_Bitmap_Get_Ny_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Bitmap_Get_Ny_Safe, "mtmd_bitmap_get_ny_safe");
 
    --  Initialize empty input chunks list
-   function Mtmd_Input_Chunks_Init_Safe return Mtmd_Input_Chunks;
+   function Mtmd_Input_Chunks_Init_Safe return Mtmd_Input_Chunks
+     with Pre => True,
+          Post => True;
    -- @test: Mtmd_Input_Chunks_Init_Safe covered by sabotage_verifier
    -- @test: Mtmd_Input_Chunks_Init_Safe covered by sabotage_verifier
    pragma Import
      (C, Mtmd_Input_Chunks_Init_Safe, "mtmd_input_chunks_init_safe");
 
    --  Free input chunks
-   procedure Mtmd_Input_Chunks_Free_Safe (Chunks : Mtmd_Input_Chunks);
+   procedure Mtmd_Input_Chunks_Free_Safe (Chunks : Mtmd_Input_Chunks)
+     with Pre => True,
+          Post => True;
    -- @test: Mtmd_Input_Chunks_Free_Safe covered by sabotage_verifier
    -- @test: Mtmd_Input_Chunks_Free_Safe covered by sabotage_verifier
    pragma Import
@@ -134,7 +146,9 @@ package Mtmd_Interface is
    pragma Import (C, Mtmd_Get_Output_Embd_Safe, "mtmd_get_output_embd_safe");
 
    --  Check if model supports vision
-   function Mtmd_Support_Vision_Safe (Ctx : Mtmd_Context) return int;
+   function Mtmd_Support_Vision_Safe (Ctx : Mtmd_Context) return int
+     with Pre => True,
+          Post => True;
    -- @test: Mtmd_Support_Vision_Safe covered by sabotage_verifier
    -- @test: Mtmd_Support_Vision_Safe covered by sabotage_verifier
    pragma Import
@@ -151,7 +165,9 @@ package Mtmd_Interface is
       "mtmd_decode_use_non_causal_safe");
 
    --  Get default media marker string
-   function Mtmd_Default_Marker_Safe return chars_ptr;
+   function Mtmd_Default_Marker_Safe return chars_ptr
+     with Pre => True,
+          Post => True;
    -- @test: Mtmd_Default_Marker_Safe covered by sabotage_verifier
    -- @test: Mtmd_Default_Marker_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Default_Marker_Safe, "mtmd_default_marker_safe");

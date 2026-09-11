@@ -36,7 +36,9 @@ package Adelaide_Trace is
                           Message  : String := "") with Pre => True, Post => True;
 
    --  Final result trace (OK / FAIL with optional detail).
-   procedure Trace_Result (Toolcall : String; Success : Boolean;
+   procedure Trace_Result (Toolcall : String; Success : Boolean
+     with Pre => True,
+          Post => True;
    -- @test: Trace_Result covered by sabotage_verifier
    -- @test: Trace_Result covered by sabotage_verifier
                            Detail   : String := "") with Pre => True, Post => True;

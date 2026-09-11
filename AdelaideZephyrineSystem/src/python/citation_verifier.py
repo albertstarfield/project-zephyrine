@@ -43,7 +43,11 @@ def format_citation(paper: dict) -> str:
     return f"{authors} ({year}). {title}. DOI: {doi}"
 
 
+# [Documentation: test_format_citation implementation]
+# [Documentation: test_format_citation implementation]
 def test_format_citation():    """Test stub for format_citation."""    pass
 
 
+# [Documentation: test_query_crossref implementation]
+# [Documentation: test_query_crossref implementation]
 def test_query_crossref():    """Test stub for query_crossref."""    pass

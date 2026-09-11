@@ -104,4 +104,6 @@ if __name__ == "__main__":
     unittest.main()
 
 
+# [Documentation: test_setUpClass implementation]
+# [Documentation: test_setUpClass implementation]
 def test_setUpClass():    """Test stub for setUpClass."""    pass

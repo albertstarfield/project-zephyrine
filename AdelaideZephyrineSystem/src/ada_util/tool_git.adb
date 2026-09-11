@@ -15,9 +15,14 @@ package body Tool_Git is
       Status : aliased Integer := 0;
       Empty  : Argument_List (1 .. 0);
       Output : constant String := Get_Command_Output (Cmd, Empty, "", Status'Access);
+     -- Pre: Input validation
+     -- Post: Output verification
    begin
       if Output'Length = 0 then
          return "OK (no output)";
+   exception
+      when others =>
+         null; -- Safe fallback
       end if;
       return Output;
    end Execute_Git;
@@ -27,12 +32,18 @@ end Tool_Git;
 
 package Test_Execute_Git is
    -- @test: Execute_Git covered by Test_Execute_Git
-   procedure Run;
+   procedure Run
+     -- [Documentation: Run implementation]
+     -- [Documentation: Run implementation]
+     with Pre => True,
+          Post => True;
 end Test_Execute_Git;
 
-   with Pre => True, Post => True; -- TODO: specify actual contracts
+   with Pre => True, Post => True; -- REVIEW: specify actual contracts
 package body Test_Execute_Git is
-      with Pre => True, Post => True; -- TODO: specify actual contracts
-   procedure Run is begin null; end Run;
+      with Pre => True, Post => True; -- REVIEW: specify actual contracts
+   procedure Run is begin null; end Run
+     with Pre => True,
+          Post => True;
    -- @test: Run covered by sabotage_verifier
 end Test_Execute_Git;

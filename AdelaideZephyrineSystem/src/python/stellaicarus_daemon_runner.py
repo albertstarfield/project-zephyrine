@@ -276,7 +276,11 @@ if __name__ == "__main__":
 
 
 
+# [Documentation: test_main implementation]
+# [Documentation: test_main implementation]
 def test_main():    """Test stub for main."""    pass
 
 
+# [Documentation: test_print_hw_detection implementation]
+# [Documentation: test_print_hw_detection implementation]
 def test_print_hw_detection():    """Test stub for print_hw_detection."""    pass

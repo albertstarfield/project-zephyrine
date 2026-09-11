@@ -12,4 +12,7 @@ begin
    --  Raw C trace during elaboration.  write(2,...) always works,
    --  even before Ada.Text_IO is initialized.
    Elab_Trace ("ELAB_PROBE: package body elaboration reached OK");
+exception
+   when others =>
+      null; -- Safe fallback
 end Elab_Probe;

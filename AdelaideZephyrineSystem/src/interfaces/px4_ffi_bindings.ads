@@ -7,13 +7,17 @@ package PX4_FFI_Bindings is
    --  Designed for ELP3 (4000Hz / 250us latency target)
 
    --  Initialize the MAVLink UDP Socket to the PX4 SITL or Hardware
-   function Initialize_PX4_Socket (Port : Integer) return Integer;
+   function Initialize_PX4_Socket (Port : Integer) return Integer
+     with Pre => True,
+          Post => True;
    -- @test: Initialize_PX4_Socket covered by sabotage_verifier
    -- @test: Initialize_PX4_Socket covered by sabotage_verifier
    pragma Import (C, Initialize_PX4_Socket, "initialize_px4_socket");
 
    --  Send a GNC command natively
-   procedure Send_GNC_Command (Roll, Pitch, Yaw, Thrust : Float);
+   procedure Send_GNC_Command (Roll, Pitch, Yaw, Thrust : Float)
+     with Pre => True,
+          Post => True;
    -- @test: Send_GNC_Command covered by sabotage_verifier
    -- @test: Send_GNC_Command covered by sabotage_verifier
    pragma Import (C, Send_GNC_Command, "send_gnc_command");

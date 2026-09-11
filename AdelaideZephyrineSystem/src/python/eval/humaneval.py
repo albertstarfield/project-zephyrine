@@ -89,7 +89,11 @@ def check_code_answer(expected_pattern: str, predicted: str) -> bool:
     return expected_clean.lower() in predicted_clean.lower()
 
 
+# [Documentation: test_check_code_answer implementation]
+# [Documentation: test_check_code_answer implementation]
 def test_check_code_answer():    """Test stub for check_code_answer."""    pass
 
 
+# [Documentation: test_evaluate implementation]
+# [Documentation: test_evaluate implementation]
 def test_evaluate():    """Test stub for evaluate."""    pass

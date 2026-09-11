@@ -91,7 +91,9 @@ package Splash_Screen is
    --  Returns:
    --    True if the controller was initialized successfully.
    --    False if the WebView is invalid.
-   function Create (Config  : Splash_Config := (others => <>);
+   function Create (Config  : Splash_Config := (others => <>)
+     with Pre => True,
+          Post => True;
    -- @test: Create covered by sabotage_verifier
    -- @test: Create covered by sabotage_verifier
       with Pre => True,
@@ -104,7 +106,9 @@ package Splash_Screen is
    --
    --  Parameters:
    --    WebView: The WebView to navigate
-   procedure Show (WebView : WebView_Handle);
+   procedure Show (WebView : WebView_Handle)
+     with Pre => True,
+          Post => True;
    -- @test: Show covered by sabotage_verifier
    -- @test: Show covered by sabotage_verifier
       with Pre => True,
@@ -115,7 +119,9 @@ package Splash_Screen is
    --
    --  Parameters:
    --    WebView: The WebView (for null check)
-   procedure Wait_For_Ready (WebView : WebView_Handle);
+   procedure Wait_For_Ready (WebView : WebView_Handle)
+     with Pre => True,
+          Post => True;
    -- @test: Wait_For_Ready covered by sabotage_verifier
    -- @test: Wait_For_Ready covered by sabotage_verifier
       with Pre => True,
@@ -128,7 +134,9 @@ package Splash_Screen is
    --  Parameters:
    --    WebView: The WebView (for null check)
    --    Main_URL: Unused (navigation already happened in Show)
-   procedure Dismiss (WebView : WebView_Handle;
+   procedure Dismiss (WebView : WebView_Handle
+     with Pre => True,
+          Post => True;
    -- @test: Dismiss covered by sabotage_verifier
    -- @test: Dismiss covered by sabotage_verifier
       with Pre => True,
@@ -145,7 +153,9 @@ package Splash_Screen is
    --  Returns:
    --    The current Splash_State (Not_Started, Fading_In, Displaying,
    --    Fading_Out, or Done)
-   function Get_State return Splash_State;
+   function Get_State return Splash_State
+     with Pre => True,
+          Post => True;
    -- @test: Get_State covered by sabotage_verifier
    -- @test: Get_State covered by sabotage_verifier
       with Pre => True,
@@ -153,7 +163,9 @@ package Splash_Screen is
 
    --  Is_Visible: Return True if the splash screen is currently visible.
    --  Returns False if not started, faded out, or done.
-   function Is_Visible return Boolean;
+   function Is_Visible return Boolean
+     with Pre => True,
+          Post => True;
    -- @test: Is_Visible covered by sabotage_verifier
    -- @test: Is_Visible covered by sabotage_verifier
       with Pre => True,

@@ -102,7 +102,9 @@ package Zephyrine_GL_Renderer is
    --  Public API
    --  ──────────────────────────────────────────────────────────────────────
 
-   procedure Initialize (State : in out Renderer_State);
+   procedure Initialize (State : in out Renderer_State)
+     with Pre => True,
+          Post => True;
    -- @test: Initialize covered by sabotage_verifier
    --  Compile shaders, create program, set up VAO/VBO/IBO.
    --  Must be called after GLFW window + GL context creation.
@@ -113,18 +115,24 @@ package Zephyrine_GL_Renderer is
    --  CITATION: OpenGL ES 2.0 Spec Section 2.5.1 "Shader Compilation"
    --  — compile errors are non-fatal; check Compile_Status after Compile.
 
-   procedure Set_Viewport (State : in out Renderer_State;
+   procedure Set_Viewport (State : in out Renderer_State
+     with Pre => True,
+          Post => True;
    -- @test: Set_Viewport covered by sabotage_verifier
                            Width, Height : GL.Types.Int);
    --  Update orthographic projection matrix dimensions.
    --  Called on window resize and initial display.
 
-   procedure Begin_Frame (State : in out Renderer_State);
+   procedure Begin_Frame (State : in out Renderer_State)
+     with Pre => True,
+          Post => True;
    -- @test: Begin_Frame covered by sabotage_verifier
    --  Clear framebuffer, set default GL state for UI rendering.
    --  Enables alpha blending, disables depth test.
 
-   procedure Draw_Quad (State   : in out Renderer_State;
+   procedure Draw_Quad (State   : in out Renderer_State
+     with Pre => True,
+          Post => True;
    -- @test: Draw_Quad covered by sabotage_verifier
                         X, Y    : GL.Types.Single;
                         W, H    : GL.Types.Single;
@@ -153,7 +161,9 @@ package Zephyrine_GL_Renderer is
       Border_Width : GL.Types.Single := 1.0);
    --  Draw a rectangle with a colored border (for focus rings, outlines).
 
-   function Load_Texture (State : in out Renderer_State;
+   function Load_Texture (State : in out Renderer_State
+     with Pre => True,
+          Post => True;
    -- @test: Load_Texture covered by sabotage_verifier
                           Path  : String)
                           return Natural;
@@ -163,7 +173,9 @@ package Zephyrine_GL_Renderer is
    --  CITATION: GL.Images.Load_File_To_Texture handles format detection
    --  (PNG, JPEG, TGA) via signature sniffing.
 
-   procedure Finalize (State : in out Renderer_State);
+   procedure Finalize (State : in out Renderer_State)
+     with Pre => True,
+          Post => True;
    -- @test: Finalize covered by sabotage_verifier
    --  Release GL resources (shader program, buffers, textures).
 

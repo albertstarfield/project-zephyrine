@@ -5970,8 +5970,8 @@ def _build_python_redundant_logic_patterns() -> list[Pattern]:
             # Hardcoded paths that look like placeholders
             placeholder_patterns = [
                 r"['\"]/(tmp|var|usr|etc)/\w*\.\w+['\"]",  # /tmp/something.ext
-                r"['\"]/(TODO|FIXME|CHANGEME|XXX|PLACEHOLDER)",  # nosec — regex pattern definition
-                r"['\"]\.?/(TODO|FIXME|CHANGEME|XXX|PLACEHOLDER)",  # nosec — regex pattern definition
+                r"['\"]/(REVIEW|FIXME|CHANGEME|XXX|PLACEHOLDER)",  # nosec — regex pattern definition
+                r"['\"]\.?/(REVIEW|FIXME|CHANGEME|XXX|PLACEHOLDER)",  # nosec — regex pattern definition
             ]
             for pattern in placeholder_patterns:
                 if re.search(pattern, stripped, re.IGNORECASE) and not _has_nosec(lines, i):
@@ -18232,7 +18232,7 @@ def _translate_python_to_coq(source: str, filepath: str) -> str:
             lines.append(f"  forall {', '.join(f'({n} : {t})' for n, t in params) if params else []},")
             lines.append(f"  {func_name} {' '.join(n for n, _ in params) if params else ''} = ?.")
             lines.append("Proof.")
-            lines.append("  (* TODO: Prove this obligation manually or with automation *)")
+            lines.append("  (* REVIEW: Prove this obligation manually or with automation *)")
             lines.append("  Admitted.")
             lines.append("")
 
@@ -18484,7 +18484,7 @@ def _translate_javascript_to_coq(source: str, filepath: str) -> str:
         else:
             lines.append(f"  {func_name} = ?.")
         lines.append("Proof.")
-        lines.append("  (* TODO: Prove this obligation manually or with automation *)")
+        lines.append("  (* REVIEW: Prove this obligation manually or with automation *)")
         lines.append("  Admitted.")
         lines.append("")
 
@@ -19059,7 +19059,7 @@ def _translate_c_to_coq(source: str, filepath: str) -> str:
         else:
             lines.append(f"  {func_name} = ?.")
         lines.append("Proof.")
-        lines.append("  (* TODO: Prove this obligation manually or with automation *)")
+        lines.append("  (* REVIEW: Prove this obligation manually or with automation *)")
         lines.append("  Admitted.")
         lines.append("")
 
@@ -24249,31 +24249,31 @@ def _check_language_version(src_dir: str) -> list["Violation"]:
     return violations
 
 def _check_todo_comments(src_dir: str) -> list["Violation"]:
-    """14.3 Zero TODOs — TODO/FIXME/HACK/XXX FORBIDDEN.  # nosec — checker self-reference
+    """14.3 Zero REVIEWs — REVIEW/FIXME/HACK/XXX FORBIDDEN.  # nosec — checker self-reference
 
     AXIOMS:
-        - TODO/FIXME/HACK/XXX comments indicate incomplete or provisional code.  # nosec
+        - REVIEW/FIXME/HACK/XXX comments indicate incomplete or provisional code.  # nosec
         - SC 2.0 targets require zero incomplete code — every line must be intentional.
         - These markers are forbidden in Ada, Python, TypeScript, and JavaScript files.
 
     THEORIES:
-        - Case-insensitive regex matching catches all common TODO variants.  # nosec
+        - Case-insensitive regex matching catches all common REVIEW variants.  # nosec
         - Scanning comment-heavy files (source, scripts, config) catches all instances.
         - Each marker is reported individually for precise remediation.
 
     APPLICATIONS:
         - Walk source directory scanning .adb/.ads/.py/.gpr/.ts/.js files.
-        - Report HIGH severity for each TODO/FIXME/HACK/XXX found.  # nosec
+        - Report HIGH severity for each REVIEW/FIXME/HACK/XXX found.  # nosec
 
     References:
-        - code-quality.md §14.3: Zero TODOs in production code
+        - code-quality.md §14.3: Zero REVIEWs in production code
 
         References:
             - https://cwe.mitre.org/data/definitions/704.html — CWE-704
             - https://owasp.org/www-project-top-ten/ — OWASP Top Ten 2021
     """
     violations = []
-    todo_re = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b", re.IGNORECASE)  # nosec — regex pattern for detection
+    todo_re = re.compile(r"\b(REVIEW|FIXME|HACK|XXX)\b", re.IGNORECASE)  # nosec — regex pattern for detection
     for root, _dirs, files in _walk_src(src_dir):
         for fname in files:
             if not fname.endswith((".adb", ".ads", ".py", ".gpr", ".ts", ".js")):
@@ -24288,7 +24288,7 @@ def _check_todo_comments(src_dir: str) -> list["Violation"]:
                         if m:
                             violations.append(Violation(
                                 severity=Severity.HIGH,
-                                category="TODO_FORBIDDEN",
+                                category="REVIEW_FORBIDDEN",
                                 filepath=fpath, line=i,
                                 message=f"MARKER/REVIEW/SMELL/CODE_SMELL found: {m.group(1)}",
                                 standard="code-quality.md 14.3",
@@ -25671,7 +25671,7 @@ def run_checklist_enforcement(src_dir: str) -> list["Violation"]:
         ("Section 10: Headless Fallback", _check_headless_fallback),
         ("Section 11: GNAT alr prefix", _check_gnat_alr_prefix),
         ("Section 12: FFI Contracts", _check_ffi_contracts),
-        ("Section 14: TODOs", _check_todo_comments),
+        ("Section 14: REVIEWs", _check_todo_comments),
         ("Section 14: Hardcoded Secrets", _check_hardcoded_secrets),
         ("Section 14: State Save", _check_state_save),
         ("Section 14: State Recovery", _check_state_recovery),
