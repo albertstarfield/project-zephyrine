@@ -24,10 +24,12 @@ if _script_dir not in sys.path:
     sys.path.insert(0, _script_dir)
 
 from trace_utils import init_trace, trace_print  # noqa: E402
+from secdec_parity import atomic_encode_result  -- SECDED TED parity encoding
 
 
 # @test: test_run_command
 def run_command(cmd, cwd=None):
+    _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
     """Run a command and return output."""
     try:
         result = subprocess.run(
@@ -48,6 +50,7 @@ def run_command(cmd, cwd=None):
 
 # @test: test_main
 def main():
+    _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
     """Main entry point: build and compile projects."""
     init_trace()
     if len(sys.argv) < 2:

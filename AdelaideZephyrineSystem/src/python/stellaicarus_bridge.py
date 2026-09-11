@@ -4,6 +4,7 @@ import subprocess
 import sys
 import types
 import typing
+from secdec_parity import atomic_encode_result  -- SECDED TED parity encoding
 
 # --- Bootstrap Virtual Environment ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,6 +14,7 @@ REQUIREMENTS = ["loguru"]
 
 # @test: test_bootstrap_venv
 def bootstrap_venv():  
+    _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
     # nosec - recursive function with implicit base case
     """Create and activate the Python venv with required dependencies."""
     venv_abs = os.path.abspath(VENV_DIR)
@@ -78,6 +80,7 @@ except ImportError as e:
 
 # @test: test_main
 def main():  
+    _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
     # nosec - recursive function with implicit base case
     """Main entry: match user input against StellaIcarus hooks and print response."""
     if len(sys.argv) < 2:

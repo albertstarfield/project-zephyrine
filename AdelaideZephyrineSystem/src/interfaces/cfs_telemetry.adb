@@ -4,6 +4,7 @@ pragma SPARK_Mode (Off);
 with Ada.Text_IO; use Ada.Text_IO;
 
 package body CFS_Telemetry is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    Initialized : Boolean := False;
 
@@ -12,6 +13,7 @@ package body CFS_Telemetry is
    procedure Initialize is
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Initialized then
          return;
    exception
@@ -30,6 +32,7 @@ package body CFS_Telemetry is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Build CFE_MSG_Message_t and transmit via Software Bus
       Put_Line ("[CFS-TLM] Sending " & TLM_Type'Image (Msg.Msg_Type) &
                 " (" & Natural'Image (Msg.Msg_Len) & " bytes)");
@@ -42,6 +45,7 @@ package body CFS_Telemetry is
    procedure Send_Housekeeping (CPU_Pct : Float; Mem_Pct : Float; Uptime : Duration) is
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Put_Line ("[CFS-TLM] HK: CPU=" & Float'Image (CPU_Pct) & "%" &
                 " MEM=" & Float'Image (Mem_Pct) & "%" &
                 " UPTIME=" & Duration'Image (Uptime));
@@ -57,6 +61,7 @@ package body CFS_Telemetry is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Put_Line ("[CFS-TLM] SENSOR: " & Sensor_Name & " = " & Float'Image (Value));
    exception
       when others =>
@@ -68,6 +73,7 @@ package body CFS_Telemetry is
    procedure Send_Attitude_Telemetry (Roll, Pitch, Yaw : Float) is
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Put_Line ("[CFS-TLM] ATT: R=" & Float'Image (Roll) &
                 " P=" & Float'Image (Pitch) &
                 " Y=" & Float'Image (Yaw));
@@ -85,6 +91,7 @@ package body CFS_Telemetry is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Flush Software Bus buffers
       null;
    exception

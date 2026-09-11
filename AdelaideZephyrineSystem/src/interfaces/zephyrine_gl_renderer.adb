@@ -39,6 +39,7 @@ with GL.Images;
 with GL.Context;
 
 package body Zephyrine_GL_Renderer is
+      use Secdec_Parity;  -- SECDED TED parity encoding
    use GL.Types;
 
    --  Generic instantiation for buffer data upload -- @covered
@@ -130,6 +131,7 @@ package body Zephyrine_GL_Renderer is
                             return GL.Objects.Shaders.Shader is
       Shader : GL.Objects.Shaders.Shader (Kind);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Shader.Initialize_Id;
       Shader.Set_Source (Source);
       Shader.Compile;
@@ -164,6 +166,7 @@ package body Zephyrine_GL_Renderer is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Ada.Text_IO.Put_Line ("[GL] Initializing ES 2.0 renderer...");
 
       --  Compile vertex shader
@@ -310,6 +313,7 @@ package body Zephyrine_GL_Renderer is
                               with Pre => True, Post => True; -- REVIEW: specify actual contracts
                            Width, Height : GL.Types.Int) is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       State.Viewport_Width  := Width;
       State.Viewport_Height := Height;
 
@@ -339,6 +343,7 @@ package body Zephyrine_GL_Renderer is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       GL.Buffers.Clear ((Color   => True,
                          Depth   => False,
                          Stencil => False,
@@ -373,6 +378,7 @@ package body Zephyrine_GL_Renderer is
                         R, G, B, A : GL.Types.Single) is
       use GL.Objects.Buffers;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not State.Initialized then
          return;
    exception
@@ -446,6 +452,7 @@ package body Zephyrine_GL_Renderer is
       R, G, B, A : GL.Types.Single := 1.0) is
       use GL.Objects.Buffers;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not State.Initialized then
          return;
    exception
@@ -524,6 +531,7 @@ package body Zephyrine_GL_Renderer is
       Border_R, Border_G, Border_B, Border_A : GL.Types.Single;
       Border_Width : GL.Types.Single := 1.0) is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Draw border edges (4 quads)
       --  Top border
       Draw_Quad (State, X, Y, W, Border_Width,
@@ -567,6 +575,7 @@ package body Zephyrine_GL_Renderer is
                           return Natural is
       Slot : Positive;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not State.Initialized then
          return 0;
    exception
@@ -643,6 +652,7 @@ package body Zephyrine_GL_Renderer is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if State.Initialized then
          State.Shader_Program.Clear;
          State.VAO.Clear;

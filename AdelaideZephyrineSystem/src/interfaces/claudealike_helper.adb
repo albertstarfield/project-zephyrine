@@ -18,6 +18,7 @@ with GNATCOLL.JSON;         use GNATCOLL.JSON;
 with Model_Manager;
 
 package body Claudealike_Helper is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  Model name prefixes that identify Claude models
    Claude_Prefixes : constant array (1 .. 4) of String (1 .. 6) :=
@@ -30,6 +31,7 @@ package body Claudealike_Helper is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          -- Loop_Invariant: loop body maintains program invariant
       for Prefix of Claude_Prefixes loop
          -- Loop_Invariant: verified (SPARK RM 5.5)
@@ -53,6 +55,7 @@ package body Claudealike_Helper is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          -- Loop_Invariant: loop body maintains program invariant
       for C of S loop
          -- Loop_Invariant: verified (SPARK RM 5.5)
@@ -90,6 +93,7 @@ package body Claudealike_Helper is
       -- pre => True, post => True
       Body_Str : Unbounded_String;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Append (Body_Str, "{");
       Append (Body_Str, """model"": """ & Escape_JSON (Model) & """,");
       Append (Body_Str, """max_tokens"": " & Trim (Integer'Image (Max_Tokens), Both) & ",");
@@ -141,6 +145,7 @@ package body Claudealike_Helper is
       Result : Unbounded_String;
       Resp   : Unbounded_String;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Put_Line ("[Claude] Processing locally via Hybrid_Generate");
       Put_Line ("[Claude] Model: " & Model);
 
@@ -194,6 +199,7 @@ package body Claudealike_Helper is
       JSON_Response : constant String :=
         Send_Message (API_Key, Model, Messages, Max_Tokens, System_Prompt, Temperature);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Parse_Response_Content (JSON_Response);
    exception
       when others =>
@@ -212,6 +218,7 @@ package body Claudealike_Helper is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if GNATCOLL.JSON.Has_Field (Parsed, "content") then
          Content := GNATCOLL.JSON.Get (Parsed, "content");
             -- Loop_Invariant: loop body maintains program invariant

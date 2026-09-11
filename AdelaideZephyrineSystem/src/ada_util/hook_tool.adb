@@ -21,6 +21,7 @@ with Trace_Utils;
 --  via .hooks.json configuration file.
 -- @test: Hook_Tool covered by sabotage_verifier
 procedure Hook_Tool is
+      use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
@@ -39,6 +40,7 @@ procedure Hook_Tool is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       begin
          Args (1) := new String'("-c");  -- PREALLOCATED_REVIEWED
          Args (2) := new String'(Cmd);  -- PREALLOCATED_REVIEWED

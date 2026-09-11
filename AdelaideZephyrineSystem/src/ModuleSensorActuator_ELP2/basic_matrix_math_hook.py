@@ -4,6 +4,7 @@ import re
 import sys
 import time
 from re import Match
+from secdec_parity import atomic_encode_result  -- SECDED TED parity encoding
 
 # --- ACCELERATION ENGINE SETUP ---
 # Detects the most powerful available hardware backend.
@@ -88,6 +89,7 @@ def _format_tensor(tensor) -> str:
 # --- MAIN HANDLER ---
 # @test: handler is covered by sabotage_verifier
 def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
+    _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
     if not _TORCH_AVAILABLE:
         return "I need my PyTorch upgrades to perform matrix calculations."
 

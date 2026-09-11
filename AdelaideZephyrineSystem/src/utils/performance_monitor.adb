@@ -1,5 +1,6 @@
 pragma Style_Checks (Off);
 package body Performance_Monitor is
+      use Secdec_Parity;  -- SECDED TED parity encoding
    pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    --  Initialize: Initializes the performance monitor (no-op implementation).
    -- @test: Initialize covered by sabotage_verifier

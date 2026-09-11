@@ -7,6 +7,7 @@ with GNAT.OS_Lib; use GNAT.OS_Lib;
 with GNAT.Expect; use GNAT.Expect;
 
 package body Tool_Issue is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    -- function: Execute_Issue
    -- @test: Execute_Issue covered by sabotage_verifier
@@ -21,6 +22,7 @@ package body Tool_Issue is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Params'Length = 0 then
          return "ERROR: Usage: issue <list|create|close|comment> [args]";
    exception

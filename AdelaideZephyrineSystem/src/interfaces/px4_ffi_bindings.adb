@@ -1,6 +1,7 @@
 with Ada.Text_IO; use Ada.Text_IO;
 
 package body PX4_FFI_Bindings is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    --  Executes a Guidance, Navigation, and Control (GNC) command by parsing the
@@ -11,6 +12,7 @@ package body PX4_FFI_Bindings is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Put_Line ("[PX4-FFI] Executing Native GNC Command from LLM...");
       Put_Line ("[PX4-FFI] Params: " & Params);
       

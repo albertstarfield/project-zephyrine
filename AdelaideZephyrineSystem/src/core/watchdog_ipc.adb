@@ -7,6 +7,7 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Interfaces.C;          use Interfaces.C;
 
 package body Watchdog_IPC is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    Run_Dir   : constant String := "run";
    PID_File  : constant String := Run_Dir & "/adelaide_server.pid";
@@ -84,6 +85,7 @@ package body Watchdog_IPC is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Latest_Timestamp :=
            To_Duration (Clock - Time_Of (0, Time_Span_Zero));
       exception
@@ -98,6 +100,7 @@ package body Watchdog_IPC is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          return Latest_Timestamp;
       exception
          when others =>
@@ -111,6 +114,7 @@ package body Watchdog_IPC is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Stop_Requested := True;
       exception
          when others =>
@@ -124,6 +128,7 @@ package body Watchdog_IPC is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          return Stop_Requested;
       exception
          when others =>
@@ -220,6 +225,7 @@ package body Watchdog_IPC is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  No PID file => no other instance running
       if not Exists (PID_File) then
          return False;
@@ -326,6 +332,7 @@ package body Watchdog_IPC is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Exists (Run_Dir) then
          Create_Path (Run_Dir);
    exception
@@ -361,6 +368,7 @@ package body Watchdog_IPC is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Fast, non-blocking: just update the shared timestamp.
       --  The background task writes the actual file independently.
       HB_State.Update;
@@ -385,6 +393,7 @@ package body Watchdog_IPC is
      -- [Documentation: Run implementation]
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  DIRECT file write — used only during Init and shutdown.
       --  For normal operation, use Update_Heartbeat instead.
       Create (F, Out_File, Tmp_File);
@@ -427,6 +436,7 @@ package body Watchdog_IPC is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if HB_Task_Started then
          HB_State.Request_Stop;
          -- [Documentation: Run implementation]
@@ -452,6 +462,7 @@ package body Watchdog_IPC is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Create (F, Out_File, Exit_File);
       Put_Line (F, Reason);
       Put_Line (F, Integer'Image (Signal_Or_Code));

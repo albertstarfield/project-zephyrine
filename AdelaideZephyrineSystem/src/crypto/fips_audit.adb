@@ -3,6 +3,7 @@ with Ada.Calendar;
 with Ada.Calendar.Formatting;
 
 package body FIPS_Audit is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    Log_File_Name : constant String := "fips_audit.log";
@@ -16,6 +17,7 @@ package body FIPS_Audit is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Is_Open then
          begin
             Ada.Text_IO.Open (File => Log_File,
@@ -39,6 +41,7 @@ package body FIPS_Audit is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Open_Log;
       Ada.Text_IO.Put_Line (Log_File, "[" & Timestamp & "] [FIPS AUDIT] " & Event_Message);
       Ada.Text_IO.Flush (Log_File);

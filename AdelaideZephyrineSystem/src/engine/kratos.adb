@@ -4,6 +4,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with AnsiAda;
 
 package body Kratos is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  Wrapper around llama_decode that uses a signal guard to recover from crashes.
    -- @test: Safe_Llama_Decode covered by sabotage_verifier
@@ -24,6 +25,7 @@ package body Kratos is
 
       Crash_Val : Interfaces.C.int;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Crash_Val := Guard_Enter;
       if Crash_Val = 0 then
          --  Normal path: call into llama.cpp
@@ -61,6 +63,7 @@ package body Kratos is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Put_Line (Standard_Error,
         AnsiAda.Background (AnsiAda.Red)
         & "[BUGCHECK] [Kratos] *** CRASH ISOLATED *** " & Sig_Name

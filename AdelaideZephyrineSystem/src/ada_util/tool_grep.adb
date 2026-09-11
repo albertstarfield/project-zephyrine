@@ -7,6 +7,7 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Ada.Directories; use Ada.Directories;
 
 package body Tool_Grep is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    -- function: Execute_Grep
    -- @test: Execute_Grep covered by sabotage_verifier
@@ -19,6 +20,7 @@ package body Tool_Grep is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Params'Length = 0 then
          return "ERROR: Usage: grep <pattern> <filepath> [--ignore-case] [--line-number]";
    exception

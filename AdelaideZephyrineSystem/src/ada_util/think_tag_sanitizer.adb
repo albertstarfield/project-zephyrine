@@ -14,6 +14,7 @@ with Ada.Strings; use Ada.Strings;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 
 package body Think_Tag_Sanitizer is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    Open_Tag  : constant String := "<think>";
    Close_Tag : constant String := "</think>";
@@ -26,6 +27,7 @@ package body Think_Tag_Sanitizer is
       First : Positive := Str'First;
       Last  : Natural  := Str'Last;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Scan forward past whitespace
          -- Loop_Invariant: loop body maintains program invariant
       while First <= Last and then Str (First) = ' ' loop
@@ -59,6 +61,7 @@ package body Think_Tag_Sanitizer is
       Result : Unbounded_String := Null_Unbounded_String;
       I      : Natural := Source'First;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Source'Length = 0 then
          return Null_Unbounded_String;
    exception

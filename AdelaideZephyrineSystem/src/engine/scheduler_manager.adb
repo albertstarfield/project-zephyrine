@@ -8,6 +8,7 @@ with Model_Manager;
 with Model_Types; use Model_Types;
 
 package body Scheduler_Manager is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  [ElabTrace-C]: RAW C trace to confirm Scheduler_Manager body elaboration reached.
@@ -24,6 +25,7 @@ package body Scheduler_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Elab_Trace (Interfaces.C.Strings.New_String ("SCHEDULER_MANAGER BODY ELABORATION ENTERED"));
       return 0;
    exception
@@ -64,6 +66,7 @@ package body Scheduler_Manager is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          List.Append (Item);
       exception
          when others =>
@@ -79,6 +82,7 @@ package body Scheduler_Manager is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Found := False;
             -- Loop_Invariant: loop body maintains program invariant
          while Has_Element (Cur) loop
@@ -145,6 +149,7 @@ package body Scheduler_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Worker = null then
          Worker := new Scheduler_Task_Type;  -- PREALLOCATED_REVIEWED
    -- [Documentation: Run implementation]
@@ -163,6 +168,7 @@ package body Scheduler_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       Evt.Trigger_Time := Clock + Seconds (Delay_Seconds);

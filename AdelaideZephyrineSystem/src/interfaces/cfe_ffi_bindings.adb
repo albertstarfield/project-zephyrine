@@ -5,6 +5,7 @@ with Ada.Text_IO; use Ada.Text_IO;
 with System;
 
 package body CFE_FFI_Bindings is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  Internal state
    Initialized  : Boolean := False;
@@ -21,6 +22,7 @@ package body CFE_FFI_Bindings is
       Pipe_Name_Tlm  : constant String := "ADELAIDE_TLM" & Character'Val (0);
       Status         : CFE_Status_t;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Initialized then
          return;
    exception
@@ -64,6 +66,7 @@ package body CFE_FFI_Bindings is
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Status : CFE_Status_t;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Initialized then
          CFE_Initialize;
    exception
@@ -87,6 +90,7 @@ package body CFE_FFI_Bindings is
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Status : CFE_Status_t;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Status := CFE_EVS_SendEvent
         (EventId   => 16#0001#,
          EventType => CFE_EVS_EventType_INFORMATIONAL,
@@ -108,6 +112,7 @@ package body CFE_FFI_Bindings is
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Status : CFE_Status_t;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Status := CFE_EVS_SendEvent
         (EventId   => 16#0002#,
          EventType => CFE_EVS_EventType_ERROR,

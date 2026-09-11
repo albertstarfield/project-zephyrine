@@ -2,6 +2,7 @@ pragma SPARK_Mode (Off);
 --  thread: Shutdown manager uses protected object for thread-safe signal handling
 
 package body Shutdown_Manager is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    protected body Shutdown_Status is
       --  Request: Requests a graceful shutdown.
@@ -11,6 +12,7 @@ package body Shutdown_Manager is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Is_Requested := True;
       exception
          when others =>

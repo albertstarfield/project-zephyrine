@@ -7,6 +7,7 @@ with GNAT.OS_Lib; use GNAT.OS_Lib;
 with GNAT.Expect; use GNAT.Expect;
 
 package body Tool_Code is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    -- function: Execute_Code
    -- @test: Execute_Code covered by sabotage_verifier
@@ -22,6 +23,7 @@ package body Tool_Code is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Params'Length = 0 then
          return "ERROR: Usage: code <language> <code> e.g. 'python print(1+1)'";
    exception

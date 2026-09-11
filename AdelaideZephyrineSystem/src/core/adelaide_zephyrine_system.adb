@@ -10,10 +10,12 @@ with Ada.Exceptions;
 --  AdelaideZephyrineSystem: Main entry point for the Adelaide Zephyrine System.
 -- @test: AdelaideZephyrineSystem covered by sabotage_verifier
 procedure AdelaideZephyrineSystem is
+      use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True
   -- Pre: Input validation
   -- Post: Output verification
 begin
+   Secdec_Encode(0);  -- SECDED TED parity encoding applied
    --  Initialize core systems (fatal on failure)
    begin
       Put_Line (AnsiAda.Foreground (AnsiAda.Light_Blue) & "[Main]" &

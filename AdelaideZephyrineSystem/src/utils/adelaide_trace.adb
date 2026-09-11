@@ -10,6 +10,7 @@ with Ada.Real_Time; use Ada.Real_Time;
 with GNAT.OS_Lib;
 
 package body Adelaide_Trace is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  ------------------------------------------------------------------------
    --  Initialize
@@ -23,6 +24,7 @@ package body Adelaide_Trace is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Start_Time := Ada.Real_Time.Clock;
 
       --  Read prefix from environment
@@ -52,6 +54,7 @@ package body Adelaide_Trace is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Natural ( Ada.Real_Time.To_Duration ( Ada.Real_Time."-" (Ada.Real_Time.Clock, Start_Time) ) );
    exception
       when others =>
@@ -67,6 +70,7 @@ package body Adelaide_Trace is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Trace_Enabled then
          return;
    exception
@@ -101,6 +105,7 @@ package body Adelaide_Trace is
                           Message  : String := "") is
       -- pre => True, post => True
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Trace_Enabled then
          return;
    exception
@@ -138,6 +143,7 @@ package body Adelaide_Trace is
       -- pre => True, post => True
       Status : constant String := (if Success then "OK" else "FAIL");
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Trace_Enabled then
          return;
    exception

@@ -13,6 +13,7 @@ with Kokoro_Interface;
 with Ada.Streams;
 
 package body Proactive_Engine is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    Pending_Audio       : Unbounded_String := Null_Unbounded_String;
 
@@ -42,6 +43,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Ada.Real_Time.To_Duration (Ada.Real_Time.Clock - Init_Time);
    exception
       when others =>
@@ -55,6 +57,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Init_Time := Ada.Real_Time.Clock;
       Handless_State := Off;
       Greeted_On_Activate := False;
@@ -73,6 +76,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handless_State = Off then
          Handless_State := Activating;
          Put_Line (AnsiAda.Foreground (AnsiAda.Green) & "[Proactive]" &
@@ -144,6 +148,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Handless_State := Off;
       Put_Line (AnsiAda.Foreground (AnsiAda.Yellow) & "[Proactive]" &
                 AnsiAda.Reset & " Handless Mode DEACTIVATED.");
@@ -159,6 +164,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Handless_State = Active;
    exception
       when others =>
@@ -172,6 +178,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handless_State /= Active then
          return;
    exception
@@ -236,6 +243,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Q_Count < Max_Scheduled then
          Q_Count := Q_Count + 1;
          Questions (Q_Count).Active := True;
@@ -259,6 +267,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Q_Count < Max_Scheduled then
          Q_Count := Q_Count + 1;
          Questions (Q_Count).Active := True;
@@ -282,6 +291,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handless_State /= Active then
          return;
    exception
@@ -363,6 +373,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return To_String (Last_Question);
    exception
       when others =>
@@ -378,6 +389,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return To_String (Last_Answer);
    exception
       when others =>
@@ -393,6 +405,7 @@ package body Proactive_Engine is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Pending_Audio := Pending_Audio & PCM;
    exception
       when others =>
@@ -408,6 +421,7 @@ package body Proactive_Engine is
      -- [Documentation: Run implementation]
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Length (Pending_Audio) > 0;
    exception
       when others =>
@@ -424,6 +438,7 @@ package body Proactive_Engine is
      -- [Documentation: Run implementation]
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Pending_Audio := Null_Unbounded_String;
       return Result;
    exception

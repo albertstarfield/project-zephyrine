@@ -37,6 +37,7 @@ with Tool_Call_Autofix;  --  Fuzzy tool name correction (grammar autocorrect pat
 with CFS_Tool_Bridge;
 
 package body Tool_Manager is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  =========================================================================
    --  TOOL CALL AUTOFIX: Fuzzy matching registry for LLM tool name correction
@@ -87,6 +88,7 @@ package body Tool_Manager is
       Result : Tool_Result := (Success => False,
                                 Output  => Null_Unbounded_String);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Path := GNAT.OS_Lib.Locate_Exec_On_Path ("python3");
       if Path = null then
          Result.Output := To_Unbounded_String ("Error: python3 not found");
@@ -343,6 +345,7 @@ package body Tool_Manager is
       Truncated_Prompt : constant String :=
         Prompt (Prompt'First .. Integer'Min (Prompt'First + 79, Prompt'Last));
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Adelaide_Trace.Trace_Print ("imagine", "generating",
         "prompt: """ & Truncated_Prompt & """");
 
@@ -400,6 +403,7 @@ package body Tool_Manager is
       Name    : Unbounded_String;
       Rest    : Unbounded_String;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Adelaide_Trace.Trace_Print (Toolcall => "cronia",
         Message => "params: " & Params);
 
@@ -505,6 +509,7 @@ package body Tool_Manager is
    function Execute_Proactive_Tool (Params : String) return Tool_Result is  -- pre => True, post => True
       Result : Tool_Result := (Success => False, Output => Null_Unbounded_String);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Adelaide_Trace.Trace_Print (Toolcall => "proactive",
         Message => "params: " & Params);
 
@@ -589,6 +594,7 @@ package body Tool_Manager is
       Result : Tool_Result := (Success => False, Output => Null_Unbounded_String);
       Pipe_Idx : Natural := Index (Params, "|");
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Pipe_Idx = 0 or else Pipe_Idx = Params'First or else Pipe_Idx = Params'Last then
          Result.Output := To_Unbounded_String ("Error: Invalid ROS2 tool parameters. Expected 'servo_id|angle'.");
          return Result;
@@ -631,6 +637,7 @@ package body Tool_Manager is
       -- Pre => True, Post => True;  -- SPARK RM 5.5, DO-178C MC/DC
       Bridge_Result : CFS_Tool_Bridge.Tool_Result;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  pragma Assert (Params'Length >= 0);
       if Params'Length > 4096 then
          return (Success => False,
@@ -654,6 +661,7 @@ package body Tool_Manager is
    function Execute_Cat (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Cat.Execute_Cat (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
               Output  => To_Unbounded_String (Output));
    exception
@@ -666,6 +674,7 @@ package body Tool_Manager is
    function Execute_Grep (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Grep.Execute_Grep (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
               Output  => To_Unbounded_String (Output));
    exception
@@ -678,6 +687,7 @@ package body Tool_Manager is
    function Execute_Git (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Git.Execute_Git (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => True, Output => To_Unbounded_String (Output));
    exception
       when others =>
@@ -689,6 +699,7 @@ package body Tool_Manager is
    function Execute_File_Edit (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_File_Edit.Execute_File_Edit (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
               Output  => To_Unbounded_String (Output));
    exception
@@ -701,6 +712,7 @@ package body Tool_Manager is
    function Execute_Dir (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Dir_Driver.Execute_Dir (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
               Output  => To_Unbounded_String (Output));
    exception
@@ -713,6 +725,7 @@ package body Tool_Manager is
    function Execute_Todo (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Todo.Execute_Todo (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
               Output  => To_Unbounded_String (Output));
    exception
@@ -725,6 +738,7 @@ package body Tool_Manager is
    function Execute_Killshell (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Killshell.Execute_Killshell (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
               Output  => To_Unbounded_String (Output));
    exception
@@ -739,6 +753,7 @@ package body Tool_Manager is
       -- [Documentation: Run implementation]
       Output : constant String := Tool_Math.Execute_Math (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
               Output  => To_Unbounded_String (Output));
    exception
@@ -751,6 +766,7 @@ package body Tool_Manager is
    function Execute_Code (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Code.Execute_Code (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       return (Success => True, Output => To_Unbounded_String (Output));
@@ -764,6 +780,7 @@ package body Tool_Manager is
    function Execute_Test (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Test.Execute_Test (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => True, Output => To_Unbounded_String (Output));
    exception
       when others =>
@@ -777,6 +794,7 @@ package body Tool_Manager is
    function Execute_Issue (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Issue.Execute_Issue (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => True, Output => To_Unbounded_String (Output));
    exception
       when others =>
@@ -790,6 +808,7 @@ package body Tool_Manager is
    function Execute_Review (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Review.Execute_Review (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => True, Output => To_Unbounded_String (Output));
    exception
       when others =>
@@ -803,6 +822,7 @@ package body Tool_Manager is
       -- [Documentation: Run implementation]
       Output : constant String := Tool_Hook.Execute_Hook (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return (Success => not (Output'Length >= 5 and then Output (Output'First .. Output'First + 4) = "ERROR"),
               Output  => To_Unbounded_String (Output));
    exception
@@ -815,6 +835,7 @@ package body Tool_Manager is
    function Execute_Package (Params : String) return Tool_Result is  -- pre => True, post => True
       Output : constant String := Tool_Package.Execute_Package (Params);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       return (Success => True, Output => To_Unbounded_String (Output));

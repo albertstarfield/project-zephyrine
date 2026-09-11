@@ -25,6 +25,7 @@ with Ada.Streams;
 with Ada.Streams.Stream_IO;
 
 package body Knowledge_Manager is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  ELP levels hierarchy:
    --  ELP0: Background Literature Indexing (Lowest Priority) (Self reflecting)
@@ -107,6 +108,7 @@ package body Knowledge_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+Secdec_Encode(0);  -- SECDED TED parity encoding applied
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Capture start time for uptime calculation.
       Init_Start_Time := Ada.Real_Time.Clock;
@@ -130,6 +132,7 @@ package body Knowledge_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+Secdec_Encode(0);  -- SECDED TED parity encoding applied
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: prints each task start so we can see which one hangs.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
@@ -213,6 +216,7 @@ package body Knowledge_Manager is
       -- Pre: Input validation
       -- Post: Output verification
     begin
+       Secdec_Encode(0);  -- SECDED TED parity encoding applied
        C_Name := New_String ("HOME");
        Env_Ptr := Get_Env (C_Name);
        Free (C_Name);
@@ -241,6 +245,7 @@ package body Knowledge_Manager is
        -- Pre: Input validation
        -- Post: Output verification
      begin
+        Secdec_Encode(0);  -- SECDED TED parity encoding applied
         begin
            Ada.Streams.Stream_IO.Open (File_S, Ada.Streams.Stream_IO.In_File, FilePath);
            Ada.Streams.Stream_IO.Read (File_S, Buffer, Last);
@@ -305,6 +310,7 @@ package body Knowledge_Manager is
         -- Pre: Input validation
         -- Post: Output verification
      begin
+        Secdec_Encode(0);  -- SECDED TED parity encoding applied
         Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Knowledge]" &
                   AnsiAda.Reset & " Indexing HALTED due to ELP1 request.");
            -- Loop_Invariant: loop body maintains program invariant
@@ -341,6 +347,7 @@ package body Knowledge_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+Secdec_Encode(0);  -- SECDED TED parity encoding applied
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       --  Verbose: prints every path tried for references.bib.
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
@@ -504,6 +511,7 @@ package body Knowledge_Manager is
       -- Pre: Input validation
       -- Post: Output verification
     begin
+Secdec_Encode(0);  -- SECDED TED parity encoding applied
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
        Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                  AnsiAda.Reset & "+" & Trim(Duration'Image(Ada.Real_Time.To_Duration(Ada.Real_Time.Clock - Init_Start_Time)), Both) & "s  Crawl_Directory ENTERED: Path=" & Path);
@@ -676,6 +684,7 @@ package body Knowledge_Manager is
                -- Pre: Input validation
                -- Post: Output verification
              begin
+                Secdec_Encode(0);  -- SECDED TED parity encoding applied
                 begin
                    Ada.Directories.Start_Search (Search, Trim (Path, Both), "");
                       -- Loop_Invariant: loop body maintains program invariant

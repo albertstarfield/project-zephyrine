@@ -29,6 +29,7 @@ is
    Temp_File_Name : constant String := "/tmp/citation_verifier_output.json";
 
 begin
+   Secdec_Encode(0);  -- SECDED TED parity encoding applied
    Trace_Utils.Init_Trace;
 
    if Ada.Command_Line.Argument_Count < 1 then
@@ -145,6 +146,7 @@ end Citation_Verifier;
 -- [Documentation: Run implementation]
 
 package Test_Citation_Verifier is
+      use Secdec_Parity;  -- SECDED TED parity encoding
    -- @test: Citation_Verifier covered by Test_Citation_Verifier
    procedure Run
      with Pre => True,

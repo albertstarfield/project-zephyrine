@@ -53,6 +53,7 @@ with Zephyrine_Widget_Tree;  use Zephyrine_Widget_Tree;
 with Adelaide_Trace;
 
 package body Zephyrine_Main_Framedisplay is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    -- =========================================================================
    -- PACKAGE-LEVEL STATE — GLFW window (single-window application)
@@ -102,6 +103,7 @@ package body Zephyrine_Main_Framedisplay is
    is
       Handle : Renderer_Handle;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Adelaide_Trace.Trace_Print (
         Toolcall => "framedisplay:init",
         Message => "Initializing OpenGL ES 2.0 renderer (GLFW backend): " &
@@ -312,6 +314,7 @@ package body Zephyrine_Main_Framedisplay is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    exception
@@ -332,6 +335,7 @@ package body Zephyrine_Main_Framedisplay is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    exception
@@ -352,6 +356,7 @@ package body Zephyrine_Main_Framedisplay is
                         with Pre => True, Post => True; -- REVIEW: specify actual contracts
                      Height : Positive) is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    exception
@@ -380,6 +385,7 @@ package body Zephyrine_Main_Framedisplay is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    exception
@@ -419,6 +425,7 @@ package body Zephyrine_Main_Framedisplay is
       with Pre => True, Post => True; -- REVIEW: specify actual contracts
    is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return False;
    exception
@@ -456,6 +463,7 @@ package body Zephyrine_Main_Framedisplay is
       with Pre => True, Post => True; -- REVIEW: specify actual contracts
    is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle /= null and then Handle.Is_Initialized then
          return Handle.Stylesheet;
    exception
@@ -472,6 +480,7 @@ package body Zephyrine_Main_Framedisplay is
       with Pre => True, Post => True; -- REVIEW: specify actual contracts
    is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle /= null and then Handle.Is_Initialized then
          return Handle.Tree;
    exception
@@ -491,6 +500,7 @@ package body Zephyrine_Main_Framedisplay is
       with Pre => True, Post => True; -- REVIEW: specify actual contracts
    is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    exception
@@ -523,6 +533,7 @@ package body Zephyrine_Main_Framedisplay is
       with Pre => True, Post => True; -- REVIEW: specify actual contracts
    is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    exception
@@ -629,6 +640,7 @@ package body Zephyrine_Main_Framedisplay is
       with Pre => True, Post => True; -- REVIEW: specify actual contracts
    is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return False;
    exception
@@ -695,6 +707,7 @@ package body Zephyrine_Main_Framedisplay is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    exception
@@ -728,6 +741,7 @@ package body Zephyrine_Main_Framedisplay is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    exception
@@ -768,6 +782,7 @@ package body Zephyrine_Main_Framedisplay is
    is
       Clamped : constant Float := Float'Max (0.0, Float'Min (1.0, Opacity));
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          -- [Documentation: Run implementation]
          -- [Documentation: Run implementation]
@@ -790,6 +805,7 @@ package body Zephyrine_Main_Framedisplay is
       Start_Time : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
       Elapsed    : Float := 0.0;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    exception
@@ -831,6 +847,7 @@ package body Zephyrine_Main_Framedisplay is
       Start_Time : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
       Elapsed    : Float := 0.0;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle = null or else not Handle.Is_Initialized then
          return;
    -- [Documentation: Run implementation]

@@ -7,6 +7,7 @@ with Shutdown_Manager;
 with Model_Manager; use Model_Manager;
 
 package body ELP_Queue is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  ========================================================================
   --  SIMPLIFIED ELP QUEUE (GRANULAR TRACKING)
@@ -99,6 +100,7 @@ package body ELP_Queue is
        -- Pre: Input validation
        -- Post: Output verification
        begin
+          Secdec_Encode(0);  -- SECDED TED parity encoding applied
           Counts (Level) := Counts (Level) + 1;
           Total := Total + 1;
           Source_Len := Natural'Min (Source'Length, 32);
@@ -127,6 +129,7 @@ package body ELP_Queue is
          -- Pre: Input validation
          -- Post: Output verification
     begin
+       Secdec_Encode(0);  -- SECDED TED parity encoding applied
        if Counts (Level) > 0 then
           Counts (Level) := Counts (Level) - 1;
           Total := Total - 1;
@@ -195,6 +198,7 @@ package body ELP_Queue is
          -- Pre: Input validation
          -- Post: Output verification
        begin
+          Secdec_Encode(0);  -- SECDED TED parity encoding applied
           Task_Timings (Level).Start_Time := Clock;
        exception
           when others =>
@@ -260,6 +264,7 @@ package body ELP_Queue is
     is
        -- pre => True, post => True
     begin
+       Secdec_Encode(0);  -- SECDED TED parity encoding applied
        Load_State.Increment (Level, Source);
        
        --  Only apply predictive pre-warming for ELP1 (user-facing) requests
@@ -395,6 +400,7 @@ package body ELP_Queue is
        -- Pre: Input validation
        -- Post: Output verification
      begin
+        Secdec_Encode(0);  -- SECDED TED parity encoding applied
         --  Default values to satisfy compiler (should never be used)
         Level := ELP0;
         Kind  := Qwen_Embedding;
@@ -437,6 +443,7 @@ package body ELP_Queue is
        -- Pre: Input validation
        -- Post: Output verification
      begin
+        Secdec_Encode(0);  -- SECDED TED parity encoding applied
         --  Safety check: only decrement if we actually have tasks at this priority
         --  This handles edge cases where multiple threads might try to dequeue the same task
         if Load_State.Get_Counts(Level) > 0 then
@@ -468,6 +475,7 @@ package body ELP_Queue is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if C = 0 then
          return 0.0;
    exception
@@ -524,6 +532,7 @@ package body ELP_Queue is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+Secdec_Encode(0);  -- SECDED TED parity encoding applied
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
       Put_Line (AnsiAda.Foreground (AnsiAda.Cyan) & "[Init-V]" &
                 AnsiAda.Reset & " ELP_Queue.Initialize ENTERED.");

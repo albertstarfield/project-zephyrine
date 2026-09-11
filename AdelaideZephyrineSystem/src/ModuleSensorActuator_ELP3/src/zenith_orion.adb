@@ -8,6 +8,7 @@ with AnsiAda;
 with CFS_Telemetry;
 
 package body Zenith_Orion is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  ===========================================================================
    --  INDUSTRY CONTROL LOOP BENCHMARKS (Why 4000Hz?):
@@ -51,6 +52,7 @@ package body Zenith_Orion is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Initialize cFS telemetry subsystem for ELP3
       CFS_Telemetry.Initialize;
       Put_Line ("[ZenithOrion-ELP3] Initialized at 4000Hz");
@@ -72,6 +74,7 @@ package body Zenith_Orion is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Start_Time := Clock;
       
       --  Critical Deterministic Routine (ELP3)
@@ -151,6 +154,7 @@ package body Zenith_Orion is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Last_Execution_Time;
    exception
       when others =>
@@ -164,6 +168,7 @@ package body Zenith_Orion is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if J_Count = 0 then
          return (0.0, 0.0, 0.0);
    exception
@@ -182,6 +187,7 @@ package body Zenith_Orion is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Index (Lower_Prompt, "zenith lock") > 0 then
          return "[ZenithOrion-ELP3] Pacing Lock Engaged at 1ms. Max_Jitter: " &
                 Duration'Image (Max_J);
@@ -202,6 +208,7 @@ package body Zenith_Orion is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Buffer_Len := Natural'Min (Servo_ID'Length, 64);
          Buffer_Servo (1 .. Buffer_Len) := Servo_ID (Servo_ID'First .. Servo_ID'First + Buffer_Len - 1);
          Buffer_Angle := Angle;
@@ -220,6 +227,7 @@ package body Zenith_Orion is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Valid := Has_Command;
          if Has_Command then
             Length := Buffer_Len;

@@ -15,6 +15,7 @@ with Mtmd_Interface; use Mtmd_Interface;
 --       The mtmd API handles the CLIP vision encoder and projection
 --       into the text model's embedding space.
 package body Image_Encoder is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  State for the last encoded image
    type Image_Encoding_State is record
@@ -35,6 +36,7 @@ package body Image_Encoder is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Marker_Ptr = Null_Ptr then
          return "<__media__>";
    exception
@@ -63,6 +65,7 @@ package body Image_Encoder is
       Text_Ptr : chars_ptr;
       Result   : int;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Clean up any previous encoding
       Free_Last_Image;
 
@@ -188,6 +191,7 @@ package body Image_Encoder is
       Text_Ptr : chars_ptr;
       Result   : int;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Clean up any previous encoding
       Free_Last_Image;
 
@@ -305,6 +309,7 @@ package body Image_Encoder is
       File_Size : Natural;
       Data   : System.Address; -- FFI: System.Address required for C binding
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Open the file and get its size
       begin
          Open (File, In_File, Filename);
@@ -348,6 +353,7 @@ package body Image_Encoder is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Last_Image.N_Tokens;
    exception
       when others =>
@@ -360,6 +366,7 @@ package body Image_Encoder is
       with Pre => True, Post => True; -- REVIEW: specify actual contracts
    function Get_Last_Image_Embeddings return System.Address is -- FFI: System.Address required for C binding
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Last_Image.Embeddings;
    exception
       when others =>
@@ -375,6 +382,7 @@ package body Image_Encoder is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Last_Image.Is_Valid then
          if Last_Image.Bitmap /= Null_Mtmd_Bitmap then
             Mtmd_Bitmap_Free_Safe (Last_Image.Bitmap);

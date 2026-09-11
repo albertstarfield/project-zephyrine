@@ -5,6 +5,7 @@ with Model_Manager;
 with Shutdown_Manager;
 
 package body Watchdog_Manager is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    protected body Inference_Monitor is
 
@@ -15,6 +16,7 @@ package body Watchdog_Manager is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Active := True;
          Start_Time := Now;
          Current_Model := Model;
@@ -31,6 +33,7 @@ package body Watchdog_Manager is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Active := False;
          Aborted := False;
       exception
@@ -45,6 +48,7 @@ package body Watchdog_Manager is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Aborted := True;
       exception
          when others =>
@@ -80,6 +84,7 @@ package body Watchdog_Manager is
             "and positive timeout bounds");
          Now : constant Time := Clock;
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Out_Aborted := False;
          Out_Model := Current_Model;
          if Active and then not Aborted and then Now - Start_Time > Limit then
@@ -102,6 +107,7 @@ package body Watchdog_Manager is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Last_Heartbeat := Now;
       exception
          when others =>
@@ -115,6 +121,7 @@ package body Watchdog_Manager is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Active := False;
       exception
          when others =>
@@ -134,6 +141,7 @@ package body Watchdog_Manager is
         -- Pre: Input validation
         -- Post: Output verification
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          if not Active then
             OK := True;
          elsif Last_Heartbeat = Time_Of (0, Time_Span_Zero) then

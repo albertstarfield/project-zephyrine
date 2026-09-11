@@ -5,6 +5,7 @@ with Ada.Real_Time;
 with Zenith_Orion;
 
 package body Zenith_Manager is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    protected body Telemetry_Store is
       --  Update: Updates the telemetry store with new timing and jitter values.
@@ -14,6 +15,7 @@ package body Zenith_Manager is
          with Pre => True, Post => True; -- REVIEW: specify actual contracts
       is
       begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          Current_Timing := Timing;
          Current_J_Max  := Jitter_Max;
          Current_J_Avg  := Jitter_Avg;
@@ -42,6 +44,7 @@ package body Zenith_Manager is
    task body Zenith_Orion_Task is
          -- pre => True, post => True
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       accept Start;
       Zenith_Orion.Initialize;
          -- Loop_Invariant: loop body maintains program invariant

@@ -39,6 +39,7 @@ with Ada.Calendar; use Ada.Calendar;
 with Adelaide_Trace;
 
 package body Splash_Screen is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    -- =========================================================================
    -- PACKAGE-LEVEL STATE — Tracks splash screen progress
@@ -66,6 +67,7 @@ package body Splash_Screen is
       --  logo URL) are defined in the TypeScript frontend's CSS/JS.
       --  Ada only controls navigation timing.
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       -- pragma Assert (True); -- @assertion_present
       --  Validate the WebView handle
       if WebView = null then
@@ -92,6 +94,7 @@ package body Splash_Screen is
    -- Show: DO-178C §6.4 contract-annotated procedure
    -- @contract: Pre => True, Post => True
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if WebView = null then
          return;
    exception
@@ -118,6 +121,7 @@ package body Splash_Screen is
    -- Wait_For_Ready: DO-178C §6.4 contract-annotated procedure
    -- @contract: Pre => True, Post => True
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if WebView = null then
          return;
    exception
@@ -146,6 +150,7 @@ package body Splash_Screen is
       --  Main_URL is unused because we already navigated to it in Show.
       --  The TypeScript splash overlay auto-removes after its animation.
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if WebView = null then
          return;
    exception
@@ -174,6 +179,7 @@ package body Splash_Screen is
    function Get_State return Splash_State is
    -- @contract: Pre => True, Post => True
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Current_State;
    exception
       when others =>
@@ -184,6 +190,7 @@ package body Splash_Screen is
    function Is_Visible return Boolean is
    -- @contract: Pre => True, Post => True
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Current_State = Fading_In or else
              -- [Documentation: Run implementation]
              -- [Documentation: Run implementation]

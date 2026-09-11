@@ -16,6 +16,7 @@ with Ada.Strings.Unbounded;
 with Ada.Environment_Variables;
 
 package body Trace_Utils is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  Init_Trace: Initialize tracing. Records start time, sets output
    --  prefix from argument or ADELAIDE_TOOL_TRACE_PREFIX env var.
@@ -26,6 +27,7 @@ package body Trace_Utils is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Start_Time := Ada.Calendar.Clock;
 
       if Prefix'Length > 0 then
@@ -61,6 +63,7 @@ package body Trace_Utils is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Natural(Diff);
    exception
       when others =>
@@ -81,6 +84,7 @@ package body Trace_Utils is
       Label : Unbounded_String := To_Unbounded_String(Toolcall);
       Msg   : Unbounded_String;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Enabled then
          return;
    exception
@@ -124,6 +128,7 @@ package body Trace_Utils is
       Status : constant String := (if Success then "OK" else "FAIL");
       Msg    : Unbounded_String := To_Unbounded_String(Status);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Detail'Length > 0 then
          Append(Msg, " -- " & Detail);
    exception

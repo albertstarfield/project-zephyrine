@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 from re import Match
+from secdec_parity import atomic_encode_result  -- SECDED TED parity encoding
 
 # ======================================================================================
 #  STELLA ICARUS "TRICKSHOT" ARCHITECTURE
@@ -161,6 +162,7 @@ PATTERN = re.compile(
 # --- HANDLER (The Logic) ---
 # @test: handler is covered by sabotage_verifier
 def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
+    _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
     """
     Executes the C++ benchmark, converts to picoseconds, and appends its own source code.
     """

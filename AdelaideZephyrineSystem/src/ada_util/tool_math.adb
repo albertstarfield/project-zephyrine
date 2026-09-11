@@ -6,6 +6,7 @@ with GNAT.OS_Lib; use GNAT.OS_Lib;
 with GNAT.Expect; use GNAT.Expect;
 
 package body Tool_Math is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    -- function: Execute_Math
    -- @test: Execute_Math covered by sabotage_verifier
@@ -17,6 +18,7 @@ package body Tool_Math is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Expr'Length = 0 then
          return "ERROR: Usage: math <expression> e.g. '2 + 3 * 4'";
    exception

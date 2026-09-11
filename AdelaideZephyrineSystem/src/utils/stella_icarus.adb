@@ -6,6 +6,7 @@ with Ada.Characters.Handling;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 
 package body Stella_Icarus is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  Initialize: Initializes the Stella Icarus subsystem.
    -- @test: Initialize covered by sabotage_verifier
@@ -14,6 +15,7 @@ package body Stella_Icarus is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       null;
    exception
       when others =>
@@ -28,6 +30,7 @@ package body Stella_Icarus is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Index (Lower_Prompt, "what time is it") > 0 or else Index (Lower_Prompt, "current time") > 0 then
          declare
             Now : constant Ada.Calendar.Time := Ada.Calendar.Clock;

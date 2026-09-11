@@ -5,6 +5,7 @@ with Ada.Strings.Unbounded;
 with System;
 
 package body Moonshine_Interface is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    use Interfaces.C;
    use Interfaces.C.Strings;
@@ -20,6 +21,7 @@ package body Moonshine_Interface is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       -- Using Tiny Streaming
       Handle := Moonshine_Bindings.Load_Transcriber_From_Files
         (Path              => C_Path,
@@ -47,6 +49,7 @@ package body Moonshine_Interface is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle >= 0 then
          Moonshine_Bindings.Free_Transcriber (Handle);
          Handle := -1;
@@ -70,6 +73,7 @@ package body Moonshine_Interface is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Handle < 0 then
          return "Moonshine model not initialized";
    exception

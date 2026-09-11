@@ -1,5 +1,6 @@
 pragma Style_Checks (Off);
 package body Log_Aggregator is
+      use Secdec_Parity;  -- SECDED TED parity encoding
    pragma SPARK_Mode (On);  -- DO-178C 5.2.2
    --  Start: Starts the log aggregator (no-op implementation).
    -- @test: Start covered by sabotage_verifier

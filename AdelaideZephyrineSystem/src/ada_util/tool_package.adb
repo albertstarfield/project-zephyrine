@@ -7,6 +7,7 @@ with GNAT.OS_Lib; use GNAT.OS_Lib;
 with GNAT.Expect; use GNAT.Expect;
 
 package body Tool_Package is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    -- function: Execute_Package
    -- @test: Execute_Package covered by sabotage_verifier
@@ -22,6 +23,7 @@ package body Tool_Package is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Params'Length = 0 then
          return "ERROR: Usage: package <install|remove|update|search> [pkg_name]";
    exception

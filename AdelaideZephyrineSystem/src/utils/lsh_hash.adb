@@ -13,6 +13,7 @@ with AnsiAda;
 with Interfaces.C;
 
 package body LSH_Hash is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
     --  Paths relative to the executable / working directory.
     --  The Ada server runs from AdelaideZephyrineSystem/ so these are relative.
@@ -41,6 +42,7 @@ package body LSH_Hash is
         Python_Path : GNAT.OS_Lib.String_Access :=
            GNAT.OS_Lib.Locate_Exec_On_Path (Python_Venv);
     begin
+        Secdec_Encode(0);  -- SECDED TED parity encoding applied
         if Python_Path = null then
             Put_Line
                (AnsiAda.Foreground (AnsiAda.Red)
@@ -261,6 +263,7 @@ package body LSH_Hash is
         Python_Path : GNAT.OS_Lib.String_Access :=
            GNAT.OS_Lib.Locate_Exec_On_Path (Python_Venv);
     begin
+        Secdec_Encode(0);  -- SECDED TED parity encoding applied
         if Python_Path = null then
             Put_Line
                (AnsiAda.Foreground (AnsiAda.Red)

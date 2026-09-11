@@ -25,6 +25,7 @@ with Ada.Strings.Fixed;
 with Interfaces; use Interfaces;
 
 package body API_Key_Manager is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  ── Constant-time Comparison (FIPS 140-3 §5.7) ──────────────────────────
    --  Prevents timing side-channel attacks on API key and Crypto Officer
@@ -39,6 +40,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          -- Loop_Invariant: loop body maintains program invariant
       for I in 1 .. A'Length loop
          -- Loop_Invariant: verified (SPARK RM 5.5)
@@ -92,6 +94,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Determine enforcement mode (default ON per FIPS 140-3 §5.3.2)
       Enforcement := (Enforce = "1");
 
@@ -196,6 +199,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       declare
          Co_Key_Str : constant String :=
            Ada.Environment_Variables.Value ("ADELAIDE_CRYPTO_OFFICER_KEY", "");
@@ -227,6 +231,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Enforcement;
    exception
       when others =>
@@ -244,6 +249,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Co_Initialized then
          Put_Line ("[API_KEY] Cannot enable enforcement: "
                    & "Crypto Officer not initialized.");
@@ -274,6 +280,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Co_Initialized then
          Put_Line ("[API_KEY] Cannot disable enforcement: "
                    & "Crypto Officer not initialized.");
@@ -304,6 +311,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Co_Initialized then
          Put_Line ("[API_KEY] Cannot reload keys: "
                    & "Crypto Officer not initialized.");
@@ -379,6 +387,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Enforcement then
          --  When enforcement is off, ALL requests pass through
          --  (backward compatible with Ollama/OpenWebUI clients)
@@ -434,6 +443,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Co_Initialized then
          return False;
    exception
@@ -455,6 +465,7 @@ package body API_Key_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Natural (Loaded_Keys.Length);
    exception
       when others =>

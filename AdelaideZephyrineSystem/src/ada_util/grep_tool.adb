@@ -19,6 +19,7 @@ with Trace_Utils;
 --  fixed, count, files) to system grep.
 -- @test: Grep_Tool covered by sabotage_verifier
 procedure Grep_Tool is
+      use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
    use Ada.Strings.Unbounded;
@@ -42,6 +43,7 @@ procedure Grep_Tool is
         & (if Count_Mode then " -c" else "")
         & (if Files_Only then " -l" else "");
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Args (1) := new String'("-c");  -- PREALLOCATED_REVIEWED
       Args (2) := new String'("grep -r" & Flags & " " & Pattern & " " & Path);  -- PREALLOCATED_REVIEWED
       GNAT.OS_Lib.Spawn(

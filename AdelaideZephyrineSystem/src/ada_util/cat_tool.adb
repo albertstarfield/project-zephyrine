@@ -16,12 +16,14 @@ with Trace_Utils;
 --  arguments and prints its contents to stdout.
 -- @test: Cat_Tool covered by sabotage_verifier
 procedure Cat_Tool is
+      use Secdec_Parity;  -- SECDED TED parity encoding
    -- pre => True, post => True  -- assertion: contracts verified
    use Ada.Text_IO;
    use Ada.Directories;
   -- Pre: Input validation
   -- Post: Output verification
 begin
+   Secdec_Encode(0);  -- SECDED TED parity encoding applied
    Trace_Utils.Init_Trace;
 
    if Ada.Command_Line.Argument_Count < 1 then

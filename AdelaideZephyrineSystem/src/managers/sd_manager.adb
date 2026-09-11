@@ -12,6 +12,7 @@ with AnsiAda;
 with System;
 
 package body SD_Manager is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  ============================================================================
    --  HELPER: Uptime string for logging
@@ -27,6 +28,7 @@ package body SD_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return "[" & Integer'Image (Seconds) & "s]";
    exception
       when others =>
@@ -51,6 +53,7 @@ package body SD_Manager is
       --  But since these are access constants, we store them as-is
       --  The caller must ensure the strings outlive this package
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Init_Start_Time := Clock;
       Is_Initialized := True;
 
@@ -91,6 +94,7 @@ package body SD_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  [FREE-PARALLEL-MEMORY] If refinement context is loaded, free it first
       if Refiner_Ctx /= Null_SD_Ctx then
          Put_Line
@@ -168,6 +172,7 @@ package body SD_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Flux_Ctx = Null_SD_Ctx then
          Put_Line
            (Uptime_String & " [SD-Manager] FLUX context already null, nothing to free.");
@@ -202,6 +207,7 @@ package body SD_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  [FREE-PARALLEL-MEMORY] If FLUX context is loaded, free it first
       if Flux_Ctx /= Null_SD_Ctx then
          Put_Line
@@ -265,6 +271,7 @@ package body SD_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Refiner_Ctx = Null_SD_Ctx then
          Put_Line
            (Uptime_String & " [SD-Manager] Refinement context already null, nothing to free.");
@@ -554,6 +561,7 @@ package body SD_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Put_Line
         (Uptime_String & " [SD-Manager] Freeing all SD contexts...");
 

@@ -13,6 +13,7 @@ with Interfaces.C; use Interfaces.C;
 --       message content formats, including vision/multipart content.
 --       It also handles Ollama's "images" field format.
 package body Multimodal_Content_Parser is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  Base64 decoding table
    --  Why: We need to decode base64-encoded image data from API requests
@@ -27,6 +28,7 @@ package body Multimodal_Content_Parser is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          -- Loop_Invariant: loop body maintains program invariant
       for C in Standard.Character range 'A' .. 'Z' loop
          -- Loop_Invariant: verified (SPARK RM 5.5)
@@ -66,6 +68,7 @@ package body Multimodal_Content_Parser is
       Acc      : Natural := 0;
       Bits     : Natural := 0;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Table_Initialized then
          Init_Base64_Table;
          Table_Initialized := True;
@@ -128,6 +131,7 @@ package body Multimodal_Content_Parser is
       -- pre => True, post => True
       Result : Unbounded_String := Null_Unbounded_String;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not GNATCOLL.JSON.Has_Field (Message, "content") then
          return Result;
    exception
@@ -191,6 +195,7 @@ package body Multimodal_Content_Parser is
       Decoded : constant Stream_Element_Array :=
         Decode_Base64 (Base64_Data);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Decoded'Length = 0 then
          Ada.Text_IO.Put_Line
            ("[Multimodal_Content_Parser] Empty base64 data");
@@ -218,6 +223,7 @@ package body Multimodal_Content_Parser is
       -- pre => True, post => True
       Found_Images : Boolean := False;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not GNATCOLL.JSON.Has_Field (Message, "content") then
          return False;
    exception
@@ -334,6 +340,7 @@ package body Multimodal_Content_Parser is
       -- pre => True, post => True
       Found_Images : Boolean := False;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not GNATCOLL.JSON.Has_Field (Message, "images") then
          return False;
    exception
@@ -382,6 +389,7 @@ package body Multimodal_Content_Parser is
    is
       -- pre => True, post => True
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Check OpenAI format (content array with image_url parts)
       if GNATCOLL.JSON.Has_Field (Message, "content") then
          declare

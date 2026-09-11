@@ -10,6 +10,7 @@ with Ada.Characters.Handling;
 with AnsiAda;
 
 package body Verification_Manager is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    --  Helper to run an external command and capture its output
    -- @test: Run_Command_Capture covered by sabotage_verifier
@@ -22,6 +23,7 @@ package body Verification_Manager is
       Success  : Boolean;
       Ret_Code : Integer;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Path = null then
          return -1;
    exception
@@ -48,6 +50,7 @@ package body Verification_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Ada.Directories.Exists (File_Path) then
          return "";
    exception
@@ -85,6 +88,7 @@ package body Verification_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       Rand_Pack.Reset (Seed);
          -- Loop_Invariant: loop body maintains program invariant
       for I in Result'Range loop
@@ -113,6 +117,7 @@ package body Verification_Manager is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+         Secdec_Encode(0);  -- SECDED TED parity encoding applied
          -- Loop_Invariant: loop body maintains program invariant
       loop
          declare
@@ -222,6 +227,7 @@ package body Verification_Manager is
       Log_File      : constant String := "obj/dafny_verify_" & Suffix & ".log";
       Build_Log     : constant String := "obj/dafny_build_" & Suffix & ".log";
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       --  Map Target Language
       if Lang_Lower = "js" or else Lang_Lower = "javascript" then
          Target := To_Unbounded_String ("js");

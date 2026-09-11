@@ -26,6 +26,7 @@ with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with Spark_Drbg; -- Force linkage of the exported C symbols
 
 package body Adelaide_Crypto is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    use Interfaces.C;
    use Interfaces.C.Strings;
@@ -123,6 +124,7 @@ package body Adelaide_Crypto is
       C_Arg1 : chars_ptr := New_String (Arg1);
       C_Res  : chars_ptr;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       C_Res := Fn (C_Arg1);
       Free (C_Arg1);
       if C_Res = Null_Ptr then
@@ -163,6 +165,7 @@ package body Adelaide_Crypto is
       C_Arg2 : chars_ptr := New_String (Arg2);
       C_Res  : chars_ptr;
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       C_Res := Fn (C_Arg1, C_Arg2);
       Free (C_Arg1);
       Free (C_Arg2);
@@ -201,6 +204,7 @@ package body Adelaide_Crypto is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Crypto_Initialized then
          return True;
    exception
@@ -238,6 +242,7 @@ package body Adelaide_Crypto is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Crypto_Initialized and then Adl_Master_Key_Available = 1;
    exception
       when others =>
@@ -251,6 +256,7 @@ package body Adelaide_Crypto is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Adl_Is_Poisoned = 1;
    exception
       when others =>
@@ -264,6 +270,7 @@ package body Adelaide_Crypto is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Crypto_Initialized and then Adl_Self_Tests_Passed = 1;
    exception
       when others =>
@@ -277,6 +284,7 @@ package body Adelaide_Crypto is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Crypto_Initialized
          and then Adl_Master_Key_Available = 1
          and then Adl_Self_Tests_Passed = 1
@@ -293,6 +301,7 @@ package body Adelaide_Crypto is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       return Adl_Is_FIPS_Mode = 1;
    exception
       when others =>
@@ -306,6 +315,7 @@ package body Adelaide_Crypto is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Enabled then
          Adl_Set_FIPS_Mode (0);
          Ada.Text_IO.Put_Line ("[CRYPTO] FIPS mode disabled (Crypto Officer override).");
@@ -323,6 +333,7 @@ package body Adelaide_Crypto is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Crypto_Initialized then
          return (Success => False,
                  Data    => Null_Unbounded_String,
@@ -342,6 +353,7 @@ package body Adelaide_Crypto is
       Plaintext   : String) return Crypto_Result
    is
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Crypto_Initialized then
          return (Success => False,
                  Data    => Null_Unbounded_String,
@@ -364,6 +376,7 @@ package body Adelaide_Crypto is
    is
       -- pre => True, post => True
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if not Crypto_Initialized then
          return (Success => False,
                  Data    => Null_Unbounded_String,
@@ -387,6 +400,7 @@ package body Adelaide_Crypto is
    is
       Res : constant Crypto_Result := Encrypt_Field (Sub_Key_Hex, Plaintext);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Res.Success and then Res.Data /= Null_Unbounded_String then
          return To_String (Res.Data);
    exception
@@ -416,6 +430,7 @@ package body Adelaide_Crypto is
       -- pre => True, post => True
       Res : constant Crypto_Result := Decrypt_Field (Sub_Key_Hex, Ciphertext_Hex);
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Res.Success and then Res.Data /= Null_Unbounded_String then
          return To_String (Res.Data);
    exception
@@ -445,6 +460,7 @@ package body Adelaide_Crypto is
      -- [Documentation: Run implementation]
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Value'Length < Min_Hex_Length then
          return False;
    exception

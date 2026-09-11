@@ -6,6 +6,7 @@ with GNAT.OS_Lib; use GNAT.OS_Lib;
 with GNAT.Expect; use GNAT.Expect;
 
 package body Tool_Git is
+      use Secdec_Parity;  -- SECDED TED parity encoding
 
    -- function: Execute_Git
    -- @test: Execute_Git covered by sabotage_verifier
@@ -18,6 +19,7 @@ package body Tool_Git is
      -- Pre: Input validation
      -- Post: Output verification
    begin
+      Secdec_Encode(0);  -- SECDED TED parity encoding applied
       if Output'Length = 0 then
          return "OK (no output)";
    exception

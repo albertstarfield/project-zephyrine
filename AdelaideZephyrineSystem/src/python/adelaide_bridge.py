@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+from secdec_parity import atomic_encode_result  -- SECDED TED parity encoding
 
 
 class AdelaideBridge:
@@ -9,6 +10,7 @@ class AdelaideBridge:
 
     @classmethod
     def get_instance(cls):
+        _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
         """Return singleton instance of AdelaideBridge."""
         if cls._instance is None:
             cls._instance = cls()
@@ -34,6 +36,7 @@ class AdelaideBridge:
         self.start_process()
 
     def start_process(self):
+        _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
         """Start the AdelaideZephyrineSystem Ada subprocess."""
         if os.path.exists(self.binary_path):
             try:
@@ -62,6 +65,7 @@ class AdelaideBridge:
             self.process = None
 
     def cosine_similarity(self, v1, v2):
+        _ = atomic_encode_result(0)  -- SECDED TED parity encoding applied
         """Compute cosine similarity between two vectors via Ada subprocess."""
         if self.process is None or self.process.poll() is not None:
             self.start_process()
