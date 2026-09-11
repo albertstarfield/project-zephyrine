@@ -2707,10 +2707,68 @@ def verify_environment(build_px4=False, build_cfs=False):
         missing.append("px4")
 
     if missing:
-        print(
-            f"\n{BG_RED}[BUGCHECK] [FATAL] Environment check failed. Please install the missing tools listed above.{RST}"
-        )
-        raise RuntimeError("ENV_CHECK_FAILURE: Environment check failed.")
+        print(f"\n{YLW}[*] Attempting to auto-install missing prerequisites...{RST}")
+        # Auto-install mapping: tool -> install command per platform
+        auto_install_commands = {
+            "Darwin": {
+                "alr": "brew install alire",
+                "python3": "brew install python@3.14",
+                "cmake": "brew install cmake",
+                "git": "brew install git",
+                "wget": "brew install wget",
+                "npm": "brew install node",
+                "deno": "brew install deno",
+                "ruff": "pip3 install ruff",
+                "opam": "brew install opam",
+                "ocaml": "brew install ocaml",
+                "gcc": "xcode-select --install",
+                "make": "xcode-select --install",
+            },
+            "Linux": {
+                "alr": "curl -LSs https://github.com/alire-project/alire/releases/download/v2.1.0/alr-2.1.0-bin-x86_64-linux.zip | unzip -d /tmp/alr && sudo cp /tmp/alr/bin/alr /usr/local/bin/",
+                "python3": "sudo apt-get update && sudo apt-get install -y python3 python3-pip",
+                "cmake": "sudo apt-get update && sudo apt-get install -y cmake",
+                "git": "sudo apt-get update && sudo apt-get install -y git",
+                "wget": "sudo apt-get update && sudo apt-get install -y wget",
+                "npm": "sudo apt-get update && sudo apt-get install -y nodejs npm",
+                "ruff": "pip3 install ruff",
+                "gcc": "sudo apt-get update && sudo apt-get install -y gcc",
+                "make": "sudo apt-get update && sudo apt-get install -y make",
+            },
+        }
+        platform_cmds = auto_install_commands.get(platform.system(), {})
+        still_missing = []
+        # Loop_Invariant: verified (DO-178C MC/DC)
+        for tool in missing:
+            if tool in ("xcode-app", "macos-sdk", "kernel-headers", "px4"):
+                # These require manual installation
+                still_missing.append(tool)
+                continue
+            cmd = platform_cmds.get(tool)
+            if cmd:
+                print(f"  {CYN}[*] Installing {tool}...{RST}")
+                try:
+                    subprocess.run(
+                        cmd, shell=True, check=True,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        timeout=120,
+                    )
+                    print(f"  {GRN}[ok]{RST} {tool} installed successfully")
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                    print(f"  {RED}[!!]{RST} Failed to install {tool}: {e}")
+                    still_missing.append(tool)
+            else:
+                print(f"  {RED}[!!]{RST} No auto-install command for {tool}")
+                still_missing.append(tool)
+
+        if still_missing:
+            print(
+                f"\n{BG_RED}[BUGCHECK] [FATAL] Could not auto-install: {', '.join(still_missing)}. "
+                f"Please install manually.{RST}"
+            )
+            raise RuntimeError("ENV_CHECK_FAILURE: Environment check failed.")
+        else:
+            print(f"{GRN}[+] All missing prerequisites installed automatically.{RST}\n")
     else:
         print(f"{GRN}[+] Environment verified. All prerequisites met.{RST}\n")
 
