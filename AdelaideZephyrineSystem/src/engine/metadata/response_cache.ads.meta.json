@@ -1,0 +1,9 @@
+{
+  "source_file": "response_cache.ads",
+  "source_hash": "97c5df47e6fad026efcf0de01318b0e6c63925db317dbe2666e58f9b8bd8607b",
+  "rs_checksum": "17cf39fc56d69daab270cb1551771a5536c3a73eaf0abe8c8bf6b1c6be3afcfd",
+  "gc_checksum": "a938b5a650fc0a171b93ba3b79641b932c7371cb2016cac04b0d19bb77bcc72a",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 11
+}

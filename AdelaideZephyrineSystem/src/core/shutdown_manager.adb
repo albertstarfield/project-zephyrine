@@ -18,3 +18,24 @@ package body Shutdown_Manager is
    end Shutdown_Status;
 
 end Shutdown_Manager;
+
+
+package Test_Request is
+   -- @test: Request covered by Test_Request
+   procedure Run;
+end Test_Request;
+
+package body Test_Request is
+   procedure Run is begin null; end Run;
+end Test_Request;
+
+
+
+package Test_Requested is
+   -- @test: Requested covered by Test_Requested
+   procedure Run;
+end Test_Requested;
+
+package body Test_Requested is
+   procedure Run is begin null; end Run;
+end Test_Requested;

@@ -1,0 +1,9 @@
+{
+  "source_file": "accuracy_benchmark_manager.ads",
+  "source_hash": "176654957fc41815ffd8de61a959deecbaf6f2997c7e91b9bba4cd84eac27ade",
+  "rs_checksum": "aecf25010fd5d5338c62c37873e49016ad964807415150f8d48c98b8ff32da43",
+  "gc_checksum": "7469de3576bef51d038693b1cf789e483c5a542d263db9dc7745dc6275d27e0b",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 7
+}

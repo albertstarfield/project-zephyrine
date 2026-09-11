@@ -1,0 +1,9 @@
+{
+  "source_file": "sd_interface.adb",
+  "source_hash": "ef92643b20f0c24a7df04a9ea5b1efb43414ba7c8151964cc49e57860476396e",
+  "rs_checksum": "a6b1eabf28738c9ebc60a0c1c5be671dc2d8eb27f5f157bcab0aea713039ef78",
+  "gc_checksum": "014607f0fd0e0f4413a7563cf824745e13f7dabbabd49d40849b8c59f7ee7f19",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 23
+}

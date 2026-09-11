@@ -1,0 +1,9 @@
+{
+  "source_file": "stderr_suppress.c",
+  "source_hash": "5f29f95c11fc92e3bc2aa900c62d4d6f7de11889d68582322987f3de1d74d6b3",
+  "rs_checksum": "5861f6d9929d1b8a5c71eb5dd9cdffc2f6f8a109c11ed7369b4b37604e6448c6",
+  "gc_checksum": "3eac10c284115c86d5d3d2e74c046a05316e3ec61c11079045d3c8808e741f9c",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

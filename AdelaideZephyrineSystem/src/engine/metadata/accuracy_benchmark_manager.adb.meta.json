@@ -1,0 +1,9 @@
+{
+  "source_file": "accuracy_benchmark_manager.adb",
+  "source_hash": "3d5bef3a02542154bec8e3880c4ec784aea2b57c0943d0147a65499ab2cd8fe7",
+  "rs_checksum": "4e902d32c74d45cd39d39af932a498c41af77fd08fe8faf5b0383c783291527a",
+  "gc_checksum": "9c8cfdcc0cc0694baa7ca8dbf6158178f746a96601329953aedbeebfe6a86f9d",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 51
+}

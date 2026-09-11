@@ -1,0 +1,9 @@
+{
+  "source_file": "cfs_tool_bridge.ads",
+  "source_hash": "c416913755d7466210be9f90eb61f5a15247a2c799de8b68c967760d8fc754aa",
+  "rs_checksum": "e23a4bf5ae5cd3bfa631af4fd644356aa22d229532347bc3dea07589c9ff8acf",
+  "gc_checksum": "3c17b45d0fe4723242694c34945790a12f8393b2003957cd067b5e30893b8d08",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

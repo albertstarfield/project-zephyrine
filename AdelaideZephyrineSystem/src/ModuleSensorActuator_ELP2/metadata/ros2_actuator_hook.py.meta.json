@@ -1,0 +1,9 @@
+{
+  "source_file": "ros2_actuator_hook.py",
+  "source_hash": "d158f0607080b5fdc0b36abc5e22af2795bf03e9e1935d3a3e30296c97b9d1b7",
+  "rs_checksum": "7df7c63e22a8aeb5518d7a8cfb9ff28840e76245a22115f66deb7093830d72f5",
+  "gc_checksum": "88a2836b7cd804eb660e57c7046b6d6723b4c90528b6ce7b8a6c2dae95cfa343",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

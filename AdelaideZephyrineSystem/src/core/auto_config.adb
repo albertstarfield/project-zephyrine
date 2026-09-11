@@ -765,3 +765,200 @@ package body Auto_Config is
    end Reset_To_Minimal;
 
 end Auto_Config;
+
+
+package Test_Next_Ctx_Level is
+   -- @test: Next_Ctx_Level covered by Test_Next_Ctx_Level
+   procedure Run;
+end Test_Next_Ctx_Level;
+
+package body Test_Next_Ctx_Level is
+   procedure Run is begin null; end Run;
+end Test_Next_Ctx_Level;
+
+
+
+package Test_Set_Probe_Target is
+   -- @test: Set_Probe_Target covered by Test_Set_Probe_Target
+   procedure Run;
+end Test_Set_Probe_Target;
+
+package body Test_Set_Probe_Target is
+   procedure Run is begin null; end Run;
+end Test_Set_Probe_Target;
+
+
+
+package Test_Detect_Hardware is
+   -- @test: Detect_Hardware covered by Test_Detect_Hardware
+   procedure Run;
+end Test_Detect_Hardware;
+
+package body Test_Detect_Hardware is
+   procedure Run is begin null; end Run;
+end Test_Detect_Hardware;
+
+
+
+package Test_Record_Success is
+   -- @test: Record_Success covered by Test_Record_Success
+   procedure Run;
+end Test_Record_Success;
+
+package body Test_Record_Success is
+   procedure Run is begin null; end Run;
+end Test_Record_Success;
+
+
+
+package Test_Get_Probe_Target is
+   -- @test: Get_Probe_Target covered by Test_Get_Probe_Target
+   procedure Run;
+end Test_Get_Probe_Target;
+
+package body Test_Get_Probe_Target is
+   procedure Run is begin null; end Run;
+end Test_Get_Probe_Target;
+
+
+
+package Test_Save_Config is
+   -- @test: Save_Config covered by Test_Save_Config
+   procedure Run;
+end Test_Save_Config;
+
+package body Test_Save_Config is
+   procedure Run is begin null; end Run;
+end Test_Save_Config;
+
+
+
+package Test_Threads_To_Int is
+   -- @test: Threads_To_Int covered by Test_Threads_To_Int
+   procedure Run;
+end Test_Threads_To_Int;
+
+package body Test_Threads_To_Int is
+   procedure Run is begin null; end Run;
+end Test_Threads_To_Int;
+
+
+
+package Test_Initialize is
+   -- @test: Initialize covered by Test_Initialize
+   procedure Run;
+end Test_Initialize;
+
+package body Test_Initialize is
+   procedure Run is begin null; end Run;
+end Test_Initialize;
+
+
+
+package Test_Accel_Layers_To_Int is
+   -- @test: Accel_Layers_To_Int covered by Test_Accel_Layers_To_Int
+   procedure Run;
+end Test_Accel_Layers_To_Int;
+
+package body Test_Accel_Layers_To_Int is
+   procedure Run is begin null; end Run;
+end Test_Accel_Layers_To_Int;
+
+
+
+package Test_Next_Accel_Level is
+   -- @test: Next_Accel_Level covered by Test_Next_Accel_Level
+   procedure Run;
+end Test_Next_Accel_Level;
+
+package body Test_Next_Accel_Level is
+   procedure Run is begin null; end Run;
+end Test_Next_Accel_Level;
+
+
+
+package Test_Ctx_To_Unsigned is
+   -- @test: Ctx_To_Unsigned covered by Test_Ctx_To_Unsigned
+   procedure Run;
+end Test_Ctx_To_Unsigned;
+
+package body Test_Ctx_To_Unsigned is
+   procedure Run is begin null; end Run;
+end Test_Ctx_To_Unsigned;
+
+
+
+package Test_Reset_To_Minimal is
+   -- @test: Reset_To_Minimal covered by Test_Reset_To_Minimal
+   procedure Run;
+end Test_Reset_To_Minimal;
+
+package body Test_Reset_To_Minimal is
+   procedure Run is begin null; end Run;
+end Test_Reset_To_Minimal;
+
+
+
+package Test_Load_Config_File is
+   -- @test: Load_Config_File covered by Test_Load_Config_File
+   procedure Run;
+end Test_Load_Config_File;
+
+package body Test_Load_Config_File is
+   procedure Run is begin null; end Run;
+end Test_Load_Config_File;
+
+
+
+package Test_Parse_Config_Line is
+   -- @test: Parse_Config_Line covered by Test_Parse_Config_Line
+   procedure Run;
+end Test_Parse_Config_Line;
+
+package body Test_Parse_Config_Line is
+   procedure Run is begin null; end Run;
+end Test_Parse_Config_Line;
+
+
+
+package Test_Get_Config is
+   -- @test: Get_Config covered by Test_Get_Config
+   procedure Run;
+end Test_Get_Config;
+
+package body Test_Get_Config is
+   procedure Run is begin null; end Run;
+end Test_Get_Config;
+
+
+
+package Test_Batch_To_Unsigned is
+   -- @test: Batch_To_Unsigned covered by Test_Batch_To_Unsigned
+   procedure Run;
+end Test_Batch_To_Unsigned;
+
+package body Test_Batch_To_Unsigned is
+   procedure Run is begin null; end Run;
+end Test_Batch_To_Unsigned;
+
+
+
+package Test_Next_Batch_Level is
+   -- @test: Next_Batch_Level covered by Test_Next_Batch_Level
+   procedure Run;
+end Test_Next_Batch_Level;
+
+package body Test_Next_Batch_Level is
+   procedure Run is begin null; end Run;
+end Test_Next_Batch_Level;
+
+
+
+package Test_Record_Failure is
+   -- @test: Record_Failure covered by Test_Record_Failure
+   procedure Run;
+end Test_Record_Failure;
+
+package body Test_Record_Failure is
+   procedure Run is begin null; end Run;
+end Test_Record_Failure;

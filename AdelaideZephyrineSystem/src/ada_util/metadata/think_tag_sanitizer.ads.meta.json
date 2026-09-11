@@ -1,0 +1,9 @@
+{
+  "source_file": "think_tag_sanitizer.ads",
+  "source_hash": "56ccea9c4e97991418415148c63c8353462c130f7841943f9e0bd7bb85dcecda",
+  "rs_checksum": "20926183c8a45c1a357e7a0a63d39637ebaf8de167d6f0df355f9faf68e25d4d",
+  "gc_checksum": "d70f2b8736a3e5a926b7be1adfd7d08ab6e038b27c735129f964b54ab0d3f88b",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

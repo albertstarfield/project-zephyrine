@@ -1,0 +1,9 @@
+{
+  "source_file": "kratos.adb",
+  "source_hash": "12074d6f8ea171b0b75864c87fb0714f6786d2c7f2b30df5c25c1492a33a4888",
+  "rs_checksum": "d0e7d5c3c91a46d37eb9eb386a28fe01e84e7a4bafa0bdbffe1e26afc7b1c8b6",
+  "gc_checksum": "5994ccdb796aaabf0661360cb83ab955326ddd0f4d7259ebc6c4f5596c06b835",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

@@ -1,0 +1,9 @@
+{
+  "source_file": "database_manager.adb",
+  "source_hash": "0e16b321d1a9de94d73ffcabf4cd81161075a46417c2936f472bcdf720e5a0d6",
+  "rs_checksum": "81a5612ad7b7d1f3438a66f6a03e0efce8651f75a47ec094186e24d02c4052ce",
+  "gc_checksum": "f49d0b929b257b634aea5da2890f58f1a65f980f3c2b09645247104d96831ab4",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 152
+}

@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_call_autofix.adb",
+  "source_hash": "bd6038ff5510fc84d0843902d9acb5d4b5dacad371059e47df4d1889f7e0532b",
+  "rs_checksum": "00060d3164a475010e677250bf59a8462bf355da964b7b7d600dc6973ed2fa75",
+  "gc_checksum": "a9efb889246b2dd5692e00c5e851df7d268131e48f9775517e2cc58796d5d2e1",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 40
+}

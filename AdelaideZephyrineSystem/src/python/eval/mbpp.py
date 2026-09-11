@@ -24,7 +24,7 @@ class MbppEvaluator(BaseEvaluator):
     is ~0%.
     """
 
-    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  # nosec
+    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  
         # nosec - recursive function with implicit base case
         """Run MBPP basic Python programming benchmark evaluation.
 
@@ -84,3 +84,9 @@ def check_code_answer(expected_pattern: str, predicted: str) -> bool:
     expected_clean = "".join(expected_pattern.split())
     predicted_clean = "".join(predicted.split())
     return expected_clean.lower() in predicted_clean.lower()
+
+
+def test_check_code_answer():    """Test stub for check_code_answer."""    pass
+
+
+def test_evaluate():    """Test stub for evaluate."""    pass

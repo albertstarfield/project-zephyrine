@@ -1,0 +1,9 @@
+{
+  "source_file": "adl_drbg_shim.c",
+  "source_hash": "985dfb9b9489340011c047d8692ac3ddc4fcc68a0f751a3e5c8743e05d632411",
+  "rs_checksum": "b21abf042360506544f8a70b3fcb5d291b7415176a772d14953b69a7d95c31d3",
+  "gc_checksum": "3520c66e039893c966b67127b4133d8d2c559e541604f8c09cabd11541e0157c",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 9
+}

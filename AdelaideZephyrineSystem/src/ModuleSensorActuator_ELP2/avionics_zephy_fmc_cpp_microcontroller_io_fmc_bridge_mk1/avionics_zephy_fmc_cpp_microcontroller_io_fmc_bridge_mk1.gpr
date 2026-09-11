@@ -8,7 +8,7 @@ project Avionics_Zephy_Fmc_Cpp_Microcontroller_Io_Fmc_Bridge_Mk1 is
    for Main use ("avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1.adb");
 
    package Compiler is
-      -- Use Ada 2022 standard
+      -- Use Ada 2012 standard
       -- Disable specific style checks that are causing warnings
       for Default_Switches ("Ada") use Avionics_Zephy_Fmc_Cpp_Microcontroller_Io_Fmc_Bridge_Mk1_Config.Ada_Compiler_Switches &
                                      ("-gnat2022", "-gnatws", "-gnatW8", "-gnatyb");

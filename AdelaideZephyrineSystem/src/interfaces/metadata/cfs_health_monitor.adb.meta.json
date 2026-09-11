@@ -1,0 +1,9 @@
+{
+  "source_file": "cfs_health_monitor.adb",
+  "source_hash": "f91b190df105b3d6daefbe4432daf51d9785d2a358943b32d04634f415c2ace5",
+  "rs_checksum": "227a603984f49db15214342ba7143003e2f6f8837b24cb4093294816d3de29ff",
+  "gc_checksum": "b03c27dbe50c67c75ee9cf2133244766fd9cb759fc9f4d0f08ccc9325944f931",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 4
+}

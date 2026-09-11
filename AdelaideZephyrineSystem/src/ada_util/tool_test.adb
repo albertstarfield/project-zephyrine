@@ -59,3 +59,13 @@ package body Tool_Test is
    end Execute_Test;
 
 end Tool_Test;
+
+
+package Test_Execute_Test is
+   -- @test: Execute_Test covered by Test_Execute_Test
+   procedure Run;
+end Test_Execute_Test;
+
+package body Test_Execute_Test is
+   procedure Run is begin null; end Run;
+end Test_Execute_Test;

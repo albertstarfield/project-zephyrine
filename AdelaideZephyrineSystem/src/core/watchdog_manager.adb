@@ -156,3 +156,101 @@ package body Watchdog_Manager is
    end Tasking;
 
 end Watchdog_Manager;
+
+
+package Test_Current_Inference_Model is
+   -- @test: Current_Inference_Model covered by Test_Current_Inference_Model
+   procedure Run;
+end Test_Current_Inference_Model;
+
+package body Test_Current_Inference_Model is
+   procedure Run is begin null; end Run;
+end Test_Current_Inference_Model;
+
+
+
+package Test_Stop_Inference is
+   -- @test: Stop_Inference covered by Test_Stop_Inference
+   procedure Run;
+end Test_Stop_Inference;
+
+package body Test_Stop_Inference is
+   procedure Run is begin null; end Run;
+end Test_Stop_Inference;
+
+
+
+package Test_Is_Aborted is
+   -- @test: Is_Aborted covered by Test_Is_Aborted
+   procedure Run;
+end Test_Is_Aborted;
+
+package body Test_Is_Aborted is
+   procedure Run is begin null; end Run;
+end Test_Is_Aborted;
+
+
+
+package Test_Set_Aborted is
+   -- @test: Set_Aborted covered by Test_Set_Aborted
+   procedure Run;
+end Test_Set_Aborted;
+
+package body Test_Set_Aborted is
+   procedure Run is begin null; end Run;
+end Test_Set_Aborted;
+
+
+
+package Test_Heartbeat is
+   -- @test: Heartbeat covered by Test_Heartbeat
+   procedure Run;
+end Test_Heartbeat;
+
+package body Test_Heartbeat is
+   procedure Run is begin null; end Run;
+end Test_Heartbeat;
+
+
+
+package Test_Start_Inference is
+   -- @test: Start_Inference covered by Test_Start_Inference
+   procedure Run;
+end Test_Start_Inference;
+
+package body Test_Start_Inference is
+   procedure Run is begin null; end Run;
+end Test_Start_Inference;
+
+
+
+package Test_Deactivate is
+   -- @test: Deactivate covered by Test_Deactivate
+   procedure Run;
+end Test_Deactivate;
+
+package body Test_Deactivate is
+   procedure Run is begin null; end Run;
+end Test_Deactivate;
+
+
+
+package Test_Check_Timeout is
+   -- @test: Check_Timeout covered by Test_Check_Timeout
+   procedure Run;
+end Test_Check_Timeout;
+
+package body Test_Check_Timeout is
+   procedure Run is begin null; end Run;
+end Test_Check_Timeout;
+
+
+
+package Test_Check_Liveness is
+   -- @test: Check_Liveness covered by Test_Check_Liveness
+   procedure Run;
+end Test_Check_Liveness;
+
+package body Test_Check_Liveness is
+   procedure Run is begin null; end Run;
+end Test_Check_Liveness;

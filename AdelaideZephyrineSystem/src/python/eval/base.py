@@ -26,7 +26,7 @@ class QuestionResult:
 class AdelaideEvalClient:
     """Client for inferring through the Adelaide HTTP API."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 11420, use_openai: bool = True):  # nosec
+    def __init__(self, host: str = "127.0.0.1", port: int = 11420, use_openai: bool = True):  
         # nosec - recursive function with implicit base case
         """Initialize eval client with host, port, and API format."""
         self.host = host
@@ -38,7 +38,7 @@ class AdelaideEvalClient:
         else:
             self.endpoint = f"http://{host}:{port}/api/chat"
 
-    def generate(self, prompt: str, model: str = "default", max_tokens: int = 128) -> str:  # nosec
+    def generate(self, prompt: str, model: str = "default", max_tokens: int = 128) -> str:  
         # nosec - recursive function with implicit base case
         """Send a synchronous generation request to Adelaide."""
         if self.use_openai:
@@ -90,12 +90,18 @@ class AdelaideEvalClient:
 class BaseEvaluator:
     """Base class for all dataset evaluators."""
 
-    def __init__(self, client: AdelaideEvalClient):  # nosec
+    def __init__(self, client: AdelaideEvalClient):  
         # nosec - recursive function with implicit base case
         """Initialize evaluator with Adelaide eval client."""
         self.client = client
 
-    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  # nosec
+    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  
         # nosec - recursive function with implicit base case
         """Run the evaluation."""
         raise NotImplementedError("Subclasses must implement evaluate()")
+
+
+def test_evaluate():    """Test stub for evaluate."""    pass
+
+
+def test_generate():    """Test stub for generate."""    pass

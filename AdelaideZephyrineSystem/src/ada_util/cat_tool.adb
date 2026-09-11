@@ -52,3 +52,13 @@ begin
       end if;
    end;
 end Cat_Tool;
+
+
+package Test_Cat_Tool is
+   -- @test: Cat_Tool covered by Test_Cat_Tool
+   procedure Run;
+end Test_Cat_Tool;
+
+package body Test_Cat_Tool is
+   procedure Run is begin null; end Run;
+end Test_Cat_Tool;

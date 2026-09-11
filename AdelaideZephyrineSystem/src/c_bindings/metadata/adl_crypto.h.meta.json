@@ -1,0 +1,9 @@
+{
+  "source_file": "adl_crypto.h",
+  "source_hash": "14a1c1364cfbe595775ccc6e457a38a0d893b71a9b9d0667b44a03819c219ba2",
+  "rs_checksum": "1057121d49b0014b39d7324787241208b355b778f6d3f3cc64e35df4713729f0",
+  "gc_checksum": "ee40a280b0a9729da634c1b11de8208addfba9b3ff9f9780994d49fa4d19b141",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 32
+}

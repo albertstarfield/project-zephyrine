@@ -1,0 +1,9 @@
+{
+  "source_file": "identity_manager.ads",
+  "source_hash": "02c33bcd4259a56cac6e6d7469f0bf173986b3b18aed3b42e0307a035618624c",
+  "rs_checksum": "ac836693ce47805110df763ff22daf45c997cf9596bdae87473d8d7d42d421f2",
+  "gc_checksum": "c6da8308e87acdf3083f445597f74cc8412b6ef35534bb4c4ea1919b2ae99d8a",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

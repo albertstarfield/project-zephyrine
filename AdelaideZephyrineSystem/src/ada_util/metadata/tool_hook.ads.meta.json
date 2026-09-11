@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_hook.ads",
+  "source_hash": "b540c29bd688b195328357e32d269ace4453d8d5b670cafdd67b536c4cde754c",
+  "rs_checksum": "288fd144769409b215e795d4fc03faad4bae953522ecf5272506e7ca68f64c66",
+  "gc_checksum": "732bd1b5cab8fe35ea6f4346d8636ed7c73f31609980eb7450eba2f5c5e6bb7e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

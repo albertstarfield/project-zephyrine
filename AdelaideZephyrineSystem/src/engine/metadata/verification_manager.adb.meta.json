@@ -1,0 +1,9 @@
+{
+  "source_file": "verification_manager.adb",
+  "source_hash": "392d5c353e9d6d71c3359bff6ae6d1ebcd19b16e222d15683ac84486b868a4d3",
+  "rs_checksum": "3e254ef92206216df5954744e319c9a2439bcce582f1578acc37cdf7b0446e0f",
+  "gc_checksum": "5949b70aa731a9b75ca3f7933b4c636f9f5a3ef6f9a111921f78b2afe2d17bb6",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 33
+}

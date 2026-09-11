@@ -1,0 +1,9 @@
+{
+  "source_file": "humaneval.py",
+  "source_hash": "cc3c1e510533e2be1f90f8c0258578a117e4b3cb49d957f920ba04f436f6125b",
+  "rs_checksum": "e6d31df67d4f85ed0afb28c501ace3f109378c188c9144a8701432d7e5ec2b56",
+  "gc_checksum": "0cc754fedd741c80d19a8dc2a1cab50d4b33d07abb9d71754c0b55bf1270f861",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 7
+}

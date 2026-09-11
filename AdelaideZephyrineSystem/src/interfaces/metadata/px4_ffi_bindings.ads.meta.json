@@ -1,0 +1,9 @@
+{
+  "source_file": "px4_ffi_bindings.ads",
+  "source_hash": "81cb4e47b3dde35c38c12e17f498334eb2344d15308ae79aef42d1ae17f4d23f",
+  "rs_checksum": "1beeca123faf4665451b1d20c453b061196e2fe718cf7b7136e9d0873841c539",
+  "gc_checksum": "386fa6d9846e5b1ceec029584409ecb1ee1cd8caf3025cac214e5bed88885e1a",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

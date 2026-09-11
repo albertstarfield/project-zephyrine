@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_manager.adb",
+  "source_hash": "b28f0f20bc21e8bc58740d7853d286fdb0572ec073dec5982101db62e7c4ae8b",
+  "rs_checksum": "932e072a8e92db5264c2295033d29166dae73f3b859fbfe1df54c3aa57d9a721",
+  "gc_checksum": "61a2839656f2afc887b273dc4bdf18799ad56c62057591734fba69fc71fe22fa",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 67
+}

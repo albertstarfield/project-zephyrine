@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_git.ads",
+  "source_hash": "0be0af2aed0f1ee67bbc66c9b519a8992a1b3dd822a7aa44ac9dbc5a39955c9d",
+  "rs_checksum": "c852cccc214fa12f302ed3eb0cf077147ba0b000d805f79418c362c9b1efaaef",
+  "gc_checksum": "72b63d259be99a7cf2c6a4d9a691b792192e72ae11b6584b8834380e27f07ab3",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 1
+}

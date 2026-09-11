@@ -1,0 +1,9 @@
+{
+  "source_file": "kratos.ads",
+  "source_hash": "a7762a3bb39d4f0b69098197569f0d345da76dde850b76fb05745cf3081ffbce",
+  "rs_checksum": "5755967b71672b6bdc92b768a961b98a5b5a1b13a9e8fc3789f8cfb569ec0271",
+  "gc_checksum": "50c6d272602228f06377efd6c0a8f7efac057a9cf5dbc116b9ee4ff16a2b17d3",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

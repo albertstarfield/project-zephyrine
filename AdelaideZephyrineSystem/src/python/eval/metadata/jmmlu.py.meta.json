@@ -1,0 +1,9 @@
+{
+  "source_file": "jmmlu.py",
+  "source_hash": "215e1cccbb403aa40a20f202720918f31947818206fc11cf334d60e8c22ebba2",
+  "rs_checksum": "ba3f813e184d73d273877d4d3eab8a6126afc3a1197ebf132f9f8869650fe2b6",
+  "gc_checksum": "cb0350b8175134623a7f311525705ef3023d7756c5215866658d2ba376912252",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

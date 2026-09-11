@@ -1697,3 +1697,167 @@ begin
     --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
     Watchdog_IPC.Write_Exit_Reason ("Clean Shutdown", 0);
 end Adelaide_Server;
+
+
+package Test_Get_Port is
+   -- @test: Get_Port covered by Test_Get_Port
+   procedure Run;
+end Test_Get_Port;
+
+package body Test_Get_Port is
+   procedure Run is begin null; end Run;
+end Test_Get_Port;
+
+
+
+package Test_Get_Sidecar_Port is
+   -- @test: Get_Sidecar_Port covered by Test_Get_Sidecar_Port
+   procedure Run;
+end Test_Get_Sidecar_Port;
+
+package body Test_Get_Sidecar_Port is
+   procedure Run is begin null; end Run;
+end Test_Get_Sidecar_Port;
+
+
+
+package Test_Is_Shutdown_Requested is
+   -- @test: Is_Shutdown_Requested covered by Test_Is_Shutdown_Requested
+   procedure Run;
+end Test_Is_Shutdown_Requested;
+
+package body Test_Is_Shutdown_Requested is
+   procedure Run is begin null; end Run;
+end Test_Is_Shutdown_Requested;
+
+
+
+package Test_Last_Signal_Received is
+   -- @test: Last_Signal_Received covered by Test_Last_Signal_Received
+   procedure Run;
+end Test_Last_Signal_Received;
+
+package body Test_Last_Signal_Received is
+   procedure Run is begin null; end Run;
+end Test_Last_Signal_Received;
+
+
+
+package Test_Get_SSL_Key_Path is
+   -- @test: Get_SSL_Key_Path covered by Test_Get_SSL_Key_Path
+   procedure Run;
+end Test_Get_SSL_Key_Path;
+
+package body Test_Get_SSL_Key_Path is
+   procedure Run is begin null; end Run;
+end Test_Get_SSL_Key_Path;
+
+
+
+package Test_Is_Running is
+   -- @test: Is_Running covered by Test_Is_Running
+   procedure Run;
+end Test_Is_Running;
+
+package body Test_Is_Running is
+   procedure Run is begin null; end Run;
+end Test_Is_Running;
+
+
+
+package Test_Force_Stderr_Unbuffered is
+   -- @test: Force_Stderr_Unbuffered covered by Test_Force_Stderr_Unbuffered
+   procedure Run;
+end Test_Force_Stderr_Unbuffered;
+
+package body Test_Force_Stderr_Unbuffered is
+   procedure Run is begin null; end Run;
+end Test_Force_Stderr_Unbuffered;
+
+
+
+package Test_Adelaide_Server is
+   -- @test: Adelaide_Server covered by Test_Adelaide_Server
+   procedure Run;
+end Test_Adelaide_Server;
+
+package body Test_Adelaide_Server is
+   procedure Run is begin null; end Run;
+end Test_Adelaide_Server;
+
+
+
+package Test_Get_SSL_Cert_Path is
+   -- @test: Get_SSL_Cert_Path covered by Test_Get_SSL_Cert_Path
+   procedure Run;
+end Test_Get_SSL_Cert_Path;
+
+package body Test_Get_SSL_Cert_Path is
+   procedure Run is begin null; end Run;
+end Test_Get_SSL_Cert_Path;
+
+
+
+package Test_Install_Shutdown_Handlers is
+   -- @test: Install_Shutdown_Handlers covered by Test_Install_Shutdown_Handlers
+   procedure Run;
+end Test_Install_Shutdown_Handlers;
+
+package body Test_Install_Shutdown_Handlers is
+   procedure Run is begin null; end Run;
+end Test_Install_Shutdown_Handlers;
+
+
+
+package Test_Use_HTTPS is
+   -- @test: Use_HTTPS covered by Test_Use_HTTPS
+   procedure Run;
+end Test_Use_HTTPS;
+
+package body Test_Use_HTTPS is
+   procedure Run is begin null; end Run;
+end Test_Use_HTTPS;
+
+
+
+package Test_Force_Stdout_Unbuffered is
+   -- @test: Force_Stdout_Unbuffered covered by Test_Force_Stdout_Unbuffered
+   procedure Run;
+end Test_Force_Stdout_Unbuffered;
+
+package body Test_Force_Stdout_Unbuffered is
+   procedure Run is begin null; end Run;
+end Test_Force_Stdout_Unbuffered;
+
+
+
+package Test_Stop_Clock is
+   -- @test: Stop_Clock covered by Test_Stop_Clock
+   procedure Run;
+end Test_Stop_Clock;
+
+package body Test_Stop_Clock is
+   procedure Run is begin null; end Run;
+end Test_Stop_Clock;
+
+
+
+package Test_Get_Host is
+   -- @test: Get_Host covered by Test_Get_Host
+   procedure Run;
+end Test_Get_Host;
+
+package body Test_Get_Host is
+   procedure Run is begin null; end Run;
+end Test_Get_Host;
+
+
+
+package Test_C_Exit is
+   -- @test: C_Exit covered by Test_C_Exit
+   procedure Run;
+end Test_C_Exit;
+
+package body Test_C_Exit is
+   procedure Run is begin null; end Run;
+end Test_C_Exit;

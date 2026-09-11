@@ -1,0 +1,9 @@
+{
+  "source_file": "trickshot_stellaicarus_benchmark_simplearitmatic.py",
+  "source_hash": "e469490a8ff634d8da4f242f3f06cfdf3f5798def72b2ff412eb36c34af02ed2",
+  "rs_checksum": "e259e6b7c4ae792881f5b3c168919ee1cbef87736b0faf44ca8c6d29337fb3b8",
+  "gc_checksum": "5b7fd0e738a23e289fd8bbe19b1e7d5a01f8b7edc9f02f12f8bb9a00290f0417",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 16
+}

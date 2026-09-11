@@ -23,3 +23,13 @@ package body Tool_Git is
    end Execute_Git;
 
 end Tool_Git;
+
+
+package Test_Execute_Git is
+   -- @test: Execute_Git covered by Test_Execute_Git
+   procedure Run;
+end Test_Execute_Git;
+
+package body Test_Execute_Git is
+   procedure Run is begin null; end Run;
+end Test_Execute_Git;

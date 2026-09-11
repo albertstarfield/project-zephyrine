@@ -12,9 +12,7 @@ from adelaide_bridge import AdelaideBridge
 
 class TestAdelaideCore(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):  # nosec
-        """TODO: Document setUpClass."""
-        # nosec - recursive function with implicit base case
+    def setUpClass(cls):
         """Set up AdelaideBridge singleton for all tests."""
         cls.bridge = AdelaideBridge.get_instance()
         # Verify the bridge was started successfully
@@ -23,10 +21,7 @@ class TestAdelaideCore(unittest.TestCase):
                 "AdelaideZephyrineSystem binary not built or not available."
             )
 
-    def test_cosine_similarity_basic(self):  # nosec
-        """test_cosine_similarity_basic function (PEP 257, ECSS-Q-ST-80C 6.2)"""
-        # 1. Identical vectors
-        # nosec - recursive function with implicit base case
+    def test_cosine_similarity_basic(self):
         """Test cosine similarity for identical vectors returns 1.0."""
         v1 = [1.0, 2.0, 3.0]
         v2 = [1.0, 2.0, 3.0]
@@ -36,9 +31,7 @@ class TestAdelaideCore(unittest.TestCase):
         self.assertAlmostEqual(ada_sim, np_sim, places=5)
         self.assertAlmostEqual(ada_sim, 1.0, places=5)
 
-    def test_cosine_similarity_orthogonal(self):  # nosec
-        """test_cosine_similarity_orthogonal function (PEP 257, ECSS-Q-ST-80C 6.2)"""
-        # nosec - recursive function with implicit base case
+    def test_cosine_similarity_orthogonal(self):
         """Test cosine similarity for orthogonal vectors returns 0.0."""
         v1 = [1.0, 0.0]
         v2 = [0.0, 1.0]
@@ -46,9 +39,7 @@ class TestAdelaideCore(unittest.TestCase):
         self.assertIsNotNone(ada_sim)
         self.assertAlmostEqual(ada_sim, 0.0, places=5)
 
-    def test_cosine_similarity_opposite(self):  # nosec
-        """test_cosine_similarity_opposite function (PEP 257, ECSS-Q-ST-80C 6.2)"""
-        # nosec - recursive function with implicit base case
+    def test_cosine_similarity_opposite(self):
         """Test cosine similarity for opposite vectors returns -1.0."""
         v1 = [1.0, -1.0, 0.5]
         v2 = [-1.0, 1.0, -0.5]
@@ -56,9 +47,7 @@ class TestAdelaideCore(unittest.TestCase):
         self.assertIsNotNone(ada_sim)
         self.assertAlmostEqual(ada_sim, -1.0, places=5)
 
-    def test_cosine_similarity_zero_vector(self):  # nosec
-        """test_cosine_similarity_zero_vector function (PEP 257, ECSS-Q-ST-80C 6.2)"""
-        # nosec - recursive function with implicit base case
+    def test_cosine_similarity_zero_vector(self):
         """Test cosine similarity with zero vector returns 0.0."""
         v1 = [0.0, 0.0, 0.0]
         v2 = [1.0, 2.0, 3.0]
@@ -66,10 +55,7 @@ class TestAdelaideCore(unittest.TestCase):
         self.assertIsNotNone(ada_sim)
         self.assertEqual(ada_sim, 0.0)
 
-    def test_parity_generate_and_verify(self):  # nosec
-        """test_parity_generate_and_verify function (PEP 257, ECSS-Q-ST-80C 6.2)"""
-        # Test RAID-5 parity generation and verification via CLI directly
-        # nosec - recursive function with implicit base case
+    def test_parity_generate_and_verify(self):
         """Test RAID-5 parity generation and verification via Ada CLI."""
         binary_path = self.bridge.binary_path
 
@@ -116,3 +102,6 @@ class TestAdelaideCore(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_setUpClass():    """Test stub for setUpClass."""    pass

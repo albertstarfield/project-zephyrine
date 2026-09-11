@@ -1,0 +1,9 @@
+{
+  "source_file": "mtmd_interface.ads",
+  "source_hash": "68fab4ab0f6b2f6886ac5bc057d4efb63108971f00bcba21c057ee9d9cc4efc0",
+  "rs_checksum": "9a2fa5c4e19d0936ba3439e4fdcc0d18ce4681f9de72a309ab3d33d359e2ba69",
+  "gc_checksum": "c14adbf03532f924f77b7cd3dc13f0bb5ae74538942addad59f136d1695b191d",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 16
+}

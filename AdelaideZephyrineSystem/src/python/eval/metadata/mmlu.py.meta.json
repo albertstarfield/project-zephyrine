@@ -1,0 +1,9 @@
+{
+  "source_file": "mmlu.py",
+  "source_hash": "713d9389102a9c8b9205c076bef79184bfae0f264d6903af8611454064206f77",
+  "rs_checksum": "b3c6c58b65f9a4d8ebbe7dacb2fa2a0686d3e447345ffae280ceb00de8bb0773",
+  "gc_checksum": "326ccbb4ed899e266c2e034c173ab700dd498609ebb427b5ef4a9d1ee4fd3828",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 8
+}

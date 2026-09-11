@@ -134,3 +134,12 @@ cinst.txt
 ## ============================
 **.helm-diag**
 **/.opencode**
+
+## ============================
+## Legacy Pre-Recording Directories (no longer used)
+## ============================
+thoughts/
+systemCore/
+launchcontrol/
+llama_cpp_direct/
+ZephyWatchtower/

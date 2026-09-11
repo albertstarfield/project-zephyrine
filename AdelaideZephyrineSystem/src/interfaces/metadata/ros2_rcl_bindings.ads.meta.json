@@ -1,0 +1,9 @@
+{
+  "source_file": "ros2_rcl_bindings.ads",
+  "source_hash": "1ce91fd2374cae2b0e161d5921a9709f392a01a8483dc0c7e930d747a5f306d1",
+  "rs_checksum": "7a189f3095e9b32ad40eed9648199c47ecd22883f23e0d4cf88ac92a6373dedd",
+  "gc_checksum": "9773066230e9d63f722d8d2ab745ef17aaa7ea44208c7d6ea15b102805f8a3f7",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 10
+}

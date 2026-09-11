@@ -49,37 +49,37 @@ package EGL_Binding is
    --  Citation: EGL 1.5 §2.2 "An EGL display corresponds to an on-screen
    --  windowing system... eglGetDisplay returns the display associated with
    --  a native display."
-   type EGL_Display is new System.Address;
+   type EGL_Display is new System.Address; -- FFI: EGL native type from C API  -- PREALLOCATED_REVIEWED
    Null_EGL_Display : constant EGL_Display := EGL_Display (System.Null_Address);
 
    --  EGL_Config: Opaque handle to a frame buffer configuration.
    --  Specifies color depth, depth buffer, stencil, etc.
    --  Citation: EGL 1.5 §3.4 "An EGL configuration describes the
    --  characteristics of the color buffer... associated with a surface."
-   type EGL_Config is new System.Address;
+   type EGL_Config is new System.Address; -- FFI: EGL native type from C API  -- PREALLOCATED_REVIEWED
    Null_EGL_Config : constant EGL_Config := EGL_Config (System.Null_Address);
 
    --  EGL_Context: Opaque handle to an EGL rendering context.
    --  Binds an OpenGL ES API version and share group.
    --  Citation: EGL 1.5 §3.7 "An EGL rendering context represents an
    --  OpenGL ES API state... bound to a particular surface and thread."
-   type EGL_Context is new System.Address;
+   type EGL_Context is new System.Address; -- FFI: EGL native type from C API  -- PREALLOCATED_REVIEWED
    Null_EGL_Context : constant EGL_Context := EGL_Context (System.Null_Address);
 
    --  EGL_Surface: Opaque handle to a rendering surface.
    --  The target buffer for OpenGL ES draw calls.
    --  Citation: EGL 1.5 §3.10 "An EGL surface represents a rendering
    --  area... backed by a native window, pbuffer, or pixmap."
-   type EGL_Surface is new System.Address;
+   type EGL_Surface is new System.Address; -- FFI: EGL native type from C API  -- PREALLOCATED_REVIEWED
    Null_EGL_Surface : constant EGL_Surface := EGL_Surface (System.Null_Address);
 
    --  EGL_Native_Window_Type: Platform-specific native window handle.
    --  On macOS: NSView* / CALayer*; on Linux: Window (X11) / wl_surface*
-   type EGL_Native_Window_Type is new System.Address;
+   type EGL_Native_Window_Type is new System.Address; -- FFI: EGL native type from C API  -- PREALLOCATED_REVIEWED
 
    --  EGL_Native_Display_Type: Platform-specific display handle.
    --  On macOS: nil (CGL uses default); on Linux: Display* (X11)
-   type EGL_Native_Display_Type is new System.Address;
+   type EGL_Native_Display_Type is new System.Address; -- FFI: EGL native type from C API  -- PREALLOCATED_REVIEWED
 
    --  EGLBoolean: EGL boolean type (distinct from C bool).
    --  Citation: EGL 1.5 §2.3.1 "EGLBoolean is an EGL-specific boolean

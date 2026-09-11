@@ -1,0 +1,9 @@
+{
+  "source_file": "security_scanner.ads",
+  "source_hash": "85def273dcff0d8475e315ee34d0629fb1400faedb4cfdd16903c8be0061c62b",
+  "rs_checksum": "27342f7966feb8b4df9544c3b89d90d2f2ac0b5faa6303546a1f674388f6218f",
+  "gc_checksum": "ad7a16d49ddb2745d13949746ea26f0cad85597028caccc2873731b3cb68f69f",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

@@ -1,0 +1,9 @@
+{
+  "source_file": "master_key_store.adb",
+  "source_hash": "e97b1e8bcf4fa93209525e247a1b219e3caacdb2f5c3580af9012f48dd4e4280",
+  "rs_checksum": "38865d8f1a33350cd80d78116ef98d94014039a0afeef00e27d9252efb3cc72d",
+  "gc_checksum": "e65995018cccefc5b2d856413717337d863a93cb7e73ea1f822043b4b3c81666",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 7
+}

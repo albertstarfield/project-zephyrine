@@ -1,0 +1,9 @@
+{
+  "source_file": "build.py",
+  "source_hash": "7a57c3412a59232eeefbce4d913ffebb6f935a502d4eeeba7fdc08787f2618a7",
+  "rs_checksum": "882b83e9e7349affa837c42685abc6568b29d12b89ca8928957368633b200cb3",
+  "gc_checksum": "edd56981273e1c09b4c49b100918f2fe95c46656472af98f90af341923f19da2",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 7
+}

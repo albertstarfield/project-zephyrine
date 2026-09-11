@@ -1,0 +1,9 @@
+{
+  "source_file": "adelaide_crypto.ads",
+  "source_hash": "ea4575b37a4f49bc85be24b279c139f1426574bfed20035b5746e3f25313a166",
+  "rs_checksum": "9b02668f3e595892a066667def9da8a0180c4d154d17c1766aed5cecc3ce9052",
+  "gc_checksum": "37e7ca8b52f23825d2ebc9c1d44803463f57bfdf5ff4727b1dea16657191293e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 11
+}

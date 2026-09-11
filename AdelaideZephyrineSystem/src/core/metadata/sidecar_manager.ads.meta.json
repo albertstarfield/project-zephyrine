@@ -1,0 +1,9 @@
+{
+  "source_file": "sidecar_manager.ads",
+  "source_hash": "3c98650372be748f28c1e6f6868b80caf76fb0630dc39d105aebe9bc70032675",
+  "rs_checksum": "01390c9085cd78f8e8da3398500c886b064fd8c0b2a1d14eb7402f4c9e3de8dd",
+  "gc_checksum": "731c5d8db4987d783af7c33de07a308b7d8ec92d720fa9a2f24fa779b98d6059",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 22
+}

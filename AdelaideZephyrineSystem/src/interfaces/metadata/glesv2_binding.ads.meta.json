@@ -1,0 +1,9 @@
+{
+  "source_file": "glesv2_binding.ads",
+  "source_hash": "fb0d5052fa1d5713bdb8add9bbcb7b77c843cf5acfd60ecc04d75042bdca45f9",
+  "rs_checksum": "a8196631bc6cdbf78629016b10453ec14a8a4b31bf1664ef2f553bb216f99750",
+  "gc_checksum": "fcb561ea5b6c26a4a921400eb01d95fcfbfb28151747b6ae88f0f4fbf956393a",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 51
+}

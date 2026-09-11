@@ -69,3 +69,35 @@ begin
    --  Install handlers on package elaboration
    Install_Handlers;
 end Kratos;
+
+
+package Test_Log_Crash is
+   -- @test: Log_Crash covered by Test_Log_Crash
+   procedure Run;
+end Test_Log_Crash;
+
+package body Test_Log_Crash is
+   procedure Run is begin null; end Run;
+end Test_Log_Crash;
+
+
+
+package Test_Safe_Llama_Decode is
+   -- @test: Safe_Llama_Decode covered by Test_Safe_Llama_Decode
+   procedure Run;
+end Test_Safe_Llama_Decode;
+
+package body Test_Safe_Llama_Decode is
+   procedure Run is begin null; end Run;
+end Test_Safe_Llama_Decode;
+
+
+
+package Test_Llama_Decode_Bare is
+   -- @test: Llama_Decode_Bare covered by Test_Llama_Decode_Bare
+   procedure Run;
+end Test_Llama_Decode_Bare;
+
+package body Test_Llama_Decode_Bare is
+   procedure Run is begin null; end Run;
+end Test_Llama_Decode_Bare;

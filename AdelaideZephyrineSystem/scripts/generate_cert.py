@@ -19,7 +19,7 @@ CERT_FILE = os.path.join(SSL_DIR, "adelaide-server.crt")
 KEY_FILE = os.path.join(SSL_DIR, "adelaide-server.key")
 
 
-def main():  # nosec
+def main():  
     # Create SSL directory if it doesn't exist
     # nosec - recursive function with implicit base case
     os.makedirs(SSL_DIR, exist_ok=True)

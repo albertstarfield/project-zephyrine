@@ -1,0 +1,9 @@
+{
+  "source_file": "base.py",
+  "source_hash": "9695610a3310ec3694f8c87b45e1e725536b9af134d179959a503eecda196e1e",
+  "rs_checksum": "aef657133040318a15b0dab74b873b4b43239a0eb5f41da57ca98bea32234d5e",
+  "gc_checksum": "3ef5d236ce78352748a1889a1cfea6a4c5a0f1fc40d5762006d366da8743884a",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 7
+}

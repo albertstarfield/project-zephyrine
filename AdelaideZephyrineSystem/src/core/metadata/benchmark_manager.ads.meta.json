@@ -1,0 +1,9 @@
+{
+  "source_file": "benchmark_manager.ads",
+  "source_hash": "788e845576a0a5e4facf6cfa29813628b43bf9de5acb5040ca8f38755cd91153",
+  "rs_checksum": "2c6669937369ca3a2c6c3c793156fac8a33db4886af2f43dfed88144822d3271",
+  "gc_checksum": "ccf60cd8b1d27964fec6f39bc45474e9a1b0d139de95d90a4592da7dfe65bdb3",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

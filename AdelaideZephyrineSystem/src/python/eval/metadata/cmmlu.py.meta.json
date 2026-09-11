@@ -1,0 +1,9 @@
+{
+  "source_file": "cmmlu.py",
+  "source_hash": "ca697847e3d13f1d3c95b5365ad9790cf4e480d8e2491fef82a44e026243435c",
+  "rs_checksum": "f54e604306e45e479723e8f118caac91e1196cb3d4ff715ecb2d8373873113dd",
+  "gc_checksum": "1a6ae9e8d6082367ba1f022a13cba1d1f2fbaa20111a4af85213f34dbd0f5dc3",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

@@ -1,0 +1,9 @@
+{
+  "source_file": "shutdown_manager.adb",
+  "source_hash": "f352188433390a47f7a9145d1ad4dc277408890055526b0068646be3e4fbd83e",
+  "rs_checksum": "6f24ce59485982314f018646034cac138694e2beef32ea07a135a07abaea81b3",
+  "gc_checksum": "d42dee1e2117af0417759f3399ccbad9d432075bf9f6ed23bbbec522e0e7b34e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_math.ads",
+  "source_hash": "15e0e620eeb2dc64ce79224e86cd548603b8acb24b0e49c5088ac24b10a06c3f",
+  "rs_checksum": "aff93ff666b305e9b83ae25eab9db562211ed753ced1b88bd4d2890dd2ca80f2",
+  "gc_checksum": "1f36cf75e218712c7c24e0d63648e5264d44cf091840823bb42c112adfd7f76d",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 1
+}

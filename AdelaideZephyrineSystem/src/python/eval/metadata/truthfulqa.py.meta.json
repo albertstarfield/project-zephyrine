@@ -1,0 +1,9 @@
+{
+  "source_file": "truthfulqa.py",
+  "source_hash": "ce1e6f89450af4706968bae80124a030d6f4ea46b3c5c855a76fbff7256b2ed7",
+  "rs_checksum": "d15fe388d070ab2643e0bea1e886567752cec6168a2c123eba7a541d4f00dc40",
+  "gc_checksum": "2a6f6b556c21e4e510d365e747b03869316f756ecce386fb4132a891cadfe9e0",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 7
+}

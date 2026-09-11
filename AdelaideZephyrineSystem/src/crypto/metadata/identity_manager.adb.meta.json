@@ -1,0 +1,9 @@
+{
+  "source_file": "identity_manager.adb",
+  "source_hash": "90d5045cc797a69cb7f69e586f8eb57202ba83d09c45b28169bd30ddac56d54d",
+  "rs_checksum": "cb860d5301d101a0dfa4f88729742dd0bf59cf4a6a91cd82584e16b46fb91d2b",
+  "gc_checksum": "2707ba9a7468fe6ee10feec1078e1523b63da7187bece8533a87d00fd92d588b",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 10
+}

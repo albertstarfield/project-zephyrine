@@ -1,0 +1,9 @@
+{
+  "source_file": "toolchain_manager.ads",
+  "source_hash": "9a9ee0a0d7a6b907cb806c9886cd2f67f7d165c30d1a744f19369c7f99782596",
+  "rs_checksum": "83368c1b7a71203a550361d371ad7e2b5d4449addbd80641f5e568767ca6eaf5",
+  "gc_checksum": "0b849b7477181a3ae9fd9c01de032b7480e92fddc8832fa7d107b64a5eebd028",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 1
+}

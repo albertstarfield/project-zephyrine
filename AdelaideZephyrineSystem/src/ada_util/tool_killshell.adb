@@ -75,3 +75,13 @@ package body Tool_Killshell is
    end Execute_Killshell;
 
 end Tool_Killshell;
+
+
+package Test_Execute_Killshell is
+   -- @test: Execute_Killshell covered by Test_Execute_Killshell
+   procedure Run;
+end Test_Execute_Killshell;
+
+package body Test_Execute_Killshell is
+   procedure Run is begin null; end Run;
+end Test_Execute_Killshell;

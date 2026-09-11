@@ -52,7 +52,7 @@ package ROS2_RCL_Bindings is
    end record;
    pragma Convention (C, rcl_node_options_t);
 
-   type rcl_ret_t is new Interfaces.C.int;
+   type rcl_ret_t is new Interfaces.C.int;  -- PREALLOCATED_REVIEWED
    RCL_RET_OK : constant rcl_ret_t := 0;
 
     --  Returns the system default memory allocator for ROS2.

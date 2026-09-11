@@ -1,0 +1,9 @@
+{
+  "source_file": "fips_audit.ads",
+  "source_hash": "0bdf347347d6e6a7db4c820cd244f8c264b624d572733146297dda5c792ed6e2",
+  "rs_checksum": "5809e96bddbfe9c480161006cfb578bf10e7c9a4af903a04d40b734661ae2f37",
+  "gc_checksum": "5edb62d75da94f399d4e7c4d80ead09bbe1c4870449cb73af9bd92ab07c3e292",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 1
+}

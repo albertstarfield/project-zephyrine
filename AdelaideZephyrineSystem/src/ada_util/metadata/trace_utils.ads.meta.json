@@ -1,0 +1,9 @@
+{
+  "source_file": "trace_utils.ads",
+  "source_hash": "97a19fccaa11c6a527418b0ba0791561a3ec590ebc20b8ba4f39c51a3850061f",
+  "rs_checksum": "6376a072bca39f6732bd785ef02c3944bb6e50f58a99f519543b382ef250a26f",
+  "gc_checksum": "6b01cb19483c5cc068ba73887d759000cf10bd1b427e9526b6097c24028b28fe",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 4
+}

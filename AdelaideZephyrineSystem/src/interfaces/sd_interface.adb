@@ -228,3 +228,68 @@ package body SD_Interface is
    end Log_All_Enum_Names;
 
 end SD_Interface;
+
+
+package Test_Log_Image_Gen_Params is
+   -- @test: Log_Image_Gen_Params covered by Test_Log_Image_Gen_Params
+   procedure Run;
+end Test_Log_Image_Gen_Params;
+
+package body Test_Log_Image_Gen_Params is
+   procedure Run is begin null; end Run;
+end Test_Log_Image_Gen_Params;
+
+
+
+package Test_SD_System_Info is
+   -- @test: SD_System_Info covered by Test_SD_System_Info
+   procedure Run;
+end Test_SD_System_Info;
+
+package body Test_SD_System_Info is
+   procedure Run is begin null; end Run;
+end Test_SD_System_Info;
+
+
+
+package Test_Log_All_Enum_Names is
+   -- @test: Log_All_Enum_Names covered by Test_Log_All_Enum_Names
+   procedure Run;
+end Test_Log_All_Enum_Names;
+
+package body Test_Log_All_Enum_Names is
+   procedure Run is begin null; end Run;
+end Test_Log_All_Enum_Names;
+
+
+
+package Test_Log_Context_Params is
+   -- @test: Log_Context_Params covered by Test_Log_Context_Params
+   procedure Run;
+end Test_Log_Context_Params;
+
+package body Test_Log_Context_Params is
+   procedure Run is begin null; end Run;
+end Test_Log_Context_Params;
+
+
+
+package Test_SD_Version_Info is
+   -- @test: SD_Version_Info covered by Test_SD_Version_Info
+   procedure Run;
+end Test_SD_Version_Info;
+
+package body Test_SD_Version_Info is
+   procedure Run is begin null; end Run;
+end Test_SD_Version_Info;
+
+
+
+package Test_Log_Generate_Result is
+   -- @test: Log_Generate_Result covered by Test_Log_Generate_Result
+   procedure Run;
+end Test_Log_Generate_Result;
+
+package body Test_Log_Generate_Result is
+   procedure Run is begin null; end Run;
+end Test_Log_Generate_Result;

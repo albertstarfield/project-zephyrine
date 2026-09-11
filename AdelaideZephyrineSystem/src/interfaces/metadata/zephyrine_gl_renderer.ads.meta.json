@@ -1,0 +1,9 @@
+{
+  "source_file": "zephyrine_gl_renderer.ads",
+  "source_hash": "303e5f76146c1d070b9514dd695e3d372701655fb71b80f694dc51f3798e46db",
+  "rs_checksum": "a7f35f5d8ce1f0424d22b31c0e8a8920298093174c483253480d8245be023239",
+  "gc_checksum": "8e3337f19b7ec4013061a14b60c0c684cb648fc85c858c778824d9e93c56019a",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 15
+}

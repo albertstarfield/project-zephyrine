@@ -1,0 +1,9 @@
+{
+  "source_file": "winogrande.py",
+  "source_hash": "3026b4b3f5c6a95526e667c82b3e9f22dc9074d1cb467bc9e83856693d357c71",
+  "rs_checksum": "00496b4c779e7d794a0a9d8d1842a9d16f1d42eaf3ed9f1185aafedde8cb2b32",
+  "gc_checksum": "e0e68aced8f1577243b811a1811ac02a828648db9eacebf7e6e48f3560fe8378",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

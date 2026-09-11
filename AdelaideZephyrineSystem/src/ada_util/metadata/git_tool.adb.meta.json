@@ -1,0 +1,9 @@
+{
+  "source_file": "git_tool.adb",
+  "source_hash": "ed0a0e344a7ce113d87207134edbecd2b80cc6b06f4b9292c3276617b2874ad7",
+  "rs_checksum": "5c11ded3418ee9e36650d1ace2810ed997795541f72ef631d7d09c36415f3e05",
+  "gc_checksum": "16e1a26c0acb6c6a38fb9e2ce1449d073e79edaa33a9382b5e57e9a40feb5825",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 8
+}

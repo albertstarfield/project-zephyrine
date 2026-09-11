@@ -1,0 +1,9 @@
+{
+  "source_file": "grep_tool.adb",
+  "source_hash": "1faa4b2bf0f4cf0e7eed4d63c2626781eb3372e4ac2570f4682197d50af96950",
+  "rs_checksum": "f56c0e14fbb464483c373965e2849ef30a305a6ded82d467a8cc5dbfa26e3b34",
+  "gc_checksum": "b6dac9313811d52f91a08d3300460718ab70811207ec077b66a315939087af03",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

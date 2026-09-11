@@ -1,0 +1,9 @@
+{
+  "source_file": "ros2_telemetry_node.py",
+  "source_hash": "bcd6d5782ca503ec6b7d8582e7d057d17085d45b1f6ea1b8c928cf39dea8e930",
+  "rs_checksum": "d64c725191ef1f8742ad163318c4ac3f9ed8ee2ad1f38b0e14baa1c7d7ba2412",
+  "gc_checksum": "9c785e7b4c4098258d8ed87f7c02c0bee9110b2d62c32b581ea8d137607eaabf",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

@@ -1,0 +1,9 @@
+{
+  "source_file": "adelaide_server_pkg.ads",
+  "source_hash": "99644659a4f857e8763b71f46e3a3a44f039e18fb302535a668fc0dca4373444",
+  "rs_checksum": "b9aac0c26dfb91787b6aab919bb0d984b9b89f7c54638abc9572e112f719ea69",
+  "gc_checksum": "807f319587c6f800ad1904ba56496b90ced871ab7f329c6137e970a87e827d29",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

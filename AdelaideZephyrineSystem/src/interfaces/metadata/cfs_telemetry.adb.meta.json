@@ -1,0 +1,9 @@
+{
+  "source_file": "cfs_telemetry.adb",
+  "source_hash": "559ac6890b96bfcc45fd8bba7a364dc104ccdc734a7673b05c6c695f261750d6",
+  "rs_checksum": "434916633f8907277dcc1be891b9b706fa948bdbc511d0253b40c26db6938b14",
+  "gc_checksum": "2f0011ae958716c0847413c6284bbf8ea94e3439c1f417e232b53b94df4d89dd",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

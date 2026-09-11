@@ -1,0 +1,9 @@
+{
+  "source_file": "cronia_scheduler.ads",
+  "source_hash": "77b657a4609c5708353c77520ba332d61791b76c8279d34f1123e14415069495",
+  "rs_checksum": "9791351120a19f552619497293b87e968c236dab649b0ab2267c3f5de886ae43",
+  "gc_checksum": "18f5ec27a67d0131ca3fab51b6f9e3d2b171c35edb4a8e5f7e99f6519ca1b0c5",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 8
+}

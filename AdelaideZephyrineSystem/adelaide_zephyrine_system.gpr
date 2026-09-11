@@ -88,6 +88,16 @@
 --  or -march=x86-64-v3 for x86_64, or -march=armv8-a for Linux arm64.
 --  ============================================================================
 
+--  [QUIRK-011] [ALL] Alire config GPR project naming convention
+--  `alr update` regenerates config/adelaide_zephyrine_system_config.gpr
+--  with project name Adelaide_Zephyrine_System_Config (underscores between words).
+--  This is NOT git-tracked from Alire's perspective -- it is auto-generated.
+--  All qualified references (Build_Profile, Alire_Host_OS, etc.) MUST
+--  match this exact casing or gprbuild fails with "unknown project".
+--  LEARNED: Previously used AdelaideZephyrineSystem_Config (CamelCase, no
+--  underscores) which caused repeated breakage after every `alr update`.
+--  FIX: Align this file's references to match Alire's generated naming.
+--  ============================================================================
 with "config/adelaide_zephyrine_system_config.gpr";
 with "aws";
 with "gnatcoll";
@@ -98,7 +108,7 @@ project AdelaideZephyrineSystem is
 
    for Languages use ("Ada", "C", "C++");
    for Source_Dirs use ("src/", "src/ada_util/", "src/c_bindings/", "src/core/", "src/crypto/", "src/engine/", "src/interfaces/", "src/managers/", "src/NonDeterministicGenerativeModelManager/", "src/utils/", "config/", "src/ModuleSensorActuator_ELP3/src/", "src/ModuleSensorActuator_ELP3/ROS2/", "src/ModuleSensorActuator_ELP2/ROS2/");
-   for Object_Dir use "obj/" & AdelaideZephyrineSystem_Config.Build_Profile;
+   for Object_Dir use "obj/" & Adelaide_Zephyrine_System_Config.Build_Profile;
    for Create_Missing_Dirs use "True";
    for Exec_Dir use "bin";
    for Main use ("adelaide_zephyrine_system.adb", "adelaide_server.adb", "adelaide_watchdog.adb");
@@ -110,7 +120,7 @@ project AdelaideZephyrineSystem is
    --  On Linux: Alire_Host_OS = "linux"  -> others => null (no block)
    --  On Win:   Alire_Host_OS = "windows" -> Source_Dirs overridden to fail
    --  LINUX-COMPAT: This block has no effect on Linux.  Safe to leave as-is.
-   case AdelaideZephyrineSystem_Config.Alire_Host_OS is
+   case Adelaide_Zephyrine_System_Config.Alire_Host_OS is
       when "windows" =>
          --  Point to a non-existent directory so gprbuild fails immediately
          --  with: "source directory does not exist: __WINDOWS_NT...__"
@@ -123,10 +133,10 @@ project AdelaideZephyrineSystem is
    GGML_Backend : Backend_Type := external ("GGML_BACKEND", "metal");
 
    package Compiler is
-      case AdelaideZephyrineSystem_Config.Alire_Host_OS is
+      case Adelaide_Zephyrine_System_Config.Alire_Host_OS is
          when "macos" =>
             for Default_Switches ("Ada") use
-              AdelaideZephyrineSystem_Config.Ada_Compiler_Switches &
+              Adelaide_Zephyrine_System_Config.Ada_Compiler_Switches &
             ("-gnat2022", "-gnatX", "-gnatE", "-gnatyN", "-mmacosx-version-min=15.0");
             for Default_Switches ("C++") use
               ("-I" & project'Project_Dir & "vendor/llama.cpp/include",
@@ -150,7 +160,7 @@ project AdelaideZephyrineSystem is
                 "-I" & project'Project_Dir & "vendor/cFS/osal/src/os/inc");
          when "linux" =>
             for Default_Switches ("Ada") use
-              AdelaideZephyrineSystem_Config.Ada_Compiler_Switches &
+              Adelaide_Zephyrine_System_Config.Ada_Compiler_Switches &
             ("-gnat2022", "-gnatX", "-gnatE", "-gnatyN");
             for Default_Switches ("C++") use
               ("-I" & project'Project_Dir & "vendor/llama.cpp/include",
@@ -170,7 +180,7 @@ project AdelaideZephyrineSystem is
                 "-I" & project'Project_Dir & "vendor/cFS/osal/src/os/inc");
          when others =>
             for Default_Switches ("Ada") use
-              AdelaideZephyrineSystem_Config.Ada_Compiler_Switches &
+              Adelaide_Zephyrine_System_Config.Ada_Compiler_Switches &
             ("-gnat2022", "-gnatX", "-gnatE", "-gnatyN");
       end case;
    end Compiler;
@@ -213,7 +223,7 @@ project AdelaideZephyrineSystem is
                            );
 
       Platform_Flags := ();
-      case AdelaideZephyrineSystem_Config.Alire_Host_OS is
+      case Adelaide_Zephyrine_System_Config.Alire_Host_OS is
          when "macos" =>
             Platform_Flags := (
                                "-L/opt/homebrew/opt/sqlite/lib",

@@ -1,0 +1,9 @@
+{
+  "source_file": "cfe_ffi_bindings.ads",
+  "source_hash": "9910ef6b5bd6a82fbe9418c2e9c6564f0b2a1bd3c8e3fd14ef86429c3deb3963",
+  "rs_checksum": "8a267c60d0190cb25aef829727bfadac6d06fb58fb85d1362dc7d82c671ea671",
+  "gc_checksum": "b6558a5509d970c8dfc651de095aca81b14427e1807712d3eb65186f43b89a00",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 16
+}

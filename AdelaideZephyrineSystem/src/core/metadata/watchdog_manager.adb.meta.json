@@ -1,0 +1,9 @@
+{
+  "source_file": "watchdog_manager.adb",
+  "source_hash": "ea53cafea3e72c9f09a73e218a5acf8f216159c6776be42a736af3539e210bd1",
+  "rs_checksum": "fc9a0e398cadb6b3d33d3261e9a31cbb3a09665adff820932b784924191f0a39",
+  "gc_checksum": "0eb897f2c72aa4d7dcd2b126645dbfd574abad113183480e8de88e2474d1f114",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 12
+}

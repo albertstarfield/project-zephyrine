@@ -1,0 +1,9 @@
+{
+  "source_file": "stellaicarus_bridge.py",
+  "source_hash": "ebac4f476530814ecd6d45b836f8bb28d16401d023f6c6d771ab029baae56318",
+  "rs_checksum": "e02a3ea31712d5fe7f45560781a18be9d8d63d98fb97bf7712418d86580bd693",
+  "gc_checksum": "563c277e2bbc7973ac95ab7f9b17558dc4c19d006ffbab678e208e9ee9535ef3",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 9
+}

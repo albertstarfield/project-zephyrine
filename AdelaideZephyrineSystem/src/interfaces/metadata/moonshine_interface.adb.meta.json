@@ -1,0 +1,9 @@
+{
+  "source_file": "moonshine_interface.adb",
+  "source_hash": "01e525298068d01d697fd546d4a724d6f0e4870681db6be90ab6b6ef9a0a885e",
+  "rs_checksum": "0f92d629d63a177c618419e5d20bb0629cc0b7f2c66938520c39fd2d9f48f5ad",
+  "gc_checksum": "21767dd5992c769dc2c0ce747d998d7c31139930210469eb1a416c6ee3ed2b82",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 8
+}

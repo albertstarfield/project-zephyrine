@@ -1,0 +1,9 @@
+{
+  "source_file": "cfe_ffi_bindings.adb",
+  "source_hash": "55b83ac0bbe16adec71492fca0cfeeb9d5a8e581d53651a9362ccaec1504abcd",
+  "rs_checksum": "0edad1f894b7f8806ccb068f02f73bf4fe189dcaed4d45109141544b40f6cb15",
+  "gc_checksum": "e44bb1faf3b1138801e1eee9ec57c44d4d5b843893d839361e5ec6e21f525c09",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 12
+}

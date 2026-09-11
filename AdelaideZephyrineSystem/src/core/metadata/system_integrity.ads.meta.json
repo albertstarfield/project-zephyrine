@@ -1,0 +1,9 @@
+{
+  "source_file": "system_integrity.ads",
+  "source_hash": "65b13dcab5126e865852efe7db8c819263855f03b8763642e9490e4816c128dd",
+  "rs_checksum": "3f9c182166ae7fce8799148fae788a81928ce5b92c633af346b1ac7e93b0e605",
+  "gc_checksum": "eac660f07842739c74472cccf44a514161c5ecc34f4d4e6785a2d20606dcb73c",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

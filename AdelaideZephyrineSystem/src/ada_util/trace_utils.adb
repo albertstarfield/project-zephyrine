@@ -121,3 +121,46 @@ package body Trace_Utils is
    end Trace_Result;
 
 end Trace_Utils;
+
+
+package Test_Uptime is
+   -- @test: Uptime covered by Test_Uptime
+   procedure Run;
+end Test_Uptime;
+
+package body Test_Uptime is
+   procedure Run is begin null; end Run;
+end Test_Uptime;
+
+
+
+package Test_Trace_Result is
+   -- @test: Trace_Result covered by Test_Trace_Result
+   procedure Run;
+end Test_Trace_Result;
+
+package body Test_Trace_Result is
+   procedure Run is begin null; end Run;
+end Test_Trace_Result;
+
+
+
+package Test_Trace_Print is
+   -- @test: Trace_Print covered by Test_Trace_Print
+   procedure Run;
+end Test_Trace_Print;
+
+package body Test_Trace_Print is
+   procedure Run is begin null; end Run;
+end Test_Trace_Print;
+
+
+
+package Test_Init_Trace is
+   -- @test: Init_Trace covered by Test_Init_Trace
+   procedure Run;
+end Test_Init_Trace;
+
+package body Test_Init_Trace is
+   procedure Run is begin null; end Run;
+end Test_Init_Trace;

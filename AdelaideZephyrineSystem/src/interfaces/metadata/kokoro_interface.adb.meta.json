@@ -1,0 +1,9 @@
+{
+  "source_file": "kokoro_interface.adb",
+  "source_hash": "09234cb3a7576633128356d7618596dca73da060ac0fa501766361ff0ee569e3",
+  "rs_checksum": "dd4cf4dab365ae7797f4743a0606bb126c5e5b5590fe3bfe2ac9897ad7b9d46b",
+  "gc_checksum": "802ab77781de1fe82b6ffe244d0bd7b2b506935ce2fdd3288f70f2fc039a7cf6",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

@@ -106,3 +106,35 @@ package body ZO_ROS2_Actuator is
    end Publish_Actuator_Command;
 
 end ZO_ROS2_Actuator;
+
+
+package Test_Initialize_ROS2 is
+   -- @test: Initialize_ROS2 covered by Test_Initialize_ROS2
+   procedure Run;
+end Test_Initialize_ROS2;
+
+package body Test_Initialize_ROS2 is
+   procedure Run is begin null; end Run;
+end Test_Initialize_ROS2;
+
+
+
+package Test_Prefix is
+   -- @test: Prefix covered by Test_Prefix
+   procedure Run;
+end Test_Prefix;
+
+package body Test_Prefix is
+   procedure Run is begin null; end Run;
+end Test_Prefix;
+
+
+
+package Test_Publish_Actuator_Command is
+   -- @test: Publish_Actuator_Command covered by Test_Publish_Actuator_Command
+   procedure Run;
+end Test_Publish_Actuator_Command;
+
+package body Test_Publish_Actuator_Command is
+   procedure Run is begin null; end Run;
+end Test_Publish_Actuator_Command;

@@ -1,0 +1,9 @@
+{
+  "source_file": "key_derivation.adb",
+  "source_hash": "93d5b00eb400dc1cd3b4428030e66f783bd5dfa7f4e0c42b9aede05bfd22313e",
+  "rs_checksum": "3217cafaa4d5aa976c2ce876daba7e55aa2c98a58306510466d7c6a3b12490b2",
+  "gc_checksum": "10d88ec8e5f2d74e01d712df5ba0dc373b481845b3fa39eb0fcd76cc6983b9fa",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 26
+}

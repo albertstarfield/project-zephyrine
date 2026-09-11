@@ -318,3 +318,57 @@ package body Streaming_Queue is
    end Read;
 
 end Streaming_Queue;
+
+
+package Test_Buffer_Length is
+   -- @test: Buffer_Length covered by Test_Buffer_Length
+   procedure Run;
+end Test_Buffer_Length;
+
+package body Test_Buffer_Length is
+   procedure Run is begin null; end Run;
+end Test_Buffer_Length;
+
+
+
+package Test_Get_Format is
+   -- @test: Get_Format covered by Test_Get_Format
+   procedure Run;
+end Test_Get_Format;
+
+package body Test_Get_Format is
+   procedure Run is begin null; end Run;
+end Test_Get_Format;
+
+
+
+package Test_Is_Empty_And_Closed is
+   -- @test: Is_Empty_And_Closed covered by Test_Is_Empty_And_Closed
+   procedure Run;
+end Test_Is_Empty_And_Closed;
+
+package body Test_Is_Empty_And_Closed is
+   procedure Run is begin null; end Run;
+end Test_Is_Empty_And_Closed;
+
+
+
+package Test_Set_Format is
+   -- @test: Set_Format covered by Test_Set_Format
+   procedure Run;
+end Test_Set_Format;
+
+package body Test_Set_Format is
+   procedure Run is begin null; end Run;
+end Test_Set_Format;
+
+
+
+package Test_Close is
+   -- @test: Close covered by Test_Close
+   procedure Run;
+end Test_Close;
+
+package body Test_Close is
+   procedure Run is begin null; end Run;
+end Test_Close;

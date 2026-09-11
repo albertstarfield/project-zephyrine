@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_hook.adb",
+  "source_hash": "bef6378d0a076aade5013b409f51d135c572b9d9771616d00aea61953336a31e",
+  "rs_checksum": "fe16079812793c77ba28fae21ae3e1bd88e87f5e547d883644302231cd664243",
+  "gc_checksum": "6fcf843f20db56f97f42164d9c44e518eb21a0e38ad3ff81732a6a9892c77bfd",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

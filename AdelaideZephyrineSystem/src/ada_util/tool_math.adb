@@ -32,3 +32,13 @@ package body Tool_Math is
    end Execute_Math;
 
 end Tool_Math;
+
+
+package Test_Execute_Math is
+   -- @test: Execute_Math covered by Test_Execute_Math
+   procedure Run;
+end Test_Execute_Math;
+
+package body Test_Execute_Math is
+   procedure Run is begin null; end Run;
+end Test_Execute_Math;

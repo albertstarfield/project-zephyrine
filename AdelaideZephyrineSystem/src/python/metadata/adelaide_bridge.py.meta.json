@@ -1,0 +1,9 @@
+{
+  "source_file": "adelaide_bridge.py",
+  "source_hash": "60098117070d9becfa7e308eba9db2442fe1a98d9ca40660dc51e0bf13e1e924",
+  "rs_checksum": "13d52a4e77f14e7fe8179083b2c58587143e0d706178dbff765bdb2769a66216",
+  "gc_checksum": "7e0cb1cc082caa3091a7205074bdbd6b893df792a159968ad35b8729b7b9ed96",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 9
+}

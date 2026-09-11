@@ -1,0 +1,9 @@
+{
+  "source_file": "watchdog_ipc.adb",
+  "source_hash": "66838ba9efe61af30ee6f479f7f4bd0a84b1723f2cb441de976ca1f69fe95f0a",
+  "rs_checksum": "2c4f0cd0007b1a05da1957f21b32db28bae69df65f2549188ee715ec0f9e8147",
+  "gc_checksum": "7094ee61e33a0ca56b659103b4245304fb68f7a7b71e24ed2b82f511c435f6e8",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 25
+}

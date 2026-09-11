@@ -1,0 +1,9 @@
+{
+  "source_file": "multimodal_content_parser.ads",
+  "source_hash": "6bedef896b50161d9e9e6c3018c1d8b411e27cfe988232d658a4a261474e9a1d",
+  "rs_checksum": "619fa3dd3d9e93b50cd092c0d10679e142fb401d759dfe20224a7d56ba2a2767",
+  "gc_checksum": "7c0b79c872b68410066d6ef92da5ed9de7d356c61a4768c995b473d678b8ac68",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 4
+}

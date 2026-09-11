@@ -1,0 +1,9 @@
+{
+  "source_file": "hellaswag.py",
+  "source_hash": "35650b9640d034e5689dc24d7aa9d40c31f7344a66fe99f9ed7081a65cf65711",
+  "rs_checksum": "d190a3efcc30c1a28c8c81ea2a0c772337c028191dc61039607841da1cad0e46",
+  "gc_checksum": "732b91d2664fe835d412e0e50109e4d006f57e0f47f590b9bedef31f4fff8e03",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 7
+}

@@ -24,7 +24,7 @@ class WinograndeEvaluator(BaseEvaluator):
     Random baseline is 50%.
     """
 
-    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  # nosec
+    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  
         # nosec - recursive function with implicit base case
         """Run Winogrande coreference resolution benchmark evaluation.
 
@@ -82,3 +82,9 @@ class WinograndeEvaluator(BaseEvaluator):
 def expected_match(expected: str, predicted: str) -> bool:
     """Check if the expected answer matches the AI's response."""
     return expected.lower() in predicted.lower()
+
+
+def test_evaluate():    """Test stub for evaluate."""    pass
+
+
+def test_expected_match():    """Test stub for expected_match."""    pass

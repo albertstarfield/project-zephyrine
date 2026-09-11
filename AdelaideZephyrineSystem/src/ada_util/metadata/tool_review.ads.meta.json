@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_review.ads",
+  "source_hash": "698d06e630ea2b13e7e1855ebf34af14bee1aa83637d673041766653434e2beb",
+  "rs_checksum": "e6a40234e479738e8fbea34c1375f986816a617c8015dbebb29deb3f576b318b",
+  "gc_checksum": "264987e0dbdeb1b74528c96334004483b76f9886a6308ca4833a06b680462bbb",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

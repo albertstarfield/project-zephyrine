@@ -1,0 +1,9 @@
+{
+  "source_file": "stellaicarus_daemon_runner.py",
+  "source_hash": "231d4c3e72ec8ebae92fbeed8010f618aae92cc0b4a1db3dbddba67c93f4e523",
+  "rs_checksum": "0fc741f6e5c610b219823dd1784f76ad17bf8b94a7e1bb143ef533047e83d683",
+  "gc_checksum": "ee5c855325a77d70652b1b86cd64395609c4c08934748ea466375efbefad8b43",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 25
+}

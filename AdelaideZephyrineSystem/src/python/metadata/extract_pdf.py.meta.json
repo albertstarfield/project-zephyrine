@@ -1,0 +1,9 @@
+{
+  "source_file": "extract_pdf.py",
+  "source_hash": "3bca4bfd5c807ff746d80bfecfeb78fcb36184af3bcd66cf30017b573557d44c",
+  "rs_checksum": "de0f41266320bd3ec6960132f60fb7c540c24648a98e5d851776c2131f81b885",
+  "gc_checksum": "d1620843e832010466fb683dc109b31c23e84f2af41367e4d07515fe7b2b8713",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 8
+}

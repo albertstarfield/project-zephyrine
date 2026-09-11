@@ -1,0 +1,9 @@
+{
+  "source_file": "auto_config.ads",
+  "source_hash": "ce071adf8edcd5356263d05e1b98cc58d36a087aa8c0139cef68e4b201e00a8e",
+  "rs_checksum": "263ff359149cf5c4ef1d1d79e7544293d5ec8922982a2bfffa92ddbf717454de",
+  "gc_checksum": "bcdc1dcd252c8ea52240211e96a23a15aa42071fcb66b761240ac8b72deb048a",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 21
+}

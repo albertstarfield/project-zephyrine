@@ -1,0 +1,9 @@
+{
+  "source_file": "kokoro_interface.ads",
+  "source_hash": "fc62b37b03bd30cac031c5d4fa6fe91920e87ffb1b2d0fd0e491a3ed2c91cd65",
+  "rs_checksum": "e5d37bc7b8e644cbb7b487577181a24409ea60976c396dc31f9f168173bae3db",
+  "gc_checksum": "2167a98b44ed8fe9706026dad5fe74bdfa782a9c5e2342d6cad4a160864f8e8f",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 1
+}

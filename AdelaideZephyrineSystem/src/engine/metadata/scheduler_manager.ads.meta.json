@@ -1,0 +1,9 @@
+{
+  "source_file": "scheduler_manager.ads",
+  "source_hash": "1276721216ad04450c89137c4e7f76c12c47f933f72c95f7f3cb1dab6c01ad3e",
+  "rs_checksum": "9b5032590454f94b53e1228b6e880cb753627c869047bceaf045a5842c19f44a",
+  "gc_checksum": "6e15b009ec2cfb1e9ab67c1a4a66eab997eb8fa64a7508c74a14896d1d8b244e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

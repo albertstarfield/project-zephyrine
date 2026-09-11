@@ -92,3 +92,13 @@ package body Tool_Package is
    end Execute_Package;
 
 end Tool_Package;
+
+
+package Test_Execute_Package is
+   -- @test: Execute_Package covered by Test_Execute_Package
+   procedure Run;
+end Test_Execute_Package;
+
+package body Test_Execute_Package is
+   procedure Run is begin null; end Run;
+end Test_Execute_Package;

@@ -1,0 +1,9 @@
+{
+  "source_file": "sd_manager.adb",
+  "source_hash": "28d1cdbed0bda01ce660c2113ac3bd04af6acdb3c1e4ffdcddf8499f966bfa10",
+  "rs_checksum": "c65d6de66e338ccbd6a3a9d964050cca2dc628a652c61bd25b177a7221458693",
+  "gc_checksum": "abf221d7b228ec0e3a4717d72673cb712aeced9f59ea2a3755ea17796b2118f7",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 43
+}

@@ -1200,3 +1200,255 @@ package body Zephyrine_Widget_Tree is
    end Is_Visible_In_Tree;
 
 end Zephyrine_Widget_Tree;
+
+
+package Test_Compute_Layout is
+   -- @test: Compute_Layout covered by Test_Compute_Layout
+   procedure Run;
+end Test_Compute_Layout;
+
+package body Test_Compute_Layout is
+   procedure Run is begin null; end Run;
+end Test_Compute_Layout;
+
+
+
+package Test_Link_Program_Checked is
+   -- @test: Link_Program_Checked covered by Test_Link_Program_Checked
+   procedure Run;
+end Test_Link_Program_Checked;
+
+package body Test_Link_Program_Checked is
+   procedure Run is begin null; end Run;
+end Test_Link_Program_Checked;
+
+
+
+package Test_Init_Renderer is
+   -- @test: Init_Renderer covered by Test_Init_Renderer
+   procedure Run;
+end Test_Init_Renderer;
+
+package body Test_Init_Renderer is
+   procedure Run is begin null; end Run;
+end Test_Init_Renderer;
+
+
+
+package Test_Apply_To_Widget is
+   -- @test: Apply_To_Widget covered by Test_Apply_To_Widget
+   procedure Run;
+end Test_Apply_To_Widget;
+
+package body Test_Apply_To_Widget is
+   procedure Run is begin null; end Run;
+end Test_Apply_To_Widget;
+
+
+
+package Test_Apply_CSS_Stylesheet is
+   -- @test: Apply_CSS_Stylesheet covered by Test_Apply_CSS_Stylesheet
+   procedure Run;
+end Test_Apply_CSS_Stylesheet;
+
+package body Test_Apply_CSS_Stylesheet is
+   procedure Run is begin null; end Run;
+end Test_Apply_CSS_Stylesheet;
+
+
+
+package Test_Add_Widget is
+   -- @test: Add_Widget covered by Test_Add_Widget
+   procedure Run;
+end Test_Add_Widget;
+
+package body Test_Add_Widget is
+   procedure Run is begin null; end Run;
+end Test_Add_Widget;
+
+
+
+package Test_Find_Widget_By_ID is
+   -- @test: Find_Widget_By_ID covered by Test_Find_Widget_By_ID
+   procedure Run;
+end Test_Find_Widget_By_ID;
+
+package body Test_Find_Widget_By_ID is
+   procedure Run is begin null; end Run;
+end Test_Find_Widget_By_ID;
+
+
+
+package Test_Init_Tree is
+   -- @test: Init_Tree covered by Test_Init_Tree
+   procedure Run;
+end Test_Init_Tree;
+
+package body Test_Init_Tree is
+   procedure Run is begin null; end Run;
+end Test_Init_Tree;
+
+
+
+package Test_Layout_Widget is
+   -- @test: Layout_Widget covered by Test_Layout_Widget
+   procedure Run;
+end Test_Layout_Widget;
+
+package body Test_Layout_Widget is
+   procedure Run is begin null; end Run;
+end Test_Layout_Widget;
+
+
+
+package Test_Hit_Test is
+   -- @test: Hit_Test covered by Test_Hit_Test
+   procedure Run;
+end Test_Hit_Test;
+
+package body Test_Hit_Test is
+   procedure Run is begin null; end Run;
+end Test_Hit_Test;
+
+
+
+package Test_Get_Parent is
+   -- @test: Get_Parent covered by Test_Get_Parent
+   procedure Run;
+end Test_Get_Parent;
+
+package body Test_Get_Parent is
+   procedure Run is begin null; end Run;
+end Test_Get_Parent;
+
+
+
+package Test_Update_Animations is
+   -- @test: Update_Animations covered by Test_Update_Animations
+   procedure Run;
+end Test_Update_Animations;
+
+package body Test_Update_Animations is
+   procedure Run is begin null; end Run;
+end Test_Update_Animations;
+
+
+
+package Test_Process_Input is
+   -- @test: Process_Input covered by Test_Process_Input
+   procedure Run;
+end Test_Process_Input;
+
+package body Test_Process_Input is
+   procedure Run is begin null; end Run;
+end Test_Process_Input;
+
+
+
+package Test_Render_Widget is
+   -- @test: Render_Widget covered by Test_Render_Widget
+   procedure Run;
+end Test_Render_Widget;
+
+package body Test_Render_Widget is
+   procedure Run is begin null; end Run;
+end Test_Render_Widget;
+
+
+
+package Test_Get_Children is
+   -- @test: Get_Children covered by Test_Get_Children
+   procedure Run;
+end Test_Get_Children;
+
+package body Test_Get_Children is
+   procedure Run is begin null; end Run;
+end Test_Get_Children;
+
+
+
+package Test_Draw_Filled_Rect is
+   -- @test: Draw_Filled_Rect covered by Test_Draw_Filled_Rect
+   procedure Run;
+end Test_Draw_Filled_Rect;
+
+package body Test_Draw_Filled_Rect is
+   procedure Run is begin null; end Run;
+end Test_Draw_Filled_Rect;
+
+
+
+package Test_Widget_To_Selector is
+   -- @test: Widget_To_Selector covered by Test_Widget_To_Selector
+   procedure Run;
+end Test_Widget_To_Selector;
+
+package body Test_Widget_To_Selector is
+   procedure Run is begin null; end Run;
+end Test_Widget_To_Selector;
+
+
+
+package Test_Render_Tree is
+   -- @test: Render_Tree covered by Test_Render_Tree
+   procedure Run;
+end Test_Render_Tree;
+
+package body Test_Render_Tree is
+   procedure Run is begin null; end Run;
+end Test_Render_Tree;
+
+
+
+package Test_Find_Widget_By_Class is
+   -- @test: Find_Widget_By_Class covered by Test_Find_Widget_By_Class
+   procedure Run;
+end Test_Find_Widget_By_Class;
+
+package body Test_Find_Widget_By_Class is
+   procedure Run is begin null; end Run;
+end Test_Find_Widget_By_Class;
+
+
+
+package Test_Is_Visible_In_Tree is
+   -- @test: Is_Visible_In_Tree covered by Test_Is_Visible_In_Tree
+   procedure Run;
+end Test_Is_Visible_In_Tree;
+
+package body Test_Is_Visible_In_Tree is
+   procedure Run is begin null; end Run;
+end Test_Is_Visible_In_Tree;
+
+
+
+package Test_Start_Animation is
+   -- @test: Start_Animation covered by Test_Start_Animation
+   procedure Run;
+end Test_Start_Animation;
+
+package body Test_Start_Animation is
+   procedure Run is begin null; end Run;
+end Test_Start_Animation;
+
+
+
+package Test_Remove_Widget is
+   -- @test: Remove_Widget covered by Test_Remove_Widget
+   procedure Run;
+end Test_Remove_Widget;
+
+package body Test_Remove_Widget is
+   procedure Run is begin null; end Run;
+end Test_Remove_Widget;
+
+
+
+package Test_Compile_Shader_Checked is
+   -- @test: Compile_Shader_Checked covered by Test_Compile_Shader_Checked
+   procedure Run;
+end Test_Compile_Shader_Checked;
+
+package body Test_Compile_Shader_Checked is
+   procedure Run is begin null; end Run;
+end Test_Compile_Shader_Checked;

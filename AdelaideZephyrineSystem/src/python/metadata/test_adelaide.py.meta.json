@@ -1,0 +1,9 @@
+{
+  "source_file": "test_adelaide.py",
+  "source_hash": "93b09b83a9aa1d53c465f3b508aa414f9b5a82c006bf100520e0d0098d3f5294",
+  "rs_checksum": "b3d3094443cc5400ba655208a54806aaff8ea25dbe0c338d57721b26aa4750ee",
+  "gc_checksum": "8784b3dd28ea73ab0afbcc56b9363fbcf476fd56aa8019934a064813c205da91",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 9
+}

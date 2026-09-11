@@ -1,0 +1,9 @@
+{
+  "source_file": "zo_ros2_actuator.ads",
+  "source_hash": "ac315d34a6925352242e6b40dabc50c046457e92b40bc04bce9bb4a0d7c9e9af",
+  "rs_checksum": "8984c47e760db20651d7c857d629739df72a6ccdacd2b30955297f1547570041",
+  "gc_checksum": "be90ca0cd8825302b5e2f0c56dc0f6278af46a52bea9e98a69558457ad5a7625",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

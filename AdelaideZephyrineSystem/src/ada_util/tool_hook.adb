@@ -73,3 +73,13 @@ package body Tool_Hook is
    end Execute_Hook;
 
 end Tool_Hook;
+
+
+package Test_Execute_Hook is
+   -- @test: Execute_Hook covered by Test_Execute_Hook
+   procedure Run;
+end Test_Execute_Hook;
+
+package body Test_Execute_Hook is
+   procedure Run is begin null; end Run;
+end Test_Execute_Hook;

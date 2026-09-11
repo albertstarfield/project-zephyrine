@@ -1,0 +1,9 @@
+{
+  "source_file": "proactive_engine.adb",
+  "source_hash": "bd51a0569fd41bd6d456b73a8a97d2f72e3652fa486c122bf9de1163fb40c09b",
+  "rs_checksum": "f5c6164e59f0ddc3a2ddd4017471ea994ba5fcdee2ee903de9c2e8ef36f660ba",
+  "gc_checksum": "1efbdb52c659994831a9d0000b5b968dea532a5004cd02a725db8e1456dae8df",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 29
+}

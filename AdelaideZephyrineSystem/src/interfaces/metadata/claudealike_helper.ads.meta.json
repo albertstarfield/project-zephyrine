@@ -1,0 +1,9 @@
+{
+  "source_file": "claudealike_helper.ads",
+  "source_hash": "3fdaaab2805d74149c929fc4fe2b9f6e8cd843d7498370b056c55a3b208bd16b",
+  "rs_checksum": "5088a2fcd95c3d3e0dc3b9c70dc874996d5e14dc78753db816c4534f834d325b",
+  "gc_checksum": "91d91c49d7ab0566bbbd6cc91b798bd92db98cab6bc8362f56dbd64725c84af4",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

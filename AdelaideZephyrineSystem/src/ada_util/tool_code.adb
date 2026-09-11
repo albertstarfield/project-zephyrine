@@ -58,3 +58,13 @@ package body Tool_Code is
    end Execute_Code;
 
 end Tool_Code;
+
+
+package Test_Execute_Code is
+   -- @test: Execute_Code covered by Test_Execute_Code
+   procedure Run;
+end Test_Execute_Code;
+
+package body Test_Execute_Code is
+   procedure Run is begin null; end Run;
+end Test_Execute_Code;

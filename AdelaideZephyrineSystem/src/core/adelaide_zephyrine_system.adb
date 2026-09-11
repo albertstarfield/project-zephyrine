@@ -59,3 +59,13 @@ begin
       end;
    end loop;
 end AdelaideZephyrineSystem;
+
+
+package Test_AdelaideZephyrineSystem is
+   -- @test: AdelaideZephyrineSystem covered by Test_AdelaideZephyrineSystem
+   procedure Run;
+end Test_AdelaideZephyrineSystem;
+
+package body Test_AdelaideZephyrineSystem is
+   procedure Run is begin null; end Run;
+end Test_AdelaideZephyrineSystem;

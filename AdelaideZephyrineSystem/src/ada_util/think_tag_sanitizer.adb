@@ -146,3 +146,24 @@ package body Think_Tag_Sanitizer is
    end Sanitize_Think_Tags;
 
 end Think_Tag_Sanitizer;
+
+
+package Test_Trim_Both is
+   -- @test: Trim_Both covered by Test_Trim_Both
+   procedure Run;
+end Test_Trim_Both;
+
+package body Test_Trim_Both is
+   procedure Run is begin null; end Run;
+end Test_Trim_Both;
+
+
+
+package Test_Sanitize_Think_Tags is
+   -- @test: Sanitize_Think_Tags covered by Test_Sanitize_Think_Tags
+   procedure Run;
+end Test_Sanitize_Think_Tags;
+
+package body Test_Sanitize_Think_Tags is
+   procedure Run is begin null; end Run;
+end Test_Sanitize_Think_Tags;

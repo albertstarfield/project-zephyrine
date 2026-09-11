@@ -1,0 +1,9 @@
+{
+  "source_file": "gsm8k.py",
+  "source_hash": "1315247e64f04f045e5e0482b0df0b8bc9f6e19372511298d9ff734818eb171f",
+  "rs_checksum": "e03d8960a697071ff13191b82fa2aa5b85e2f1ae241e57079920660566966c3d",
+  "gc_checksum": "5118a453e662742d1f799a10afaf6020d77f3dca9a7e829593cb48e86ff24e20",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 7
+}

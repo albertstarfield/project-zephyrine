@@ -1,0 +1,9 @@
+{
+  "source_file": "streaming_queue.adb",
+  "source_hash": "77da4683d769a5830b65c383e0655533ff451d100196df1690d69f33ec762e58",
+  "rs_checksum": "d221073c7079a496a922d1afc528d213d602e61eb9f31f0d0eec1bd4f0935ffc",
+  "gc_checksum": "9e82c29de52e67d8bfe319b64275f6e06e86b959d8e6e1f553b98bccad59db88",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 29
+}

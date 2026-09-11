@@ -1,0 +1,9 @@
+{
+  "source_file": "security_scanner.adb",
+  "source_hash": "ca2ec16ff4d6f642d42b3e4b44b1d667b285cb3294034f78439e134f2c3eff81",
+  "rs_checksum": "78e98a1c18c34c8a89d43e28ea204486bd1f1aa36cbb64c9aa49c638a124966e",
+  "gc_checksum": "7119c4897466515f554cf3026b43e3e9100ea45dc001be9508b70bf29fe5a7f1",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 35
+}

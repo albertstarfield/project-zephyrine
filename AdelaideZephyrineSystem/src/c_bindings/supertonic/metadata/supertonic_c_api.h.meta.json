@@ -1,0 +1,9 @@
+{
+  "source_file": "supertonic_c_api.h",
+  "source_hash": "f27dc225dbe04f5dd291d094eb1345eb0beef99106a5e5aede25fb51989678db",
+  "rs_checksum": "5c9023ff3c62a40b8d331b17d04ecd685aca79984de9f0ae182d0e506a2c8836",
+  "gc_checksum": "829fc1e6d90b695bc0f133ca7d8395b01f80887845cb800d49375ce1aa0cbba6",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

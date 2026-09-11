@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_test.ads",
+  "source_hash": "e4c2870fdfabdd0456eee1e3182aafc698985e2348bca4b4d43caf974a8bd98d",
+  "rs_checksum": "af23666e863872a81cbae41b61d049dc01bfcbc83b905baea59a9e12f079586e",
+  "gc_checksum": "a3f029547fe892330ed7e0b4a0bde1e94954919c80b9250534eab544af3f4c9a",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

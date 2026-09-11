@@ -1,0 +1,9 @@
+{
+  "source_file": "key_derivation.ads",
+  "source_hash": "6c26ab6e47d5fac59ba69953d295e29ec7f2d08ab632454637f63ac900025c5e",
+  "rs_checksum": "7c09b2e18b6636377241d767c2610c34acfb218319b1730166527080d7653fa9",
+  "gc_checksum": "2e377a6c050ecc6ce91c5344d18b81c0f6827c00ac815a5e750488ce3dc2ee3f",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 9
+}

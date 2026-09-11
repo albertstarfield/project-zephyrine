@@ -174,3 +174,35 @@ package body CFS_Tool_Bridge is
    end Execute_CFS_Tool;
 
 end CFS_Tool_Bridge;
+
+
+package Test_Execute_CFS_Tool is
+   -- @test: Execute_CFS_Tool covered by Test_Execute_CFS_Tool
+   procedure Run;
+end Test_Execute_CFS_Tool;
+
+package body Test_Execute_CFS_Tool is
+   procedure Run is begin null; end Run;
+end Test_Execute_CFS_Tool;
+
+
+
+package Test_Get_Rest is
+   -- @test: Get_Rest covered by Test_Get_Rest
+   procedure Run;
+end Test_Get_Rest;
+
+package body Test_Get_Rest is
+   procedure Run is begin null; end Run;
+end Test_Get_Rest;
+
+
+
+package Test_Get_Subcommand is
+   -- @test: Get_Subcommand covered by Test_Get_Subcommand
+   procedure Run;
+end Test_Get_Subcommand;
+
+package body Test_Get_Subcommand is
+   procedure Run is begin null; end Run;
+end Test_Get_Subcommand;

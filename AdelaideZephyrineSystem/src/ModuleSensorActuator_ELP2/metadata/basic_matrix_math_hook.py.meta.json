@@ -1,0 +1,9 @@
+{
+  "source_file": "basic_matrix_math_hook.py",
+  "source_hash": "bf4463e486e860dbc37333824ec0fb0f80b66f09d6a1e746879ad422395729c9",
+  "rs_checksum": "0efae3f93cfa5fd486e9b41db2f8b324e1d7cd825e5b5449383190a5cf16ea3a",
+  "gc_checksum": "849f748f2b3cfe206be4b61539fb0dcf44b30787831fb67eb1ca8a16297fa452",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 13
+}

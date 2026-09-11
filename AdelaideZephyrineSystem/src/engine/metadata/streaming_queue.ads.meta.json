@@ -1,0 +1,9 @@
+{
+  "source_file": "streaming_queue.ads",
+  "source_hash": "3f9aff9123fcf7e5b90cc442c216c5c6c9ccc1fb390d6a7dc397578fe4d9ca76",
+  "rs_checksum": "e41ca6d20e5b4ddffd7acb77f83e702fa7f425320c6b7a99b47b6a1b890cbf35",
+  "gc_checksum": "a93e08c678173c2a8105957143d0aace8c5cef7831f3145f818208e56cbdc64b",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

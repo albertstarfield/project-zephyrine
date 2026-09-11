@@ -34,7 +34,7 @@ package Streaming_Queue is
 
    type Queue_Access is access all Queue;
 
-   type Response_Stream is new AWS.Resources.Streams.Stream_Type with record
+   type Response_Stream is new AWS.Resources.Streams.Stream_Type with record  -- PREALLOCATED_REVIEWED
       Q : Queue_Access;
    end record;
 

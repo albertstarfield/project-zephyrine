@@ -1,0 +1,9 @@
+{
+  "source_file": "shutdown_manager.ads",
+  "source_hash": "b6d6a9ef056b8a06b7fb29fdca0fc11574cf2545a5808cee221ca2b0ecd7b11b",
+  "rs_checksum": "dbaaedb6f45c46cf603639479147e2c3ff9966a73ba39ae618bae2217b12eef3",
+  "gc_checksum": "cd9c079c59dc78100c2ed5d358f2f61ec7c6adcba914a180da45c8d52ee45e53",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

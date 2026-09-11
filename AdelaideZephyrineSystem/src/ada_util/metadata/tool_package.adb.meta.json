@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_package.adb",
+  "source_hash": "0751bcd00343db890723d06d7689ec308ba50fc315506b14b6d54c2d4c74e4b4",
+  "rs_checksum": "e7a847e09e90dfdfb4903ab49634078a203a936eb42de8e4b40dd940d943837e",
+  "gc_checksum": "3f68d061090387d2a0f7f2950c3d69e6e4b8a8c6ad2d301716f7d34285f3ea27",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 8
+}

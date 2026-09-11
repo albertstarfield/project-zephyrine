@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_killshell.ads",
+  "source_hash": "696bb58b5e57d1aa2a3937ad66615667c3aa4324f7a9210caa4f1e08591e5fe0",
+  "rs_checksum": "ef174347a316e75ed0d7b53cede0f23ad443fe3a91bcbe19ce268cfa36b7aa28",
+  "gc_checksum": "122e7b730f61e78f414823739f145e481c0d3588e327c9a31069aadbbd2f0f2c",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

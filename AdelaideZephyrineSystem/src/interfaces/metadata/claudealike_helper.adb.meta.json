@@ -1,0 +1,9 @@
+{
+  "source_file": "claudealike_helper.adb",
+  "source_hash": "03da190ba2c72721a5ff8aaa32c6b243e9b1766dd836d9054f377a409a388b94",
+  "rs_checksum": "302c3ad35d4a8ffdfa76f829e6bf127343609f422586b481cd0e68ca57d207a8",
+  "gc_checksum": "bdece4d3a65d6d376f023bf32026655c575222aac563116fd34a25ec064911c2",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 17
+}

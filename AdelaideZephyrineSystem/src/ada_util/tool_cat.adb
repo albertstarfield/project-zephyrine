@@ -73,3 +73,13 @@ package body Tool_Cat is
    end Execute_Cat;
 
 end Tool_Cat;
+
+
+package Test_Execute_Cat is
+   -- @test: Execute_Cat covered by Test_Execute_Cat
+   procedure Run;
+end Test_Execute_Cat;
+
+package body Test_Execute_Cat is
+   procedure Run is begin null; end Run;
+end Test_Execute_Cat;

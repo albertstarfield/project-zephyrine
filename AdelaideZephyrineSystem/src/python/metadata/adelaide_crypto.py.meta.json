@@ -1,0 +1,9 @@
+{
+  "source_file": "adelaide_crypto.py",
+  "source_hash": "d316a89717be8ef5b9e575e10c93594ec01ca88b28489dcb8906c74316538e42",
+  "rs_checksum": "689516becb1e99822c5e6c79d7c546b0c4c417703f50a3888b62e604275aa455",
+  "gc_checksum": "501b447e0a2704e0ee574b796196f1514f71ca671e5594f8d15ff284f7f79023",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 65
+}

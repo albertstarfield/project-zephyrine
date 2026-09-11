@@ -1,0 +1,9 @@
+{
+  "source_file": "zo_ros2_actuator.adb",
+  "source_hash": "5d0e3b54133212eb16f35ff0e75d8dd86b417ed121d0f579a3f3c515537c5ec5",
+  "rs_checksum": "3546cd0285bb97e0e7535b42788fc1cb1e8956d3fc14c33c6e1c90c1c9167e32",
+  "gc_checksum": "efcc98430d3fb84f6e6ba4118ed73b6142df25c3153acb3a0b2289f759ba4872",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 10
+}

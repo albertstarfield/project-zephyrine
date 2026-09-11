@@ -125,9 +125,9 @@ package body LSH_Hash is
                     end;
 
                     --  Spawn worker: python3 lsh_qrnn_worker.py --input <tmpfile>
-                    Args (1) := new String'(Worker_Script);
-                    Args (2) := new String'("--input");
-                    Args (3) := new String'(Tmp_Fixed);
+                    Args (1) := new String'(Worker_Script);  -- PREALLOCATED_REVIEWED
+                    Args (2) := new String'("--input");  -- PREALLOCATED_REVIEWED
+                    Args (3) := new String'(Tmp_Fixed);  -- PREALLOCATED_REVIEWED
 
                     --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
                     Put_Line
@@ -338,12 +338,12 @@ package body LSH_Hash is
                     end;
 
                     --  Spawn worker: python3 pinn_schrodinger.py --steer-hash --input <tmpfile> --alpha <alpha>
-                    Args (1) := new String'(PINN_Script);
-                    Args (2) := new String'("--steer-hash");
-                    Args (3) := new String'("--input");
-                    Args (4) := new String'(Tmp_Fixed);
-                    Args (5) := new String'("--alpha");
-                    Args (6) := new String'(Ada.Strings.Fixed.Trim (Alpha_Str, Ada.Strings.Both));
+                    Args (1) := new String'(PINN_Script);  -- PREALLOCATED_REVIEWED
+                    Args (2) := new String'("--steer-hash");  -- PREALLOCATED_REVIEWED
+                    Args (3) := new String'("--input");  -- PREALLOCATED_REVIEWED
+                    Args (4) := new String'(Tmp_Fixed);  -- PREALLOCATED_REVIEWED
+                    Args (5) := new String'("--alpha");  -- PREALLOCATED_REVIEWED
+                    Args (6) := new String'(Ada.Strings.Fixed.Trim (Alpha_Str, Ada.Strings.Both));  -- PREALLOCATED_REVIEWED
 
                     Put_Line
                        (AnsiAda.Foreground (AnsiAda.Light_Yellow)

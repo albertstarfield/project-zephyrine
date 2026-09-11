@@ -1,0 +1,9 @@
+{
+  "source_file": "api_key_manager.adb",
+  "source_hash": "3fd43ff52b6cd4697f2b6a7039b74b8dbcad546f4f3056d07aa3178f111dc46b",
+  "rs_checksum": "3f588836ee99fe9c0b43ac0a65088ec2f87a373221b5b3ac544a0869c9e980b0",
+  "gc_checksum": "22b473d72781f3fe4dcd948107288e286f607758df803a22788ca19da29bbdfe",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 27
+}

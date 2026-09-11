@@ -1,0 +1,9 @@
+{
+  "source_file": "adelaide_server.adb",
+  "source_hash": "0b56236723a33ff9c671f04ee51c865f9efa00e2ae5021884b2ee811cc04a733",
+  "rs_checksum": "ad5b7d5d99cd33dc7c3052e9fbd92b3014de4b556ad995a4b50b674b3d52550f",
+  "gc_checksum": "3391878b153ab66449098ba3bfecb9ff7770abcdb951133929a33c49d1fd2438",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 172
+}

@@ -1,0 +1,9 @@
+{
+  "source_file": "sd_manager.ads",
+  "source_hash": "635407133867a5905006f2ccd16e395788cb015f667b2cb65546e9f14c7014b8",
+  "rs_checksum": "ecba487ac7832ee037f3e8f37c8051ea1158633f38b39527443d70303c0b9589",
+  "gc_checksum": "5b6e73e5752128aeb5bedb96483850a382404c3472d5ac43476ead758bb9c18f",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 14
+}

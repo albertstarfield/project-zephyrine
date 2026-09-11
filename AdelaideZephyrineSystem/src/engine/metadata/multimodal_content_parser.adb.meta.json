@@ -1,0 +1,9 @@
+{
+  "source_file": "multimodal_content_parser.adb",
+  "source_hash": "844f9e8cd0880113c4309ea5c6c262af819c02834cb4e69581c358d459383448",
+  "rs_checksum": "0adf4ea19ff23e7270de493e4e65ce30b2a8eaccad3bfcbe66e0a95537e01081",
+  "gc_checksum": "8dd8b848a5c2e47ff37a5d5565cc2ea89f4e70992abcfd70f6ae0ad5130efca7",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 31
+}

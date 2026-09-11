@@ -1,0 +1,9 @@
+{
+  "source_file": "proactive_engine.ads",
+  "source_hash": "fef06cebf162ddbd2075b31bb5adcbed3d6e6782eeb395e02b7ad43252d17f6a",
+  "rs_checksum": "ed3b10e11d8db7fad8ca174e3083160ab779203e1688b6838d3c1aca646b1b26",
+  "gc_checksum": "6c59df5dfb4268d8d319c644de2cb49c5c36ed33e3e5aea471f89e2507004010",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 9
+}

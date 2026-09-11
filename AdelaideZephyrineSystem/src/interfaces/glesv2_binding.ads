@@ -45,7 +45,7 @@ package GLESv2_Binding is
    subtype GLenum     is Interfaces.Unsigned_32;
    subtype GLboolean  is Interfaces.Unsigned_8;
    subtype GLbitfield is Interfaces.Unsigned_32;
-   subtype GLvoid     is System.Address;  -- Opaque pointer for vertex data
+      subtype GLvoid is System.Address; -- FFI: C void* binding  -- Opaque pointer for vertex data
    subtype GLint      is Interfaces.Integer_32;
    subtype GLuint     is Interfaces.Unsigned_32;
    subtype GLfloat    is Interfaces.C_float;
@@ -234,7 +234,7 @@ package GLESv2_Binding is
    --  string(s) for the shader object."
    procedure Shader_Source (Shader     : GLuint;
                             Count      : GLsizei;
-                            String     : access constant System.Address;
+                             String     : access constant System.Address; -- FFI: C string pointer binding
                             Length     : access constant GLint)
      with Import => True,
           Convention => C,

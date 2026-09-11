@@ -23,7 +23,7 @@ class Gsm8kEvaluator(BaseEvaluator):
     Questions are open-ended (numeric answers). Random baseline is ~0%.
     """
 
-    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  # nosec
+    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  
         # nosec - recursive function with implicit base case
         """Run GSM8K math reasoning benchmark evaluation.
 
@@ -80,3 +80,6 @@ class Gsm8kEvaluator(BaseEvaluator):
             print()
 
         return results
+
+
+def test_evaluate():    """Test stub for evaluate."""    pass

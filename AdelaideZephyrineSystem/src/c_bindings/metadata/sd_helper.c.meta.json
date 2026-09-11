@@ -1,0 +1,9 @@
+{
+  "source_file": "sd_helper.c",
+  "source_hash": "1feeafd90f8dc32b9dfd7545cda45a669df115f7a333ce55b7f8e34f887266a4",
+  "rs_checksum": "f933c829d25a8223884db8d2e18e0ea7069d443d0d0006459ff466b6d00a2afc",
+  "gc_checksum": "1739b8fa67b897fd11b2ce5b5ff1fdfda75643393c97a124d064dafbc6961091",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

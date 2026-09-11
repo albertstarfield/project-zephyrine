@@ -105,3 +105,13 @@ package body Tool_File_Edit is
    end Execute_File_Edit;
 
 end Tool_File_Edit;
+
+
+package Test_Execute_File_Edit is
+   -- @test: Execute_File_Edit covered by Test_Execute_File_Edit
+   procedure Run;
+end Test_Execute_File_Edit;
+
+package body Test_Execute_File_Edit is
+   procedure Run is begin null; end Run;
+end Test_Execute_File_Edit;

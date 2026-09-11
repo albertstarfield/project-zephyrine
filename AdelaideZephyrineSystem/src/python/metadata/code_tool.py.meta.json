@@ -1,0 +1,9 @@
+{
+  "source_file": "code_tool.py",
+  "source_hash": "58ee517dabaa5ee1d49f9ebec510604cac517a29f2bd8fa3e168c903e14b273f",
+  "rs_checksum": "905e59890f9dc9615e602d656aa18b82fd87bd026982bf8d69c819d4c72cf45a",
+  "gc_checksum": "14752dbd9e140bfa963aae2517c33240e0b37e29a16a535f1e5a1aabe09a3d8a",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

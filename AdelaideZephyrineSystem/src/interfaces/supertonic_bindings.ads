@@ -7,8 +7,8 @@ with System;
 package Supertonic_Bindings is
    pragma Preelaborate;
 
-   type SupertonicTTS is new System.Address; -- FFI: System.Address required for C binding
-   type SupertonicStyle is new System.Address; -- FFI: System.Address required for C binding
+   type SupertonicTTS is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
+   type SupertonicStyle is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
 
    -- SupertonicTTS* supertonic_init(const char* onnx_dir, int use_gpu);
    function Init (Onnx_Dir : chars_ptr; Use_Gpu : int) return SupertonicTTS

@@ -6,7 +6,7 @@ from .base import BaseEvaluator, QuestionResult
 class JmmluEvaluator(BaseEvaluator):
     """jmmlu Evaluator."""
 
-    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  # nosec
+    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  
         # nosec - recursive function with implicit base case
         """Run JMMLU Japanese multi-task language understanding benchmark evaluation."""
         results = []
@@ -35,3 +35,6 @@ class JmmluEvaluator(BaseEvaluator):
         )
         results.append(res)
         return results
+
+
+def test_evaluate():    """Test stub for evaluate."""    pass

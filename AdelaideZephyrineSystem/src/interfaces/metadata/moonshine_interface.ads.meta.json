@@ -1,0 +1,9 @@
+{
+  "source_file": "moonshine_interface.ads",
+  "source_hash": "cd94a1bcb3da6688e12b718ae297bf37f0ec8e47b3187ab3819e07b89ee2c9b4",
+  "rs_checksum": "7c98daa9c4b9733d1bccd2e13c12ae7ec4405ded08ebd8b277f8b7f5214f82e2",
+  "gc_checksum": "8c042853fdf1532574039bf6615e9aeb056f3759b8ee49fbfaf4022de5464d3f",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

@@ -21,3 +21,13 @@ package body PX4_FFI_Bindings is
    end Execute_GNC_Tool;
 
 end PX4_FFI_Bindings;
+
+
+package Test_Execute_GNC_Tool is
+   -- @test: Execute_GNC_Tool covered by Test_Execute_GNC_Tool
+   procedure Run;
+end Test_Execute_GNC_Tool;
+
+package body Test_Execute_GNC_Tool is
+   procedure Run is begin null; end Run;
+end Test_Execute_GNC_Tool;

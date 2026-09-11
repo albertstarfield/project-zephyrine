@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_manager.ads",
+  "source_hash": "fb89025350127b50ddf5b7eeb7b8955bc1352323558cce33fb4b722f56b9ca8c",
+  "rs_checksum": "6c83c5fc2aa61b181d638a154897669dd06dd1d0dcb0fe039284bcf361eeb55f",
+  "gc_checksum": "e1ef3badee78a082350090209161eab1243187b5cef322f92ecbb3350bba50eb",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 10
+}

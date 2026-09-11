@@ -1,0 +1,9 @@
+{
+  "source_file": "scheduler_manager.adb",
+  "source_hash": "dad733908c7aae2a99dd8eb6ee8e661edb3286a8a4f1b3f8530e1e29f622d163",
+  "rs_checksum": "a3fab6c79685cb1ca7c20ff82a2ce658e6673efb3be2029776306cbb1c48783d",
+  "gc_checksum": "f3d5559e40d30cb54627f5d876eaa7265b74d7ec0a3c2647f9481021a303dc8e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 11
+}

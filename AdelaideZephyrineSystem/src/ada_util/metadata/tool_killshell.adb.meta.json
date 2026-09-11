@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_killshell.adb",
+  "source_hash": "e365d31936d113b74619ffc3512cadabc9ff77de0e16840407553e52aab96a35",
+  "rs_checksum": "ac58025c33f3630e2ca25152b322b502d3a5e28d15681d8a3ce987815c6c7037",
+  "gc_checksum": "71252561e31fd023289c4ffbfb4ddb02f10bfb8f5be5b0338f2c38dfce8c8288",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

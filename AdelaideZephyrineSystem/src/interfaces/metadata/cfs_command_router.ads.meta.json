@@ -1,0 +1,9 @@
+{
+  "source_file": "cfs_command_router.ads",
+  "source_hash": "f4a3770b2ce1b77895f20c771f7c02287a3dc268fdffb6c6c07fe9b924d186e6",
+  "rs_checksum": "cfc3bd579fd41b3a0a0049abec11851540737bda8f1a1d2ec2a0e5c2dbb4e059",
+  "gc_checksum": "2df22c03d0424685deb3fd4634ab31a9530c28135a0ac8afed3f3179cab89a00",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

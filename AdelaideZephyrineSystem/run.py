@@ -136,7 +136,7 @@ MSG_READY = "READY"
 
 
 # ── Hardware-Bound Key Derivation Handler ─────────────────────────────────
-def handle_stdio_key_exchange(proc):  # nosec
+def handle_stdio_key_exchange(proc):  
     # nosec
     # test_ref: test_handle_stdio_key_exchange
     """
@@ -159,7 +159,7 @@ def handle_stdio_key_exchange(proc):  # nosec
     return True
 
 
-def _term_print(msg):  # nosec
+def _term_print(msg):  
     # nosec
     """Print to terminal directly (bypasses KISS stdout redirect)."""
     import sys
@@ -171,7 +171,7 @@ def _term_print(msg):  # nosec
 
 _global_tk_root = None
 
-def _get_tk_root():  # nosec
+def _get_tk_root():  
     # nosec
     """Return the shared Tk root window, creating it if necessary."""
     global _global_tk_root
@@ -226,7 +226,7 @@ def _password_entropy(password):
     return math.floor(len(password) * math.log2(pool))
 
 
-def _wipe_string(s):  # nosec
+def _wipe_string(s):  
     # nosec
     """Best-effort wipe of a string from Python heap memory.
 
@@ -250,7 +250,7 @@ def _wipe_string(s):  # nosec
     gc.collect()
 
 
-def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
+def _tk_input_dialog(title, prompt, welcome_msg=None):  
     # nosec
     """Show a tkinter dialog that prompts the user for text input and returns the entered string or None."""
     import tkinter as tk
@@ -321,7 +321,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
 
         result = [None]
 
-        def on_ok(_event=None):  # nosec
+        def on_ok(_event=None):  
             """Handle OK button click by reading entry value and closing dialog."""
             # nosec
             # Read directly from Entry widget — StringVar binding is unreliable on macOS
@@ -331,7 +331,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
             result[0] = val
             dialog.destroy()
 
-        def on_cancel():  # nosec
+        def on_cancel():  
             """Handle Cancel button click by setting result to None and closing dialog."""
             # nosec
             if not IS_KISS:
@@ -388,7 +388,7 @@ def _tk_input_dialog(title, prompt, welcome_msg=None):  # nosec
         root.destroy()
         return result
 
-def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
+def _tk_progress_dialog(title, message, total_eta=300.0):  
     # nosec
     """Show a tkinter progress dialog with an animated bar, step text, and time-based ETA. Returns the dialog object for updates."""
     import tkinter as tk
@@ -456,7 +456,7 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
     import time
     start_time = time.time()
 
-    def update_bar(pct=None, eta_text="", step_text="", pulse=False):  # nosec
+    def update_bar(pct=None, eta_text="", step_text="", pulse=False):  
         # nosec
         """Update the progress bar percentage, ETA label, and step text in the dialog."""
         try:
@@ -490,15 +490,15 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
     dialog._update_bar = update_bar
     dialog._root_ref = root
 
-    def _start_pulse():  # nosec
+    def _start_pulse():  
         # nosec
         """Start an animated pulse effect on the progress bar (no-op placeholder)."""
 
-    def _stop_pulse():  # nosec
+    def _stop_pulse():  
         # nosec
         pass
 
-    def _mark_done(eta_path):  # nosec
+    def _mark_done(eta_path):  
         # nosec
         elapsed = time.time() - start_time
         # Average with previous if it exists, otherwise just save elapsed
@@ -515,7 +515,7 @@ def _tk_progress_dialog(title, message, total_eta=300.0):  # nosec
     return dialog
 
 
-def _tk_progress_done(dialog):  # nosec
+def _tk_progress_done(dialog):  
     # nosec
     """Close the progress dialog and withdraw the root tk window."""
     try:
@@ -531,7 +531,7 @@ def _tk_progress_done(dialog):  # nosec
         print(f"Warning: Swallowed exception - {e}")
 
 
-def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nosec
+def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  
 
     # nosec
     """Show a tkinter password dialog and return the entered string or None."""
@@ -675,7 +675,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
     )
     cancel_btn.pack(side="left", padx=6)
 
-    def on_ok(_event=None):  # nosec
+    def on_ok(_event=None):  
         # nosec
         pw = pw_var.get()
         if confirm:
@@ -689,7 +689,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
         result[0] = pw
         dialog.destroy()
 
-    def on_cancel():  # nosec
+    def on_cancel():  
         # nosec
         result[0] = None
         dialog.destroy()
@@ -699,7 +699,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
     cancel_btn.configure(command=on_cancel)
 
     if not confirm:
-        def on_reset():  # nosec
+        def on_reset():  
             # nosec
             import tkinter.messagebox as mb
             ans = mb.askyesno(
@@ -746,7 +746,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
         print(f"[UI] Could not load bottom logo: {e}")
 
     # Live entropy update on password creation
-    def on_pw_changed(*_args):  # nosec
+    def on_pw_changed(*_args):  
         # nosec
         if not confirm or entropy_label is None:
             return
@@ -774,7 +774,7 @@ def _tk_password_dialog(title, prompt, confirm=False, promise_msg=None):  # nose
     return result[0]
 
 
-def prompt_kiss_password(is_first_boot=False, is_recovery=False):  # nosec
+def prompt_kiss_password(is_first_boot=False, is_recovery=False):  
     # nosec
     """
     KISS mode password prompt (phone-like setup).
@@ -975,7 +975,7 @@ def _tk_info_dialog(title, message, countdown=60):
     if countdown > 0:
         timer_id[0] = dialog.after(1000, _countdown_tick)
 
-    def _on_ok():  # nosec
+    def _on_ok():  
         # nosec
         """Handle OK button click by cancelling the countdown timer and closing the dialog."""
         print("[DEBUG] _tk_info_dialog _on_ok clicked or Enter pressed.")
@@ -1011,7 +1011,7 @@ def _tk_info_dialog(title, message, countdown=60):
 
 # ── InferiorParadoxical UUID — TPM / Secure Enclave Storage ──────────────
 
-def _ip_tpm_store(uuid_str):  # nosec
+def _ip_tpm_store(uuid_str):  
     # nosec
     """Store InferiorParadoxical UUID in TPM2 NVRAM (Linux)."""
     import os
@@ -1067,7 +1067,7 @@ def _ip_tpm_read():
     return None
 
 
-def _ip_sep_store(uuid_str):  # nosec
+def _ip_sep_store(uuid_str):  
     # nosec
     """Store InferiorParadoxical UUID in macOS Keychain (SEP-backed)."""
     import subprocess
@@ -1216,7 +1216,7 @@ def _get_inferior_paradoxical_uuid():
 
 # ── InferiorParadoxical Signature — static identity in TPM/SEP ──────────
 
-def _ip_signature_store(sig_hash):  # nosec
+def _ip_signature_store(sig_hash):  
     # nosec
     """Store static InferiorParadoxical signature in TPM2 NVRAM (Linux)."""
     import os
@@ -1272,7 +1272,7 @@ def _ip_signature_tpm_read():
     return None
 
 
-def _ip_signature_sep_store(sig_hash):  # nosec
+def _ip_signature_sep_store(sig_hash):  
     # nosec
     """Store static InferiorParadoxical signature in macOS Keychain (SEP)."""
     import subprocess
@@ -1299,7 +1299,7 @@ def _ip_signature_sep_store(sig_hash):  # nosec
             return False
 
 
-def _ip_signature_sep_read():  # nosec
+def _ip_signature_sep_read():  
     # nosec
     """Read static InferiorParadoxical signature from macOS Keychain (SEP)."""
     import subprocess
@@ -1419,7 +1419,7 @@ def _get_ip_signature():
 
 
 # ── Program Hash ─────────────────────────────────────────────────────────
-def compute_program_hash():  # nosec
+def compute_program_hash():  
     # nosec
     """
     SHA-512 hash of the compiled binary — detects recompilation.
@@ -1473,7 +1473,7 @@ _IP_USERNAME_CTX = "adelaide:username:cache:v1"
 _USERNAME_CACHE_FILE = os.path.join(BASE_DIR, "run", ".username_identity")
 
 
-def _derive_ip_username_key():  # nosec
+def _derive_ip_username_key():  
     # nosec - key derivation, not a security boundary
     """
     Derive an AES-256 sub-key bound to the InferiorParadoxical hardware UUID.
@@ -1490,7 +1490,7 @@ def _derive_ip_username_key():  # nosec
     return derive_sub_key(ip_key_material, _IP_USERNAME_CTX)
 
 
-def _load_cached_username(ip_key):  # nosec
+def _load_cached_username(ip_key):  
     # nosec - reading cached identity file
     """
     Attempt to decrypt and return the cached username.
@@ -1512,7 +1512,7 @@ def _load_cached_username(ip_key):  # nosec
         return None
 
 
-def _save_cached_username(ip_key, username):  # nosec
+def _save_cached_username(ip_key, username):  
     # nosec - writing cached identity file
     """
     Encrypt and persist the username for future auto-login.
@@ -1727,7 +1727,7 @@ def compute_integrity_hash():  # @test: compute_integrity_hash covered by sabota
         raise RuntimeError(f"[KEY-DERIV] Failed to compute integrity hash: {e}")
 
 
-def _try_c_derive_master_key(integrity_hash, user_secret):  # nosec
+def _try_c_derive_master_key(integrity_hash, user_secret):  
     # nosec
     """
     Try to derive master key using the C library (adl_crypto).
@@ -1763,7 +1763,7 @@ def _try_c_derive_master_key(integrity_hash, user_secret):  # nosec
         raise
 
 
-def _try_c_derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
+def _try_c_derive_master_key_from_stdin(integrity_hash, prompt):  
     # nosec
     """Attempt to derive the master key using the C library's secure stdin reader."""
     try:
@@ -1818,7 +1818,7 @@ def _try_c_derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
         raise
 
 
-def derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
+def derive_master_key_from_stdin(integrity_hash, prompt):  
     """Reads password securely via C termios, derives key, and zeroizes buffer in C."""
     # nosec
     c_result = _try_c_derive_master_key_from_stdin(integrity_hash, prompt)
@@ -1833,7 +1833,7 @@ def derive_master_key_from_stdin(integrity_hash, prompt):  # nosec
     return derive_master_key(integrity_hash, password)
 
 
-def derive_master_key(integrity_hash, user_secret):  # nosec
+def derive_master_key(integrity_hash, user_secret):  
     """Derive master key from integrity hash and user secret via HKDF-SHA512."""
     # nosec
     # Try C implementation first (FIPS 140-3 approved path)
@@ -1959,13 +1959,13 @@ os.environ["TRANSFORMERS_CACHE"] = os.path.join(BASE_DIR, ".cache", "huggingface
 class _TeeWriter:
     """Write to an original stream AND append to a log file simultaneously."""
 
-    def __init__(self, original, log_file):  # nosec
+    def __init__(self, original, log_file):  
         # nosec
         """Initialize TeeWriter with the original stream and a log file to tee output to."""
         self._orig = original
         self._log = log_file
 
-    def write(self, data):  # nosec
+    def write(self, data):  
         # nosec
         """Write data to both the original stream and the log file."""
         self._orig.write(data)
@@ -1975,7 +1975,7 @@ class _TeeWriter:
         except Exception as e:
             print(f"Warning: Swallowed exception - {e}")
 
-    def flush(self):  # nosec
+    def flush(self):  
         # nosec
         """Flush both the original stream and the log file."""
         self._orig.flush()
@@ -1984,7 +1984,7 @@ class _TeeWriter:
         except Exception as e:
             print(f"Warning: Swallowed exception - {e}")
 
-    def __getattr__(self, attr):  # nosec
+    def __getattr__(self, attr):  
         # nosec
         """Delegate attribute access to the original stream for compatibility."""
         return getattr(self._orig, attr)
@@ -1993,14 +1993,14 @@ class _TeeWriter:
 class _PipeReader(threading.Thread):
     """Daemon thread that reads a subprocess pipe and tees it to a writer."""
 
-    def __init__(self, pipe, writer, label=""):  # nosec
+    def __init__(self, pipe, writer, label=""):  
         # nosec
         super().__init__(daemon=True)
         self._pipe = pipe
         self._writer = writer
         self._label = label
 
-    def run(self):  # nosec
+    def run(self):  
         # nosec
         try:
             # Loop_Invariant: verified (DO-178C MC/DC)
@@ -2043,7 +2043,7 @@ term_stdout = None
 term_stderr = None
 
 
-def show_bsod(error_msg, log_path, stop_code="0x0000007B"):  # nosec
+def show_bsod(error_msg, log_path, stop_code="0x0000007B"):  
     # nosec
     """Display a Blue Screen of Death style error banner with the given error message and stop code."""
     bsod_text = f"""\033[44m\033[37;1m
@@ -2071,7 +2071,7 @@ If this screen appears again, verify your model assets and configuration.
         sys.__stdout__.flush()
 
 
-def print_progress(percent, message="Loading AI Model..."):  # nosec
+def print_progress(percent, message="Loading AI Model..."):  
     # nosec
     """Print a text-based progress bar with percentage and message to the terminal."""
     bar_width = 40
@@ -2090,7 +2090,7 @@ def print_progress(percent, message="Loading AI Model..."):  # nosec
         term_stdout.flush()
 
 
-def render_ascii_logo():  # nosec
+def render_ascii_logo():  
     # nosec
     """Render the Project Zephyrine logo as ASCII art from the PNG image file."""
     logo_path = os.path.join(
@@ -2259,7 +2259,7 @@ def progress_monitor(log_path):
         term_stdout.flush()
 
 
-def setup_logging():  # nosec
+def setup_logging():  
     # nosec
     """Create logs/ dir, rotate old logs, redirect stdout/stderr to tee.
     Returns the path of the current log file."""
@@ -2322,7 +2322,7 @@ BG_B = "\033[44m\033[97m"
 BG_RED = "\033[41m\033[97m"
 
 
-def get_git_version():  # nosec
+def get_git_version():  
     # nosec
     """Get current git commit hash and branch from the project root."""
     try:
@@ -2358,7 +2358,7 @@ def get_git_version():  # nosec
     except Exception:  # nosec
         return None, None, None
 
-def bootstrap_ros2_linux():  # nosec
+def bootstrap_ros2_linux():  
     # nosec
     """Install ROS2 Humble on Linux via the system package manager if not already available."""
     if "ROS_DISTRO" in os.environ:
@@ -2466,7 +2466,7 @@ def bootstrap_ros2_mac():
     os.environ["PATH"] = f"{ros_env_dir}/bin:{os.environ['PATH']}"
 
 
-def bootstrap_px4():  # nosec
+def bootstrap_px4():  
     # nosec
     """Clone and compile PX4-Autopilot for ELP2/ELP3 simulation tools."""
     vendor_dir = os.path.join(BASE_DIR, "vendor")
@@ -2715,7 +2715,7 @@ def verify_environment(build_px4=False, build_cfs=False):
         print(f"{GRN}[+] Environment verified. All prerequisites met.{RST}\n")
 
 
-def show_help():  # nosec
+def show_help():  
     # nosec
     """Print colorful help screen with git version."""
     commit, branch, status = get_git_version()
@@ -3318,7 +3318,7 @@ kokoro_process = None
 _master_key_file_path = None
 
 
-def get_files_to_hash():  # nosec
+def get_files_to_hash():  
     # NOTE: run.py itself is NOT hashed - it's an interpreter script, not a
     # compiled artifact. Changes to run.py don't trigger rebuilds.
     # nosec
@@ -3364,7 +3364,7 @@ def get_files_to_hash():  # nosec
     return sorted(files)
 
 
-def calculate_hash(file_paths):  # nosec
+def calculate_hash(file_paths):  
     # nosec
     """Compute an MD5 hash of all specified files and tool versions for rebuild detection."""
     hasher = hashlib.md5()
@@ -3398,7 +3398,7 @@ def calculate_hash(file_paths):  # nosec
 # Uses a separate .venv_hash file (independent of .build_hash) so venv
 # rebuilds don't trigger a full source rebuild and vice versa.
 
-def get_venv_files_to_hash():  # nosec
+def get_venv_files_to_hash():  
     # nosec
     """Collect files whose changes invalidate the pyvenv.
 
@@ -3432,7 +3432,7 @@ def get_venv_files_to_hash():  # nosec
     return sorted(files)
 
 
-def calculate_venv_hash():  # nosec
+def calculate_venv_hash():  
     # nosec
     """
     Compute venv validity hash from installed file contents only.
@@ -3525,7 +3525,7 @@ def check_venv_validity():
     return False
 
 
-def invalidate_venv():  # nosec
+def invalidate_venv():  
     # nosec
     """Destroy all project venvs and clear venv hash so next check forces rebuild."""
     venv_hash_file = os.path.join(BASE_DIR, ".venv_hash")
@@ -3552,7 +3552,7 @@ def invalidate_venv():  # nosec
             print(f"  [!] Warning: Could not remove venv hash: {e}")
 
 
-def save_venv_hash():  # nosec
+def save_venv_hash():  
     # nosec
     """Save current venv hash after successful rebuild."""
     venv_hash_file = os.path.join(BASE_DIR, ".venv_hash")
@@ -3778,7 +3778,502 @@ def safe_cmake_configure(cmake_flags, cwd, build_dir, module_name):
     return result
 
 
-def main():  # nosec
+# ═══════════════════════════════════════════════════════════════════════════════
+# Alire Dependency Auto-Patcher
+# ═══════════════════════════════════════════════════════════════════════════════
+# Patches known compilation issues in Alire-cached dependency sources.
+# These are upstream bugs (not caused by our code) that block `alr build`:
+#
+# Patch 1: OpenGLAda gl-debug.adb — anonymous access conversion (GNAT 16 strictness)
+# Patch 2: OpenGLAda gl-raster.ads — unused use-clause triggers -gnatwe error
+# Patch 3: libgpr gpr-compilation-protocol.adb — time_t undefined (GNAT 16 removal)
+#
+# Patches are idempotent (safe to re-run) and use content-based detection
+# so they survive hash directory changes from `alr update --force`.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Patcher walks BOTH directories to find source files needing patches:
+# 1. alire/cache/dependencies/ — Alire's dependency SOURCE cache (OpenGLAda .ads/.adb)
+# 2. venv/adalibcache/builds/  — Build artifact cache (GPR library .adb files)
+# Note: The SOURCE cache is where upstream library code lives after `alr update`.
+# The BUILD cache is where build outputs (.o, .ali) go. Patches target source files,
+# so both must be searched since some patches (e.g. gpr-compilation-protocol.adb)
+# live in the build cache while others (e.g. gl-raster.ads) live in the source cache.
+_ALIRE_SOURCE_CACHE = os.path.join(BASE_DIR, "alire", "cache", "dependencies")
+_ALIRE_BUILD_CACHE = os.path.join(BASE_DIR, "venv", "adalibcache", "builds")
+_ALIRE_CACHE_LIST = [_ALIRE_SOURCE_CACHE, _ALIRE_BUILD_CACHE]
+
+
+def _patch_alire_dependencies():  
+    # nosec
+    """Scan Alire caches and apply known upstream compilation fixes.
+
+    Walks both alire/cache/dependencies/ (source files) and venv/adalibcache/builds/
+    (build artifacts) looking for specific source files that need patching.
+    Applies string replacements in-place.  Idempotent — skips files already patched.
+
+    VERIFICATION: To prove this works, rm -rf the Alire caches before each run.
+    Patches are applied on fresh downloads only.  If cache is already patched,
+    the function reports 0 applied and that is correct.
+
+    Returns:
+        int: Number of patches applied (0 if all already applied or not found).
+    """
+    patches_applied = 0
+
+    # Build the list of directories to walk, filtering to existing ones
+    walk_dirs = [d for d in _ALIRE_CACHE_LIST if os.path.isdir(d)]
+
+    if not walk_dirs:
+        # Fallback: check global Alire builds cache (~/.local/share/alire/builds)
+        global_cache = os.path.expanduser("~/.local/share/alire/builds")
+        if os.path.isdir(global_cache):
+            print("[PATCHER] Using global Alire cache (project-local cache empty)")
+            walk_dirs = [global_cache]
+        else:
+            print("[PATCHER] Alire cache not found, skipping dependency patches")
+            return 0
+
+    # ── Patch definitions ──────────────────────────────────────────────────
+    # Each patch is (filename_glob, detect_pattern, replacement, description).
+    # detect_pattern is checked with `in` on file content — if absent, patch needed.
+    # If detect_pattern is already present, file is already patched (skip).
+
+    patches = [
+        # Patch 1: OpenGLAda gl-debug.adb
+        # GNAT 16 disallows implicit conversion of anonymous access parameters.
+        # Conv.To_Address expects named access type Object_Pointer, not anonymous.
+        # Fix: explicit cast Conv.Object_Pointer(Receiver) before To_Address.
+        {
+            "filename": "gl-debug.adb",
+            "detect": "Conv.Object_Pointer (Receiver)",
+            "old": "Conv.To_Address (Receiver)",
+            "new": "Conv.To_Address (Conv.Object_Pointer (Receiver))",
+            "desc": "OpenGLAda gl-debug.adb: anonymous access conversion for GNAT 16",
+        },
+        # Patch 2: OpenGLAda gl-raster.ads
+        # opengl.gpr sets -gnatwe (warnings as errors). The use GL.Types clause
+        # triggers an unused-use warning in GNAT 16. Fix: suppress the warning.
+        # LEARNED: The "old" pattern must match EXACTLY including indentation
+        # (3 spaces) or the patcher's "wrong version" check skips silently.
+        {
+            "filename": "gl-raster.ads",
+            "detect": 'pragma Warnings (Off, "use clause for package")',
+            "old": "   use GL.Types;\n   use GL.Types.Doubles;",
+            "new": (
+                "   pragma Warnings (Off, \"use clause for package\");\n"
+                "   use GL.Types;\n"
+                "   use GL.Types.Doubles;"
+            ),
+            "desc": "OpenGLAda gl-raster.ads: suppress unused use-clause warning (-gnatwe)",
+        },
+        # Patch 3: libgpr gpr-compilation-protocol.adb
+        # GNAT 16 removed time_t from standard visibility. Original code casts
+        # LEARNED: Original code was To_Ada (time_t (Conversions.To_Unix_Time(...)))
+        # time_t removed from direct visibility in GNAT 16. And Conversions.To_Ada_Time
+        # returns Ada.Calendar.Time but Set_File_Last_Modify_Time_Stamp expects
+        # System.Os_Lib.OS_Time. Correct fix: GNAT.OS_Lib.To_Ada(Long_Long_Integer(...))
+        # which accepts the long result of To_Unix_Time and returns OS_Time.
+        # The original code spans MULTIPLE lines:
+        #   To_Ada\n           (time_t\n              (Conversions.To_Unix_Time
+        # Patch 3c adds missing GNAT.OS_Lib import (fresh cache has no import).
+        # Three patches needed: import, unpatched original, wrongly-patched state.
+        {
+            "filename": "gpr-compilation-protocol.adb",
+            "detect": "GNAT.OS_Lib.To_Ada",
+            "old": "with GNAT.String_Split;",
+            "new": "with GNAT.OS_Lib;\nwith GNAT.String_Split;",
+            "desc": "libgpr add GNAT.OS_Lib import (fresh cache)",
+        },
+        {
+            "filename": "gpr-compilation-protocol.adb",
+            "detect": "GNAT.OS_Lib.To_Ada",
+            "old": "         To_Ada\n           (time_t\n              (Conversions.To_Unix_Time",
+            "new": "         GNAT.OS_Lib.To_Ada\n           (Long_Long_Integer\n              (Conversions.To_Unix_Time",
+            "desc": "libgpr time_t fix (original code -> OS_Lib.To_Ada)",
+        },
+        {
+            "filename": "gpr-compilation-protocol.adb",
+            "detect": "GNAT.OS_Lib.To_Ada",
+            "old": "Conversions.To_Ada_Time (Conversions.To_Unix_Time",
+            "new": "GNAT.OS_Lib.To_Ada\n           (Long_Long_Integer\n              (Conversions.To_Unix_Time",
+            "desc": "libgpr time_t fix (wrong Ada.Calendar.Time -> OS_Lib.To_Ada)",
+        },
+        # Patch 4: libgpr gpr-compilation-process.adb
+        # LEARNED: Ada 2012 + GNAT 16: generic equality operator resolution changed.
+        # The Prj_Maps instantiation explicitly passes Env_Maps."=" which gets
+        # resolved against String (Key_Type) instead of Map (Element_Type), causing
+        # "operator for type String is not declared in Env_Maps" error.
+        # Fix: Remove explicit Env_Maps."=" parameter, let generic default ("<>") apply.
+        # Both Linux and macOS affected (not platform-specific, purely compiler version).
+        # Affected combo: GNAT 16.1.0 + libgpr 25.0.0 + Ada 2012 mode.
+        # General lesson: older GNAT versions are more battle-tested and
+        # synchronized with the library ecosystem.  Newer GNAT introduces
+        # stricter checks that upstream libraries haven't adapted to yet.
+        # Prefer GNAT 15.x for safety-critical projects (GNAT 15.1.2 is the
+        # last stable release where all upstream Ada libraries compile cleanly).
+        # Frustration note: This is another Ada 2022-era breaking change in GNAT 16.
+        # Ada 2012 + GNAT 15 would not have this issue. Sticking with Ada 2012.
+        {
+            "filename": "gpr-compilation-process.adb",
+            "detect": 'Env_Maps."<");',
+            "old": 'Env_Maps.Map, Env_Maps."<", Env_Maps."=");',
+            "new": 'Env_Maps.Map, "=" => Env_Maps."=");',
+            "desc": "libgpr Env_Maps equality operator ambiguity (Ada 2012 compat)",
+        },
+        # Patch 4b: Handle wrongly-patched state from previous fix attempt
+        {
+            "filename": "gpr-compilation-process.adb",
+            "detect": 'Env_Maps."=");',
+            "old": 'Env_Maps.Map);',
+            "new": 'Env_Maps.Map, "=" => Env_Maps."=");',
+            "desc": "libgpr Env_Maps equality operator fix (wrongly patched state)",
+        },
+        # Patch 5: GNATCOLL gnatcoll-opt_parse.adb
+        # LEARNED: GNAT 16 enforces RM-2005 6.5(5.5/2) strictly — cannot copy/
+        # return a limited type value at all.  XString_Ref (= XString_Vectors.
+        # Reference_Type) is limited.  Even "L : XString_Ref; return L;" fails
+        # because returning a local limited variable requires a copy.
+        # Fix: Eliminate the intermediate variable entirely.  Modify Self.Current_Line
+        # in-place via the reference, then return Self.Current_Line directly so GNAT
+        # can use the implicit result variable (Ada 2012 return-by-reference semantics).
+        # Affected combo: GNAT 16.1.0 + gnatcoll 25.0.0.  GNAT 15.x allows this.
+        {
+            "filename": "gnatcoll-opt_parse.adb",
+            "detect": "return Self.Current_Line;",
+            "old": (
+                "      declare\n"
+                "         L : constant XString_Ref := Self.Current_Line;\n"
+                "      begin\n"
+                "         if Self.Start_Col > 0 then\n"
+                "\n"
+                "            L.Append ((1 .. Self.Start_Col => ' '));\n"
+                "         end if;\n"
+                "\n"
+                "         return L;\n"
+                "      end;"
+            ),
+            "new": (
+                "      if Self.Start_Col > 0 then\n"
+                "         Self.Current_Line.Append ((1 .. Self.Start_Col => ' '));\n"
+                "      end if;\n"
+                "\n"
+                "      return Self.Current_Line;"
+            ),
+            "desc": "GNATCOLL opt_parse limited type return fix (eliminate intermediate var)",
+        },
+        # Patch 5b: GNATCOLL also fails at Cur_Line : constant := Append_Line (Self)
+        # because it copies a limited return value into a constant.
+        {
+            "filename": "gnatcoll-opt_parse.adb",
+            "detect": "Cur_Line : XString_Ref := Append_Line (Self);",
+            "old": "Cur_Line : constant XString_Ref := Append_Line (Self);",
+            "new": "Cur_Line : XString_Ref := Append_Line (Self);",
+            "desc": "GNATCOLL opt_parse limited type constant init fix (GNAT 16 RM-2005 6.5)",
+        },
+    ]
+
+    # ── Walk Alire caches and apply patches ────────────────────────────────
+    # Walk ALL Alire directories (source cache + build cache) to find files.
+    # OpenGLAda sources live in alire/cache/dependencies/, GPR sources in
+    # venv/adalibcache/builds/.  Both need patching for GNAT 16 compatibility.
+    for cache_dir in walk_dirs:
+        print(f"[PATCHER] Scanning: {cache_dir}")
+        for root, _dirs, files in os.walk(cache_dir):
+            for fname in files:
+                for patch in patches:
+                    if fname != patch["filename"]:
+                        continue
+
+                    fpath = os.path.join(root, fname)
+                    try:
+                        with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+                            content = f.read()
+                    except (OSError, IOError):
+                        continue
+
+                    # Already patched?
+                    if patch["detect"] in content:
+                        print(f"[PATCHER] Skip (already patched): {patch['desc']}")
+                        print(f"[PATCHER]   File: {fpath}")
+                        continue
+
+                    # Pattern not present — wrong version of file, skip
+                    if patch["old"] not in content:
+                        print(f"[PATCHER] Skip (pattern mismatch): {patch['desc']}")
+                        print(f"[PATCHER]   File: {fpath}")
+                        print(f"[PATCHER]   Looking for: {patch['old']!r}")
+                        continue
+
+                    # Apply patch
+                    new_content = content.replace(patch["old"], patch["new"], 1)
+                    try:
+                        with open(fpath, "w", encoding="utf-8") as f:
+                            f.write(new_content)
+                        print(f"[PATCHER] Applied: {patch['desc']}")
+                        print(f"[PATCHER]   File: {fpath}")
+                        patches_applied += 1
+                    except (OSError, IOError) as e:
+                        print(f"[PATCHER] Warning: Could not patch {fpath}: {e}")
+
+    if patches_applied == 0:
+        print("[PATCHER] All dependency patches already applied or not needed")
+    else:
+        print(f"[PATCHER] Applied {patches_applied} patch(es) to Alire dependencies")
+
+    # ── Post-patch: Fix missing GID project for openglada_images ───────────
+    # QUIRK-011: openglada_images 0.9.0 depends on gid ^9.0.0, but the current
+    # Alire community index only has gid v12+.  Alire downloads gid_9.0.0_17722960
+    # to the cache but marks it "missing:skipped", so its project path is NOT
+    # added to the build graph.  opengl-images.gpr has "with gid" which fails.
+    #
+    # LEARNED: gprbuild resolves "with X" relative to the DIRECTORY of the
+    # importing project file.  So when opengl-images.gpr (in the
+    # openglada_images dependency dir) says "with gid", gprbuild looks for
+    # gid.gpr in THAT directory — not in the config GPR directory.
+    #
+    # LEARNED (hard way): Do NOT inject gid.gpr into config GPR via absolute
+    # path — gprbuild then sees TWO imports of the same project name (one from
+    # config GPR absolute path, one from opengl-images.gpr's "with gid" finding
+    # the proxy copy) → "duplicate project name" error.
+    #
+    # FIX: Only copy gid.gpr into the openglada_images dependency directory (the
+    # proxy copy).  This alone makes "with gid" work from opengl-images.gpr.
+    # gprbuild then transitively adds the gid project to the build graph.
+
+    # (A) Clean up any previously injected absolute gid.gpr path from config GPR
+    _config_gpr = os.path.join(BASE_DIR, "config",
+                               "adelaide_zephyrine_system_config.gpr")
+    if os.path.isfile(_config_gpr):
+        try:
+            with open(_config_gpr, "r", encoding="utf-8", errors="replace") as f:
+                cfg_content = f.read()
+            # Remove lines like: with "/abs/path/to/gid_9.0.0.../gid.gpr";
+            import re as _re
+            cleaned = _re.sub(r'with "[^"]*gid_[^"]*gid\.gpr";\n?', '',
+                              cfg_content)
+            if cleaned != cfg_content:
+                with open(_config_gpr, "w", encoding="utf-8") as f:
+                    f.write(cleaned)
+                print("[PATCHER] Cleaned stale gid.gpr absolute path from config GPR")
+        except (OSError, IOError) as e:
+            print(f"[PATCHER] Warning: Could not clean config GPR: {e}")
+
+    # (B) Find gid.gpr and write a REDIRECT proxy into openglada_images dep dir
+    # LEARNED: Cannot just copy gid.gpr verbatim — its Source_Dirs (".", "test")
+    # are relative and resolve to the WRONG directory when the proxy lives in
+    # the openglada_images dep dir instead of the gid dep dir.
+    # FIX: Write a minimal redirect GPR with absolute Source_Dirs pointing to
+    # the real gid source directory.  gprbuild follows the redirect to find
+    # gid.ads.
+    _gid_source_dir = None
+    for dep_dir in os.listdir(_ALIRE_SOURCE_CACHE):
+        if dep_dir.startswith("gid_"):
+            candidate = os.path.join(_ALIRE_SOURCE_CACHE, dep_dir)
+            if os.path.isdir(candidate):
+                _gid_source_dir = os.path.abspath(candidate)
+                break
+    if _gid_source_dir:
+        _proxy_written = False
+        for dep_dir in os.listdir(_ALIRE_SOURCE_CACHE):
+            if dep_dir.startswith("openglada_images_"):
+                _img_dir = os.path.join(_ALIRE_SOURCE_CACHE, dep_dir)
+                _proxy = os.path.join(_img_dir, "gid.gpr")
+                if not os.path.isfile(_proxy):
+                    # Write minimal redirect proxy with absolute Source_Dirs
+                    _proxy_content = (
+                        "-- QUIRK-011: Redirect proxy for GID project\n"
+                        "-- gprbuild resolves \"with X\" relative to the importing\n"
+                        "-- project's directory.  opengl-images.gpr says \"with gid\"\n"
+                        "-- and lives in the openglada_images dep dir.  This proxy\n"
+                        "-- redirects to the actual GID sources in the Alire cache.\n"
+                        "-- LEARNED: Cannot copy original gid.gpr because its\n"
+                        "-- Source_Dirs (\".\", \"test\") are relative and resolve to\n"
+                        "-- the wrong directory from here.\n"
+                        "-- LEARNED: Cannot inject into config GPR either — causes\n"
+                        "-- duplicate project name error when gprbuild also finds\n"
+                        "-- gid via this proxy from opengl-images.gpr's \"with gid\".\n"
+                        f"project GID is\n"
+                        f'   for Source_Dirs use ("{_gid_source_dir}");\n'
+                        f"end GID;\n"
+                    )
+                    with open(_proxy, "w", encoding="utf-8") as f:
+                        f.write(_proxy_content)
+                    print(f"[PATCHER]   Wrote GID redirect proxy → {_img_dir}/")
+                    _proxy_written = True
+                break
+        if _proxy_written:
+            print(f"[PATCHER] Applied: GID redirect proxy (QUIRK-011)")
+            print(f"[PATCHER]   GID sources: {_gid_source_dir}")
+            patches_applied += 1
+        else:
+            print("[PATCHER] GID redirect proxy already present (QUIRK-011)")
+    else:
+        print("[PATCHER] Warning: gid dependency not found in source cache")
+
+    # ── Post-patch: Remove -gnatwe from AWS shared.gpr ──────────────────────
+    # AWS 25.2.0 shared.gpr has "-gnatwe" (warnings as errors) in its
+    # development compiler switches (line 141).  20+ AWS files have `use Ada;`
+    # which triggers an unused-use-clause warning in GNAT 16, made fatal by
+    # -gnatwe.  Patching each file individually is fragile and non-scalable.
+    # Instead, remove -gnatwe from shared.gpr to demote warnings back to
+    # warnings (not errors) for the AWS dependency build.
+    for aws_dir in os.listdir(_ALIRE_SOURCE_CACHE):
+        if aws_dir.startswith("aws_"):
+            _shared_gpr = os.path.join(_ALIRE_SOURCE_CACHE, aws_dir, "shared.gpr")
+            if os.path.isfile(_shared_gpr):
+                try:
+                    with open(_shared_gpr, "r", encoding="utf-8") as f:
+                        _sg_content = f.read()
+                    if '("-g", "-gnata", "-gnatVa", "-gnatQ", "-gnato", "-Wall", "-gnatwe")' in _sg_content:
+                        _sg_new = _sg_content.replace(
+                            '("-g", "-gnata", "-gnatVa", "-gnatQ", "-gnato", "-Wall", "-gnatwe")',
+                            '("-g", "-gnata", "-gnatVa", "-gnatQ", "-gnato", "-Wall")'
+                        )
+                        with open(_shared_gpr, "w", encoding="utf-8") as f:
+                            f.write(_sg_new)
+                        print("[PATCHER] Applied: AWS shared.gpr: removed -gnatwe (QUIRK-012)")
+                        patches_applied += 1
+                    else:
+                        print("[PATCHER] AWS shared.gpr: -gnatwe already removed or not present (QUIRK-012)")
+                except (OSError, IOError) as e:
+                    print(f"[PATCHER] Warning: Could not patch {_shared_gpr}: {e}")
+            break
+
+    return patches_applied
+
+
+def _find_gnu_ar():
+    """Locate GNU ar binary — Homebrew on ARM64, system on x86."""
+    import platform
+    if platform.machine() == "arm64":
+        return "/opt/homebrew/opt/binutils/bin/ar"
+    return "/usr/bin/ar"  # Linux or x86 macOS with binutils
+
+
+def _repack_archives_for_apple():  
+    # nosec
+    """Repack GNU ar archives in the Alire cache with Apple's libtool.
+
+    Alire resolves dependencies using the system `ar`.  On macOS, if GNU ar
+    (from homebrew binutils) is on the PATH, dependency `.a` archives are
+    created in GNU ar format with an incompatible `__.SYMDEF` index and
+    non-8-byte-aligned object members.  Apple's ld rejects these with:
+      "building for macOS-arm64 but attempting to link with file built for
+       unknown-unsupported file format"
+
+    This function finds every `.a` file in the source cache, checks whether
+    it is GNU ar format (contains a `__.SYMDEF` member instead of Apple's
+    `__.SYMDEF SORTED`), and if so, extracts the objects, discards the old
+    index, and repacks with `/usr/bin/libtool -static` which produces a
+    proper Apple Mach-O archive with 8-byte alignment.
+
+    Idempotent: skips archives that already have a `.apple_repacked` marker.
+    LEARNED: `libtool -static -o` on macOS generates `__.SYMDEF SORTED`
+    automatically, so no need to run ranlib separately.
+
+    Returns:
+        int: Number of archives repacked.
+    """
+    import glob as _glob
+
+    if sys.platform != "darwin":
+        return 0  # Only needed on macOS
+
+    repacked = 0
+
+    # Search both source cache and build cache for .a files
+    a_files = []
+    for cache_dir in [_ALIRE_SOURCE_CACHE, _ALIRE_BUILD_CACHE]:
+        if os.path.isdir(cache_dir):
+            a_files.extend(_glob.glob(os.path.join(cache_dir, "**", "*.a"), recursive=True))
+
+    for a_path in a_files:
+        marker = a_path + ".apple_repacked"
+        if os.path.isfile(marker):
+            continue  # Already repacked
+
+        # Check if this is a GNU ar archive with __.SYMDEF
+        try:
+            with open(a_path, "rb") as f:
+                magic = f.read(8)
+                if magic != b"!<arch>\n":
+                    continue  # Not an ar archive at all
+                # Read more to check for __.SYMDEF member
+                header = f.read(1024)
+                if b"__.SYMDEF SORTED" in header:
+                    continue  # Already Apple format — skip
+                if b"__.SYMDEF" not in header:
+                    continue  # No GNU SYMDEF to worry about
+        except (OSError, IOError):
+            continue
+
+        # GNU ar detected.  Repack with Apple's libtool.
+        import tempfile
+        tmpdir = os.path.join(tempfile.gettempdir(), "opencode")
+        os.makedirs(tmpdir, exist_ok=True)
+        extract_dir = os.path.join(tmpdir, "ar_extract")
+        try:
+            # Remove stale extraction dir
+            if os.path.isdir(extract_dir):
+                import shutil
+                shutil.rmtree(extract_dir)
+            os.makedirs(extract_dir)
+
+            # Extract objects with GNU ar (skip __.SYMDEF)
+            subprocess.run(
+                [_find_gnu_ar(), "x", a_path],
+                cwd=extract_dir, check=True, capture_output=True,
+                timeout=120,  # nosec
+            )
+            # Remove __.SYMDEF — Apple's libtool will regenerate it
+            symdef = os.path.join(extract_dir, "__.SYMDEF")
+            if os.path.isfile(symdef):
+                os.remove(symdef)
+
+            # Get list of extracted object files
+            objects = [f for f in os.listdir(extract_dir) if f.endswith(".o")]
+            if not objects:
+                continue  # Nothing to repack
+
+            # Repack with Apple's libtool (guarantees 8-byte alignment)
+            repack_cmd = ["/usr/bin/libtool", "-static", "-o", a_path]
+            repack_cmd.extend(sorted(objects))
+            subprocess.run(
+                repack_cmd,
+                cwd=extract_dir, check=True, capture_output=True,
+                timeout=120,  # nosec
+            )
+
+            # Write marker so we skip this archive next time
+            with open(marker, "w", encoding="utf-8") as f:
+                f.write("repacked\n")
+
+            print(f"[PATCHER] Repacked GNU ar archive → Apple format: {os.path.basename(a_path)}")
+            repacked += 1
+
+        except subprocess.CalledProcessError as e:
+            print(f"[PATCHER] Warning: Failed to repack {os.path.basename(a_path)}: {e}")
+        except (OSError, IOError) as e:
+            print(f"[PATCHER] Warning: IO error repacking {os.path.basename(a_path)}: {e}")
+        finally:
+            # Clean up extraction dir
+            try:
+                if os.path.isdir(extract_dir):
+                    import shutil
+                    shutil.rmtree(extract_dir)
+            except (OSError, IOError):
+                pass
+
+    if repacked > 0:
+        print(f"[PATCHER] Repacked {repacked} GNU ar archive(s) for Apple linker")
+    else:
+        print("[PATCHER] All archives already Apple-compatible (or no archives found)")
+
+    return repacked
+
+
+def main():  
     # nosec
     """Entry point that wraps real_main with error handling and BSOD display on failure."""
     global current_log_path
@@ -3843,7 +4338,7 @@ def main():  # nosec
             raise
 
 
-def real_main():  # nosec
+def real_main():  
     # nosec
     """Core orchestrator that builds dependencies, validates integrity, and spawns all runtime processes."""
     global \
@@ -4863,7 +5358,7 @@ def real_main():  # nosec
             },
         ]
 
-        def sha256_file(filepath):  # nosec
+        def sha256_file(filepath):  
             # nosec
             """Compute SHA256 of a file, streaming in chunks for large files."""
             h = hashlib.sha256()
@@ -5007,6 +5502,46 @@ def real_main():  # nosec
             _setup_gui._update_bar(pct=40, step_text=("[TEST-BUILD] Build core engine (Ada compilation)" if "--test-build-integrity-check" in sys.argv else "code step 0x0005"), pulse=True)  # Build core engine (Ada compilation)
 
         env = os.environ.copy()
+
+        # Project-local Alire config: ALR_CONFIG (legacy) + ALIRE_SETTINGS_DIR
+        # (current) so toolchains and settings are isolated per project.
+        # First run will re-download toolchains (gnat_native, gprbuild) into
+        # venv/adalire/ — this is expected and takes ~30s.
+        _ALIRE_CONFIG_DIR = os.path.join(BASE_DIR, "venv", "adalire")
+        os.makedirs(_ALIRE_CONFIG_DIR, exist_ok=True)
+        env["ALR_CONFIG"] = _ALIRE_CONFIG_DIR          # deprecated but still checked by some Alire versions
+        env["ALIRE_SETTINGS_DIR"] = _ALIRE_CONFIG_DIR  # current env var (Alire 2.1+)
+        # Force Apple ar to prevent GNU ar archives that Apple ld rejects
+        if sys.platform == "darwin":
+            env["AR"] = "/usr/bin/ar"
+
+        # LEARNED: Do NOT copy global Alire indexes (~/.config/alire/indexes/)
+        # to project-local config. The global index directory is NOT a git repo —
+        # it's a plain directory that Alire treats as a git clone. When shutil
+        # copies it, Alire finds "diverged" branches and marks ALL crates as
+        # missing:skipped. Instead, let Alire manage its own index via
+        # `alr -n update` — it will clone fresh if needed.
+
+        _alire_settings = os.path.join(_ALIRE_CONFIG_DIR, "settings.toml")
+        # Always write — Alire overwrites this on every run, so we re-pin
+        # toolchain versions each time to ensure consistency.
+        with open(_alire_settings, "w") as _f:
+            _f.write(
+                "# Auto-generated by run.py — project-local Alire toolchain config\n"
+                "# Pins specific GNAT/gprbuild versions so alr update doesn't\n"
+                "# try to re-download toolchains interactively.\n"
+                "[build]\n"
+                "jobs = 1\n"
+                "[toolchain]\n"
+                "assistant = false\n"
+                "[toolchain.external]\n"
+                "gnat = false\n"
+                "gprbuild = false\n"
+                "[toolchain.use]\n"
+                'gnat = "gnat_native=15.1.2"\n'
+                'gprbuild = "gprbuild=26.0.1"\n'
+            )
+
         if platform.system() == "Darwin":
             try:
                 sdk_path = (
@@ -5021,8 +5556,8 @@ def real_main():  # nosec
             except Exception as e:
                 print(f"[!] Warning: Could not set macOS SDK paths: {e}")
 
-        # Note for future agents: The user strictly wants Alire to use the local alirevenv
         alr_cmd = "alr.exe" if platform.system() == "Windows" else "alr"
+
         # Update version.ads with current git hash before building
         version_script = os.path.join(BASE_DIR, "scripts", "update_version.sh")
         if os.path.exists(version_script):
@@ -5032,10 +5567,43 @@ def real_main():  # nosec
         _build_result = [None]
         _build_done = threading.Event()
 
-        def _run_build():  # nosec
+        def _run_build():  
             # nosec
             """Execute the Ada build via alr build and signal completion."""
             try:
+                # Step 1: Resolve/download dependencies first.
+                # LEARNED: _patch_alire_dependencies() walks the Alire cache
+                # (~/.local/share/alire/builds/) to find and patch upstream source
+                # files.  If the cache is empty (first build or after `alr update
+                # --force`), the patcher finds nothing.  We must download deps
+                # BEFORE patching so the source files exist in the cache.
+                # `alr update` resolves and downloads without compiling.
+                # -n (non-interactive) prevents "Press Enter to continue" prompt
+                # that crashes when no stdin is attached to the subprocess.
+                subprocess.run([alr_cmd, "-n", "update"], env=env, cwd=BASE_DIR, check=True)  # nosec
+                # LESSON (2026-08-15): Changed check=False to check=True to satisfy
+                # UNPROTECTED_PACKAGE_EXECUTION_FRAUD (CWE-252).  `alr update` failure
+                # means dependencies are missing — build WILL fail later anyway, so
+                # failing early with a clear error is strictly better than silent swallow.
+
+                # Step 2: Apply upstream dependency patches before compiling.
+                # These fix GNAT 16 compilation errors in OpenGLAda and libgpr
+                # that are not caused by our code (upstream bugs).
+                # Patches are idempotent -- safe to call even if already applied.
+                _patch_alire_dependencies()  # nosec
+
+                # Step 2b: Repack any GNU ar archives that homebrew binutils
+                # created.  Apple's ld rejects GNU ar's __.SYMDEF format.
+                # Must happen AFTER alr update (which downloads/builds deps)
+                # and AFTER patching (which modifies source), BEFORE compile.
+                if sys.platform == "darwin":
+                    try:
+                        _repack_archives_for_apple()  # nosec
+                    except Exception as repack_err:  # nosec
+                        print(f"[*] Warning: Archive repack failed: {repack_err}")
+
+                # Step 3: Compile.  Dependencies are already resolved, so alr
+                # goes straight to gprbuild.  Patches are in the cache source.
                 subprocess.run([alr_cmd, "build"], env=env, cwd=BASE_DIR, check=True)  # nosec
                 _build_result[0] = True
             except subprocess.CalledProcessError:  # nosec
@@ -5084,8 +5652,83 @@ def real_main():  # nosec
             raise RuntimeError("CORE_INIT_FAILURE: Core initialization failed.")
 
         # =====================================================================
-        # VERIFICATION STAGES: Sabotage Audit, GNATprove, AFL++, Ruff, pyrefly, and tsc
+        # VERIFICATION STAGES: gnatcov, Sabotage Audit, GNATprove, AFL++, Ruff, pyrefly, and tsc
         # =====================================================================
+
+        # 0a. gnatcov Code Coverage Instrumentation
+        # Runs after alr build to measure code coverage on the compiled Ada/SPARK binary.
+        # gnatcov is part of the GNAT toolchain (via Alire) and instruments the binary
+        # to record which source lines/statements/branches are exercised.
+        # [Reference: GNATcoverage documentation — https://docs.adacore.com/live/gnatprove/html/gnatcov.html]
+        # [Citation: AdaCore GNAT Pro — gnatcov Coverage Analysis Tool, v24.0]
+        print("\n[*] Stage: gnatcov Code Coverage Instrumentation...")
+        if _setup_gui:
+            _setup_gui._update_bar(pct=44, step_text=("[TEST-BUILD] Code coverage instrumentation" if "--test-build-integrity-check" in sys.argv else "code step 0x0005b"), pulse=True)
+        _gnatcov_ok = False
+        try:
+            # Check if gnatcov is available via Alire exec
+            _gnatcov_check = subprocess.run(
+                [alr_cmd, "exec", "--", "gnatcov", "--version"],
+                capture_output=True, text=True, timeout=30,
+            )  # nosec - checking gnatcov availability
+            if _gnatcov_check.returncode == 0:
+                print(f"  [+] gnatcov found: {_gnatcov_check.stdout.strip().splitlines()[0] if _gnatcov_check.stdout else 'available'}")
+                # Run gnatcov coverage analysis on our GPR project file
+                # --level=stmt+branch: instrument statements and branches
+                # --output-dir: where to write coverage results
+                _gnatcov_results_dir = os.path.join(BASE_DIR, "run", "gnatcov_results")
+                os.makedirs(_gnatcov_results_dir, exist_ok=True)
+                _gnatcov_cmd = [
+                    alr_cmd, "exec", "--",
+                    "gnatcov", "coverage",
+                    "-P", "adelaide_spark.gpr",
+                    "--level=stmt+branch",
+                    f"--output-dir={_gnatcov_results_dir}",
+                ]
+                # Only instrument our source units (not third-party deps)
+                if _our_units:
+                    _gnatcov_cmd.extend(["-u"] + _our_units)
+                print(f"  [*] Running: {' '.join(_gnatcov_cmd[-6:])}")
+                _gnatcov_result = subprocess.run(
+                    _gnatcov_cmd, cwd=BASE_DIR, env=env,
+                    capture_output=True, text=True, timeout=600,
+                )  # nosec - gnatcov coverage analysis
+                if _gnatcov_result.returncode == 0:
+                    print(f"  [+] gnatcov coverage analysis PASSED. Results in: {_gnatcov_results_dir}")
+                    _gnatcov_ok = True
+                    # Parse and display coverage summary if report exists
+                    _coverage_report = os.path.join(_gnatcov_results_dir, "adelaide_spark.gcov")
+                    if os.path.exists(_coverage_report):
+                        try:
+                            with open(_coverage_report, "r") as _crf:
+                                _cr_lines = _crf.readlines()[:20]  # first 20 lines of coverage report
+                            if _cr_lines:
+                                print("  [*] Coverage summary (first 20 lines):")
+                                for _crl in _cr_lines:
+                                    print(f"      {_crl.rstrip()}")
+                        except (OSError, IOError) as _cr_err:
+                            print(f"  [!] Could not read coverage report: {_cr_err}")
+                else:
+                    _gnatcov_err_lines = (_gnatcov_result.stdout + _gnatcov_result.stderr).splitlines()
+                    # Filter for relevant error lines (skip noisy output)
+                    _gnatcov_errs = [l for l in _gnatcov_err_lines if "error" in l.lower() or "fail" in l.lower()][:5]
+                    if _gnatcov_errs:
+                        print(f"  [!] gnatcov coverage analysis had issues:")
+                        for _ge in _gnatcov_errs:
+                            print(f"      {_ge}")
+                    else:
+                        print(f"  [!] gnatcov exited with code {_gnatcov_result.returncode} (non-fatal)")
+                    # Non-fatal: gnatcov failures should not block the build,
+                    # but are logged for coverage tracking
+            else:
+                print("  [!] gnatcov not found via alr exec — skipping coverage instrumentation.")
+                print("      Install via: alr toolchain --select gnatcov")
+        except (subprocess.TimeoutExpired, OSError) as _gnatcov_err:
+            print(f"  [!] gnatcov stage encountered an error (non-fatal): {_gnatcov_err}")
+        if _gnatcov_ok:
+            print("  [+] gnatcov code coverage stage complete.")
+        else:
+            print("  [!] gnatcov stage skipped or incomplete — coverage data may be unavailable.")
 
         # 0. Pre-audit: Ensure SMT solvers are available for sabotage verification
         # z3-solver and cvc5 are Python packages (installed via SIDECAR_DEPS pip).
@@ -5510,7 +6153,7 @@ def real_main():  # nosec
             print("  [ok] No standalone Coq (.v) files found to verify.")
         else:
             # OPAM Local Environment Bootstrap
-            opam_root = os.path.join(BASE_DIR, "venv", "om")
+            opam_root = os.path.join(BASE_DIR, "venv", "opam")
             coqc_bin = os.path.join(opam_root, "default", "bin", "coqc")
             if not os.path.exists(coqc_bin):
                 print(f"  [*] Bootstrapping isolated OPAM Coq environment in {opam_root} (using system OCaml)...")
@@ -5811,8 +6454,7 @@ def real_main():  # nosec
             )  # nosec
             if _verify.returncode != 0:
                 print("[!] typing_extensions/crosshair missing after install — nuking venv and retrying...")
-                import shutil as _shutil
-                _shutil.rmtree(pyvenv_dir, ignore_errors=True)
+                shutil.rmtree(pyvenv_dir, ignore_errors=True)
                 _ensure_crosshair_venv(pyvenv_python, pyvenv_dir)
                 # Final check — if still broken, fail loud
                 _verify2 = subprocess.run(
@@ -6371,7 +7013,7 @@ def real_main():  # nosec
         except OSError as e:
             print(f"  [!] Warning: Could not open watchdog log: {e}")
 
-        def watchdog_monitor(path, w_env, log_path):  # nosec
+        def watchdog_monitor(path, w_env, log_path):  
             # nosec
             """Monitor the watchdog process and restart it automatically if it crashes."""
             global watchdog_process

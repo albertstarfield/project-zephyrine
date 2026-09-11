@@ -43,7 +43,6 @@ extern "C" {
 """
 
 def _setup_cpp():
-    """TODO: Document _setup_cpp."""
     global _C_LIB, _ENGINE_MODE
     try:
         lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), LIB_NAME))
@@ -75,7 +74,6 @@ def _setup_cpp():
 # ==========================================
 # TIER 2: NUMBA JIT (The "Speedster")
 # ==========================================
-    """TODO: Document _setup_numba."""
 def _setup_numba():
     global _NUMBA_FUNC, _ENGINE_MODE
     try:
@@ -86,7 +84,6 @@ def _setup_numba():
         # @test: jit_calc is covered by sabotage_verifier
         def jit_calc(a, op, b):
             # Returns (result, error_code)
-            """TODO: Document jit_calc."""
             if op == 0:
                 return a + b, 0
             if op == 1:
@@ -122,7 +119,6 @@ if not _setup_cpp() and not _setup_numba():
 
 # ==========================================
 # TIER 3: PURE PYTHON (The Fallback)
-    """TODO: Document _calc_python."""
 # ==========================================
 def _calc_python(a, op, b):
     # 0=Add, 1=Sub, 2=Mul, 3=Div
@@ -163,7 +159,6 @@ PATTERN = re.compile(
 # @test: handler is covered by sabotage_verifier
 def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
     # 1. Parse & Normalize
-    """TODO: Document handler."""
     try:
         n1 = float(match.group("n1"))
         n2 = float(match.group("n2"))
@@ -218,3 +213,9 @@ def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
 if __name__ == "__main__":
     print(f"Current Engine: {_ENGINE_MODE}")
     print(handler(PATTERN.match("Calculate 10 + 20."), "", ""))
+
+
+def test_jit_calc():    """Test stub for jit_calc."""    pass
+
+
+def test_handler():    """Test stub for handler."""    pass

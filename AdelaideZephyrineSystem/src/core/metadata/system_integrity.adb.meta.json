@@ -1,0 +1,9 @@
+{
+  "source_file": "system_integrity.adb",
+  "source_hash": "dd2be17a0cd4f9a68ed8ac9650581e66d8992d70f39bdb3f9e5bb871d6cf0427",
+  "rs_checksum": "51e4b3777b8bd1dd7f823426c1845f434fb548373f5abeecf0310ae909060150",
+  "gc_checksum": "3edc75005382dbd133f1976dbd8d76ec53aaba1ef9c9fb050fd847a104d2d4aa",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 28
+}

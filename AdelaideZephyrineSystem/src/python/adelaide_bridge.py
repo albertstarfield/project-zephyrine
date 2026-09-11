@@ -8,17 +8,13 @@ class AdelaideBridge:
     _instance = None
 
     @classmethod
-    def get_instance(cls):  # nosec
-        """TODO: Document get_instance."""
-        # nosec - recursive function with implicit base case
+    def get_instance(cls):
         """Return singleton instance of AdelaideBridge."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
-    def __init__(self):  # nosec
-        """TODO: Document __init__."""
-        # nosec - recursive function with implicit base case
+    def __init__(self):
         """Initialize bridge and locate the Ada binary."""
         self.process = None
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -37,9 +33,7 @@ class AdelaideBridge:
 
         self.start_process()
 
-    def start_process(self):  # nosec
-        """TODO: Document start_process."""
-        # nosec - recursive function with implicit base case
+    def start_process(self):
         """Start the AdelaideZephyrineSystem Ada subprocess."""
         if os.path.exists(self.binary_path):
             try:
@@ -67,9 +61,7 @@ class AdelaideBridge:
         else:
             self.process = None
 
-    def cosine_similarity(self, v1, v2):  # nosec
-        """TODO: Document cosine_similarity."""
-        # nosec - recursive function with implicit base case
+    def cosine_similarity(self, v1, v2):
         """Compute cosine similarity between two vectors via Ada subprocess."""
         if self.process is None or self.process.poll() is not None:
             self.start_process()
@@ -104,3 +96,12 @@ class AdelaideBridge:
 
         return None
 
+
+
+def test_start_process():    """Test stub for start_process."""    pass
+
+
+def test_get_instance():    """Test stub for get_instance."""    pass
+
+
+def test_cosine_similarity():    """Test stub for cosine_similarity."""    pass

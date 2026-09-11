@@ -1,0 +1,9 @@
+{
+  "source_file": "sd_interface.ads",
+  "source_hash": "857e3e695c23fa037eb877c9eca53ddb05fca7d6d061088339251c01b307dd23",
+  "rs_checksum": "2bc48c11b13f971ab60c65a1153392bc9a458fd4bc8945e24cbc81d242099032",
+  "gc_checksum": "4176c77f9c9d4808e3a5cacc4c2dd1702e46fee24cfa789c4bc8f98f3d30257e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 59
+}

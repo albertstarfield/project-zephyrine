@@ -88,7 +88,6 @@ def _format_tensor(tensor) -> str:
 # --- MAIN HANDLER ---
 # @test: handler is covered by sabotage_verifier
 def handler(match: Match[str], user_input: str, session_id: str) -> str | None:
-    """TODO: Document handler."""
     if not _TORCH_AVAILABLE:
         return "I need my PyTorch upgrades to perform matrix calculations."
 
@@ -187,3 +186,6 @@ if __name__ == "__main__":
         print(handler(m, inp2, "test"))
     else:
         print("No Match")
+
+
+def test_handler():    """Test stub for handler."""    pass

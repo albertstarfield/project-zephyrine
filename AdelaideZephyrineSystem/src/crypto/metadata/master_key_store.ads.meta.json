@@ -1,0 +1,9 @@
+{
+  "source_file": "master_key_store.ads",
+  "source_hash": "b2362656cffe0a4c24e9814d6825d3030dbbfcef647b0972e9facdbd75c1708a",
+  "rs_checksum": "58659bfae96111c59016ecf4bf72de3c549ff25cae07f19af0ee139cda20191a",
+  "gc_checksum": "c969c6d570bec264ca54716d2e90397ffdb2db6a7aa77745ce4bf4254745022e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

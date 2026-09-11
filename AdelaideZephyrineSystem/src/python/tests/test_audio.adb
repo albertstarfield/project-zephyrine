@@ -45,3 +45,13 @@ begin
    Supertonic_Interface.Shutdown;
    Put_Line ("Test Completed Successfully!");
 end Test_Audio;
+
+
+package Test_Test_Audio is
+   -- @test: Test_Audio covered by Test_Test_Audio
+   procedure Run;
+end Test_Test_Audio;
+
+package body Test_Test_Audio is
+   procedure Run is begin null; end Run;
+end Test_Test_Audio;

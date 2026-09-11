@@ -1,0 +1,9 @@
+{
+  "source_file": "livecodebench.py",
+  "source_hash": "3fd2612e6e170f1db5e1ccda46ceddff22b4daa04736de21f38c38304ef4ab1d",
+  "rs_checksum": "397b434f0cc6197f51a6d8186f63ef000356a216a7bc3abff79f906da226b3e5",
+  "gc_checksum": "0771fedef8e92259de7e68925f32f7afa5435976d7f22afdfe60e11f3a330fac",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

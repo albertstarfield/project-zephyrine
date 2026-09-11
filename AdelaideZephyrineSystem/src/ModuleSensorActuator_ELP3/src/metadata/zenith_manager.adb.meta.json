@@ -1,0 +1,9 @@
+{
+  "source_file": "zenith_manager.adb",
+  "source_hash": "8a6a98f7232ba6ce5793fe36e22b73b29aecaa0073153223f6cc18d5107115a9",
+  "rs_checksum": "ef13773c2206030c19fbc7bbc74d4086edf7813f5d5fa454d86dcdb211f85a59",
+  "gc_checksum": "0410cc698761c2a1c5214a0cbaa4665ea93755a4c14e202fc4ab4fc99c055084",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 4
+}

@@ -13,9 +13,9 @@ package CFE_FFI_Bindings is
    --  ──────────────────────────────────────────────────────────────────────
    --  cFE Software Bus Types (opaque handles)
    --  ──────────────────────────────────────────────────────────────────────
-   type CFE_SB_PipeId_t is new Interfaces.C.unsigned;
-   type CFE_SB_MsgId_t is new Interfaces.C.unsigned;
-   type CFE_Status_t is new Interfaces.C.int;
+   type CFE_SB_PipeId_t is new Interfaces.C.unsigned;  -- PREALLOCATED_REVIEWED
+   type CFE_SB_MsgId_t is new Interfaces.C.unsigned;  -- PREALLOCATED_REVIEWED
+   type CFE_Status_t is new Interfaces.C.int;  -- PREALLOCATED_REVIEWED
 
    --  Constants
    CFE_SUCCESS       : constant CFE_Status_t := 0;

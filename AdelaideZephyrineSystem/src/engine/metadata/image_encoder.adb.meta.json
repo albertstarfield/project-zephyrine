@@ -1,0 +1,9 @@
+{
+  "source_file": "image_encoder.adb",
+  "source_hash": "503a1873929a553002afae22c35fbe51df07ae377d9bdbc78ef467f9ba2efe4f",
+  "rs_checksum": "89458ab97566f79d113364561a6ad839727f04a73a5197c14e94e60fedf00c15",
+  "gc_checksum": "9a95a4965ca6b2407e2813a88e6bc22fa6f3de55a8b37d850df3bfc98a09045f",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 26
+}

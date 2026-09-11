@@ -1,0 +1,9 @@
+{
+  "source_file": "fmc_servo_manual_hook_test.py",
+  "source_hash": "c925fa9e716969689f1eaa5b651db051da3eb1713c74cd35ee8d0c91b7a291d6",
+  "rs_checksum": "6ea7415286f92a96ad5ed0cc6c040dcafff83207b6ef7ffdef6fff5f8c31d2e3",
+  "gc_checksum": "d8db8343cf5807a357aeceac5986ea76a59e53a5b7d775c7f211841642709a94",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 29
+}

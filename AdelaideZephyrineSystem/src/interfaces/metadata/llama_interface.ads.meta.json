@@ -1,0 +1,9 @@
+{
+  "source_file": "llama_interface.ads",
+  "source_hash": "0cc3316ee5e1903406c182bcc62da4477fa74999a1332cbeb82b6e8cdbc0973d",
+  "rs_checksum": "6dd5aa91e045c0d980cdd90143a60d65fd3b9e1f6c25b784c0ebfd2dafc81957",
+  "gc_checksum": "e5b9940287b5d963fa50339e69f64fbf1b5c3b2035e15954d32cd5e65b4453bf",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 47
+}

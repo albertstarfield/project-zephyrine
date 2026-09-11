@@ -1,0 +1,9 @@
+{
+  "source_file": "llama_cpp_linker.ads",
+  "source_hash": "98d18bc64a72da164ab280618b60182e277ffbcf4fdc621369e9d9f0676ef697",
+  "rs_checksum": "bfe55e6ddef94831a9f12da5e1418b8806ba1e4fe3446947a21673610c926f0f",
+  "gc_checksum": "78bb1847390104ab53332e4e23c421954fe7bc4cafc575628d4d6ab7bf731440",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

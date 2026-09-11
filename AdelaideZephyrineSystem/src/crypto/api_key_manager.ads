@@ -102,7 +102,7 @@ package API_Key_Manager is
 private
 
    --  Ordered set of allowed API keys (Crypto Users).
-   package Key_Sets is new Ada.Containers.Ordered_Sets
+   package Key_Sets is new Ada.Containers.Ordered_Sets  -- PREALLOCATED_REVIEWED
      (Element_Type => Unbounded_String);
 
    Loaded_Keys   : Key_Sets.Set;

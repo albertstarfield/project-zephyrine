@@ -1,0 +1,9 @@
+{
+  "source_file": "cfs_health_monitor.ads",
+  "source_hash": "91e504a127e924ffc27b99d7e02c24111cd931a229ca90678bbd67f0de7009b1",
+  "rs_checksum": "83c4893c22dd0e58f825755fe34b2e1881e9696b48a8dbabc8a34ca45130c33d",
+  "gc_checksum": "4c56864403af217d348215a3eeeed810e140b86227af61edb70cf85ec78d669c",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

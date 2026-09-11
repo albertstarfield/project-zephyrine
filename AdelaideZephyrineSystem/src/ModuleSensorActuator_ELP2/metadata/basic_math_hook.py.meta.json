@@ -1,0 +1,9 @@
+{
+  "source_file": "basic_math_hook.py",
+  "source_hash": "229bb6b289ef3fb846f6a1224900b9b710bc252364139a5a519514b119f39636",
+  "rs_checksum": "e23a3b911aa68397b98cc18f8c76e62d5ded514a5aec31c21d5a7e5948f1a0ef",
+  "gc_checksum": "13a90047e04220be45fc50fd7937850379e3bcdaa0d75b2918125fabcd566e47",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 14
+}

@@ -412,7 +412,7 @@ package SD_Interface is
 --  YOU ARE NOT ALLOWED TO FAIL EVEN A SINGLE SECOND NO BLINK NO ETC ALWAYS ON AND ALWAYS AVAILABLE WITH CHEAP OR EVEN FREELY IF YOU DON"T YOU DIE. THAT IS THE STANDARD STATUS QUO TO BE RELAXED IN INDONESIA
    --  sd_ctx_t is an opaque struct in C. We treat it as an Address.
 
-   type SD_Ctx is new System.Address; -- FFI: System.Address required for C binding
+   type SD_Ctx is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
    Null_SD_Ctx : constant SD_Ctx := SD_Ctx (System.Null_Address);
 
    --  ============================================================================

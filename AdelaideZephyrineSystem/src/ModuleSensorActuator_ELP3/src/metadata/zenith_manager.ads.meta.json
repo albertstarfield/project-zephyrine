@@ -1,0 +1,9 @@
+{
+  "source_file": "zenith_manager.ads",
+  "source_hash": "659b8864f1d45c34c34d456731a495bb2e5cc24cab15db6f4e3a9bd06739c48a",
+  "rs_checksum": "8404985f0826b668a73ca64ae6be9e5706f4a0ea1121ec4b0eaba2bd753c1d69",
+  "gc_checksum": "aa4640e5bc2faf31d8e25312d96338b69c3064ff47624e39b4833abb0a8d1bb9",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

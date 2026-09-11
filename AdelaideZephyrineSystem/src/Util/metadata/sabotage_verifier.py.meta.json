@@ -1,0 +1,9 @@
+{
+  "source_file": "sabotage_verifier.py",
+  "source_hash": "6655d46d41e504fc8c4b6ca4a143b478fa50b28e5be1579ec4dc38af13a512f5",
+  "rs_checksum": "8cdd7cd723d4681661e23e361868ec7f273b0397cae2cb4d8232d4284d03bc8e",
+  "gc_checksum": "72ec64fddb817f1b1870c972ea49f267007447d5ccdd12e3e17795c89097244f",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2445
+}

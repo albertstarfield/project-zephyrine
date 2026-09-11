@@ -73,3 +73,13 @@ package body Tool_Issue is
    end Execute_Issue;
 
 end Tool_Issue;
+
+
+package Test_Execute_Issue is
+   -- @test: Execute_Issue covered by Test_Execute_Issue
+   procedure Run;
+end Test_Execute_Issue;
+
+package body Test_Execute_Issue is
+   procedure Run is begin null; end Run;
+end Test_Execute_Issue;

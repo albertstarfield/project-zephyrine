@@ -1,0 +1,9 @@
+{
+  "source_file": "zenith_orion.ads",
+  "source_hash": "c0ecefa6b058466986a226b0edbbbb487dc2d22bc11b7d1d8719f7f619476f03",
+  "rs_checksum": "7ccf0e8bd266bb6a6caa5550e644f4cb8e47330f137880bb0165356a3612458d",
+  "gc_checksum": "460c88c18bee9dff445f694113932240735b89bfa4a225e36a7b3411f8c5b531",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 4
+}

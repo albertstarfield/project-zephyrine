@@ -1,0 +1,9 @@
+{
+  "source_file": "watchdog_ipc.ads",
+  "source_hash": "99c63e08a9216b2aad0ee496c15b86b5e31f04b5a4b1dab22572a99fabf51699",
+  "rs_checksum": "70a787d4f1e59c3eabcb648e21f88ca0b063b3ab9c8476ad4ef89ed1befe9983",
+  "gc_checksum": "84680d4fddbe90934340b91c2ab83aa8c2bea2fbdf6178dd4b4c7990a7c82f3d",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

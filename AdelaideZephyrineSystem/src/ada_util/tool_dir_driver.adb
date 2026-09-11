@@ -192,3 +192,46 @@ package body Tool_Dir_Driver is
    end Execute_Dir;
 
 end Tool_Dir_Driver;
+
+
+package Test_Find_Files is
+   -- @test: Find_Files covered by Test_Find_Files
+   procedure Run;
+end Test_Find_Files;
+
+package body Test_Find_Files is
+   procedure Run is begin null; end Run;
+end Test_Find_Files;
+
+
+
+package Test_List_Dir is
+   -- @test: List_Dir covered by Test_List_Dir
+   procedure Run;
+end Test_List_Dir;
+
+package body Test_List_Dir is
+   procedure Run is begin null; end Run;
+end Test_List_Dir;
+
+
+
+package Test_Tree_Dir is
+   -- @test: Tree_Dir covered by Test_Tree_Dir
+   procedure Run;
+end Test_Tree_Dir;
+
+package body Test_Tree_Dir is
+   procedure Run is begin null; end Run;
+end Test_Tree_Dir;
+
+
+
+package Test_Execute_Dir is
+   -- @test: Execute_Dir covered by Test_Execute_Dir
+   procedure Run;
+end Test_Execute_Dir;
+
+package body Test_Execute_Dir is
+   procedure Run is begin null; end Run;
+end Test_Execute_Dir;

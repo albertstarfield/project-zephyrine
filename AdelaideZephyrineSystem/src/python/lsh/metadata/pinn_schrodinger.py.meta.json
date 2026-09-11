@@ -1,0 +1,9 @@
+{
+  "source_file": "pinn_schrodinger.py",
+  "source_hash": "cebf0d94ae08dd2f5539673c3714ab7b7314244bbccc06228a9a34886fff1664",
+  "rs_checksum": "faebe20133123db08046d089ac9553bee1428a816740ff163f587f384a91cba1",
+  "gc_checksum": "69bf6bdd8dd04583f3e83540ef475e8f2e622a716ae866111f91a86a5c6d774c",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 36
+}

@@ -1,0 +1,9 @@
+{
+  "source_file": "egl_binding.ads",
+  "source_hash": "80a21d73e3ae26d7ed10e45885ea7003b10d13a42aabf1ea9d1c128fc1cf9511",
+  "rs_checksum": "bcbf80147ae4ae104f6c408bc7c496a6c5f27ff2efabdef9e2e249f939347a05",
+  "gc_checksum": "d79e8009d10c742731bda7e8242d3ec4379218849248676821c3866415229f28",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 29
+}

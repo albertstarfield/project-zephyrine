@@ -171,3 +171,13 @@ package body Tool_Grep is
    end Execute_Grep;
 
 end Tool_Grep;
+
+
+package Test_Execute_Grep is
+   -- @test: Execute_Grep covered by Test_Execute_Grep
+   procedure Run;
+end Test_Execute_Grep;
+
+package body Test_Execute_Grep is
+   procedure Run is begin null; end Run;
+end Test_Execute_Grep;

@@ -1,0 +1,9 @@
+{
+  "source_file": "adelaide_watchdog.adb",
+  "source_hash": "8a6549e9e33c5aebb923ee28eb732115b6380bc5e3410fd3dc20761d6538457b",
+  "rs_checksum": "dfa1f52ae754640ce8e7f8fcdcbfdef3bee9cb9b4da95c1653789410ea01f867",
+  "gc_checksum": "d0447334cd98f9c70a039e02fb85499bdcdccb073c82d4b100a6089dd6d50bd2",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 56
+}

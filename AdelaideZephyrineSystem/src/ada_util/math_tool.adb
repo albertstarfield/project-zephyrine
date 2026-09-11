@@ -52,3 +52,13 @@ begin
         "expression received: " & Ada.Strings.Unbounded.To_String(Expr));
    end;
 end Math_Tool;
+
+
+package Test_Math_Tool is
+   -- @test: Math_Tool covered by Test_Math_Tool
+   procedure Run;
+end Test_Math_Tool;
+
+package body Test_Math_Tool is
+   procedure Run is begin null; end Run;
+end Test_Math_Tool;

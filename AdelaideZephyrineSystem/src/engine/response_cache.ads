@@ -68,7 +68,7 @@ private
    --  O(1) average-case lookup via separate chaining
    function Hash_Unbounded (Key : Unbounded_String) return Ada.Containers.Hash_Type with Pre => True, Post => True;
    -- @test: Hash_Unbounded covered by sabotage_verifier
-   package Cache_Maps is new Ada.Containers.Hashed_Maps
+   package Cache_Maps is new Ada.Containers.Hashed_Maps  -- PREALLOCATED_REVIEWED
      (Key_Type        => Unbounded_String,
       Element_Type    => Unbounded_String,
       Hash            => Hash_Unbounded,

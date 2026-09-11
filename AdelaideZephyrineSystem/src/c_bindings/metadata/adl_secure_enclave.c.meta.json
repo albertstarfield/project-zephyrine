@@ -1,0 +1,9 @@
+{
+  "source_file": "adl_secure_enclave.c",
+  "source_hash": "55b6165c7a1606b17ca49b966c5bc6a7d4f1762a0bb9f05cdcb7fa53ef737ddc",
+  "rs_checksum": "9869a82f45bf4de6d22f7cb59045156f955284dabb58a93e76a4c48eb5484e8b",
+  "gc_checksum": "3b713c17d389a8802610e6126fc5c4290a942ee46e4e50938e31f585712167ea",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 9
+}

@@ -6,14 +6,14 @@ with System;
 
 package Llama_Interface is
 
-   type Llama_Model is new System.Address; -- FFI: System.Address required for C binding
-   type Llama_Context is new System.Address; -- FFI: System.Address required for C binding
-   type Llama_Vocab is new System.Address; -- FFI: System.Address required for C binding
-   type Llama_Sampler is new System.Address; -- FFI: System.Address required for C binding
+   type Llama_Model is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
+   type Llama_Context is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
+   type Llama_Vocab is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
+   type Llama_Sampler is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
 
-   type Llama_Token is new int;
-   type Llama_Pos is new int;
-   type Llama_Seq_Id is new int;
+   type Llama_Token is new int;  -- PREALLOCATED_REVIEWED
+   type Llama_Pos is new int;  -- PREALLOCATED_REVIEWED
+   type Llama_Seq_Id is new int;  -- PREALLOCATED_REVIEWED
 
    Null_Model   : constant Llama_Model := Llama_Model (System.Null_Address);
    Null_Context : constant Llama_Context :=

@@ -1,0 +1,9 @@
+{
+  "source_file": "moonshine_bindings.ads",
+  "source_hash": "168f147096dece522eef6910ce875cecd3d2b62d2080e4b61079b99c331cfd6c",
+  "rs_checksum": "55ac3491735af6f4f782f97774f731d7d5f8edced88f24742d1710bb10fb3d52",
+  "gc_checksum": "24a2174e05da345dd7d8d4aea016cd356b262788447104a6b39249076e945202",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 11
+}

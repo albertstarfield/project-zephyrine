@@ -1,0 +1,9 @@
+{
+  "source_file": "integrity_utils.ads",
+  "source_hash": "e2c3d53943e91f1f92c993e9fe32f86ef0f887341826ae2999522ef93add0ddf",
+  "rs_checksum": "561095d854a35f4b6e8197d01800b3308201dddd36e64da473cfda13e7c3047d",
+  "gc_checksum": "46ba45e1fb24d51dcb2d2313f4f77a7d153bffcc3985c330ad0954ce7bebfd33",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

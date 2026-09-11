@@ -1,0 +1,9 @@
+{
+  "source_file": "trace_utils.adb",
+  "source_hash": "41f873fc800b50b835c86929b888ec100c026e1502784aec2fdacdfdb716135d",
+  "rs_checksum": "18963a12a486fee3908b65b7ddd4408cbcb8b798cd8a93e9cb3dbd3fa007f1fb",
+  "gc_checksum": "6252459ca81647eadc7969a853c14013003c1c6af9c68e0490a5715b4be9013e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 9
+}

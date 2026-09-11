@@ -1,0 +1,9 @@
+{
+  "source_file": "zephyrine_gl_renderer.adb",
+  "source_hash": "259dfa9ebb64b337486b59741dd58ca2ba791b2163158d0b524f9ef7fcd5f222",
+  "rs_checksum": "92d725f798a8b0aeb73b4d39d475901fefe37d79777731c54d0ca775b9cf480e",
+  "gc_checksum": "132941f579e5c0dcf19affa197f10ef1b012c45fca5e52ec8a74cc0cf1b540d4",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 52
+}

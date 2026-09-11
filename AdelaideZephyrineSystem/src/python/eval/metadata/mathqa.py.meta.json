@@ -1,0 +1,9 @@
+{
+  "source_file": "mathqa.py",
+  "source_hash": "d03b160d7849bb7878ad06a6b7d5d621c6e2aa40635505423c38d5d4a66bcfeb",
+  "rs_checksum": "e953b30359f90d92657dffe02d8b2abc17052360f57f2c6ebedc78d0c20ce14f",
+  "gc_checksum": "3f018bd739e912b3f25a212de093d07d31cc1b09ddfac5e80f7ecc74f12d32c1",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

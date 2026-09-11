@@ -1,0 +1,9 @@
+{
+  "source_file": "sidecar_manager.adb",
+  "source_hash": "689ab85b8dd199adbec8cb5d55de2003b7e0b06737ddd9ddd6df6d1a4b8c24f3",
+  "rs_checksum": "c82539481fd35ee63af0bd71fb8b2c3ebfa245e13324080bb14d683364cd7bef",
+  "gc_checksum": "97b1e9db0432e10d3260aff2328f0ce1346f486bd0e4cf6a208edd6bf8c470b7",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 63
+}

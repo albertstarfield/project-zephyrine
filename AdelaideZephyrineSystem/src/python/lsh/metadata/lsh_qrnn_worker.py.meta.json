@@ -1,0 +1,9 @@
+{
+  "source_file": "lsh_qrnn_worker.py",
+  "source_hash": "4cfa5fd23c4f7dde7395b6a3059b5a1531e70853dd47b94f1b2ba34377505120",
+  "rs_checksum": "50df1db7300b90158b1a27c30ed8afab96a76f3b4363255ca9c0274d7c681649",
+  "gc_checksum": "5f1e91cca324fd79879cb1a057fa2e26b822a84cb837beeaa85c9405537a7b30",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 17
+}

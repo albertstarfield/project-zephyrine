@@ -1,0 +1,9 @@
+{
+  "source_file": "database_manager.ads",
+  "source_hash": "c8b562f1e5194e800afe881634c4dc290a34f6106aaa0909b40b29622bff8d3b",
+  "rs_checksum": "58990191e3cb5d1a3a06f3613877bbc983420a87fb26275f1d749270a510f8dc",
+  "gc_checksum": "9e55315a1adced32886ade75daadf2f2a130fe597ca053c4d02a9aee20db7a7b",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 18
+}

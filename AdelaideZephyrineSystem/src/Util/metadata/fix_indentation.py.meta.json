@@ -1,0 +1,9 @@
+{
+  "source_file": "fix_indentation.py",
+  "source_hash": "25e9a3b976b92cc33a703aa7a79ce03cff30002a71770f54b0c7fd6302334ee5",
+  "rs_checksum": "060491b21e396b520ad22f802cd9ff33a730bf11781c543d4f505d73c7807701",
+  "gc_checksum": "768aa87d9148fe04881e61d43bbfa82354993158f8637fb727c54c3586ebf884",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 8
+}

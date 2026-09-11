@@ -1,0 +1,9 @@
+{
+  "source_file": "stella_icarus_utils.py",
+  "source_hash": "96559e76aca07d7e84e346bcf133fd3b649a3aa37eadbefca40dfc0ab149f4d4",
+  "rs_checksum": "a7b342be9b2809516c6762e60b8f87473ce89caf8a74a92b62c1355a728f958f",
+  "gc_checksum": "dcb5db9d50151fb6012d9b3d0417d8d11575a2f96c5c999350af8eb260fe009d",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 52
+}

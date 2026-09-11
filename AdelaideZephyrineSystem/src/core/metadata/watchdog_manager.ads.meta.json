@@ -1,0 +1,9 @@
+{
+  "source_file": "watchdog_manager.ads",
+  "source_hash": "a0b3f136ff82c1c751b1a33bf1cdb544ec8788a068567b24661237c21e148914",
+  "rs_checksum": "64270979d82598be32da0d4cf28b0cb213df255f5f447ec3b7283b20b4682972",
+  "gc_checksum": "9e12847b23270e677c0b0ffcae2e7f8d29f7676d08b4c975e54659fdae0c669e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

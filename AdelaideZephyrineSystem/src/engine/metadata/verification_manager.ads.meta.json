@@ -1,0 +1,9 @@
+{
+  "source_file": "verification_manager.ads",
+  "source_hash": "6979841f77edac654eb24d2e17d05266ce5c459b946f787636e86ce1db0ce821",
+  "rs_checksum": "0cffbe03d038a603ee21389dc98773daa2df9fa86404a6e6f09897b3fb006617",
+  "gc_checksum": "d09c6574dab6b283611a477b19f35d8e994eb0b04cfeccb5b799c49afbd89cb2",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

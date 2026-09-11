@@ -1,0 +1,9 @@
+{
+  "source_file": "create_macos_app.py",
+  "source_hash": "88daae770c23eadfdc307c17ced120e9c8580a6b44429907f2091364d834d7b1",
+  "rs_checksum": "8edb11dfafee1e3ff9f7444779e2a44c37040f18511d667cf291949159843eef",
+  "gc_checksum": "658a76c2a46d4090d4034ca65ef72e8433d86021d46e00f909981734799c770b",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 17
+}

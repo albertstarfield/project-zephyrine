@@ -1,0 +1,9 @@
+{
+  "source_file": "px4_ffi_bindings.adb",
+  "source_hash": "0424d5ddd5d8c9a62a76a9037ebecfd3e12bf6756f44ae5201a1033fbe5b9be1",
+  "rs_checksum": "384249c72f51c723c846fc9d3cddf28f41b092c708b9bdbb062ae2a6a3787c15",
+  "gc_checksum": "d42ff4d2b12aad5ec5c07ea6dd7956cae769810725335b9f40ebae8d92e95cbe",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

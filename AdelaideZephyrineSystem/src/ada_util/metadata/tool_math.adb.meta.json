@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_math.adb",
+  "source_hash": "571ef74efcde411fb65b0e56e376b2f3469c882380f3e9764e6ad7741182801a",
+  "rs_checksum": "96e5b3f194b3353b93d85de3c8029603c941da003dcf96247eb970437e1b7fd3",
+  "gc_checksum": "651648760e7e3031c82692fa1898129f972bf541397e781e6374781fca143528",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

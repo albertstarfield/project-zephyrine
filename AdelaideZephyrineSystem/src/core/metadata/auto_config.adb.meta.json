@@ -1,0 +1,9 @@
+{
+  "source_file": "auto_config.adb",
+  "source_hash": "f109224eb0036c8aa9d9fe7005f2e45304893677b626ef5f5243e8b76048d49a",
+  "rs_checksum": "9875260f3339f537c16311b74024e59f60357e9f2b5d2274d66a42619a703be8",
+  "gc_checksum": "e5f067a99bf33e3f6dc5c12a1a4e5aa796970cdfb1c9efce97f8c70519035f69",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 60
+}

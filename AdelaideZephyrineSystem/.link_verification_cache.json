@@ -1,0 +1,492 @@
+{
+  "https://docs.python.org/3/library/os.html#os.walk": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139763.175414,
+    "checked_by": "HEAD"
+  },
+  "https://ieeexplore.ieee.org/document/1057456": {
+    "verified": true,
+    "status_code": 202,
+    "error_message": "",
+    "timestamp": 1789139763.232673,
+    "checked_by": "HEAD"
+  },
+  "https://tools.ietf.org/html/rfc4880": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139763.8388438,
+    "checked_by": "HEAD"
+  },
+  "https://en.wikipedia.org/wiki/Finite_field": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139764.007176,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/struct.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139764.316726,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139764.387368,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/threading.html#thread-objects": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139764.772546,
+    "checked_by": "HEAD"
+  },
+  "https://parchive.sourceforge.net/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139765.143529,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/hashlib.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139765.442591,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/pathlib.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139765.8069382,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/os.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139766.478925,
+    "checked_by": "HEAD"
+  },
+  "https://cwe.mitre.org/data/definitions/704.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139768.1808891,
+    "checked_by": "HEAD"
+  },
+  "https://owasp.org/www-project-top-ten/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139769.2113411,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/sys.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139769.658816,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/ast.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139769.976681,
+    "checked_by": "HEAD"
+  },
+  "https://arxiv.org/abs/0810.4840": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139771.0124779,
+    "checked_by": "HEAD"
+  },
+  "https://cvc5.github.io/docs/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139771.926282,
+    "checked_by": "HEAD"
+  },
+  "https://github.com/pschanely/CrossHair": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139772.6665332,
+    "checked_by": "HEAD"
+  },
+  "https://smtlib.cs.uiowa.edu/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139775.893516,
+    "checked_by": "HEAD"
+  },
+  "https://tools.ietf.org/html/rfc7231": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139776.4519958,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/sys.html#sys.stderr": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139776.534441,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/datetime.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139776.867042,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/json.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139776.944127,
+    "checked_by": "HEAD"
+  },
+  "https://cwe.mitre.org/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139779.318518,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/platform.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139779.7320352,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/logging.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139780.128244,
+    "checked_by": "HEAD"
+  },
+  "https://coq.inria.fr/refman/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139784.965568,
+    "checked_by": "HEAD"
+  },
+  "https://github.com/AdaCore/spark2014": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139786.0325289,
+    "checked_by": "HEAD"
+  },
+  "https://github.com/AdaCore/ada_language_server": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139786.8243399,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/unittest.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139787.2081048,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/venv.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139787.506662,
+    "checked_by": "HEAD"
+  },
+  "https://git-scm.com/docs/gitrepository-layout": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139787.916506,
+    "checked_by": "HEAD"
+  },
+  "https://packaging.python.org/en/latest/tutorials/packaging-projects/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139788.407968,
+    "checked_by": "HEAD"
+  },
+  "https://nodejs.org/api/packages.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139788.497916,
+    "checked_by": "HEAD"
+  },
+  "https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139788.813611,
+    "checked_by": "HEAD"
+  },
+  "https://peps.python.org/pep-0405/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139789.339705,
+    "checked_by": "HEAD"
+  },
+  "https://clang.llvm.org/docs/ObjectiveCLiterals.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139790.3175511,
+    "checked_by": "HEAD"
+  },
+  "https://alt-ergo.ocamlpro.com/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139792.3412218,
+    "checked_by": "HEAD"
+  },
+  "https://why3.org/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139793.365862,
+    "checked_by": "HEAD"
+  },
+  "https://gitlab.inria.fr/why3/why3": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139794.9208372,
+    "checked_by": "HEAD"
+  },
+  "https://z3prover.github.io/api/html/z3.z3.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139796.261611,
+    "checked_by": "HEAD"
+  },
+  "https://go.dev/ref/spec": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139796.8370261,
+    "checked_by": "HEAD"
+  },
+  "https://doc.rust-lang.org/reference/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139796.9137259,
+    "checked_by": "HEAD"
+  },
+  "https://docs.oracle.com/javase/specs/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139796.9959831,
+    "checked_by": "HEAD"
+  },
+  "https://docs.ruby-lang.org/en/3.3/syntax/methods_rdoc.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139797.248767,
+    "checked_by": "HEAD"
+  },
+  "https://coq.inria.fr/refman/language/core/definitions.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139800.917944,
+    "checked_by": "HEAD"
+  },
+  "https://coq.inria.fr/refman/language/core/inductive.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139804.3632488,
+    "checked_by": "HEAD"
+  },
+  "https://tc39.es/ecma262/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139805.5716019,
+    "checked_by": "HEAD"
+  },
+  "https://www.typescriptlang.org/docs/handbook/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139807.171822,
+    "checked_by": "HEAD"
+  },
+  "https://compcert.org/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139807.800117,
+    "checked_by": "HEAD"
+  },
+  "https://peps.python.org/pep-0484/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139808.301451,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/gc.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139808.641131,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/subprocess.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139808.720321,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/shutil.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139809.022843,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/faq/programming.html#handle-errors": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139809.35851,
+    "checked_by": "HEAD"
+  },
+  "https://bandit.readthedocs.io/en/latest/config.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139809.756096,
+    "checked_by": "HEAD"
+  },
+  "https://en.wikipedia.org/wiki/Hamming_code": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139809.840273,
+    "checked_by": "HEAD"
+  },
+  "https://en.wikipedia.org/wiki/ISO/IEC_25010": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139810.350522,
+    "checked_by": "HEAD"
+  },
+  "https://ecss.nl/standard/ecss-q-st-80c-software-product-assurance/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139812.50631,
+    "checked_by": "HEAD"
+  },
+  "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n2596.pdf": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139813.7606668,
+    "checked_by": "HEAD"
+  },
+  "https://en.wikibooks.org/wiki/Ada_Programming": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139813.870274,
+    "checked_by": "HEAD"
+  },
+  "https://docs.ruby-lang.org/en/": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139813.981168,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/reference/compound_stmts.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139814.352454,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/ctypes.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139814.4293609,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/threading.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139814.5029702,
+    "checked_by": "HEAD"
+  },
+  "https://ieeexplore.ieee.org/document/7082860": {
+    "verified": true,
+    "status_code": 202,
+    "error_message": "",
+    "timestamp": 1789139814.545006,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/textwrap.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139814.8577862,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/collections.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139815.1796448,
+    "checked_by": "HEAD"
+  },
+  "https://cwe.mitre.org/data/definitions/489.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139816.273141,
+    "checked_by": "HEAD"
+  },
+  "https://docs.python.org/3/library/importlib.html": {
+    "verified": true,
+    "status_code": 200,
+    "error_message": "",
+    "timestamp": 1789139816.664479,
+    "checked_by": "HEAD"
+  }
+}

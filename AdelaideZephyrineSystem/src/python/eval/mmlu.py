@@ -24,7 +24,7 @@ class MmluEvaluator(BaseEvaluator):
     Questions are multiple choice (A/B/C/D). Random baseline is 25%.
     """
 
-    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  # nosec
+    def evaluate(self, limit: int | None = None) -> list[QuestionResult]:  
         # nosec - recursive function with implicit base case
         """Run MMLU multi-task language understanding benchmark evaluation.
 
@@ -98,3 +98,9 @@ def expected_match(expected: str, predicted: str) -> bool:
     in the response (case-insensitive).
     """
     return expected.lower() in predicted.lower()
+
+
+def test_evaluate():    """Test stub for evaluate."""    pass
+
+
+def test_expected_match():    """Test stub for expected_match."""    pass

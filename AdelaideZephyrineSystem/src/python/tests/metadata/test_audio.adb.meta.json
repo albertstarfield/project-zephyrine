@@ -1,0 +1,9 @@
+{
+  "source_file": "test_audio.adb",
+  "source_hash": "b3d25e1fb17a703140be63bbe9fa44c16b19dae2da0e83823b085f6a74a3b995",
+  "rs_checksum": "d7e2c56f01f9b3e45ba889b5bb40fdffd4ea977466b647a1e0a105c30d237511",
+  "gc_checksum": "30c5f8912f48b160ab8fb20e09c547b43b6648233eb172a084f00ef36e108139",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 4
+}

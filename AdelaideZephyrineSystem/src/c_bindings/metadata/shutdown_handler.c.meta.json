@@ -1,0 +1,9 @@
+{
+  "source_file": "shutdown_handler.c",
+  "source_hash": "90501298d0aa03a29802544b73c303ceb98f7d62a72371e04a2614dea4c64b1b",
+  "rs_checksum": "67a4a319066652f44ebc3f9aa818d6bcf31db6879493536e4323bc9815ed12b7",
+  "gc_checksum": "932fdc7b256786949db2bd6ffa8f98fb8626795cf1ab4a6ff71b2736df17e589",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 4
+}

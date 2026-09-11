@@ -1,0 +1,9 @@
+{
+  "source_file": "bbq.py",
+  "source_hash": "b15a2b2ea2d4517871fef9eb3d85d0ec765a6d312ff7c50b9e20f63a335268b5",
+  "rs_checksum": "5f1cb2d1c3551d1a83c15a825b086d668548ad695067db5d0b04a156b4c0d9ca",
+  "gc_checksum": "889c067b5db2f9a8b919ee8b7992225a1e188003e2f3a6e14294b7d88fd99109",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

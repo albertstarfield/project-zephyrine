@@ -1,0 +1,9 @@
+{
+  "source_file": "cronia_scheduler.adb",
+  "source_hash": "e3ecc2962189cb3d947c69b18a0ec9ca472a4cfdc7ced9ff22a7e4b07184ce00",
+  "rs_checksum": "923addf3351ee343bc0e9368d67572ae33b2f2ecc978ca9af4a76f689fb917d8",
+  "gc_checksum": "e82241b4aa3d90bcdb1951b3d5cfe4906dedc74a1a2a60c5b23d6dbf3a3b1486",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 20
+}

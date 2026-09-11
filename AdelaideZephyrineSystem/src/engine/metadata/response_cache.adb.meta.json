@@ -1,0 +1,9 @@
+{
+  "source_file": "response_cache.adb",
+  "source_hash": "b03a89c2052c868e70fc1b7765b447d3bf49701752a38aaacff61c7988cbb090",
+  "rs_checksum": "db372553213709be22676e8541f4cd2d37e7ceea87b44ba5180e4f99ad855d37",
+  "gc_checksum": "b2b41528f865ae24d76fdaf339bc537a4f60f98a148887606c8cd11f501fc352",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 17
+}

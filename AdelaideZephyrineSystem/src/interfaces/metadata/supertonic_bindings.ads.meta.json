@@ -1,0 +1,9 @@
+{
+  "source_file": "supertonic_bindings.ads",
+  "source_hash": "f743e2321e34ff13cb43a9b35d047de5e854c6a906cdf6b91fe505628a0c69d2",
+  "rs_checksum": "fc8f2546867174a5b6e4a5e7851555057e41705575eb1d4e1e1992e3bf99a63f",
+  "gc_checksum": "02a3af7809cd681b6efec80cce6644cacc5b5d5db95387ea8a1aa2727a75ce76",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 6
+}

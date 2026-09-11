@@ -1,0 +1,9 @@
+{
+  "source_file": "think_tag_sanitizer.adb",
+  "source_hash": "d3b190c5d034de52504fcc23980370e2510a2bb87d7431b2a079efbd8bbed899",
+  "rs_checksum": "419475ef488527a5420f3228fb3abf7f223067ae8da992bca0f3f6f24249bb2e",
+  "gc_checksum": "f73f8af45005643e1c07f60d916294839ad71679cc6268c65aa4ba9aaf53a60e",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 12
+}

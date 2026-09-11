@@ -1,0 +1,9 @@
+{
+  "source_file": "cfs_telemetry.ads",
+  "source_hash": "22838c94b736adca87a47c28f93135f9a515a5435e6e652dfc94c66f89a29062",
+  "rs_checksum": "b6909cd70f7e7d0b0b3665e97c7d3a7cbd1ba323002b81a4a2d7140d1583d625",
+  "gc_checksum": "42cdbbb06c18695d6bcb681554e9d0235118b87010e88cf3b8d7f8e5bbae50be",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 4
+}

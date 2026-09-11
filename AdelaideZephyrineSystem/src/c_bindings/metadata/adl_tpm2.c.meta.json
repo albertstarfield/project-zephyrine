@@ -1,0 +1,9 @@
+{
+  "source_file": "adl_tpm2.c",
+  "source_hash": "bee647371a99848e2493ca856ff08071ae351d6d334345e2050ff1e2cbf7de5c",
+  "rs_checksum": "6c30ba8c9209db4c257eb19dccc32d5cd88ffc943f212560fb594e9cb4ee5884",
+  "gc_checksum": "52f50cf58dbf3ae61f275e47ead03605cb8904800ef892a747eee407f77ddf1c",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 8
+}

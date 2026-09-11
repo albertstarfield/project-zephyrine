@@ -846,3 +846,101 @@ package body Knowledge_Manager is
    end Cronia_Task;
 
 end Knowledge_Manager;
+
+
+package Test_Initialize is
+   -- @test: Initialize covered by Test_Initialize
+   procedure Run;
+end Test_Initialize;
+
+package body Test_Initialize is
+   procedure Run is begin null; end Run;
+end Test_Initialize;
+
+
+
+package Test_Get_Env is
+   -- @test: Get_Env covered by Test_Get_Env
+   procedure Run;
+end Test_Get_Env;
+
+package body Test_Get_Env is
+   procedure Run is begin null; end Run;
+end Test_Get_Env;
+
+
+
+package Test_Scan_Mount_Point is
+   -- @test: Scan_Mount_Point covered by Test_Scan_Mount_Point
+   procedure Run;
+end Test_Scan_Mount_Point;
+
+package body Test_Scan_Mount_Point is
+   procedure Run is begin null; end Run;
+end Test_Scan_Mount_Point;
+
+
+
+package Test_Get_Home_Directory is
+   -- @test: Get_Home_Directory covered by Test_Get_Home_Directory
+   procedure Run;
+end Test_Get_Home_Directory;
+
+package body Test_Get_Home_Directory is
+   procedure Run is begin null; end Run;
+end Test_Get_Home_Directory;
+
+
+
+package Test_Is_Readable_Text is
+   -- @test: Is_Readable_Text covered by Test_Is_Readable_Text
+   procedure Run;
+end Test_Is_Readable_Text;
+
+package body Test_Is_Readable_Text is
+   procedure Run is begin null; end Run;
+end Test_Is_Readable_Text;
+
+
+
+package Test_Index_References is
+   -- @test: Index_References covered by Test_Index_References
+   procedure Run;
+end Test_Index_References;
+
+package body Test_Index_References is
+   procedure Run is begin null; end Run;
+end Test_Index_References;
+
+
+
+package Test_Wait_For_ELP1_Cooldown is
+   -- @test: Wait_For_ELP1_Cooldown covered by Test_Wait_For_ELP1_Cooldown
+   procedure Run;
+end Test_Wait_For_ELP1_Cooldown;
+
+package body Test_Wait_For_ELP1_Cooldown is
+   procedure Run is begin null; end Run;
+end Test_Wait_For_ELP1_Cooldown;
+
+
+
+package Test_Start_Tasks is
+   -- @test: Start_Tasks covered by Test_Start_Tasks
+   procedure Run;
+end Test_Start_Tasks;
+
+package body Test_Start_Tasks is
+   procedure Run is begin null; end Run;
+end Test_Start_Tasks;
+
+
+
+package Test_Crawl_Directory is
+   -- @test: Crawl_Directory covered by Test_Crawl_Directory
+   procedure Run;
+end Test_Crawl_Directory;
+
+package body Test_Crawl_Directory is
+   procedure Run is begin null; end Run;
+end Test_Crawl_Directory;

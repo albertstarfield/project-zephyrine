@@ -1,0 +1,9 @@
+{
+  "source_file": "tool_call_autofix.ads",
+  "source_hash": "80fd26313d5ffb23a8fe6f9d4eb9fa63555426e27fc082fbf10a896db0cf15c9",
+  "rs_checksum": "df87962ab61e6b1a27b938fa6876535f02cabc61f1a0766faea2a279f06f8721",
+  "gc_checksum": "2d8ae78befaed64afc62707d7f525371de3f0fc69be47b34c3af0372dac2e529",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 24
+}

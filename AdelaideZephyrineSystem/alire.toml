@@ -41,6 +41,87 @@
 #  submodule (moonshine/core/third-party/onnxruntime/lib/macos/arm64/).
 #  Set DYLD_LIBRARY_PATH before launching (run.py lines 297-302 handles this).
 #  Direct execution of bin/adelaide_server WILL FAIL without it.
+#
+#  [QUIRK-005] OpenGLAda 0.9.0 GNAT 16 compilation errors (auto-patched)
+#  OpenGLAda 0.9.0 has two source-level incompatibilities with GNAT 16.x:
+#    (a) gl-debug.adb:102 -- implicit conversion of anonymous access parameter
+#        to System.Address via Address_To_Access_Conversions.To_Address.
+#        GNAT 16 disallows implicit anonymous-to-named access conversions.
+#        FIX: Conv.To_Address (Conv.Object_Pointer (Receiver))
+#    (b) gl-raster.ads -- use GL.Types clause triggers unused-use warning,
+#        which is fatal because opengl.gpr sets -gnatwe (warnings as errors).
+#        FIX: pragma Warnings (Off, "use clause for package") before use clauses.
+#  Both patches are applied automatically by _patch_alire_dependencies() in
+#  run.py before every `alr build`.  Patches survive `alr update --force`
+#  because they target content patterns, not file paths.
+#  REF: [OpenGLAda090 GNAT16] flyx/OpenGLAda#182 (anonymous access)
+#       [GNAT16 -gnatwe] gcc.gnu.org/onlinedocs/gnat_ugn/Warnings.html
+#
+#  [QUIRK-006] libgpr 25.0.0 time_t undefined with GNAT 16 (auto-patched)
+#  libgpr 25.0.0 gpr-compilation-protocol.adb:981 uses bare `time_t` type
+#  which was removed from standard visibility in GNAT 16.  The original code:
+#    To_Ada (time_t (Conversions.To_Unix_Time (...)))
+#  LEARNED: time_t is in System.C_Time (via GNAT.C_Time), but the To_Ada
+#  function here is GNAT.OS_Lib.To_Ada(Long_Long_Integer) returning OS_Time,
+#  NOT Ada.Calendar.Conversions.To_Ada_Time which returns Ada.Calendar.Time.
+#  Set_File_Last_Modify_Time_Stamp expects System.Os_Lib.OS_Time, not Calendar.Time.
+#  FIX: GNAT.OS_Lib.To_Ada (Long_Long_Integer (Conversions.To_Unix_Time (...)))
+#  To_Unix_Time returns Interfaces.C.long, cast to Long_Long_Integer for OS_Lib.To_Ada.
+#  Applied automatically by _patch_alire_dependencies() in run.py.
+#  REF: [Ada.Calendar.Conversions] Ada Reference Manual RM9.01
+#       [GNAT.OS_Lib.To_Ada] gcc.gnu.org/onlinedocs/gnat_ugn/
+#
+#  [QUIRK-007] Pinned dependency versions
+#  OpenGLAda (0.9.0) and libgpr (25.0.0) are pinned to exact versions because
+#  the auto-patcher (QUIRK-005, QUIRK-006, QUIRK-010) targets specific source patterns.
+#  Upstream versions may fix these bugs OR introduce new ones with different
+#  patterns.  Until the patches are upstreamed or the libraries are upgraded
+#  to versions that compile cleanly with GNAT 16, these versions are locked.
+#  To upgrade: remove pins, run `alr update`, check if patches still apply,
+#  and update the patcher if the source patterns changed.
+#  ==========================================================================
+
+#  [QUIRK-008] alire.toml must be pure ASCII (no non-ASCII characters)
+#  Alire's TOML parser rejects non-ASCII bytes (e.g. em-dash U+2014, UTF-8
+#  multi-byte sequences) even in comments.  This causes:
+#    "Invalid TOML contents: invalid UTF-8 encoding at alire.toml:<line>:<col>"
+#  LESSON: Always use ASCII-only characters in alire.toml.  If you copy-paste
+#  documentation, replace any non-ASCII with ASCII equivalents (e.g. -- for --).
+#  ==========================================================================
+#
+#  [QUIRK-009] Ada 2012 standard -- targets SPARK 2014 for formal verification
+#  We target Ada 2012 (not Ada 2022) because:
+#  (a) SPARK 2014 is the latest stable SPARK version with mature tooling.
+#      GNATprove 15.x fully supports SPARK 2014 contracts (pre/post, type
+#      invariants, loop invariants, ghost code) with comprehensive proof.
+#  (b) Ada 2012 has extensive quirks documentation -- decades of edge cases,
+#      workarounds, and proven patterns. Ada 2022 quirks are largely unknown.
+#  (c) For a safety-critical GNC framework (DAL B/C), battle-tested > bleeding
+#      edge.  Every Ada 2012 quirk we encounter is a documented surprise.
+#  (d) SPARK 2014 + Ada 2012 is the proven combination for formal verification
+#      in avionics and space (DO-178C, ECSS-Q-ST-80C).
+#  (e) Frustration: Ada 2022 introduced new syntax/semantics that break
+#      existing codebases and library compatibility (see QUIRK-005, QUIRK-006
+#      where GNAT 16's Ada 2022 defaults cause anonymous access errors, time_t
+#      visibility removal, and stricter type conversions).  Ada 2012 is the
+#      sane choice when you want things to WORK, not fight the language.
+#  GNAT 16 defaults to Ada 2022 -- we enforce Ada 2012 via -gnat2012 in the
+#  config GPR compiler switches.
+#  ==========================================================================
+#
+#  [QUIRK-010] libgpr 25.0.0 Env_Maps equality operator ambiguity (auto-patched)
+#  gpr-compilation-process.adb:44 instantiates Prj_Maps with explicit Env_Maps."="
+#  as the equality operator parameter.  Under Ada 2012 + GNAT 16, the generic
+#  resolver picks Env_Maps."=" against String (Key_Type) instead of Map
+#  (Element_Type), causing:
+#    "operator for type String is not declared in Env_Maps"
+#  FIX: Remove explicit Env_Maps."=" parameter from the instantiation.
+#  The generic default ("<>") handles equality comparison correctly.
+#  This is another Ada 2012 vs Ada 2022 generic resolution difference.
+#  LEARNED: Ada 2012 resolves generic operators against the first matching
+#  type in the formal parameter list.  GNAT 16's Ada 2022 mode changed
+#  resolution order, causing previously valid code to fail.
+#  Applied automatically by _patch_alire_dependencies() in run.py.
 #  ==========================================================================
 
 name = "adelaide_zephyrine_system"
@@ -63,7 +144,7 @@ aws = "^25.2.0"
 gnatcoll = "^25.0.0"
 
 [[depends-on]]
-libgpr = "^25.0.0"
+libgpr = "=25.0.0"  # Pinned: QUIRK-006 (time_t auto-patch targets this version)
 
 [[depends-on]]
 xmlada = "^25.0.0"
@@ -82,11 +163,12 @@ ansiada = "^1.1.0"
 # Provides type-safe GL objects, shader/program management, texture loading,
 # and cross-platform windowing via GLFW.
 # AXIOM: OpenGL ES 2.0 context requested via GLFW hints for embedded targets.
+# Pinned to 0.9.0: QUIRK-005 (GNAT 16 anonymous access + -gnatwe auto-patches)
 [[depends-on]]
-openglada = "^0.9.0"
+openglada = "=0.9.0"
 
 [[depends-on]]
-openglada_glfw = "^0.9.0"
+openglada_glfw = "=0.9.0"
 
 [[depends-on]]
-openglada_images = "^0.9.0"
+openglada_images = "=0.9.0"

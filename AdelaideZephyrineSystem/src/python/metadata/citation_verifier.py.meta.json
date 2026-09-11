@@ -1,0 +1,9 @@
+{
+  "source_file": "citation_verifier.py",
+  "source_hash": "db403dfdf42911cdf10c7cb54379763ff04b58b08439afb87623b10cd34d4c86",
+  "rs_checksum": "36f341b60eb58bb06d90f32476d867f70445330db9b1e822a5eb0b971428a989",
+  "gc_checksum": "be18af7a3a3cc247c21213aa5cd50a747e19039ac2f00aaac8ef967af1431558",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 4
+}

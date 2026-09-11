@@ -1,0 +1,9 @@
+{
+  "source_file": "image_encoder.ads",
+  "source_hash": "9486c9f8e1ba695de621588e5c6310fd2925d5906596a27195f86cc55052a9fa",
+  "rs_checksum": "ba0d097a9ab608893fd4889d4694350964a307119e24b8043a695bf0f7a571e5",
+  "gc_checksum": "80be5fb56d3ff185cb1c9b9b9c69b45c34d78a76763c42f7b0221f6babcbb0c2",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 5
+}

@@ -1,0 +1,9 @@
+{
+  "source_file": "kratos_signal.c",
+  "source_hash": "a5425ffb82273e0fa644b069a9dd2745be707a88a4de4fe52d5af261c04d7700",
+  "rs_checksum": "cee0ec9b5bbd923ea9455d166ed75923cc30af0ade816f2655f3df6698f61ce9",
+  "gc_checksum": "182038a1a3f33d40e433df5962a5351e8043169c25fc3138f6d6e8252277e885",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 7
+}

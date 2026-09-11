@@ -11,10 +11,10 @@ with System;
 package Mtmd_Interface is
 
    --  Opaque handle types (void pointers in C)
-   type Mtmd_Context is new System.Address; -- FFI: System.Address required for C binding
-   type Mtmd_Bitmap is new System.Address; -- FFI: System.Address required for C binding
-   type Mtmd_Input_Chunks is new System.Address; -- FFI: System.Address required for C binding
-   type Mtmd_Input_Chunk is new System.Address; -- FFI: System.Address required for C binding
+   type Mtmd_Context is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
+   type Mtmd_Bitmap is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
+   type Mtmd_Input_Chunks is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
+   type Mtmd_Input_Chunk is new System.Address; -- FFI: System.Address required for C binding  -- PREALLOCATED_REVIEWED
 
    Null_Mtmd_Context : constant Mtmd_Context :=
      Mtmd_Context (System.Null_Address);

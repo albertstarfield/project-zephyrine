@@ -1,0 +1,9 @@
+{
+  "source_file": "kmmlu.py",
+  "source_hash": "dcf517b4fce48f96ed3bf7bd868c520d93f3ea8fa197f2d087bf98f320d93d15",
+  "rs_checksum": "6296c80c620ffc36ae1627e8452381ce4e35162c22d172f6b6f82f292e1423a5",
+  "gc_checksum": "28fa1e60d2b4b14ab35cf60766b350e2c4aa5f39b8a1e44d931ed366a57ce265",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 3
+}

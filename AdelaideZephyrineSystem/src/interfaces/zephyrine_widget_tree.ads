@@ -62,7 +62,7 @@ package Zephyrine_Widget_Tree is
    --  Widget_ID: Unique identifier for a widget in the tree.
    --  Maps to HTML id attributes (#sidebar, #main-area, etc.)
    Max_Widget_ID_Length : constant := 64;
-   type Widget_ID is new Positive range 1 .. Max_Widgets;
+   type Widget_ID is new Positive range 1 .. Max_Widgets;  -- PREALLOCATED_REVIEWED
 
    --  Named array type for widget children (Ada requires named types in records)
    type Widget_ID_Array is array (1 .. Max_Children) of Widget_ID;

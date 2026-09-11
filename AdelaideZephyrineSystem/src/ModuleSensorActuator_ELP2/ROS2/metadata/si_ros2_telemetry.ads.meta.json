@@ -1,0 +1,9 @@
+{
+  "source_file": "si_ros2_telemetry.ads",
+  "source_hash": "db326c6d47e24b3094ec5e4ba8f4a2178e94169f4211d4a7ed50ca20169b8939",
+  "rs_checksum": "59682533d32f5370935f691be4949d6c569f3a0aba926d46ded5250551f4a4f0",
+  "gc_checksum": "bda458763a67b446130bec20ac2c4a37f8ea458d2f03b609ea913068dca1b05f",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 2
+}

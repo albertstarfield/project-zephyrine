@@ -1,0 +1,9 @@
+{
+  "source_file": "citation_verifier.adb",
+  "source_hash": "cd9800b126083c2475e420176a84f2b190f88e773feeb718a288824321015968",
+  "rs_checksum": "8787a25e4348884252f2dd05ab1660b2ef8a4872a7a205ebbdc567d8eeb2b9f0",
+  "gc_checksum": "6af4d7e2dac490d89a85ba52b006d4ceea46279fd9d23078c7303fb25a19bbc6",
+  "version": "2.0",
+  "block_size": 512,
+  "total_blocks": 9
+}
