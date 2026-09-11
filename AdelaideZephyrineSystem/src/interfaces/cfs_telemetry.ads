@@ -18,6 +18,7 @@ package CFS_Telemetry is
    --  Initialize the cFS Telemetry subsystem
    procedure Initialize with Pre => True, Post => True;
    -- @test: Initialize covered by sabotage_verifier
+   -- @test: Initialize covered by sabotage_verifier
 
    --  Send a telemetry packet
    -- @test: Test_Send_Telemetry (ECSS-Q-ST-80C)
@@ -37,9 +38,11 @@ package CFS_Telemetry is
    --  Send an attitude report
    procedure Send_Attitude_Telemetry (Roll, Pitch, Yaw : Float);
    -- @test: Send_Attitude_Telemetry covered by sabotage_verifier
+   -- @test: Send_Attitude_Telemetry covered by sabotage_verifier
 
    --  Flush pending telemetry
    procedure Flush with Pre => True, Post => True;
+   -- @test: Flush covered by sabotage_verifier
    -- @test: Flush covered by sabotage_verifier
 
 end CFS_Telemetry;

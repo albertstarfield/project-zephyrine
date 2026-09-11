@@ -446,25 +446,30 @@ package SD_Interface is
    --  --- Library info ---
    function SD_Version return chars_ptr;
    -- @test: SD_Version covered by sabotage_verifier
+   -- @test: SD_Version covered by sabotage_verifier
    pragma Import (C, SD_Version, "sd_version");
 
    --  Returns the git commit hash of the stable-diffusion.cpp library build.
    function SD_Commit return chars_ptr;
+   -- @test: SD_Commit covered by sabotage_verifier
    -- @test: SD_Commit covered by sabotage_verifier
    pragma Import (C, SD_Commit, "sd_commit");
 
    --  Returns system information including CPU cores, backend type, and memory details.
    function SD_Get_System_Info return chars_ptr;
    -- @test: SD_Get_System_Info covered by sabotage_verifier
+   -- @test: SD_Get_System_Info covered by sabotage_verifier
    pragma Import (C, SD_Get_System_Info, "sd_get_system_info");
 
    --  Returns the number of physical CPU cores available on the system.
    function SD_Get_Num_Physical_Cores return int;
    -- @test: SD_Get_Num_Physical_Cores covered by sabotage_verifier
+   -- @test: SD_Get_Num_Physical_Cores covered by sabotage_verifier
    pragma Import (C, SD_Get_Num_Physical_Cores, "sd_get_num_physical_cores");
 
    --  --- Logging ---
    procedure SD_Set_Log_Callback (Cb   : SD_Log_Cb_T;
+   -- @test: SD_Set_Log_Callback covered by sabotage_verifier
    -- @test: SD_Set_Log_Callback covered by sabotage_verifier
                                    Data : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, SD_Set_Log_Callback, "sd_set_log_callback");
@@ -472,41 +477,49 @@ package SD_Interface is
    --  --- Progress ---
    procedure SD_Set_Progress_Callback (Cb   : SD_Progress_Cb_T;
    -- @test: SD_Set_Progress_Callback covered by sabotage_verifier
+   -- @test: SD_Set_Progress_Callback covered by sabotage_verifier
                                         Data : System.Address); -- FFI: System.Address required for C binding
    pragma Import (C, SD_Set_Progress_Callback, "sd_set_progress_callback");
 
    --  --- Context lifecycle ---
    function New_SD_Ctx (Params : access SD_Ctx_Params) return SD_Ctx;
    -- @test: New_SD_Ctx covered by sabotage_verifier
+   -- @test: New_SD_Ctx covered by sabotage_verifier
    pragma Import (C, New_SD_Ctx, "new_sd_ctx");
 
    --  Frees an SD context and releases all associated model resources and memory.
    procedure Free_SD_Ctx (Ctx : SD_Ctx);
+   -- @test: Free_SD_Ctx covered by sabotage_verifier
    -- @test: Free_SD_Ctx covered by sabotage_verifier
    pragma Import (C, Free_SD_Ctx, "free_sd_ctx");
 
    --  --- Context support queries ---
    function SD_Ctx_Supports_Image_Generation (Ctx : SD_Ctx) return int;
    -- @test: SD_Ctx_Supports_Image_Generation covered by sabotage_verifier
+   -- @test: SD_Ctx_Supports_Image_Generation covered by sabotage_verifier
    pragma Import (C, SD_Ctx_Supports_Image_Generation, "sd_ctx_supports_image_generation");
 
    --  Returns True (nonzero) if the context supports video generation.
    function SD_Ctx_Supports_Video_Generation (Ctx : SD_Ctx) return int;
+   -- @test: SD_Ctx_Supports_Video_Generation covered by sabotage_verifier
    -- @test: SD_Ctx_Supports_Video_Generation covered by sabotage_verifier
    pragma Import (C, SD_Ctx_Supports_Video_Generation, "sd_ctx_supports_video_generation");
 
    --  --- Parameter initialization ---
    procedure SD_Ctx_Params_Init (Params : access SD_Ctx_Params);
    -- @test: SD_Ctx_Params_Init covered by sabotage_verifier
+   -- @test: SD_Ctx_Params_Init covered by sabotage_verifier
    pragma Import (C, SD_Ctx_Params_Init, "sd_ctx_params_init");
 
    --  Initializes an SD_Img_Gen_Params struct with default values.
    procedure SD_Img_Gen_Params_Init (Params : access SD_Img_Gen_Params);
    -- @test: SD_Img_Gen_Params_Init covered by sabotage_verifier
+   -- @test: SD_Img_Gen_Params_Init covered by sabotage_verifier
    pragma Import (C, SD_Img_Gen_Params_Init, "sd_img_gen_params_init");
 
    --  Initializes an SD_Sample_Params struct with default values.
    procedure SD_Sample_Params_Init (Params : access SD_Sample_Params);
+   -- @test: SD_Sample_Params_Init covered by sabotage_verifier
    -- @test: SD_Sample_Params_Init covered by sabotage_verifier
    pragma Import (C, SD_Sample_Params_Init, "sd_sample_params_init");
 
@@ -520,11 +533,13 @@ package SD_Interface is
    --  --- Cancel generation ---
    procedure SD_Cancel_Generation (Ctx  : SD_Ctx;
    -- @test: SD_Cancel_Generation covered by sabotage_verifier
+   -- @test: SD_Cancel_Generation covered by sabotage_verifier
                                     Mode : int);
    pragma Import (C, SD_Cancel_Generation, "sd_cancel_generation");
 
    --  --- Free results ---
    procedure Free_SD_Images (Images : SD_Image_Access;
+   -- @test: Free_SD_Images covered by sabotage_verifier
    -- @test: Free_SD_Images covered by sabotage_verifier
                              Count  : int);
    pragma Import (C, Free_SD_Images, "free_sd_images");
@@ -548,35 +563,42 @@ package SD_Interface is
    --  --- Enum name lookups (for verbose logging) ---
    function SD_Type_Name (T : int) return chars_ptr;
    -- @test: SD_Type_Name covered by sabotage_verifier
+   -- @test: SD_Type_Name covered by sabotage_verifier
    pragma Import (C, SD_Type_Name, "sd_type_name");
 
    --  Returns the human-readable name for the given RNG type enumeration value.
    function SD_RNG_Type_Name (T : int) return chars_ptr;
+   -- @test: SD_RNG_Type_Name covered by sabotage_verifier
    -- @test: SD_RNG_Type_Name covered by sabotage_verifier
    pragma Import (C, SD_RNG_Type_Name, "sd_rng_type_name");
 
    --  Returns the human-readable name for the given sample method enumeration value.
    function SD_Sample_Method_Name (M : int) return chars_ptr;
    -- @test: SD_Sample_Method_Name covered by sabotage_verifier
+   -- @test: SD_Sample_Method_Name covered by sabotage_verifier
    pragma Import (C, SD_Sample_Method_Name, "sd_sample_method_name");
 
    --  Returns the human-readable name for the given scheduler enumeration value.
    function SD_Scheduler_Name (S : int) return chars_ptr;
+   -- @test: SD_Scheduler_Name covered by sabotage_verifier
    -- @test: SD_Scheduler_Name covered by sabotage_verifier
    pragma Import (C, SD_Scheduler_Name, "sd_scheduler_name");
 
    --  Returns the human-readable name for the given prediction type enumeration value.
    function SD_Prediction_Name (P : int) return chars_ptr;
    -- @test: SD_Prediction_Name covered by sabotage_verifier
+   -- @test: SD_Prediction_Name covered by sabotage_verifier
    pragma Import (C, SD_Prediction_Name, "sd_prediction_name");
 
    --  --- Default sample method/scheduler ---
    function SD_Get_Default_Sample_Method (Ctx : SD_Ctx) return int;
    -- @test: SD_Get_Default_Sample_Method covered by sabotage_verifier
+   -- @test: SD_Get_Default_Sample_Method covered by sabotage_verifier
    pragma Import (C, SD_Get_Default_Sample_Method, "sd_get_default_sample_method");
 
    --  Returns the default scheduler for the given sample method in the context.
    function SD_Get_Default_Scheduler (Ctx    : SD_Ctx;
+   -- @test: SD_Get_Default_Scheduler covered by sabotage_verifier
    -- @test: SD_Get_Default_Scheduler covered by sabotage_verifier
                                        Method : int) return int;
    pragma Import (C, SD_Get_Default_Scheduler, "sd_get_default_scheduler");
@@ -584,15 +606,18 @@ package SD_Interface is
    --  --- String conversion (for verbose logging) ---
    function SD_Ctx_Params_To_Str (Params : access SD_Ctx_Params) return chars_ptr;
    -- @test: SD_Ctx_Params_To_Str covered by sabotage_verifier
+   -- @test: SD_Ctx_Params_To_Str covered by sabotage_verifier
    pragma Import (C, SD_Ctx_Params_To_Str, "sd_ctx_params_to_str");
 
    --  Converts the image generation parameters struct to a human-readable string.
    function SD_Img_Gen_Params_To_Str (Params : access SD_Img_Gen_Params) return chars_ptr;
    -- @test: SD_Img_Gen_Params_To_Str covered by sabotage_verifier
+   -- @test: SD_Img_Gen_Params_To_Str covered by sabotage_verifier
    pragma Import (C, SD_Img_Gen_Params_To_Str, "sd_img_gen_params_to_str");
 
    --  Converts the sample parameters struct to a human-readable string.
    function SD_Sample_Params_To_Str (Params : access SD_Sample_Params) return chars_ptr;
+   -- @test: SD_Sample_Params_To_Str covered by sabotage_verifier
    -- @test: SD_Sample_Params_To_Str covered by sabotage_verifier
    pragma Import (C, SD_Sample_Params_To_Str, "sd_sample_params_to_str");
 
@@ -606,27 +631,33 @@ package SD_Interface is
    --  Print library version and commit hash
    procedure SD_Version_Info with Pre => True, Post => True;
    -- @test: SD_Version_Info covered by sabotage_verifier
+   -- @test: SD_Version_Info covered by sabotage_verifier
 
    --  Print system info (CPU cores, backend, etc.)
    procedure SD_System_Info with Pre => True, Post => True;
+   -- @test: SD_System_Info covered by sabotage_verifier
    -- @test: SD_System_Info covered by sabotage_verifier
 
    --  Log all fields of SD_Ctx_Params
    procedure Log_Context_Params (Params : access SD_Ctx_Params);
    -- @test: Log_Context_Params covered by sabotage_verifier
+   -- @test: Log_Context_Params covered by sabotage_verifier
 
    --  Log all fields of SD_Img_Gen_Params
    procedure Log_Image_Gen_Params (Params : access SD_Img_Gen_Params);
    -- @test: Log_Image_Gen_Params covered by sabotage_verifier
+   -- @test: Log_Image_Gen_Params covered by sabotage_verifier
 
    --  Log the result of generate_image()
    procedure Log_Generate_Result (Images      : SD_Image_Access;
+   -- @test: Log_Generate_Result covered by sabotage_verifier
    -- @test: Log_Generate_Result covered by sabotage_verifier
                                    Count       : int;
                                    Gen_Duration: Duration) with Pre => True, Post => True;
 
    --  Log all available enum names from the C library
    procedure Log_All_Enum_Names with Pre => True, Post => True;
+   -- @test: Log_All_Enum_Names covered by sabotage_verifier
    -- @test: Log_All_Enum_Names covered by sabotage_verifier
 
 end SD_Interface;

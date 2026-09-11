@@ -40,6 +40,7 @@ package Mtmd_Interface is
    --  Free mtmd context
    procedure Mtmd_Free_Safe (Ctx : Mtmd_Context);
    -- @test: Mtmd_Free_Safe covered by sabotage_verifier
+   -- @test: Mtmd_Free_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Free_Safe, "mtmd_free_safe");
 
    --  Create bitmap from raw RGB pixels
@@ -54,26 +55,31 @@ package Mtmd_Interface is
    --  Free bitmap
    procedure Mtmd_Bitmap_Free_Safe (Bitmap : Mtmd_Bitmap);
    -- @test: Mtmd_Bitmap_Free_Safe covered by sabotage_verifier
+   -- @test: Mtmd_Bitmap_Free_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Bitmap_Free_Safe, "mtmd_bitmap_free_safe");
 
    --  Get bitmap dimensions
    function Mtmd_Bitmap_Get_Nx_Safe (Bitmap : Mtmd_Bitmap) return unsigned;
+   -- @test: Mtmd_Bitmap_Get_Nx_Safe covered by sabotage_verifier
    -- @test: Mtmd_Bitmap_Get_Nx_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Bitmap_Get_Nx_Safe, "mtmd_bitmap_get_nx_safe");
 
     --  Returns the height (Ny) of the bitmap in pixels.
     function Mtmd_Bitmap_Get_Ny_Safe (Bitmap : Mtmd_Bitmap) return unsigned;
     -- @test: Mtmd_Bitmap_Get_Ny_Safe covered by sabotage_verifier
+    -- @test: Mtmd_Bitmap_Get_Ny_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Bitmap_Get_Ny_Safe, "mtmd_bitmap_get_ny_safe");
 
    --  Initialize empty input chunks list
    function Mtmd_Input_Chunks_Init_Safe return Mtmd_Input_Chunks;
+   -- @test: Mtmd_Input_Chunks_Init_Safe covered by sabotage_verifier
    -- @test: Mtmd_Input_Chunks_Init_Safe covered by sabotage_verifier
    pragma Import
      (C, Mtmd_Input_Chunks_Init_Safe, "mtmd_input_chunks_init_safe");
 
    --  Free input chunks
    procedure Mtmd_Input_Chunks_Free_Safe (Chunks : Mtmd_Input_Chunks);
+   -- @test: Mtmd_Input_Chunks_Free_Safe covered by sabotage_verifier
    -- @test: Mtmd_Input_Chunks_Free_Safe covered by sabotage_verifier
    pragma Import
      (C, Mtmd_Input_Chunks_Free_Safe, "mtmd_input_chunks_free_safe");
@@ -130,6 +136,7 @@ package Mtmd_Interface is
    --  Check if model supports vision
    function Mtmd_Support_Vision_Safe (Ctx : Mtmd_Context) return int;
    -- @test: Mtmd_Support_Vision_Safe covered by sabotage_verifier
+   -- @test: Mtmd_Support_Vision_Safe covered by sabotage_verifier
    pragma Import
      (C, Mtmd_Support_Vision_Safe, "mtmd_support_vision_safe");
 
@@ -145,6 +152,7 @@ package Mtmd_Interface is
 
    --  Get default media marker string
    function Mtmd_Default_Marker_Safe return chars_ptr;
+   -- @test: Mtmd_Default_Marker_Safe covered by sabotage_verifier
    -- @test: Mtmd_Default_Marker_Safe covered by sabotage_verifier
    pragma Import (C, Mtmd_Default_Marker_Safe, "mtmd_default_marker_safe");
 

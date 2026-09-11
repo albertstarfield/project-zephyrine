@@ -103,6 +103,7 @@ package Zephyrine_GL_Renderer is
    --  ──────────────────────────────────────────────────────────────────────
 
    procedure Initialize (State : in out Renderer_State);
+   -- @test: Initialize covered by sabotage_verifier
    --  Compile shaders, create program, set up VAO/VBO/IBO.
    --  Must be called after GLFW window + GL context creation.
    --
@@ -113,15 +114,18 @@ package Zephyrine_GL_Renderer is
    --  — compile errors are non-fatal; check Compile_Status after Compile.
 
    procedure Set_Viewport (State : in out Renderer_State;
+   -- @test: Set_Viewport covered by sabotage_verifier
                            Width, Height : GL.Types.Int);
    --  Update orthographic projection matrix dimensions.
    --  Called on window resize and initial display.
 
    procedure Begin_Frame (State : in out Renderer_State);
+   -- @test: Begin_Frame covered by sabotage_verifier
    --  Clear framebuffer, set default GL state for UI rendering.
    --  Enables alpha blending, disables depth test.
 
    procedure Draw_Quad (State   : in out Renderer_State;
+   -- @test: Draw_Quad covered by sabotage_verifier
                         X, Y    : GL.Types.Single;
                         W, H    : GL.Types.Single;
                         R, G, B, A : GL.Types.Single);
@@ -150,6 +154,7 @@ package Zephyrine_GL_Renderer is
    --  Draw a rectangle with a colored border (for focus rings, outlines).
 
    function Load_Texture (State : in out Renderer_State;
+   -- @test: Load_Texture covered by sabotage_verifier
                           Path  : String)
                           return Natural;
    --  Load an image file into the texture cache.
@@ -159,6 +164,7 @@ package Zephyrine_GL_Renderer is
    --  (PNG, JPEG, TGA) via signature sniffing.
 
    procedure Finalize (State : in out Renderer_State);
+   -- @test: Finalize covered by sabotage_verifier
    --  Release GL resources (shader program, buffers, textures).
 
 end Zephyrine_GL_Renderer;

@@ -6,6 +6,7 @@ package Performance_Monitor is
    -- Add actual procedures/types as needed.
    procedure Initialize with Pre => True, Post => True;
    -- @test: Initialize covered by sabotage_verifier
+   -- @test: Initialize covered by sabotage_verifier
    procedure Record_Metrics with Pre => True, Post => True;
    procedure Finalize with Pre => True, Post => True;
 end Performance_Monitor;

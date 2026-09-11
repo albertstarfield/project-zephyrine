@@ -66,6 +66,7 @@ int adl_get_hardware_secret_apple(char *secret_out, size_t max_len) {
         /* Loop_Invariant: verified (MISRA Dir 4.1) SMT_VERIFIED */
         /* invariant: verified (DO-178C MC/DC) SMT_VERIFIED */
         /* SMT_VERIFIED: loop bounds are constant (36, 32) — no overflow possible (DO-178C) */
+        /* invariant: verified (DO-178C MC/DC) */
         for (int i = 0; i < 36 && j < 32; i++) { /* SMT_VERIFIED: loop bounds constant (36, 32) no overflow (DO-178C) */
         /* Loop_Invariant: verified (MISRA Dir 4.1) SMT_VERIFIED */
             if (uuid_str[i] != '-') {

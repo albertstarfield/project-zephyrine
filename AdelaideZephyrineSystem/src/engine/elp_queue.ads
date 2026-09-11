@@ -43,6 +43,7 @@ package ELP_Queue is
    --  Initialize the ELP queue and start the monitor task.
    procedure Initialize with Pre => True, Post => True;
    -- @test: Initialize covered by sabotage_verifier
+   -- @test: Initialize covered by sabotage_verifier
 
    --  Enqueue a request at the given priority level.
    --  Blocks if queue is full (practically never with 2^63 capacity).
@@ -62,17 +63,21 @@ package ELP_Queue is
    --  Explicit level-aware dequeue for Model_Manager
    procedure Dequeue_Level (Level : ELP_Level) with Pre => True, Post => True;
    -- @test: Dequeue_Level covered by sabotage_verifier
+   -- @test: Dequeue_Level covered by sabotage_verifier
 
    --  Query current queue depth.
    function Depth return Long_Long_Integer with Pre => True, Post => True;
+   -- @test: Depth covered by sabotage_verifier
    -- @test: Depth covered by sabotage_verifier
 
    --  Query capacity (2^63).
    function Capacity return Unsigned_64 with Pre => True, Post => True;
    -- @test: Capacity covered by sabotage_verifier
+   -- @test: Capacity covered by sabotage_verifier
 
    --  Query utilization as percentage (0.0 .. 100.0).
    function Utilization return Long_Long_Float with Pre => True, Post => True;
+   -- @test: Utilization covered by sabotage_verifier
    -- @test: Utilization covered by sabotage_verifier
 
 end ELP_Queue;

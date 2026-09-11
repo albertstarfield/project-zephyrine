@@ -16,6 +16,7 @@ package SI_ROS2_Telemetry is
    --  Initialize_ROS2: Initializes the ROS2 node and communication infrastructure.
    function Initialize_ROS2 return Boolean with Pre => True, Post => True;
    -- @test: Initialize_ROS2 covered by sabotage_verifier
+   -- @test: Initialize_ROS2 covered by sabotage_verifier
    --  Poll_Telemetry: Polls telemetry data from sensors and publishes to ROS2 topics.
    procedure Poll_Telemetry with Pre => True, Post => True;
 

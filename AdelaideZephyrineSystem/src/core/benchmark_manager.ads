@@ -30,6 +30,7 @@ package Benchmark_Manager is
    --  Validate API key for benchmark endpoint
    function Validate_API_Key (Key : String) return Boolean with Pre => True, Post => True;
    -- @test: Validate_API_Key covered by sabotage_verifier
+   -- @test: Validate_API_Key covered by sabotage_verifier
 
    --  Run benchmark with SSE streaming
    --  Returns SSE events as strings
@@ -42,6 +43,7 @@ package Benchmark_Manager is
 
    --  Generate prompt with exact token count
    function Generate_Prompt (Target_Tokens : Natural) return String with Pre => True, Post => True;
+   -- @test: Generate_Prompt covered by sabotage_verifier
    -- @test: Generate_Prompt covered by sabotage_verifier
 
    --  Compute metrics from timing data

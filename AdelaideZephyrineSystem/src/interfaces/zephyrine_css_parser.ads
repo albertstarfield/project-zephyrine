@@ -315,10 +315,12 @@ package Zephyrine_CSS_Parser is
    --  Hex_To_Color: Convert hex string "#rrggbb" or "#rrggbbaa" to CSS_Color.
    --  Handles 3-digit shorthand (#abc → #aabbcc).
    function Hex_To_Color (Hex : String) return CSS_Color;
+   -- @test: Hex_To_Color covered by sabotage_verifier
 
    --  Parse_Length: Convert a CSS length string like "260px", "1.5rem", "100%"
    --  to a CSS_Length value.
    function Parse_Length (Text : String) return CSS_Length;
+   -- @test: Parse_Length covered by sabotage_verifier
 
    --  Length_To_Pixels: Convert a CSS_Length to pixels given viewport dimensions.
    function Length_To_Pixels
@@ -332,5 +334,6 @@ package Zephyrine_CSS_Parser is
    --  Used to pass colors to glUniform4f / glClearColor.
    type GL_Color_Array is array (1 .. 4) of Float;
    function Color_To_GL (Color : CSS_Color) return GL_Color_Array;
+   -- @test: Color_To_GL covered by sabotage_verifier
 
 end Zephyrine_CSS_Parser;

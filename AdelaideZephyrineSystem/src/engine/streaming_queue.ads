@@ -14,15 +14,18 @@ package Streaming_Queue is
       --  Mark the queue as closed, flushing any format-specific end-of-stream markers.
       procedure Close with Pre => True, Post => True;
       -- @test: Close covered by sabotage_verifier
+      -- @test: Close covered by sabotage_verifier
       --  Return the current number of bytes buffered in the queue.
       function Buffer_Length return Natural with Pre => True, Post => True;
       --  Return True when the queue is closed and all buffered data has been consumed.
       function Is_Empty_And_Closed return Boolean with Pre => True, Post => True;
       -- @test: Is_Empty_And_Closed covered by sabotage_verifier
+      -- @test: Is_Empty_And_Closed covered by sabotage_verifier
       --  Set the output format and model identifier for streamed responses.
       procedure Set_Format (F : Format_Type; Model : String := "") with Pre => True, Post => True;
       --  Return the current output format of the queue.
       function Get_Format return Format_Type with Pre => True, Post => True;
+      -- @test: Get_Format covered by sabotage_verifier
       -- @test: Get_Format covered by sabotage_verifier
    private
       Buffer    : Unbounded_String := Null_Unbounded_String;

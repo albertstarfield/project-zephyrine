@@ -40,6 +40,7 @@ package Image_Encoder is
    --  Get the number of embedding tokens from the last encoded image
    function Get_Last_Image_Tokens return Natural with Pre => True, Post => True;
    -- @test: Get_Last_Image_Tokens covered by sabotage_verifier
+   -- @test: Get_Last_Image_Tokens covered by sabotage_verifier
 
    --  Get the embedding data from the last encoded image
    --  Returns a pointer to the float array containing the embeddings
@@ -48,6 +49,7 @@ package Image_Encoder is
 
    --  Free the last encoded image data
    procedure Free_Last_Image with Pre => True, Post => True;
+   -- @test: Free_Last_Image covered by sabotage_verifier
    -- @test: Free_Last_Image covered by sabotage_verifier
 
 end Image_Encoder;

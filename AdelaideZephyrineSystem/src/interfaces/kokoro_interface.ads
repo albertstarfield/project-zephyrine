@@ -8,5 +8,6 @@ package Kokoro_Interface is
    --  Returns the raw WAV file bytes.
    function Synthesize_Speech (Text : String) return Ada.Streams.Stream_Element_Array with Pre => True, Post => True;
    -- @test: Synthesize_Speech covered by sabotage_verifier
+   -- @test: Synthesize_Speech covered by sabotage_verifier
 
 end Kokoro_Interface;

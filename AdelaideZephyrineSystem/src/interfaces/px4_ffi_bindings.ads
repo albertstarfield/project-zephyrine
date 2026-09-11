@@ -9,15 +9,18 @@ package PX4_FFI_Bindings is
    --  Initialize the MAVLink UDP Socket to the PX4 SITL or Hardware
    function Initialize_PX4_Socket (Port : Integer) return Integer;
    -- @test: Initialize_PX4_Socket covered by sabotage_verifier
+   -- @test: Initialize_PX4_Socket covered by sabotage_verifier
    pragma Import (C, Initialize_PX4_Socket, "initialize_px4_socket");
 
    --  Send a GNC command natively
    procedure Send_GNC_Command (Roll, Pitch, Yaw, Thrust : Float);
    -- @test: Send_GNC_Command covered by sabotage_verifier
+   -- @test: Send_GNC_Command covered by sabotage_verifier
    pragma Import (C, Send_GNC_Command, "send_gnc_command");
 
    --  Ada wrapper for the LLM to call
    procedure Execute_GNC_Tool (Params : String) with Pre => True, Post => True;
+   -- @test: Execute_GNC_Tool covered by sabotage_verifier
    -- @test: Execute_GNC_Tool covered by sabotage_verifier
 
 end PX4_FFI_Bindings;

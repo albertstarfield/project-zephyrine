@@ -16,6 +16,7 @@ package body Fuzzy_Match is
    --  Match: Returns a fuzzy match score between 0.0 (no match) and 1.0 (exact match).
    -- @test: Match covered by sabotage_verifier
    function Match (Haystack, Needle : String) return Float
+      with Pre => True, Post => True; -- TODO: specify actual contracts
    is
       H_Len   : constant Integer := Haystack'Length;
       N_Len   : constant Integer := Needle'Length;

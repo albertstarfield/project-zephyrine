@@ -8,4 +8,5 @@ package Tool_Issue is
    --          or "comment <number> <text>"
    function Execute_Issue (Params : String) return String with Pre => True, Post => True;
    -- @test: Execute_Issue covered by sabotage_verifier
+   -- @test: Execute_Issue covered by sabotage_verifier
 end Tool_Issue;

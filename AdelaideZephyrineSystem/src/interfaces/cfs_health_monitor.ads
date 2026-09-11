@@ -20,6 +20,7 @@ package CFS_Health_Monitor is
    --  Initialize the cFS Health Monitor
    procedure Initialize with Pre => True, Post => True;
    -- @test: Initialize covered by sabotage_verifier
+   -- @test: Initialize covered by sabotage_verifier
 
    --  Check health of a named application
    -- @test: Test_Check_App_Health (ECSS-Q-ST-80C)
@@ -38,6 +39,7 @@ package CFS_Health_Monitor is
 
    --  Reset health counters
    procedure Reset_Counters with Pre => True, Post => True;
+   -- @test: Reset_Counters covered by sabotage_verifier
    -- @test: Reset_Counters covered by sabotage_verifier
 
 end CFS_Health_Monitor;

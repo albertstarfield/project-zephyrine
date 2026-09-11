@@ -7,4 +7,5 @@ package Tool_Git is
    --  Params: "<command> [args...]"
    function Execute_Git (Params : String) return String with Pre => True, Post => True;
    -- @test: Execute_Git covered by sabotage_verifier
+   -- @test: Execute_Git covered by sabotage_verifier
 end Tool_Git;

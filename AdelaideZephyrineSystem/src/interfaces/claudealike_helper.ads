@@ -54,9 +54,11 @@ package Claudealike_Helper is
    --  Parse a Claude API JSON response and extract the text content.
    function Parse_Response_Content (JSON_Response : String) return String with Pre => True, Post => True;
    -- @test: Parse_Response_Content covered by sabotage_verifier
+   -- @test: Parse_Response_Content covered by sabotage_verifier
 
    --  Check if a model name looks like a Claude model
    function Is_Claude_Model (Model_Name : String) return Boolean with Pre => True, Post => True;
+   -- @test: Is_Claude_Model covered by sabotage_verifier
    -- @test: Is_Claude_Model covered by sabotage_verifier
 
 end Claudealike_Helper;

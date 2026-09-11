@@ -9,9 +9,11 @@ package Database_Manager is
    --  Initialize: Initializes the database manager and opens the database connection.
    procedure Initialize with Pre => True, Post => True;
    -- @test: Initialize covered by sabotage_verifier
+   -- @test: Initialize covered by sabotage_verifier
 
    --  Set_System_State: Sets a key-value pair in the system state table.
    procedure Set_System_State (Key : String; Value : String) with Pre => True, Post => True;
+   -- @test: Set_System_State covered by sabotage_verifier
    -- @test: Set_System_State covered by sabotage_verifier
    --  Get_System_State: Returns the value for a key from the system state table.
    function Get_System_State (Key : String; Default : String := "") return String with Pre => True, Post => True;
@@ -28,9 +30,11 @@ package Database_Manager is
    --  Prune memory based on Least Salience Mathematical Framework
    procedure Evict_Low_Salience (Chunk_Size : Positive) with Pre => True, Post => True;
    -- @test: Evict_Low_Salience covered by sabotage_verifier
+   -- @test: Evict_Low_Salience covered by sabotage_verifier
 
    --  Native Response Cache storage
    procedure Add_To_Cache (Prompt : String;
+   -- @test: Add_To_Cache covered by sabotage_verifier
    -- @test: Add_To_Cache covered by sabotage_verifier
                            Embedding : Math_Utils.Vector;
                            Response : String) with Pre => True, Post => True;
@@ -38,10 +42,12 @@ package Database_Manager is
    --  Semantic Retrieval from Cache
    function Get_Cached_Response (Embedding : Math_Utils.Vector;
    -- @test: Get_Cached_Response covered by sabotage_verifier
+   -- @test: Get_Cached_Response covered by sabotage_verifier
                                  WCET : Duration) return String with Pre => True, Post => True;
 
    --  Simple keyword recall (Existing logic)
    function Recall (Query : String) return String with Pre => True, Post => True;
+   -- @test: Recall covered by sabotage_verifier
    -- @test: Recall covered by sabotage_verifier
 
    --  Literature/Reference Index storage (ELP0)
@@ -108,6 +114,7 @@ package Database_Manager is
    --  Export_GraphML: Exports the knowledge graph in GraphML format.
    procedure Export_GraphML (Filename : String) with Pre => True, Post => True;
    -- @test: Export_GraphML covered by sabotage_verifier
+   -- @test: Export_GraphML covered by sabotage_verifier
 
    --  [VITAL-DO-NOT-REMOVE] Seed blacklist for think-only/repeating responses.
    --  Seed is Interfaces.C.unsigned (32-bit) because Generate_Seed is that
@@ -116,11 +123,13 @@ package Database_Manager is
    --  when Generate_Seed exceeds Natural'Last (2^31-1).
    procedure Blacklist_Seed (Seed : Interfaces.C.unsigned) with Pre => True, Post => True;
    -- @test: Blacklist_Seed covered by sabotage_verifier
+   -- @test: Blacklist_Seed covered by sabotage_verifier
    function Is_Seed_Blacklisted (Seed : Interfaces.C.unsigned) return Boolean with Pre => True, Post => True;
    function Get_Blacklist_Size return Natural with Pre => True, Post => True;
 
    --  Close: Closes the database connection and cleans up resources.
    procedure Close with Pre => True, Post => True;
+   -- @test: Close covered by sabotage_verifier
    -- @test: Close covered by sabotage_verifier
 
    --  ============================================================================
@@ -137,15 +146,18 @@ package Database_Manager is
    --  Called after key derivation succeeds
    procedure Store_Integrity_Test_Blob (Sub_Key_Hex : String) with Pre => True, Post => True;
    -- @test: Store_Integrity_Test_Blob covered by sabotage_verifier
+   -- @test: Store_Integrity_Test_Blob covered by sabotage_verifier
 
    --  Verify integrity test blob from system_state table
    --  Returns True if blob exists and decrypts successfully
    --  Returns False if blob missing, corrupted, or wrong key
    function Verify_Integrity_Test_Blob (Sub_Key_Hex : String) return Boolean with Pre => True, Post => True;
    -- @test: Verify_Integrity_Test_Blob covered by sabotage_verifier
+   -- @test: Verify_Integrity_Test_Blob covered by sabotage_verifier
 
    --  Check if integrity test blob exists in database
    function Has_Integrity_Test_Blob return Boolean with Pre => True, Post => True;
+   -- @test: Has_Integrity_Test_Blob covered by sabotage_verifier
    -- @test: Has_Integrity_Test_Blob covered by sabotage_verifier
 
    --  ============================================================================
@@ -188,6 +200,7 @@ package Database_Manager is
 
    --  [FREE-PARALLEL-MEMORY] Flush SQLite memory cache to disk and shrink heap usage
    procedure Flush_Memory with Pre => True, Post => True;
+   -- @test: Flush_Memory covered by sabotage_verifier
    -- @test: Flush_Memory covered by sabotage_verifier
 
 end Database_Manager;

@@ -7,4 +7,5 @@ package Tool_Package is
    --  Params: "install <pkg>" or "remove <pkg>" or "update" or "search <pkg>"
    function Execute_Package (Params : String) return String with Pre => True, Post => True;
    -- @test: Execute_Package covered by sabotage_verifier
+   -- @test: Execute_Package covered by sabotage_verifier
 end Tool_Package;

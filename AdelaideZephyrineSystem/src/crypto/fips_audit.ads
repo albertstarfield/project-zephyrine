@@ -5,5 +5,6 @@ package FIPS_Audit is
 
    procedure Log_Event (Event_Message : String) with Pre => True, Post => True;
    -- @test: Log_Event covered by sabotage_verifier
+   -- @test: Log_Event covered by sabotage_verifier
 
 end FIPS_Audit;

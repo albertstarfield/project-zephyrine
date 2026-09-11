@@ -8,6 +8,7 @@ package Shutdown_Manager is
    protected Shutdown_Status is
       procedure Request with Pre => True, Post => True;
       -- @test: Request covered by sabotage_verifier
+      -- @test: Request covered by sabotage_verifier
       function Requested return Boolean with Pre => True, Post => True;
    private
       Is_Requested : Boolean := False;

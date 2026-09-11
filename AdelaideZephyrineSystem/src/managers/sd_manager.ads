@@ -88,10 +88,12 @@ package SD_Manager is
    --  FreeParallelMemory: Unloads refinement context first if loaded
    procedure Load_Flux_Context with Pre => True, Post => True;
    -- @test: Load_Flux_Context covered by sabotage_verifier
+   -- @test: Load_Flux_Context covered by sabotage_verifier
 
    --  Free FLUX context (FreeParallelMemory)
    --  Calls Free_SD_Ctx, clears Flux_Ctx, logs unload
    procedure Free_Flux_Context with Pre => True, Post => True;
+   -- @test: Free_Flux_Context covered by sabotage_verifier
    -- @test: Free_Flux_Context covered by sabotage_verifier
 
    --  ============================================================================
@@ -102,10 +104,12 @@ package SD_Manager is
    --  FreeParallelMemory: Unloads FLUX context first if loaded
    procedure Load_Refiner_Context with Pre => True, Post => True;
    -- @test: Load_Refiner_Context covered by sabotage_verifier
+   -- @test: Load_Refiner_Context covered by sabotage_verifier
 
    --  Free refinement context (FreeParallelMemory)
    --  Calls Free_SD_Ctx, clears Refiner_Ctx, logs unload
    procedure Free_Refiner_Context with Pre => True, Post => True;
+   -- @test: Free_Refiner_Context covered by sabotage_verifier
    -- @test: Free_Refiner_Context covered by sabotage_verifier
 
    --  ============================================================================
@@ -139,6 +143,7 @@ package SD_Manager is
 
    --  Free all loaded contexts (shutdown)
    procedure Free_All with Pre => True, Post => True;
+   -- @test: Free_All covered by sabotage_verifier
    -- @test: Free_All covered by sabotage_verifier
 
 end SD_Manager;

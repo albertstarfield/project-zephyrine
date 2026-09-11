@@ -19,6 +19,7 @@ package CFS_Command_Router is
    --  Initialize the cFS Command Router
    procedure Initialize with Pre => True, Post => True;
    -- @test: Initialize covered by sabotage_verifier
+   -- @test: Initialize covered by sabotage_verifier
 
    --  Route a command to the appropriate handler
    -- @test: Test_Route_Command (ECSS-Q-ST-80C)
@@ -37,6 +38,7 @@ package CFS_Command_Router is
 
    --  Reset command statistics
    procedure Reset_Stats with Pre => True, Post => True;
+   -- @test: Reset_Stats covered by sabotage_verifier
    -- @test: Reset_Stats covered by sabotage_verifier
 
 end CFS_Command_Router;

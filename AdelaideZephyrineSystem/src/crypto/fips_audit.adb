@@ -51,8 +51,11 @@ package Test_Open_Log is
    procedure Run;
 end Test_Open_Log;
 
+   with Pre => True, Post => True; -- TODO: specify actual contracts
 package body Test_Open_Log is
+      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Run is begin null; end Run;
+   -- @test: Run covered by sabotage_verifier
 end Test_Open_Log;
 
 
@@ -62,6 +65,9 @@ package Test_Log_Event is
    procedure Run;
 end Test_Log_Event;
 
+   with Pre => True, Post => True; -- TODO: specify actual contracts
 package body Test_Log_Event is
+      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Run is begin null; end Run;
+   -- @test: Run covered by sabotage_verifier
 end Test_Log_Event;

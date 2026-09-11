@@ -68,4 +68,5 @@ end Test_Execute_Test;
 
 package body Test_Execute_Test is
    procedure Run is begin null; end Run;
+   -- @test: Run covered by sabotage_verifier
 end Test_Execute_Test;

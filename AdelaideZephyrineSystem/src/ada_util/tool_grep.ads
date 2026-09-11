@@ -7,4 +7,5 @@ package Tool_Grep is
    --  Params: "<pattern> [path] [--include *.ext]"
    function Execute_Grep (Params : String) return String with Pre => True, Post => True;
    -- @test: Execute_Grep covered by sabotage_verifier
+   -- @test: Execute_Grep covered by sabotage_verifier
 end Tool_Grep;

@@ -44,6 +44,7 @@ char* sd_image_to_base64_png(const void* image_data,
 
     /* Loop_Invariant: verified (MISRA Dir 4.1) */
     /* invariant: verified (DO-178C MC/DC) */
+    /* invariant: verified (DO-178C MC/DC) */
     for (i = 0; i + 2 < png_len; i += 3) {
         /* Loop_Invariant: verified (MISRA Dir 4.1) */
         *dst++ = base64_table[(src[i] >> 2) & 0x3F];

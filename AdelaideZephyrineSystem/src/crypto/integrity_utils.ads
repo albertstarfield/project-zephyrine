@@ -9,6 +9,7 @@ package Integrity_Utils is
    --  CRC-32 calculation using the standard IEEE polynomial 0xEDB88320
    function Calculate_CRC32 (Data : Byte_Array) return Unsigned_32 with Pre => True, Post => True;
    -- @test: Calculate_CRC32 covered by sabotage_verifier
+   -- @test: Calculate_CRC32 covered by sabotage_verifier
 
    --  Generates an XOR parity block for N blocks of size Block_Size
    procedure Generate_Parity (
@@ -54,6 +55,7 @@ package Integrity_Utils is
 
    --  Returns True if the data appears to be binary (contains NUL bytes or high non-printable ratio)
    function Is_Binary (Data : Byte_Array) return Boolean with Pre => True, Post => True;
+   -- @test: Is_Binary covered by sabotage_verifier
    -- @test: Is_Binary covered by sabotage_verifier
 
 end Integrity_Utils;

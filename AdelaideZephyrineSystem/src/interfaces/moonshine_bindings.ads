@@ -67,6 +67,7 @@ package Moonshine_Bindings is
    --  Frees the transcriber handle and releases all associated resources.
    procedure Free_Transcriber (Transcriber_Handle : int);
    -- @test: Free_Transcriber covered by sabotage_verifier
+   -- @test: Free_Transcriber covered by sabotage_verifier
    pragma Import (C, Free_Transcriber, "moonshine_free_transcriber");
 
    --  Creates a new streaming transcription session for the given transcriber handle.

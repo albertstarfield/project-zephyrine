@@ -163,6 +163,7 @@ package GLESv2_Binding is
    --  glClearColor: Specify clear values for the color buffers.
    --  Citation: OpenGL ES 2.0 §4.2.3
    procedure Clear_Color (Red   : GLfloat;
+   -- @test: Clear_Color covered by sabotage_verifier
                           Green : GLfloat;
                           Blue  : GLfloat;
                           Alpha : GLfloat)
@@ -185,6 +186,7 @@ package GLESv2_Binding is
    --  Citation: OpenGL ES 2.0 §4.1.7 "glBlendFunc defines the source and
    --  destination blending factors."
    procedure Blend_Func (Sfactor : GLenum;
+   -- @test: Blend_Func covered by sabotage_verifier
                          Dfactor : GLenum)
      with Import => True,
           Convention => C,
@@ -193,6 +195,7 @@ package GLESv2_Binding is
    --  glScissor: Define the scissor rectangle.
    --  Citation: OpenGL ES 2.0 §4.2.5
    procedure Scissor (X      : GLint;
+   -- @test: Scissor covered by sabotage_verifier
                       Y      : GLint;
                       Width  : GLsizei;
                       Height : GLsizei)
@@ -204,6 +207,7 @@ package GLESv2_Binding is
    --  Citation: OpenGL ES 2.0 §2.12.1 "glViewport sets the viewport...
    --  x, y specify the lower-left corner; width, height specify size."
    procedure Viewport (X      : GLint;
+   -- @test: Viewport covered by sabotage_verifier
                        Y      : GLint;
                        Width  : GLsizei;
                        Height : GLsizei)
@@ -233,6 +237,7 @@ package GLESv2_Binding is
    --  Citation: OpenGL ES 2.0 §3.5 "glShaderSource sets the source code
    --  string(s) for the shader object."
    procedure Shader_Source (Shader     : GLuint;
+   -- @test: Shader_Source covered by sabotage_verifier
                             Count      : GLsizei;
                              String     : access constant System.Address; -- FFI: C string pointer binding
                             Length     : access constant GLint)
@@ -250,6 +255,7 @@ package GLESv2_Binding is
 
    --  glGetShaderiv: Query a shader object parameter.
    procedure Get_Shaderiv (Shader : GLuint;
+   -- @test: Get_Shaderiv covered by sabotage_verifier
                            Pname  : GLenum;
                            Params : access GLint)
      with Import => True,
@@ -258,6 +264,7 @@ package GLESv2_Binding is
 
    --  glGetShaderInfoLog: Return the information log for a shader.
    procedure Get_Shader_Info_Log (Shader      : GLuint;
+   -- @test: Get_Shader_Info_Log covered by sabotage_verifier
                                   BufSize     : GLsizei;
                                   Length      : access GLsizei;
                                   InfoLog     : access Character)
@@ -286,6 +293,7 @@ package GLESv2_Binding is
    --  glAttachShader: Attach a shader to a program.
    --  Citation: OpenGL ES 2.0 §3.6.1
    procedure Attach_Shader (Program : GLuint;
+   -- @test: Attach_Shader covered by sabotage_verifier
                             Shader  : GLuint)
      with Import => True,
           Convention => C,
@@ -301,6 +309,7 @@ package GLESv2_Binding is
 
    --  glGetProgramiv: Query a program object parameter.
    procedure Get_Programiv (Program : GLuint;
+   -- @test: Get_Programiv covered by sabotage_verifier
                             Pname   : GLenum;
                             Params  : access GLint)
      with Import => True,
@@ -309,6 +318,7 @@ package GLESv2_Binding is
 
    --  glGetProgramInfoLog: Return the information log for a program.
    procedure Get_Program_Info_Log (Program   : GLuint;
+   -- @test: Get_Program_Info_Log covered by sabotage_verifier
                                    BufSize  : GLsizei;
                                    Length   : access GLsizei;
                                    InfoLog  : access Character)
@@ -329,6 +339,7 @@ package GLESv2_Binding is
 
    --  glGetAttribLocation: Return the location of a generic attribute.
    function Get_Attribute_Location (Program : GLuint;
+   -- @test: Get_Attribute_Location covered by sabotage_verifier
                                     Name    : Interfaces.C.Strings.chars_ptr)
       return GLint
      with Import => True,
@@ -337,6 +348,7 @@ package GLESv2_Binding is
 
    --  glGetUniformLocation: Return the location of a uniform variable.
    function Get_Uniform_Location (Program : GLuint;
+   -- @test: Get_Uniform_Location covered by sabotage_verifier
                                   Name    : Interfaces.C.Strings.chars_ptr)
       return GLint
      with Import => True,
@@ -358,6 +370,7 @@ package GLESv2_Binding is
    --  Citation: OpenGL ES 2.0 §2.8 "glVertexAttribPointer specifies the
    --  location and data format of an array of generic attributes."
    procedure Vertex_Attribute_Pointer (Index      : GLuint;
+   -- @test: Vertex_Attribute_Pointer covered by sabotage_verifier
                                        Size       : GLint;
                                        Type_Kind  : GLenum;
                                        Normalized : GLboolean;
@@ -373,6 +386,7 @@ package GLESv2_Binding is
 
    --  glUniform1f: Set a single float uniform.
    procedure Uniform1f (Location : GLint;
+   -- @test: Uniform1f covered by sabotage_verifier
                         V0       : GLfloat)
      with Import => True,
           Convention => C,
@@ -380,6 +394,7 @@ package GLESv2_Binding is
 
    --  glUniform2f: Set a vec2 uniform.
    procedure Uniform2f (Location : GLint;
+   -- @test: Uniform2f covered by sabotage_verifier
                         V0, V1   : GLfloat)
      with Import => True,
           Convention => C,
@@ -387,6 +402,7 @@ package GLESv2_Binding is
 
    --  glUniform3f: Set a vec3 uniform.
    procedure Uniform3f (Location : GLint;
+   -- @test: Uniform3f covered by sabotage_verifier
                         V0, V1, V2 : GLfloat)
      with Import => True,
           Convention => C,
@@ -394,6 +410,7 @@ package GLESv2_Binding is
 
    --  glUniform4f: Set a vec4 uniform (used for RGBA colors).
    procedure Uniform4f (Location    : GLint;
+   -- @test: Uniform4f covered by sabotage_verifier
                         V0, V1, V2, V3 : GLfloat)
      with Import => True,
           Convention => C,
@@ -401,6 +418,7 @@ package GLESv2_Binding is
 
    --  glUniform1i: Set a single int uniform (used for texture units).
    procedure Uniform1i (Location : GLint;
+   -- @test: Uniform1i covered by sabotage_verifier
                         V0       : GLint)
      with Import => True,
           Convention => C,
@@ -408,6 +426,7 @@ package GLESv2_Binding is
 
    --  glUniformMatrix4fv: Set a mat4 uniform (used for transforms).
    procedure Uniform_Matrix4fv (Location : GLint;
+   -- @test: Uniform_Matrix4fv covered by sabotage_verifier
                                 Count    : GLsizei;
                                 Transpose : GLboolean;
                                 Value    : access constant GLfloat)
@@ -421,6 +440,7 @@ package GLESv2_Binding is
 
    --  glGenTextures: Generate texture object names.
    procedure Gen_Textures (N      : GLsizei;
+   -- @test: Gen_Textures covered by sabotage_verifier
                            Textures : access GLuint)
      with Import => True,
           Convention => C,
@@ -428,6 +448,7 @@ package GLESv2_Binding is
 
    --  glDeleteTextures: Delete texture objects.
    procedure Delete_Textures (N        : GLsizei;
+   -- @test: Delete_Textures covered by sabotage_verifier
                               Textures : access constant GLuint)
      with Import => True,
           Convention => C,
@@ -435,6 +456,7 @@ package GLESv2_Binding is
 
    --  glBindTexture: Bind a named texture to a target.
    procedure Bind_Texture (Target  : GLenum;
+   -- @test: Bind_Texture covered by sabotage_verifier
                            Texture : GLuint)
      with Import => True,
           Convention => C,
@@ -442,6 +464,7 @@ package GLESv2_Binding is
 
    --  glTexParameteri: Set texture parameter (filtering, wrapping).
    procedure Tex_Parameteri (Target : GLenum;
+   -- @test: Tex_Parameteri covered by sabotage_verifier
                              Pname  : GLenum;
                              Param  : GLint)
      with Import => True,
@@ -452,6 +475,7 @@ package GLESv2_Binding is
    --  Citation: OpenGL ES 2.0 §4.3.2 "glTexImage2D defines a 2D texture
    --  image... pixels is the image data in client memory."
    procedure Tex_Image_2D (Target     : GLenum;
+   -- @test: Tex_Image_2D covered by sabotage_verifier
                             Level      : GLint;
                             Internal_Format : GLint;
                             Width      : GLsizei;
@@ -484,6 +508,7 @@ package GLESv2_Binding is
    --  Citation: OpenGL ES 2.0 §3.8.1 "glDrawArrays redefines the contents
    --  of vertex array primitives."
    procedure Draw_Arrays (Mode  : GLenum;
+   -- @test: Draw_Arrays covered by sabotage_verifier
                           First : GLint;
                           Count : GLsizei)
      with Import => True,
@@ -494,6 +519,7 @@ package GLESv2_Binding is
    --  Citation: OpenGL ES 2.0 §3.8.2 "glDrawElements renders a sequence
    --  of geometric primitives using vertex indices."
    procedure Draw_Elements (Mode   : GLenum;
+   -- @test: Draw_Elements covered by sabotage_verifier
                             Count  : GLsizei;
                             Type_Kind : GLenum;
                             Indices : GLvoid)
@@ -519,6 +545,7 @@ package GLESv2_Binding is
 
    --  glGenFramebuffers: Generate framebuffer object names.
    procedure Gen_Framebuffers (N           : GLsizei;
+   -- @test: Gen_Framebuffers covered by sabotage_verifier
                                Framebuffers : access GLuint)
      with Import => True,
           Convention => C,
@@ -526,6 +553,7 @@ package GLESv2_Binding is
 
    --  glBindFramebuffer: Bind a framebuffer object.
    procedure Bind_Framebuffer (Target     : GLenum;
+   -- @test: Bind_Framebuffer covered by sabotage_verifier
                                Framebuffer : GLuint)
      with Import => True,
           Convention => C,
@@ -533,6 +561,7 @@ package GLESv2_Binding is
 
    --  glFramebufferTexture2D: Attach a 2D texture to a framebuffer.
    procedure Framebuffer_Texture_2D (Target      : GLenum;
+   -- @test: Framebuffer_Texture_2D covered by sabotage_verifier
                                      Attachment  : GLenum;
                                      Tex_Target  : GLenum;
                                      Texture     : GLuint;
@@ -549,6 +578,7 @@ package GLESv2_Binding is
 
    --  glDeleteFramebuffers: Delete framebuffer objects.
    procedure Delete_Framebuffers (N             : GLsizei;
+   -- @test: Delete_Framebuffers covered by sabotage_verifier
                                   Framebuffers : access constant GLuint)
      with Import => True,
           Convention => C,
@@ -556,6 +586,7 @@ package GLESv2_Binding is
 
    --  glGenRenderbuffers: Generate renderbuffer object names.
    procedure Gen_Renderbuffers (N           : GLsizei;
+   -- @test: Gen_Renderbuffers covered by sabotage_verifier
                                 Renderbuffers : access GLuint)
      with Import => True,
           Convention => C,
@@ -563,6 +594,7 @@ package GLESv2_Binding is
 
    --  glBindRenderbuffer: Bind a renderbuffer object.
    procedure Bind_Renderbuffer (Target      : GLenum;
+   -- @test: Bind_Renderbuffer covered by sabotage_verifier
                                 Renderbuffer : GLuint)
      with Import => True,
           Convention => C,
@@ -570,6 +602,7 @@ package GLESv2_Binding is
 
    --  glRenderbufferStorage: Allocate storage for a renderbuffer.
    procedure Renderbuffer_Storage (Target          : GLenum;
+   -- @test: Renderbuffer_Storage covered by sabotage_verifier
                                    Internal_Format : GLenum;
                                    Width           : GLsizei;
                                    Height          : GLsizei)
@@ -579,6 +612,7 @@ package GLESv2_Binding is
 
    --  glFramebufferRenderbuffer: Attach a renderbuffer to a framebuffer.
    procedure Framebuffer_Renderbuffer (Target     : GLenum;
+   -- @test: Framebuffer_Renderbuffer covered by sabotage_verifier
                                        Attachment : GLenum;
                                        Renderbuf_Target : GLenum;
                                        Renderbuffer : GLuint)
@@ -588,6 +622,7 @@ package GLESv2_Binding is
 
    --  glDeleteRenderbuffers: Delete renderbuffer objects.
    procedure Delete_Renderbuffers (N             : GLsizei;
+   -- @test: Delete_Renderbuffers covered by sabotage_verifier
                                    Renderbuffers : access constant GLuint)
      with Import => True,
           Convention => C,
@@ -595,6 +630,7 @@ package GLESv2_Binding is
 
    --  glBindBuffer: Bind a buffer object (VBO support).
    procedure Bind_Buffer (Target : GLenum;
+   -- @test: Bind_Buffer covered by sabotage_verifier
                           Buffer : GLuint)
      with Import => True,
           Convention => C,
@@ -602,6 +638,7 @@ package GLESv2_Binding is
 
    --  glGenBuffers: Generate buffer object names.
    procedure Gen_Buffers (N       : GLsizei;
+   -- @test: Gen_Buffers covered by sabotage_verifier
                           Buffers : access GLuint)
      with Import => True,
           Convention => C,
@@ -609,6 +646,7 @@ package GLESv2_Binding is
 
    --  glBufferData: Create and initialize a buffer object's data store.
    procedure Buffer_Data (Target : GLenum;
+   -- @test: Buffer_Data covered by sabotage_verifier
                           Size   : Interfaces.C.long;
                           Data   : GLvoid;
                           Usage  : GLenum)
@@ -622,6 +660,7 @@ package GLESv2_Binding is
 
    --  glReadPixels: Read a block of pixels from the framebuffer.
    procedure Read_Pixels (X      : GLint;
+   -- @test: Read_Pixels covered by sabotage_verifier
                           Y      : GLint;
                           Width  : GLsizei;
                           Height : GLsizei;

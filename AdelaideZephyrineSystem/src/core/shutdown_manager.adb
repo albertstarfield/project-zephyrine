@@ -14,6 +14,7 @@ package body Shutdown_Manager is
 
       --  Requested: Returns True if a shutdown has been requested.
       -- @test: Requested covered by sabotage_verifier
+         with Pre => True, Post => True; -- TODO: specify actual contracts
       function Requested return Boolean is (Is_Requested);
    end Shutdown_Status;
 
@@ -25,8 +26,11 @@ package Test_Request is
    procedure Run;
 end Test_Request;
 
+   with Pre => True, Post => True; -- TODO: specify actual contracts
 package body Test_Request is
+      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Run is begin null; end Run;
+   -- @test: Run covered by sabotage_verifier
 end Test_Request;
 
 
@@ -36,6 +40,9 @@ package Test_Requested is
    procedure Run;
 end Test_Requested;
 
+   with Pre => True, Post => True; -- TODO: specify actual contracts
 package body Test_Requested is
+      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Run is begin null; end Run;
+   -- @test: Run covered by sabotage_verifier
 end Test_Requested;

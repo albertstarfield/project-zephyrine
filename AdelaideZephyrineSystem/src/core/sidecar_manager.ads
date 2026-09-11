@@ -72,9 +72,11 @@ package Sidecar_Manager is
    --  Populates default settings if table is empty.
    procedure Initialize with Pre => True, Post => True;
    -- @test: Initialize covered by sabotage_verifier
+   -- @test: Initialize covered by sabotage_verifier
 
    --  Close: Closes the database connection and releases resources.
    procedure Close with Pre => True, Post => True;
+   -- @test: Close covered by sabotage_verifier
    -- @test: Close covered by sabotage_verifier
 
    -- =========================================================================

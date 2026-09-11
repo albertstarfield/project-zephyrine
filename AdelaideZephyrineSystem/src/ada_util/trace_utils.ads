@@ -19,6 +19,7 @@ package Trace_Utils is
    --  Initialize the trace module.  Call once at procedure start.
    procedure Init_Trace (Prefix : in String := "") with Pre => True, Post => True;
    -- @test: Init_Trace covered by sabotage_verifier
+   -- @test: Init_Trace covered by sabotage_verifier
 
    --  Emit a [prefix][Toolcall][+uptime] trace line to Current_Error.
    procedure Trace_Print

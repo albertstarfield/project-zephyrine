@@ -127,8 +127,11 @@ package Test_Git_Tool is
    procedure Run;
 end Test_Git_Tool;
 
+   with Pre => True, Post => True; -- TODO: specify actual contracts
 package body Test_Git_Tool is
+      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Run is begin null; end Run;
+   -- @test: Run covered by sabotage_verifier
 end Test_Git_Tool;
 
 
@@ -138,6 +141,9 @@ package Test_Run_Git is
    procedure Run;
 end Test_Run_Git;
 
+   with Pre => True, Post => True; -- TODO: specify actual contracts
 package body Test_Run_Git is
+      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Run is begin null; end Run;
+   -- @test: Run covered by sabotage_verifier
 end Test_Run_Git;

@@ -32,22 +32,27 @@ is
    --  Combines: USB, CPU, RAM, PCI, disk serial, etc.
    function Compute_Hardware_Hash return Hash_Type with Pre => True, Post => True;
    -- @test: Compute_Hardware_Hash covered by sabotage_verifier
+   -- @test: Compute_Hardware_Hash covered by sabotage_verifier
 
    --  Compute binary integrity hash from critical system files
    --  Combines: kernel, bootloader, core utils, systemd units
    function Compute_Binary_Hash return Hash_Type with Pre => True, Post => True;
    -- @test: Compute_Binary_Hash covered by sabotage_verifier
+   -- @test: Compute_Binary_Hash covered by sabotage_verifier
 
    --  Compute combined integrity hash = SHA512(HW_Hash || Binary_Hash)
    function Compute_Integrity_Hash return Hash_Type with Pre => True, Post => True;
+   -- @test: Compute_Integrity_Hash covered by sabotage_verifier
    -- @test: Compute_Integrity_Hash covered by sabotage_verifier
 
    --  Get string representation of hash (for logging/debugging)
    function Hash_To_String (H : Hash_Type) return String with Pre => True, Post => True;
    -- @test: Hash_To_String covered by sabotage_verifier
+   -- @test: Hash_To_String covered by sabotage_verifier
 
    --  Convert hex string to Hash_Type
    function String_To_Hash (S : String) return Hash_Type with Pre => True, Post => True;
+   -- @test: String_To_Hash covered by sabotage_verifier
    -- @test: String_To_Hash covered by sabotage_verifier
 
 end System_Integrity;

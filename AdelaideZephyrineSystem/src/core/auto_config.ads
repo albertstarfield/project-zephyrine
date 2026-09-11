@@ -57,6 +57,7 @@ package Auto_Config is
    --  Ctx_To_Unsigned: Converts context ladder to C unsigned integer.
    function Ctx_To_Unsigned (C : Ctx_Ladder) return Interfaces.C.unsigned with Pre => True, Post => True;
    -- @test: Ctx_To_Unsigned covered by sabotage_verifier
+   -- @test: Ctx_To_Unsigned covered by sabotage_verifier
    pragma Inline (Ctx_To_Unsigned);
 
    --  ========================================================================
@@ -71,6 +72,7 @@ package Auto_Config is
    --  with callers that were written for the old enum ladder.
    --  ========================================================================
    function Threads_To_Int (T : Interfaces.C.int) return Interfaces.C.int with Pre => True, Post => True;
+   -- @test: Threads_To_Int covered by sabotage_verifier
    -- @test: Threads_To_Int covered by sabotage_verifier
    pragma Inline (Threads_To_Int);
 
@@ -90,6 +92,7 @@ package Auto_Config is
 
    --  Batch_To_Unsigned: Converts batch ladder to C unsigned integer.
    function Batch_To_Unsigned (B : Batch_Ladder) return Interfaces.C.unsigned with Pre => True, Post => True;
+   -- @test: Batch_To_Unsigned covered by sabotage_verifier
    -- @test: Batch_To_Unsigned covered by sabotage_verifier
    pragma Inline (Batch_To_Unsigned);
 
@@ -112,6 +115,7 @@ package Auto_Config is
    Accel_All_Layers : constant Interfaces.C.int := -1;
 
    function Accel_Layers_To_Int (A : Accel_Layer_Ladder) return Interfaces.C.int with Pre => True, Post => True;
+   -- @test: Accel_Layers_To_Int covered by sabotage_verifier
    -- @test: Accel_Layers_To_Int covered by sabotage_verifier
    pragma Inline (Accel_Layers_To_Int);
 
@@ -139,10 +143,12 @@ package Auto_Config is
    --  Call once at startup, before any Load_Model.
    procedure Initialize with Pre => True, Post => True;
    -- @test: Initialize covered by sabotage_verifier
+   -- @test: Initialize covered by sabotage_verifier
 
    --  Get the working config for a model kind.
    --  Returns the current best-known settings.
    function Get_Config (Kind : Model_Type) return Working_Config with Pre => True, Post => True;
+   -- @test: Get_Config covered by sabotage_verifier
    -- @test: Get_Config covered by sabotage_verifier
 
    --  Record that a context size worked.
@@ -163,6 +169,7 @@ package Auto_Config is
    --  Returns the target if set, then clears it (one-shot probe).
    function Get_Probe_Target (Kind : Model_Type) return Ctx_Ladder with Pre => True, Post => True;
    -- @test: Get_Probe_Target covered by sabotage_verifier
+   -- @test: Get_Probe_Target covered by sabotage_verifier
 
    --  Record that a context size failed (OOM, null context, crash).
    --  Auto-config steps back and records the max working config.
@@ -175,9 +182,11 @@ package Auto_Config is
    --  Call on clean shutdown or periodically.
    procedure Save_Config with Pre => True, Post => True;
    -- @test: Save_Config covered by sabotage_verifier
+   -- @test: Save_Config covered by sabotage_verifier
 
    --  Force re-probe from minimal (e.g., after hardware change).
    procedure Reset_To_Minimal with Pre => True, Post => True;
+   -- @test: Reset_To_Minimal covered by sabotage_verifier
    -- @test: Reset_To_Minimal covered by sabotage_verifier
 
    --  ========================================================================

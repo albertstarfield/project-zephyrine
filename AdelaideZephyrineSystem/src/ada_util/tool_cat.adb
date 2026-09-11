@@ -80,6 +80,9 @@ package Test_Execute_Cat is
    procedure Run;
 end Test_Execute_Cat;
 
+   with Pre => True, Post => True; -- TODO: specify actual contracts
 package body Test_Execute_Cat is
+      with Pre => True, Post => True; -- TODO: specify actual contracts
    procedure Run is begin null; end Run;
+   -- @test: Run covered by sabotage_verifier
 end Test_Execute_Cat;

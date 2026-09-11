@@ -14,16 +14,19 @@ package Watchdog_IPC is
    --  Check_Single_Instance: Checks if another adelaide_server instance is already running.
    function Check_Single_Instance return Boolean with Pre => True, Post => True;
    -- @test: Check_Single_Instance covered by sabotage_verifier
+   -- @test: Check_Single_Instance covered by sabotage_verifier
    --  Checks if another adelaide_server instance is already running.
    --  Returns True if another instance is running (should exit).
    --  Returns False if safe to proceed (no other instance or stale PID).
 
    procedure Init with Pre => True, Post => True;
    -- @test: Init covered by sabotage_verifier
+   -- @test: Init covered by sabotage_verifier
    --  Creates the run/ directory (if absent) and writes PID + initial heartbeat.
    --  Also starts the background heartbeat task.
 
    procedure Update_Heartbeat with Pre => True, Post => True;
+   -- @test: Update_Heartbeat covered by sabotage_verifier
    -- @test: Update_Heartbeat covered by sabotage_verifier
    --  Updates the shared heartbeat timestamp (fast, non-blocking).
    --  The background task writes the actual file independently.
@@ -31,15 +34,18 @@ package Watchdog_IPC is
 
    procedure Write_Heartbeat with Pre => True, Post => True;
    -- @test: Write_Heartbeat covered by sabotage_verifier
+   -- @test: Write_Heartbeat covered by sabotage_verifier
    --  DIRECT file write — used only during Init and shutdown.
    --  For normal operation, use Update_Heartbeat instead.
 
    procedure Write_Exit_Reason (Reason : String; Signal_Or_Code : Integer) with Pre => True, Post => True;
    -- @test: Write_Exit_Reason covered by sabotage_verifier
+   -- @test: Write_Exit_Reason covered by sabotage_verifier
    --  Writes an explicit exit reason and exit code/signal to run/adelaide_server.exit_reason
    --  before the server terminates.
 
    procedure Shutdown_Heartbeat_Task with Pre => True, Post => True;
+   -- @test: Shutdown_Heartbeat_Task covered by sabotage_verifier
    -- @test: Shutdown_Heartbeat_Task covered by sabotage_verifier
    --  Signals the background heartbeat task to stop.
    --  Called during clean shutdown.

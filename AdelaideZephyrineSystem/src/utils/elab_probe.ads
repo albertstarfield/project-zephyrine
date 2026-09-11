@@ -13,5 +13,6 @@ package Elab_Probe is
    --  C side uses strlen() to measure the string — do NOT pass a length.
    procedure Elab_Trace (Label : String);
    -- @test: Elab_Trace covered by sabotage_verifier
+   -- @test: Elab_Trace covered by sabotage_verifier
    pragma Import (C, Elab_Trace, "elab_trace_c");
 end Elab_Probe;

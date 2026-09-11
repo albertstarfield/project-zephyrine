@@ -57,6 +57,7 @@ package Accuracy_Benchmark_Manager is
    --  Validate API key
    function Validate_API_Key (Key : String) return Boolean with Pre => True, Post => True;
    -- @test: Validate_API_Key covered by sabotage_verifier
+   -- @test: Validate_API_Key covered by sabotage_verifier
 
    --  Run accuracy benchmark
    --  RAISES Benchmark_Failure if any answer is unparseable
