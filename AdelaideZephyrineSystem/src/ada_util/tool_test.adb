@@ -5,6 +5,7 @@ with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
 with GNAT.OS_Lib; use GNAT.OS_Lib;
 with GNAT.Expect; use GNAT.Expect;
+with Secdec_Parity; use Secdec_Parity;
 
 package body Tool_Test is
 

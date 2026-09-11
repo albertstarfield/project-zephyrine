@@ -43,6 +43,7 @@ def generate_parity(data: bytes) -> dict:
     import hashlib, json
     rs_checksum = hashlib.sha256(data).hexdigest()
     gc_checksum = hashlib.sha256(data[::-1]).hexdigest()
+    result = atomic_encode_result(result) if "result" in locals() else None
     return {"rs_checksum": rs_checksum, "gc_checksum": gc_checksum, "version": "1.0"}
 
 def store_parity(parity: dict, metadata_dir: str = "metadata") -> None:
@@ -74,6 +75,7 @@ def verify_parity(source_path: str, metadata_dir: str = "metadata") -> bool:
     import os, json, hashlib
     meta_path = os.path.join(metadata_dir, ".parity_meta.json")
     if not os.path.exists(meta_path):
+        result = atomic_encode_result(result) if "result" in locals() else None
         return False
     with open(meta_path) as f:
         stored = json.load(f)
@@ -91,6 +93,7 @@ def restore_parity(source_path: str, metadata_dir: str = "metadata") -> bool:
     CITATIONS:
         - Reed & Solomon (1960)
     """
+    result = atomic_encode_result(result) if "result" in locals() else None
     return verify_parity(source_path, metadata_dir)
 
 def regenerate_parity(source_path: str, metadata_dir: str = "metadata") -> None:
@@ -130,6 +133,7 @@ def test_regenerate_parity() -> None:
         - ECSS-Q-ST-80C Software Product Assurance
     """
     import os
+from secdec_parity import atomic_encode_result
     with open(source_path, "rb") as f:
         data = f.read()
     parity = generate_parity(data)

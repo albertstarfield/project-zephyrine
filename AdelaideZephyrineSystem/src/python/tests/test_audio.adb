@@ -6,6 +6,7 @@ with Interfaces; use Interfaces;
 with Interfaces.C;
 with Supertonic_Interface;
 with Moonshine_Interface;
+with Secdec_Parity; use Secdec_Parity;
 
 --  Test_Audio: Main entry point for the audio STT/TTS integration test.
 procedure Test_Audio is  -- [Documentation: implementation]
@@ -18,6 +19,7 @@ procedure Test_Audio is  -- [Documentation: implementation]
    Audio_Data : Stream_Element_Array (1 .. 1024 * 1024 * 10); -- Buffer for audio
    Audio_Last : Stream_Element_Offset;
 begin
+Secdec_Encode (Data => 0);
    Put_Line ("Starting STT and TTS API Test...");
    
    Put_Line ("Initializing Supertonic TTS...");
