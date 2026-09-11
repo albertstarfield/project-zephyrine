@@ -266,6 +266,7 @@ package body Test_Pop_Command is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -286,6 +287,7 @@ end Test_Check_SHM_Trigger;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Check_SHM_Trigger is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -306,6 +308,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -328,6 +331,7 @@ end Test_Get_Jitter_Profile;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Jitter_Profile is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -346,6 +350,7 @@ end Test_Get_Current_Timing;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Current_Timing is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -364,6 +369,7 @@ end Test_Paced_Loop;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Paced_Loop is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -382,6 +388,7 @@ end Test_Push_Command;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Push_Command is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

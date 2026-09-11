@@ -35,6 +35,7 @@ package Zenith_Orion is
    --  Thread-safe buffer to transport commands from ELP0/ELP1 tools
    --  to the deterministic ELP3 fast-path.
    protected ROS2_Command_Buffer is
+      -- Push_Command implementation
       procedure Push_Command (Servo_ID : String; Angle : Float) with Pre => True, Post => True;
       -- @test: Push_Command covered by sabotage_verifier
       -- @test: Push_Command covered by sabotage_verifier

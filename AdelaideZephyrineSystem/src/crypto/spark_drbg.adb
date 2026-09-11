@@ -295,6 +295,7 @@ end Test_Adl_Drbg_Init;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adl_Drbg_Init is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -317,6 +318,7 @@ package body Test_Update is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -337,6 +339,7 @@ end Test_Increment_V;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Increment_V is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -357,6 +360,7 @@ end Test_Generate;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Generate is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -379,6 +383,7 @@ end Test_Continuous_Health_Check;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Continuous_Health_Check is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -399,6 +404,7 @@ end Test_Clear;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Clear is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -417,6 +423,7 @@ end Test_Instantiate;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Instantiate is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -435,6 +442,7 @@ end Test_Adl_Drbg_Clear;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adl_Drbg_Clear is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -453,6 +461,7 @@ end Test_Adl_Drbg_Generate;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adl_Drbg_Generate is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

@@ -85,6 +85,7 @@ package Test_Execute_Test is
 end Test_Execute_Test;
 
 package body Test_Execute_Test is
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

@@ -161,6 +161,7 @@ end Test_Uptime;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Uptime is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -181,6 +182,7 @@ end Test_Trace_Result;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Trace_Result is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -203,6 +205,7 @@ end Test_Trace_Print;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Trace_Print is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -221,6 +224,7 @@ end Test_Init_Trace;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Init_Trace is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

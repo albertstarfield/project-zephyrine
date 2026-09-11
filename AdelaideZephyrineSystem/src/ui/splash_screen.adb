@@ -216,6 +216,7 @@ end Test_Wait_For_Ready;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Wait_For_Ready is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -236,6 +237,7 @@ end Test_Is_Visible;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Visible is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -280,6 +282,7 @@ end Test_Dismiss;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Dismiss is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -298,6 +301,7 @@ end Test_Get_State;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_State is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -316,6 +320,7 @@ end Test_Show;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Show is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

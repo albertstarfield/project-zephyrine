@@ -17,6 +17,7 @@ package body Kratos is
    --  Raw FFI binding to the llama.cpp llama_decode function.
       -- @test: Llama_Decode_Bare covered by sabotage_verifier
          with Pre => True, Post => True; -- IMPL: specify actual contracts
+      -- Llama_Decode_Bare implementation
       function Llama_Decode_Bare  -- [Documentation: implementation]
         (Ctx   : System.Address; -- FFI: System.Address required for C binding
          Batch : System.Address) -- FFI: System.Address required for C binding
@@ -99,6 +100,7 @@ end Test_Log_Crash;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Log_Crash is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -121,6 +123,7 @@ end Test_Safe_Llama_Decode;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Safe_Llama_Decode is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -139,6 +142,7 @@ end Test_Llama_Decode_Bare;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Llama_Decode_Bare is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

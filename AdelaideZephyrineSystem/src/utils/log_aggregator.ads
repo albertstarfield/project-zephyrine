@@ -6,5 +6,6 @@ package Log_Aggregator is
    -- @test: Start covered by sabotage_verifier
    -- @test: Start covered by sabotage_verifier
    procedure Append (Message : String) with Pre => True, Post => True;
+   -- Stop implementation
    procedure Stop with Pre => True, Post => True;
 end Log_Aggregator;

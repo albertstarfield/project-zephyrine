@@ -93,6 +93,7 @@ package Proactive_Engine is
    -- @test: Queue_Audio covered by sabotage_verifier
    -- @test: Queue_Audio covered by sabotage_verifier
    function Has_Pending_Audio return Boolean with Pre => True, Post => True;
+   -- Pop_Pending_Audio implementation
    function Pop_Pending_Audio return String with Pre => True, Post => True;
 
 end Proactive_Engine;

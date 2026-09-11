@@ -438,6 +438,7 @@ end Test_Read_File_Content;
 -- [Documentation: Run implementation]
 package body Test_Read_File_Content is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -458,6 +459,7 @@ end Test_Verify_And_Compile_Dafny;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Verify_And_Compile_Dafny is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -476,6 +478,7 @@ end Test_Get_Random_Suffix;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Random_Suffix is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -494,6 +497,7 @@ end Test_Run_Command_Capture;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Command_Capture is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -512,6 +516,7 @@ end Test_Verify_Python;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Verify_Python is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

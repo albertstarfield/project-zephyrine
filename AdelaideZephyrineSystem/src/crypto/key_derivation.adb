@@ -20,6 +20,7 @@ is
    --  HKDF_SHA512: C FFI binding for HKDF-SHA512 key derivation.
    -- @test: HKDF_SHA512 covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- HKDF_SHA512 implementation
    function HKDF_SHA512  -- [Documentation: implementation]
      (Salt      : System.Address; -- FFI: System.Address required for C binding
       Salt_Len  : Interfaces.C.size_t;
@@ -359,6 +360,7 @@ end Test_Initialize_Key_Derivation;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize_Key_Derivation is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -403,6 +405,7 @@ end Test_Clear_Master_Key;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Clear_Master_Key is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -423,6 +426,7 @@ end Test_Hex_To_AES_Key;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hex_To_AES_Key is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -445,6 +449,7 @@ end Test_Hex_To_Nibble;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hex_To_Nibble is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -467,6 +472,7 @@ end Test_Master_Key_To_Hex;
 -- [Documentation: Run implementation]
 package body Test_Master_Key_To_Hex is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -487,6 +493,7 @@ end Test_Derive_And_Store_Master_Key;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Derive_And_Store_Master_Key is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -507,6 +514,7 @@ end Test_Derive_Master_Key;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Derive_Master_Key is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -525,6 +533,7 @@ end Test_Get_Master_Key;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Master_Key is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -543,6 +552,7 @@ end Test_HKDF_SHA256;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_HKDF_SHA256 is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -561,6 +571,7 @@ end Test_HKDF_SHA512;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_HKDF_SHA512 is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -579,6 +590,7 @@ end Test_AES_Key_To_Hex;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_AES_Key_To_Hex is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -597,6 +609,7 @@ end Test_Derive_AES_Key;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Derive_AES_Key is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

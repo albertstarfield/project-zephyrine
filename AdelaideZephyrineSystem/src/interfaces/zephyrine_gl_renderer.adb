@@ -44,6 +44,7 @@ package body Zephyrine_GL_Renderer is
 
    --  Generic instantiation for buffer data upload -- @covered
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Set_Single_Buffer implementation
    procedure Set_Single_Buffer is new GL.Objects.Buffers.Set_Sub_Data  -- PREALLOCATED_REVIEWED
      (GL.Types.Single_Pointers);
 
@@ -338,6 +339,7 @@ package body Zephyrine_GL_Renderer is
    --  — framebuffer is cleared before new frame rendering.
 
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Begin_Frame implementation
    procedure Begin_Frame (State : in out Renderer_State) is  -- [Documentation: implementation]
       -- @covered
      -- Pre: Input validation
@@ -647,6 +649,7 @@ package body Zephyrine_GL_Renderer is
    --  CITATION: OpenGLAda GL_Object — Finalize releases GL resources.
 
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Finalize implementation
    procedure Finalize (State : in out Renderer_State) is  -- [Documentation: implementation]
       -- @covered
      -- Pre: Input validation
@@ -695,6 +698,7 @@ package body Test_Set_Single_Buffer is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -715,6 +719,7 @@ end Test_Draw_Textured_Quad;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Draw_Textured_Quad is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -735,6 +740,7 @@ end Test_Finalize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Finalize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -757,6 +763,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -779,6 +786,7 @@ end Test_Load_Texture;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Load_Texture is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -799,6 +807,7 @@ end Test_Begin_Frame;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Begin_Frame is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -817,6 +826,7 @@ end Test_Draw_Quad_With_Border;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Draw_Quad_With_Border is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -835,6 +845,7 @@ end Test_Compile_Shader;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Compile_Shader is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -853,6 +864,7 @@ end Test_Set_Viewport;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_Viewport is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -871,6 +883,7 @@ end Test_Draw_Quad;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Draw_Quad is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

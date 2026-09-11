@@ -1451,6 +1451,7 @@ end Test_Compute_Layout;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Compute_Layout is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1471,6 +1472,7 @@ end Test_Link_Program_Checked;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Link_Program_Checked is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1493,6 +1495,7 @@ end Test_Init_Renderer;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Init_Renderer is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1515,6 +1518,7 @@ package body Test_Apply_To_Widget is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1535,6 +1539,7 @@ end Test_Apply_CSS_Stylesheet;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Apply_CSS_Stylesheet is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1555,6 +1560,7 @@ end Test_Add_Widget;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Add_Widget is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1577,6 +1583,7 @@ end Test_Find_Widget_By_ID;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Find_Widget_By_ID is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -1599,6 +1606,7 @@ end Test_Init_Tree;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Init_Tree is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1619,6 +1627,7 @@ end Test_Layout_Widget;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Layout_Widget is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1641,6 +1650,7 @@ end Test_Hit_Test;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hit_Test is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1663,6 +1673,7 @@ package body Test_Get_Parent is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1681,6 +1692,7 @@ end Test_Update_Animations;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Update_Animations is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1699,6 +1711,7 @@ end Test_Process_Input;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Process_Input is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1717,6 +1730,7 @@ end Test_Render_Widget;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Render_Widget is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1735,6 +1749,7 @@ end Test_Get_Children;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Children is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1753,6 +1768,7 @@ end Test_Draw_Filled_Rect;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Draw_Filled_Rect is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1771,6 +1787,7 @@ end Test_Widget_To_Selector;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Widget_To_Selector is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1789,6 +1806,7 @@ end Test_Render_Tree;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Render_Tree is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1807,6 +1825,7 @@ end Test_Find_Widget_By_Class;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Find_Widget_By_Class is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1825,6 +1844,7 @@ end Test_Is_Visible_In_Tree;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Visible_In_Tree is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1843,6 +1863,7 @@ end Test_Start_Animation;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Start_Animation is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1861,6 +1882,7 @@ end Test_Remove_Widget;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Remove_Widget is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1879,6 +1901,7 @@ end Test_Compile_Shader_Checked;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Compile_Shader_Checked is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

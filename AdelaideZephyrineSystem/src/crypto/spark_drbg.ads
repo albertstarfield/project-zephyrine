@@ -68,6 +68,7 @@ is
    -- Pre => True, Post => True; -- ECSS-Q-ST-80C §6.3
      with Export => True, Convention => C, External_Name => "adl_drbg_init";
 
+   -- Adl_Drbg_Generate implementation
    function Adl_Drbg_Generate (Out_Buf : System.Address; Len : size_t) return int -- FFI: System.Address required for C binding
       -- @test: unit_test_exists  -- DO-178C 6.4.4
      with Export => True, Convention => C, External_Name => "adl_drbg_generate";

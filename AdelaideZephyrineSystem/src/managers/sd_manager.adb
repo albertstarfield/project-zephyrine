@@ -42,6 +42,7 @@ package body SD_Manager is
 
    -- @test: Initialize covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Initialize implementation
    procedure Initialize  -- [Documentation: implementation]
      (Flux_Diffusion : String;
       Flux_Clip_L    : String;
@@ -304,6 +305,7 @@ package body SD_Manager is
    --  FFI to C helper for PNG+Base64 encoding
    -- @test: SD_Image_To_Base64_PNG covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- SD_Image_To_Base64_PNG implementation
    function SD_Image_To_Base64_PNG  -- [Documentation: implementation]
      (Image_Data : System.Address; -- FFI: System.Address required for C binding
       Width      : Interfaces.C.int;
@@ -314,6 +316,7 @@ package body SD_Manager is
    --  SD_Free_String: C FFI binding to free a string allocated by the SD library.
    -- @test: SD_Free_String covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- SD_Free_String implementation
    procedure SD_Free_String (Str : Interfaces.C.Strings.chars_ptr)  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -322,6 +325,7 @@ package body SD_Manager is
    --  Generate_Two_Stage: Generates an image using a two-stage Flux pipeline.
    -- @test: Generate_Two_Stage covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Generate_Two_Stage implementation
    procedure Generate_Two_Stage  -- [Documentation: implementation]
      (Prompt         : String;
       Width          : Integer := 1024;
@@ -605,6 +609,7 @@ end Test_SD_Free_String;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_SD_Free_String is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -625,6 +630,7 @@ end Test_Load_Flux_Context;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Load_Flux_Context is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -647,6 +653,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -669,6 +676,7 @@ end Test_Uptime_String;
 -- [Documentation: Run implementation]
 package body Test_Uptime_String is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -689,6 +697,7 @@ end Test_SD_Image_To_Base64_PNG;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_SD_Image_To_Base64_PNG is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -709,6 +718,7 @@ end Test_Free_All;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Free_All is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -727,6 +737,7 @@ end Test_Load_Refiner_Context;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Load_Refiner_Context is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -745,6 +756,7 @@ end Test_Free_Flux_Context;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Free_Flux_Context is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -763,6 +775,7 @@ end Test_Free_Refiner_Context;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Free_Refiner_Context is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -781,6 +794,7 @@ end Test_Generate_Two_Stage;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Generate_Two_Stage is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

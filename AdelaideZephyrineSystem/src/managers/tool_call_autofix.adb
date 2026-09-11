@@ -502,6 +502,7 @@ end Test_Levenshtein;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Levenshtein is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -524,6 +525,7 @@ end Test_To_Lower_Case;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_To_Lower_Case is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -546,6 +548,7 @@ end Test_Build_Default_Registry;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Build_Default_Registry is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -566,6 +569,7 @@ end Test_Match_Quality;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Match_Quality is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -584,6 +588,7 @@ end Test_Register_Tool;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Register_Tool is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -602,6 +607,7 @@ end Test_Fuzzy_Fix;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Fuzzy_Fix is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

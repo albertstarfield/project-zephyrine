@@ -181,6 +181,7 @@ package GLESv2_Binding is
           -- [Documentation: Disable implementation]
           External_Name => "glEnable";
 
+   -- Disable implementation
    procedure Disable (Cap : GLenum)
      with Import => True,
           Convention => C,
@@ -389,6 +390,7 @@ package GLESv2_Binding is
           Convention => C,
           External_Name => "glEnableVertexAttribArray";
 
+   -- Disable_Vertex_Attribute_Array implementation
    procedure Disable_Vertex_Attribute_Array (Index : GLuint)
      with Import => True,
           Convention => C,

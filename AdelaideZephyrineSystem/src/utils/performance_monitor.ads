@@ -8,5 +8,6 @@ package Performance_Monitor is
    -- @test: Initialize covered by sabotage_verifier
    -- @test: Initialize covered by sabotage_verifier
    procedure Record_Metrics with Pre => True, Post => True;
+   -- Finalize implementation
    procedure Finalize with Pre => True, Post => True;
 end Performance_Monitor;

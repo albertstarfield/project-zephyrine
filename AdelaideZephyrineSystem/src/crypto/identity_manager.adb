@@ -161,6 +161,7 @@ end Test_Register_User;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Register_User is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -205,6 +206,7 @@ end Test_SHA256_Hash;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_SHA256_Hash is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -223,6 +225,7 @@ end Test_Compute_Identity_Hash;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Compute_Identity_Hash is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -241,6 +244,7 @@ end Test_Authenticate_User;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Authenticate_User is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

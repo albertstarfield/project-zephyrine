@@ -16,6 +16,7 @@ package Adelaide_Server_Pkg is
    -- @test: Register covered by sabotage_verifier
    -- @test: Register covered by sabotage_verifier
    procedure Unregister (ID : String) with Pre => True, Post => True;
+   -- Push_Log implementation
    procedure Push_Log (ID : String; Log : String) with Pre => True, Post => True;
 
    --  Last API endpoint tracker (thread-safe for heartbeat)

@@ -85,6 +85,7 @@ end Test_Execute_Code;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Code is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

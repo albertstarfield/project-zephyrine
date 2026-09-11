@@ -513,6 +513,7 @@ end Test_Validate_API_Key;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Validate_API_Key is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -533,6 +534,7 @@ end Test_Initialize_Crypto_Officer;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize_Crypto_Officer is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -555,6 +557,7 @@ end Test_Is_Enforcement_Enabled;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Enforcement_Enabled is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -575,6 +578,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -593,6 +597,7 @@ end Test_Disable_Enforcement;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Disable_Enforcement is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -611,6 +616,7 @@ end Test_Is_Crypto_Officer;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Crypto_Officer is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -629,6 +635,7 @@ end Test_Reload_Keys;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Reload_Keys is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -647,6 +654,7 @@ end Test_Enable_Enforcement;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Enable_Enforcement is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -665,6 +673,7 @@ end Test_Key_Count;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Key_Count is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

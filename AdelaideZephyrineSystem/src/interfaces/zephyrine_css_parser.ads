@@ -337,6 +337,7 @@ package Zephyrine_CSS_Parser is
    --  Color_To_GL: Convert CSS_Color to OpenGL RGBA float array.
    --  Used to pass colors to glUniform4f / glClearColor.
    type GL_Color_Array is array (1 .. 4) of Float;
+   -- Color_To_GL implementation
    function Color_To_GL (Color : CSS_Color) return GL_Color_Array
      with Pre => True,
           Post => True;

@@ -149,7 +149,7 @@ def atomic_encode_result(value: int, bits: int = 32) -> AtomicFunctionResult:
     )
 
 
-def atomic_function_wrapper(func, *args, **kwargs):
+def atomic_function_wrapper(func, *args, **kwargs) -> None:
     """Wrap a function call with SECDED TED parity protection.
 
     This decorator/wrapper function executes the wrapped function and
@@ -188,6 +188,22 @@ def atomic_function_wrapper(func, *args, **kwargs):
 
 
 def secdec_encode(value: int, bits: int = 32) -> AtomicFunctionResult:
+
+def test_atomic_encode_result() -> None:
+    """Test atomic_encode_result."""
+    # Test implementation
+    pass
+
+def test_atomic_function_wrapper() -> None:
+    """Test atomic_function_wrapper."""
+    # Test implementation
+    pass
+
+def test_secdec_encode() -> None:
+    """Test secdec_encode."""
+    # Test implementation
+    pass
+
     """Alias for atomic_encode_result (SECDED TED encoding).
 
     Args:

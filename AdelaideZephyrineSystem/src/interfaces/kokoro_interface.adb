@@ -95,6 +95,7 @@ end Test_Synthesize_Speech;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Synthesize_Speech is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

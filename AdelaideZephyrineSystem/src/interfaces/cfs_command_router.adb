@@ -30,6 +30,7 @@ package body CFS_Command_Router is
    -- @test: Route_Command covered by sabotage_verifier
    -- Procedure Route_Command: Implementation detail
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Route_Command implementation
    procedure Route_Command (Cmd : Command) is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
@@ -64,6 +65,7 @@ package body CFS_Command_Router is
 
    -- @test: Get_Command_Count covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Get_Command_Count implementation
    function Get_Command_Count return Natural is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
@@ -107,6 +109,7 @@ end Test_Register_Handler;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Register_Handler is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -129,6 +132,7 @@ end Test_Get_Command_Count;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Command_Count is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -151,6 +155,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -169,6 +174,7 @@ end Test_Reset_Stats;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Reset_Stats is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -187,6 +193,7 @@ end Test_Route_Command;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Route_Command is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

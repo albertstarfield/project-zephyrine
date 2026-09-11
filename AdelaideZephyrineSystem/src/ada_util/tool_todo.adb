@@ -158,6 +158,7 @@ package body Tool_Todo is
    --  Manual ASCII To_Lower (avoids Ada.Strings.Handling dependency).
    -- @test: To_Lower_Char covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- To_Lower_Char implementation
    function To_Lower_Char (C : Character) return Character is  -- [Documentation: implementation]
      -- Pre: Input validation
      -- Post: Output verification
@@ -410,6 +411,7 @@ end Test_Execute_Todo;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Todo is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -432,6 +434,7 @@ end Test_Save_Todos;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Save_Todos is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -454,6 +457,7 @@ package body Test_To_Lower_Char is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -472,6 +476,7 @@ end Test_Next_Id;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Next_Id is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -490,6 +495,7 @@ end Test_Load_Todos;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Load_Todos is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -508,6 +514,7 @@ end Test_Contains_Case_Insensitive;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Contains_Case_Insensitive is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -526,6 +533,7 @@ end Test_To_Lower_Str;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_To_Lower_Str is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

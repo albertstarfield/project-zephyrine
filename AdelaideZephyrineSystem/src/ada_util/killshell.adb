@@ -154,6 +154,7 @@ end Test_Run_Cmd;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Cmd is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -172,6 +173,7 @@ end Test_KillShell;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_KillShell is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

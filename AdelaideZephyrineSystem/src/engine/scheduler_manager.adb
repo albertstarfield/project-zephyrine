@@ -195,6 +195,7 @@ end Test_Emit_Elab_Trace;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Emit_Elab_Trace is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -217,6 +218,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -239,6 +241,7 @@ end Test_Add;
 -- [Documentation: Run implementation]
 package body Test_Add is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -257,6 +260,7 @@ end Test_Schedule;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Schedule is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -275,6 +279,7 @@ end Test_Get_Next;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Next is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -293,6 +298,7 @@ end Test_Elab_Trace;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Elab_Trace is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

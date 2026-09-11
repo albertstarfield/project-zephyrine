@@ -369,6 +369,7 @@ end Test_Do_Tail;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Do_Tail is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -391,6 +392,7 @@ end Test_Do_Exists;
 -- [Documentation: Run implementation]
 package body Test_Do_Exists is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -411,6 +413,7 @@ end Test_File_Edit;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_File_Edit is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -431,6 +434,7 @@ end Test_Do_Write;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Do_Write is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -449,6 +453,7 @@ end Test_Args;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Args is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -467,6 +472,7 @@ end Test_Do_Read;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Do_Read is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -485,6 +491,7 @@ end Test_Do_Head;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Do_Head is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -503,6 +510,7 @@ end Test_Do_Edit;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Do_Edit is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

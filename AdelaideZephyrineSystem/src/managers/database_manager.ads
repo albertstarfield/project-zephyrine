@@ -21,6 +21,7 @@ package Database_Manager is
    --  Scaling parameter for Salience (S = HitFrequency / (1 + Alpha * DeltaT))
    Alpha : constant Float := 0.0001;
 
+   -- Remember implementation
    procedure Remember
       -- @test: unit_test_exists  -- DO-178C 6.4.4
      (Prompt   : String;
@@ -129,6 +130,7 @@ package Database_Manager is
    -- @test: Blacklist_Seed covered by sabotage_verifier
    -- @test: Blacklist_Seed covered by sabotage_verifier
    function Is_Seed_Blacklisted (Seed : Interfaces.C.unsigned) return Boolean with Pre => True, Post => True;
+   -- Get_Blacklist_Size implementation
    function Get_Blacklist_Size return Natural with Pre => True, Post => True;
 
    --  Close: Closes the database connection and cleans up resources.

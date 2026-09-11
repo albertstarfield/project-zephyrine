@@ -184,6 +184,7 @@ package body Security_Scanner is
    -- @test: To_Lower_Str covered by sabotage_verifier
    -- Function To_Lower_Str: Implementation detail
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- To_Lower_Str implementation
    function To_Lower_Str (S : String) return String is  -- [Documentation: implementation]
       Result : String := S;
      -- Pre: Input validation
@@ -508,6 +509,7 @@ package body Test_Scan_Directory is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -528,6 +530,7 @@ end Test_Format_JSON;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Format_JSON is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -548,6 +551,7 @@ end Test_To_Lower_Char;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_To_Lower_Char is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -570,6 +574,7 @@ end Test_Scan_File;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Scan_File is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -592,6 +597,7 @@ end Test_To_Lower_Str;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_To_Lower_Str is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -610,6 +616,7 @@ end Test_Format_Report;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Format_Report is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -628,6 +635,7 @@ end Test_Should_Skip_Dir;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Should_Skip_Dir is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -646,6 +654,7 @@ end Test_Is_Source_File;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Source_File is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -664,6 +673,7 @@ end Test_Contains_Case_Insensitive;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Contains_Case_Insensitive is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

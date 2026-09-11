@@ -6,6 +6,7 @@ package Zenith_Manager is
 
    --  Protected object to store telemetry safely for non-SPARK consumers
    protected Telemetry_Store is
+      -- Update implementation
       procedure Update (Timing : Duration; Jitter_Max : Duration; Jitter_Avg : Duration) with Pre => True, Post => True;
       -- @test: Update covered by sabotage_verifier
       -- @test: Update covered by sabotage_verifier

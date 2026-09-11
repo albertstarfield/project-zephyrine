@@ -242,6 +242,7 @@ package body Test_Store is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -262,6 +263,7 @@ end Test_Normalize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Normalize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -282,6 +284,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -304,6 +307,7 @@ end Test_Hit_Count;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hit_Count is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -326,6 +330,7 @@ end Test_Reset_Stats;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Reset_Stats is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -346,6 +351,7 @@ end Test_Lookup;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Lookup is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -364,6 +370,7 @@ end Test_Entry_Count;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Entry_Count is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -382,6 +389,7 @@ end Test_Miss_Count;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Miss_Count is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -400,6 +408,7 @@ end Test_Seed_Common_Queries;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Seed_Common_Queries is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -418,6 +427,7 @@ end Test_Hash_Unbounded;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hash_Unbounded is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

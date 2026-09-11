@@ -250,6 +250,7 @@ end Test_Find_Files;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Find_Files is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -272,6 +273,7 @@ end Test_List_Dir;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_List_Dir is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -290,6 +292,7 @@ end Test_Tree_Dir;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Tree_Dir is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -308,6 +311,7 @@ end Test_Execute_Dir;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Dir is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

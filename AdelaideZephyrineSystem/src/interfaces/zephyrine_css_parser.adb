@@ -1864,6 +1864,7 @@ end Test_Current_Char;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Current_Char is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1884,6 +1885,7 @@ end Test_Read_Identifier;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Read_Identifier is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1906,6 +1908,7 @@ end Test_Skip_Whitespace;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Skip_Whitespace is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -1928,6 +1931,7 @@ end Test_Map_Property_Kind;
 -- [Documentation: Run implementation]
 package body Test_Map_Property_Kind is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1948,6 +1952,7 @@ end Test_Classify_Selector;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Classify_Selector is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1968,6 +1973,7 @@ end Test_Read_Number;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Read_Number is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2012,6 +2018,7 @@ end Test_Parse_RGBA;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Parse_RGBA is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2032,6 +2039,7 @@ end Test_Calculate_Specificity;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Calculate_Specificity is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2054,6 +2062,7 @@ end Test_Parse_Keyframe_Block;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Parse_Keyframe_Block is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2072,6 +2081,7 @@ end Test_Hex_Byte;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hex_Byte is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2090,6 +2100,7 @@ end Test_Read_Quoted_String;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Read_Quoted_String is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2108,6 +2119,7 @@ end Test_Color_To_GL;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Color_To_GL is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2126,6 +2138,7 @@ end Test_Lookup_Property;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Lookup_Property is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2144,6 +2157,7 @@ end Test_Lookup_Property_By_Raw;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Lookup_Property_By_Raw is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2162,6 +2176,7 @@ end Test_Get_Keyframe;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Keyframe is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2180,6 +2195,7 @@ end Test_To_Lower;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_To_Lower is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2198,6 +2214,7 @@ end Test_Parse_Length;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Parse_Length is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2216,6 +2233,7 @@ end Test_Advance;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Advance is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2234,6 +2252,7 @@ end Test_Read_Value;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Read_Value is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2252,6 +2271,7 @@ end Test_Parse_CSS_File;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Parse_CSS_File is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2270,6 +2290,7 @@ end Test_Parse_Rule_Block;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Parse_Rule_Block is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2288,6 +2309,7 @@ end Test_Skip_Comment;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Skip_Comment is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2306,6 +2328,7 @@ end Test_Hex_To_Color;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hex_To_Color is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2324,6 +2347,7 @@ end Test_Hex_Digit;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hex_Digit is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2342,6 +2366,7 @@ end Test_Parse_Content;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Parse_Content is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

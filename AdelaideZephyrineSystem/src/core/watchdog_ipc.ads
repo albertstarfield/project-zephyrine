@@ -19,12 +19,14 @@ package Watchdog_IPC is
    --  Returns True if another instance is running (should exit).
    --  Returns False if safe to proceed (no other instance or stale PID).
 
+   -- Init implementation
    procedure Init with Pre => True, Post => True;
    -- @test: Init covered by sabotage_verifier
    -- @test: Init covered by sabotage_verifier
    --  Creates the run/ directory (if absent) and writes PID + initial heartbeat.
    --  Also starts the background heartbeat task.
 
+   -- Update_Heartbeat implementation
    procedure Update_Heartbeat with Pre => True, Post => True;
    -- @test: Update_Heartbeat covered by sabotage_verifier
    -- @test: Update_Heartbeat covered by sabotage_verifier
@@ -32,18 +34,21 @@ package Watchdog_IPC is
    --  The background task writes the actual file independently.
    --  Called from the server main loop every ~1 s.
 
+   -- Write_Heartbeat implementation
    procedure Write_Heartbeat with Pre => True, Post => True;
    -- @test: Write_Heartbeat covered by sabotage_verifier
    -- @test: Write_Heartbeat covered by sabotage_verifier
    --  DIRECT file write — used only during Init and shutdown.
    --  For normal operation, use Update_Heartbeat instead.
 
+   -- Write_Exit_Reason implementation
    procedure Write_Exit_Reason (Reason : String; Signal_Or_Code : Integer) with Pre => True, Post => True;
    -- @test: Write_Exit_Reason covered by sabotage_verifier
    -- @test: Write_Exit_Reason covered by sabotage_verifier
    --  Writes an explicit exit reason and exit code/signal to run/adelaide_server.exit_reason
    --  before the server terminates.
 
+   -- Shutdown_Heartbeat_Task implementation
    procedure Shutdown_Heartbeat_Task with Pre => True, Post => True;
    -- @test: Shutdown_Heartbeat_Task covered by sabotage_verifier
    -- @test: Shutdown_Heartbeat_Task covered by sabotage_verifier

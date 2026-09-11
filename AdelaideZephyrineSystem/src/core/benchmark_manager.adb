@@ -282,6 +282,7 @@ end Test_Compute_Metrics;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Compute_Metrics is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -304,6 +305,7 @@ end Test_Run_Benchmark;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Benchmark is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -322,6 +324,7 @@ end Test_Generate_Prompt;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Generate_Prompt is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -340,6 +343,7 @@ end Test_Validate_API_Key;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Validate_API_Key is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

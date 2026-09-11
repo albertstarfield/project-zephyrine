@@ -141,6 +141,7 @@ end Test_Initialize_ROS2;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize_ROS2 is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -161,6 +162,7 @@ end Test_Prefix;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Prefix is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -179,6 +181,7 @@ end Test_Publish_Actuator_Command;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Publish_Actuator_Command is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

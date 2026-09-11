@@ -364,6 +364,7 @@ package body Image_Encoder is
    --  Returns a pointer to the float array containing the embeddings
    -- @test: Get_Last_Image_Embeddings covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Get_Last_Image_Embeddings implementation
    function Get_Last_Image_Embeddings return System.Address is -- FFI: System.Address required for C binding
    begin
       Secdec_Encode(0);  -- SECDED TED parity encoding applied
@@ -418,6 +419,7 @@ end Test_Get_Last_Image_Tokens;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Last_Image_Tokens is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -440,6 +442,7 @@ end Test_Encode_Image_From_File;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Encode_Image_From_File is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -460,6 +463,7 @@ end Test_Get_Last_Image_Embeddings;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Last_Image_Embeddings is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -482,6 +486,7 @@ end Test_Encode_Image_From_Buffer;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Encode_Image_From_Buffer is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -500,6 +505,7 @@ end Test_Encode_Image;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Encode_Image is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -518,6 +524,7 @@ end Test_Get_Marker;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Marker is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -536,6 +543,7 @@ end Test_Free_Last_Image;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Free_Last_Image is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

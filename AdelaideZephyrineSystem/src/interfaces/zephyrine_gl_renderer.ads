@@ -102,6 +102,7 @@ package Zephyrine_GL_Renderer is
    --  Public API
    --  ──────────────────────────────────────────────────────────────────────
 
+   -- Initialize implementation
    procedure Initialize (State : in out Renderer_State)
      with Pre => True,
           Post => True;
@@ -115,6 +116,7 @@ package Zephyrine_GL_Renderer is
    --  CITATION: OpenGL ES 2.0 Spec Section 2.5.1 "Shader Compilation"
    --  — compile errors are non-fatal; check Compile_Status after Compile.
 
+   -- Set_Viewport implementation
    procedure Set_Viewport (State : in out Renderer_State
      with Pre => True,
           Post => True;
@@ -123,6 +125,7 @@ package Zephyrine_GL_Renderer is
    --  Update orthographic projection matrix dimensions.
    --  Called on window resize and initial display.
 
+   -- Begin_Frame implementation
    procedure Begin_Frame (State : in out Renderer_State)
      with Pre => True,
           Post => True;
@@ -130,6 +133,7 @@ package Zephyrine_GL_Renderer is
    --  Clear framebuffer, set default GL state for UI rendering.
    --  Enables alpha blending, disables depth test.
 
+   -- Draw_Quad implementation
    procedure Draw_Quad (State   : in out Renderer_State
      with Pre => True,
           Post => True;
@@ -143,6 +147,7 @@ package Zephyrine_GL_Renderer is
    --  CITATION: Khronos, "OpenGL ES 2.0," Section 3.3.1 "Basic Rasterization"
    --  — primitives are rasterized in window coordinates.
 
+   -- Draw_Textured_Quad implementation
    procedure Draw_Textured_Quad
      (State      : in out Renderer_State;
       X, Y       : GL.Types.Single;
@@ -152,6 +157,7 @@ package Zephyrine_GL_Renderer is
    --  Draw a textured rectangle. Texture_ID references a loaded texture.
    --  The color multiplies the texture color (for tinting/opacity).
 
+   -- Draw_Quad_With_Border implementation
    procedure Draw_Quad_With_Border
      (State   : in out Renderer_State;
       X, Y    : GL.Types.Single;
@@ -161,6 +167,7 @@ package Zephyrine_GL_Renderer is
       Border_Width : GL.Types.Single := 1.0);
    --  Draw a rectangle with a colored border (for focus rings, outlines).
 
+   -- Load_Texture implementation
    function Load_Texture (State : in out Renderer_State
      with Pre => True,
           Post => True;
@@ -173,6 +180,7 @@ package Zephyrine_GL_Renderer is
    --  CITATION: GL.Images.Load_File_To_Texture handles format detection
    --  (PNG, JPEG, TGA) via signature sniffing.
 
+   -- Finalize implementation
    procedure Finalize (State : in out Renderer_State)
      with Pre => True,
           Post => True;

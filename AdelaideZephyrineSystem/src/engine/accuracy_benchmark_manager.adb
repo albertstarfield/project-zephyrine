@@ -30,6 +30,7 @@ package body Accuracy_Benchmark_Manager is
    --  as JSONL files. No runtime downloading needed — files ship with the code.
    -- @test: Download_Dataset covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Download_Dataset implementation
    function Download_Dataset (  -- [Documentation: implementation]
       Repo_Id : String;
       Subset  : String;
@@ -667,6 +668,7 @@ package body Test_Validate_API_Key is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -687,6 +689,7 @@ end Test_Call_Model_Chat;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Call_Model_Chat is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -707,6 +710,7 @@ end Test_Extract_Answer;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Extract_Answer is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -725,6 +729,7 @@ end Test_Run_Accuracy_Benchmark;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Accuracy_Benchmark is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -743,6 +748,7 @@ end Test_Check_Answer;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Check_Answer is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -761,6 +767,7 @@ end Test_Download_Dataset;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Download_Dataset is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

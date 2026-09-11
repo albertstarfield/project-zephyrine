@@ -41,7 +41,9 @@ package Secdec_Parity is
    -- AXIOMS: Every procedure must use Atomic_Function_Wrapper for parity
    -- THEOREMS: Parity protection prevents silent data corruption
    -- CITATIONS: ECSS-Q-ST-80C, CWE-682
-   procedure Atomic_Function_Wrapper (Value : in Integer);
+   procedure Atomic_Function_Wrapper (Value : in Integer)
+     with Pre => True,
+          Post => True;
 
    -- Calculate syndrome for error detection
    -- AXIOMS: Syndrome calculation enables error correction

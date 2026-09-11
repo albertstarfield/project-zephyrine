@@ -48,12 +48,14 @@ procedure Adelaide_Watchdog is  -- [Documentation: implementation]
    --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM)
    -- @test: Install_Shutdown_Handlers covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Install_Shutdown_Handlers implementation
    procedure Install_Shutdown_Handlers  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
    pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
    -- @test: Is_Shutdown_Requested covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Is_Shutdown_Requested implementation
    function Is_Shutdown_Requested return Interfaces.C.int  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -875,6 +877,7 @@ end Test_Write_Watchdog_Heartbeat;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Write_Watchdog_Heartbeat is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -897,6 +900,7 @@ end Test_Restart_Server;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Restart_Server is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -919,6 +923,7 @@ end Test_C_Exit;
 -- [Documentation: Run implementation]
 package body Test_C_Exit is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -939,6 +944,7 @@ end Test_Sys_Kill;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Sys_Kill is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -959,6 +965,7 @@ end Test_Check_All_APIs;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Check_All_APIs is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1003,6 +1010,7 @@ end Test_Get_Heartbeat_Age_S;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Heartbeat_Age_S is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1023,6 +1031,7 @@ end Test_Get_Host;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Host is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1045,6 +1054,7 @@ end Test_Get_Port;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Port is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -1067,6 +1077,7 @@ end Test_Read_PID;
 -- [Documentation: Run implementation]
 package body Test_Read_PID is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1085,6 +1096,7 @@ end Test_Last_Signal_Received;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Last_Signal_Received is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1103,6 +1115,7 @@ end Test_Install_Shutdown_Handlers;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Install_Shutdown_Handlers is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1121,6 +1134,7 @@ end Test_Is_Shutdown_Requested;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Shutdown_Requested is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1139,6 +1153,7 @@ end Test_Is_Process_Alive;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Process_Alive is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1157,6 +1172,7 @@ end Test_Check_Server;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Check_Server is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1175,6 +1191,7 @@ end Test_Write_Watchdog_PID;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Write_Watchdog_PID is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1193,6 +1210,7 @@ end Test_Read_Args;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Read_Args is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1211,6 +1229,7 @@ end Test_Get_PID;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_PID is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1229,6 +1248,7 @@ end Test_Get_PPID;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_PPID is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1247,6 +1267,7 @@ end Test_Adelaide_Watchdog;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adelaide_Watchdog is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

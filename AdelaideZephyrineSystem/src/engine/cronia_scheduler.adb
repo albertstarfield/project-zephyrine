@@ -339,6 +339,7 @@ package body Test_Cancel is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -359,6 +360,7 @@ end Test_Find_Job;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Find_Job is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -379,6 +381,7 @@ end Test_Uptime;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Uptime is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -401,6 +404,7 @@ end Test_Tick;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Tick is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -423,6 +427,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -443,6 +448,7 @@ end Test_Schedule_Repeating;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Schedule_Repeating is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -461,6 +467,7 @@ end Test_Get_Job;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Job is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -479,6 +486,7 @@ end Test_Schedule_If_Past;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Schedule_If_Past is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -497,6 +505,7 @@ end Test_Active_Job_Count;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Active_Job_Count is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -515,6 +524,7 @@ end Test_Add_Job;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Add_Job is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -533,6 +543,7 @@ end Test_Schedule_At;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Schedule_At is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

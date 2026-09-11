@@ -1206,6 +1206,7 @@ end Test_Run_Sidecar_Tests;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Sidecar_Tests is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1228,6 +1229,7 @@ end Test_Get_Engine_Stats;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Engine_Stats is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -1250,6 +1252,7 @@ end Test_Test_Sessions_CRUD;
 -- [Documentation: Run implementation]
 package body Test_Test_Sessions_CRUD is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1270,6 +1273,7 @@ end Test_Current_ISO_8601;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Current_ISO_8601 is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1290,6 +1294,7 @@ end Test_Exec_SQL;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Exec_SQL is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1334,6 +1339,7 @@ end Test_Test_Engine_Telemetry;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Test_Engine_Telemetry is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1354,6 +1360,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1376,6 +1383,7 @@ end Test_Get_Messages;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Messages is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -1398,6 +1406,7 @@ end Test_Create_Session;
 -- [Documentation: Run implementation]
 package body Test_Create_Session is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1416,6 +1425,7 @@ end Test_Query_Single_String;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Query_Single_String is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1434,6 +1444,7 @@ end Test_Test_Messages_CRUD;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Test_Messages_CRUD is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1452,6 +1463,7 @@ end Test_Update_Telemetry;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Update_Telemetry is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1470,6 +1482,7 @@ end Test_Add_Message;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Add_Message is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1488,6 +1501,7 @@ end Test_Run_Http_Loopback_Tests;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Http_Loopback_Tests is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1506,6 +1520,7 @@ end Test_Run_Test;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Test is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1524,6 +1539,7 @@ end Test_Rename_Session;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Rename_Session is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1542,6 +1558,7 @@ end Test_Save_Engine_Setting;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Save_Engine_Setting is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1560,6 +1577,7 @@ end Test_List_Sessions;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_List_Sessions is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1578,6 +1596,7 @@ end Test_Duplicate_Session;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Duplicate_Session is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1596,6 +1615,7 @@ end Test_Test_Engine_Settings_CRUD;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Test_Engine_Settings_CRUD is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1614,6 +1634,7 @@ end Test_Delete_Engine_Setting;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Delete_Engine_Setting is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1632,6 +1653,7 @@ end Test_Delete_Last_Assistant_Messages;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Delete_Last_Assistant_Messages is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1650,6 +1672,7 @@ end Test_Close;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Close is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1668,6 +1691,7 @@ end Test_Get_Engine_Settings;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Engine_Settings is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

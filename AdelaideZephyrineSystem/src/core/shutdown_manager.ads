@@ -6,6 +6,7 @@ package Shutdown_Manager is
    --  Used to gracefully stop background tasks (ELP monitor, watchdog, etc.)
    --  before the server finalized.
    protected Shutdown_Status is
+      -- Request implementation
       procedure Request with Pre => True, Post => True;
       -- @test: Request covered by sabotage_verifier
       -- @test: Request covered by sabotage_verifier

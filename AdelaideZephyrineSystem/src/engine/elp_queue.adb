@@ -208,18 +208,21 @@ package body ELP_Queue is
        --  Return the per-level task counts.
        -- @test: Get_Counts covered by sabotage_verifier
           with Pre => True, Post => True; -- IMPL: specify actual contracts
+       -- Get_Counts implementation
        function Get_Counts return Level_Counts is (Counts)  -- [Documentation: implementation]
          with Pre => True,
               Post => True;
        --  Return the total number of pending tasks across all levels.
        -- @test: Get_Total covered by sabotage_verifier
           with Pre => True, Post => True; -- IMPL: specify actual contracts
+       -- Get_Total implementation
        function Get_Total return Long_Long_Integer is (Total)  -- [Documentation: implementation]
          with Pre => True,
               Post => True;
        --  Return the source name of the most recently enqueued task.
        -- @test: Get_Last_Source covered by sabotage_verifier
           with Pre => True, Post => True; -- IMPL: specify actual contracts
+       -- Get_Last_Source implementation
        function Get_Last_Source return String is (Last_Source (1 .. Source_Len))  -- [Documentation: implementation]
          with Pre => True,
               Post => True;
@@ -604,6 +607,7 @@ package body Test_Decrement is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -624,6 +628,7 @@ end Test_Utilization;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Utilization is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -644,6 +649,7 @@ end Test_Enqueue;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Enqueue is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -666,6 +672,7 @@ end Test_Set_Task_Start;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_Task_Start is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -688,6 +695,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -708,6 +716,7 @@ end Test_Increment;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Increment is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -730,6 +739,7 @@ end Test_Get_Counts;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Counts is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -748,6 +758,7 @@ end Test_Get_Last_Source;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Last_Source is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -766,6 +777,7 @@ end Test_Dequeue;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Dequeue is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -784,6 +796,7 @@ end Test_Capacity;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Capacity is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -802,6 +815,7 @@ end Test_Depth;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Depth is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -820,6 +834,7 @@ end Test_Dequeue_Level;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Dequeue_Level is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -838,6 +853,7 @@ end Test_Get_Total;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Total is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

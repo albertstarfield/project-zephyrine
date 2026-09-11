@@ -452,6 +452,7 @@ package body Test_Extract_And_Encode_Images is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -472,6 +473,7 @@ end Test_Process_Base64_Image;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Process_Base64_Image is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -492,6 +494,7 @@ end Test_Extract_Text_Content;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Extract_Text_Content is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -514,6 +517,7 @@ end Test_Init_Base64_Table;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Init_Base64_Table is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -532,6 +536,7 @@ end Test_Decode_Base64;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Decode_Base64 is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -550,6 +555,7 @@ end Test_Extract_Ollama_Images;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Extract_Ollama_Images is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -568,6 +574,7 @@ end Test_Has_Images;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Has_Images is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

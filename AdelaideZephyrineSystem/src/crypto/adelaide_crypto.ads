@@ -53,6 +53,7 @@ package Adelaide_Crypto is
    -- @test: Is_Poisoned covered by sabotage_verifier
    -- @test: Is_Poisoned covered by sabotage_verifier
    function Self_Tests_Passed return Boolean with Pre => True, Post => True;
+   -- Is_FIPS_Ready implementation
    function Is_FIPS_Ready return Boolean with Pre => True, Post => True;
 
    --  FIPS 140-3 mode control:

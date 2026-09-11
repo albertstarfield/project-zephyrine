@@ -2299,6 +2299,7 @@ end Test_Has_Integrity_Test_Blob;
 -- [Documentation: Run implementation]
 package body Test_Has_Integrity_Test_Blob is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2319,6 +2320,7 @@ end Test_Get_User;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_User is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2339,6 +2341,7 @@ end Test_Get_Random_Literature_Chunk;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Random_Literature_Chunk is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2383,6 +2386,7 @@ end Test_DB_File;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_DB_File is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2403,6 +2407,7 @@ end Test_Search_Interaction_By_LSH;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Search_Interaction_By_LSH is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2425,6 +2430,7 @@ end Test_Initialize;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Initialize is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -2447,6 +2453,7 @@ end Test_Search_Imagined_Images;
 -- [Documentation: Run implementation]
 package body Test_Search_Imagined_Images is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2467,6 +2474,7 @@ end Test_Get_Cached_Response;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Cached_Response is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2487,6 +2495,7 @@ end Test_Set_System_State;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_System_State is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2531,6 +2540,7 @@ end Test_Get_System_State;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_System_State is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2549,6 +2559,7 @@ end Test_Lit_DB_File;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Lit_DB_File is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2567,6 +2578,7 @@ end Test_Add_Graph_Relation;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Add_Graph_Relation is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2585,6 +2597,7 @@ end Test_Export_GraphML;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Export_GraphML is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2603,6 +2616,7 @@ end Test_Store_Imagined_Image;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Store_Imagined_Image is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2621,6 +2635,7 @@ end Test_Blacklist_Seed;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Blacklist_Seed is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2639,6 +2654,7 @@ end Test_Add_Literature_Chunk;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Add_Literature_Chunk is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2657,6 +2673,7 @@ end Test_Flush_Memory;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Flush_Memory is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2675,6 +2692,7 @@ end Test_Search_Interaction;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Search_Interaction is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2693,6 +2711,7 @@ end Test_DB_Dir;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_DB_Dir is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2711,6 +2730,7 @@ end Test_Remember;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Remember is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2729,6 +2749,7 @@ end Test_Evict_Low_Salience;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Evict_Low_Salience is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2747,6 +2768,7 @@ end Test_Store_Integrity_Test_Blob;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Store_Integrity_Test_Blob is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2765,6 +2787,7 @@ end Test_Do_Init;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Do_Init is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2783,6 +2806,7 @@ end Test_Get_Recent_Imagined_Images;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Recent_Imagined_Images is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2801,6 +2825,7 @@ end Test_Add_To_Cache;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Add_To_Cache is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2819,6 +2844,7 @@ end Test_C_Abort;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_C_Abort is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2837,6 +2863,7 @@ end Test_Search_Literature_By_LSH;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Search_Literature_By_LSH is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2855,6 +2882,7 @@ end Test_Verify_Integrity_Test_Blob;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Verify_Integrity_Test_Blob is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2873,6 +2901,7 @@ end Test_Recall;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Recall is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2891,6 +2920,7 @@ end Test_Is_Seed_Blacklisted;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Seed_Blacklisted is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2909,6 +2939,7 @@ end Test_Search_Literature;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Search_Literature is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2927,6 +2958,7 @@ end Test_Close;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Close is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2945,6 +2977,7 @@ end Test_Get_Blacklist_Size;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Blacklist_Size is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

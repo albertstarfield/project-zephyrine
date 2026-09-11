@@ -115,12 +115,14 @@ procedure Adelaide_Server is  -- [Documentation: implementation]
     --  Get_Port: Returns the server port from command-line args or environment.
     -- @test: Get_Port covered by sabotage_verifier
        with Pre => True, Post => True; -- IMPL: specify actual contracts
+    -- Get_Port implementation
     function Get_Port return Natural  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     --  Get_Host: Returns the server host from command-line args or environment.
     -- @test: Get_Host covered by sabotage_verifier
        with Pre => True, Post => True; -- IMPL: specify actual contracts
+    -- Get_Host implementation
     function Get_Host return String  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
@@ -137,12 +139,14 @@ procedure Adelaide_Server is  -- [Documentation: implementation]
     --  Use_HTTPS: Returns True if HTTPS is enabled via command-line or environment.
     -- @test: Use_HTTPS covered by sabotage_verifier
        with Pre => True, Post => True; -- IMPL: specify actual contracts
+    -- Use_HTTPS implementation
     function Use_HTTPS return Boolean  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     --  Get_Sidecar_Port: Returns the sidecar UI port from command-line or environment.
     -- @test: Get_Sidecar_Port covered by sabotage_verifier
        with Pre => True, Post => True; -- IMPL: specify actual contracts
+    -- Get_Sidecar_Port implementation
     function Get_Sidecar_Port return Natural  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
@@ -150,12 +154,14 @@ procedure Adelaide_Server is  -- [Documentation: implementation]
     --  [DO NOT REMOVE] C FFI for graceful shutdown (SIGINT/SIGTERM/SIGQUIT)
     -- @test: Install_Shutdown_Handlers covered by sabotage_verifier
        with Pre => True, Post => True; -- IMPL: specify actual contracts
+    -- Install_Shutdown_Handlers implementation
     procedure Install_Shutdown_Handlers  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
     pragma Import (C, Install_Shutdown_Handlers, "install_shutdown_handlers");
     -- @test: Is_Shutdown_Requested covered by sabotage_verifier
        with Pre => True, Post => True; -- IMPL: specify actual contracts
+    -- Is_Shutdown_Requested implementation
     function Is_Shutdown_Requested return Interfaces.C.int  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
@@ -163,6 +169,7 @@ procedure Adelaide_Server is  -- [Documentation: implementation]
     --  Last_Signal_Received: C FFI binding returning the last signal received by the process.
     -- @test: Last_Signal_Received covered by sabotage_verifier
        with Pre => True, Post => True; -- IMPL: specify actual contracts
+    -- Last_Signal_Received implementation
     function Last_Signal_Received return Interfaces.C.int  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
@@ -186,6 +193,7 @@ procedure Adelaide_Server is  -- [Documentation: implementation]
     --  Call these as the VERY FIRST thing in main(), before any Put_Line.
     -- @test: Force_Stdout_Unbuffered covered by sabotage_verifier
        with Pre => True, Post => True; -- IMPL: specify actual contracts
+    -- Force_Stdout_Unbuffered implementation
     procedure Force_Stdout_Unbuffered  -- [Documentation: implementation]
       with Pre => True,
            Post => True;
@@ -1864,6 +1872,7 @@ end Test_Get_Sidecar_Port;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Sidecar_Port is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1884,6 +1893,7 @@ end Test_Is_Shutdown_Requested;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Shutdown_Requested is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1906,6 +1916,7 @@ end Test_Last_Signal_Received;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Last_Signal_Received is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -1928,6 +1939,7 @@ end Test_Get_SSL_Key_Path;
 -- [Documentation: Run implementation]
 package body Test_Get_SSL_Key_Path is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1948,6 +1960,7 @@ end Test_Is_Running;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Running is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1968,6 +1981,7 @@ end Test_Force_Stderr_Unbuffered;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Force_Stderr_Unbuffered is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1986,6 +2000,7 @@ end Test_Adelaide_Server;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Adelaide_Server is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2004,6 +2019,7 @@ end Test_Get_SSL_Cert_Path;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_SSL_Cert_Path is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2022,6 +2038,7 @@ end Test_Install_Shutdown_Handlers;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Install_Shutdown_Handlers is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2040,6 +2057,7 @@ end Test_Use_HTTPS;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Use_HTTPS is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2058,6 +2076,7 @@ end Test_Force_Stdout_Unbuffered;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Force_Stdout_Unbuffered is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2076,6 +2095,7 @@ end Test_Stop_Clock;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Stop_Clock is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2094,6 +2114,7 @@ end Test_Get_Host;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Host is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -2112,6 +2133,7 @@ end Test_C_Exit;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_C_Exit is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

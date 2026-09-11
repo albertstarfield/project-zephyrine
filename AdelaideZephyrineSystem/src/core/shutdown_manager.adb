@@ -22,6 +22,7 @@ package body Shutdown_Manager is
       --  Requested: Returns True if a shutdown has been requested.
       -- @test: Requested covered by sabotage_verifier
          with Pre => True, Post => True; -- IMPL: specify actual contracts
+      -- Requested implementation
       function Requested return Boolean is (Is_Requested)  -- [Documentation: implementation]
         with Pre => True,
              Post => True;
@@ -42,6 +43,7 @@ end Test_Request;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Request is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -64,6 +66,7 @@ end Test_Requested;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Requested is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

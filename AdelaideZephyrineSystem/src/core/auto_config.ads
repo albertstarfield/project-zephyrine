@@ -114,6 +114,7 @@ package Auto_Config is
    --  AL_All maps to -1 (all layers on accelerator)
    Accel_All_Layers : constant Interfaces.C.int := -1;
 
+   -- Accel_Layers_To_Int implementation
    function Accel_Layers_To_Int (A : Accel_Layer_Ladder) return Interfaces.C.int with Pre => True, Post => True;
    -- @test: Accel_Layers_To_Int covered by sabotage_verifier
    -- @test: Accel_Layers_To_Int covered by sabotage_verifier

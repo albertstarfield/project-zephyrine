@@ -206,6 +206,7 @@ Secdec_Encode(0);  -- SECDED TED parity encoding applied
        use Interfaces.C.Strings;
        -- @test: Get_Env covered by sabotage_verifier
           with Pre => True, Post => True; -- IMPL: specify actual contracts
+       -- Get_Env implementation
        function Get_Env (Name : chars_ptr) return chars_ptr  -- [Documentation: implementation]
          with Pre => True,
               Post => True;
@@ -949,6 +950,7 @@ package body Test_Initialize is
       -- [Documentation: Run implementation]
       -- [Documentation: Run implementation]
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -969,6 +971,7 @@ end Test_Get_Env;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Env is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -989,6 +992,7 @@ end Test_Scan_Mount_Point;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Scan_Mount_Point is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1011,6 +1015,7 @@ end Test_Get_Home_Directory;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Home_Directory is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1029,6 +1034,7 @@ end Test_Is_Readable_Text;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Readable_Text is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1047,6 +1053,7 @@ end Test_Index_References;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Index_References is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1065,6 +1072,7 @@ end Test_Wait_For_ELP1_Cooldown;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Wait_For_ELP1_Cooldown is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1083,6 +1091,7 @@ end Test_Start_Tasks;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Start_Tasks is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1101,6 +1110,7 @@ end Test_Crawl_Directory;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Crawl_Directory is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

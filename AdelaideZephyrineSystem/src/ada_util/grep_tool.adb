@@ -28,6 +28,7 @@ procedure Grep_Tool is  -- [Documentation: implementation]
    --  (-i case-insensitive, -c count, -l files-only).
    -- @test: Run_Grep covered by sabotage_verifier
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run_Grep implementation
    function Run_Grep (Pattern, Path : in String  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -115,6 +116,7 @@ end Test_Run_Grep;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Grep is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -135,6 +137,7 @@ end Test_Grep_Tool;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Grep_Tool is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

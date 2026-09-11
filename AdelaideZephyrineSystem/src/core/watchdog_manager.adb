@@ -58,6 +58,7 @@ package body Watchdog_Manager is
       --  Is_Aborted: Returns True if the current inference has been aborted.
       -- @test: Is_Aborted covered by sabotage_verifier
          with Pre => True, Post => True; -- IMPL: specify actual contracts
+      -- Is_Aborted implementation
       function Is_Aborted return Boolean is (Aborted)  -- [Documentation: implementation]
         with Pre => True,
              Post => True;
@@ -65,6 +66,7 @@ package body Watchdog_Manager is
       --  Current_Inference_Model: Returns the model type of the current inference.
       -- @test: Current_Inference_Model covered by sabotage_verifier
          with Pre => True, Post => True; -- IMPL: specify actual contracts
+      -- Current_Inference_Model implementation
       function Current_Inference_Model return Model_Type is (Current_Model)  -- [Documentation: implementation]
         with Pre => True,
              Post => True;
@@ -253,6 +255,7 @@ end Test_Stop_Inference;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Stop_Inference is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -273,6 +276,7 @@ end Test_Is_Aborted;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Aborted is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -295,6 +299,7 @@ end Test_Set_Aborted;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_Aborted is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -317,6 +322,7 @@ end Test_Heartbeat;
 -- [Documentation: Run implementation]
 package body Test_Heartbeat is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -335,6 +341,7 @@ end Test_Start_Inference;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Start_Inference is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -353,6 +360,7 @@ end Test_Deactivate;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Deactivate is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -371,6 +379,7 @@ end Test_Check_Timeout;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Check_Timeout is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -389,6 +398,7 @@ end Test_Check_Liveness;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Check_Liveness is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

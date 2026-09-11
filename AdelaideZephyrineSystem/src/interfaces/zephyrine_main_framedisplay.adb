@@ -894,6 +894,7 @@ end Test_Process_Events;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Process_Events is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -938,6 +939,7 @@ end Test_Hide;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Hide is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -958,6 +960,7 @@ end Test_Update_Widget_Text;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Update_Widget_Text is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -980,6 +983,7 @@ end Test_Get_CSS_Stylesheet;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_CSS_Stylesheet is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -1002,6 +1006,7 @@ end Test_Get_Widget_Tree;
 -- [Documentation: Run implementation]
 package body Test_Get_Widget_Tree is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1022,6 +1027,7 @@ end Test_Run_Event_Loop;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Event_Loop is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1042,6 +1048,7 @@ end Test_Load_CSS;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Load_CSS is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1060,6 +1067,7 @@ end Test_Init;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Init is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1078,6 +1086,7 @@ end Test_Execute_Command;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Execute_Command is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1096,6 +1105,7 @@ end Test_Fade_In;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Fade_In is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1114,6 +1124,7 @@ end Test_Set_Opacity;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_Opacity is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1132,6 +1143,7 @@ end Test_Fade_Out;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Fade_Out is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1150,6 +1162,7 @@ end Test_Render_Frame;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Render_Frame is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1168,6 +1181,7 @@ end Test_Close;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Close is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -1186,6 +1200,7 @@ end Test_Show;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Show is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

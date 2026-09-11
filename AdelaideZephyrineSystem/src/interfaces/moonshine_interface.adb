@@ -141,6 +141,7 @@ end Test_Transcribe_Raw_PCM;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Transcribe_Raw_PCM is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -161,6 +162,7 @@ end Test_Init_Moonshine;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Init_Moonshine is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -179,6 +181,7 @@ end Test_Free_Moonshine;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Free_Moonshine is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

@@ -263,6 +263,7 @@ end Test_Is_Claude_Model;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Claude_Model is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -285,6 +286,7 @@ end Test_Parse_Response_Content;
 -- [Documentation: Run implementation]
 package body Test_Parse_Response_Content is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -305,6 +307,7 @@ end Test_Escape_JSON;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Escape_JSON is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -325,6 +328,7 @@ end Test_Get_Response_Text;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Response_Text is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -343,6 +347,7 @@ end Test_Build_Request_Body;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Build_Request_Body is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -361,6 +366,7 @@ end Test_Send_Message;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Send_Message is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

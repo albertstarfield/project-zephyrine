@@ -232,6 +232,7 @@ end Test_Detect_Package_Manager;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Detect_Package_Manager is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -254,6 +255,7 @@ end Test_Run_Cmd;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Cmd is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -272,6 +274,7 @@ end Test_Package_Tool;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Package_Tool is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -290,6 +293,7 @@ end Test_Install_Package;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Install_Package is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

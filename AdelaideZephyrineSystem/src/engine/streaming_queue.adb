@@ -398,6 +398,7 @@ end Test_Buffer_Length;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Buffer_Length is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -418,6 +419,7 @@ end Test_Get_Format;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Get_Format is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -436,6 +438,7 @@ end Test_Is_Empty_And_Closed;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Empty_And_Closed is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -454,6 +457,7 @@ end Test_Set_Format;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Set_Format is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -472,6 +476,7 @@ end Test_Close;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Close is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

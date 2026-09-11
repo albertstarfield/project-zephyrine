@@ -417,6 +417,7 @@ end Test_Verify_Python_Package;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Verify_Python_Package is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -439,6 +440,7 @@ end Test_Run_Shell;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Shell is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      -- [Documentation: Run implementation]
      -- [Documentation: Run implementation]
@@ -459,6 +461,7 @@ end Test_Verify_And_Heal;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Verify_And_Heal is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -477,6 +480,7 @@ end Test_Is_Rocq_Library_Installed;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Is_Rocq_Library_Installed is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -495,6 +499,7 @@ end Test_Run_Command;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Run_Command is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -513,6 +518,7 @@ end Test_Start_Orchestrator;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Start_Orchestrator is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

@@ -285,6 +285,7 @@ end Test_Log_Image_Gen_Params;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Log_Image_Gen_Params is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -305,6 +306,7 @@ end Test_SD_System_Info;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_SD_System_Info is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -327,6 +329,7 @@ end Test_Log_All_Enum_Names;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Log_All_Enum_Names is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           -- [Documentation: Run implementation]
@@ -347,6 +350,7 @@ end Test_Log_Context_Params;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Log_Context_Params is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -365,6 +369,7 @@ end Test_SD_Version_Info;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_SD_Version_Info is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -383,6 +388,7 @@ end Test_Log_Generate_Result;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Log_Generate_Result is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;

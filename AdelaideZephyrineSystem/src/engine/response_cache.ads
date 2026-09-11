@@ -51,6 +51,7 @@ package Response_Cache is
    -- @test: Hit_Count covered by sabotage_verifier
    -- @test: Hit_Count covered by sabotage_verifier
    function Miss_Count return Natural with Pre => True, Post => True;
+   -- Entry_Count implementation
    function Entry_Count return Natural with Pre => True, Post => True;
    --  Reset the hit and miss counters to zero.
    procedure Reset_Stats with Pre => True, Post => True;

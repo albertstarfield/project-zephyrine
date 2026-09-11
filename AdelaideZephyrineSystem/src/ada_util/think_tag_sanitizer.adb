@@ -183,6 +183,7 @@ end Test_Trim_Both;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Trim_Both is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
@@ -201,6 +202,7 @@ end Test_Sanitize_Think_Tags;
    with Pre => True, Post => True; -- IMPL: specify actual contracts
 package body Test_Sanitize_Think_Tags is
       with Pre => True, Post => True; -- IMPL: specify actual contracts
+   -- Run implementation
    procedure Run is begin null; end Run  -- [Documentation: implementation]
      with Pre => True,
           Post => True;
